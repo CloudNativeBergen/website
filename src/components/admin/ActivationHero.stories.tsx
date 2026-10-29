@@ -121,3 +121,24 @@ export const NearlyLive: Story = light(NEARLY_LIVE, emailOk)
 export const FreshDark: Story = dark(FRESH)
 
 export const NearlyLiveDark: Story = dark(NEARLY_LIVE, emailOk)
+
+/** Live, six weeks out or closer: the hero shows the event stage's next steps. */
+export const EventPrep: Story = {
+  ...light(NEARLY_LIVE),
+  args: {
+    showEvent: true,
+    checklist: buildActivationChecklist(
+      { ...NEARLY_LIVE, visibility: 'live' },
+      [
+        ...emailOk,
+        {
+          id: 'slack.botToken',
+          group: 'slack',
+          label: 'SLACK_BOT_TOKEN',
+          status: 'ok',
+        },
+      ],
+      { ...SHARED_TENANT, now: new Date('2026-04-20T12:00:00Z') },
+    ),
+  },
+}

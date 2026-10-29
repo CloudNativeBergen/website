@@ -451,6 +451,15 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     icon: EnvelopeIcon,
   },
   {
+    // Reached from the Photo Wall header; searchable here.
+    id: 'photo-wall-setup',
+    title: 'Photo Wall Setup',
+    href: '/admin/photo-wall/setup',
+    group: 'Events & Content',
+    keywords: ['photo wall', 'qr', 'posting', 'links', 'room signs', 'export'],
+    icon: PhotoIcon,
+  },
+  {
     // Moved out of the sidebar (#1079); MarketingPlanHome already renders a
     // "Marketing report" header action, and it remains ⌘K-searchable here.
     id: 'marketing-report',

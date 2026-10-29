@@ -170,6 +170,8 @@ export interface ActivationRow {
    * absence of agency, and the two must not read the same.
    */
   unavailable?: string
+  /** Room names whose screen links the checklist lists (`room-screens` row). */
+  rooms?: string[]
 }
 
 /** One stage's rows plus its own rollup. */
@@ -251,8 +253,8 @@ export interface ConferenceForActivation {
   titoEventSlug?: string | null
   // Event stage.
   programDate?: string | null
-  /** Only the count and each track's `sponsor` are read. */
-  schedules?: { tracks?: { sponsor?: unknown }[] }[]
+  /** Only the count and each track's `trackTitle` and `sponsor` are read. */
+  schedules?: { tracks?: { trackTitle?: string; sponsor?: unknown }[] }[]
   socialHashtag?: string
   socialLinks?: string[]
   venueTravelInfo?: string
@@ -402,6 +404,26 @@ export function isEventStageRelevant(
     present(conference.endDate) &&
     osloTodayDateString(now) > conference.endDate!
   )
+}
+
+/** How long before `startDate` the dashboard hero shows the event stage. */
+export const EVENT_HERO_LEAD_DAYS = 42
+
+/**
+ * Whether `/admin` shows the event stage in its hero: from six weeks before
+ * `startDate` (Oslo date) until `endDate`, while the stage is relevant at all.
+ * The dashboard asks this before opting in to the event facts.
+ */
+export function isEventHeroWindow(
+  conference: ConferenceForActivation,
+  now: Date = new Date(),
+): boolean {
+  if (!present(conference.startDate)) return false
+  if (!isEventStageRelevant(conference, now)) return false
+  const opens = new Date(`${conference.startDate}T00:00:00Z`)
+  if (Number.isNaN(opens.getTime())) return false
+  opens.setUTCDate(opens.getUTCDate() - EVENT_HERO_LEAD_DAYS)
+  return osloTodayDateString(now) >= opens.toISOString().slice(0, 10)
 }
 
 /** Non-empty string / present number. Trims strings; a 0 id counts as absent. */
@@ -722,6 +744,13 @@ export function buildActivationChecklist(
   // day is over in Oslo; `endDate` is a calendar date, so it compares as a string.
   const now = options.now ?? new Date()
   const schedules = conference.schedules ?? []
+  const rooms = [
+    ...new Set(
+      schedules.flatMap((s) =>
+        (s.tracks ?? []).flatMap((t) => (t.trackTitle ? [t.trackTitle] : [])),
+      ),
+    ),
+  ]
   const eventRows: ActivationRow[] = [
     {
       // Mirrors `isProgramPublished` (@/lib/conference/state), restated so
@@ -768,6 +797,16 @@ export function buildActivationChecklist(
       anchor: '/admin/schedule',
       hint: 'Optional: give a sponsor a room, thanked on its screen.',
       optional: true,
+    },
+    {
+      id: 'room-screens',
+      stage: 'event',
+      label: 'Room screens',
+      done: rooms.length > 0,
+      anchor: '/admin/schedule',
+      hint: 'Optional: add rooms to the schedule to get a screen link for each.',
+      optional: true,
+      rooms,
     },
     ...(options.eventFacts ? eventFactRows(options.eventFacts) : []),
   ]

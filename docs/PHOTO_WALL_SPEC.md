@@ -574,13 +574,22 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
   is slice P6.
 - **Phone-first.** One column of cards on a phone, a grid on desktop.
 - **Before setup:** a short explanation and **Set up the Photo Wall** (§4.1).
+- **Two pages.** `/admin/photo-wall` is the moderation queue, straight under
+  the header. `/admin/photo-wall/setup` (the header's **Setup** link) holds
+  the settings, the links, the room signs and the marketing export.
+- **Header:** on both pages, the posting status (§7) as a chip: "Posting:
+  Open", "Paused", "Automatic, opens <first day>" or "Closed". Next to it is
+  **Pause posting** or **Open posting**. It makes the same change as the
+  Posting setting. It is not offered when Open would not help (the
+  conference is over, or the wall is closed). An empty Pending tab says when
+  posting is paused or closed.
 - **Settings row:** **Posting** (Open / Paused; Automatic from P2),
   **Sponsor strip** (on/off) and **Wall Look** (Pinboard / Mosaic /
   Spotlight, P3; §9).
 - **Links:** the posting link with its QR code (PNG download, reusing the
   `qr-code-styling` helper the Feedback Code uses), the Wall page link and the
   Screen Mode link, each with Copy.
-- **Live pending count** at the top, from the polled queue.
+- **Live pending count** beside the queue's heading, from the polled queue.
 - **Tabs:** **Pending**, **On the wall**, **Not shown**.
 - **Card:** the whole photo with the square crop outlined, caption, name,
   submitted time (`src/lib/time.ts`), and a "Marketing OK" mark when the

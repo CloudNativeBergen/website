@@ -77,6 +77,7 @@ describe('the Posting note (§7)', () => {
   ])('%s says %j (warning: %s)', (state, text, warn) => {
     render(
       <PhotoWallAdmin
+        setup
         view={view(state === 'saving' ? 'open' : state)}
         onSetUp={() => {}}
         onChange={() => {}}
@@ -98,6 +99,7 @@ describe('the Posting switch (§7, §10)', () => {
   it('offers Automatic, Open and Paused, each with its own mode', () => {
     render(
       <PhotoWallAdmin
+        setup
         view={view('open')}
         onSetUp={() => {}}
         onChange={() => {}}
@@ -123,6 +125,7 @@ describe('the Posting switch (§7, §10)', () => {
     const onChange = vi.fn()
     render(
       <PhotoWallAdmin
+        setup
         view={view('open')}
         onSetUp={() => {}}
         onChange={onChange}
@@ -137,6 +140,7 @@ describe('the Posting switch (§7, §10)', () => {
     const paused = view('paused')
     render(
       <PhotoWallAdmin
+        setup
         view={{ ...paused, wall: { ...paused.wall!, postingMode: 'paused' } }}
         onSetUp={() => {}}
         onChange={onChange}
@@ -154,6 +158,7 @@ describe('the Wall Look (§9, P3)', () => {
     const v = view('open')
     render(
       <PhotoWallAdmin
+        setup
         view={{ ...v, wall: { ...v.wall!, look: 'mosaic' } }}
         onSetUp={() => {}}
         onChange={() => {}}
@@ -179,6 +184,7 @@ describe('the Wall Look (§9, P3)', () => {
     const onChange = vi.fn()
     render(
       <PhotoWallAdmin
+        setup
         view={view('open')}
         onSetUp={() => {}}
         onChange={onChange}
@@ -188,5 +194,52 @@ describe('the Wall Look (§9, P3)', () => {
       within(looks()).getByRole('radio', { name: new RegExp(label) }),
     )
     expect(onChange).toHaveBeenCalledWith({ look })
+  })
+})
+
+describe('the header posting status (§7, §10)', () => {
+  const header = (
+    v: PhotoWallAdminView,
+    onChange: (c: object) => void = () => {},
+  ) =>
+    render(<PhotoWallAdmin view={v} onSetUp={() => {}} onChange={onChange} />)
+
+  it.each<[PostingState, string, string | null]>([
+    ['open', 'Posting: Open (automatic)', 'Pause posting'],
+    ['paused', 'Posting: Paused', 'Open posting'],
+    ['notYetOpen', 'Posting: Automatic, not open yet', 'Open posting'],
+    ['ended', 'Posting: Closed', null],
+    ['closed', 'Posting: Closed', null],
+  ])('%s says %j', (state, text, action) => {
+    header(view(state))
+    expect(screen.getByText(text)).toBeInTheDocument()
+    const buttons = screen
+      .queryAllByRole('button')
+      .map((b) => b.textContent)
+      .filter((t) => /posting$/.test(t ?? ''))
+    expect(buttons).toEqual(action ? [action] : [])
+  })
+
+  it('says when an Automatic wall opens', () => {
+    header({ ...view('notYetOpen'), opensOn: '2026-10-26' })
+    expect(screen.getByText(/^Posting: Automatic, opens /)).toHaveTextContent(
+      /26/,
+    )
+  })
+
+  it('Pause asks for the same change as the Posting switch', () => {
+    const onChange = vi.fn()
+    header(view('open'), onChange)
+    fireEvent.click(screen.getByRole('button', { name: 'Pause posting' }))
+    expect(onChange).toHaveBeenCalledWith({ postingMode: 'paused' })
+  })
+
+  it('links to Setup, and shows the queue rather than the settings', () => {
+    header(view('open'))
+    expect(screen.getByRole('link', { name: 'Setup' })).toHaveAttribute(
+      'href',
+      '/admin/photo-wall/setup',
+    )
+    expect(screen.queryByRole('radiogroup', { name: 'Posting' })).toBeNull()
   })
 })

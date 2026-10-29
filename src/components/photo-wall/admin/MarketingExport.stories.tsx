@@ -1,13 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, fn, within } from 'storybook/test'
-import type {
-  ModerationPost,
-  ModerationQueueData,
-  PhotoWallAdminView,
-} from '@/lib/photo-wall'
+import type { PhotoWallAdminView } from '@/lib/photo-wall'
 import { MARKETING_EXPORT_ROUTE, MarketingExport } from './MarketingExport'
-import { ModerationQueueView } from './ModerationQueue'
-import { PendingSummaryView } from './PendingSummary'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 
 const meta = {
@@ -88,36 +82,6 @@ export const CountNotLoaded: Story = {
   },
 }
 
-let n = 0
-const post = (fields: Partial<ModerationPost>): ModerationPost => ({
-  _id: `wallPost-${++n}`,
-  status: 'approved',
-  photo: {
-    url: '/storybook-fixtures/wall-landscape.jpg',
-    width: 1600,
-    height: 1000,
-  },
-  crop: { x: 0.5, y: 0.5 },
-  caption: null,
-  name: null,
-  marketingConsent: true,
-  submittedAt: '2026-10-26T07:30:00Z',
-  approvedAt: '2026-10-26T07:40:00Z',
-  decidedAt: '2026-10-26T07:40:00Z',
-  incarnation: { createdAt: null, assetId: null },
-  ...fields,
-})
-/** Two exported; a pending, a Not shown and a non-consented one are not. */
-const QUEUE: ModerationQueueData = {
-  posts: [
-    post({ caption: 'Keynote crowd', name: 'Ada' }),
-    post({ caption: 'Coffee line' }),
-    post({ status: 'pending', approvedAt: null, decidedAt: null }),
-    post({ status: 'notShown' }),
-    post({ marketingConsent: false }),
-  ],
-}
-
 const VIEW: PhotoWallAdminView = {
   wall: {
     _id: 'photoWall-conf-A',
@@ -134,7 +98,7 @@ const VIEW: PhotoWallAdminView = {
   },
 }
 
-/** The whole admin page after the event: the export under the queue. */
+/** The whole Setup page after the event: the export under the links. */
 export const InThePage: StoryObj<typeof PhotoWallAdmin> = {
   render: (args) => <PhotoWallAdmin {...args} />,
   args: {
@@ -142,8 +106,7 @@ export const InThePage: StoryObj<typeof PhotoWallAdmin> = {
     conferenceTitle: 'Cloud Native Days Norway 2026',
     onSetUp: fn(),
     onChange: fn(),
-    summary: <PendingSummaryView pending={1} />,
-    queue: <ModerationQueueView queue={QUEUE} />,
+    setup: true,
     marketingExport: <MarketingExport count={2} />,
   },
   play: async ({ canvasElement }) => {

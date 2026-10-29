@@ -5,20 +5,21 @@ import type { PhotoWall, PhotoWallSettingsChange } from '@/lib/photo-wall'
 import { api } from '@/lib/trpc/client'
 import { MarketingExport } from './MarketingExport'
 import { ModerationQueue } from './ModerationQueue'
-import { PendingSummary } from './PendingSummary'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 
 /**
- * `/admin/photo-wall` (Photo Wall spec §10): reads `photoWall.settings` and
+ * `/admin/photo-wall` and `/admin/photo-wall/setup` (Photo Wall spec §10): reads `photoWall.settings` and
  * wires Set up and the switches to their procedures. Each answer is the
  * wall as the server now has it, so it replaces the read in place.
  */
 export function PhotoWallAdminPage({
   conferenceTitle,
   rooms,
+  setup = false,
 }: {
   conferenceTitle?: string
   rooms?: string[]
+  setup?: boolean
 }) {
   const utils = api.useUtils()
   const settings = api.photoWall.settings.useQuery(undefined, {
@@ -52,6 +53,7 @@ export function PhotoWallAdminPage({
   return (
     <PhotoWallAdmin
       view={settings.data}
+      setup={setup}
       pending={update.isPending ? update.variables : undefined}
       conferenceTitle={conferenceTitle}
       rooms={rooms}
@@ -65,8 +67,7 @@ export function PhotoWallAdminPage({
         (update.isError && !landed(update.variables, wall))
       }
       // Mounted, and so polled, only once the wall is set up.
-      queue={<ModerationQueue />}
-      summary={<PendingSummary />}
+      queue={<ModerationQueue posting={settings.data.posting} />}
       marketingExport={
         <MarketingExport count={settings.data.marketingExportCount} />
       }

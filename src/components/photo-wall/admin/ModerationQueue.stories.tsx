@@ -8,7 +8,7 @@ import {
   type PhotoWallAdminView,
 } from '@/lib/photo-wall'
 import { ModerationQueue, ModerationQueueView } from './ModerationQueue'
-import { PendingSummary, PendingSummaryView } from './PendingSummary'
+import { PendingSummaryView } from './PendingSummary'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 import type { PostActionOutcome } from './WallPostCard'
 
@@ -373,7 +373,7 @@ const VIEW: PhotoWallAdminView = {
   links: LINKS,
 }
 
-/** The whole admin page: the live pending count under the header, the queue under the settings and links. */
+/** The whole admin page: the queue straight under the header, the live pending count beside its heading. */
 export const InThePage: StoryObj<typeof PhotoWallAdmin> = {
   render: (args) => <PhotoWallAdmin {...args} />,
   args: {
@@ -381,9 +381,9 @@ export const InThePage: StoryObj<typeof PhotoWallAdmin> = {
     conferenceTitle: 'Cloud Native Days Norway 2026',
     onSetUp: fn(),
     onChange: fn(),
-    summary: <PendingSummaryView pending={countByTab(POSTS).pending} />,
     queue: (
       <ModerationQueueView
+        summary={<PendingSummaryView pending={countByTab(POSTS).pending} />}
         queue={QUEUE}
         onAction={async () => 'done'}
         onApproveAll={async () => ({ approved: 3, pending: 3 })}
@@ -392,25 +392,12 @@ export const InThePage: StoryObj<typeof PhotoWallAdmin> = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getByRole('region', { name: 'Settings' })).toBeVisible()
+    await expect(canvas.queryByRole('region', { name: 'Settings' })).toBeNull()
     await expect(canvas.getByRole('region', { name: 'Posts' })).toBeVisible()
+    await expect(canvas.getByText('Posting: Open')).toBeVisible()
     await expect(canvas.getByTestId('pending-summary')).toHaveTextContent(
       '3 photos waiting',
     )
-  },
-}
-/** Review, pressed with Not shown open: back to Pending, focused, scrolled to. */
-export const InThePageReview: StoryObj<typeof PhotoWallAdmin> = {
-  ...InThePage,
-  parameters: PHONE,
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const summary = canvas.getByTestId('pending-summary')
-    await userEvent.click(canvas.getByRole('tab', { name: 'Not shown (2)' }))
-    await userEvent.click(within(summary).getByRole('link', { name: 'Review' }))
-    const pending = canvas.getByRole('tab', { name: 'Pending (3)' })
-    await expect(pending).toHaveAttribute('aria-selected', 'true')
-    await expect(pending).toHaveFocus()
   },
 }
 export const InThePageDark: StoryObj<typeof PhotoWallAdmin> = {
@@ -426,13 +413,17 @@ export const InThePagePhoneDark: StoryObj<typeof PhotoWallAdmin> = {
   parameters: PHONE,
   globals: { theme: 'dark' },
 }
-/** Nothing waiting: the count says so quietly, with no Review link. */
+/** Nothing waiting: the count says so quietly. */
 export const InThePageNothingWaiting: StoryObj<typeof PhotoWallAdmin> = {
   ...InThePage,
   args: {
     ...InThePage.args!,
-    summary: <PendingSummaryView pending={0} />,
-    queue: <ModerationQueueView queue={EMPTY} />,
+    queue: (
+      <ModerationQueueView
+        queue={EMPTY}
+        summary={<PendingSummaryView pending={0} />}
+      />
+    ),
   },
   parameters: PHONE,
   play: async ({ canvasElement }) => {
@@ -440,7 +431,6 @@ export const InThePageNothingWaiting: StoryObj<typeof PhotoWallAdmin> = {
     await expect(canvas.getByTestId('pending-summary')).toHaveTextContent(
       'Nothing waiting for approval',
     )
-    await expect(canvas.queryByRole('link', { name: 'Review' })).toBeNull()
   },
 }
 /** Before Set up there is no queue to show. */
@@ -462,7 +452,6 @@ export const InThePageNotSetUp: StoryObj<typeof PhotoWallAdmin> = {
 export const Polled: StoryObj<typeof ModerationQueue> = {
   render: () => (
     <div className="space-y-6">
-      <PendingSummary />
       <ModerationQueue />
     </div>
   ),
@@ -523,10 +512,15 @@ export const InThePageNotCurrent: StoryObj<typeof PhotoWallAdmin> = {
     conferenceTitle: 'Cloud Native Days Norway 2026',
     onSetUp: fn(),
     onChange: fn(),
-    summary: (
-      <PendingSummaryView pending={0} staleSince="2026-10-26T09:42:00Z" />
+    queue: (
+      <ModerationQueueView
+        queue={EMPTY}
+        failed
+        summary={
+          <PendingSummaryView pending={0} staleSince="2026-10-26T09:42:00Z" />
+        }
+      />
     ),
-    queue: <ModerationQueueView queue={EMPTY} failed />,
   },
   parameters: PHONE,
   play: async ({ canvasElement }) => {
@@ -545,8 +539,9 @@ export const InThePageFirstLoadFailed: StoryObj<typeof PhotoWallAdmin> = {
   ...InThePageNotCurrent,
   args: {
     ...InThePageNotCurrent.args!,
-    summary: <PendingSummaryView failed />,
-    queue: <ModerationQueueView failed />,
+    queue: (
+      <ModerationQueueView failed summary={<PendingSummaryView failed />} />
+    ),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)

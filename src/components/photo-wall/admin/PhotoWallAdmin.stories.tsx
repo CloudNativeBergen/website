@@ -39,12 +39,13 @@ const meta = {
     docs: {
       description: {
         component:
-          'The organizers’ Photo Wall page, `/admin/photo-wall` (Photo Wall spec §10), slice M1: before setup a short explanation and **Set up the Photo Wall**; after it the **Posting** (Automatic / Open / Paused, P2) and **Sponsor strip** switches, the **Wall Look** (Pinboard / Mosaic / Spotlight, P3), and the links: the posting link with its QR and PNG download, the Wall page and Screen Mode, each with Copy. One column on a phone, side by side on a wide screen. Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'The organizers’ Photo Wall Setup page, `/admin/photo-wall/setup` (Photo Wall spec §10): before setup a short explanation and **Set up the Photo Wall**; after it the **Posting** (Automatic / Open / Paused, P2) and **Sponsor strip** switches, the **Wall Look** (Pinboard / Mosaic / Spotlight, P3), and the links: the posting link with its QR and PNG download, the Wall page and Screen Mode, each with Copy. One column on a phone, side by side on a wide screen. Dark mode follows the global `theme` toolbar (story-level `globals`).',
       },
     },
   },
   args: {
     view: view(WALL),
+    setup: true,
     conferenceTitle: 'Cloud Native Days Norway 2026',
     onSetUp: fn(),
     onChange: fn(),
@@ -129,6 +130,13 @@ export const Paused: Story = {
 export const PausedKeyboard: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
+    // The header comes first: the back link, then the quick Open posting.
+    await userEvent.tab()
+    await expect(canvas.getByRole('link', { name: 'Photo Wall' })).toHaveFocus()
+    await userEvent.tab()
+    await expect(
+      canvas.getByRole('button', { name: 'Open posting' }),
+    ).toHaveFocus()
     await userEvent.tab()
     await expect(canvas.getByRole('radio', { name: 'Paused' })).toHaveFocus()
     await userEvent.keyboard('{ArrowLeft}')
@@ -367,10 +375,10 @@ const CONFERENCE_DAYS = { startDate: '2026-10-26', endDate: '2026-10-27' }
 const postingOf = (wall: PhotoWall): PostingState =>
   postingState(wall, CONFERENCE_DAYS, new Date('2026-10-19T12:00:00Z'))
 
-/** The page as `/admin/photo-wall` renders it, its procedures mocked. */
+/** The page as `/admin/photo-wall/setup` renders it, its procedures mocked. */
 export const Page: StoryObj<typeof PhotoWallAdminPage> = {
   render: () => (
-    <PhotoWallAdminPage conferenceTitle="Cloud Native Days Norway 2026" />
+    <PhotoWallAdminPage conferenceTitle="Cloud Native Days Norway 2026" setup />
   ),
   beforeEach: () => {
     served = view(null)
@@ -408,17 +416,8 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
     await expect(
       canvas.getByText(/Posting opens by itself at 00:00/),
     ).toBeVisible()
-    // Once set up, the page mounts the polled queue and the live count (M4a).
-    await expect(
-      await canvas.findByRole('region', { name: 'Posts' }, WAIT),
-    ).toBeVisible()
-    await waitFor(
-      () =>
-        expect(canvas.getByTestId('pending-summary')).toHaveTextContent(
-          'Nothing waiting for approval',
-        ),
-      WAIT,
-    )
+    // The queue is on the main page, not here.
+    await expect(canvas.queryByRole('region', { name: 'Posts' })).toBeNull()
     await userEvent.click(canvas.getByRole('radio', { name: 'Open' }))
     // The pressed value shows while the answer is still on its way, and the
     // note says so rather than giving the old mode's reason.
@@ -460,7 +459,7 @@ export const Page: StoryObj<typeof PhotoWallAdminPage> = {
 /** Set up landed but its answer was lost: the read again shows the wall, and no failure. */
 export const SetUpAnswerLost: StoryObj<typeof PhotoWallAdminPage> = {
   render: () => (
-    <PhotoWallAdminPage conferenceTitle="Cloud Native Days Norway 2026" />
+    <PhotoWallAdminPage conferenceTitle="Cloud Native Days Norway 2026" setup />
   ),
   beforeEach: () => {
     served = view(null)
@@ -492,7 +491,7 @@ export const SetUpAnswerLost: StoryObj<typeof PhotoWallAdminPage> = {
 /** A change landed but its answer was lost: the wall read again shows it, and no failure. */
 export const ChangeAnswerLost: StoryObj<typeof PhotoWallAdminPage> = {
   render: () => (
-    <PhotoWallAdminPage conferenceTitle="Cloud Native Days Norway 2026" />
+    <PhotoWallAdminPage conferenceTitle="Cloud Native Days Norway 2026" setup />
   ),
   beforeEach: () => {
     served = view(WALL)
@@ -524,7 +523,7 @@ export const ChangeAnswerLost: StoryObj<typeof PhotoWallAdminPage> = {
 /** A change that did not land: the alert stays, and the switch shows the stored value. */
 export const ChangeFailed: StoryObj<typeof PhotoWallAdminPage> = {
   render: () => (
-    <PhotoWallAdminPage conferenceTitle="Cloud Native Days Norway 2026" />
+    <PhotoWallAdminPage conferenceTitle="Cloud Native Days Norway 2026" setup />
   ),
   beforeEach: () => {
     served = view(WALL)
@@ -563,5 +562,67 @@ export const RoomSigns: Story = {
 
 export const RoomSignsDark: Story = {
   ...RoomSigns,
+  globals: { theme: 'dark' },
+}
+
+/**
+ * `/admin/photo-wall` with posting paused: the header says so and opens it
+ * with one press, the same change as the Setup page's Posting switch; the
+ * empty Pending tab says why it is empty.
+ */
+export const QueuePagePaused: StoryObj<typeof PhotoWallAdminPage> = {
+  render: () => (
+    <PhotoWallAdminPage conferenceTitle="Cloud Native Days Norway 2026" />
+  ),
+  beforeEach: () => {
+    served = view(WALL)
+    updates.length = 0
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(`${TRPC}.settings`, () => trpc(served)),
+        emptyQueue,
+        http.post(`${TRPC}.updateSettings`, async ({ request }) => {
+          const change = (await request.json()) as Partial<PhotoWall>
+          updates.push(change)
+          const wall = { ...served.wall!, ...change }
+          served = view(wall, 'open')
+          return trpc(served)
+        }),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText('Posting: Paused', {}, WAIT),
+    ).toBeVisible()
+    await expect(canvas.getByRole('link', { name: 'Setup' })).toHaveAttribute(
+      'href',
+      '/admin/photo-wall/setup',
+    )
+    await expect(
+      await canvas.findByText(/Posting is paused/, {}, WAIT),
+    ).toBeVisible()
+    await userEvent.click(canvas.getByRole('button', { name: 'Open posting' }))
+    await expect(
+      await canvas.findByText('Posting: Open', {}, WAIT),
+    ).toBeVisible()
+    await expect(updates).toEqual([{ postingMode: 'open' }])
+  },
+}
+export const QueuePagePausedDark: StoryObj<typeof PhotoWallAdminPage> = {
+  ...QueuePagePaused,
+  play: undefined,
+  globals: { theme: 'dark' },
+}
+export const QueuePagePausedPhone: StoryObj<typeof PhotoWallAdminPage> = {
+  ...QueuePagePaused,
+  play: undefined,
+  parameters: { ...QueuePagePaused.parameters, ...PHONE },
+}
+export const QueuePagePausedPhoneDark: StoryObj<typeof PhotoWallAdminPage> = {
+  ...QueuePagePausedPhone,
   globals: { theme: 'dark' },
 }

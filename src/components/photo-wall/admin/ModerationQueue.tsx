@@ -1,6 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 import {
   APPROVE_ALL_MAX,
   MODERATION_TABS,
@@ -11,9 +17,11 @@ import {
   type ModerationPost,
   type ModerationQueueData,
   type ModerationTab,
+  type PostingState,
 } from '@/lib/photo-wall'
 import { api } from '@/lib/trpc/client'
 import { focusIsWith } from '../focus'
+import { PendingSummary } from './PendingSummary'
 import { MODERATION_POLL_MS, moderationQueuePolling } from './polling'
 import {
   WallPostCard,
@@ -29,7 +37,7 @@ import {
  * shown, with each card's actions and Approve all pending. After every
  * action the queue is read again, so the card moves to its new tab.
  */
-export function ModerationQueue() {
+export function ModerationQueue({ posting }: { posting?: PostingState }) {
   const queue = api.photoWall.moderationQueue.useQuery(
     undefined,
     moderationQueuePolling,
@@ -118,6 +126,8 @@ export function ModerationQueue() {
       onApproveAll={onApproveAll}
       talks={talks.data}
       onSetTalk={onSetTalk}
+      posting={posting}
+      summary={<PendingSummary />}
     />
   )
 }
@@ -164,19 +174,6 @@ export const MODERATION_QUEUE_ID = 'photo-wall-posts'
 const tabId = (tab: ModerationTab) => `${MODERATION_QUEUE_ID}-tab-${tab}`
 const panelId = `${MODERATION_QUEUE_ID}-panel`
 
-/**
- * The pending count's Review link (§10): scroll to the queue and select and
- * focus its Pending tab, as a press on that tab would.
- */
-export function revealPendingTab() {
-  document
-    .getElementById(MODERATION_QUEUE_ID)
-    ?.scrollIntoView({ block: 'start' })
-  const pending = document.getElementById(tabId('pending'))
-  pending?.click()
-  pending?.focus({ preventScroll: true })
-}
-
 export interface ModerationQueueViewProps {
   queue?: ModerationQueueData
   /** The first read is on its way. */
@@ -196,6 +193,10 @@ export interface ModerationQueueViewProps {
   /** The cards' tag picker and its write (Talk photos spec §6.3). */
   talks?: WallPostCardProps['talks']
   onSetTalk?: WallPostCardProps['onSetTalk']
+  /** Why posting is closed, if it is: an empty Pending tab says so (§7). */
+  posting?: PostingState
+  /** The live pending count, beside the heading. */
+  summary?: ReactNode
 }
 
 /** What the queue says after an action, for every outcome but a failure. */
@@ -213,6 +214,16 @@ const NOTICES: Record<Exclude<PostActionOutcome, 'done' | 'failed'>, string> = {
   gone: 'This photo was deleted.',
 }
 
+/** An empty Pending tab while posting is shut: no new posts are coming. */
+const emptyPending = (posting?: PostingState) =>
+  !posting || posting === 'open'
+    ? EMPTY.pending
+    : posting === 'paused'
+      ? 'Nothing waiting. Posting is paused, so no new photos come in.'
+      : posting === 'notYetOpen'
+        ? 'Nothing waiting. Posting hasn’t opened yet.'
+        : 'Nothing waiting. Posting is closed.'
+
 const EMPTY: Record<ModerationTab, string> = {
   pending: `Nothing waiting. New posts show up here within about ${MODERATION_POLL_MS / 1000} seconds of being posted.`,
   onTheWall: 'Nothing on the wall yet. Approve a pending post to show it.',
@@ -227,6 +238,8 @@ export function ModerationQueueView({
   onApproveAll,
   talks,
   onSetTalk,
+  posting,
+  summary,
 }: ModerationQueueViewProps) {
   const [tab, setTab] = useState<ModerationTab>('pending')
   // The page's one polite word on what an action did: the card it was on
@@ -380,8 +393,8 @@ export function ModerationQueueView({
       aria-labelledby={`${MODERATION_QUEUE_ID}-title`}
       className="scroll-mt-20 space-y-4"
     >
-      {/* The live pending count is at the top of the page (`PendingSummary`),
-          the page's one live region for it; the Pending tab shows it here. */}
+      {/* The live pending count (`PendingSummary`) sits beside the heading,
+          the page's one live region for it. */}
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2
           id={`${MODERATION_QUEUE_ID}-title`}
@@ -389,6 +402,7 @@ export function ModerationQueueView({
         >
           Posts
         </h2>
+        {summary}
         {!queue && loading && (
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
             Loading posts…
@@ -484,7 +498,7 @@ export function ModerationQueueView({
           loading && <Skeleton />
         ) : posts.length === 0 ? (
           <p className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-600 dark:border-gray-600 dark:text-gray-400">
-            {EMPTY[tab]}
+            {tab === 'pending' ? emptyPending(posting) : EMPTY[tab]}
           </p>
         ) : (
           <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
