@@ -103,6 +103,9 @@ beforeEach(() => {
   audience.conferences = []
   fetchMock.mockImplementation(
     (query: string, params: Record<string, unknown> = {}) => {
+      if (query.startsWith('array::unique')) {
+        return Promise.resolve(audience.conferences.map((c) => c._id))
+      }
       if (query.startsWith('*[_type == "conference"')) {
         return Promise.resolve(audience.conferences)
       }

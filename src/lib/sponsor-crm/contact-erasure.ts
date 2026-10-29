@@ -213,11 +213,16 @@ async function removeFromSponsorAudiences(emails: string[]): Promise<string[]> {
   const failures: string[] = []
   let conferences: Conference[] = []
   try {
+    const ids = await clientReadUncached.fetch<string[]>(
+      // groq-global: erasure is the person's right across every tenant, like
+      // the send-record read in `erasure-recipients.ts`.
+      `array::unique(*[_type == "sponsorForConference"].conference._ref)`,
+    )
     conferences =
       (await clientReadUncached.fetch<Conference[]>(
-        // groq-global: erasure is the person's right across every tenant,
-        // like the send-record read in `erasure-recipients.ts`.
-        `*[_type == "conference" && count(*[_type == "sponsorForConference" && conference._ref == ^._id]) > 0]{ _id, title, organization }`,
+        // groq-global: the conferences named by the read above, by id.
+        `*[_type == "conference" && _id in $ids]{ _id, title, organization }`,
+        { ids: ids ?? [] },
       )) ?? []
   } catch (error) {
     console.warn('[contact-erasure] listing conferences failed:', error)
