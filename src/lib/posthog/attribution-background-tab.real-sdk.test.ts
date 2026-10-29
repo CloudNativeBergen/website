@@ -12,7 +12,7 @@ import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import posthog from 'posthog-js'
 import { initTenantAnalytics, VERIFY_RUN_PARAM } from './init'
 import { ANALYTICS_CONFIG_ELEMENT_ID } from './config'
-import { UTM_STRIP_DEADLINE_MS } from './address-bar'
+import { UTM_STRIP_DEADLINE_MS, UTM_STRIP_WATCH_TICK_MS } from './address-bar'
 
 const TOKEN = 'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh'
 
@@ -45,7 +45,15 @@ beforeAll(() => {
     }
   })
 })
-afterAll(() => {
+afterAll(async () => {
+  // The strip's guard re-checks the address bar on a timer for as long as
+  // the page is on the landing. Leave it, and let the next re-check run and
+  // stop while the window still has a location: left pending, it fires
+  // after jsdom's teardown, in whatever file the worker runs next.
+  window.history.replaceState(null, '', '/elsewhere')
+  await new Promise((resolve) =>
+    setTimeout(resolve, UTM_STRIP_WATCH_TICK_MS + 100),
+  )
   vi.restoreAllMocks()
 })
 
