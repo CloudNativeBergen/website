@@ -616,7 +616,7 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
   (`denyNonOrganizer()` on the page, `adminProcedure` on every procedure).
 - **Nav entry** "Photo Wall" in the admin menu. The pending-count badge on it
   is slice P6.
-- **Phone-first.** One column of cards on a phone, a grid on desktop.
+- **Phone-first.** Compact cards: two columns on a phone, up to five on a wide screen.
 - **Before setup:** a short explanation and **Set up the Photo Wall** (§4.1).
 - **Two pages.** `/admin/photo-wall` is the moderation queue, straight under
   the header. `/admin/photo-wall/setup` (the header's **Setup** link) holds
@@ -637,7 +637,10 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
 - **Tabs:** **Pending**, **On the wall**, **Not shown**.
 - **Card:** the whole photo with the square crop outlined, caption, name,
   submitted time (`src/lib/time.ts`), and a "Marketing OK" mark when the
-  contributor ticked marketing consent.
+  contributor ticked marketing consent. The photo is a square
+  thumbnail (the whole photo fitted in, crop outlined); a click opens it
+  large. The decisions (Approve, Reject, Remove) are buttons on the card;
+  Delete now, Withdraw marketing OK and the talk tag sit in its ⋯ menu.
 - **Actions:**
   - Pending: **Approve**, **Reject**.
   - On the wall: **Remove**.

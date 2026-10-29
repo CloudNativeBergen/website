@@ -265,6 +265,17 @@ const QUEUE: ModerationQueueData = {
 }
 
 const tab = (name: RegExp) => screen.getByRole('tab', { name })
+
+/** Opens a card's ⋯ menu and answers its items' names. */
+const menuOf = (card: HTMLElement) => {
+  fireEvent.click(within(card).getByRole('button', { name: 'More actions' }))
+  return screen.getAllByRole('menuitem').map((item) => item.textContent)
+}
+/** Chooses `name` from a card's ⋯ menu. */
+const choose = (card: HTMLElement, name: string) => {
+  menuOf(card)
+  fireEvent.click(screen.getByRole('menuitem', { name }))
+}
 /** The incarnation the fixtures' cards show: no creation time, no photo id. */
 const NO_PHOTO_ID = { createdAt: null, assetId: null }
 
@@ -292,7 +303,7 @@ describe('ModerationQueueView (§10)', () => {
     expect(img).toHaveAttribute('width', '1600')
     expect(img).toHaveAttribute('height', '1000')
     // 1600×1000, crop x = 0: the square is the left 62.5 %.
-    const outline = within(card).getByTestId('crop-outline')
+    const outline = within(card).getByTestId('thumb-outline')
     expect(outline.style.left).toBe('0%')
     expect(outline.style.width).toBe('62.5%')
     expect(outline.style.top).toBe('0%')
@@ -333,7 +344,7 @@ describe('ModerationQueueView (§10)', () => {
       'src',
       expect.stringContaining('def-1200x1600'),
     )
-    const outline = within(card).getByTestId('crop-outline')
+    const outline = within(card).getByTestId('thumb-outline')
     expect(outline.style.top).toBe('25%')
     expect(outline.style.height).toBe('75%')
     expect(outline.style.width).toBe('100%')
@@ -744,12 +755,15 @@ describe('the card (§10)', () => {
         }}
       />,
     )
+    // The card shows a square thumbnail; the photo opens large.
+    expect(screen.getByTestId('thumb-box').style.width).toBe('15.625%')
+    fireEvent.click(screen.getByRole('button', { name: /^Enlarge/ }))
     const box = screen.getByTestId('photo-box')
     expect(box.style.width).toMatch(/^min\(100%, 70vh ?\* ?0\.15625\)$/)
     expect(box.style.aspectRatio).toBe('320 / 2048')
     // The outline and the photo are inside the capped box, not its frame.
     expect(box).toContainElement(screen.getByTestId('crop-outline'))
-    expect(box).toContainElement(screen.getByRole('img'))
+    expect(box).toContainElement(within(box).getByRole('img'))
     expect(screen.getByTestId('crop-outline').style.top).toBe('84.375%')
   })
 
@@ -787,34 +801,41 @@ describe('the actions (§10)', () => {
   })
 
   const card = (name: string) => screen.getByRole('article', { name })
+  // The card's buttons by name, leaving out the thumbnail's Enlarge.
   const buttons = (el: HTMLElement) =>
     within(el)
       .queryAllByRole('button')
-      .map((b) => b.textContent)
+      .map((b) => b.getAttribute('aria-label') ?? b.textContent)
+      .filter((name) => !name?.startsWith('Enlarge'))
   const notice = () => screen.getByRole('status')
 
   it('each status offers its own actions; a deleting card only Try again', () => {
     render(<ModerationQueue />)
     // Withdraw marketing OK only on a card with the mark.
+    // The decisions are buttons; the rest is in the ⋯ menu.
     expect(buttons(card('Keynote crowd'))).toEqual([
       'Approve',
       'Reject',
-      'Delete now',
-      'Withdraw marketing OK',
-      'Add talk',
+      'More actions',
     ])
+    expect(menuOf(card('Keynote crowd'))).toEqual([
+      'Add talk',
+      'Withdraw marketing OK',
+      'Delete now',
+    ])
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
     fireEvent.click(tab(/^On the wall/))
     expect(buttons(screen.getByRole('article'))).toEqual([
       'Remove',
-      'Delete now',
-      'Add talk',
+      'More actions',
     ])
+    expect(menuOf(screen.getByRole('article'))).toEqual([
+      'Add talk',
+      'Delete now',
+    ])
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
     fireEvent.click(tab(/^Not shown/))
-    expect(buttons(card('Blurry'))).toEqual([
-      'Approve',
-      'Delete now',
-      'Add talk',
-    ])
+    expect(buttons(card('Blurry'))).toEqual(['Approve', 'More actions'])
     expect(buttons(card('Gone soon'))).toEqual(['Try again'])
   })
 
@@ -841,11 +862,7 @@ describe('the actions (§10)', () => {
 
   it('Withdraw marketing OK asks first; Cancel withdraws nothing and gives focus back', async () => {
     render(<ModerationQueue />)
-    fireEvent.click(
-      within(card('Keynote crowd')).getByRole('button', {
-        name: 'Withdraw marketing OK',
-      }),
-    )
+    choose(card('Keynote crowd'), 'Withdraw marketing OK')
     const confirm = within(card('Keynote crowd')).getByRole('group', {
       name: 'Withdraw marketing OK? The photo leaves the marketing export. Only the contributor can give it again.',
     })
@@ -858,7 +875,7 @@ describe('the actions (§10)', () => {
     await vi.waitFor(() =>
       expect(
         within(card('Keynote crowd')).getByRole('button', {
-          name: 'Withdraw marketing OK',
+          name: 'More actions',
         }),
       ).toHaveFocus(),
     )
@@ -868,11 +885,7 @@ describe('the actions (§10)', () => {
   it('Withdraw marketing OK, confirmed, sends the post the card showed, says so, and reads the queue again', async () => {
     h.withdrawMarketing.mockResolvedValue({ status: 'done' })
     render(<ModerationQueue />)
-    fireEvent.click(
-      within(card('Keynote crowd')).getByRole('button', {
-        name: 'Withdraw marketing OK',
-      }),
-    )
+    choose(card('Keynote crowd'), 'Withdraw marketing OK')
     fireEvent.click(
       within(card('Keynote crowd')).getByRole('button', { name: 'Withdraw' }),
     )
@@ -905,11 +918,7 @@ describe('the actions (§10)', () => {
     const openConfirm = () => {
       const r = render(view(consenting))
       fireEvent.click(tab(/^Not shown/))
-      fireEvent.click(
-        within(card('Late one')).getByRole('button', {
-          name: 'Withdraw marketing OK',
-        }),
-      )
+      choose(card('Late one'), 'Withdraw marketing OK')
       return r
     }
     const confirmGroup = () =>
@@ -921,8 +930,8 @@ describe('the actions (§10)', () => {
       [
         'the mark is gone (another organizer withdrew it)',
         { marketingConsent: false },
-        ['Approve', 'Delete now'],
-        'Delete now',
+        ['Approve', 'More actions'],
+        'More actions',
       ],
       [
         'the post is deleting (another organizer started a Delete)',
@@ -973,11 +982,7 @@ describe('the actions (§10)', () => {
       if (answer) h.withdrawMarketing.mockResolvedValue(answer)
       else h.withdrawMarketing.mockRejectedValue(new Error('offline'))
       render(<ModerationQueue />)
-      fireEvent.click(
-        within(card('Keynote crowd')).getByRole('button', {
-          name: 'Withdraw marketing OK',
-        }),
-      )
+      choose(card('Keynote crowd'), 'Withdraw marketing OK')
       fireEvent.click(
         within(card('Keynote crowd')).getByRole('button', { name: 'Withdraw' }),
       )
@@ -995,7 +1000,7 @@ describe('the actions (§10)', () => {
     render(<ModerationQueue />)
     const keynote = card('Keynote crowd')
     expect(within(keynote).getByText('No talk tagged.')).toBeTruthy()
-    fireEvent.click(within(keynote).getByRole('button', { name: 'Add talk' }))
+    choose(keynote, 'Add talk')
     fireEvent.change(within(keynote).getByRole('searchbox'), {
       target: { value: 'bo' },
     })
@@ -1035,7 +1040,7 @@ describe('the actions (§10)', () => {
     expect(within(tagged).getByTestId('talk-tag').textContent).toContain(
       'Talk: Keynote · Ada',
     )
-    fireEvent.click(within(tagged).getByRole('button', { name: 'Clear tag' }))
+    choose(tagged, 'Clear tag')
     await vi.waitFor(() =>
       expect(h.setTalkTag).toHaveBeenCalledWith({
         id: 'wallPost-1',
@@ -1102,9 +1107,7 @@ describe('the actions (§10)', () => {
 
   it('Delete now asks first; Cancel deletes nothing and gives focus back', async () => {
     render(<ModerationQueue />)
-    fireEvent.click(
-      within(card('Keynote crowd')).getByRole('button', { name: 'Delete now' }),
-    )
+    choose(card('Keynote crowd'), 'Delete now')
     const confirm = within(card('Keynote crowd')).getByRole('group', {
       name: 'Delete this photo for good? It can’t be undone.',
     })
@@ -1118,7 +1121,7 @@ describe('the actions (§10)', () => {
     await vi.waitFor(() =>
       expect(
         within(card('Keynote crowd')).getByRole('button', {
-          name: 'Delete now',
+          name: 'More actions',
         }),
       ).toHaveFocus(),
     )
@@ -1128,9 +1131,7 @@ describe('the actions (§10)', () => {
   it('Delete now, confirmed, deletes it', async () => {
     h.deletePost.mockResolvedValue({ status: 'deleted' })
     render(<ModerationQueue />)
-    fireEvent.click(
-      within(card('Keynote crowd')).getByRole('button', { name: 'Delete now' }),
-    )
+    choose(card('Keynote crowd'), 'Delete now')
     fireEvent.click(
       within(card('Keynote crowd')).getByRole('button', { name: 'Delete' }),
     )
@@ -1451,7 +1452,7 @@ describe('the queue holds what is in flight, and where focus goes (§10)', () =>
     await act(async () => answers[1]({ status: 'done' }))
     serve(approved(pendingTwo, 'wallPost-5'))
     rerender(<ModerationQueue />)
-    expect(within(card('First')).getAllByRole('button')[0]).toHaveFocus()
+    expect(card('First').querySelector('[data-decision]')).toHaveFocus()
     // Then A.
     await act(async () => answers[0]({ status: 'done' }))
     serve(approved(pendingTwo, 'wallPost-1', 'wallPost-5'))
@@ -1605,9 +1606,7 @@ describe('closing a confirm when the answer comes hands focus back only if it is
       new Promise((_, reject) => (answer = () => reject(new Error('503')))),
     )
     render(<ModerationQueue />)
-    fireEvent.click(
-      within(card('First')).getByRole('button', { name: 'Delete now' }),
-    )
+    choose(card('First'), 'Delete now')
     const press = within(card('First')).getByRole('button', { name: 'Delete' })
     press.focus()
     fireEvent.click(press)
@@ -1628,7 +1627,7 @@ describe('closing a confirm when the answer comes hands focus back only if it is
     const fail = deleteFailingLater()
     await fail()
     expect(
-      within(card('First')).getByRole('button', { name: 'Delete now' }),
+      within(card('First')).getByRole('button', { name: 'More actions' }),
     ).toHaveFocus()
   })
 
@@ -1819,9 +1818,7 @@ describe('a post re-created under the same id gets a fresh card (§6.2)', () => 
     serve(A)
     const { rerender } = render(<ModerationQueue />)
     const original = screen.getByRole('article', { name: 'Original' })
-    fireEvent.click(
-      within(original).getByRole('button', { name: 'Delete now' }),
-    )
+    choose(original, 'Delete now')
     expect(within(original).getByRole('group')).toBeVisible()
     serve(B)
     rerender(<ModerationQueue />)
