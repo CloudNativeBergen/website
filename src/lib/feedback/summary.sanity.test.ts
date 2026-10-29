@@ -1140,20 +1140,6 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
       expect(report).toMatchObject({ claimed: 0, failed: 0, notReached: 3 })
     })
 
-    it('counts a talk whose own read the deadline cut off as not reached, not failed', async () => {
-      h.hangDocReadsOf = ['talk-1']
-      const start = Date.now()
-
-      const report = await deliverFeedbackSummaries({
-        now: NOW,
-        deadline: new Date(start + 150),
-      })
-
-      expect(Date.now() - start).toBeLessThan(2_000)
-      expect(sentAt('talk-1')).toBeUndefined()
-      expect(report).toMatchObject({ due: 1, failed: 0, notReached: 1 })
-    })
-
     describe('when the deadline timer fires before the clock reaches the deadline', () => {
       // The run's timer is monotonic and `Date.now()` is not: the timer can
       // fire a millisecond before the wall clock says the deadline has come.
@@ -1191,6 +1177,25 @@ describe('deliverFeedbackSummaries: claim, then send', () => {
           deadline: new Date(Date.now() + 60_000),
         })
 
+        expect(sentAt('talk-1')).toBeUndefined()
+        expect(report).toMatchObject({ due: 1, failed: 0, notReached: 1 })
+      })
+
+      it('counts a talk whose own read the deadline cut off as not reached, not failed', async () => {
+        h.hangDocReadsOf = ['talk-1']
+        const fire = earlyDeadline()
+        // Fired once the talk's own read is waiting, whatever the load: not
+        // during the selection, and not after a wall-clock guess.
+        h.beforeDocRead = (id) => {
+          if (id === 'talk-1') setTimeout(fire, 0)
+        }
+
+        const report = await deliverFeedbackSummaries({
+          now: NOW,
+          deadline: new Date(Date.now() + 60_000),
+        })
+
+        expect(h.docReadsTried).toContain('talk-1')
         expect(sentAt('talk-1')).toBeUndefined()
         expect(report).toMatchObject({ due: 1, failed: 0, notReached: 1 })
       })
