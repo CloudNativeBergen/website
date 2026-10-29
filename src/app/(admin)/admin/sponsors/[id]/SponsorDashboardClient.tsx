@@ -15,6 +15,7 @@ import {
 } from '@/components/admin/sponsor/SponsorSendModal'
 import { SponsorDetailHeader } from '@/components/admin/sponsor-crm/widgets/SponsorDetailHeader'
 import { SponsorOverviewWidget } from '@/components/admin/sponsor-crm/widgets/SponsorOverviewWidget'
+import { SponsorPhaseWidget } from '@/components/admin/sponsor-crm/widgets/SponsorPhaseWidget'
 import { SponsorFollowUpWidget } from '@/components/admin/sponsor-crm/widgets/SponsorFollowUpWidget'
 import { SponsorContactsWidget } from '@/components/admin/sponsor-crm/widgets/SponsorContactsWidget'
 import { SponsorContractWidget } from '@/components/admin/sponsor-crm/widgets/SponsorContractWidget'
@@ -60,6 +61,10 @@ export function SponsorDashboardClient({
   )
   const { data: sponsor } = api.sponsor.crm.getById.useQuery({
     id: sponsorId,
+  })
+
+  const { data: activities } = api.sponsor.crm.activities.list.useQuery({
+    sponsorForConferenceId: sponsorId,
   })
 
   const [sendKind, setSendKind] = useState<SendableKind | null>(null)
@@ -109,6 +114,16 @@ export function SponsorDashboardClient({
 
       <main className="flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
+          {sponsor && (
+            <div className="mb-8">
+              <SponsorPhaseWidget
+                sponsor={sponsor}
+                activities={activities}
+                onOpenRecord={openRecord}
+                onChanged={refresh}
+              />
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
             <div className="flex flex-col gap-8 lg:col-span-1">
               <SponsorOverviewWidget
