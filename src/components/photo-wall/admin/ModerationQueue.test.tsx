@@ -2184,3 +2184,95 @@ describe('keyboard shortcuts on the queue (§10)', () => {
     expect(h.reject).not.toHaveBeenCalled()
   })
 })
+
+describe('Approve all (§10): a confirm with the count, and one Undo for the batch', () => {
+  const inc = (n: number) => ({
+    createdAt: `2026-10-26T07:0${n}:00Z`,
+    assetId: `image-${n}`,
+  })
+  const queue: ModerationQueueData = {
+    posts: [1, 2, 3].map((n) =>
+      post({
+        _id: `wallPost-${n}`,
+        caption: `Batch ${n}`,
+        submittedAt: `2026-10-26T07:1${n}:00Z`,
+        incarnation: inc(n),
+      }),
+    ),
+  }
+  beforeEach(() => {
+    for (const fn of [h.invalidate, h.approve, h.remove, h.approveAllPending])
+      fn.mockReset()
+    h.remove.mockResolvedValue({ status: 'done' })
+    h.useQuery.mockReturnValue({
+      data: queue,
+      isPending: false,
+      isError: false,
+    })
+  })
+  const approveAll = async () => {
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Approve all pending (3)' }),
+    )
+    expect(
+      screen.getByText('Approve all 3 pending photos? They go on the wall.'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Approve all' }))
+  }
+
+  it('Undo removes exactly the posts it approved, each as the card showed it', async () => {
+    // Post 2 changed meanwhile: not approved, so not undone either.
+    h.approveAllPending.mockResolvedValue({
+      approved: 2,
+      approvedIds: ['wallPost-1', 'wallPost-3'],
+      pending: 3,
+    })
+    render(<ModerationQueue />)
+    await approveAll()
+    expect(
+      await screen.findByText(
+        'Approved 2 photos · Undo takes them off the wall',
+      ),
+    ).toBeInTheDocument()
+    expect(h.remove).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await screen.findByText('Took 2 photos off the wall. They’re in Not shown.')
+    expect(h.remove).toHaveBeenCalledTimes(2)
+    expect(h.remove.mock.calls.map(([input]) => input)).toEqual(
+      expect.arrayContaining([
+        { id: 'wallPost-1', from: 'approved', shown: inc(1) },
+        { id: 'wallPost-3', from: 'approved', shown: inc(3) },
+      ]),
+    )
+    expect(h.approve).not.toHaveBeenCalled()
+  })
+
+  it('says how many Undo took back when one changed meanwhile', async () => {
+    h.approveAllPending.mockResolvedValue({
+      approved: 3,
+      approvedIds: ['wallPost-1', 'wallPost-2', 'wallPost-3'],
+      pending: 3,
+    })
+    h.remove.mockResolvedValueOnce({ status: 'changed' })
+    render(<ModerationQueue />)
+    await approveAll()
+    await screen.findByText('Approved 3 photos · Undo takes them off the wall')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await screen.findByText(
+      'Took 2 of 3 off the wall. The others changed meanwhile or failed.',
+    )
+    expect(h.remove).toHaveBeenCalledTimes(3)
+  })
+
+  it('nothing approved: no Undo', async () => {
+    h.approveAllPending.mockResolvedValue({
+      approved: 0,
+      approvedIds: [],
+      pending: 3,
+    })
+    render(<ModerationQueue />)
+    await approveAll()
+    await screen.findByText(/^Approved 0 of 3\./)
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+  })
+})

@@ -662,7 +662,7 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
   refreshes with no change; otherwise it retries once, and **only if no moderation decision happened in between**: the status **and** `decidedAt` are what the action read (a marketing untick changes neither). So an Approve begun on Pending doesn't retry after a rejection, and a Remove doesn't retry after someone removed and re-approved the post. A marketing untick is the usual reason to retry.
 - **Approve** patches `status: approved`, `approvedAt` and `decidedAt`.
 - **Reject** and **Remove** patch `status: notShown` and `decidedAt`.
-- **Approve all pending** approves the posts pending when pressed, one guarded patch per post, four at a time, within a 30 s budget (a transaction is all-or-nothing, so one conflicted post would sink a whole batch). A conflicted post is skipped and stays pending. It reports how many it approved; pressing again picks up the rest.
+- **Approve all pending** approves the posts pending when pressed, one guarded patch per post, four at a time, within a 30 s budget (a transaction is all-or-nothing, so one conflicted post would sink a whole batch). A conflicted post is skipped and stays pending. It reports how many it approved; pressing again picks up the rest. Its confirm names the exact count. It also answers the ids it approved (acknowledged writes only), and the Undo toast offers one Undo for the batch: a guarded Remove of exactly those posts, four at a time. The queue then says how many came off the wall.
 - **Delete now** runs the same Delete as the contributor's (§12).
 - **Undo:** after Approve, Reject or Remove, a toast at the bottom says what
   Undo does ("Rejected · Undo puts it on the wall") for about 8 s, held while
