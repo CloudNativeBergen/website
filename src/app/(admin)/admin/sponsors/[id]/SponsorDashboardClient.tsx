@@ -2,6 +2,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import type { Conference } from '@/lib/conference/types'
 import type { SendableKind } from '@/components/admin/sponsor/SponsorSendModal'
@@ -57,6 +58,7 @@ export function SponsorDashboardClient({
   // The page is read-only; editing happens in the board's side panel,
   // opened over the page and kept in `?edit=<tab>`.
   const panel = useSponsorRecordPanel({ viewParam: 'edit', fixedId: sponsorId })
+  const router = useRouter()
   const openRecord = (view: RecordView) => panel.open(sponsorId, view)
 
   useEffect(() => {
@@ -169,6 +171,7 @@ export function SponsorDashboardClient({
           onViewChange={panel.setView}
           onClose={panel.close}
           onChanged={refresh}
+          onDeleted={() => router.push('/admin/sponsors/crm')}
           initialSendKind={sendOnOpen}
           conference={conference}
           domain={domain}

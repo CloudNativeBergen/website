@@ -1,7 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { SponsorCard } from './SponsorCard'
-import { mockSponsors, mockSponsor } from '@/__mocks__/sponsor-data'
+import { mockSponsor } from '@/__mocks__/sponsor-data'
 import { DndContext } from '@dnd-kit/core'
+import { fn } from 'storybook/test'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import type { BoardView } from './BoardViewSwitcher'
 
 // Fixed date so day-count badges (e.g. "Pending (14d)") are deterministic in visual snapshots
 const FIXED_NOW = new Date('2026-02-15T12:00:00Z')
@@ -39,7 +43,7 @@ const meta: Meta<typeof SponsorCard> = {
     docs: {
       description: {
         component:
-          'Visual representation of sponsors in the CRM pipeline. Each card displays sponsor information, current status, contract value, and available actions. Cards support drag-and-drop for pipeline management and adapt their layout based on the current view (pipeline, contract, or invoice board). The design follows Nordic minimalism principles with clear status indicators using the brand color system.',
+          'Compact sponsor card on the CRM board. Three lines: logo and name; value, tier and owner; one status line that depends on the board (next follow-up or days since contact, signature status and waiting time, invoice due or overdue). The whole card is the drag handle; a click or Enter opens the sponsor panel. The checkbox shows on hover, focus or in selection mode.',
       },
     },
   },
@@ -50,18 +54,24 @@ const meta: Meta<typeof SponsorCard> = {
       description:
         'Current board view affects card layout and displayed information',
     },
+    isSelectionMode: { control: 'boolean' },
     isSelected: {
       control: 'boolean',
       description: 'Whether the card is selected for bulk actions',
     },
   },
+  args: {
+    onEdit: fn(),
+    onToggleSelect: fn(),
+    onEmail: fn(),
+  },
   decorators: [
     (Story) => (
-      <DndContext>
-        <div className="max-w-sm p-8">
+      <NotificationProvider>
+        <DndContext>
           <Story />
-        </div>
-      </DndContext>
+        </DndContext>
+      </NotificationProvider>
     ),
   ],
 }
@@ -69,223 +79,158 @@ const meta: Meta<typeof SponsorCard> = {
 export default meta
 type Story = StoryObj<typeof SponsorCard>
 
+const owner = {
+  _id: 'org-1',
+  name: 'Kari Nordmann',
+  email: 'kari@example.com',
+}
+
+const activity = (createdAt: string) =>
+  ({
+    activityType: 'note',
+    description: '',
+    createdAt,
+  }) as SponsorForConferenceExpanded['lastActivity']
+
+const BOARDS: {
+  view: BoardView
+  cards: {
+    label: string
+    sponsor: SponsorForConferenceExpanded
+    selected?: boolean
+  }[]
+}[] = [
+  {
+    view: 'pipeline',
+    cards: [
+      {
+        label: 'Follow-up overdue',
+        sponsor: mockSponsor({
+          nextFollowUpAt: '2026-02-10',
+          assignedTo: owner,
+        }),
+      },
+      {
+        label: 'Follow-up ahead',
+        sponsor: mockSponsor({
+          _id: 'p2',
+          nextFollowUpAt: '2026-02-20',
+          assignedTo: owner,
+        }),
+        selected: true,
+      },
+      {
+        label: 'Stale, no owner',
+        sponsor: mockSponsor({
+          _id: 'p3',
+          sponsor: { ...mockSponsor().sponsor, name: 'Nordic Cloud', logo: '' },
+          lastActivity: activity('2026-02-01T12:00:00Z'),
+        }),
+      },
+    ],
+  },
+  {
+    view: 'contract',
+    cards: [
+      {
+        label: 'Waiting for signature',
+        sponsor: mockSponsor({
+          _id: 'c1',
+          contractStatus: 'contract-sent',
+          signatureStatus: 'pending',
+          contractSentAt: '2026-02-05T12:00:00Z',
+          assignedTo: owner,
+        }),
+      },
+      {
+        label: 'Signed',
+        sponsor: mockSponsor({
+          _id: 'c2',
+          contractStatus: 'contract-signed',
+          signatureStatus: 'signed',
+          contractSentAt: '2026-02-01T12:00:00Z',
+        }),
+      },
+    ],
+  },
+  {
+    view: 'invoice',
+    cards: [
+      {
+        label: 'Due',
+        sponsor: mockSponsor({
+          _id: 'i1',
+          invoiceStatus: 'sent',
+          invoiceDueAt: '2026-03-01',
+          assignedTo: owner,
+        }),
+      },
+      {
+        label: 'Overdue',
+        sponsor: mockSponsor({
+          _id: 'i2',
+          invoiceStatus: 'sent',
+          invoiceDueAt: '2026-02-01',
+        }),
+      },
+    ],
+  },
+]
+
+function AllBoards() {
+  return (
+    <div className="grid w-[1180px] grid-cols-3 gap-6">
+      {BOARDS.map((board) => (
+        <section key={board.view} className="space-y-3">
+          <h3 className="text-sm font-semibold text-gray-700 capitalize dark:text-gray-200">
+            {board.view}
+          </h3>
+          {board.cards.map((card) => (
+            <div key={card.label} className="space-y-1">
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                {card.label}
+              </p>
+              <SponsorCard
+                sponsor={card.sponsor}
+                currentView={board.view}
+                columnKey={board.view}
+                isSelected={card.selected}
+                onEdit={fn()}
+                onEmail={fn()}
+              />
+            </div>
+          ))}
+        </section>
+      ))}
+    </div>
+  )
+}
+
 export const Interactive: Story = {
   args: {
-    sponsor: mockSponsors.negotiating,
+    sponsor: mockSponsor({ assignedTo: owner, nextFollowUpAt: '2026-02-20' }),
     currentView: 'pipeline',
-    onEdit: () => console.log('Edit clicked'),
-    onDelete: () => console.log('Delete clicked'),
-    onEmail: () => console.log('Email clicked'),
-    onOpenHistory: () => console.log('Open history clicked'),
-    onAdvanceStage: (stage) => console.log(`Advance stage clicked: ${stage}`),
+    columnKey: 'negotiating',
   },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Interactive playground - use controls to change view type, selection state, and other properties.',
-      },
-    },
-  },
+  render: (args) => (
+    <div className="max-w-xs">
+      <SponsorCard {...args} />
+    </div>
+  ),
 }
 
-export const Prospect: Story = {
-  args: {
-    sponsor: mockSponsors.prospect,
-    currentView: 'pipeline',
-    onEdit: () => {},
-    onDelete: () => {},
-  },
+export const AllBoardsLight: Story = {
+  globals: { theme: 'light' },
+  render: () => <AllBoards />,
 }
 
-export const Contacted: Story = {
-  args: {
-    sponsor: mockSponsors.contacted,
-    currentView: 'pipeline',
-    onEdit: () => {},
-    onDelete: () => {},
-  },
+export const AllBoardsDark: Story = {
+  globals: { theme: 'dark' },
+  render: () => <AllBoards />,
 }
 
-export const Negotiating: Story = {
-  args: {
-    sponsor: mockSponsors.negotiating,
-    currentView: 'pipeline',
-    onEdit: () => {},
-    onDelete: () => {},
-  },
-}
-
-export const ClosedWon: Story = {
-  args: {
-    sponsor: mockSponsors.closedWon,
-    currentView: 'pipeline',
-    onEdit: () => {},
-    onDelete: () => {},
-  },
-}
-
-export const ClosedLost: Story = {
-  args: {
-    sponsor: mockSponsors.closedLost,
-    currentView: 'pipeline',
-    onEdit: () => {},
-    onDelete: () => {},
-  },
-}
-
-export const PipelineView: Story = {
-  args: {
-    sponsor: mockSponsors.negotiating,
-    currentView: 'pipeline',
-    onEdit: () => {},
-    onDelete: () => {},
-  },
-}
-
-export const ContractView: Story = {
-  args: {
-    sponsor: mockSponsor({
-      status: 'closed-won',
-      contractStatus: 'contract-sent',
-    }),
-    currentView: 'contract',
-    onEdit: () => {},
-    onDelete: () => {},
-  },
-}
-
-export const InvoiceView: Story = {
-  args: {
-    sponsor: mockSponsor({
-      status: 'closed-won',
-      contractStatus: 'contract-signed',
-      invoiceStatus: 'sent',
-    }),
-    currentView: 'invoice',
-    onEdit: () => {},
-    onDelete: () => {},
-  },
-}
-
-export const WithAssignee: Story = {
-  args: {
-    sponsor: mockSponsor({
-      assignedTo: {
-        _id: 'speaker-1',
-        name: 'John Doe',
-        email: 'john@example.com',
-      },
-    }),
-    currentView: 'pipeline',
-    onEdit: () => {},
-    onDelete: () => {},
-  },
-}
-
-export const Selected: Story = {
-  args: {
-    sponsor: mockSponsors.negotiating,
-    currentView: 'pipeline',
-    isSelected: true,
-    isSelectionMode: true,
-    onToggleSelect: () => console.log('Toggle'),
-    onEdit: () => {},
-    onDelete: () => {},
-  },
-}
-
-export const NoLogo: Story = {
-  args: {
-    sponsor: mockSponsor({
-      sponsor: {
-        ...mockSponsors.negotiating.sponsor,
-        logo: '',
-        logoBright: '',
-      },
-    }),
-    currentView: 'pipeline',
-    onEdit: () => console.log('Edit clicked'),
-    onDelete: () => console.log('Delete clicked'),
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Edge case: Sponsor without logo displays fallback name initials.',
-      },
-    },
-  },
-}
-
-export const ContractViewWithSignaturePending: Story = {
-  args: {
-    sponsor: mockSponsor({
-      status: 'closed-won',
-      contractStatus: 'contract-sent',
-      signatureStatus: 'pending',
-      contractSentAt: '2026-02-01T10:00:00Z',
-    }),
-    currentView: 'contract',
-    onEdit: () => {},
-    onDelete: () => {},
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Contract board view with signature pending badge showing days elapsed.',
-      },
-    },
-  },
-}
-
-export const ContractViewWithSignatureSigned: Story = {
-  args: {
-    sponsor: mockSponsor({
-      status: 'closed-won',
-      contractStatus: 'contract-signed',
-      signatureStatus: 'signed',
-      contractSignedAt: '2026-02-10T14:00:00Z',
-    }),
-    currentView: 'contract',
-    onEdit: () => {},
-    onDelete: () => {},
-  },
-}
-
-export const ContractViewWithSignatureRejected: Story = {
-  args: {
-    sponsor: mockSponsor({
-      status: 'closed-won',
-      contractStatus: 'contract-sent',
-      signatureStatus: 'rejected',
-      contractSentAt: '2026-02-05T10:00:00Z',
-    }),
-    currentView: 'contract',
-    onEdit: () => {},
-    onDelete: () => {},
-  },
-}
-
-export const HighValue: Story = {
-  args: {
-    sponsor: mockSponsor({
-      contractValue: 2500000,
-      contractCurrency: 'NOK',
-      status: 'negotiating',
-      tags: ['high-priority', 'multi-year-potential'],
-    }),
-    currentView: 'pipeline',
-    onEdit: () => console.log('Edit clicked'),
-    onDelete: () => console.log('Delete clicked'),
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Edge case: High-value sponsor with large contract value and priority tags.',
-      },
-    },
-  },
+export const SelectionModeDark: Story = {
+  ...Interactive,
+  globals: { theme: 'dark' },
+  args: { ...Interactive.args, isSelectionMode: true, isSelected: false },
 }

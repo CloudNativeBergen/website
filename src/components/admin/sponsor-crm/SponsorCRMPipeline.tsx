@@ -50,11 +50,17 @@ import { Conference } from '@/lib/conference/types'
 import { teamMembersForKey } from '@/lib/teams/members'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorDragDrop } from '@/hooks/useSponsorDragDrop'
-import { SponsorDeleteModal } from '@/components/admin/sponsor-crm/SponsorDeleteModal'
-import type { DeleteCleanupOptions } from '@/components/admin/sponsor-crm/SponsorDeleteModal'
 import { TierPickerPrompt } from '@/components/admin/sponsor-crm/TierPickerPrompt'
 import { SponsorHealthPanel } from '@/components/admin/sponsor-crm/SponsorHealthPanel'
-import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core'
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  pointerWithin,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
 import clsx from 'clsx'
 
 interface SponsorCRMPipelineProps {
@@ -94,8 +100,6 @@ export function SponsorCRMPipeline({
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
   const [emailKind, setEmailKind] = useState<SendableKind>('information')
   const [contractSend, setContractSend] = useState<ContractSendOptions>({})
-  const [deleteConfirmSponsor, setDeleteConfirmSponsor] =
-    useState<SponsorForConferenceExpanded | null>(null)
   const [currentView, setCurrentView] = useState<BoardView>(
     () =>
       (['pipeline', 'contract', 'invoice'].includes(
@@ -115,6 +119,12 @@ export function SponsorCRMPipeline({
   // linkable and the back button closes it. Old modal links land here too.
   const panel = useSponsorRecordPanel({ idParam: 'sponsor', viewParam: 'view' })
   const panelId = panel.id
+  // The whole card is the drag handle: a pointer has to travel 6px before a
+  // drag starts, so a plain click still opens the sponsor.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor),
+  )
   const openPanel = panel.open
   const refreshSponsor = useRefreshSponsor()
 
@@ -123,18 +133,10 @@ export function SponsorCRMPipeline({
     isDragging,
     handleDragStart,
     handleDragEnd,
-    handleAdvanceStage,
     pendingTierMove,
     confirmTierMove,
     cancelTierMove,
   } = useSponsorDragDrop(currentView)
-
-  const deleteMutation = api.sponsor.crm.delete.useMutation({
-    onSuccess: () => {
-      utils.sponsor.crm.list.invalidate()
-      utils.sponsor.crm.healthViolations.invalidate()
-    },
-  })
 
   // Parse filters from URL
   const tiersFilter = useMemo(
@@ -261,13 +263,6 @@ export function SponsorCRMPipeline({
     setIsFormOpen(true)
   }, [])
 
-  const handleOpenContract = useCallback(
-    (sponsor: SponsorForConferenceExpanded) => {
-      openPanel(sponsor._id, 'contract')
-    },
-    [openPanel],
-  )
-
   const handleCloseForm = useCallback(() => {
     setIsFormOpen(false)
     utils.sponsor.crm.list.invalidate()
@@ -289,10 +284,6 @@ export function SponsorCRMPipeline({
   )
   const handleOpenEmail = useCallback(
     (sponsor: SponsorForConferenceExpanded) => openSend(sponsor, 'information'),
-    [openSend],
-  )
-  const handleOpenDiscountSend = useCallback(
-    (sponsor: SponsorForConferenceExpanded) => openSend(sponsor, 'discount'),
     [openSend],
   )
   const handleCloseEmail = useCallback(() => {
@@ -355,27 +346,6 @@ export function SponsorCRMPipeline({
         name: o.name,
       }))
   }, [conference.organizers])
-
-  const handleDelete = useCallback(
-    async (sponsorId: string) => {
-      const sponsor = sponsors.find((s) => s._id === sponsorId)
-      if (sponsor) setDeleteConfirmSponsor(sponsor)
-    },
-    [sponsors],
-  )
-
-  const confirmDelete = useCallback(
-    async (options: DeleteCleanupOptions) => {
-      if (!deleteConfirmSponsor) return
-      await deleteMutation.mutateAsync({
-        id: deleteConfirmSponsor._id,
-        cancelAgreement: options.cancelAgreement,
-        deleteContractAsset: options.deleteContractAsset,
-      })
-      setDeleteConfirmSponsor(null)
-    },
-    [deleteConfirmSponsor, deleteMutation],
-  )
 
   // Clear selection when filters change
   useEffect(() => {
@@ -531,18 +501,6 @@ export function SponsorCRMPipeline({
         tiers={tiers}
         onSelect={confirmTierMove}
         onCancel={cancelTierMove}
-      />
-      <SponsorDeleteModal
-        isOpen={deleteConfirmSponsor !== null}
-        onClose={() => setDeleteConfirmSponsor(null)}
-        onConfirm={confirmDelete}
-        count={1}
-        hasPendingAgreement={
-          deleteConfirmSponsor?.signatureStatus === 'pending' &&
-          !!deleteConfirmSponsor?.signatureId
-        }
-        hasContractDocument={!!deleteConfirmSponsor?.contractDocument}
-        isLoading={deleteMutation.isPending}
       />
       {isFormOpen && (
         <SponsorCRMForm
@@ -1043,6 +1001,7 @@ export function SponsorCRMPipeline({
       {/* Board Columns */}
       <DndContext
         id={dndId}
+        sensors={sensors}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         collisionDetection={pointerWithin}
@@ -1067,24 +1026,9 @@ export function SponsorCRMPipeline({
                 isSelectionMode={selectedIds.length > 0}
                 thresholds={conference.crmInactivityThresholds}
                 onSponsorClick={handleOpenForm}
-                onSponsorDelete={handleDelete}
-                onSponsorEmail={
-                  currentView !== 'contract' ? handleOpenEmail : undefined
-                }
-                onSponsorSendDiscountCodes={
-                  currentView !== 'contract' && canSendDiscountCodes
-                    ? handleOpenDiscountSend
-                    : undefined
-                }
-                onSponsorContract={
-                  currentView === 'contract' ? handleOpenContract : undefined
-                }
+                onSponsorEmail={handleOpenEmail}
                 onSponsorToggleSelect={handleToggleSelect}
                 onAddClick={() => handleOpenForm()}
-                onSponsorOpenHistory={(sponsor) =>
-                  handleOpenForm(sponsor, 'history')
-                }
-                onSponsorAdvanceStage={handleAdvanceStage}
               />
             )
           })}
@@ -1098,7 +1042,6 @@ export function SponsorCRMPipeline({
                 currentView={currentView}
                 thresholds={conference.crmInactivityThresholds}
                 onEdit={() => {}}
-                onDelete={() => {}}
               />
             </div>
           )}

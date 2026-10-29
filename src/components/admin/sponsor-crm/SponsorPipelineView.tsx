@@ -88,6 +88,8 @@ export interface SponsorPipelineViewProps {
   onSendEmail?: () => void
   /** Send → Discount codes (#1262). Omitted when ticketing is off. */
   onSendDiscountCodes?: () => void
+  /** Delete this sponsor (side panel only). Omitted ⇒ no Delete action. */
+  onDelete?: () => void
 }
 
 /** A titled block with an uppercase eyebrow, separated by hairline dividers. */
@@ -141,6 +143,7 @@ export function SponsorPipelineView({
   onOpenView,
   onSendEmail,
   onSendDiscountCodes,
+  onDelete,
 }: SponsorPipelineViewProps) {
   // The same codes the discount send resolves: stored, or matched by name.
   const codeOptions = api.sponsor.crm.discountCodeOptions.useQuery(
@@ -408,6 +411,15 @@ export function SponsorPipelineView({
         >
           Cancel
         </button>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="mr-auto inline-flex cursor-pointer justify-center rounded-md px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30"
+          >
+            Delete sponsor
+          </button>
+        )}
       </div>
     </form>
   )
