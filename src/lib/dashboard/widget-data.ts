@@ -51,7 +51,14 @@ import { TravelSupportStatus } from '@/lib/travel-support/types'
 import { getWorkshopStatistics } from '@/lib/workshop/sanity'
 import type { WorkshopStatistics } from '@/lib/workshop/types'
 import { getConversationViewCounts } from '@/lib/messaging/sanity'
-import { actionItemsForOrganizer } from '@/lib/sponsor-crm/action-items'
+import {
+  actionItemsForOrganizer,
+  generateRenewalItems,
+} from '@/lib/sponsor-crm/action-items'
+import {
+  shapeRenewals,
+  type PreviousEditionRenewals,
+} from '@/lib/sponsor-crm/renewal'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import type { OrganizerTeam } from '@/lib/teams/types'
 import {
@@ -184,7 +191,7 @@ const WIDGET_GROQ_SOURCES: Record<
   readonly DashboardGroqSource[]
 > = {
   'marketing-due': ['marketingDueTasks'],
-  'sponsors-waiting': ['sponsorActions'],
+  'sponsors-waiting': ['sponsorActions', 'renewals'],
   'quick-actions': ['proposals', 'sponsors'],
   'review-progress': ['proposals', 'reviews'],
   'proposal-pipeline': ['proposals'],
@@ -1157,6 +1164,7 @@ export async function loadDashboardWidgetData(
     groqResult = await fetchDashboardGroq(
       ctx.conferenceId,
       sourcesForWidgets(wanted, myTeamKeys),
+      ctx.conference.organization?._ref,
     )
   } catch (error) {
     groqError = error instanceof Error ? error : new Error(String(error))
@@ -1200,7 +1208,11 @@ export async function loadDashboardWidgetData(
     shapeMarketingDue(rows(groqResult.marketingDueTasks)),
   )
   add('sponsors-waiting', () =>
-    shapeSponsorsWaiting(rows(groqResult.sponsorActions), ctx.speakerId),
+    shapeSponsorsWaiting(
+      rows(groqResult.sponsorActions),
+      ctx.speakerId,
+      shapeRenewals(groqResult.renewals),
+    ),
   )
   add('upcoming-deadlines', () => shapeDeadlines(ctx.conference))
   add('cfp-health', () => shapeCFPHealth(ctx.conference, proposals))
@@ -1251,9 +1263,21 @@ export const SPONSORS_WAITING_LIMIT = 6
 export function shapeSponsorsWaiting(
   sponsors: SponsorForConferenceExpanded[],
   organizerId: string | null,
+  renewals: PreviousEditionRenewals | null = null,
 ): SponsorsWaitingData {
+  // Same rule as actionItemsForOrganizer: mine plus unassigned.
+  const myRenewals = renewals && {
+    ...renewals,
+    candidates: renewals.candidates.filter(
+      (c) => !c.assignedTo || c.assignedTo._id === organizerId,
+    ),
+  }
   return {
-    items: actionItemsForOrganizer(sponsors, organizerId)
+    items: [
+      ...actionItemsForOrganizer(sponsors, organizerId),
+      ...generateRenewalItems(myRenewals),
+    ]
+      .sort((a, b) => a.priority - b.priority)
       .slice(0, SPONSORS_WAITING_LIMIT)
       .map((item) => ({
         id: item.id,

@@ -16,6 +16,7 @@ import {
 } from '@/components/admin/sponsor-crm/utils'
 import {
   generateActionItems,
+  generateRenewalItems,
   type ActionItem,
 } from '@/lib/sponsor-crm/action-items'
 
@@ -117,10 +118,16 @@ function ActionRow({ item }: { item: ActionItem }) {
 export function SponsorActionItems({ organizerId }: SponsorActionItemsProps) {
   const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery({})
 
-  const actionItems = useMemo(() => {
-    if (!sponsors.length) return []
-    return generateActionItems(sponsors, organizerId)
-  }, [sponsors, organizerId])
+  const { data: renewals } = api.sponsor.crm.renewalReminders.useQuery()
+
+  const actionItems = useMemo(
+    () =>
+      [
+        ...generateActionItems(sponsors, organizerId),
+        ...generateRenewalItems(renewals, organizerId),
+      ].sort((a, b) => a.priority - b.priority),
+    [sponsors, renewals, organizerId],
+  )
 
   const grouped = useMemo(() => {
     const groups: Record<Severity, ActionItem[]> = {

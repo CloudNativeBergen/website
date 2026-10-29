@@ -19,6 +19,7 @@ import { SponsorPhaseWidget } from '@/components/admin/sponsor-crm/widgets/Spons
 import { SponsorFollowUpWidget } from '@/components/admin/sponsor-crm/widgets/SponsorFollowUpWidget'
 import { SponsorContactsWidget } from '@/components/admin/sponsor-crm/widgets/SponsorContactsWidget'
 import { SponsorContractWidget } from '@/components/admin/sponsor-crm/widgets/SponsorContractWidget'
+import { SponsorRenewalWidget } from '@/components/admin/sponsor-crm/widgets/SponsorRenewalWidget'
 import { SponsorActivityFeedWidget } from '@/components/admin/sponsor-crm/widgets/SponsorActivityFeedWidget'
 
 type RecordView = NonNullable<
@@ -114,6 +115,9 @@ export function SponsorDashboardClient({
 
       <main className="flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
+          <div className="mb-8 empty:hidden">
+            <SponsorRenewalWidget sponsorId={sponsorId} />
+          </div>
           {sponsor && (
             <div className="mb-8">
               <SponsorPhaseWidget

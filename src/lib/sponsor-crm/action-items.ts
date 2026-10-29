@@ -316,6 +316,43 @@ export function generateActionItems(
   return actions.sort((a, b) => a.priority - b.priority)
 }
 
+/** A previous-edition sponsor with no deal this year (R2, #1687). */
+export interface RenewalItemInput {
+  edition: { title: string; domain?: string }
+  candidates: Array<{
+    _id: string
+    name: string
+    assignedTo?: { _id: string; name: string; image?: string }
+  }>
+}
+
+/**
+ * Renewal reminders. The server only returns candidates inside the lead window
+ * (see `renewal.ts`), so this maps them. Each links to the old record on the
+ * previous edition's domain, where "Copy to next year" lives.
+ */
+export function generateRenewalItems(
+  renewals: RenewalItemInput | null | undefined,
+  organizerId?: string,
+): ActionItem[] {
+  if (!renewals) return []
+  const { edition } = renewals
+  const base = edition.domain ? `https://${edition.domain}` : ''
+  return renewals.candidates
+    .filter((c) => !organizerId || c.assignedTo?._id === organizerId)
+    .map((c) => ({
+      id: `${c._id}-renewal`,
+      type: 'follow-up' as const,
+      title: 'Renewal',
+      sponsor: { id: c._id, name: c.name },
+      assignedTo: c.assignedTo
+        ? { name: c.assignedTo.name, image: c.assignedTo.image }
+        : undefined,
+      description: `Sponsored ${edition.title}, not contacted for this year`,
+      priority: 4.5,
+      link: `${base}/admin/sponsors/${c._id}`,
+    }))
+}
 /** Most urgent priority that counts as "waiting on you" in the event checklist. */
 export const URGENT_ACTION_PRIORITY = 3
 
