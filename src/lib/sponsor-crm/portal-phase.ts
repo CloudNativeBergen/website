@@ -14,10 +14,14 @@ export type PortalPhase = 'none' | 'signed' | 'event' | 'after'
 export const EVENT_LEAD_DAYS = 28
 export const AFTER_EVENT_DAYS = 90
 
+/** Signed, and neither lost afterwards nor cancelled (`rejected`). */
 export function isPortalSigned(sponsor: {
   contractStatus?: string | null
   signatureStatus?: string | null
+  status?: string | null
 }): boolean {
+  if (sponsor.status === 'closed-lost') return false
+  if (sponsor.signatureStatus === 'rejected') return false
   return (
     sponsor.contractStatus === 'contract-signed' ||
     sponsor.signatureStatus === 'signed'
@@ -31,7 +35,7 @@ function addDays(date: string, days: number): string {
 }
 
 export function portalPhase(
-  sponsor: { contractStatus?: string | null; signatureStatus?: string | null },
+  sponsor: Parameters<typeof isPortalSigned>[0],
   conference: { startDate?: string | null; endDate?: string | null },
   now: Date,
 ): PortalPhase {

@@ -14,6 +14,16 @@ describe('portalPhase', () => {
     ).toBe('none')
   })
 
+  it('is none for a lost deal or a cancelled agreement', () => {
+    const day = at('2026-10-15')
+    expect(portalPhase({ ...signed, status: 'closed-lost' }, conf, day)).toBe(
+      'none',
+    )
+    expect(
+      portalPhase({ ...signed, signatureStatus: 'rejected' }, conf, day),
+    ).toBe('none')
+  })
+
   it('counts a signed signature status as signed', () => {
     expect(
       portalPhase({ signatureStatus: 'signed' }, conf, at('2026-01-01')),

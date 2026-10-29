@@ -148,8 +148,12 @@ type RawAfterSigning = Omit<
 > & {
   earlyAccessToken?: string | null
   conferenceId?: string | null
+  /** The deal's pipeline status: checked here, never sent on. */
+  dealStatus?: string | null
   hasPhotoWall?: boolean
 }
+
+const HTTP_URL = /^https?:\/\//i
 
 /**
  * Drops the after-signing block before the contract is signed, and turns the
@@ -163,12 +167,18 @@ export function withAfterSigning(
   now: Date = new Date(),
 ): RegistrationSponsorInfo {
   const { afterSigning, ...sponsor } = raw
-  if (!afterSigning || !isPortalSigned(sponsor)) return sponsor
+  if (
+    !afterSigning ||
+    !isPortalSigned({ ...sponsor, status: afterSigning.dealStatus })
+  )
+    return sponsor
   const {
     earlyAccessToken,
-    // The conference id is only for the photo-wall lookup: not sent on.
+    // Only for the checks here: not sent on.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     conferenceId,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    dealStatus,
     ...rest
   } = afterSigning
   const { workshopSponsorStart: from, workshopOpening: to } = rest
@@ -183,6 +193,14 @@ export function withAfterSigning(
     afterSigning: {
       ...rest,
       hasPhotoWall: rest.hasPhotoWall ?? false,
+      // The sponsor link unhides sponsor ticket types: like the discount
+      // email, give it only with codes, and only as an http(s) URL.
+      ticketUrl:
+        rest.discountCodes.length > 0 &&
+        rest.ticketUrl &&
+        HTTP_URL.test(rest.ticketUrl)
+          ? rest.ticketUrl
+          : null,
       onsiteContact: rest.onsiteContact
         ? { name: rest.onsiteContact.name, email: rest.onsiteContact.email }
         : null,
@@ -256,7 +274,8 @@ export async function validateRegistrationToken(
           "onsiteContact": conference->speakerInfo.onsiteContact{ name, email },
           "contactEmail": conference->contactEmail,
           "sponsorEmail": conference->sponsorEmail,
-          "conferenceId": conference._ref
+          "conferenceId": conference._ref,
+          "dealStatus": status
         }
       }`,
       { registrationToken: token },
@@ -272,7 +291,11 @@ export async function validateRegistrationToken(
     }
 
     const conferenceId = result.afterSigning?.conferenceId
-    if (result.afterSigning && conferenceId && isPortalSigned(result)) {
+    if (
+      result.afterSigning &&
+      conferenceId &&
+      isPortalSigned({ ...result, status: result.afterSigning.dealStatus })
+    ) {
       result.afterSigning.hasPhotoWall = await hasLivePhotoWall(conferenceId)
     }
     return { sponsor: withAfterSigning(result) }

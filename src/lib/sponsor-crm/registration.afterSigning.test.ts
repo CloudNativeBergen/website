@@ -69,6 +69,47 @@ describe('withAfterSigning', () => {
     expect(out.afterSigning?.earlyAccessPath).toBeNull()
   })
 
+  const signedWith = (extra: Record<string, unknown>) =>
+    withAfterSigning({
+      ...base,
+      contractStatus: 'contract-signed',
+      afterSigning: { ...raw, ...extra } as typeof raw,
+    }).afterSigning
+
+  it('returns no ticket link without discount codes', () => {
+    expect(
+      signedWith({ discountCodes: [], ticketUrl: 'https://t.example.com/s' })
+        ?.ticketUrl,
+    ).toBeNull()
+  })
+
+  it('returns the ticket link with codes, only as http(s)', () => {
+    expect(
+      signedWith({ ticketUrl: 'https://t.example.com/s' })?.ticketUrl,
+    ).toBe('https://t.example.com/s')
+    expect(
+      signedWith({ ticketUrl: 'javascript:alert(1)' as never })?.ticketUrl,
+    ).toBeNull()
+  })
+
+  it('drops the block for a lost deal, never sending the status on', () => {
+    expect(signedWith({ dealStatus: 'closed-lost' } as never)).toBeUndefined()
+    expect(
+      signedWith({ dealStatus: 'closed-won' } as never),
+    ).not.toHaveProperty('dealStatus')
+  })
+
+  it('drops the block for a cancelled agreement', () => {
+    expect(
+      withAfterSigning({
+        ...base,
+        contractStatus: 'contract-signed',
+        signatureStatus: 'rejected',
+        afterSigning: raw,
+      }).afterSigning,
+    ).toBeUndefined()
+  })
+
   it('never returns the on-site contact phone number', () => {
     const out = withAfterSigning({
       ...base,
