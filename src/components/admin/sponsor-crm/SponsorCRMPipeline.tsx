@@ -21,10 +21,7 @@ import {
   sponsorFromAddress,
   type SendableKind,
 } from '@/components/admin/sponsor/SponsorSendModal'
-import {
-  BoardViewSwitcher,
-  type BoardView,
-} from '@/components/admin/sponsor-crm/BoardViewSwitcher'
+import { BoardViewSwitcher } from '@/components/admin/sponsor-crm/BoardViewSwitcher'
 import { SponsorBoardColumn } from '@/components/admin/sponsor-crm/SponsorBoardColumn'
 import { SponsorBulkActions } from '@/components/admin/sponsor-crm/SponsorBulkActions'
 import { SponsorCard } from '@/components/admin/sponsor-crm/SponsorCard'
@@ -84,6 +81,10 @@ import {
   type BoardActionFilter,
 } from '@/lib/sponsor-crm/action-items'
 import { actionFilterLabel } from '@/lib/sponsor-crm/overview'
+import {
+  boardViewFromParam,
+  withoutBoardFilters,
+} from '@/lib/sponsor-crm/board-params'
 
 export function SponsorCRMPipeline({
   conferenceId,
@@ -106,14 +107,8 @@ export function SponsorCRMPipeline({
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
   const [emailKind, setEmailKind] = useState<SendableKind>('information')
   const [contractSend, setContractSend] = useState<ContractSendOptions>({})
-  const [currentView, setCurrentView] = useState<BoardView>(
-    () =>
-      (['pipeline', 'contract', 'invoice'].includes(
-        searchParams.get('board') || '',
-      )
-        ? searchParams.get('board')
-        : 'pipeline') as BoardView,
-  )
+  // From the URL, so Back/Forward and shared links pick the board.
+  const currentView = boardViewFromParam(searchParams.get('board'))
   const [searchQuery, setSearchQuery] = useState('')
   const debouncedSearchQuery = useDebounce(searchQuery, 300)
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
@@ -472,8 +467,11 @@ export function SponsorCRMPipeline({
   }, [needsFollowUpFilter, updateFilters])
 
   const clearAllFilters = useCallback(() => {
-    router.push(window.location.pathname, { scroll: false })
-  }, [router])
+    // Keep the board, the open sponsor and its tab.
+    router.push(`?${withoutBoardFilters(searchParams.toString())}`, {
+      scroll: false,
+    })
+  }, [router, searchParams])
 
   const activeFilterCount =
     tiersFilter.length +
@@ -617,7 +615,6 @@ export function SponsorCRMPipeline({
             <BoardViewSwitcher
               currentView={currentView}
               onViewChange={(view) => {
-                setCurrentView(view)
                 updateUrlParams({
                   board: view === 'pipeline' ? null : view,
                 })
@@ -640,6 +637,8 @@ export function SponsorCRMPipeline({
               />
               {searchQuery && (
                 <button
+                  type="button"
+                  aria-label="Clear search"
                   onClick={() => setSearchQuery('')}
                   className="absolute top-1/2 right-2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                 >
@@ -651,6 +650,9 @@ export function SponsorCRMPipeline({
 
           {/* Mobile: search toggle */}
           <button
+            type="button"
+            aria-label="Search sponsors"
+            aria-expanded={isMobileSearchOpen}
             onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
             className={clsx(
               'ml-auto flex h-9 w-9 items-center justify-center rounded-lg transition-colors sm:hidden',
@@ -831,6 +833,8 @@ export function SponsorCRMPipeline({
               />
               {searchQuery && (
                 <button
+                  type="button"
+                  aria-label="Clear search"
                   onClick={() => setSearchQuery('')}
                   className="absolute top-1/2 right-2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                 >

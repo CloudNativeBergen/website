@@ -4,6 +4,7 @@ import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
+import { useNotificationSafe } from '@/components/admin/NotificationProvider'
 import type { Conference } from '@/lib/conference/types'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
 import type { ContractSendOptions } from '@/components/admin/sponsor-crm/SponsorContractView'
@@ -27,24 +28,7 @@ export const RECORD_VIEWS: RecordView[] = [
   'messages',
 ]
 
-/** Every query a sponsor's page or board card reads. */
-export function useRefreshSponsor() {
-  const utils = api.useUtils()
-  return useCallback(
-    (id: string) => {
-      utils.sponsor.crm.getById.invalidate({ id })
-      utils.sponsor.crm.getOverview.invalidate({ id })
-      utils.sponsor.crm.getContacts.invalidate({ id })
-      utils.sponsor.crm.getContractDetails.invalidate({ id })
-      utils.sponsor.crm.activities.list.invalidate({
-        sponsorForConferenceId: id,
-      })
-      utils.sponsor.crm.list.invalidate()
-      utils.sponsor.crm.healthViolations.invalidate()
-    },
-    [utils],
-  )
-}
+export { useRefreshSponsor } from '@/hooks/useRefreshSponsor'
 
 /**
  * The side panel's URL state. The board uses `?sponsor=<id>&view=<tab>`;
@@ -157,7 +141,14 @@ export function SponsorRecordPanel({
   const [contractSend, setContractSend] = useState<ContractSendOptions>({})
   const [confirmDelete, setConfirmDelete] = useState(false)
   const utils = api.useUtils()
+  const notifications = useNotificationSafe()
   const deleteMutation = api.sponsor.crm.delete.useMutation({
+    onError: (error) =>
+      notifications?.showNotification({
+        type: 'error',
+        title: 'Sponsor not deleted',
+        message: error.message,
+      }),
     onSuccess: () => {
       utils.sponsor.crm.list.invalidate()
       utils.sponsor.crm.healthViolations.invalidate()

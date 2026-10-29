@@ -209,10 +209,8 @@ export function SponsorPhaseWidget({
                 <time dateTime={step.date} className="text-gray-500">
                   {formatDateSafe(step.date)}
                 </time>
-              ) : (
-                <span className="text-gray-500">
-                  {step.reached ? 'date unknown' : 'pending'}
-                </span>
+              ) : step.reached ? null : (
+                <span className="text-gray-500">pending</span>
               )}
             </li>
           )

@@ -101,11 +101,20 @@ export function SponsorBulkActions({
 
   const bulkDeleteMutation = api.sponsor.crm.bulkDelete.useMutation({
     onSuccess: (result) => {
-      showNotification({
-        type: 'success',
-        title: 'Bulk delete successful',
-        message: `Deleted ${result.deletedCount} of ${result.totalCount} selected sponsors.`,
-      })
+      const kept = result.cancelFailedIds.length
+      showNotification(
+        kept > 0
+          ? {
+              type: 'warning',
+              title: 'Some sponsors not deleted',
+              message: `Deleted ${result.deletedCount} of ${result.totalCount} selected sponsors. ${kept} kept because their signing agreement could not be cancelled. Try again or cancel it with the provider.`,
+            }
+          : {
+              type: 'success',
+              title: 'Bulk delete successful',
+              message: `Deleted ${result.deletedCount} of ${result.totalCount} selected sponsors.`,
+            },
+      )
       utils.sponsor.crm.list.invalidate()
       utils.sponsor.crm.healthViolations.invalidate()
       onSuccess()

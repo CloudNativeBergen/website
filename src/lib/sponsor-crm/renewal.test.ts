@@ -201,22 +201,23 @@ describe('copyToNextEdition', () => {
 })
 
 describe('renewal reminders (R2)', () => {
-  it('opens exactly 6 months before the start date', () => {
+  it('opens at Oslo midnight 6 months before the start date', () => {
+    // 00:00 Oslo is 22:00Z the day before in summer, 23:00Z in winter.
     expect(
-      isRenewalWindowOpen('2026-10-27', new Date('2026-04-26T23:59:59Z')),
+      isRenewalWindowOpen('2026-10-27', new Date('2026-04-26T21:59:59Z')),
     ).toBe(false)
     expect(
-      isRenewalWindowOpen('2026-10-27', new Date('2026-04-27T00:00:00Z')),
+      isRenewalWindowOpen('2026-10-27', new Date('2026-04-26T22:00:00Z')),
     ).toBe(true)
   })
 
   it('clamps to the last day of the target month', () => {
     // 31 Aug - 6 months = 28 Feb (2026 is not a leap year), not 3 March.
     expect(
-      isRenewalWindowOpen('2026-08-31', new Date('2026-02-27T23:59:59Z')),
+      isRenewalWindowOpen('2026-08-31', new Date('2026-02-27T22:59:59Z')),
     ).toBe(false)
     expect(
-      isRenewalWindowOpen('2026-08-31', new Date('2026-02-28T00:00:00Z')),
+      isRenewalWindowOpen('2026-08-31', new Date('2026-02-27T23:00:00Z')),
     ).toBe(true)
   })
 

@@ -10,6 +10,8 @@ import {
 } from './sponsorEarlyAccess'
 import { requireWorkshopsEnabled } from '../workshopAdmin'
 import { earlyAccessCopiesBehindNotice } from '@/lib/sponsor-crm/early-access-email'
+import { isFollowUpOverdue } from '@/lib/sponsor-crm/follow-up'
+import { sponsorValueNOK } from '@/lib/sponsor-crm/value'
 import { expireEarlyAccessLinks } from '@/lib/workshop/early-access'
 import {
   requireDocumentInCurrentConference,
@@ -396,13 +398,14 @@ async function prepareRegistrationSend(
  * After a registration send went out (#1263): the first one moves the deal
  * to registration-sent. Decided on the status read NOW — not before the
  * email round-trip — so a contract send that landed in between is never
- * moved backwards. Best-effort: can neither fail nor undo the send.
+ * moved backwards. Can neither fail nor undo the send; returns false when
+ * the deal could not be moved, so the organizer is told.
  */
 async function markRegistrationSent(
   conference: Conference,
   sponsorForConferenceId: string,
   actorId: string,
-) {
+): Promise<boolean> {
   try {
     const current = await clientReadUncached.fetch<{
       contractStatus: string | null
@@ -411,9 +414,9 @@ async function markRegistrationSent(
       `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ contractStatus, _rev }`,
       { id: sponsorForConferenceId, conferenceId: conference._id },
     )
-    if (!current) return
+    if (!current) return true
     const from = current.contractStatus || 'none'
-    if (CONTRACT_STATUSES_PAST_REGISTRATION.has(from)) return
+    if (CONTRACT_STATUSES_PAST_REGISTRATION.has(from)) return true
     // Revision-conditional: a write that lands between this read and the
     // patch (a contract send on another tab) makes Sanity reject the patch,
     // and the deal is left where that write put it.
@@ -428,13 +431,21 @@ async function markRegistrationSent(
       'registration-sent',
       actorId,
     )
+    return true
   } catch (error) {
+    // A revision conflict means another write won; the deal is where that
+    // write put it, which is not a failure to report.
+    if ((error as { statusCode?: number })?.statusCode === 409) return true
     console.error(
       '[sendCommunication] moving the deal to registration-sent failed:',
       error,
     )
+    return false
   }
 }
+
+const CANCEL_FAILED_MESSAGE =
+  'Could not cancel the signing agreement; nothing was deleted. Try again or cancel it with the provider.'
 
 /**
  * Check organizer-chosen codes against the conference's OWN provider event
@@ -1550,8 +1561,8 @@ export const sponsorRouter = router({
         // Filter: follow-up due (scheduled date has passed)
         if (input?.followUpDue) {
           const now = new Date()
-          filtered = filtered.filter(
-            (s) => s.nextFollowUpAt && new Date(s.nextFollowUpAt) <= now,
+          filtered = filtered.filter((s) =>
+            isFollowUpOverdue(s.nextFollowUpAt, now),
           )
         }
 
@@ -1576,7 +1587,7 @@ export const sponsorRouter = router({
                 break
               }
               case 'value':
-                cmp = (a.contractValue || 0) - (b.contractValue || 0)
+                cmp = sponsorValueNOK(a) - sponsorValueNOK(b)
                 break
               case 'stale': {
                 const aStale = a.lastActivity?.createdAt || a._updatedAt
@@ -2303,46 +2314,70 @@ export const sponsorRouter = router({
           input.ids,
           'sponsorForConference',
         )
-        // Cancel signing agreements if requested
+        // Cancel signing agreements if requested. A sponsor whose agreement
+        // could not be cancelled is NOT deleted: deleting it would leave a live
+        // agreement at the provider with no record pointing at it.
+        let deleteIds = input.ids
+        const cancelFailedIds: string[] = []
         if (input.cancelAgreements) {
+          let pendingAgreements: Array<{
+            _id: string
+            signatureId: string
+            signingProvider?: SigningProviderType
+          }>
           try {
             const { conference: bulkConf } =
               await getConferenceForCurrentDomain()
-            const pendingAgreements = await clientReadUncached.fetch<
-              Array<{
-                signatureId: string
-                signingProvider?: SigningProviderType
-              }>
-            >(
-              `*[_type == "sponsorForConference" && conference._ref == $conferenceId && _id in $ids && signatureStatus == "pending" && defined(signatureId)]{ signatureId, "signingProvider": conference->signingProvider }`,
+            pendingAgreements = await clientReadUncached.fetch(
+              `*[_type == "sponsorForConference" && conference._ref == $conferenceId && _id in $ids && signatureStatus == "pending" && defined(signatureId)]{ _id, signatureId, "signingProvider": conference->signingProvider }`,
               { ids: input.ids, conferenceId: bulkConf._id },
             )
-            if (pendingAgreements.length > 0) {
-              for (const {
-                signatureId,
-                signingProvider,
-              } of pendingAgreements) {
-                const provider = getSigningProvider(signingProvider)
-                try {
-                  await provider.cancelAgreement(signatureId)
-                } catch (e) {
-                  console.error(
-                    `[bulkDelete] Failed to cancel agreement ${signatureId}:`,
-                    e,
-                  )
-                }
-              }
-            }
           } catch (e) {
-            console.error('[bulkDelete] Failed to cancel agreements:', e)
+            console.error('[bulkDelete] Failed to read pending agreements:', e)
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: CANCEL_FAILED_MESSAGE,
+              cause: e,
+            })
+          }
+          for (const {
+            _id,
+            signatureId,
+            signingProvider,
+          } of pendingAgreements) {
+            try {
+              await getSigningProvider(signingProvider).cancelAgreement(
+                signatureId,
+              )
+            } catch (e) {
+              console.error(
+                `[bulkDelete] Failed to cancel agreement ${signatureId}:`,
+                e,
+              )
+              cancelFailedIds.push(_id)
+            }
+          }
+          deleteIds = input.ids.filter((id) => !cancelFailedIds.includes(id))
+        }
+        if (deleteIds.length === 0) {
+          return {
+            success: true as const,
+            deletedCount: 0,
+            totalCount: input.ids.length,
+            cancelFailedIds,
           }
         }
 
         try {
           // TENANCY: scoped to the REQUEST's conference (see bulkUpdate).
-          return await bulkDeleteSponsors(input.ids, conferenceId, {
+          const result = await bulkDeleteSponsors(deleteIds, conferenceId, {
             deleteContractAssets: input.deleteContractAssets,
           })
+          return {
+            ...result,
+            totalCount: input.ids.length,
+            cancelFailedIds,
+          }
         } catch (error) {
           // Preserve refusals: a fail-closed tenancy denial must not surface as
           // a 500, or the guard becomes indistinguishable from a server fault.
@@ -2375,7 +2410,8 @@ export const sponsorRouter = router({
           input.id,
           'sponsorForConference',
         )
-        // Cancel signing agreement if requested
+        // Cancel signing agreement if requested. If that fails, nothing is
+        // deleted: the agreement would stay live with no record pointing at it.
         if (input.cancelAgreement) {
           try {
             const { conference: delConf } =
@@ -2389,18 +2425,17 @@ export const sponsorRouter = router({
               { id: input.id, conferenceId: delConf._id },
             )
             if (sfc?.signatureId && sfc.signatureStatus === 'pending') {
-              const provider = getSigningProvider(sfc.signingProvider)
-              try {
-                await provider.cancelAgreement(sfc.signatureId)
-              } catch (e) {
-                console.error(
-                  `[delete] Failed to cancel agreement ${sfc.signatureId}:`,
-                  e,
-                )
-              }
+              await getSigningProvider(sfc.signingProvider).cancelAgreement(
+                sfc.signatureId,
+              )
             }
           } catch (e) {
             console.error('[delete] Failed to cancel agreement:', e)
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: CANCEL_FAILED_MESSAGE,
+              cause: e,
+            })
           }
         }
 
@@ -3316,13 +3351,13 @@ export const sponsorRouter = router({
           }
         }
 
-        if (registration) {
-          await markRegistrationSent(
-            conference,
-            input.sponsorForConferenceId,
-            ctx.speaker._id,
-          )
-        }
+        const registrationStateFailed = registration
+          ? !(await markRegistrationSent(
+              conference,
+              input.sponsorForConferenceId,
+              ctx.speaker._id,
+            ))
+          : false
         // The email is out: apply the contract state (contract-sent + pending
         // signature, or reminderCount). Never fails the send; the organizer is
         // told when the record could not be updated.
@@ -3381,6 +3416,9 @@ export const sponsorRouter = router({
           // token: the organizer is told, as on the record's "Create link".
           ...(copiesBehind > 0 && { earlyAccessCopiesBehind: copiesBehind }),
           ...(contractStateFailed && { contractStateFailed: true as const }),
+          ...(registrationStateFailed && {
+            registrationStateFailed: true as const,
+          }),
           ...(contractCopyFailed && { contractCopyFailed: true as const }),
         }
       }),

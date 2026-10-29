@@ -79,6 +79,7 @@ vi.mock('@/lib/trpc/client', () => {
 
 vi.mock('@/components/admin/NotificationProvider', () => ({
   useNotification: () => ({ showNotification: vi.fn() }),
+  useNotificationSafe: () => undefined,
 }))
 vi.mock('@/hooks/useSponsorDragDrop', () => ({
   __esModule: true,

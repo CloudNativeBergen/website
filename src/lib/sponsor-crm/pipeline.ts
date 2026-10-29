@@ -1,4 +1,5 @@
 import type { SponsorForConferenceExpanded } from './types'
+import { sponsorValueNOK } from './value'
 
 export interface SponsorPipelineData {
   byStatus: Record<string, number>
@@ -6,6 +7,7 @@ export interface SponsorPipelineData {
   byContractStatus: Record<string, number>
   byInvoiceStatus: Record<string, number>
   totalContractValue: number
+  /** Always NOK: values are converted before they are summed. */
   contractCurrency: string
   totalSponsors: number
   closedWonCount: number
@@ -25,9 +27,9 @@ export function aggregateSponsorPipeline(
   let closedLostCount = 0
 
   for (const s of sponsors) {
+    const valueNOK = sponsorValueNOK(s)
     byStatus[s.status] = (byStatus[s.status] || 0) + 1
-    byStatusValue[s.status] =
-      (byStatusValue[s.status] || 0) + (s.contractValue || 0)
+    byStatusValue[s.status] = (byStatusValue[s.status] || 0) + valueNOK
     byContractStatus[s.contractStatus] =
       (byContractStatus[s.contractStatus] || 0) + 1
     byInvoiceStatus[s.invoiceStatus] =
@@ -35,9 +37,7 @@ export function aggregateSponsorPipeline(
 
     if (s.status === 'closed-won') {
       closedWonCount++
-      if (s.contractValue) {
-        totalContractValue += s.contractValue
-      }
+      totalContractValue += valueNOK
     } else if (s.status === 'closed-lost') {
       closedLostCount++
     }
@@ -54,7 +54,7 @@ export function aggregateSponsorPipeline(
     byContractStatus,
     byInvoiceStatus,
     totalContractValue,
-    contractCurrency: sponsors[0]?.contractCurrency || 'NOK',
+    contractCurrency: 'NOK',
     totalSponsors: sponsors.length,
     closedWonCount,
     closedLostCount,

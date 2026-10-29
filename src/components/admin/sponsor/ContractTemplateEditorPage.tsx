@@ -99,8 +99,11 @@ export function ContractTemplateEditorPage({
   }, [existingTemplate])
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  const utils = api.useUtils()
+
   const createMutation = api.sponsor.contractTemplates.create.useMutation({
     onSuccess: (data) => {
+      utils.sponsor.contractTemplates.invalidate()
       showNotification({
         type: 'success',
         title: 'Template created',
@@ -123,6 +126,7 @@ export function ContractTemplateEditorPage({
 
   const updateMutation = api.sponsor.contractTemplates.update.useMutation({
     onSuccess: () => {
+      utils.sponsor.contractTemplates.invalidate()
       showNotification({
         type: 'success',
         title: 'Template saved',

@@ -25,6 +25,7 @@ import {
 import { SponsorPipelineView } from './SponsorPipelineView'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorCRMFormMutations } from '@/hooks/useSponsorCRMFormMutations'
+import { useRefreshSponsor } from '@/hooks/useRefreshSponsor'
 import { SponsorMessagesPanel } from './SponsorMessagesPanel'
 import { SponsorCommunicationsPanel } from './SponsorCommunicationsPanel'
 
@@ -203,6 +204,7 @@ export function SponsorCRMForm({
   })
 
   const utils = api.useUtils()
+  const refreshSponsor = useRefreshSponsor()
 
   // Auto-fill contract value when package changes
   useEffect(() => {
@@ -473,8 +475,7 @@ export function SponsorCRMForm({
             <SponsorContactEditor
               sponsorForConference={sponsor}
               onSuccess={() => {
-                utils.sponsor.crm.list.invalidate()
-                utils.sponsor.crm.healthViolations.invalidate()
+                refreshSponsor(sponsor._id)
                 utils.sponsor.contractTemplates?.contractReadiness?.invalidate()
               }}
               onCancel={handleClose}
@@ -506,8 +507,7 @@ export function SponsorCRMForm({
               conferenceId={conferenceId}
               sponsor={sponsor}
               onSuccess={() => {
-                utils.sponsor.crm.list.invalidate()
-                utils.sponsor.crm.healthViolations.invalidate()
+                refreshSponsor(sponsor._id)
                 utils.sponsor.contractTemplates?.contractReadiness?.invalidate()
               }}
               onSendRegistration={onSendRegistration}

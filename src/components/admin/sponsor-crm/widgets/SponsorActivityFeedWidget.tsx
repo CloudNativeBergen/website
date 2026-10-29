@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { api } from '@/lib/trpc/client'
 import { formatDateSafe } from '@/lib/time'
+import { useRefreshSponsor } from '@/hooks/useRefreshSponsor'
 import {
   ChatBubbleLeftRightIcon,
   EnvelopeIcon,
@@ -18,7 +19,7 @@ export function SponsorActivityFeedWidget({
   sponsorId,
   onNewActivity,
 }: SponsorActivityFeedWidgetProps) {
-  const trpcUtils = api.useUtils()
+  const refreshSponsor = useRefreshSponsor()
   const [note, setNote] = useState('')
 
   const { data, isLoading, error } = api.sponsor.crm.activities.list.useQuery({
@@ -28,9 +29,7 @@ export function SponsorActivityFeedWidget({
   const createActivity = api.sponsor.crm.activities.create.useMutation({
     onSuccess: () => {
       setNote('')
-      trpcUtils.sponsor.crm.activities.list.invalidate({
-        sponsorForConferenceId: sponsorId,
-      })
+      refreshSponsor(sponsorId)
     },
   })
 

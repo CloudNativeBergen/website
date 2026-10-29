@@ -1,6 +1,8 @@
 import type { SponsorForConferenceExpanded } from './types'
 import { type ActionItemType } from '@/components/admin/sponsor-crm/utils'
-import { calculateSponsorValue } from './value'
+import { sponsorValueNOK } from './value'
+import { isFollowUpOverdue } from './follow-up'
+import { hasPositiveContractValue } from './contract-readiness'
 import { formatNumber } from '@/lib/format'
 import { formatDateSafe } from '@/lib/time'
 import { isInvoicePastDue } from './invoice'
@@ -84,35 +86,33 @@ export function generateActionItems(
     }
 
     // Priority 1.7: High-value prospects not yet contacted
-    const { value, currency } = calculateSponsorValue(sponsor)
-    if (sponsor.status === 'prospect' && currency === 'NOK' && value >= 50000) {
+    const valueNOK = sponsorValueNOK(sponsor)
+    if (sponsor.status === 'prospect' && valueNOK >= 50000) {
       actions.push({
         id: `${sponsor._id}-high-value`,
         type: 'high-priority',
         title: 'High Value Prospect',
         sponsor: { id: sponsor._id, name },
         assignedTo,
-        description: `${name} is a high-value prospect (${formatNumber(value)} NOK) not yet contacted`,
+        description: `${name} is a high-value prospect (${formatNumber(Math.round(valueNOK))} NOK) not yet contacted`,
         priority: 1.7,
         link,
       })
     }
 
     // Priority 2: Follow-up due (scheduled date passed)
-    if (sponsor.nextFollowUpAt) {
-      const followUpDate = new Date(sponsor.nextFollowUpAt)
-      if (followUpDate <= now) {
-        actions.push({
-          id: `${sponsor._id}-follow-up-due`,
-          type: 'follow-up',
-          title: 'Follow-up Due',
-          sponsor: { id: sponsor._id, name },
-          assignedTo,
-          description: `Scheduled follow-up with ${name} is due`,
-          priority: 2,
-          link,
-        })
-      }
+    const lost = sponsor.status === 'closed-lost'
+    if (!lost && isFollowUpOverdue(sponsor.nextFollowUpAt, now)) {
+      actions.push({
+        id: `${sponsor._id}-follow-up-due`,
+        type: 'follow-up',
+        title: 'Follow-up Due',
+        sponsor: { id: sponsor._id, name },
+        assignedTo,
+        description: `Scheduled follow-up with ${name} is due`,
+        priority: 2,
+        link,
+      })
     }
 
     // Priority 2: Invoice not sent for closed deals with signed contract.
@@ -123,6 +123,7 @@ export function generateActionItems(
       : null
     const staleSigned = !!signedAt && signedAt < sevenDaysAgo
     if (
+      !lost &&
       sponsor.contractStatus === 'contract-signed' &&
       sponsor.invoiceStatus === 'not-sent' &&
       (staleSigned ||
@@ -145,9 +146,13 @@ export function generateActionItems(
       })
     }
 
-    // Priority 2: Registration complete — send contract
+    // Priority 2: Registration complete — send contract. Same guards as the
+    // contract state machine: a tier and a positive value.
     if (
+      !lost &&
       sponsor.registrationComplete &&
+      sponsor.tier &&
+      hasPositiveContractValue(sponsor.contractValue) &&
       sponsor.contractStatus !== 'contract-sent' &&
       sponsor.contractStatus !== 'contract-signed'
     ) {
@@ -244,7 +249,10 @@ export function generateActionItems(
     ) {
       actions.push({
         id: `${sponsor._id}-missing-contract`,
-        type: 'missing-contract',
+        type:
+          sponsor.contractStatus === 'contract-sent'
+            ? 'awaiting-signature'
+            : 'missing-contract',
         title:
           sponsor.contractStatus === 'contract-sent'
             ? 'Awaiting Signature'

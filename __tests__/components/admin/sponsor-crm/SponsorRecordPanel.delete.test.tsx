@@ -14,7 +14,16 @@ import {
 import type { Conference } from '@/lib/conference/types'
 import { SponsorRecordPanel } from '@/components/admin/sponsor-crm/SponsorRecordPanel'
 
-const h = vi.hoisted(() => ({ mutate: vi.fn(), invalidate: vi.fn() }))
+const h = vi.hoisted(() => ({
+  mutate: vi.fn(),
+  invalidate: vi.fn(),
+  notify: vi.fn(),
+  error: null as Error | null,
+}))
+
+vi.mock('@/components/admin/NotificationProvider', () => ({
+  useNotificationSafe: () => ({ showNotification: h.notify }),
+}))
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
@@ -45,10 +54,14 @@ vi.mock('@/lib/trpc/client', () => ({
           }),
         },
         delete: {
-          useMutation: (opts: { onSuccess: () => void }) => ({
+          useMutation: (opts: {
+            onSuccess: () => void
+            onError: (e: Error) => void
+          }) => ({
             mutate: (input: unknown) => {
               h.mutate(input)
-              opts.onSuccess()
+              if (h.error) opts.onError(h.error)
+              else opts.onSuccess()
             },
             isPending: false,
           }),
@@ -70,6 +83,8 @@ vi.mock('@/components/admin/sponsor/SponsorSendModal', () => ({
 afterEach(() => {
   cleanup()
   h.mutate.mockClear()
+  h.notify.mockClear()
+  h.error = null
 })
 
 function renderPanel() {
@@ -122,4 +137,19 @@ it('passes each cleanup choice the organizer makes', () => {
     cancelAgreement: false,
     deleteContractAsset: true,
   })
+})
+
+it('shows the server error and keeps the panel open when the delete fails', () => {
+  h.error = new Error(
+    'Could not cancel the signing agreement; nothing was deleted.',
+  )
+  const { onClose, dialog } = renderPanel()
+  confirm(dialog)
+  expect(h.notify).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: 'error',
+      message: 'Could not cancel the signing agreement; nothing was deleted.',
+    }),
+  )
+  expect(onClose).not.toHaveBeenCalled()
 })

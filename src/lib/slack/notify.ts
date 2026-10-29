@@ -39,22 +39,25 @@ async function sendSlackNotification(
  * `slackChannel` wins, otherwise it falls back to
  * `conference.salesNotificationChannel`, i.e. exactly today's channel.
  */
+/** False only when a configured channel could not be posted to. */
 async function sendSalesNotification(
   message: SlackMessage,
   conference: Conference,
-) {
+): Promise<boolean> {
   const channel = resolveTeamSlackChannel({
     conference,
     teamKey: 'sponsors',
     kind: 'sales',
   })
-  if (!channel) return
+  if (!channel) return true
 
   try {
     const botToken = await resolveConferenceSlackToken(conference)
     await postSlackMessage(message, { channel, botToken })
+    return true
   } catch (error) {
     console.error('Error sending Slack sales notification:', error)
+    return false
   }
 }
 
@@ -624,7 +627,7 @@ export async function notifySponsorAlert(
     },
     sponsorPipelineButton(conference, args),
   ]
-  await sendSalesNotification(
+  return sendSalesNotification(
     { blocks, text: `${args.headline}: ${args.sponsorName}` },
     conference,
   )
