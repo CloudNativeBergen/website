@@ -195,6 +195,17 @@ describe('attribution by the stored link', () => {
   })
 })
 
+describe('the link back to the sponsor panel (#1704 T1)', () => {
+  it('each linked code opens its sponsor in the CRM pipeline panel', () => {
+    renderPanel(['comp-7q2'])
+    expect(
+      within(sponsorTable())
+        .getAllByRole('link', { name: 'Open Acme Cloud in the sponsor CRM' })[0]
+        .getAttribute('href'),
+    ).toBe('/admin/sponsors/crm?sponsor=sfc-acme&view=pipeline')
+  })
+})
+
 describe('Assign to sponsor', () => {
   it('links a standalone code to the chosen sponsor without sending', async () => {
     q.assign.mockResolvedValue({

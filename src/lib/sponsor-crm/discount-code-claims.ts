@@ -191,3 +191,50 @@ export async function claimDiscountCodes({
     }
   }
 }
+
+/**
+ * Unlink a code from a sponsor (#1704 T1): drop it from the stored link and
+ * give back the sponsor's claim, so another sponsor can be given it at once
+ * rather than after {@link CLAIM_SETTLE_MS}. Returns false when the sponsor
+ * does not store the code.
+ */
+export async function unlinkDiscountCode({
+  conferenceId,
+  sponsorForConferenceId,
+  code,
+}: {
+  conferenceId: string
+  sponsorForConferenceId: string
+  code: string
+}): Promise<boolean> {
+  const wanted = normalizeDiscountCode(code)
+  const stored = await clientReadUncached.fetch<
+    { _key: string; code?: string }[] | null
+  >(
+    `*[_type == "sponsorForConference" && conference._ref == $conferenceId && _id == $id][0].discountCodes[]{ _key, code }`,
+    { conferenceId, id: sponsorForConferenceId },
+  )
+  const keys = (stored ?? [])
+    .filter((c) => normalizeDiscountCode(c.code ?? '') === wanted)
+    .map((c) => c._key)
+  if (keys.length === 0) return false
+  await clientWrite
+    .patch(sponsorForConferenceId)
+    .unset(keys.map((k) => `discountCodes[_key==${JSON.stringify(k)}]`))
+    .commit()
+  const claim = await clientReadUncached.fetch<ClaimDoc | null>(
+    `*[_type == "discountCodeClaim" && conference._ref == $conferenceId && _id == $id][0]{
+      _id, _rev, "sponsorForConferenceId": sponsorForConference._ref
+    }`,
+    { conferenceId, id: discountCodeClaimId(conferenceId, code) },
+  )
+  if (claim?.sponsorForConferenceId === sponsorForConferenceId) {
+    try {
+      await clientWrite.delete(claim._id)
+    } catch (error) {
+      // The link is gone; a leftover claim goes stale on its own.
+      console.error('[discount-code-claims] release failed:', claim._id, error)
+    }
+  }
+  return true
+}

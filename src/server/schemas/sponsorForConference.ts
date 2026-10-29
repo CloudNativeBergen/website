@@ -342,6 +342,12 @@ export const AssignDiscountCodesSchema = z.object({
   discountCodes: z.array(z.string().trim().min(1).max(100)).min(1).max(20),
 })
 
+/** Sponsor panel → Tickets (#1704 T1): unlink one stored code. */
+export const UnassignDiscountCodeSchema = z.object({
+  sponsorForConferenceId: z.string().min(1, 'Sponsor ID is required'),
+  code: z.string().trim().min(1).max(100),
+})
+
 export const CommunicationRecordIdSchema = z.object({
   id: z.string().min(1, 'Activity ID is required'),
 })

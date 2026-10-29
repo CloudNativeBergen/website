@@ -165,6 +165,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   registrationToken,
   registrationComplete,
   registrationCompletedAt,
+  discountCodes[]{ _key, code, providerCodeId, linkedAt, linkedVia },
   "hasWorkshopEarlyAccessLink": defined(workshopEarlyAccessToken),
   "workshopEarlySignupCount": ${EARLY_SIGNUP_COUNT},
   nextFollowUpAt,

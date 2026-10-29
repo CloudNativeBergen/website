@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { fn, expect, userEvent, within } from 'storybook/test'
+import { http, HttpResponse } from 'msw'
 import { SponsorPipelineView } from './SponsorPipelineView'
 import type { SponsorPipelineFormData } from './SponsorPipelineView'
 import { mockSponsor, mockSponsorTier } from '@/__mocks__/sponsor-data'
@@ -81,6 +82,33 @@ const meta = {
   tags: ['autodocs'],
   parameters: {
     layout: 'padded',
+    // The Tickets block (shown with onSendDiscountCodes) reads the codes.
+    msw: {
+      handlers: [
+        http.get('/api/trpc/sponsor.crm.discountCodeOptions', () =>
+          HttpResponse.json({
+            result: {
+              data: {
+                codes: [
+                  {
+                    code: 'ACME-2026',
+                    linked: true,
+                    selected: true,
+                    used: 2,
+                    limit: 5,
+                    type: 'percent',
+                    value: '100',
+                  },
+                  { code: 'SPARE-01', linked: false, selected: false },
+                ],
+                ticketUrl: 'https://tickets.example.com',
+                hasSponsorInviteLink: true,
+              },
+            },
+          }),
+        ),
+      ],
+    },
     docs: {
       description: {
         component:

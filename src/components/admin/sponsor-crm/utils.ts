@@ -93,6 +93,7 @@ export function getActivityIcon(type: ActivityType) {
     case 'message':
       return ChatBubbleLeftRightIcon
     case 'discount_codes_assigned':
+    case 'discount_code_unlinked':
       return TicketIcon
   }
 }
@@ -124,6 +125,7 @@ export function getActivityColor(type: ActivityType): string {
     case 'message':
       return 'text-sky-600 bg-sky-100 dark:text-sky-400 dark:bg-sky-900/20'
     case 'discount_codes_assigned':
+    case 'discount_code_unlinked':
       return 'text-violet-600 bg-violet-100 dark:text-violet-400 dark:bg-violet-900/20'
   }
 }
