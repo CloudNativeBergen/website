@@ -93,7 +93,12 @@ import {
 import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
 import type { ProposalInput, ProposalExisting } from '@/lib/proposal/types'
-import { Action, Status, isInactiveProposal } from '@/lib/proposal/types'
+import {
+  Action,
+  Status,
+  isInactiveProposal,
+  MAX_SPEAKER_WORKSHOP_CAPACITY,
+} from '@/lib/proposal/types'
 import { actionStateMachine } from '@/lib/proposal'
 import {
   countActiveProposals,
@@ -227,6 +232,27 @@ async function requireTopicsReferenceable(
   const added = ids.filter((id) => !existing.has(id))
   if (added.length === 0) return
   await requireDocumentsInCurrentOrg(added, 'topic')
+}
+
+/**
+ * A speaker may ask for up to MAX_SPEAKER_WORKSHOP_CAPACITY seats; more is the
+ * organizers' call. A value an organizer already set is kept, so a speaker
+ * saving the proposal again is not refused for it.
+ */
+function assertSpeakerCapacity(
+  capacity: number | undefined,
+  storedCapacity: number | undefined,
+) {
+  if (
+    capacity !== undefined &&
+    capacity > MAX_SPEAKER_WORKSHOP_CAPACITY &&
+    capacity !== storedCapacity
+  ) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: `Capacity cannot exceed ${MAX_SPEAKER_WORKSHOP_CAPACITY} participants. Ask the organizers for more.`,
+    })
+  }
 }
 
 /**
@@ -1018,6 +1044,7 @@ export const proposalRouter = router({
         // REFERENCE INJECTION (#731): see `requireTopicsReferenceable`. Nothing
         // exists yet, so there is no grandfathered set — every topic must be
         // this org's.
+        assertSpeakerCapacity(input.data.capacity, undefined)
         await requireTopicsReferenceable(input.data.topics, [])
 
         const { proposal, err } = await createProposal(
@@ -1214,6 +1241,18 @@ export const proposalRouter = router({
               message: `Please fix the following: ${fieldErrors.join('. ')}`,
             })
           }
+        }
+
+        // Organizers of the proposal's own org may set up to the schema's 500.
+        const isOrganizerForProposal =
+          ctx.isOrgOrganizer &&
+          !!ctx.orgId &&
+          existing._organizationId === ctx.orgId
+        if (!isOrganizerForProposal) {
+          assertSpeakerCapacity(
+            input.data.capacity,
+            existing.capacity ?? undefined,
+          )
         }
 
         // REFERENCE INJECTION (#731): `getProposal` above proved the TALK is the

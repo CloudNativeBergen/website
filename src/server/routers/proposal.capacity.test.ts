@@ -362,3 +362,63 @@ describe('proposal.update by an organizer who speaks at the workshop (#1344)', (
     )
   })
 })
+
+describe('a speaker may ask for up to 200 seats; organizers set up to 500', () => {
+  const speaker = () => {
+    const sp = { _id: 'sp-1', name: 'Speaker', email: 'sp@example.com' }
+    const user = { email: sp.email }
+    return proposalRouter.createCaller({
+      session: { user, speaker: sp },
+      speaker: sp,
+      user,
+    } as unknown as Context)
+  }
+  const stored = (capacity: number) => {
+    h.stored = { capacity, conferenceId: 'conf-A' }
+    h.getProposal.mockResolvedValue({
+      proposal: {
+        _id: 'talk-1',
+        status: 'draft',
+        format: 'workshop_120',
+        capacity,
+        _organizationId: 'org-A',
+        // No conference: the CFP-window rule is not what is under test.
+      },
+      proposalError: null,
+    })
+  }
+  const edit = (who: typeof speaker, capacity: number) =>
+    who().update({
+      id: 'talk-1',
+      data: { title: 'Hands-on', format: 'workshop_120', capacity },
+    } as never)
+
+  it('a speaker at 200: saved', async () => {
+    stored(10)
+    await edit(speaker, 200)
+    expect(h.changeCapacity).toHaveBeenCalled()
+  })
+
+  it('a speaker at 201: refused, nothing written', async () => {
+    stored(10)
+    await expect(edit(speaker, 201)).rejects.toThrow(
+      'Capacity cannot exceed 200 participants. Ask the organizers for more.',
+    )
+    expect(h.changeCapacity).not.toHaveBeenCalled()
+    expect(h.updateProposal).not.toHaveBeenCalled()
+  })
+
+  it('a speaker saving the 300 an organizer set: saved', async () => {
+    stored(300)
+    await edit(speaker, 300)
+    expect(h.updateProposal).toHaveBeenCalledTimes(1)
+  })
+
+  it('an organizer at 300: saved', async () => {
+    stored(10)
+    await edit(organizer, 300)
+    expect(h.changeCapacity).toHaveBeenCalledWith('talk-1', 'conf-A', 300, {
+      edit: { format: 'workshop_120' },
+    })
+  })
+})

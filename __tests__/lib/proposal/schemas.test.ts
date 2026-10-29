@@ -145,18 +145,18 @@ describe('ProposalInputSchema (strict)', () => {
     expect(result.success).toBe(true)
   })
 
-  it('accepts a workshop capacity of 200 and rejects 201', () => {
+  it('accepts a workshop capacity of 500 and rejects 501', () => {
     const at = (capacity: number) =>
       ProposalInputSchema.safeParse({
         ...fullProposal,
         format: Format.workshop_120,
         capacity,
       })
-    expect(at(200).success).toBe(true)
-    const over = at(201)
+    expect(at(500).success).toBe(true)
+    const over = at(501)
     expect(over.success).toBe(false)
     expect(over.error?.issues[0]?.message).toBe(
-      'Capacity cannot exceed 200 participants',
+      'Capacity cannot exceed 500 participants',
     )
   })
 
