@@ -274,7 +274,9 @@ async function createPost({
   if (trusted) {
     console.log(
       `[AUDIT] Photo Wall post ${wallPostId(uploadId)} auto-approved for ${trusted.role} ${trusted.speakerId}` +
-        (trusted.realAdminId ? ` (impersonated by ${trusted.realAdminId})` : ''),
+        (trusted.realAdminId
+          ? ` (impersonated by ${trusted.realAdminId})`
+          : ''),
     )
   }
   expireWallPost(conferenceId, deviceKey, {

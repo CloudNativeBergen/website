@@ -105,7 +105,10 @@ export async function POST(request: Request) {
     form,
     now: new Date(),
     // The session cookie is on `Path=/`, so it arrives here too (§6.6).
-    session: await getAuthSession({ url: request.url, headers: request.headers }),
+    session: await getAuthSession({
+      url: request.url,
+      headers: request.headers,
+    }),
   })
   return outcome.ok ? NextResponse.json({ ok: true }) : refused(outcome.refusal)
 }

@@ -296,6 +296,24 @@ export const ComposerDark: Story = {
   },
 }
 
+/** A signed-in organizer or confirmed speaker (§6.6): one line above Post. */
+export const TrustedPoster: Story = {
+  args: { trustedName: 'Ingrid Hansen' },
+  play: async ({ canvasElement }) => {
+    const canvas = await pickFixture(canvasElement)
+    await expect(
+      canvas.getByText(/Your photo goes straight on the wall/),
+    ).toHaveTextContent(
+      'You’re signed in as Ingrid Hansen. Your photo goes straight on the wall.',
+    )
+  },
+}
+
+export const TrustedPosterDark: Story = {
+  ...TrustedPoster,
+  globals: { theme: 'dark' },
+}
+
 /** Caption and name filled, Fjord picked: the card as it will show on the wall. */
 export const Filled: Story = {
   play: async ({ canvasElement }) => {

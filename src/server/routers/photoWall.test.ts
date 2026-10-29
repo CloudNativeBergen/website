@@ -237,6 +237,7 @@ describe('photoWall.settings', () => {
       postingMode: 'paused',
       sponsorStrip: false,
       look: 'pinboard',
+      trustedPostersSkipApproval: false,
       closedAt: null,
     })
   })
@@ -267,6 +268,8 @@ describe('photoWall.settings', () => {
       sponsorStrip: false,
       // A missing look reads as Pinboard (§4.1).
       look: 'pinboard',
+      // A missing switch reads as off: existing walls keep moderating (§6.6).
+      trustedPostersSkipApproval: false,
       closedAt: null,
     })
     // 2026-10-26 08:00Z is the conference's first day.

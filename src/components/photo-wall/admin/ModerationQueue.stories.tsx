@@ -206,6 +206,39 @@ export const OnTheWallPhoneDark: Story = {
   globals: { theme: 'dark' },
 }
 
+/** A trusted poster's post, approved at Submit (§6.6): the label, and Remove as for any other. */
+const AUTO_APPROVED: ModerationQueueData = {
+  posts: [
+    post({
+      status: 'approved',
+      caption: 'Speaker selfie before the talk',
+      name: 'Ingrid',
+      autoApprovedBy: 'Ingrid Hansen',
+      submittedAt: '2026-10-26T08:00:00Z',
+      approvedAt: '2026-10-26T08:00:00Z',
+      decidedAt: '2026-10-26T08:00:00Z',
+    }),
+  ],
+}
+export const AutoApproved: Story = {
+  args: { queue: AUTO_APPROVED },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('tab', { name: 'On the wall (1)' }))
+    const [card] = canvas.getAllByRole('article')
+    await expect(
+      within(card).getByText('Auto-approved · Ingrid Hansen'),
+    ).toBeVisible()
+    await expect(
+      within(card).getByRole('button', { name: 'Remove' }),
+    ).toBeVisible()
+  },
+}
+export const AutoApprovedDark: Story = {
+  ...AutoApproved,
+  globals: { theme: 'dark' },
+}
+
 /** Not shown holds the rejected post and a delete that did not finish (§12). */
 export const NotShownWithDeleting: Story = {
   play: async ({ canvasElement }) => {

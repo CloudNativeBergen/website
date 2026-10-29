@@ -83,7 +83,7 @@ export function PhotoWallAdmin({
         description={
           setup
             ? 'Posting, the screens’ look, and the links and QR codes to share.'
-            : 'Attendees post photos from their phones. Nothing appears until an organizer approves it.'
+            : 'Attendees post photos from their phones. Organizers approve each photo before it appears; with Trusted posters on, organizers’ and confirmed speakers’ photos appear at once.'
         }
         contextHighlight={conferenceTitle}
         backLink={
@@ -144,10 +144,22 @@ export function PhotoWallAdmin({
                   saving={saving}
                   onChange={(postingMode) => onChange({ postingMode })}
                 />
-                <SponsorStripSetting
+                <SwitchSetting
+                  label="Sponsor strip"
+                  note="Show the conference’s sponsors along the bottom of Screen Mode."
                   on={wall.sponsorStrip}
                   saving={saving}
                   onChange={(sponsorStrip) => onChange({ sponsorStrip })}
+                />
+                <SwitchSetting
+                  label="Trusted posters skip approval"
+                  note="Photos from organizers and confirmed speakers, signed in, go straight on the wall."
+                  hint="New. Off on this wall until you turn it on."
+                  on={wall.trustedPostersSkipApproval}
+                  saving={saving}
+                  onChange={(trustedPostersSkipApproval) =>
+                    onChange({ trustedPostersSkipApproval })
+                  }
                 />
                 <WallLookSetting
                   look={wall.look}
@@ -397,11 +409,18 @@ function PostingSetting({
   )
 }
 
-function SponsorStripSetting({
+/** An on/off setting (§10). `hint` shows while it is off (§6.6). */
+function SwitchSetting({
+  label,
+  note,
+  hint,
   on,
   saving,
   onChange,
 }: {
+  label: string
+  note: string
+  hint?: string
   on: boolean
   saving: boolean
   onChange: (on: boolean) => void
@@ -415,14 +434,19 @@ function SponsorStripSetting({
           id={labelId}
           className="text-sm font-medium text-gray-900 dark:text-white"
         >
-          Sponsor strip
+          {label}
         </p>
         <p
           id={noteId}
           className="mt-1 text-sm text-gray-600 dark:text-gray-400"
         >
-          Show the conference’s sponsors along the bottom of Screen Mode.
+          {note}
         </p>
+        {hint && !on && (
+          <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+            {hint}
+          </p>
+        )}
       </div>
       <button
         type="button"

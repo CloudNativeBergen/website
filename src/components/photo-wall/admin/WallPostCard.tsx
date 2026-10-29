@@ -111,6 +111,11 @@ export function WallPostCard({
               Marketing OK
             </span>
           )}
+          {post.autoApprovedBy && (
+            <span className="rounded-full bg-blue-50 px-2 py-0.5 font-medium text-blue-800 ring-1 ring-blue-600/20 dark:bg-blue-900/30 dark:text-blue-200 dark:ring-blue-400/30">
+              Auto-approved · {post.autoApprovedBy}
+            </span>
+          )}
         </p>
         {onAction && (
           <Actions

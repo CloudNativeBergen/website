@@ -35,6 +35,7 @@ interface PostRow {
   submittedAt: string | null
   approvedAt: string | null
   decidedAt: string | null
+  autoApprovedBy: string | null
   talk: {
     _id: string | null
     title: string | null
@@ -92,6 +93,9 @@ export async function readModerationQueue(
       submittedAt,
       approvedAt,
       decidedAt,
+      "autoApprovedBy": select(
+        defined(autoApproval) => coalesce(autoApproval.speaker->name, autoApproval.role)
+      ),
       "talk": talk->{ _id, title, "speakers": speakers[]->name }
     }`,
   )
@@ -113,6 +117,7 @@ export async function readModerationQueue(
       submittedAt: row.submittedAt ?? null,
       approvedAt: row.approvedAt ?? null,
       decidedAt: row.decidedAt ?? null,
+      ...(row.autoApprovedBy ? { autoApprovedBy: row.autoApprovedBy } : {}),
       incarnation: {
         createdAt: row._createdAt ?? null,
         // A `deleting` post shows no photo, and its asset id stays hidden.
