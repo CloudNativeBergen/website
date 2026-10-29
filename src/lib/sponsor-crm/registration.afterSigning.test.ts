@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/sanity/client', () => ({
@@ -66,5 +67,32 @@ describe('withAfterSigning', () => {
       new Date('2026-09-08T08:00:00Z'),
     )
     expect(out.afterSigning?.earlyAccessPath).toBeNull()
+  })
+
+  it('never returns the on-site contact phone number', () => {
+    const out = withAfterSigning({
+      ...base,
+      signatureStatus: 'signed',
+      afterSigning: {
+        ...raw,
+        onsiteContact: {
+          name: 'Kari',
+          email: 'kari@example.com',
+          phone: '+47 400 00 000',
+        } as never,
+      },
+    })
+    expect(out.afterSigning?.onsiteContact).toEqual({
+      name: 'Kari',
+      email: 'kari@example.com',
+    })
+  })
+
+  it('does not ask Sanity for the on-site contact phone', () => {
+    const src = readFileSync(
+      new URL('./registration.ts', import.meta.url),
+      'utf8',
+    )
+    expect(src).toContain('onsiteContact{ name, email }')
   })
 })

@@ -161,7 +161,7 @@ export function PortalWhatHappensNext({ a }: { a: PortalAfterSigning }) {
 }
 
 export function PortalAtTheEvent({ a }: { a: PortalAfterSigning }) {
-  const contact = a.onsiteContact?.name || a.onsiteContact?.phone
+  const contact = a.onsiteContact?.name
   const contactEmail = a.onsiteContact?.email || a.contactEmail
   return (
     <section className={card}>
@@ -177,9 +177,7 @@ export function PortalAtTheEvent({ a }: { a: PortalAfterSigning }) {
               On-site contact
             </h3>
             <p className={muted}>
-              {[a.onsiteContact?.name, a.onsiteContact?.phone]
-                .filter(Boolean)
-                .join(', ')}
+              {[a.onsiteContact?.name].filter(Boolean).join(', ')}
               {contact && contactEmail && ', '}
               {contactEmail && (
                 <a href={`mailto:${contactEmail}`} className={link}>

@@ -23,7 +23,6 @@ const a: PortalAfterSigning = {
     'Take the light rail to Byparken, then walk five minutes.\nParking at Bygarasjen.',
   onsiteContact: {
     name: 'Kari Nordmann',
-    phone: '+47 400 00 000',
     email: null,
   },
   contactEmail: 'hello@example.com',

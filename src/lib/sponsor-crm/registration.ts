@@ -35,7 +35,6 @@ export interface PortalAfterSigning {
   venueTravelInfo: string | null
   onsiteContact: {
     name: string | null
-    phone: string | null
     email: string | null
   } | null
   contactEmail: string | null
@@ -184,6 +183,9 @@ export function withAfterSigning(
     afterSigning: {
       ...rest,
       hasPhotoWall: rest.hasPhotoWall ?? false,
+      onsiteContact: rest.onsiteContact
+        ? { name: rest.onsiteContact.name, email: rest.onsiteContact.email }
+        : null,
       earlyAccessPath: headStart
         ? `${WORKSHOP_EARLY_ACCESS_PATH}/${encodeURIComponent(earlyAccessToken)}`
         : null,
@@ -251,7 +253,7 @@ export async function validateRegistrationToken(
           "venueName": conference->venueName,
           "venueAddress": conference->venueAddress,
           "venueTravelInfo": conference->venueTravelInfo,
-          "onsiteContact": conference->speakerInfo.onsiteContact{ name, phone, email },
+          "onsiteContact": conference->speakerInfo.onsiteContact{ name, email },
           "contactEmail": conference->contactEmail,
           "sponsorEmail": conference->sponsorEmail,
           "conferenceId": conference._ref
