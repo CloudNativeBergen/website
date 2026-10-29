@@ -20,7 +20,8 @@ import {
   DealStatusSection,
 } from './form'
 import { ManageCards } from './ManageCards'
-import { SponsorTicketsBlock } from './SponsorTicketsBlock'
+import { SponsorTicketsBlock, nameMatchedCodes } from './SponsorTicketsBlock'
+import { api } from '@/lib/trpc/client'
 import type { SponsorSubView } from './form/deal-status'
 import { hasPositiveContractValue } from '@/lib/sponsor-crm/contract-readiness'
 import clsx from 'clsx'
@@ -141,6 +142,17 @@ export function SponsorPipelineView({
   onSendEmail,
   onSendDiscountCodes,
 }: SponsorPipelineViewProps) {
+  // The same codes the discount send resolves: stored, or matched by name.
+  const codeOptions = api.sponsor.crm.discountCodeOptions.useQuery(
+    { sponsorForConferenceId: sponsor?._id ?? '' },
+    {
+      enabled: !!sponsor && !!onSendDiscountCodes,
+      refetchOnWindowFocus: false,
+    },
+  )
+  const hasCodes =
+    !!sponsor?.discountCodes?.length ||
+    nameMatchedCodes(codeOptions.data?.codes).length > 0
   const isContractValueLocked =
     (sponsor?.contractStatus === 'contract-sent' ||
       sponsor?.contractStatus === 'contract-signed') &&
@@ -304,11 +316,9 @@ export function SponsorPipelineView({
                   <button
                     type="button"
                     onClick={onSendDiscountCodes}
-                    disabled={!sponsor.discountCodes?.length}
+                    disabled={!hasCodes}
                     title={
-                      sponsor.discountCodes?.length
-                        ? undefined
-                        : 'Link a code under Tickets first'
+                      hasCodes ? undefined : 'Link a code under Tickets first'
                     }
                     className={`${SEND_BUTTON} disabled:cursor-not-allowed disabled:opacity-50`}
                   >
@@ -316,7 +326,7 @@ export function SponsorPipelineView({
                     Send codes
                   </button>
                 )}
-                {onSendDiscountCodes && !sponsor.discountCodes?.length && (
+                {onSendDiscountCodes && !hasCodes && (
                   <p className="self-center text-xs text-gray-500 dark:text-gray-400">
                     No codes linked yet
                   </p>

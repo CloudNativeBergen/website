@@ -700,6 +700,13 @@ describe('sponsor.crm.unassignDiscountCode', () => {
       { id: SFC, paths: ['discountCodes[_key=="k1"]'] },
     ])
     expect(h.claimOps).toContainEqual({ op: 'delete', id: claimId })
+    expect(
+      h.creates.find((d) => d.activityType === 'discount_code_unlinked'),
+    ).toMatchObject({
+      sponsorForConference: { _ref: SFC },
+      description: 'Discount code acme-2026 unlinked',
+      createdBy: { _ref: 'sp-admin' },
+    })
   })
 
   it('leaves another sponsor’s claim alone', async () => {

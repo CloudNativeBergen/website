@@ -3416,6 +3416,13 @@ export const sponsorRouter = router({
             message: `${input.code} is not linked to this sponsor`,
           })
         }
+        await createSponsorActivity(
+          input.sponsorForConferenceId,
+          'discount_code_unlinked',
+          `Discount code ${input.code} unlinked`,
+          ctx.speaker._id,
+          { oldValue: input.code },
+        )
         return { success: true as const }
       }),
 

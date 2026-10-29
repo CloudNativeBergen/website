@@ -40,6 +40,10 @@ export default defineType({
             title: 'Discount Codes Assigned',
             value: 'discount_codes_assigned',
           },
+          {
+            title: 'Discount Code Unlinked',
+            value: 'discount_code_unlinked',
+          },
         ],
         layout: 'dropdown',
       },

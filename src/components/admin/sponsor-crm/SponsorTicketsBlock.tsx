@@ -10,6 +10,15 @@ import { useNotification } from '@/components/admin/NotificationProvider'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 
+type CodeOption = { code: string; selected: boolean; linked: boolean }
+
+/** Codes the discount send counts as this sponsor's by name, not stored. */
+export function nameMatchedCodes<T extends CodeOption>(
+  codes: readonly T[] | undefined,
+): T[] {
+  return codes?.filter((c) => c.selected && !c.linked) ?? []
+}
+
 const SMALL_BUTTON =
   'rounded-md px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-300 ring-inset hover:bg-gray-50 disabled:opacity-50 dark:text-gray-300 dark:ring-white/10 dark:hover:bg-white/10'
 
@@ -40,10 +49,13 @@ export function SponsorTicketsBlock({
     options.data?.codes.find(
       (c) => normalizeDiscountCode(c.code) === normalizeDiscountCode(code),
     )
-  // Free to link: not stored here, and not stored on or counted for another.
+  // Counted as this sponsor's by name only, as the discount send does while
+  // the sponsor stores no codes. Linking stores them.
+  const byName = nameMatchedCodes(options.data?.codes)
+  // Free to link: not stored or matched here, and not held by another.
   const free =
     options.data?.codes.filter(
-      (c) => !c.linked && !c.linkedTo && !c.attributedTo,
+      (c) => !c.selected && !c.linked && !c.linkedTo && !c.attributedTo,
     ) ?? []
 
   const refresh = () => {
@@ -116,6 +128,41 @@ export function SponsorTicketsBlock({
             )
           })}
         </ul>
+      )}
+
+      {byName.length > 0 && (
+        <div>
+          <ul className="divide-y divide-gray-100 dark:divide-white/5">
+            {byName.map((c) => (
+              <li key={c.code} className="flex items-center gap-2 py-1.5">
+                <span className="min-w-0 font-mono text-sm break-all text-gray-900 dark:text-white">
+                  {c.code}
+                </span>
+                <span className="rounded-full bg-amber-100 px-2 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                  Matched by name
+                </span>
+                <button
+                  type="button"
+                  className={`ml-auto ${SMALL_BUTTON}`}
+                  disabled={assign.isPending}
+                  aria-label={`Link ${c.code}`}
+                  onClick={() =>
+                    assign.mutate({
+                      sponsorForConferenceId,
+                      discountCodes: [c.code],
+                    })
+                  }
+                >
+                  Link
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            These codes carry the sponsor&apos;s name. Linking confirms them as
+            this sponsor&apos;s codes.
+          </p>
+        </div>
       )}
 
       {options.error ? (

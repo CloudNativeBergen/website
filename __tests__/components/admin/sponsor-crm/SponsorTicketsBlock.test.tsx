@@ -16,6 +16,7 @@ import {
 import { mockSponsor } from '@/__mocks__/sponsor-data'
 
 const q = vi.hoisted(() => ({
+  codes: null as unknown[] | null,
   assign: vi.fn(),
   unassign: vi.fn(),
   invalidateRecord: vi.fn(),
@@ -51,7 +52,7 @@ vi.mock('@/lib/trpc/client', () => {
               isLoading: false,
               error: null,
               data: {
-                codes: [
+                codes: q.codes ?? [
                   {
                     code: 'ACME-2026',
                     linked: true,
@@ -83,10 +84,12 @@ vi.mock('@/lib/trpc/client', () => {
 import { SponsorTicketsBlock } from '@/components/admin/sponsor-crm/SponsorTicketsBlock'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 
-function renderBlock() {
-  const sponsor = mockSponsor({
-    discountCodes: [{ _key: 'k1', code: 'ACME-2026' }],
-  })
+function renderBlock(
+  discountCodes: { _key: string; code: string }[] = [
+    { _key: 'k1', code: 'ACME-2026' },
+  ],
+) {
+  const sponsor = mockSponsor({ discountCodes })
   sponsor.tier = { ...sponsor.tier!, ticketEntitlement: 4 }
   render(
     <NotificationProvider>
@@ -96,7 +99,10 @@ function renderBlock() {
   return sponsor
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  q.codes = null
+})
 afterEach(cleanup)
 
 describe('SponsorTicketsBlock', () => {
@@ -141,6 +147,26 @@ describe('SponsorTicketsBlock', () => {
         code: 'ACME-2026',
       }),
     )
+    expect(q.invalidateRecord).toHaveBeenCalledWith({ id: sponsor._id })
+  })
+
+  it('shows codes matched only by name, with the hint, and links one', () => {
+    q.codes = [
+      { code: 'ACME-2026', linked: false, selected: true },
+      { code: 'FREE-1', linked: false, selected: false },
+    ]
+    const sponsor = renderBlock([])
+    expect(screen.getByText('Matched by name')).toBeInTheDocument()
+    expect(screen.getByText(/Linking confirms them/)).toBeInTheDocument()
+    const select = screen.getByLabelText('Code to link')
+    expect(
+      Array.from(select.querySelectorAll('option')).map((o) => o.value),
+    ).toEqual(['', 'FREE-1'])
+    fireEvent.click(screen.getByRole('button', { name: 'Link ACME-2026' }))
+    expect(q.assign).toHaveBeenCalledWith({
+      sponsorForConferenceId: sponsor._id,
+      discountCodes: ['ACME-2026'],
+    })
     expect(q.invalidateRecord).toHaveBeenCalledWith({ id: sponsor._id })
   })
 })

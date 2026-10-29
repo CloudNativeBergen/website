@@ -33,6 +33,8 @@ export type ActivityType =
   | 'message'
   // Discount codes linked to the sponsor without a send (#1262).
   | 'discount_codes_assigned'
+  // A stored code removed from the sponsor (#1704 T1).
+  | 'discount_code_unlinked'
 
 /**
  * What kind of email a sent-communication record is (#1261). Slice 1 sends

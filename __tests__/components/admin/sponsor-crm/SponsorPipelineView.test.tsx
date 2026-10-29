@@ -14,8 +14,24 @@ vi.mock('@/components/admin/sponsor/SponsorActivityTimeline', () => ({
   SponsorActivityTimeline: () => <div data-testid="activity-timeline" />,
 }))
 
-vi.mock('@/components/admin/sponsor-crm/SponsorTicketsBlock', () => ({
+vi.mock('@/components/admin/sponsor-crm/SponsorTicketsBlock', async (orig) => ({
+  ...(await orig<object>()),
   SponsorTicketsBlock: () => <div data-testid="tickets-block" />,
+}))
+
+const codeOptions = vi.hoisted(() => ({
+  codes: [] as Array<{ code: string; selected: boolean; linked: boolean }>,
+}))
+vi.mock('@/lib/trpc/client', () => ({
+  api: {
+    sponsor: {
+      crm: {
+        discountCodeOptions: {
+          useQuery: () => ({ data: { codes: codeOptions.codes } }),
+        },
+      },
+    },
+  },
 }))
 
 const defaultFormData: SponsorPipelineFormData = {
@@ -164,6 +180,16 @@ describe('SponsorPipelineView — sections', () => {
 
 describe('SponsorPipelineView — tickets (#1704 T1)', () => {
   afterEach(cleanup)
+  beforeEach(() => {
+    codeOptions.codes = []
+  })
+
+  it('enables Send codes when the codes are only matched by name', () => {
+    codeOptions.codes = [{ code: 'ACME-2026', selected: true, linked: false }]
+    renderPipelineView(mockSponsor({ status: 'closed-won' }), vi.fn())
+    expect(screen.getByRole('button', { name: /Send codes/ })).toBeEnabled()
+    expect(screen.queryByText('No codes linked yet')).not.toBeInTheDocument()
+  })
 
   it('hides the Tickets block when discount codes are gated off', () => {
     renderPipelineView(mockSponsor({ status: 'closed-won' }))
