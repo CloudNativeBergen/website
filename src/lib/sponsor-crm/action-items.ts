@@ -43,7 +43,7 @@ export function generateActionItems(
       ? { name: sponsor.assignedTo.name, image: sponsor.assignedTo.image }
       : undefined
 
-    const link = `/admin/sponsors/crm?sponsor=${sponsor._id}`
+    const link = `/admin/sponsors/${sponsor._id}?view=pipeline`
     const name = sponsor.sponsor.name
 
     // Priority 1: Overdue invoices

@@ -92,6 +92,7 @@ export function SponsorDashboardClient({
       sponsorForConferenceId: sponsorId,
     })
     utils.sponsor.crm.list.invalidate()
+    utils.sponsor.crm.healthViolations.invalidate()
   }, [utils, sponsorId])
 
   return (
@@ -101,6 +102,7 @@ export function SponsorDashboardClient({
         initialData={initialOverview}
         backHref={backHref}
         onOpenRecord={() => openRecord('pipeline')}
+        onChanged={refresh}
         onSendEmail={sponsor ? () => setSendKind('information') : undefined}
       />
 

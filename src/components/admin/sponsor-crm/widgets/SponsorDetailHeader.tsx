@@ -4,6 +4,8 @@
 import { api } from '@/lib/trpc/client'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import { SponsorLogo } from '@/components/SponsorLogo'
+import { useNotification } from '@/components/admin/NotificationProvider'
 import { STATUSES } from '@/components/admin/sponsor-crm/form/constants'
 
 interface SponsorDetailHeaderProps {
@@ -13,6 +15,8 @@ interface SponsorDetailHeaderProps {
   onOpenRecord: () => void
   /** Opens the Send modal. Omitted when there is no sender identity. */
   onSendEmail?: () => void
+  /** Refreshes every sponsor query on the page after a status change. */
+  onChanged: () => void
   /** Back arrow target. Defaults to the pipeline board. */
   backHref?: string
 }
@@ -22,9 +26,10 @@ export function SponsorDetailHeader({
   initialData,
   onOpenRecord,
   onSendEmail,
+  onChanged,
   backHref = '/admin/sponsors/crm',
 }: SponsorDetailHeaderProps) {
-  const trpcUtils = api.useUtils()
+  const { showNotification } = useNotification()
 
   const { data, isLoading } = api.sponsor.crm.getOverview.useQuery(
     {
@@ -33,11 +38,17 @@ export function SponsorDetailHeader({
     { initialData },
   )
 
-  const updateMutation = api.sponsor.crm.update.useMutation({
-    onSuccess: () => {
-      trpcUtils.sponsor.crm.getOverview.invalidate({ id: sponsorId })
-      trpcUtils.sponsor.crm.list.invalidate() // Invalidate the Kanban board too
-    },
+  // Through moveStage, so the pipeline transition rules apply. Every query
+  // the page holds is refreshed after, or the open record would save the old
+  // status back.
+  const updateMutation = api.sponsor.crm.moveStage.useMutation({
+    onSuccess: onChanged,
+    onError: (error) =>
+      showNotification({
+        type: 'error',
+        title: 'Could not change the status',
+        message: error.message,
+      }),
   })
 
   if (isLoading) {
@@ -62,9 +73,10 @@ export function SponsorDetailHeader({
           <ArrowLeftIcon className="h-5 w-5" />
         </Link>
         {data.sponsor?.logo ? (
-          <img
-            src={data.sponsor.logo}
-            alt={data.sponsor.name}
+          <SponsorLogo
+            logo={data.sponsor.logo}
+            logoBright={data.sponsor.logoBright}
+            name={data.sponsor.name}
             className="h-12 w-12 rounded-lg border border-gray-200 bg-white object-contain p-1"
           />
         ) : (
@@ -83,7 +95,7 @@ export function SponsorDetailHeader({
               onChange={(e) => {
                 updateMutation.mutate({
                   id: sponsorId,
-                  status: e.target.value as any,
+                  newStatus: e.target.value as any,
                 })
               }}
               className="inline-flex items-center rounded-md bg-blue-50 py-1 pr-8 pl-2 text-xs font-medium text-blue-700 ring-1 ring-blue-700/10 ring-inset focus:ring-2 focus:ring-blue-500 dark:bg-blue-900/30 dark:text-blue-400 dark:ring-blue-400/20"
@@ -103,7 +115,7 @@ export function SponsorDetailHeader({
         {data.status !== 'closed-won' && (
           <button
             onClick={() =>
-              updateMutation.mutate({ id: sponsorId, status: 'closed-won' })
+              updateMutation.mutate({ id: sponsorId, newStatus: 'closed-won' })
             }
             disabled={updateMutation.isPending}
             className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"

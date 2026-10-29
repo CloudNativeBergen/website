@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import type { Conference } from '@/lib/conference/types'
 import { SponsorDashboardClient } from './SponsorDashboardClient'
 import { http, HttpResponse } from 'msw'
+import { mockSponsor } from '@/__mocks__/sponsor-data'
 
 const meta: Meta<typeof SponsorDashboardClient> = {
   title: 'Admin/Sponsor CRM/SponsorDashboardClient',
@@ -38,6 +39,16 @@ export const Default: Story = {
   parameters: {
     msw: {
       handlers: [
+        // The full record the header buttons and Manage links open.
+        http.get('/api/trpc/sponsor.crm.getById', () =>
+          trpcResult(
+            mockSponsor({
+              _id: 'sponsor-1',
+              status: 'negotiating',
+              sponsor: { _id: 'sponsor-1', name: 'Acme Corp' } as any,
+            }),
+          ),
+        ),
         http.get('/api/trpc/sponsor.crm.getOverview', () =>
           trpcResult(mockOverview),
         ),

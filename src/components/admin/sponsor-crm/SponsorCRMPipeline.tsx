@@ -10,7 +10,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
 import { SponsorSendModal } from '@/components/admin'
-import type { ContractSendOptions } from './SponsorContractView'
 import {
   sponsorFromAddress,
   type SendableKind,
@@ -81,15 +80,10 @@ export function SponsorCRMPipeline({
   const hasDefaultedRef = useRef(false)
   const dndId = useId()
 
-  const [selectedSponsor, setSelectedSponsor] =
-    useState<SponsorForConferenceExpanded | null>(null)
   const [emailSponsor, setEmailSponsor] =
     useState<SponsorForConferenceExpanded | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [isFormOpen, setIsFormOpen] = useState(false)
-  const [initialFormView, setInitialFormView] = useState<
-    'pipeline' | 'history' | 'contract'
-  >('pipeline')
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
   const [emailKind, setEmailKind] = useState<SendableKind>('information')
   const [deleteConfirmSponsor, setDeleteConfirmSponsor] =
@@ -204,16 +198,6 @@ export function SponsorCRMPipeline({
       refetchOnWindowFocus: !isUserBusy,
     })
 
-  // Keep selectedSponsor in sync with fresh query data
-  useEffect(() => {
-    if (!selectedSponsor || !sponsors.length) return
-    const fresh = sponsors.find((s) => s._id === selectedSponsor._id)
-    if (fresh && fresh !== selectedSponsor) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedSponsor(fresh)
-    }
-  }, [sponsors, selectedSponsor])
-
   // All filtering now happens on the server
   const filteredSponsors = useMemo(() => {
     if (!needsFollowUpFilter) return sponsors
@@ -250,16 +234,12 @@ export function SponsorCRMPipeline({
         router.push(`/admin/sponsors/${sponsor._id}?view=${formView}`)
         return
       }
-      setSelectedSponsor(null)
-      setInitialFormView(formView)
       setIsFormOpen(true)
     },
     [router],
   )
 
   const handleCreateNew = useCallback(() => {
-    setSelectedSponsor(null)
-    setInitialFormView('pipeline')
     setIsFormOpen(true)
     updateUrlParams({ sponsor: null, view: null })
   }, [updateUrlParams])
@@ -272,7 +252,6 @@ export function SponsorCRMPipeline({
   )
 
   const handleCloseForm = useCallback(() => {
-    setSelectedSponsor(null)
     setIsFormOpen(false)
     updateUrlParams({ sponsor: null, view: null })
     utils.sponsor.crm.list.invalidate()
@@ -282,15 +261,6 @@ export function SponsorCRMPipeline({
     utils.sponsor.crm.list,
     utils.sponsor.crm.healthViolations,
   ])
-
-  const handleFormViewChange = useCallback(
-    (formView: string) => {
-      if (selectedSponsor) {
-        updateUrlParams({ view: formView })
-      }
-    },
-    [selectedSponsor, updateUrlParams],
-  )
 
   const handleOpenEmail = useCallback(
     (sponsor: SponsorForConferenceExpanded) => {
@@ -308,36 +278,6 @@ export function SponsorCRMPipeline({
     },
     [],
   )
-  const handleOpenRegistrationSend = useCallback(
-    (sponsor: SponsorForConferenceExpanded) => {
-      setEmailKind('registration')
-      setEmailSponsor(sponsor)
-      setIsEmailModalOpen(true)
-    },
-    [],
-  )
-  const handleOpenEarlyAccessSend = useCallback(
-    (sponsor: SponsorForConferenceExpanded) => {
-      setEmailKind('workshop-early-access')
-      setEmailSponsor(sponsor)
-      setIsEmailModalOpen(true)
-    },
-    [],
-  )
-  // Send → Contract (#1264): what the contract view previewed (template +
-  // counter-signature) rides along to the modal; a reminder or signed copy
-  // carries nothing and the server decides the action from the state.
-  const [contractSend, setContractSend] = useState<ContractSendOptions>({})
-  const handleOpenContractSend = useCallback(
-    (sponsor: SponsorForConferenceExpanded, options: ContractSendOptions) => {
-      setContractSend(options)
-      setEmailKind('contract')
-      setEmailSponsor(sponsor)
-      setIsEmailModalOpen(true)
-    },
-    [],
-  )
-
   const handleCloseEmail = useCallback(() => {
     setEmailSponsor(null)
     setIsEmailModalOpen(false)
@@ -589,66 +529,21 @@ export function SponsorCRMPipeline({
       />
       {isFormOpen && (
         <SponsorCRMForm
-          key={selectedSponsor?._id || 'new'}
           conferenceId={conferenceId}
           workshopsEnabled={workshopsEnabled}
           // Without one a link gives no head start, and the section says so.
           sponsorStartSet={!!conference.workshopRegistrationSponsorStart}
-          sponsor={selectedSponsor}
+          sponsor={null}
           isOpen={isFormOpen}
           onClose={handleCloseForm}
+          // A new sponsor continues on its own page (#1274), where the
+          // record and every send live.
           onSuccess={(createdId) => {
             if (createdId) {
-              const created = utils.sponsor.crm.list
-                .getData({
-                  assignedTo:
-                    assignedToFilter === 'unassigned'
-                      ? undefined
-                      : assignedToFilter,
-                  unassignedOnly: assignedToFilter === 'unassigned',
-                  tags: tagsFilter.length > 0 ? tagsFilter : undefined,
-                  tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
-                })
-                ?.find((s) => s._id === createdId)
-              if (created) {
-                setSelectedSponsor(created)
-                setInitialFormView('pipeline')
-              }
+              router.push(`/admin/sponsors/${createdId}?view=pipeline`)
             }
           }}
           existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
-          initialView={initialFormView}
-          onViewChange={handleFormViewChange}
-          // "Send email" in the detail modal's Manage grid reuses the SAME Send
-          // modal the board card's overflow opens; it is rendered below
-          // this one, so it layers over the detail modal and closing it returns
-          // to the sponsor. Needs `conference` for the sender identity, exactly
-          // like the card path.
-          onSendEmail={
-            selectedSponsor && conference
-              ? () => handleOpenEmail(selectedSponsor)
-              : undefined
-          }
-          onSendDiscountCodes={
-            selectedSponsor && conference && canSendDiscountCodes
-              ? () => handleOpenDiscountSend(selectedSponsor)
-              : undefined
-          }
-          onSendRegistration={
-            selectedSponsor && conference
-              ? () => handleOpenRegistrationSend(selectedSponsor)
-              : undefined
-          }
-          onSendContract={
-            selectedSponsor && conference
-              ? (options) => handleOpenContractSend(selectedSponsor, options)
-              : undefined
-          }
-          onSendEarlyAccess={
-            selectedSponsor && conference
-              ? () => handleOpenEarlyAccessSend(selectedSponsor)
-              : undefined
-          }
         />
       )}
 
@@ -662,7 +557,6 @@ export function SponsorCRMPipeline({
           onSent={() => utils.sponsor.crm.list.invalidate()}
           sponsorForConference={emailSponsor}
           kind={emailKind}
-          contractSend={emailKind === 'contract' ? contractSend : undefined}
           domain={domain}
           // Mirrors the server's `resolveConferenceFrom(…, 'sponsorEmail')`
           // fallback so the From: line shows what will actually be used.

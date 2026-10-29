@@ -780,7 +780,7 @@ describe('generateActionItems', () => {
       const sponsor = createSponsor({ invoiceStatus: 'overdue' })
       const items = generateActionItems([sponsor])
 
-      expect(items[0].link).toBe('/admin/sponsors/crm?sponsor=sfc-1')
+      expect(items[0].link).toBe('/admin/sponsors/sfc-1?view=pipeline')
     })
 
     it('includes sponsor name in description', () => {

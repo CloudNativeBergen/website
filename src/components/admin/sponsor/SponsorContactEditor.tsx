@@ -19,10 +19,7 @@ import { api } from '@/lib/trpc/client'
 import { useNotification } from '../NotificationProvider'
 
 interface SponsorContactEditorProps {
-  sponsorForConference: Pick<
-    SponsorForConferenceExpanded,
-    '_id' | 'contactPersons' | 'billing' | 'sponsor'
-  >
+  sponsorForConference: SponsorForConferenceExpanded
   onSuccess?: () => void
   onCancel?: () => void
   className?: string
