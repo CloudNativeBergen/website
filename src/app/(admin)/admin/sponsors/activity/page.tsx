@@ -1,6 +1,8 @@
+import { Suspense } from 'react'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { ClipboardDocumentListIcon } from '@heroicons/react/24/outline'
+import { SponsorActivityLog } from '@/components/admin/sponsor/SponsorActivityLog'
 
 export default async function AdminSponsorActivity() {
   const { conference, error: conferenceError } =
@@ -34,11 +36,9 @@ export default async function AdminSponsorActivity() {
         backLink={{ href: '/admin/sponsors', label: 'Back to Dashboard' }}
       />
 
-      <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-600 dark:bg-gray-800">
-        <p className="text-gray-600 dark:text-gray-400">
-          Full activity log with filters and pagination coming soon
-        </p>
-      </div>
+      <Suspense>
+        <SponsorActivityLog />
+      </Suspense>
     </div>
   )
 }

@@ -141,7 +141,12 @@ import {
   listActivitiesForConference,
   getCommunicationRecord,
   listCommunicationsForSponsor,
+  listActivityLog,
 } from '@/lib/sponsor-crm/activities'
+import {
+  ACTIVITY_TYPE_LABELS,
+  type ActivityType,
+} from '@/lib/sponsor-crm/types'
 import { sendSponsorCommunication } from '@/lib/sponsor-crm/communication-send'
 import {
   appendLinkedCodes,
@@ -2485,6 +2490,44 @@ export const sponsorRouter = router({
           }
 
           return activities || []
+        }),
+
+      /**
+       * The activity log page (#1704 A1): the whole conference's activity,
+       * filtered and paged 50 at a time. `cursor` is the row offset, named so
+       * for `useInfiniteQuery`. The conference always comes from the domain.
+       */
+      log: adminProcedure
+        .input(
+          z.object({
+            sponsor: z.string().min(1).optional(),
+            owner: z.string().min(1).optional(),
+            type: z
+              .enum(
+                Object.keys(ACTIVITY_TYPE_LABELS) as [
+                  ActivityType,
+                  ...ActivityType[],
+                ],
+              )
+              .optional(),
+            cursor: z.number().int().min(0).max(100000).nullish(),
+          }),
+        )
+        .query(async ({ input }) => {
+          const conferenceId = await resolveConferenceId()
+          try {
+            return await listActivityLog(
+              conferenceId,
+              { sponsor: input.sponsor, owner: input.owner, type: input.type },
+              input.cursor ?? 0,
+            )
+          } catch (error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to list the activity log',
+              cause: error,
+            })
+          }
         }),
 
       /**

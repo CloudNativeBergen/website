@@ -36,6 +36,23 @@ export type ActivityType =
   // A stored code removed from the sponsor (#1704 T1).
   | 'discount_code_unlinked'
 
+/** Every activity type with its label (mirrors the sponsorActivity schema). */
+export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
+  stage_change: 'Stage Change',
+  invoice_status_change: 'Invoice Status Change',
+  contract_status_change: 'Contract Status Change',
+  contract_signed: 'Contract Signed',
+  note: 'Note',
+  email: 'Email',
+  call: 'Call',
+  meeting: 'Meeting',
+  signature_status_change: 'Signature Status Change',
+  registration_complete: 'Registration Complete',
+  contract_reminder_sent: 'Contract Reminder Sent',
+  message: 'Message',
+  discount_codes_assigned: 'Discount Codes Assigned',
+}
+
 /**
  * What kind of email a sent-communication record is (#1261). Slice 1 sends
  * only `information`; the other kinds arrive with #1262–#1264 but the record
