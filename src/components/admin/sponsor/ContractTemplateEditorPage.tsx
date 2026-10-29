@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import { AdminPageHeader } from '@/components/admin'
 import { useNotification } from '@/components/admin'
 import type { Conference } from '@/lib/conference/types'
@@ -325,7 +326,10 @@ export function ContractTemplateEditorPage({
           title="Contract Preview"
           description="Preview with sample sponsor data — variables are replaced with example values"
           icon={<EyeIcon />}
-          backLink={{ href: '/admin/sponsors/contracts', label: 'Contracts' }}
+          backLink={{
+            href: '/admin/sponsors/contracts',
+            label: SPONSOR_PAGE_TITLES.contracts,
+          }}
         />
         <div className="mb-4 flex items-center justify-between">
           <button
@@ -360,7 +364,10 @@ export function ContractTemplateEditorPage({
         title={isEditing ? 'Edit Contract Template' : 'New Contract Template'}
         description="Configure the contract template structure and settings"
         icon={<DocumentTextIcon />}
-        backLink={{ href: '/admin/sponsors/contracts', label: 'Contracts' }}
+        backLink={{
+          href: '/admin/sponsors/contracts',
+          label: SPONSOR_PAGE_TITLES.contracts,
+        }}
       />
 
       <form onSubmit={handleSubmit} className="space-y-8">

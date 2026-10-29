@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { useNotification } from './NotificationProvider'
 import { EmailModal } from './EmailModal'
 import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
@@ -39,8 +39,13 @@ function expandPreviewBroadcastVariables(value: string): string {
 interface GeneralBroadcastModalProps {
   isOpen: boolean
   onClose: () => void
-  onSend: (subject: string, message: string) => Promise<void>
-  onSyncContacts: () => Promise<void>
+  /** May return the server's own recipient count, for the success message. */
+  onSend: (
+    subject: string,
+    message: string,
+  ) => Promise<{ recipientCount?: number } | void>
+  /** Shown as a Sync button in the default recipient line. */
+  onSyncContacts?: () => Promise<void>
   recipientCount: number
   recipientType: string
   fromEmail: string
@@ -51,6 +56,9 @@ interface GeneralBroadcastModalProps {
   socialLinks: string[]
   /** Tenant brand primary (THEMING L1) for the preview and the sent email. */
   brandColor?: string
+  /** Replaces the default count-and-sync line, e.g. with a recipient picker. */
+  recipientInfo?: ReactNode
+  title?: string
 }
 
 export function GeneralBroadcastModal({
@@ -67,6 +75,8 @@ export function GeneralBroadcastModal({
   eventUrl,
   socialLinks,
   brandColor,
+  recipientInfo,
+  title = 'Send Broadcast Email',
 }: GeneralBroadcastModalProps) {
   const { showNotification } = useNotification()
 
@@ -96,11 +106,11 @@ export function GeneralBroadcastModal({
       throw new Error(formatUnmergedVariablesMessage(unmergedVariables))
     }
 
-    await onSend(subject, JSON.stringify(message))
+    const sent = await onSend(subject, JSON.stringify(message))
     showNotification({
       type: 'success',
       title: 'Email sent',
-      message: `Email sent to ${recipientCount} ${recipientType}`,
+      message: `Email sent to ${sent?.recipientCount ?? recipientCount} ${recipientType}`,
     })
   }
 
@@ -109,14 +119,16 @@ export function GeneralBroadcastModal({
       <span className="text-sm text-gray-600 dark:text-gray-400">
         {recipientCount} confirmed {recipientType}
       </span>
-      <button
-        type="button"
-        onClick={onSyncContacts}
-        className="inline-flex items-center gap-1 rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
-      >
-        <ArrowPathIcon className="h-3 w-3" />
-        Sync
-      </button>
+      {onSyncContacts && (
+        <button
+          type="button"
+          onClick={onSyncContacts}
+          className="inline-flex items-center gap-1 rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+        >
+          <ArrowPathIcon className="h-3 w-3" />
+          Sync
+        </button>
+      )}
     </div>
   )
 
@@ -161,8 +173,8 @@ export function GeneralBroadcastModal({
     <EmailModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Send Broadcast Email"
-      recipientInfo={recipientDisplay}
+      title={title}
+      recipientInfo={recipientInfo ?? recipientDisplay}
       brandColor={brandColor}
       onSend={handleSend}
       submitButtonText={`Send to ${recipientCount} ${recipientType}`}

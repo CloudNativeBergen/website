@@ -235,10 +235,24 @@ import {
 } from '@/lib/contract-signing'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
 import { syncSponsorAudience, type Contact } from '@/lib/email/audience'
+import {
+  BroadcastFiltersSchema,
+  DEFAULT_BROADCAST_FILTERS,
+  resolveBroadcastRecipients,
+  type BroadcastFilters,
+} from '@/lib/sponsor-crm/broadcast-recipients'
+import {
+  acquireBroadcastLock,
+  BroadcastLockLostError,
+  extendBroadcastLock,
+  holdsBroadcastLock,
+  releaseBroadcastLock,
+  type BroadcastLock,
+} from '@/lib/sponsor-crm/broadcast-lock'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { logBulkEmailSent } from '@/lib/sponsor-crm/activity'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
-import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import type { SponsorEmailTemplate } from '@/lib/sponsor/types'
 import { publishSponsorStatusChange } from '@/lib/sponsor-crm/events'
 import '@/lib/events/registry'
@@ -786,46 +800,28 @@ function sanitizeSponsorLogoInput<
   return out
 }
 
-async function syncConfirmedSponsorAudience(conference: Conference) {
-  const { sponsors: crmSponsors, error: crmError } =
-    await listSponsorsForConference(conference._id)
+async function syncConfirmedSponsorAudience(
+  conference: Conference,
+  lock: HeldSendLock,
+  filters: BroadcastFilters = DEFAULT_BROADCAST_FILTERS,
+) {
+  const { eligibleSponsors, recipients, crmSponsors } =
+    await resolveSponsorBroadcastRecipients(conference, filters)
 
-  if (crmError || !crmSponsors) {
-    throw new TRPCError({
-      code: 'INTERNAL_SERVER_ERROR',
-      message: 'Failed to load sponsor CRM data',
-    })
-  }
-
-  // Audiences are scoped to confirmed (closed-won) sponsors. Prospects
-  // and negotiating sponsors must not receive general sponsor broadcasts.
-  const eligibleSponsors = crmSponsors.filter(
-    (s: SponsorForConferenceExpanded) =>
-      s.status === 'closed-won' &&
-      s.contactPersons &&
-      s.contactPersons.length > 0 &&
-      s.contactPersons.some((contact) => Boolean(contact.email?.trim())),
-  )
-
-  if (eligibleSponsors.length === 0) {
+  if (recipients.length === 0) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
       message:
-        'No confirmed sponsors with contact information found. Add contact information to closed-won sponsors before syncing.',
+        'No sponsor contacts match these filters. Add contact information or widen the filters.',
     })
   }
 
-  const sponsorContacts: Contact[] = eligibleSponsors.flatMap(
-    (s: SponsorForConferenceExpanded) =>
-      s.contactPersons
-        ?.filter((contact) => Boolean(contact.email?.trim()))
-        .map((contact) => ({
-          email: contact.email.trim(),
-          firstName: contact.name?.trim().split(' ')[0] || '',
-          lastName: contact.name?.trim().split(' ').slice(1).join(' ') || '',
-          organization: s.sponsor.name,
-        })) || [],
-  )
+  const sponsorContacts: Contact[] = recipients.map((r) => ({
+    email: r.email,
+    firstName: r.name.split(' ')[0] || '',
+    lastName: r.name.split(' ').slice(1).join(' ') || '',
+    organization: r.sponsorName,
+  }))
 
   const {
     success,
@@ -834,8 +830,19 @@ async function syncConfirmedSponsorAudience(conference: Conference) {
     addedCount,
     removedCount,
     error: syncError,
-  } = await syncSponsorAudience(conference, sponsorContacts)
+  } = await syncSponsorAudience(conference, sponsorContacts, {
+    // Opt-outs of people still in this conference's CRM survive a narrowing
+    // sync; an erased or removed contact's does not.
+    keepUnsubscribedIn: crmContactEmails(crmSponsors),
+    // A long sync keeps its claim alive, and stops once it has lost it.
+    onProgress: async () => {
+      if (!(await extendBroadcastLock(lock))) {
+        throw new BroadcastLockLostError()
+      }
+    },
+  })
 
+  if (syncError instanceof BroadcastLockLostError) throw sendLockConflict()
   if (!success || syncError) {
     throw new TRPCError({
       code: 'INTERNAL_SERVER_ERROR',
@@ -850,6 +857,81 @@ async function syncConfirmedSponsorAudience(conference: Conference) {
     syncedCount,
     addedCount,
     removedCount,
+  }
+}
+
+/**
+ * The recipients of an "Email sponsors" broadcast, resolved on the server
+ * from the CURRENT conference's sponsors only (#1704 C1). Prospects and
+ * negotiating sponsors are left out unless the filters ask for them.
+ */
+async function resolveSponsorBroadcastRecipients(
+  conference: Conference,
+  filters: BroadcastFilters,
+) {
+  const { sponsors: crmSponsors, error: crmError } =
+    await listSponsorsForConference(conference._id)
+
+  if (crmError || !crmSponsors) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to load sponsor CRM data',
+    })
+  }
+
+  const { recipients, sponsors } = resolveBroadcastRecipients(
+    crmSponsors,
+    filters,
+  )
+  return { recipients, eligibleSponsors: sponsors, crmSponsors }
+}
+
+/** Every address the conference's CRM still holds, normalized. */
+function crmContactEmails(sponsors: SponsorForConferenceExpanded[]) {
+  const emails = new Set<string>()
+  for (const sfc of sponsors) {
+    for (const c of sfc.contactPersons ?? []) {
+      if (c.email?.trim()) emails.add(c.email.trim().toLowerCase())
+    }
+    if (sfc.billing?.email?.trim()) {
+      emails.add(sfc.billing.email.trim().toLowerCase())
+    }
+  }
+  return emails
+}
+
+type HeldSendLock = BroadcastLock & {
+  /** Set when the claim must outlive the run (see `withSponsorSendLock`). */
+  keepUntilExpiry?: boolean
+}
+
+const sendLockConflict = () =>
+  new TRPCError({
+    code: 'CONFLICT',
+    message: 'Another sponsor email is being sent. Try again in a minute.',
+  })
+
+/**
+ * One sponsor send or audience sync at a time per conference: each one
+ * rewrites the shared sponsor audience, so overlapping runs would mail one
+ * send's recipients with another's filters. Released in `finally`.
+ *
+ * ASSUMPTION: Resend resolves a broadcast's recipients from the audience when
+ * it dispatches the broadcast, not when `send` returns. So a send keeps the
+ * claim until Resend reports the broadcast past `draft`/`queued`; if that
+ * does not happen within the wait cap, the run sets `keepUntilExpiry` and the
+ * claim is left to expire instead of being released early.
+ */
+async function withSponsorSendLock<T>(
+  conference: Conference,
+  run: (lock: HeldSendLock) => Promise<T>,
+): Promise<T> {
+  const lock: HeldSendLock | null = await acquireBroadcastLock(conference._id)
+  if (!lock) throw sendLockConflict()
+  try {
+    return await run(lock)
+  } finally {
+    if (!lock.keepUntilExpiry) await releaseBroadcastLock(lock)
   }
 }
 
@@ -3575,12 +3657,37 @@ export const sponsorRouter = router({
         }
       }),
 
+    /** Count and preview for the "Email sponsors" recipient step. */
+    broadcastRecipients: adminProcedure
+      .input(BroadcastFiltersSchema)
+      .query(async ({ input }) => {
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain()
+        if (conferenceError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+        const { recipients, eligibleSponsors } =
+          await resolveSponsorBroadcastRecipients(conference, input)
+        return {
+          contactCount: recipients.length,
+          sponsorCount: eligibleSponsors.length,
+          recipients,
+        }
+      }),
+
     broadcastEmail: adminProcedure
       .input(
-        z.object({
-          subject: z.string().min(1),
-          message: z.string().min(1),
-        }),
+        z
+          .object({
+            subject: z.string().min(1),
+            message: z.string().min(1),
+            // Filters only: the recipients are resolved on the server.
+            filters: BroadcastFiltersSchema.default(DEFAULT_BROADCAST_FILTERS),
+          })
+          .strict(),
       )
       .mutation(async ({ input, ctx }) => {
         const { conference, error: conferenceError } =
@@ -3619,25 +3726,51 @@ export const sponsorRouter = router({
           })
         }
 
-        // Sync confirmed (closed-won) sponsor contacts into the Resend audience
-        // before sending so broadcasts never target a stale or empty segment.
-        const { eligibleSponsors } =
-          await syncConfirmedSponsorAudience(conference)
-
-        const response = await sendBroadcastEmail({
+        // Held until Resend has dispatched the broadcast, or it has failed.
+        const { eligibleSponsors, body } = await withSponsorSendLock(
           conference,
-          subject: input.subject,
-          messagePortableText,
-          audienceType: 'sponsors',
-        })
+          async (lock) => {
+            // Sync the matching sponsor contacts into the Resend audience
+            // before sending so broadcasts never target a stale or empty
+            // segment.
+            const { eligibleSponsors, syncedCount } =
+              await syncConfirmedSponsorAudience(
+                conference,
+                lock,
+                input.filters,
+              )
 
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: errorData.error || 'Failed to send broadcast email',
-          })
-        }
+            // Taken over (an expired claim) while syncing: another run now
+            // owns the audience, so this one must not send to it.
+            if (!(await holdsBroadcastLock(lock))) throw sendLockConflict()
+
+            const response = await sendBroadcastEmail({
+              conference,
+              subject: input.subject,
+              messagePortableText,
+              audienceType: 'sponsors',
+              waitUntilDispatched: true,
+            })
+
+            if (!response.ok) {
+              const errorData = await response.json()
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: errorData.error || 'Failed to send broadcast email',
+              })
+            }
+            const body = await response.json()
+            if (body.dispatched === false) {
+              lock.keepUntilExpiry = true
+              console.warn(
+                '[broadcastEmail] Resend had not dispatched the broadcast within the wait cap; the send lock is left to expire:',
+                { conferenceId: conference._id, broadcastId: body.broadcastId },
+              )
+            }
+            // The count the toast reports: what was synced, not the preview.
+            return { eligibleSponsors, body: { ...body, syncedCount } }
+          },
+        )
 
         try {
           const userId = ctx.speaker._id
@@ -3649,7 +3782,7 @@ export const sponsorRouter = router({
           console.warn('[broadcastEmail] CRM tracking failed:', crmError)
         }
 
-        return await response.json()
+        return body
       }),
 
     syncAudience: adminProcedure.mutation(async () => {
@@ -3663,8 +3796,11 @@ export const sponsorRouter = router({
         })
       }
 
+      // A Sync during a send would reset the audience mid-send.
       const { audienceId, syncedCount, addedCount, removedCount } =
-        await syncConfirmedSponsorAudience(conference)
+        await withSponsorSendLock(conference, (lock) =>
+          syncConfirmedSponsorAudience(conference, lock),
+        )
 
       return {
         success: true,

@@ -1054,7 +1054,11 @@ export async function removeContactFromAudience(
     // THE WHOLE AUDIENCE, not the first twenty (#895). A contact past the first
     // page used to be invisible here, and the miss was reported as success.
     const listing = await listAllContacts(client, audienceId)
-    contact = listing.items.find((c) => c.email === email)
+    // Case-insensitive: Resend keeps the address as it was added, and callers
+    // (the erasure chain) pass the lowercased form.
+    contact = listing.items.find(
+      (c) => c.email.trim().toLowerCase() === email.trim().toLowerCase(),
+    )
 
     if (!contact) {
       // "Not in the list" only means "not in the audience" if the list was
@@ -1108,10 +1112,27 @@ export async function removeSpeakerFromAudience(
   return removeContactFromAudience(client, audienceId, speakerEmail)
 }
 
+export interface SyncAudienceOptions {
+  /**
+   * Normalized addresses whose UNSUBSCRIBED contact is kept even when it is
+   * not in `contacts`. Removing an opt-out and re-adding it later
+   * (`unsubscribed: false`) could resurrect it, so a narrowing sync keeps the
+   * opt-outs of people who are still in the CRM; anyone else (erased, removed
+   * from the CRM) is dropped as usual.
+   */
+  keepUnsubscribedIn?: ReadonlySet<string>
+  /** Awaited every `SYNC_PROGRESS_EVERY` add/remove calls; a throw aborts. */
+  onProgress?: () => Promise<void>
+}
+
+/** How many contact writes pass between `onProgress` calls. */
+export const SYNC_PROGRESS_EVERY = 50
+
 export async function syncAudienceWithContacts(
   conference: Conference,
   audienceType: AudienceType,
   contacts: Contact[],
+  options: SyncAudienceOptions = {},
 ): Promise<{
   success: boolean
   audienceId: string
@@ -1180,9 +1201,22 @@ export async function syncAudienceWithContacts(
     const contactsToAdd = deduplicatedContacts.filter(
       (c) => !existingEmails.has(normalizeEmail(c.email)),
     )
+    // See `keepUnsubscribedIn`: an opt-out left in place receives nothing.
     const contactsToRemove = existingContacts.filter(
-      (c) => !currentContactEmails.has(normalizeEmail(c.email)),
+      (c) =>
+        !currentContactEmails.has(normalizeEmail(c.email)) &&
+        !(
+          c.unsubscribed &&
+          options.keepUnsubscribedIn?.has(normalizeEmail(c.email))
+        ),
     )
+
+    let writes = 0
+    const progress = async () => {
+      if (options.onProgress && ++writes % SYNC_PROGRESS_EVERY === 0) {
+        await options.onProgress()
+      }
+    }
 
     let addedCount = 0
     const contactErrors: string[] = []
@@ -1200,6 +1234,7 @@ export async function syncAudienceWithContacts(
         )
       }
       await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+      await progress()
     }
 
     let removedCount = 0
@@ -1219,6 +1254,7 @@ export async function syncAudienceWithContacts(
       }
 
       await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+      await progress()
     }
 
     if (contactErrors.length > 0) {
@@ -1288,6 +1324,7 @@ export async function syncConferenceAudience(
 export async function syncSponsorAudience(
   conference: Conference,
   sponsorContacts: Contact[],
+  options: SyncAudienceOptions = {},
 ): Promise<{
   success: boolean
   audienceId: string
@@ -1296,5 +1333,10 @@ export async function syncSponsorAudience(
   removedCount: number
   error?: Error
 }> {
-  return syncAudienceWithContacts(conference, 'sponsors', sponsorContacts)
+  return syncAudienceWithContacts(
+    conference,
+    'sponsors',
+    sponsorContacts,
+    options,
+  )
 }

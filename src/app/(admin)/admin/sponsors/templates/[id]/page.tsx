@@ -1,4 +1,5 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import { ErrorDisplay } from '@/components/admin'
 import { SponsorEmailTemplateEditorPage } from '@/components/admin/sponsor/SponsorEmailTemplateEditorPage'
 
@@ -21,7 +22,7 @@ export default async function EditTemplatePage({
         message={conferenceError.message}
         backLink={{
           href: '/admin/sponsors/templates',
-          label: 'Back to Templates',
+          label: `Back to ${SPONSOR_PAGE_TITLES.templates}`,
         }}
       />
     )
@@ -34,7 +35,7 @@ export default async function EditTemplatePage({
         message="No conference found for current domain"
         backLink={{
           href: '/admin/sponsors/templates',
-          label: 'Back to Templates',
+          label: `Back to ${SPONSOR_PAGE_TITLES.templates}`,
         }}
       />
     )

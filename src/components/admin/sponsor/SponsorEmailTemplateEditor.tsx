@@ -1,5 +1,6 @@
 'use client'
 
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import { useState, useMemo, useCallback } from 'react'
 import { api } from '@/lib/trpc/client'
 import { useNotification, AdminPageHeader } from '@/components/admin'
@@ -246,7 +247,7 @@ export function SponsorEmailTemplateEditor({
         contextHighlight={conference.title}
         backLink={{
           href: '/admin/sponsors/templates',
-          label: 'Back to Templates',
+          label: `Back to ${SPONSOR_PAGE_TITLES.templates}`,
         }}
         actionItems={[
           {
