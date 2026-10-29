@@ -16,6 +16,7 @@ import {
 } from '@/components/admin/sponsor-crm/utils'
 import {
   generateActionItems,
+  generateRenewalItems,
   type ActionItem,
 } from '@/lib/sponsor-crm/action-items'
 
@@ -64,11 +65,19 @@ function ActionRowIcon({ type }: { type: ActionItem['type'] }) {
   return React.createElement(getActionItemIcon(type), { className: 'h-4 w-4' })
 }
 
+/** A renewal item has no link when its edition has no usable domain. */
+function MaybeLink({
+  href,
+  ...props
+}: { href: string } & React.HTMLAttributes<HTMLElement>) {
+  return href ? <Link href={href} {...props} /> : <div {...props} />
+}
+
 function ActionRow({ item }: { item: ActionItem }) {
   const severity = getSeverity(item.priority)
 
   return (
-    <Link
+    <MaybeLink
       href={item.link}
       className={clsx(
         'flex items-center gap-3 border-l-4 px-3 py-2.5 transition-colors',
@@ -110,17 +119,23 @@ function ActionRow({ item }: { item: ActionItem }) {
           )}
         </div>
       )}
-    </Link>
+    </MaybeLink>
   )
 }
 
 export function SponsorActionItems({ organizerId }: SponsorActionItemsProps) {
   const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery({})
 
-  const actionItems = useMemo(() => {
-    if (!sponsors.length) return []
-    return generateActionItems(sponsors, organizerId)
-  }, [sponsors, organizerId])
+  const { data: renewals } = api.sponsor.crm.renewalReminders.useQuery()
+
+  const actionItems = useMemo(
+    () =>
+      [
+        ...generateActionItems(sponsors, organizerId),
+        ...generateRenewalItems(renewals, organizerId),
+      ].sort((a, b) => a.priority - b.priority),
+    [sponsors, renewals, organizerId],
+  )
 
   const grouped = useMemo(() => {
     const groups: Record<Severity, ActionItem[]> = {

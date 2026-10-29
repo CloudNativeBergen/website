@@ -51,7 +51,15 @@ import { TravelSupportStatus } from '@/lib/travel-support/types'
 import { getWorkshopStatistics } from '@/lib/workshop/sanity'
 import type { WorkshopStatistics } from '@/lib/workshop/types'
 import { getConversationViewCounts } from '@/lib/messaging/sanity'
-import { actionItemsForOrganizer } from '@/lib/sponsor-crm/action-items'
+import {
+  actionItemsForOrganizer,
+  generateRenewalItems,
+} from '@/lib/sponsor-crm/action-items'
+import {
+  isRenewalWindowOpen,
+  shapeRenewals,
+  type PreviousEditionRenewals,
+} from '@/lib/sponsor-crm/renewal'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import type { OrganizerTeam } from '@/lib/teams/types'
 import {
@@ -184,7 +192,7 @@ const WIDGET_GROQ_SOURCES: Record<
   readonly DashboardGroqSource[]
 > = {
   'marketing-due': ['marketingDueTasks'],
-  'sponsors-waiting': ['sponsorActions'],
+  'sponsors-waiting': ['sponsorActions', 'renewals'],
   'quick-actions': ['proposals', 'sponsors'],
   'review-progress': ['proposals', 'reviews'],
   'proposal-pipeline': ['proposals'],
@@ -1153,11 +1161,15 @@ export async function loadDashboardWidgetData(
   // than an error state.
   let groqResult: DashboardGroqResult = {}
   let groqError: Error | null = null
+  const sources = sourcesForWidgets(wanted, myTeamKeys)
+  // Renewal reminders only exist inside their lead window: skip the root
+  // entirely outside it.
+  if (!isRenewalWindowOpen(ctx.conference.startDate)) sources.delete('renewals')
   try {
-    groqResult = await fetchDashboardGroq(
-      ctx.conferenceId,
-      sourcesForWidgets(wanted, myTeamKeys),
-    )
+    groqResult = await fetchDashboardGroq(ctx.conferenceId, sources, {
+      orgId: ctx.conference.organization?._ref,
+      currentStartDate: ctx.conference.startDate,
+    })
   } catch (error) {
     groqError = error instanceof Error ? error : new Error(String(error))
   }
@@ -1200,7 +1212,11 @@ export async function loadDashboardWidgetData(
     shapeMarketingDue(rows(groqResult.marketingDueTasks)),
   )
   add('sponsors-waiting', () =>
-    shapeSponsorsWaiting(rows(groqResult.sponsorActions), ctx.speakerId),
+    shapeSponsorsWaiting(
+      rows(groqResult.sponsorActions),
+      ctx.speakerId,
+      shapeRenewals(groqResult.renewals),
+    ),
   )
   add('upcoming-deadlines', () => shapeDeadlines(ctx.conference))
   add('cfp-health', () => shapeCFPHealth(ctx.conference, proposals))
@@ -1251,9 +1267,21 @@ export const SPONSORS_WAITING_LIMIT = 6
 export function shapeSponsorsWaiting(
   sponsors: SponsorForConferenceExpanded[],
   organizerId: string | null,
+  renewals: PreviousEditionRenewals | null = null,
 ): SponsorsWaitingData {
+  // Same rule as actionItemsForOrganizer: mine plus unassigned.
+  const myRenewals = renewals && {
+    ...renewals,
+    candidates: renewals.candidates.filter(
+      (c) => !c.assignedTo || c.assignedTo._id === organizerId,
+    ),
+  }
   return {
-    items: actionItemsForOrganizer(sponsors, organizerId)
+    items: [
+      ...actionItemsForOrganizer(sponsors, organizerId),
+      ...generateRenewalItems(myRenewals),
+    ]
+      .sort((a, b) => a.priority - b.priority)
       .slice(0, SPONSORS_WAITING_LIMIT)
       .map((item) => ({
         id: item.id,

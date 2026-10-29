@@ -69,6 +69,13 @@ import {
   getOrganizationRefViaParentConference,
 } from '@/lib/organization/sanity'
 import type { Conference } from '@/lib/conference/types'
+import {
+  copyToNextEdition,
+  getPreviousEditionRenewals,
+  getRenewalContext,
+  hasEnded,
+} from '@/lib/sponsor-crm/renewal'
+import { findOutboundOrigin } from '@/lib/conference/baseUrl'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
 import type {
@@ -499,6 +506,23 @@ async function prepareDiscountSend(
     html: discountCodesCardHtml({ codes, ticketUrl, theme: conference.theme }),
     attachments: discountCodeAttachments(codes, ticketUrl),
   }
+}
+
+/**
+ * TENANCY (R1, #1687): the source record must belong to the current domain's
+ * conference, which must belong to the request org; the next edition is read
+ * org-scoped from that org. A foreign id is simply not found.
+ */
+async function loadRenewal(orgId: string | null | undefined, id: string) {
+  const conferenceId = await resolveConferenceId()
+  const { source, next } =
+    orgId && conferenceId
+      ? await getRenewalContext(orgId, conferenceId, id)
+      : { source: null, next: null }
+  if (!source) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Sponsor not found' })
+  }
+  return { source, next }
 }
 
 async function getSponsorForCurrentConference(id: string) {
@@ -2330,6 +2354,58 @@ export const sponsorRouter = router({
 
         return result
       }),
+
+    // R1 (#1687): what "Copy to next year" can do for this record.
+    renewal: adminProcedure
+      .input(SponsorIdSchema)
+      .query(async ({ input, ctx }) => {
+        // The next edition is only read once the event has ended.
+        const { source, next } = await loadRenewal(ctx.orgId, input.id)
+        return {
+          eventEnded: hasEnded(source.conference.endDate),
+          nextEdition: next
+            ? { title: next.title, origin: findOutboundOrigin(next) }
+            : null,
+          existingId: next?.existingId ?? null,
+        }
+      }),
+
+    // R1 (#1687). The target edition is derived server-side from the source
+    // record's org; the client only names the source record.
+    copyToNextYear: adminProcedure
+      .input(SponsorIdSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { source, next } = await loadRenewal(ctx.orgId, input.id)
+        if (!hasEnded(source.conference.endDate)) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'The conference has not ended yet',
+          })
+        }
+        if (!next) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: "Create next year's conference first",
+          })
+        }
+        const origin = findOutboundOrigin(next)
+        if (next.existingId) {
+          return { id: next.existingId, origin, created: false }
+        }
+        const { id, created } = await copyToNextEdition(
+          source,
+          next,
+          ctx.speaker._id,
+        )
+        return { id, origin, created }
+      }),
+
+    // R2 (#1687): one org-scoped query; null outside the lead window.
+    renewalReminders: adminProcedure.query(async ({ ctx }) => {
+      const { conference } = await getConferenceForCurrentDomain()
+      if (!ctx.orgId || !conference?._id) return null
+      return getPreviousEditionRenewals(ctx.orgId, conference)
+    }),
 
     importAllHistoric: adminProcedure
       .input(ImportAllHistoricSponsorsSchema)

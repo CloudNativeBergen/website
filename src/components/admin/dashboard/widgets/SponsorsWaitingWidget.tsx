@@ -13,6 +13,14 @@ import {
   WidgetBody,
 } from './shared'
 
+/** A renewal item has no href when its edition has no usable domain. */
+function MaybeLink({
+  href,
+  ...props
+}: { href: string } & React.HTMLAttributes<HTMLElement>) {
+  return href ? <Link href={href} {...props} /> : <div {...props} />
+}
+
 export function SponsorsWaitingWidget({ conference }: BaseWidgetProps) {
   const { data, loading, error, refetch } = useWidgetData<SponsorsWaitingData>(
     conference ? () => fetchSponsorsWaiting() : null,
@@ -36,7 +44,7 @@ export function SponsorsWaitingWidget({ conference }: BaseWidgetProps) {
           <ul className="flex flex-col gap-1.5">
             {data.items.map((item) => (
               <li key={item.id}>
-                <Link
+                <MaybeLink
                   href={item.href}
                   className="block min-w-0 rounded-lg border border-gray-200 px-2.5 py-2 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-gray-700 dark:hover:bg-gray-700"
                 >
@@ -55,7 +63,7 @@ export function SponsorsWaitingWidget({ conference }: BaseWidgetProps) {
                   >
                     {item.title}
                   </p>
-                </Link>
+                </MaybeLink>
               </li>
             ))}
           </ul>

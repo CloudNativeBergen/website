@@ -45,7 +45,8 @@ export const SPONSOR_OVERVIEW_FIELDS = `
     _id,
     name,
     email,
-    image
+    // A Sanity image object, not a URL: resolve it like every speaker read.
+    "image": coalesce(image.asset->url, imageURL)
   },
   contractValue,
   contractCurrency,
