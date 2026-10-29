@@ -59,6 +59,11 @@ export default defineConfig({
     // runner (a tree-scanning test with no timeout of its own went over it).
     // A hang still fails; tests that need longer say so themselves.
     testTimeout: 15_000,
+    // Run the tests inside each file in random order, so a test that leans on
+    // state another test left behind fails here instead of later. The default
+    // reporter prints the seed ("Running tests with seed ..."); reproduce a
+    // failing order with `pnpm vitest run --sequence.seed=<seed> <file>`.
+    sequence: { shuffle: { tests: true } },
     include: ['**/__tests__/**/*.test.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
     exclude: [
       'node_modules',

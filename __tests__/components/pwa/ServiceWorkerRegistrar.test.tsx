@@ -75,6 +75,10 @@ let reloadMock: ReturnType<typeof vi.fn>
 beforeEach(() => {
   vi.stubEnv('NODE_ENV', 'production')
   h.pathname = '/'
+  // Screen Mode is remembered in module state and sessionStorage: a Screen
+  // Mode case must not leave the banner hidden for the next case.
+  window.sessionStorage.clear()
+  markScreenMode(null)
 
   container = new FakeSWContainer()
   Object.defineProperty(navigator, 'serviceWorker', {
@@ -374,8 +378,6 @@ describe('ServiceWorkerRegistrar on /wall/screen', () => {
     screenAnswers = true
     headFetch.mockClear()
     vi.stubGlobal('fetch', headFetch)
-    window.sessionStorage.clear()
-    markScreenMode(null)
   })
   afterEach(() => {
     vi.unstubAllGlobals()

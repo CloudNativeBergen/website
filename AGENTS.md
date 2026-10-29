@@ -81,6 +81,7 @@ These are the rules that repeatedly caught real defects here. Follow them withou
   - For full-screen/mobile views set `parameters.layout: 'fullscreen'` on the story so captures aren't inset.
   - Prefer isolated Storybook capture over trusting a deployed URL — a stale **PWA service worker** can serve an old bundle (see `public/sw.js` / `scripts/stamp-sw.mjs`); a Safari **Private tab** bypasses the SW when checking production.
 - **Testing (Vitest):** Test behavior over implementation. Prefer integration tests. Mock at boundaries.
+  - Tests within a file run in random order (`sequence.shuffle.tests` in `vitest.config.ts`). Each test sets up its own state: set mock defaults in `beforeEach` or as the `vi.fn` implementation, which `vi.resetAllMocks()` restores. If a run fails only in some orders, copy the seed from the `Running tests with seed "N"` line and reproduce with `pnpm vitest run --sequence.seed=N <file>`.
 - **Storybook Interaction:** Use `play` functions for interactive tests (`storybook/test`).
 
 ## In-app notifications
