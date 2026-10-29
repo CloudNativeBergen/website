@@ -173,8 +173,9 @@ export const TimeSlotDropZone = ({
       {!isOccupied && !activeDragItem && !isReadOnly && (
         <button
           onClick={handleAddServiceSession}
-          className="absolute inset-0 z-10 flex items-center justify-center opacity-0 transition-all duration-200 group-hover:opacity-100 hover:z-20"
+          className="absolute inset-0 z-10 flex items-center justify-center opacity-0 transition-all duration-200 group-hover:opacity-100 hover:z-20 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
           title="Create service session"
+          aria-label="Create service session"
           type="button"
           onMouseDown={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}

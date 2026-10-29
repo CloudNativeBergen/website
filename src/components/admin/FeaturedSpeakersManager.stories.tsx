@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { FeaturedSpeakersManager } from './FeaturedSpeakersManager'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { http, HttpResponse } from 'msw'
 
 const mockFeaturedSpeakers = [
@@ -75,9 +76,11 @@ const meta: Meta<typeof FeaturedSpeakersManager> = {
   },
   decorators: [
     (Story) => (
-      <div className="max-w-2xl p-4">
-        <Story />
-      </div>
+      <NotificationProvider>
+        <div className="max-w-2xl p-4">
+          <Story />
+        </div>
+      </NotificationProvider>
     ),
   ],
 }

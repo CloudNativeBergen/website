@@ -408,10 +408,10 @@ export function BadgeManagementClient({
     if (!deleteBadgeInfo) return
     try {
       await deleteMutation.mutateAsync({ badgeId: deleteBadgeInfo.badgeId })
-    } catch (error) {
-      console.error('Error deleting badge:', error)
+      setDeleteBadgeInfo(null)
+    } catch {
+      // onError shows the notification; keep the dialog open to retry
     }
-    setDeleteBadgeInfo(null)
   }
 
   const isDevelopment = isLocalhostClient()

@@ -112,6 +112,10 @@ vi.mock('@/lib/trpc/client', () => ({
   },
 }))
 
+vi.mock('@/components/admin/NotificationProvider', () => ({
+  useNotification: () => ({ showNotification: vi.fn() }),
+}))
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }))

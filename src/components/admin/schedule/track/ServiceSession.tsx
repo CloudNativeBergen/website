@@ -146,7 +146,7 @@ export const ServiceSession = ({
               className={`absolute right-0 bottom-0 left-0 z-20 h-2 cursor-ns-resize border-t transition-all ${
                 isResizing
                   ? 'border-blue-400 bg-blue-200 opacity-100 dark:border-blue-500 dark:bg-blue-800'
-                  : 'border-gray-400 bg-gray-200 opacity-0 group-hover:opacity-100 dark:border-gray-500 dark:bg-gray-600'
+                  : 'border-gray-400 bg-gray-200 opacity-0 group-hover:opacity-100 dark:border-gray-500 dark:bg-gray-600 [@media(hover:none)]:opacity-100'
               }`}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
@@ -163,11 +163,12 @@ export const ServiceSession = ({
               ></div>
             </div>
 
-            <div className="absolute top-0.5 right-0.5 z-20 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            <div className="absolute top-0.5 right-0.5 z-20 flex gap-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
               <button
                 onClick={handleStartEdit}
                 className="rounded-full bg-gray-100 p-0.5 text-gray-600 transition-colors hover:bg-gray-200 hover:opacity-100 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
                 title="Rename session"
+                aria-label="Rename session"
                 type="button"
               >
                 <PencilIcon className="h-3 w-3" />
@@ -176,6 +177,7 @@ export const ServiceSession = ({
                 onClick={handleDuplicate}
                 className="rounded-full bg-blue-100 p-0.5 text-blue-600 transition-colors hover:bg-blue-200 hover:opacity-100 dark:bg-blue-900/50 dark:text-blue-400 dark:hover:bg-blue-800/50"
                 title="Duplicate to all tracks"
+                aria-label="Duplicate to all tracks"
                 type="button"
               >
                 <DocumentDuplicateIcon className="h-3 w-3" />
@@ -184,6 +186,7 @@ export const ServiceSession = ({
                 onClick={handleRemove}
                 className="rounded-full bg-red-100 p-0.5 text-red-600 transition-colors hover:bg-red-200 hover:opacity-100 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-800/50"
                 title="Remove session"
+                aria-label="Remove session"
                 type="button"
               >
                 <TrashIcon className="h-3 w-3" />
