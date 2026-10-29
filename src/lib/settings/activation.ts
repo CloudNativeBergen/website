@@ -326,6 +326,8 @@ export interface EventPrepFacts {
   /** Public sponsors, and how many of them have no logo. */
   sponsors: number
   sponsorsWithoutLogo: number
+  /** Sponsors with an open action item at priority 3 or more urgent. */
+  sponsorsWaiting: number
 }
 
 function eventFactRows(f: EventPrepFacts): ActivationRow[] {
@@ -376,6 +378,14 @@ function eventFactRows(f: EventPrepFacts): ActivationRow[] {
       optional: true,
     },
   ]
+  rows.push({
+    id: 'sponsors-waiting',
+    stage: 'event',
+    label: `Sponsors waiting on you (${f.sponsorsWaiting})`,
+    done: f.sponsorsWaiting === 0,
+    anchor: '/admin/sponsors/crm',
+    hint: 'Clear overdue invoices, due follow-ups, contracts and missing contacts.',
+  })
   if (f.sponsors > 0) {
     rows.push({
       id: 'sponsor-logos',

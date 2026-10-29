@@ -143,6 +143,7 @@ export type ActionItemType =
   | 'signature-expired'
   | 'registration-pending'
   | 'registration-complete'
+  | 'unassigned'
 
 export function getActionItemIcon(type: ActionItemType) {
   switch (type) {
@@ -171,6 +172,8 @@ export function getActionItemIcon(type: ActionItemType) {
       return PaperAirplaneIcon
     case 'registration-complete':
       return DocumentTextIcon
+    case 'unassigned':
+      return UserGroupIcon
   }
 }
 
@@ -201,6 +204,8 @@ export function getActionItemColor(type: ActionItemType): string {
       return 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/20'
     case 'registration-complete':
       return 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/20'
+    case 'unassigned':
+      return 'text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-gray-700'
   }
 }
 

@@ -832,6 +832,7 @@ describe('event stage', () => {
       hasPhotoWall: true,
       sponsors: 2,
       sponsorsWithoutLogo: 0,
+      sponsorsWaiting: 0,
     }
     const withFacts = (f: Partial<EventPrepFacts>) =>
       buildActivationChecklist(EVENT_READY, CHECKS_OK, {
@@ -855,9 +856,10 @@ describe('event stage', () => {
         ['speaker-info-email', true],
         ['speaker-todos', true],
         ['photo-wall', true],
+        ['sponsors-waiting', true],
         ['sponsor-logos', true],
       ])
-      expect(group).toMatchObject({ done: 9, required: 9, allDone: true })
+      expect(group).toMatchObject({ done: 10, required: 10, allDone: true })
     })
 
     it('marks each fact outstanding and shows counts', () => {
@@ -879,6 +881,14 @@ describe('event stage', () => {
       expect(rowOf({ sponsorsWithoutLogo: 1 }, 'sponsor-logos')!.done).toBe(
         false,
       )
+      expect(rowOf({ sponsorsWaiting: 2 }, 'sponsors-waiting')).toMatchObject({
+        done: false,
+        label: 'Sponsors waiting on you (2)',
+        anchor: '/admin/sponsors/crm',
+      })
+      expect(rowOf({ sponsorsWaiting: 2 }, 'sponsors-waiting')!.optional).toBe(
+        undefined,
+      )
     })
 
     it('keeps the photo wall optional', () => {
@@ -892,7 +902,11 @@ describe('event stage', () => {
     })
 
     it('never touches the top-level rollup', () => {
-      const c = withFacts({ speakersWithTodos: 5, unscheduledTalks: 1 })
+      const c = withFacts({
+        speakersWithTodos: 5,
+        unscheduledTalks: 1,
+        sponsorsWaiting: 3,
+      })
       expect(c.allDone).toBe(true)
       expect(c.readyToGoLive).toBe(true)
     })

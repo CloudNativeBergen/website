@@ -30,6 +30,7 @@
 
 export type MockableAction =
   | 'fetchMarketingDue'
+  | 'fetchSponsorsWaiting'
   | 'fetchMyAreasData'
   | 'fetchSponsorPipelineData'
   | 'fetchDeadlines'
@@ -188,4 +189,7 @@ export function saveDashboardConfig(): Promise<void> {
 
 export function fetchMarketingDue(...args: unknown[]): Promise<unknown> {
   return dispatch('fetchMarketingDue', args)
+}
+export function fetchSponsorsWaiting(...args: unknown[]): Promise<unknown> {
+  return dispatch('fetchSponsorsWaiting', args)
 }

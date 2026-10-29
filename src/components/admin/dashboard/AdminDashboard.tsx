@@ -34,6 +34,10 @@ import {
   saveDashboardConfig,
   type SerializedWidget,
 } from '@/app/(admin)/admin/actions'
+import {
+  SponsorsWaitingHint,
+  SPONSORS_WAITING_HINT_KEY,
+} from './SponsorsWaitingHint'
 
 const DEFAULT_WIDGETS = PRESET_CONFIGS.planning.widgets
 
@@ -76,6 +80,10 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<Widget | null>(null)
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading')
+  // Only organizers with a SAVED layout can be missing the new card; new
+  // installs get it from the preset. Dismissal starts unknown (no flash).
+  const [hadSavedLayout, setHadSavedLayout] = useState(false)
+  const [hintDismissed, setHintDismissed] = useState(true)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Widgets scheduled for the debounced save but not yet sent. Lets the
@@ -145,6 +153,14 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
         // `[]` is a DELIBERATELY EMPTY personal layout and must render an
         // empty grid — defaults apply only when NO config exists (null).
         if (saved) {
+          setHadSavedLayout(true)
+          try {
+            setHintDismissed(
+              window.localStorage.getItem(SPONSORS_WAITING_HINT_KEY) === 'true',
+            )
+          } catch {
+            setHintDismissed(false)
+          }
           setWidgets(
             saved.map((w) => {
               // Normalize stored spans into the widget's registry min/max:
@@ -327,6 +343,27 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
     [widgets, columnCount],
   )
 
+  const showSponsorsHint =
+    loadStatus === 'loaded' &&
+    hadSavedLayout &&
+    !hintDismissed &&
+    !widgets.some((w) => w.type === 'sponsors-waiting')
+
+  const dismissSponsorsHint = useCallback(() => {
+    setHintDismissed(true)
+    try {
+      window.localStorage.setItem(SPONSORS_WAITING_HINT_KEY, 'true')
+    } catch {
+      // Best-effort: hidden for this session even if we can't persist.
+    }
+  }, [])
+
+  const addSponsorsCard = useCallback(() => {
+    handleAddWidget('sponsors-waiting')
+    // Added once is enough: removing the card later must not bring the hint back.
+    dismissSponsorsHint()
+  }, [handleAddWidget, dismissSponsorsHint])
+
   const handleRemoveRequest = useCallback(
     (widgetId: string) => {
       const target = widgets.find((w) => w.id === widgetId)
@@ -412,6 +449,12 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
 
   return (
     <div className="relative min-h-screen">
+      {showSponsorsHint && (
+        <SponsorsWaitingHint
+          onAdd={addSponsorsCard}
+          onDismiss={dismissSponsorsHint}
+        />
+      )}
       {showWidgetPicker && (
         <WidgetPicker
           onSelect={handleAddWidget}

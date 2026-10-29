@@ -130,3 +130,4 @@ export const fetchRecentActivity = () => requestWidgetData('recent-activity')
 export const fetchMyAreasData = () => requestWidgetData('my-areas')
 
 export const fetchMarketingDue = () => requestWidgetData('marketing-due')
+export const fetchSponsorsWaiting = () => requestWidgetData('sponsors-waiting')
