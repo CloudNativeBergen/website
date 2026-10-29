@@ -95,27 +95,29 @@ export const ProgramListView = React.memo(function ProgramListView({
           {sortedDays.length > 1 && (
             <div className="border-b border-brand-frosted-steel pb-4 dark:border-gray-700 print:border-none print:pb-1">
               {isScheduleInPast(date) ? (
-                <button
-                  onClick={() =>
-                    setToggledDays((prev) => ({
-                      ...prev,
-                      [date]: !isDayOpen(date),
-                    }))
-                  }
-                  className="group inline-flex items-center gap-2 transition-colors hover:text-brand-cloud-blue dark:hover:text-blue-400"
-                  aria-expanded={isDayOpen(date)}
-                >
-                  <h2 className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white print:text-xs print:font-bold">
-                    {formatConferenceDateLong(date)}
-                  </h2>
-                  <span className="text-brand-slate-gray dark:text-gray-400 print:hidden">
-                    {isDayOpen(date) ? (
-                      <ChevronDownIcon className="h-5 w-5 transition-transform group-hover:scale-110" />
-                    ) : (
-                      <ChevronRightIcon className="h-5 w-5 transition-transform group-hover:scale-110" />
-                    )}
-                  </span>
-                </button>
+                <h2 className="font-space-grotesk text-xl font-semibold print:text-xs print:font-bold">
+                  <button
+                    onClick={() =>
+                      setToggledDays((prev) => ({
+                        ...prev,
+                        [date]: !isDayOpen(date),
+                      }))
+                    }
+                    className="group inline-flex items-center gap-2 transition-colors hover:text-brand-cloud-blue dark:hover:text-blue-400"
+                    aria-expanded={isDayOpen(date)}
+                  >
+                    <span className="text-brand-slate-gray dark:text-white">
+                      {formatConferenceDateLong(date)}
+                    </span>
+                    <span className="text-brand-slate-gray dark:text-gray-400 print:hidden">
+                      {isDayOpen(date) ? (
+                        <ChevronDownIcon className="h-5 w-5 transition-transform group-hover:scale-110" />
+                      ) : (
+                        <ChevronRightIcon className="h-5 w-5 transition-transform group-hover:scale-110" />
+                      )}
+                    </span>
+                  </button>
+                </h2>
               ) : (
                 <h2 className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white print:text-xs print:font-bold">
                   {formatConferenceDateLong(date)}

@@ -1,5 +1,6 @@
 import { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
 import { getSimulatedTime } from './dev-time'
+import { osloLocalInputToIso } from '@/lib/time'
 
 export type TalkStatus =
   'past' | 'happening-now' | 'happening-soon' | 'upcoming'
@@ -23,7 +24,9 @@ export function parseTalkDateTime(
   dateString: string,
   timeString: string,
 ): Date {
-  return new Date(`${dateString}T${timeString}:00`)
+  // Schedule times are Europe/Oslo wall-clock, whatever zone the viewer is in.
+  const iso = osloLocalInputToIso(`${dateString}T${timeString.substring(0, 5)}`)
+  return iso ? new Date(iso) : new Date(NaN)
 }
 
 export function getTalkStatus(

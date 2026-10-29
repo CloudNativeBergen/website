@@ -1,6 +1,5 @@
 import type { ProposalWithWorkshopData } from './types'
 import type { Format } from '@/lib/proposal/types'
-import { formatTime12Hour } from '@/lib/time'
 
 export function getWorkshopDuration(format: Format): string {
   if (format === 'workshop_120') return '2 hours'
@@ -28,7 +27,8 @@ export function getOperatingSystemLabel(os: string): string {
   return labels[os] || os
 }
 
-export const formatTime = formatTime12Hour
+// Schedule times are already 24-hour "HH:MM", the house style.
+export const formatTime = (time: string): string => time.substring(0, 5)
 
 export function getWorkshopDateTime(workshop: ProposalWithWorkshopData) {
   return {

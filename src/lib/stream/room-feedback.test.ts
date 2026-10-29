@@ -5,6 +5,7 @@ import { Status } from '@/lib/proposal/types'
 import { clearSimulatedTime, setSimulatedTime } from '@/lib/program/dev-time'
 import { getCurrentConferenceTime } from '@/lib/program/time-utils'
 import { roomFeedbackCodes } from './room-feedback'
+import { osloLocalInputToIso } from '@/lib/time'
 
 const DATE = '2026-10-27'
 const ROOM = 'Main Hall'
@@ -51,7 +52,9 @@ const DAY = schedules([
 const URLS = Object.fromEntries(
   ['a', 'b', 'c', 'd'].map((id) => [id, `https://x.test/f/${id}`]),
 )
-const at = (hhmm: string) => new Date(`${DATE}T${hhmm}:00`)
+// Oslo wall-clock, like the schedule.
+const at = (hhmm: string, date = DATE) =>
+  new Date(osloLocalInputToIso(`${date}T${hhmm}`)!)
 const ids = (hhmm: string, urls = URLS, day = DAY) =>
   roomFeedbackCodes(day, ROOM, urls, at(hhmm)).map((c) => c.talkId)
 
@@ -142,7 +145,7 @@ describe('roomFeedbackCodes', () => {
 
   it('shows nothing on another day', () => {
     expect(
-      roomFeedbackCodes(DAY, ROOM, URLS, new Date('2026-10-28T11:30:00')),
+      roomFeedbackCodes(DAY, ROOM, URLS, at('11:30', '2026-10-28')),
     ).toEqual([])
   })
 

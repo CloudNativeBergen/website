@@ -15,15 +15,21 @@ import {
 } from '@/lib/program/dev-time'
 import { getCurrentConferenceTime } from '@/lib/program/time-utils'
 import { ConferenceSchedule } from '@/lib/conference/types'
-import { formatConferenceDateLong } from '@/lib/time'
+import {
+  formatConferenceDateLong,
+  instantToOsloLocalInput,
+  osloLocalInputToIso,
+} from '@/lib/time'
 
 interface DevTimeControlProps {
   schedules?: ConferenceSchedule[]
 }
 
 const addDays = (dateString: string, days: number): string => {
-  const date = new Date(dateString)
-  date.setDate(date.getDate() + days)
+  // Calendar arithmetic in UTC, so neither the viewer's zone nor a DST change
+  // can move the result onto another day.
+  const date = new Date(`${dateString}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + days)
   return date.toISOString().split('T')[0]
 }
 
@@ -48,16 +54,12 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
     const updateInputFields = () => {
       const simulated = getSimulatedTime()
       if (simulated) {
-        // Format date as YYYY-MM-DD in local timezone
-        const year = simulated.getFullYear()
-        const month = String(simulated.getMonth() + 1).padStart(2, '0')
-        const day = String(simulated.getDate()).padStart(2, '0')
-        setSelectedDate(`${year}-${month}-${day}`)
-
-        // Format time as HH:MM in local timezone
-        const hours = String(simulated.getHours()).padStart(2, '0')
-        const minutes = String(simulated.getMinutes()).padStart(2, '0')
-        setSelectedTime(`${hours}:${minutes}`)
+        // The inputs show Oslo wall-clock time, like the programme.
+        const [date, time] = instantToOsloLocalInput(
+          simulated.toISOString(),
+        ).split('T')
+        setSelectedDate(date)
+        setSelectedTime(time)
       } else if (schedules.length > 0 && !selectedDate) {
         setSelectedDate(schedules[0].date)
         setSelectedTime('10:00')
@@ -80,11 +82,9 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
     if (!selectedDate || !selectedTime) return
 
     try {
-      // Create date in local timezone
-      const [year, month, day] = selectedDate.split('-').map(Number)
-      const [hours, minutes] = selectedTime.split(':').map(Number)
-      const date = new Date(year, month - 1, day, hours, minutes, 0)
-      setSimulatedTime(date)
+      const iso = osloLocalInputToIso(`${selectedDate}T${selectedTime}`)
+      if (!iso) throw new Error('Invalid date/time')
+      setSimulatedTime(iso)
     } catch (error) {
       console.error('Invalid time format:', error)
       alert('Invalid date/time selection')
@@ -156,17 +156,15 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
       time: string,
       offsetMinutes: number = 0,
     ): string => {
-      const date = new Date(`${scheduleDate}T${time}:00+01:00`)
-      date.setMinutes(date.getMinutes() + offsetMinutes)
-      return (
-        date.toISOString().replace('Z', '+01:00').substring(0, 19) + '+01:00'
-      )
+      const iso = osloLocalInputToIso(`${scheduleDate}T${time.substring(0, 5)}`)
+      if (!iso) return ''
+      return new Date(Date.parse(iso) + offsetMinutes * 60_000).toISOString()
     }
 
     return [
       {
         label: '08:00',
-        time: `${scheduleDate}T08:00:00+01:00`,
+        time: createDateTime('08:00'),
         desc: 'Before event',
       },
       {
@@ -178,12 +176,12 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
         label: secondTalk ? secondTalk.startTime.substring(0, 5) : '10:30',
         time: secondTalk
           ? createDateTime(secondTalk.startTime, 15)
-          : `${scheduleDate}T10:30:00+01:00`,
+          : createDateTime('10:30'),
         desc: 'During talk',
       },
       {
         label: '17:00',
-        time: `${scheduleDate}T17:00:00+01:00`,
+        time: createDateTime('17:00'),
         desc: 'After event',
       },
     ]
@@ -231,6 +229,7 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
             </div>
             <button
               onClick={() => setIsOpen(false)}
+              aria-label="Close dev time control"
               className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
             >
               <XMarkIcon className="h-5 w-5" />
@@ -303,6 +302,7 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
                   <button
                     onClick={handleSetTime}
                     disabled={!selectedDate || !selectedTime}
+                    aria-label="Set simulated time"
                     className="rounded bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <PlayIcon className="h-4 w-4" />

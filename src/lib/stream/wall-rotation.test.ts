@@ -8,6 +8,7 @@ import {
   wallRotationRequested,
   type Turn,
 } from './wall-rotation'
+import { osloLocalInputToIso } from '@/lib/time'
 
 describe('wallRotationRequested', () => {
   it('is on for ?wall=1', () => {
@@ -46,8 +47,12 @@ const day = (date: string, ...talks: TrackTalk[]): ConferenceSchedule => ({
   ],
 })
 
-// Local times: the screen reads the talk times on its own clock.
-const local = (date: string, time: string) => new Date(`${date}T${time}`)
+// Schedule times are Oslo wall-clock, whatever the screen's own zone.
+const local = (date: string, time: string) =>
+  new Date(
+    Date.parse(osloLocalInputToIso(`${date}T${time.slice(0, 5)}`)!) +
+      Number(time.slice(6, 8) || 0) * 1000,
+  )
 
 describe('holdsRoom', () => {
   const schedules = [day('2026-10-27', talk('10:00', '10:40'))]
