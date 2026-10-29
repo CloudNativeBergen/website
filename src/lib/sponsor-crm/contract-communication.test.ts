@@ -355,7 +355,11 @@ describe('sendContractReminderBySystem', () => {
     const outcome = await sendContractReminderBySystem('sfc-1', {
       maxReminders: 2,
     })
-    expect(outcome).toEqual({ ok: true, recipient: 'kari@acme.test' })
+    expect(outcome).toEqual({
+      ok: true,
+      recipient: 'kari@acme.test',
+      lastReminder: true,
+    })
 
     const sent = h.send.mock.calls[0][0]
     expect(sent.to).toEqual(['kari@acme.test'])
@@ -419,6 +423,7 @@ describe('sendContractReminderBySystem', () => {
     ).toEqual({
       ok: true,
       recipient: 'cfo@acme-holding.test',
+      lastReminder: true,
     })
     expect(h.send.mock.calls[0][0].to).toEqual(['cfo@acme-holding.test'])
     const record = h.creates.find((d) => d.communicationKind === 'contract')
@@ -451,6 +456,7 @@ describe('sendContractReminderBySystem', () => {
     ).toEqual({
       ok: true,
       recipient: 'kari@acme.test',
+      lastReminder: true,
     })
     expect(h.send.mock.calls[0][0].to).toEqual(['kari@acme.test'])
   })
@@ -481,9 +487,20 @@ describe('sendContractReminderBySystem', () => {
     const outcome = await sendContractReminderBySystem('sfc-1', {
       maxReminders: 2,
     })
-    expect(outcome).toEqual({ ok: true, recipient: 'kari@acme.test' })
+    expect(outcome).toEqual({
+      ok: true,
+      recipient: 'kari@acme.test',
+      lastReminder: true,
+    })
     expect(h.sequence).toEqual(['claim', 'send'])
     expect(h.incs).toEqual([{ id: 'sfc-1', field: 'reminderCount', by: 1 }])
+  })
+
+  it('flags only the reminder that uses the last slot (#1687 N1)', async () => {
+    h.sfc!.reminderCount = 0
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toMatchObject({ ok: true, lastReminder: false })
   })
 
   it("stops at the limit it reads itself — a sweep that reads after another sweep's claim sends nothing", async () => {
@@ -625,7 +642,11 @@ describe('sendContractReminderBySystem', () => {
     const outcome = await sendContractReminderBySystem('sfc-1', {
       maxReminders: 2,
     })
-    expect(outcome).toEqual({ ok: true, recipient: 'kari@acme.test' })
+    expect(outcome).toEqual({
+      ok: true,
+      recipient: 'kari@acme.test',
+      lastReminder: true,
+    })
     expect(h.send.mock.calls[0][0].to).toEqual(['kari@acme.test'])
     const record = h.creates.find((d) => d.communicationKind === 'contract')
     expect(record!.recipients).toEqual([
@@ -638,7 +659,11 @@ describe('sendContractReminderBySystem', () => {
     const outcome = await sendContractReminderBySystem('sfc-1', {
       maxReminders: 2,
     })
-    expect(outcome).toEqual({ ok: true, recipient: 'kari@acme.test' })
+    expect(outcome).toEqual({
+      ok: true,
+      recipient: 'kari@acme.test',
+      lastReminder: true,
+    })
     expect(h.send.mock.calls[0][0].html).toContain(`href="${SIGNING_URL}"`)
   })
 

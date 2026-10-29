@@ -13,6 +13,7 @@ import {
 } from '@/lib/slack/client'
 import { resolveConferenceSlackToken } from '@/lib/slack/token'
 import { resolveTeamSlackChannel } from '@/lib/teams'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 
 /**
  * Post to the CFP Slack channel. An explicit `channel` (resolved from a team,
@@ -559,12 +560,83 @@ export async function notifyNewVolunteer(
   await sendSlackNotification(message, conference)
 }
 
+/** Who the sponsor alert is for, and where it links (#1687 N1). */
+export interface SponsorAlertTarget {
+  sfcId: string
+  ownerName: string | null
+}
+
+function sponsorOwnerField(target: SponsorAlertTarget) {
+  return {
+    type: 'mrkdwn',
+    text: `*Owner:*\n${target.ownerName ? escapeMrkdwn(target.ownerName) : 'No owner assigned'}`,
+  }
+}
+
+function sponsorPipelineButton(
+  conference: Conference,
+  target: SponsorAlertTarget,
+): SlackBlock {
+  return {
+    type: 'actions',
+    elements: [
+      {
+        type: 'button',
+        text: { type: 'plain_text', text: 'Open in pipeline', emoji: true },
+        url: `${conferenceBaseUrl(conference)}/admin/sponsors/${target.sfcId}?view=pipeline`,
+        action_id: 'open_sponsor_pipeline',
+      },
+    ],
+  }
+}
+
+/**
+ * A sponsor event that needs the owner's attention, posted to the sales
+ * channel. Slack has no user mapping for organizers, so the owner is named,
+ * not mentioned; with no owner the message says so.
+ */
+export async function notifySponsorAlert(
+  args: SponsorAlertTarget & {
+    sponsorName: string
+    headline: string
+    detail: string
+  },
+  conference: Conference,
+) {
+  const blocks: SlackBlock[] = [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: args.headline, emoji: true },
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Sponsor:*\n${escapeMrkdwn(args.sponsorName)}`,
+        },
+        sponsorOwnerField(args),
+      ],
+    },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: escapeMrkdwn(args.detail) },
+    },
+    sponsorPipelineButton(conference, args),
+  ]
+  await sendSalesNotification(
+    { blocks, text: `${args.headline}: ${args.sponsorName}` },
+    conference,
+  )
+}
+
 export async function notifySponsorRegistrationComplete(
   sponsorName: string,
   tierTitle: string | null,
   contractValue: number | null,
   contractCurrency: string | null,
   conference: Conference,
+  target?: SponsorAlertTarget,
 ) {
   const domain = getDomainFromConference(conference)
 
@@ -609,7 +681,12 @@ export async function notifySponsorRegistrationComplete(
     })
   }
 
-  if (domain) {
+  if (target) {
+    blocks.push(
+      { type: 'section', fields: [sponsorOwnerField(target)] },
+      sponsorPipelineButton(conference, target),
+    )
+  } else if (domain) {
     blocks.push(
       createAdminLinkButton(
         domain,

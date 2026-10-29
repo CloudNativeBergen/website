@@ -9,7 +9,12 @@ vi.mock('@/lib/slack/client', () => ({
 }))
 vi.mock('@/lib/speaker/sanity', () => ({ getSpeaker: vi.fn() }))
 
-import { notifyNewSpeakerMessage, notifySponsorMessage } from './notify'
+import {
+  notifyNewSpeakerMessage,
+  notifySponsorAlert,
+  notifySponsorMessage,
+  notifySponsorRegistrationComplete,
+} from './notify'
 import type { Conference } from '@/lib/conference/types'
 
 function conf(overrides: Partial<Conference>): Conference {
@@ -87,5 +92,53 @@ describe('sponsor-message Slack — sponsors team sales channel (TEAMS-2)', () =
       conf({ salesNotificationChannel: undefined }),
     )
     expect(postMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('sponsor alerts (#1687 N1)', () => {
+  const alert = {
+    sfcId: 'sfc-1',
+    sponsorName: 'Acme',
+    headline: 'Follow-up date passed',
+    detail: 'Due.',
+  }
+  const text = () => JSON.stringify(postMock.mock.calls[0][0])
+
+  it('names the owner and links to the pipeline view on the sales channel', async () => {
+    await notifySponsorAlert({ ...alert, ownerName: 'Ola' }, conf({}))
+    expect(postMock.mock.calls[0][1]).toEqual({ channel: '#sales' })
+    expect(text()).toContain('Ola')
+    expect(text()).toContain(
+      'https://cnd.example/admin/sponsors/sfc-1?view=pipeline',
+    )
+  })
+
+  it('says "No owner assigned" when the sponsor has no owner', async () => {
+    await notifySponsorAlert({ ...alert, ownerName: null }, conf({}))
+    expect(text()).toContain('No owner assigned')
+  })
+
+  it('posts nothing when Slack is not configured for the tenant', async () => {
+    await notifySponsorAlert(
+      { ...alert, ownerName: 'Ola' },
+      conf({ salesNotificationChannel: undefined }),
+    )
+    expect(postMock).not.toHaveBeenCalled()
+  })
+
+  it('addresses the owner on the registration-complete message', async () => {
+    await notifySponsorRegistrationComplete(
+      'Acme',
+      null,
+      null,
+      null,
+      conf({}),
+      {
+        sfcId: 'sfc-1',
+        ownerName: null,
+      },
+    )
+    expect(text()).toContain('No owner assigned')
+    expect(text()).toContain('/admin/sponsors/sfc-1?view=pipeline')
   })
 })

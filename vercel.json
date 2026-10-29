@@ -67,6 +67,10 @@
     {
       "path": "/api/cron/photo-wall-retention",
       "schedule": "10 3 * * *"
+    },
+    {
+      "path": "/api/cron/sponsor-follow-ups",
+      "schedule": "0 8 * * *"
     }
   ]
 }

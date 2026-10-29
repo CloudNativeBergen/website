@@ -218,6 +218,15 @@ export default defineType({
       hidden: true,
     }),
     defineField({
+      name: 'followUpAlertedFor',
+      title: 'Follow-up Alerted For',
+      type: 'string',
+      description:
+        'The follow-up date the overdue Slack alert was last sent for; set by the sponsor-follow-ups cron so each date alerts once.',
+      readOnly: true,
+      hidden: true,
+    }),
+    defineField({
       name: 'contractTemplate',
       title: 'Contract Template',
       type: 'reference',

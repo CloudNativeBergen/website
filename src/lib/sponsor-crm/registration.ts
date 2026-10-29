@@ -281,7 +281,9 @@ export function buildPortalUrl(baseUrl: string, token: string): string {
 }
 
 export interface SfcNotificationData {
+  _id: string
   sponsorName: string
+  ownerName: string | null
   tierTitle: string | null
   contractValue: number | null
   contractCurrency: string | null
@@ -293,7 +295,9 @@ export async function getSfcForNotification(
 ): Promise<SfcNotificationData | null> {
   return clientRead.fetch<SfcNotificationData | null>(
     `*[_type == "sponsorForConference" && _id == $id][0]{
+      _id,
       "sponsorName": sponsor->name,
+      "ownerName": assignedTo->name,
       "tierTitle": tier->title,
       contractValue,
       contractCurrency,
