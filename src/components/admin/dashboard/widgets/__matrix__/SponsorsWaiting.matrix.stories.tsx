@@ -50,7 +50,7 @@ const mixed: SponsorsWaitingData = {
       id: 'bergen-unassigned',
       title: 'Assign an owner',
       sponsorName: 'Bergen Bytes',
-      priority: 3.8,
+      priority: 3,
       href: '/admin/sponsors/bergen?view=pipeline',
     },
   ],

@@ -817,14 +817,14 @@ describe('generateActionItems', () => {
   })
 })
 
-describe('assign an owner (priority 3.8)', () => {
+describe('assign an owner (priority 3)', () => {
   it('asks for an owner on an unassigned sponsor', () => {
     expect(generateActionItems([createSponsor()])).toEqual([
       expect.objectContaining({
         id: 'sfc-1-unassigned',
         type: 'unassigned',
         title: 'Assign an owner',
-        priority: 3.8,
+        priority: 3,
         link: '/admin/sponsors/sfc-1?view=pipeline',
       }),
     ])
@@ -864,7 +864,7 @@ describe('actionItemsForOrganizer', () => {
       ]),
     ).toEqual([
       ['mine-overdue', 1],
-      ['nobody', 3.8],
+      ['nobody', 3],
       ['mine', 4.5],
     ])
   })

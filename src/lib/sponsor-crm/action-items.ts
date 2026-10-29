@@ -205,7 +205,7 @@ export function generateActionItems(
       })
     }
 
-    // Priority 3.8: Nobody owns this deal yet, so nobody will chase it
+    // Priority 3: Nobody owns this deal yet, so nobody will chase it
     if (!sponsor.assignedTo && sponsor.status !== 'closed-lost') {
       actions.push({
         id: `${sponsor._id}-unassigned`,
@@ -213,7 +213,7 @@ export function generateActionItems(
         title: 'Assign an owner',
         sponsor: { id: sponsor._id, name },
         description: `Nobody owns ${name} yet. Assign an organizer to follow up`,
-        priority: 3.8,
+        priority: 3,
         link,
       })
     }

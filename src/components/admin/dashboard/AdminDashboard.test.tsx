@@ -508,3 +508,65 @@ describe('AdminDashboard persistence', () => {
     )
   })
 })
+
+describe('AdminDashboard sponsors-waiting hint', () => {
+  beforeEach(() => window.localStorage.clear())
+  const hint = () => screen.queryByText(/New: Sponsors waiting on you/)
+
+  it('shows for a saved layout without the card; adding saves the card', async () => {
+    vi.mocked(loadDashboardConfig).mockResolvedValue(savedWidgets)
+    renderDashboard()
+    await flushLoad()
+    expect(hint()).not.toBeNull()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add to dashboard' }))
+    })
+    expect(hint()).toBeNull()
+    await advancePastDebounce()
+    const payload = vi.mocked(saveDashboardConfig).mock.calls[0][0]
+    expect(payload.map((w) => w.type)).toContain('sponsors-waiting')
+    expect(window.localStorage.getItem('cndn.sponsorsWaitingHint.v1')).toBe(
+      'true',
+    )
+  })
+
+  it('remembers a dismissal and does not save', async () => {
+    vi.mocked(loadDashboardConfig).mockResolvedValue(savedWidgets)
+    renderDashboard()
+    await flushLoad()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    })
+    expect(hint()).toBeNull()
+    cleanup()
+
+    renderDashboard()
+    await flushLoad()
+    expect(hint()).toBeNull()
+    await advancePastDebounce()
+    expect(saveDashboardConfig).not.toHaveBeenCalled()
+  })
+
+  it('stays hidden for new installs and layouts that have the card', async () => {
+    vi.mocked(loadDashboardConfig).mockResolvedValue(null)
+    renderDashboard()
+    await flushLoad()
+    expect(hint()).toBeNull()
+    cleanup()
+
+    vi.mocked(loadDashboardConfig).mockResolvedValue([
+      ...savedWidgets,
+      {
+        id: 'sponsors-waiting-1',
+        type: 'sponsors-waiting',
+        title: 'Sponsors waiting on you',
+        position: { row: 3, col: 0, rowSpan: 3, colSpan: 3 },
+        config: undefined,
+      },
+    ])
+    renderDashboard()
+    await flushLoad()
+    expect(hint()).toBeNull()
+  })
+})
