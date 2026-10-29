@@ -28,24 +28,7 @@ export const RECORD_VIEWS: RecordView[] = [
   'messages',
 ]
 
-/** Every query a sponsor's page or board card reads. */
-export function useRefreshSponsor() {
-  const utils = api.useUtils()
-  return useCallback(
-    (id: string) => {
-      utils.sponsor.crm.getById.invalidate({ id })
-      utils.sponsor.crm.getOverview.invalidate({ id })
-      utils.sponsor.crm.getContacts.invalidate({ id })
-      utils.sponsor.crm.getContractDetails.invalidate({ id })
-      utils.sponsor.crm.activities.list.invalidate({
-        sponsorForConferenceId: id,
-      })
-      utils.sponsor.crm.list.invalidate()
-      utils.sponsor.crm.healthViolations.invalidate()
-    },
-    [utils],
-  )
-}
+export { useRefreshSponsor } from '@/hooks/useRefreshSponsor'
 
 /**
  * The side panel's URL state. The board uses `?sponsor=<id>&view=<tab>`;

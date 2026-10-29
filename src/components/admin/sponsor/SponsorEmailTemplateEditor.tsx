@@ -88,7 +88,7 @@ export function SponsorEmailTemplateEditor({
   const createMutation = api.sponsor.emailTemplates.create.useMutation({
     onSuccess: () => {
       setSaveStatus('success')
-      utils.sponsor.emailTemplates.list.invalidate()
+      utils.sponsor.emailTemplates.invalidate()
       showNotification({
         type: 'success',
         title: 'Template created',
@@ -109,7 +109,7 @@ export function SponsorEmailTemplateEditor({
   const updateMutation = api.sponsor.emailTemplates.update.useMutation({
     onSuccess: () => {
       setSaveStatus('success')
-      utils.sponsor.emailTemplates.list.invalidate()
+      utils.sponsor.emailTemplates.invalidate()
       showNotification({
         type: 'success',
         title: 'Template updated',

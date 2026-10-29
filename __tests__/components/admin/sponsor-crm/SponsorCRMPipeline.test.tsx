@@ -36,7 +36,10 @@ vi.mock('@/lib/trpc/client', () => ({
           getOverview: { invalidate: vi.fn() },
           getContacts: { invalidate: vi.fn() },
           getContractDetails: { invalidate: vi.fn() },
-          activities: { list: { invalidate: vi.fn() } },
+          activities: {
+            list: { invalidate: vi.fn() },
+            log: { invalidate: vi.fn() },
+          },
         },
       },
     }),
@@ -430,5 +433,25 @@ describe('SponsorCRMPipeline — ?action= filter', () => {
     renderPipeline()
     expect(screen.getByText(/^card sfc-late/)).toBeInTheDocument()
     expect(screen.getByText(/^card sfc-fine/)).toBeInTheDocument()
+  })
+
+  it('Clear all drops the filters and keeps the board and open sponsor', () => {
+    searchParams = new URLSearchParams(
+      'board=invoice&action=overdue&tags=x&sponsor=sfc-late&view=contacts',
+    )
+    renderPipeline()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }))
+    expect(push).toHaveBeenLastCalledWith(
+      '?board=invoice&sponsor=sfc-late&view=contacts',
+      { scroll: false },
+    )
+  })
+
+  it('names the mobile search toggle and says whether it is open', () => {
+    renderPipeline()
+    const toggle = screen.getByRole('button', { name: 'Search sponsors' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
   })
 })
