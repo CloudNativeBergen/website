@@ -336,7 +336,10 @@ export function SponsorCard({
                 <span className="sr-only">Open options</span>
                 <EllipsisHorizontalIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
               </MenuButton>
-              <MenuItems className="absolute right-0 z-10 mt-2 w-40 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black/5 focus:outline-none dark:bg-gray-800 dark:ring-white/10">
+              <MenuItems
+                anchor="bottom end"
+                className="z-50 w-40 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black/5 [--anchor-gap:4px] focus:outline-none dark:bg-gray-800 dark:ring-white/10"
+              >
                 <div className="py-1">
                   {onEmail && (
                     <MenuItem>
