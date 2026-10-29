@@ -268,13 +268,25 @@ export const photoWallRouter = router({
       }),
     ),
 
-  /** Remove a post from the wall (§10): Not shown. */
+  /**
+   * Remove a post from the wall (§10): Not shown. `from`, optional, is the
+   * status the card (or the Undo of an Approve) showed.
+   */
   remove: adminProcedure
-    .input(z.object({ id: postId, shown }).strict())
+    .input(
+      z
+        .object({
+          id: postId,
+          from: z.enum(ALLOWED_FROM.remove).optional(),
+          shown,
+        })
+        .strict(),
+    )
     .mutation(({ ctx, input }) =>
       moderate(ctx.orgId, {
         postId: input.id,
         action: 'remove',
+        from: input.from,
         shown: input.shown,
       }),
     ),

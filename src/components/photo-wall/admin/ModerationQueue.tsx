@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -19,6 +20,7 @@ import {
   type ModerationTab,
   type PostingState,
 } from '@/lib/photo-wall'
+import { XMarkIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import { focusIsWith } from '../focus'
 import { PendingSummary } from './PendingSummary'
@@ -73,7 +75,9 @@ export function ModerationQueue({ posting }: { posting?: PostingState }) {
         case 'reject':
           return (await reject.mutateAsync({ id, shown })).status
         case 'remove':
-          return (await remove.mutateAsync({ id, shown })).status
+          if (!allowsFrom('remove', post.status)) return 'changed'
+          return (await remove.mutateAsync({ id, from: post.status, shown }))
+            .status
         case 'withdrawMarketing':
           return (await withdrawMarketing.mutateAsync({ id, shown })).status
         case 'delete': {
@@ -214,6 +218,41 @@ const NOTICES: Record<Exclude<PostActionOutcome, 'done' | 'failed'>, string> = {
   gone: 'This photo was deleted.',
 }
 
+/**
+ * UNDO (§10): what undoes each decision, and what the toast says it does.
+ * The spec has no way back to Pending, so undoing an Approve takes the post
+ * off the wall to Not shown, whichever tab it came from.
+ */
+const UNDO: Record<
+  Exclude<PostAction, 'withdrawMarketing' | 'delete'>,
+  { after: ModerationPost['status']; reverse: PostAction; says: string }
+> = {
+  approve: {
+    after: 'approved',
+    reverse: 'remove',
+    says: 'Approved · Undo takes it off the wall',
+  },
+  reject: {
+    after: 'notShown',
+    reverse: 'approve',
+    says: 'Rejected · Undo puts it on the wall',
+  },
+  remove: {
+    after: 'notShown',
+    reverse: 'approve',
+    says: 'Removed · Undo puts it back on the wall',
+  },
+}
+
+/** How long the Undo toast stays, unless focus is in it. */
+export const UNDO_MS = 8000
+
+/** The latest undoable action: only it can be undone. */
+interface Undoable {
+  says: string
+  undo: () => void
+}
+
 /** An empty Pending tab while posting is shut: no new posts are coming. */
 const emptyPending = (posting?: PostingState) =>
   !posting || posting === 'open'
@@ -254,6 +293,8 @@ export function ModerationQueueView({
   // A new action on the post, or any decision seen since (even one that
   // brought the status back), ends it.
   const [failures, setFailures] = useState<Record<string, Failure>>({})
+  const [undoable, setUndoable] = useState<Undoable | null>(null)
+  const dismissUndo = useCallback(() => setUndoable(null), [])
   const [approvingAll, setApprovingAll] = useState(false)
   const [approveAllFailed, setApproveAllFailed] = useState(false)
   const tabRefs = useRef<Partial<Record<ModerationTab, HTMLButtonElement>>>({})
@@ -323,12 +364,13 @@ export function ModerationQueueView({
   }, [queue, tab])
 
   const act = onAction
-    ? async (post: ModerationPost, action: PostAction) => {
+    ? async (post: ModerationPost, action: PostAction, offerUndo = true) => {
         const key = cardKey(post)
         if (inFlight[key]) return null
         setInFlight((all) => ({ ...all, [key]: action }))
         setFailures((all) => without(all, key))
         setNotice('')
+        setUndoable(null)
         let outcome: PostActionOutcome = 'failed'
         try {
           outcome = await onAction(post, action)
@@ -347,7 +389,20 @@ export function ModerationQueueView({
             },
           }))
         }
-        if (outcome === 'done') setNotice(DONE[action])
+        const undo =
+          action === 'approve' || action === 'reject' || action === 'remove'
+            ? UNDO[action]
+            : undefined
+        if (outcome === 'done' && undo && offerUndo) {
+          // The post as the action left it, the same incarnation: the
+          // server's guarded re-read answers `changed` if anyone decided
+          // in between.
+          const after = { ...post, status: undo.after }
+          setUndoable({
+            says: undo.says,
+            undo: () => void act?.(after, undo.reverse, false),
+          })
+        } else if (outcome === 'done') setNotice(DONE[action])
         else if (outcome !== 'failed') setNotice(NOTICES[outcome])
         return outcome
       }
@@ -359,6 +414,7 @@ export function ModerationQueueView({
     setApprovingAll(true)
     setApproveAllFailed(false)
     setNotice('')
+    setUndoable(null)
     try {
       const { approved } = await onApproveAll(shownNow)
       setNotice(
@@ -427,6 +483,7 @@ export function ModerationQueueView({
       >
         {notice}
       </p>
+      {undoable && <UndoToast undoable={undoable} onDismiss={dismissUndo} />}
       <div
         role="tablist"
         aria-label="Posts by status"
@@ -530,6 +587,63 @@ const KEY_MOVES: Partial<Record<string, (at: number, last: number) => number>> =
     Home: () => 0,
     End: (_, last) => last,
   }
+
+/**
+ * The Undo toast (§10): fixed at the bottom, gone after {@link UNDO_MS}
+ * (held while focus is in it), Escape dismisses it. Not the admin
+ * NotificationProvider, which has no action slot and is not on this page.
+ */
+function UndoToast({
+  undoable,
+  onDismiss,
+}: {
+  undoable: Undoable
+  onDismiss: () => void
+}) {
+  const [held, setHeld] = useState(false)
+  useEffect(() => {
+    if (held) return
+    const timer = setTimeout(onDismiss, UNDO_MS)
+    return () => clearTimeout(timer)
+  }, [undoable, held, onDismiss])
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      tabIndex={-1}
+      onFocus={() => setHeld(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setHeld(false)
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return
+        event.preventDefault()
+        onDismiss()
+      }}
+      className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-md items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 text-sm text-white shadow-lg ring-1 ring-black/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:bg-gray-700 dark:ring-white/10"
+    >
+      <span className="flex-1">{undoable.says}</span>
+      <button
+        type="button"
+        onClick={() => {
+          onDismiss()
+          undoable.undo()
+        }}
+        className="inline-flex min-h-10 items-center rounded-md px-3 font-semibold text-indigo-200 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-indigo-300"
+      >
+        Undo
+      </button>
+      <button
+        type="button"
+        aria-label="Dismiss"
+        onClick={onDismiss}
+        className="inline-flex size-10 items-center justify-center rounded-md text-gray-300 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-indigo-300"
+      >
+        <XMarkIcon className="size-5" aria-hidden="true" />
+      </button>
+    </div>
+  )
+}
 
 function Skeleton() {
   return (
