@@ -67,6 +67,7 @@ import { STARTER_SESSION_FORMATS } from '@/lib/onboarding/create'
 import { formats as FORMAT_TITLES } from '@/lib/proposal/types'
 import { deriveBlueskyHandle } from '@/lib/stream/config'
 import { osloTodayDateString } from '@/lib/time'
+import { isProgramPublished } from '@/lib/conference/state'
 
 /**
  * Which half of activation a row belongs to. `cfp` is the critical path to a
@@ -775,15 +776,11 @@ export function buildActivationChecklist(
   ]
   const eventRows: ActivationRow[] = [
     {
-      // Mirrors `isProgramPublished` (@/lib/conference/state), restated so
-      // this module stays free of that file's imports.
+      // Same rule as the public /program page, so the two cannot drift.
       id: 'program',
       stage: 'event',
       label: 'Programme published',
-      done:
-        present(conference.programDate) &&
-        now >= new Date(conference.programDate!) &&
-        schedules.length > 0,
+      done: isProgramPublished(conference, now) && schedules.length > 0,
       anchor: '/admin/schedule',
       hint: 'Build the schedule and set the date the programme goes public.',
     },

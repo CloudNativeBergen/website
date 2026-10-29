@@ -795,6 +795,17 @@ describe('event stage', () => {
     expect(program({ ...EVENT_READY, schedules: [] })).toBe(false)
   })
 
+  it('counts the programme date by the Oslo day, not UTC midnight', () => {
+    const program = (now: string) =>
+      event(
+        { ...EVENT_READY, programDate: '2026-04-01' },
+        new Date(now),
+      )!.rows.find((r) => r.id === 'program')!.done
+    // 22:30 UTC on 31 March is 00:30 on 1 April in Oslo (CEST).
+    expect(program('2026-03-31T21:30:00Z')).toBe(false)
+    expect(program('2026-03-31T22:30:00Z')).toBe(true)
+  })
+
   it('does not count a non-Bluesky social link', () => {
     const c = { ...EVENT_READY, socialLinks: ['https://x.com/cnd'] }
     expect(event(c)!.rows.find((r) => r.id === 'bluesky')!.done).toBe(false)

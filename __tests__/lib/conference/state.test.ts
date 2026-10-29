@@ -115,7 +115,7 @@ describe('Conference State Helpers', () => {
     })
 
     it('returns false before program date', () => {
-      vi.setSystemTime(new Date('2025-04-30T23:59:59Z'))
+      vi.setSystemTime(new Date('2025-04-30T21:59:59Z')) // 23:59:59 in Oslo
       expect(isProgramPublished(baseConference)).toBe(false)
     })
 

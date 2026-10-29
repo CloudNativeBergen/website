@@ -1,3 +1,4 @@
+import { osloTodayDateString } from '@/lib/time'
 import { Conference } from './types'
 
 /**
@@ -146,16 +147,17 @@ export function canAcceptProposals(conference: {
 }
 
 /**
- * Check if the program has been published
+ * Whether the programme is public: from 00:00 Oslo time on `programDate` (a
+ * Sanity `date`, so compared as an Oslo calendar day, not UTC midnight).
  */
 export function isProgramPublished(
   conference: { programDate?: Conference['programDate'] | null },
   now: Date = new Date(),
 ): boolean {
-  if (!conference.programDate) {
+  if (!conference.programDate || Number.isNaN(now.getTime())) {
     return false
   }
-  return now >= new Date(conference.programDate)
+  return osloTodayDateString(now) >= conference.programDate
 }
 
 /**
