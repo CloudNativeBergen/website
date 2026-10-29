@@ -1,23 +1,16 @@
 'use client'
 
-import type {
-  SponsorForConferenceExpanded,
-  SponsorTag,
-  SignatureStatus,
-} from '@/lib/sponsor-crm/types'
-import type { Speaker } from '@/lib/speaker/types'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { SponsorLogo } from '@/components/SponsorLogo'
-import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { formatNumber } from '@/lib/format'
 import {
   ExclamationTriangleIcon,
-  Bars2Icon,
   EllipsisHorizontalIcon,
 } from '@heroicons/react/24/outline'
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react'
 import {
-  getInvoiceStatusColor,
   formatInvoiceStatusLabel,
+  formatStatusName,
   calculateSponsorValue,
   getSignatureStatusBadgeProps,
   getDaysPending,
@@ -25,6 +18,9 @@ import {
   getDaysInactive,
 } from './utils'
 import type { CrmActivityThreshold } from '@/lib/conference/types'
+import { isInvoicePastDue } from '@/lib/sponsor-crm/invoice'
+import { formatConferenceDate, osloTodayDateString } from '@/lib/time'
+import { useNotification } from '@/components/admin/NotificationProvider'
 import clsx from 'clsx'
 import { BoardView } from './BoardViewSwitcher'
 import { useDraggable } from '@dnd-kit/core'
@@ -38,45 +34,109 @@ interface SponsorCardProps {
   thresholds?: CrmActivityThreshold[]
   onToggleSelect?: () => void
   onEdit: () => void
-  onDelete: () => void
   onEmail?: () => void
-  /** Send → Discount codes (#1262). Omitted when ticketing is off. */
-  onSendDiscountCodes?: () => void
-  onContract?: () => void
-  onOpenHistory?: () => void
-  onAdvanceStage?: (targetStage: string) => void
 }
 
-const TAG_BADGES: {
-  tag: SponsorTag
-  label: string
-  classes: string
-}[] = [
-  {
-    tag: 'high-priority',
-    label: 'PRI',
-    classes:
-      'bg-red-100 text-red-700 ring-red-700/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20',
-  },
-  {
-    tag: 'needs-follow-up',
-    label: 'FUP',
-    classes:
-      'bg-amber-100 text-amber-700 ring-amber-700/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20',
-  },
-  {
-    tag: 'returning-sponsor',
-    label: 'RET',
-    classes:
-      'bg-emerald-100 text-emerald-700 ring-emerald-700/20 dark:bg-emerald-900/30 dark:text-emerald-400 dark:ring-emerald-400/20',
-  },
-]
+const STALE_DAYS = 7
 
-const TAG_TOOLTIPS: Record<string, string> = {
-  PRI: 'High Priority',
-  FUP: 'Needs Follow-up',
-  RET: 'Returning Sponsor',
+const shortDate = (date: string) =>
+  formatConferenceDate(date, { day: 'numeric', month: 'short' })
+
+const days = (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]!.toUpperCase())
+    .join('')
+
+const formatValue = (v: number) =>
+  v >= 1000000
+    ? `${(v / 1000000).toFixed(1)}M`
+    : v >= 1000
+      ? `${(v / 1000).toFixed(0)}K`
+      : formatNumber(v)
+
+/**
+ * The single status line under the card's value row. Each board answers its
+ * own question: when do we talk next (pipeline), is the contract signed
+ * (contract), is the invoice paid on time (invoice).
+ */
+export function getCardStatus(
+  sponsor: SponsorForConferenceExpanded,
+  view: BoardView,
+  thresholds?: CrmActivityThreshold[],
+): { text: string; overdue: boolean; warning: boolean } {
+  const inactive = getDaysInactive(sponsor)
+  // Same stale rules as the board's follow-up flag and the action items
+  // ("Stale Negotiation": contacted/negotiating with 7+ days of silence).
+  const warning =
+    checkSponsorNeedsFollowUp(sponsor, thresholds) ||
+    (['contacted', 'negotiating'].includes(sponsor.status) &&
+      inactive !== null &&
+      inactive >= STALE_DAYS)
+
+  if (view === 'contract') {
+    const sig = sponsor.signatureStatus
+    const signed =
+      sig === 'signed' || sponsor.contractStatus === 'contract-signed'
+    const label =
+      sig && sig !== 'not-started'
+        ? `Signature ${getSignatureStatusBadgeProps(sig).label.toLowerCase()}`
+        : !sponsor.contractStatus || sponsor.contractStatus === 'none'
+          ? 'No contract yet'
+          : formatStatusName(sponsor.contractStatus)
+    const waiting = signed ? null : getDaysPending(sponsor.contractSentAt)
+    return {
+      text: waiting === null ? label : `${label} · waiting ${days(waiting)}`,
+      overdue: false,
+      warning,
+    }
+  }
+
+  if (view === 'invoice') {
+    if (isInvoicePastDue(sponsor)) {
+      return {
+        text: `Overdue since ${shortDate(sponsor.invoiceDueAt!)}`,
+        overdue: true,
+        warning,
+      }
+    }
+    if (sponsor.invoiceDueAt && sponsor.invoiceStatus === 'sent') {
+      return {
+        text: `Due ${shortDate(sponsor.invoiceDueAt)}`,
+        overdue: false,
+        warning,
+      }
+    }
+    return {
+      text: formatInvoiceStatusLabel(sponsor.invoiceStatus),
+      overdue: false,
+      warning,
+    }
+  }
+
+  if (sponsor.nextFollowUpAt) {
+    const overdue =
+      sponsor.nextFollowUpAt.slice(0, 10) < osloTodayDateString()
+    return {
+      text: `Follow up ${shortDate(sponsor.nextFollowUpAt)}`,
+      overdue,
+      warning,
+    }
+  }
+  if (inactive === null) return { text: 'No activity yet', overdue: false, warning }
+  return {
+    text: inactive === 0 ? 'In contact today' : `No contact for ${days(inactive)}`,
+    overdue: false,
+    warning,
+  }
 }
+
+const MENU_ITEM =
+  'block w-full px-4 py-2 text-left text-sm text-gray-700 data-[focus]:bg-gray-100 dark:text-gray-300 dark:data-[focus]:bg-gray-700'
 
 export function SponsorCard({
   sponsor,
@@ -87,16 +147,14 @@ export function SponsorCard({
   thresholds,
   onToggleSelect,
   onEdit,
-  onDelete,
   onEmail,
-  onSendDiscountCodes,
-  onContract,
-  onOpenHistory,
-  onAdvanceStage,
 }: SponsorCardProps) {
+  const { showNotification } = useNotification()
   const { value, currency } = calculateSponsorValue(sponsor)
   const needsFollowUp = checkSponsorNeedsFollowUp(sponsor, thresholds)
-  const inactiveDays = getDaysInactive(sponsor)
+  const status = getCardStatus(sponsor, currentView, thresholds)
+  const name = sponsor.sponsor.name
+  const owner = sponsor.assignedTo
 
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: sponsor._id,
@@ -108,359 +166,182 @@ export function SponsorCard({
     disabled: isSelectionMode || !columnKey,
   })
 
-  const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onDelete()
-  }
+  const open = () => (isSelectionMode ? onToggleSelect?.() : onEdit())
 
-  const handleEditClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onEdit()
-  }
-
-  const handleEmailClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onEmail?.()
-  }
-
-  const handleContractClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onContract?.()
-  }
-
-  const handleCardClick = () => {
-    if (isSelectionMode) {
-      onToggleSelect?.()
-    } else {
-      onEdit()
+  const copyLink = async () => {
+    const url = `${window.location.origin}/admin/sponsors/crm?sponsor=${encodeURIComponent(sponsor._id)}&view=pipeline`
+    try {
+      await navigator.clipboard.writeText(url)
+      showNotification({ type: 'success', title: 'Link copied' })
+    } catch {
+      showNotification({ type: 'error', title: 'Could not copy the link' })
     }
   }
 
-  const activeTags = TAG_BADGES.filter((t) => sponsor.tags?.includes(t.tag))
-
-  const formatValue = (v: number) =>
-    v >= 1000000
-      ? `${(v / 1000000).toFixed(1)}M`
-      : v >= 1000
-        ? `${(v / 1000).toFixed(0)}K`
-        : formatNumber(v)
-
-  let nextStage: { key: string; label: string } | null = null
-  if (currentView === 'pipeline') {
-    if (sponsor.status === 'prospect')
-      nextStage = { key: 'contacted', label: 'Contacted' }
-    else if (sponsor.status === 'contacted')
-      nextStage = { key: 'negotiating', label: 'Negotiating' }
-    else if (sponsor.status === 'negotiating')
-      nextStage = { key: 'closed-won', label: 'Closed Won' }
-  } else if (currentView === 'contract') {
-    if (!sponsor.contractStatus || sponsor.contractStatus === 'none')
-      nextStage = { key: 'verbal-agreement', label: 'Verbal Agreement' }
-    else if (sponsor.contractStatus === 'verbal-agreement')
-      nextStage = { key: 'contract-sent', label: 'Contract Sent' }
-    else if (sponsor.contractStatus === 'contract-sent')
-      nextStage = { key: 'contract-signed', label: 'Contract Signed' }
-  } else if (currentView === 'invoice') {
-    if (!sponsor.invoiceStatus || sponsor.invoiceStatus === 'not-sent')
-      nextStage = { key: 'sent', label: 'Sent' }
-    else if (sponsor.invoiceStatus === 'sent')
-      nextStage = { key: 'paid', label: 'Paid' }
-  }
-
-  const handleAdvanceStage = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (nextStage) {
-      onAdvanceStage?.(nextStage.key)
-    }
+  // Keeps clicks, key presses and pointer-downs inside the checkbox and menu
+  // from opening the sponsor or starting a drag.
+  const stop = {
+    onClick: (e: React.SyntheticEvent) => e.stopPropagation(),
+    onPointerDown: (e: React.SyntheticEvent) => e.stopPropagation(),
+    onKeyDown: (e: React.SyntheticEvent) => e.stopPropagation(),
   }
 
   return (
     <div
       ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      role="button"
+      tabIndex={0}
+      aria-label={`${name}, ${status.text}`}
+      aria-pressed={isSelectionMode ? isSelected : undefined}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && e.target === e.currentTarget) {
+          e.preventDefault()
+          open()
+          return
+        }
+        listeners?.onKeyDown?.(e)
+      }}
       className={clsx(
-        'group relative flex flex-col gap-2 overflow-hidden rounded-lg border py-3 pr-3 pl-2 transition-all hover:border-brand-cloud-blue hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500',
+        'group relative flex cursor-pointer flex-col gap-1 rounded-lg border py-2 pr-2 pl-3 transition-colors hover:shadow-md focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none',
+        columnKey && !isSelectionMode && 'active:cursor-grabbing',
         isSelected
-          ? 'border-indigo-500 bg-indigo-50/30 shadow-sm ring-1 ring-indigo-500 dark:border-indigo-400 dark:bg-indigo-900/20'
-          : 'border-gray-200 bg-white',
+          ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500 dark:border-indigo-400 dark:bg-indigo-950/40 dark:ring-indigo-400'
+          : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-500',
         needsFollowUp
           ? 'border-l-4 border-l-amber-500'
-          : 'border-l-[3px] border-l-gray-400',
+          : 'border-l-[3px] border-l-gray-400 dark:border-l-gray-500',
         isDragging && 'opacity-30',
       )}
-      onClick={handleCardClick}
     >
-      <div className="flex w-full gap-2">
-        {/* Drag Handle */}
-        <div
-          className={clsx(
-            'flex shrink-0 cursor-grab items-center justify-center text-gray-400 hover:text-gray-600 active:cursor-grabbing dark:text-gray-500 dark:hover:text-gray-300',
-            (isSelectionMode || !columnKey) && 'pointer-events-none invisible',
-          )}
-          {...attributes}
-          {...listeners}
-        >
-          <Bars2Icon className="h-5 w-5" />
-        </div>
-
-        {/* Selection Checkbox */}
-        <div
-          className={clsx(
-            'absolute top-1 left-1 z-10 transition-opacity',
-            isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
-          )}
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={() => onToggleSelect?.()}
-            className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-          />
-        </div>
-
-        {/* Left: Logo + Assignee */}
-        <div className="flex w-14 shrink-0 flex-col items-center justify-center gap-1.5">
-          {/* Logo */}
-          <div className="flex h-9 w-14 items-center justify-center overflow-hidden">
-            {sponsor.sponsor.logo ? (
-              <SponsorLogo
-                logo={sponsor.sponsor.logo}
-                logoBright={sponsor.sponsor.logoBright}
-                name={sponsor.sponsor.name}
-                className="max-h-full w-auto max-w-14 object-contain"
-              />
-            ) : (
-              <span className="truncate text-center text-[10px] leading-tight font-bold text-gray-500 uppercase dark:text-gray-400">
-                {sponsor.sponsor.name}
-              </span>
-            )}
-          </div>
-          {/* Assignee */}
-          {sponsor.assignedTo && (
-            <div className="scale-[0.8] transform">
-              <SpeakerAvatars
-                speakers={[
-                  {
-                    _id: sponsor.assignedTo._id,
-                    name: sponsor.assignedTo.name,
-                    image: sponsor.assignedTo.image,
-                  } as Speaker,
-                ]}
-                size="sm"
-                maxVisible={1}
-                showTooltip={true}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Right: Name + Value + Tags */}
-        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-          {/* Name */}
-          <p className="truncate text-base leading-snug font-semibold text-gray-900 dark:text-white">
-            {sponsor.sponsor.name}
-          </p>
-
-          {/* Value */}
-          {value > 0 && (
-            <div className="flex items-center text-base leading-snug">
-              <span className="shrink-0 font-bold text-brand-cloud-blue dark:text-blue-400">
-                {formatValue(value)} {currency}
-              </span>
-            </div>
-          )}
-
-          {/* Tags + Invoice status */}
-          <div className="flex items-center gap-1">
-            {activeTags.map((t) => (
-              <span
-                key={t.tag}
-                title={TAG_TOOLTIPS[t.label]}
-                className={clsx(
-                  'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-bold uppercase ring-1 ring-inset',
-                  t.classes,
-                )}
-              >
-                {t.label}
-              </span>
-            ))}
-            {value > 0 && currentView !== 'pipeline' && (
-              <span
-                className={clsx(
-                  'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-medium whitespace-nowrap',
-                  getInvoiceStatusColor(sponsor.invoiceStatus),
-                )}
-              >
-                {formatInvoiceStatusLabel(sponsor.invoiceStatus)}
-              </span>
-            )}
-            {currentView === 'contract' &&
-              sponsor.signatureStatus &&
-              sponsor.signatureStatus !== 'not-started' && (
-                <SignatureBadge
-                  status={sponsor.signatureStatus}
-                  contractSentAt={sponsor.contractSentAt}
-                />
-              )}
-            {currentView === 'contract' &&
-              sponsor.registrationComplete &&
-              sponsor.contractStatus !== 'contract-sent' &&
-              sponsor.contractStatus !== 'contract-signed' && (
-                <span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] leading-none font-bold whitespace-nowrap text-amber-700 ring-1 ring-amber-700/20 ring-inset dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20">
-                  READY
-                </span>
-              )}
-          </div>
-        </div>
-
-        {/* Action Buttons - Top Right */}
-        <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
-          {needsFollowUp && inactiveDays !== null && (
-            <span className="mr-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-600/20 dark:bg-amber-900/30 dark:text-amber-400">
-              <ExclamationTriangleIcon className="mr-1 h-3.5 w-3.5" />⚠{' '}
-              {inactiveDays}d inactive
+      {/* Line 1: logo + name */}
+      <div className="flex items-center gap-2 pr-12">
+        <div className="flex h-6 w-10 shrink-0 items-center justify-center overflow-hidden">
+          {sponsor.sponsor.logo ? (
+            <SponsorLogo
+              logo={sponsor.sponsor.logo}
+              logoBright={sponsor.sponsor.logoBright}
+              name={name}
+              className="max-h-full w-auto max-w-10 object-contain"
+            />
+          ) : (
+            <span className="text-[10px] font-bold text-gray-500 uppercase dark:text-gray-400">
+              {initials(name)}
             </span>
           )}
-          <div
-            className="flex opacity-40 transition-opacity group-hover:opacity-100 hover:opacity-100"
-            // Stopping only the pointerdown keeps drag-and-drop off the menu
-            // but still lets the click bubble to the card root, which opens the
-            // sponsor — so the menu appeared and was instantly covered by the
-            // modal. Both have to stop here.
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Menu as="div" className="relative inline-block text-left">
-              <MenuButton className="flex items-center rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-700">
-                <span className="sr-only">Open options</span>
-                <EllipsisHorizontalIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-              </MenuButton>
-              <MenuItems className="absolute right-0 z-10 mt-2 w-40 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black/5 focus:outline-none dark:bg-gray-800 dark:ring-white/10">
-                <div className="py-1">
-                  {onEmail && (
-                    <MenuItem>
-                      <button
-                        onClick={handleEmailClick}
-                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 data-[focus]:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:data-[focus]:bg-gray-700"
-                      >
-                        Send Email
-                      </button>
-                    </MenuItem>
-                  )}
-                  {onSendDiscountCodes && (
-                    <MenuItem>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onSendDiscountCodes()
-                        }}
-                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 data-[focus]:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:data-[focus]:bg-gray-700"
-                      >
-                        Send discount codes
-                      </button>
-                    </MenuItem>
-                  )}
-                  {onOpenHistory && (
-                    <MenuItem>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onOpenHistory()
-                        }}
-                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 data-[focus]:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:data-[focus]:bg-gray-700"
-                      >
-                        Log Note
-                      </button>
-                    </MenuItem>
-                  )}
-                  {onContract && (
-                    <MenuItem>
-                      <button
-                        onClick={handleContractClick}
-                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 data-[focus]:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:data-[focus]:bg-gray-700"
-                      >
-                        Send Contract
-                      </button>
-                    </MenuItem>
-                  )}
-                  <MenuItem>
-                    <button
-                      onClick={handleEditClick}
-                      className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 data-[focus]:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:data-[focus]:bg-gray-700"
-                    >
-                      Edit Details
-                    </button>
-                  </MenuItem>
-                  <MenuItem>
-                    <button
-                      onClick={handleDeleteClick}
-                      className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 data-[focus]:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/50 dark:data-[focus]:bg-red-900/50"
-                    >
-                      Delete
-                    </button>
-                  </MenuItem>
-                </div>
-              </MenuItems>
-            </Menu>
-          </div>
         </div>
+        <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+          {name}
+        </p>
       </div>
 
-      {/* Bottom Row - CTA */}
-      {nextStage && (
-        <div className="mt-2 flex w-full border-t border-gray-100 pt-2 dark:border-gray-700">
-          <button
-            onClick={handleAdvanceStage}
-            className="flex w-full cursor-pointer items-center justify-center rounded bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-400 dark:hover:bg-indigo-900/50"
+      {/* Line 2: value · tier · owner */}
+      <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+        {value > 0 && (
+          <span className="shrink-0 font-semibold text-gray-900 dark:text-white">
+            {formatValue(value)} {currency}
+          </span>
+        )}
+        {value > 0 && sponsor.tier && <span aria-hidden="true">·</span>}
+        {sponsor.tier && <span className="truncate">{sponsor.tier.title}</span>}
+        <span className="ml-auto shrink-0">
+          {owner ? (
+            owner.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={owner.image}
+                alt={owner.name}
+                title={owner.name}
+                className="h-5 w-5 rounded-full object-cover"
+              />
+            ) : (
+              <span
+                title={owner.name}
+                aria-label={owner.name}
+                className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-200 text-[9px] font-semibold text-gray-700 dark:bg-gray-600 dark:text-gray-100"
+              >
+                {initials(owner.name)}
+              </span>
+            )
+          ) : (
+            <span className="text-gray-400 dark:text-gray-500">No owner</span>
+          )}
+        </span>
+      </div>
+
+      {/* Line 3: board status */}
+      <p
+        className={clsx(
+          'flex items-center gap-1 truncate text-xs',
+          status.overdue
+            ? 'font-medium text-red-600 dark:text-red-400'
+            : 'text-gray-500 dark:text-gray-400',
+        )}
+      >
+        {status.warning && (
+          <ExclamationTriangleIcon
+            className="h-3.5 w-3.5 shrink-0 text-amber-500 dark:text-amber-400"
+            aria-label="Needs attention"
+          />
+        )}
+        <span className="truncate">{status.text}</span>
+      </p>
+
+      {/* Selection checkbox */}
+      <div
+        className={clsx(
+          'absolute top-1 left-1 z-10 leading-none transition-opacity focus-within:opacity-100 group-hover:opacity-100 group-focus-visible:opacity-100',
+          isSelected || isSelectionMode ? 'opacity-100' : 'opacity-0',
+        )}
+        {...stop}
+      >
+        <input
+          type="checkbox"
+          aria-label={`Select ${name}`}
+          checked={isSelected}
+          onChange={() => onToggleSelect?.()}
+          className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+        />
+      </div>
+
+      {/* Options menu */}
+      <div className="absolute top-1 right-1" {...stop}>
+        <Menu>
+          <MenuButton
+            aria-label={`Options for ${name}`}
+            className="flex items-center rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
           >
-            &rarr; {nextStage.label}
-          </button>
-        </div>
-      )}
+            <EllipsisHorizontalIcon className="h-5 w-5" />
+          </MenuButton>
+          <MenuItems
+            anchor="bottom end"
+            className="z-50 w-44 rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 [--anchor-gap:4px] focus:outline-none dark:bg-gray-800 dark:ring-white/10"
+          >
+            {onEmail && (
+              <MenuItem>
+                <button onClick={onEmail} className={MENU_ITEM}>
+                  Send email
+                </button>
+              </MenuItem>
+            )}
+            <MenuItem>
+              <button onClick={copyLink} className={MENU_ITEM}>
+                Copy link
+              </button>
+            </MenuItem>
+            <MenuItem>
+              <a
+                href={`/admin/sponsors/${encodeURIComponent(sponsor._id)}`}
+                className={MENU_ITEM}
+              >
+                Open sponsor page
+              </a>
+            </MenuItem>
+          </MenuItems>
+        </Menu>
+      </div>
     </div>
-  )
-}
-
-const SIGNATURE_COLORS: Record<
-  Exclude<SignatureStatus, 'not-started'>,
-  string
-> = {
-  pending:
-    'bg-yellow-100 text-yellow-700 ring-yellow-700/20 dark:bg-yellow-900/30 dark:text-yellow-400 dark:ring-yellow-400/20',
-  signed:
-    'bg-green-100 text-green-700 ring-green-700/20 dark:bg-green-900/30 dark:text-green-400 dark:ring-green-400/20',
-  rejected:
-    'bg-red-100 text-red-700 ring-red-700/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20',
-  expired:
-    'bg-orange-100 text-orange-700 ring-orange-700/20 dark:bg-orange-900/30 dark:text-orange-400 dark:ring-orange-400/20',
-}
-
-function SignatureBadge({
-  status,
-  contractSentAt,
-}: {
-  status: SignatureStatus
-  contractSentAt?: string
-}) {
-  const { label } = getSignatureStatusBadgeProps(status)
-  const days = getDaysPending(contractSentAt)
-  const colorClass =
-    SIGNATURE_COLORS[status as keyof typeof SIGNATURE_COLORS] ??
-    SIGNATURE_COLORS.pending
-
-  return (
-    <span
-      className={clsx(
-        'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-bold whitespace-nowrap ring-1 ring-inset',
-        colorClass,
-      )}
-      title={days != null ? `Sent ${days}d ago` : undefined}
-    >
-      {label}
-      {status === 'pending' && days != null && days > 0 && (
-        <span className="ml-0.5 font-normal">({days}d)</span>
-      )}
-    </span>
   )
 }

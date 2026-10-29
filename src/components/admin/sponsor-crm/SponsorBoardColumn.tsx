@@ -172,27 +172,8 @@ export function SponsorBoardColumn({
               thresholds={thresholds}
               onToggleSelect={() => onSponsorToggleSelect?.(sponsor._id)}
               onEdit={() => onSponsorClick(sponsor)}
-              onDelete={() => onSponsorDelete(sponsor._id)}
               onEmail={
                 onSponsorEmail ? () => onSponsorEmail(sponsor) : undefined
-              }
-              onSendDiscountCodes={
-                onSponsorSendDiscountCodes
-                  ? () => onSponsorSendDiscountCodes(sponsor)
-                  : undefined
-              }
-              onContract={
-                onSponsorContract ? () => onSponsorContract(sponsor) : undefined
-              }
-              onOpenHistory={
-                onSponsorOpenHistory
-                  ? () => onSponsorOpenHistory(sponsor)
-                  : undefined
-              }
-              onAdvanceStage={
-                onSponsorAdvanceStage
-                  ? (targetStage) => onSponsorAdvanceStage(sponsor, targetStage)
-                  : undefined
               }
             />
           ))}

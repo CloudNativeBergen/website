@@ -54,7 +54,15 @@ import { SponsorDeleteModal } from '@/components/admin/sponsor-crm/SponsorDelete
 import type { DeleteCleanupOptions } from '@/components/admin/sponsor-crm/SponsorDeleteModal'
 import { TierPickerPrompt } from '@/components/admin/sponsor-crm/TierPickerPrompt'
 import { SponsorHealthPanel } from '@/components/admin/sponsor-crm/SponsorHealthPanel'
-import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core'
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  pointerWithin,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
 import clsx from 'clsx'
 
 interface SponsorCRMPipelineProps {
@@ -115,6 +123,12 @@ export function SponsorCRMPipeline({
   // linkable and the back button closes it. Old modal links land here too.
   const panel = useSponsorRecordPanel({ idParam: 'sponsor', viewParam: 'view' })
   const panelId = panel.id
+  // The whole card is the drag handle: a pointer has to travel 6px before a
+  // drag starts, so a plain click still opens the sponsor.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor),
+  )
   const openPanel = panel.open
   const refreshSponsor = useRefreshSponsor()
 
@@ -1043,6 +1057,7 @@ export function SponsorCRMPipeline({
       {/* Board Columns */}
       <DndContext
         id={dndId}
+        sensors={sensors}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         collisionDetection={pointerWithin}
@@ -1098,7 +1113,6 @@ export function SponsorCRMPipeline({
                 currentView={currentView}
                 thresholds={conference.crmInactivityThresholds}
                 onEdit={() => {}}
-                onDelete={() => {}}
               />
             </div>
           )}
