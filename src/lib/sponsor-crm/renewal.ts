@@ -16,27 +16,23 @@ import { createSponsorActivity } from './activity'
 // fixed 6 months before `startDate`. Add a conference field if editions differ.
 export const RENEWAL_LEAD_MONTHS = 6
 
-/** True from `RENEWAL_LEAD_MONTHS` before `startDate` onwards. */
+/** True from `RENEWAL_LEAD_MONTHS` before `startDate` onwards, by Oslo date. */
 export function isRenewalWindowOpen(
   startDate: string | undefined,
   now = new Date(),
 ) {
   if (!startDate) return false
-  const start = new Date(startDate)
+  // `startDate` is a plain Oslo date; do the month arithmetic on it as a
+  // calendar date and compare with today's Oslo date.
+  const [y, m, d] = startDate.slice(0, 10).split('-').map(Number)
+  const month = m - 1 - RENEWAL_LEAD_MONTHS
   // Clamp to the target month's last day: 31 Aug minus 6 months is 28 Feb,
-  // not the 3 March `setUTCMonth` would overflow to.
-  const month = start.getUTCMonth() - RENEWAL_LEAD_MONTHS
-  const lastDay = new Date(
-    Date.UTC(start.getUTCFullYear(), month + 1, 0),
-  ).getUTCDate()
-  const opens = new Date(
-    Date.UTC(
-      start.getUTCFullYear(),
-      month,
-      Math.min(start.getUTCDate(), lastDay),
-    ),
-  )
-  return now >= opens
+  // not the 3 March a plain month shift would overflow to.
+  const lastDay = new Date(Date.UTC(y, month + 1, 0)).getUTCDate()
+  const opens = new Date(Date.UTC(y, month, Math.min(d, lastDay)))
+    .toISOString()
+    .slice(0, 10)
+  return osloTodayDateString(now) >= opens
 }
 
 /** `endDate` is a plain Oslo date: the event has ended from the next day on. */

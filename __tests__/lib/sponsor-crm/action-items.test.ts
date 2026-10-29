@@ -4,6 +4,7 @@ import {
   generateActionItems,
 } from '@/lib/sponsor-crm/action-items'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import { formatNumber } from '@/lib/format'
 
 function createSponsor(
   overrides: Partial<SponsorForConferenceExpanded> = {},
@@ -120,15 +121,26 @@ describe('generateActionItems', () => {
       )
     })
 
-    it('does not trigger for non-NOK currency', () => {
-      const sponsor = createSponsor({
+    it('compares non-NOK deals by their NOK value', () => {
+      const big = createSponsor({
         status: 'prospect',
-        contractValue: 100000,
-        contractCurrency: 'USD',
+        contractValue: 5000,
+        contractCurrency: 'EUR',
       })
-      const items = generateActionItems([sponsor])
+      const small = createSponsor({
+        status: 'prospect',
+        contractValue: 4000,
+        contractCurrency: 'EUR',
+      })
 
-      expect(items).not.toContainEqual(
+      // FALLBACK_RATES: 1 EUR = 11.6 NOK, so 58 000 and 46 400 NOK.
+      expect(generateActionItems([big])).toContainEqual(
+        expect.objectContaining({
+          title: 'High Value Prospect',
+          description: expect.stringContaining(`${formatNumber(58000)} NOK`),
+        }),
+      )
+      expect(generateActionItems([small])).not.toContainEqual(
         expect.objectContaining({ title: 'High Value Prospect' }),
       )
     })
@@ -185,6 +197,19 @@ describe('generateActionItems', () => {
       )
     })
 
+    it('does not trigger for a lost deal', () => {
+      const sponsor = createSponsor({
+        status: 'closed-lost',
+        contractStatus: 'contract-signed',
+        contractSignedAt: '2020-01-01T00:00:00Z',
+        invoiceStatus: 'not-sent',
+      })
+
+      expect(generateActionItems([sponsor])).not.toContainEqual(
+        expect.objectContaining({ type: 'needs-invoice' }),
+      )
+    })
+
     it('does not trigger without contractValue', () => {
       const sponsor = createSponsor({
         status: 'closed-won',
@@ -203,6 +228,13 @@ describe('generateActionItems', () => {
       const sponsor = createSponsor({
         registrationComplete: true,
         contractStatus: 'none',
+        tier: {
+          _id: 't1',
+          title: 'Gold',
+          tagline: 'Top tier',
+          tierType: 'standard',
+        },
+        contractValue: 50000,
       })
       const items = generateActionItems([sponsor])
 
@@ -213,6 +245,40 @@ describe('generateActionItems', () => {
           priority: 2,
         }),
       )
+    })
+
+    it('needs a tier and a positive value, like the contract guards', () => {
+      const noTier = createSponsor({
+        registrationComplete: true,
+        contractValue: 50000,
+      })
+      const noValue = createSponsor({
+        registrationComplete: true,
+        tier: {
+          _id: 't1',
+          title: 'Gold',
+          tagline: 'Top tier',
+          tierType: 'standard',
+        },
+        contractValue: 0,
+      })
+      const lost = createSponsor({
+        registrationComplete: true,
+        status: 'closed-lost',
+        tier: {
+          _id: 't1',
+          title: 'Gold',
+          tagline: 'Top tier',
+          tierType: 'standard',
+        },
+        contractValue: 50000,
+      })
+
+      for (const sponsor of [noTier, noValue, lost]) {
+        expect(generateActionItems([sponsor])).not.toContainEqual(
+          expect.objectContaining({ type: 'registration-complete' }),
+        )
+      }
     })
 
     it('does not trigger when contract already sent', () => {
@@ -298,7 +364,7 @@ describe('generateActionItems', () => {
 
       expect(items).toContainEqual(
         expect.objectContaining({
-          type: 'missing-contract',
+          type: 'awaiting-signature',
           title: 'Awaiting Signature',
           priority: 4,
         }),
@@ -798,6 +864,20 @@ describe('generateActionItems', () => {
     })
   })
 
+  describe('follow-up due (priority 2)', () => {
+    it('fires once the follow-up has passed, but not for a lost deal', () => {
+      const past = { nextFollowUpAt: '2020-01-01T08:00:00Z' }
+      expect(generateActionItems([createSponsor(past)])).toContainEqual(
+        expect.objectContaining({ title: 'Follow-up Due' }),
+      )
+      expect(
+        generateActionItems([
+          createSponsor({ ...past, status: 'closed-lost' }),
+        ]),
+      ).not.toContainEqual(expect.objectContaining({ title: 'Follow-up Due' }))
+    })
+  })
+
   describe('multiple conditions for same sponsor', () => {
     it('generates multiple action items when sponsor matches several conditions', () => {
       const sponsor = createSponsor({
@@ -806,6 +886,7 @@ describe('generateActionItems', () => {
         contractValue: 50000,
         invoiceStatus: 'overdue',
         registrationComplete: true,
+        tier: { _id: 't1', title: 'Gold', tagline: '', tierType: 'standard' },
         tags: ['needs-follow-up'],
       })
       const items = generateActionItems([sponsor])

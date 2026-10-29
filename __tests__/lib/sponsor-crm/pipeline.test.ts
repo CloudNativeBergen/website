@@ -172,14 +172,27 @@ describe('aggregateSponsorPipeline', () => {
   })
 
   describe('currency handling', () => {
-    it('uses first sponsor currency as default', () => {
+    it('converts every deal to NOK before summing', () => {
       const sponsors = [
-        createSponsor({ _id: 'a', contractCurrency: 'USD' }),
-        createSponsor({ _id: 'b', contractCurrency: 'EUR' }),
+        createSponsor({
+          _id: 'a',
+          status: 'closed-won',
+          contractValue: 1000,
+          contractCurrency: 'EUR',
+        }),
+        createSponsor({
+          _id: 'b',
+          status: 'closed-won',
+          contractValue: 10000,
+          contractCurrency: 'NOK',
+        }),
       ]
       const result = aggregateSponsorPipeline(sponsors)
 
-      expect(result.contractCurrency).toBe('USD')
+      // FALLBACK_RATES: 1 EUR = 11.6 NOK
+      expect(result.totalContractValue).toBeCloseTo(21600)
+      expect(result.byStatusValue['closed-won']).toBeCloseTo(21600)
+      expect(result.contractCurrency).toBe('NOK')
     })
 
     it('defaults to NOK for empty array', () => {

@@ -18,7 +18,8 @@ import {
 } from './utils'
 import type { CrmActivityThreshold } from '@/lib/conference/types'
 import { isInvoicePastDue } from '@/lib/sponsor-crm/invoice'
-import { formatConferenceDate, osloTodayDateString } from '@/lib/time'
+import { formatConferenceDate } from '@/lib/time'
+import { isFollowUpOverdue } from '@/lib/sponsor-crm/follow-up'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import clsx from 'clsx'
 import { BoardView } from './BoardViewSwitcher'
@@ -125,7 +126,7 @@ export function getCardStatus(
   }
 
   if (sponsor.nextFollowUpAt) {
-    const overdue = sponsor.nextFollowUpAt.slice(0, 10) < osloTodayDateString()
+    const overdue = isFollowUpOverdue(sponsor.nextFollowUpAt)
     return {
       text: `Follow up ${shortDate(sponsor.nextFollowUpAt)}`,
       overdue,

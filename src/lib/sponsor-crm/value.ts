@@ -1,4 +1,9 @@
 import type { SponsorForConferenceExpanded } from './types'
+import type { SupportedCurrency } from '@/lib/travel-support/types'
+import {
+  FALLBACK_RATES,
+  convertCurrency,
+} from '@/lib/travel-support/exchange-rates'
 
 /**
  * The monetary value of a deal, ex VAT, with the currency it is denominated in.
@@ -29,4 +34,24 @@ export function calculateSponsorValue(sponsor: SponsorForConferenceExpanded): {
   }
 
   return { value, currency }
+}
+
+/**
+ * {@link calculateSponsorValue} in NOK, so deals in different currencies can be
+ * summed, compared and sorted.
+ */
+// ponytail: server code has no cached live rates (the travel-support cache is
+// localStorage), so it converts with FALLBACK_RATES. Pass live rates where a
+// caller has them.
+export function sponsorValueNOK(
+  sponsor: SponsorForConferenceExpanded,
+  rates: Record<
+    SupportedCurrency,
+    Record<SupportedCurrency, number>
+  > = FALLBACK_RATES,
+): number {
+  const { value, currency } = calculateSponsorValue(sponsor)
+  return value
+    ? convertCurrency(value, currency as SupportedCurrency, 'NOK', rates)
+    : 0
 }
