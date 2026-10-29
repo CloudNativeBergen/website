@@ -184,6 +184,8 @@ export function SponsorCommunicationRecord({
             The body of this email could not be loaded.
           </p>
         ) : (
+          // White on purpose, also in dark mode: emails are designed for a
+          // light background.
           <iframe
             title={`Email body: ${activity.subject ?? ''}`}
             sandbox=""

@@ -2,6 +2,7 @@
 'use client'
 
 import { api } from '@/lib/trpc/client'
+import { SPONSOR_STATUS_LABELS } from '@/lib/sponsor-crm/labels'
 import {
   BuildingOffice2Icon,
   ExclamationTriangleIcon,
@@ -68,8 +69,8 @@ export function SponsorOverviewWidget({
             <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
               Deal Status
             </dt>
-            <dd className="mt-1 text-sm text-gray-900 capitalize dark:text-white">
-              {(data.status || 'prospect').replace(/-/g, ' ')}
+            <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+              {SPONSOR_STATUS_LABELS[data.status || 'prospect']}
             </dd>
           </div>
           <div className="sm:col-span-1">

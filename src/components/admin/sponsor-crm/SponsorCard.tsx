@@ -18,6 +18,7 @@ import {
 } from './utils'
 import type { CrmActivityThreshold } from '@/lib/conference/types'
 import { isInvoicePastDue } from '@/lib/sponsor-crm/invoice'
+import { SIGNATURE_LABELS } from '@/lib/sponsor-crm/labels'
 import { formatConferenceDate, osloTodayDateString } from '@/lib/time'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import clsx from 'clsx'
@@ -38,13 +39,6 @@ interface SponsorCardProps {
 }
 
 const STALE_DAYS = 7
-
-const SIGNATURE_LABELS = {
-  pending: 'Awaiting signature',
-  signed: 'Signed',
-  rejected: 'Signature rejected',
-  expired: 'Signature expired',
-} as const
 
 const shortDate = (date: string) =>
   formatConferenceDate(date, { day: 'numeric', month: 'short' })
@@ -164,21 +158,16 @@ export function SponsorCard({
   const name = sponsor.sponsor.name
   const owner = sponsor.assignedTo
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    setActivatorNodeRef,
-    isDragging,
-  } = useDraggable({
-    id: sponsor._id,
-    data: {
-      type: 'sponsor',
-      sponsor,
-      sourceColumnKey: columnKey,
-    },
-    disabled: isSelectionMode || !columnKey,
-  })
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } =
+    useDraggable({
+      id: sponsor._id,
+      data: {
+        type: 'sponsor',
+        sponsor,
+        sourceColumnKey: columnKey,
+      },
+      disabled: isSelectionMode || !columnKey,
+    })
 
   const open = () => (isSelectionMode ? onToggleSelect?.() : onEdit())
 
@@ -243,7 +232,9 @@ export function SponsorCard({
           type="button"
           ref={setActivatorNodeRef}
           {...attributes}
-          aria-pressed={isSelectionMode ? isSelected : attributes['aria-pressed']}
+          aria-pressed={
+            isSelectionMode ? isSelected : attributes['aria-pressed']
+          }
           onClick={open}
           className="truncate text-left text-sm font-semibold text-gray-900 after:absolute after:inset-0 after:rounded-lg focus:outline-none dark:text-white"
         >
@@ -305,7 +296,7 @@ export function SponsorCard({
       {/* Selection checkbox */}
       <div
         className={clsx(
-          'absolute top-1 left-1 z-10 leading-none transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100',
+          'absolute top-1 left-1 z-10 leading-none transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-within:opacity-100',
           isSelected || isSelectionMode ? 'opacity-100' : 'opacity-0',
         )}
         {...stop}

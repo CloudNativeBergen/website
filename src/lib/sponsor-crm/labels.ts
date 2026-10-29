@@ -26,6 +26,14 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   cancelled: 'Cancelled',
 }
 
+/** Signature states as the sponsor card and contract widget word them. */
+export const SIGNATURE_LABELS = {
+  pending: 'Awaiting signature',
+  signed: 'Signed',
+  rejected: 'Signature rejected',
+  expired: 'Signature expired',
+} as const
+
 /**
  * One name per sponsor admin page (#1704 C2), used by the admin nav and the
  * command palette registry, the sponsors overview cards, the page headers and

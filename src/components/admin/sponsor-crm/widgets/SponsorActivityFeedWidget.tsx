@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { api } from '@/lib/trpc/client'
+import { formatDateSafe } from '@/lib/time'
 import {
   ChatBubbleLeftRightIcon,
   EnvelopeIcon,
@@ -140,7 +141,7 @@ export function SponsorActivityFeedWidget({
                             ? 'sent an email'
                             : 'added a note'}
                           <span className="ml-2 whitespace-nowrap">
-                            {new Date(activity._createdAt).toLocaleDateString()}
+                            {formatDateSafe(activity._createdAt)}
                           </span>
                         </div>
                         <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">
