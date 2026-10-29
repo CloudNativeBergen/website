@@ -158,6 +158,7 @@ export function SponsorBulkActions({
           <button
             onClick={onClearSelection}
             disabled={isProcessing}
+            aria-label="Clear selection"
             className="cursor-pointer rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800"
           >
             <XMarkIcon className="h-5 w-5" />

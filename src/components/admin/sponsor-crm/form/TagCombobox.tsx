@@ -54,6 +54,7 @@ export function TagCombobox({ value, onChange }: TagComboboxProps) {
                       e.stopPropagation()
                       removeTag(tagValue)
                     }}
+                    aria-label={`Remove tag ${tag?.label || tagValue}`}
                     className="cursor-pointer rounded-full p-0.5 hover:bg-indigo-200 dark:hover:bg-indigo-900/50"
                   >
                     <XMarkIcon className="h-3 w-3" />

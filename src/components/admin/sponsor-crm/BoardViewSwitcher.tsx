@@ -38,6 +38,8 @@ export function BoardViewSwitcher({
           <button
             key={view.key}
             onClick={() => onViewChange(view.key)}
+            aria-label={view.label}
+            aria-pressed={isActive}
             className={clsx(
               'flex h-full items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors',
               isActive

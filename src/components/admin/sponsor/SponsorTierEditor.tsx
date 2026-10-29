@@ -578,6 +578,7 @@ function SponsorTierModal({
                     <button
                       type="button"
                       onClick={() => removePrice(index)}
+                      aria-label={`Remove price ${index + 1}`}
                       disabled={isLoading}
                       className="cursor-pointer rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50"
                     >
@@ -640,6 +641,7 @@ function SponsorTierModal({
                         <button
                           type="button"
                           onClick={() => removePerk(index)}
+                          aria-label={`Remove perk ${index + 1}`}
                           disabled={isLoading}
                           className="cursor-pointer rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50"
                         >
