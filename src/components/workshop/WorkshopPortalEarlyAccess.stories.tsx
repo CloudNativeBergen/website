@@ -162,20 +162,20 @@ const mobile = (story: Story): Story => ({
 })
 
 const OFFERS = ['Available Workshops', 'Full Workshops']
-const sections = (canvasElement: HTMLElement) =>
+/**
+ * Banners and the workshop list's sections are both h2. The list's section
+ * headings are a fixed set; every other h2 is a banner, so an unexpected
+ * heading still fails one of the two assertions.
+ */
+const LIST_SECTIONS = ['Your Workshops', ...OFFERS]
+const headings2 = (canvasElement: HTMLElement) =>
   within(canvasElement)
     .queryAllByRole('heading', { level: 2 })
-    .map((heading) => heading.textContent)
-/**
- * The headings of the banners shown. (A workshop's card has a heading of the
- * same level: those are the workshops' titles, and are left out.)
- */
-const WORKSHOP_TITLES = WORKSHOPS.map((each) => each.title)
+    .map((heading) => heading.textContent?.trim() ?? '')
+const sections = (canvasElement: HTMLElement) =>
+  headings2(canvasElement).filter((h) => LIST_SECTIONS.includes(h))
 const banners = (canvasElement: HTMLElement) =>
-  within(canvasElement)
-    .queryAllByRole('heading', { level: 3 })
-    .map((heading) => heading.textContent ?? '')
-    .filter((heading) => !WORKSHOP_TITLES.includes(heading))
+  headings2(canvasElement).filter((h) => !LIST_SECTIONS.includes(h))
 const statuses = (canvasElement: HTMLElement) =>
   within(canvasElement)
     .queryAllByRole('status')
@@ -362,7 +362,7 @@ export const SignUpRefusedAfterRevoke: Story = {
     // The page renders again, as everyone sees it.
     await expect(
       await canvas.findByRole('heading', {
-        level: 3,
+        level: 2,
         name: 'Workshop registration is not yet open',
       }),
     ).toBeInTheDocument()
