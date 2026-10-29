@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { appRouter } from '@/server/_app'
 import {
   getSponsorForConference,
@@ -193,5 +193,74 @@ describe('updateInvoiceStatus mutation', () => {
         newStatus: 'cancelled',
       }),
     ).resolves.not.toThrow()
+  })
+
+  describe('invoice due date', () => {
+    const signed = {
+      invoiceStatus: 'not-sent' as const,
+      contractValue: 100,
+      contractCurrency: 'NOK' as const,
+      billing: { invoiceFormat: 'ehf' as const, email: 'bill@test.com' },
+      contractStatus: 'contract-signed' as const,
+    }
+
+    afterEach(() => vi.useRealTimers())
+
+    it('sets the due date 30 Oslo days after sending', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      // 23:30 UTC on 1 Oct is already 2 Oct in Oslo.
+      vi.setSystemTime(new Date('2026-10-01T23:30:00Z'))
+      vi.mocked(getSponsorForConference).mockResolvedValue({
+        sponsorForConference: makeSfc(signed),
+      })
+      await caller.sponsor.crm.updateInvoiceStatus({
+        id: 'sfc-1',
+        newStatus: 'sent',
+      })
+      // Across the end of summer time (25 Oct) the day does not shift.
+      expect(updateSponsorForConference).toHaveBeenCalledWith(
+        'sfc-1',
+        expect.objectContaining({ invoiceDueAt: '2026-11-01' }),
+      )
+    })
+
+    it('keeps an existing due date', async () => {
+      vi.mocked(getSponsorForConference).mockResolvedValue({
+        sponsorForConference: makeSfc({
+          ...signed,
+          invoiceStatus: 'overdue',
+          invoiceDueAt: '2026-01-15',
+        }),
+      })
+      await caller.sponsor.crm.updateInvoiceStatus({
+        id: 'sfc-1',
+        newStatus: 'sent',
+      })
+      const data = vi.mocked(updateSponsorForConference).mock.calls[0][1]
+      expect(data).not.toHaveProperty('invoiceDueAt')
+    })
+
+    it('crm.update sets the due date on sent unless one is set', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-03-28T12:00:00Z'))
+      vi.mocked(getSponsorForConference).mockResolvedValue({
+        sponsorForConference: makeSfc(signed),
+      })
+      await caller.sponsor.crm.update({ id: 'sfc-1', invoiceStatus: 'sent' })
+      expect(updateSponsorForConference).toHaveBeenLastCalledWith(
+        'sfc-1',
+        expect.objectContaining({ invoiceDueAt: '2026-04-27' }),
+      )
+
+      await caller.sponsor.crm.update({
+        id: 'sfc-1',
+        invoiceStatus: 'sent',
+        invoiceDueAt: '2026-05-10',
+      })
+      expect(updateSponsorForConference).toHaveBeenLastCalledWith(
+        'sfc-1',
+        expect.objectContaining({ invoiceDueAt: '2026-05-10' }),
+      )
+    })
   })
 })

@@ -123,6 +123,7 @@ export function SponsorCRMForm({
     contractStatus: (sponsor?.contractStatus || 'none') as ContractStatus,
     status: (sponsor?.status || 'prospect') as SponsorStatus,
     invoiceStatus: (sponsor?.invoiceStatus || 'not-sent') as InvoiceStatus,
+    invoiceDueAt: sponsor?.invoiceDueAt || '',
     contractValue: sponsor?.contractValue?.toString() || '',
     contractCurrency: (sponsor?.contractCurrency || 'NOK') as
       'NOK' | 'USD' | 'EUR' | 'GBP',

@@ -20,6 +20,7 @@ const defaultFormData: SponsorPipelineFormData = {
   contractStatus: 'verbal-agreement',
   status: 'negotiating',
   invoiceStatus: 'not-sent',
+  invoiceDueAt: '',
   contractValue: '100000',
   contractCurrency: 'NOK',
   tags: ['warm-lead', 'returning-sponsor'],

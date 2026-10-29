@@ -22,6 +22,7 @@ interface DealStatusSectionProps {
   onStatusChange: (value: SponsorStatus) => void
   onContractStatusChange: (value: ContractStatus) => void
   onInvoiceStatusChange: (value: InvoiceStatus) => void
+  onInvoiceDueAtChange?: (value: string) => void
 }
 
 /** An amber inline hint listing the unmet prerequisites for the next step. */
@@ -48,6 +49,7 @@ export function DealStatusSection({
   onStatusChange,
   onContractStatusChange,
   onInvoiceStatusChange,
+  onInvoiceDueAtChange,
 }: DealStatusSectionProps) {
   const state = toSponsorState(formData, sponsor)
 
@@ -113,6 +115,19 @@ export function DealStatusSection({
               : null
           }
         />
+        {onInvoiceDueAtChange &&
+          (formData.invoiceStatus === 'sent' ||
+            formData.invoiceStatus === 'overdue') && (
+            <label className="mt-2 block text-xs font-medium text-gray-700 dark:text-gray-300">
+              Due date
+              <input
+                type="date"
+                value={formData.invoiceDueAt ?? ''}
+                onChange={(e) => onInvoiceDueAtChange(e.target.value)}
+                className="mt-1 block w-full rounded-md border-0 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset focus:ring-2 focus:ring-indigo-600 dark:bg-white/5 dark:text-white dark:ring-white/10"
+              />
+            </label>
+          )}
       </div>
     </div>
   )

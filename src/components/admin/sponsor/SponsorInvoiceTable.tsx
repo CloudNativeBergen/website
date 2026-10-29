@@ -20,7 +20,7 @@ import {
   Td,
   TableEmptyState,
 } from '@/components/DataTable'
-import type { InvoiceRow } from '@/lib/sponsor-crm/invoice'
+import { isInvoicePastDue, type InvoiceRow } from '@/lib/sponsor-crm/invoice'
 import { INVOICE_STATUS_LABELS } from '@/lib/sponsor-crm/labels'
 import type { BadgeColor } from '@/components/StatusBadge'
 import type { InvoiceStatus } from '@/lib/sponsor-crm/types'
@@ -178,6 +178,19 @@ const StatusCell = ({ row }: { row: InvoiceRow }) => (
         Sent {formatDateSafe(row.invoiceSentAt)}
       </div>
     )}
+    {row.invoiceDueAt &&
+      row.invoiceStatus !== 'paid' &&
+      row.invoiceStatus !== 'cancelled' &&
+      (isInvoicePastDue(row) ? (
+        <div className="flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400">
+          <ExclamationTriangleIcon className="h-3.5 w-3.5" />
+          Overdue since {formatDateSafe(row.invoiceDueAt)}
+        </div>
+      ) : (
+        <div className="text-xs text-gray-500 dark:text-gray-400">
+          Due {formatDateSafe(row.invoiceDueAt)}
+        </div>
+      ))}
     {row.invoicePaidAt && (
       <div className="text-xs text-gray-500 dark:text-gray-400">
         Paid {formatDateSafe(row.invoicePaidAt)}
@@ -211,7 +224,11 @@ export function SponsorInvoiceTable({
         {rows.map((row) => (
           <div
             key={row.sponsorForConferenceId}
-            className="rounded-lg border border-gray-200 bg-white p-4 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900"
+            className={`rounded-lg border bg-white p-4 text-sm shadow-sm dark:bg-gray-900 ${
+              isInvoicePastDue(row)
+                ? 'border-red-300 dark:border-red-800'
+                : 'border-gray-200 dark:border-gray-700'
+            }`}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -266,7 +283,14 @@ export function SponsorInvoiceTable({
           </TableHeader>
           <TableBody>
             {rows.map((row) => (
-              <Tr key={row.sponsorForConferenceId}>
+              <Tr
+                key={row.sponsorForConferenceId}
+                className={
+                  isInvoicePastDue(row)
+                    ? 'bg-red-50 dark:bg-red-900/10'
+                    : undefined
+                }
+              >
                 <Td>
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-gray-900 dark:text-white">

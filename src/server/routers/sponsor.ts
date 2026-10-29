@@ -204,7 +204,10 @@ import { generateContractPdf } from '@/lib/sponsor-crm/contract-pdf'
 import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
 import { auditSponsorHealth } from '@/lib/sponsor-crm/health'
 import { isBillingComplete } from '@/lib/sponsor-crm/billing'
-import { evaluateInvoiceReadiness } from '@/lib/sponsor-crm/invoice'
+import {
+  defaultInvoiceDueDate,
+  evaluateInvoiceReadiness,
+} from '@/lib/sponsor-crm/invoice'
 import {
   canTransition,
   checkPipelineState,
@@ -1702,6 +1705,13 @@ export const sponsorRouter = router({
           if (updateData.invoiceStatus === 'sent' && !existing.invoiceSentAt) {
             updateData.invoiceSentAt = getCurrentDateTime()
           }
+          if (
+            updateData.invoiceStatus === 'sent' &&
+            !existing.invoiceDueAt &&
+            !updateData.invoiceDueAt
+          ) {
+            updateData.invoiceDueAt = defaultInvoiceDueDate()
+          }
           if (updateData.invoiceStatus === 'paid' && !existing.invoicePaidAt) {
             updateData.invoicePaidAt = getCurrentDateTime()
           }
@@ -1713,6 +1723,7 @@ export const sponsorRouter = router({
             updateData.invoiceStatus === 'cancelled'
           ) {
             updateData.invoiceSentAt = null
+            updateData.invoiceDueAt = null
           }
         }
 
@@ -1936,6 +1947,7 @@ export const sponsorRouter = router({
         const updateData: Partial<{
           invoiceStatus: string
           invoiceSentAt: string | null
+          invoiceDueAt: string | null
           invoicePaidAt: string | null
         }> = {
           invoiceStatus: input.newStatus,
@@ -1943,6 +1955,9 @@ export const sponsorRouter = router({
 
         if (input.newStatus === 'sent' && !existing.invoiceSentAt) {
           updateData.invoiceSentAt = getCurrentDateTime()
+        }
+        if (input.newStatus === 'sent' && !existing.invoiceDueAt) {
+          updateData.invoiceDueAt = defaultInvoiceDueDate()
         }
         if (input.newStatus === 'paid' && !existing.invoicePaidAt) {
           updateData.invoicePaidAt = getCurrentDateTime()
@@ -1953,6 +1968,7 @@ export const sponsorRouter = router({
         }
         if (input.newStatus === 'not-sent' || input.newStatus === 'cancelled') {
           updateData.invoiceSentAt = null
+          updateData.invoiceDueAt = null
         }
 
         const { sponsorForConference, error } =

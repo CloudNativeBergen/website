@@ -2,6 +2,8 @@ import type { SponsorForConferenceExpanded } from './types'
 import { type ActionItemType } from '@/components/admin/sponsor-crm/utils'
 import { calculateSponsorValue } from './value'
 import { formatNumber } from '@/lib/format'
+import { formatDateSafe } from '@/lib/time'
+import { isInvoicePastDue } from './invoice'
 
 export interface ActionItem {
   id: string
@@ -46,15 +48,19 @@ export function generateActionItems(
     const link = `/admin/sponsors/${sponsor._id}?view=pipeline`
     const name = sponsor.sponsor.name
 
-    // Priority 1: Overdue invoices
-    if (sponsor.invoiceStatus === 'overdue') {
+    // Priority 1: Overdue invoices, including sent ones past their due date.
+    // A past-due invoice only suggests marking it; the status is left alone.
+    const pastDue = isInvoicePastDue(sponsor, now)
+    if (sponsor.invoiceStatus === 'overdue' || pastDue) {
       actions.push({
         id: `${sponsor._id}-overdue`,
         type: 'overdue',
         title: 'Invoice Overdue',
         sponsor: { id: sponsor._id, name },
         assignedTo,
-        description: `Invoice is overdue for ${name}`,
+        description: pastDue
+          ? `Invoice overdue since ${formatDateSafe(sponsor.invoiceDueAt!)}. Mark overdue.`
+          : `Invoice is overdue for ${name}`,
         priority: 1,
         link,
       })
@@ -109,21 +115,32 @@ export function generateActionItems(
       }
     }
 
-    // Priority 2: Invoice not sent for closed deals with signed contract
+    // Priority 2: Invoice not sent for closed deals with signed contract.
+    // Signed more than 7 days ago without an invoice: flagged on any deal
+    // and raised in priority.
+    const signedAt = sponsor.contractSignedAt
+      ? new Date(sponsor.contractSignedAt)
+      : null
+    const staleSigned = !!signedAt && signedAt < sevenDaysAgo
     if (
-      sponsor.status === 'closed-won' &&
-      sponsor.contractValue &&
       sponsor.contractStatus === 'contract-signed' &&
-      sponsor.invoiceStatus === 'not-sent'
+      sponsor.invoiceStatus === 'not-sent' &&
+      (staleSigned ||
+        (sponsor.status === 'closed-won' && sponsor.contractValue))
     ) {
+      const days = signedAt
+        ? Math.floor((now.getTime() - signedAt.getTime()) / 86_400_000)
+        : 0
       actions.push({
         id: `${sponsor._id}-needs-invoice`,
         type: 'needs-invoice',
         title: 'Invoice Not Sent',
         sponsor: { id: sponsor._id, name },
         assignedTo,
-        description: `Invoice not yet sent to ${name}`,
-        priority: 2,
+        description: staleSigned
+          ? `Signed ${days} days ago, no invoice sent`
+          : `Invoice not yet sent to ${name}`,
+        priority: staleSigned ? 1.8 : 2,
         link,
       })
     }

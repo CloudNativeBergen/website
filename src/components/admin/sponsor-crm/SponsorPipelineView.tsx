@@ -39,6 +39,7 @@ export interface SponsorPipelineFormData {
   contractStatus: ContractStatus
   status: SponsorStatus
   invoiceStatus: InvoiceStatus
+  invoiceDueAt: string
   contractValue: string
   contractCurrency: 'NOK' | 'USD' | 'EUR' | 'GBP'
   tags: SponsorTag[]
@@ -189,6 +190,9 @@ export function SponsorPipelineView({
             }
             onInvoiceStatusChange={(invoiceStatus) =>
               onFormDataChange((prev) => ({ ...prev, invoiceStatus }))
+            }
+            onInvoiceDueAtChange={(invoiceDueAt) =>
+              onFormDataChange((prev) => ({ ...prev, invoiceDueAt }))
             }
           />
         </Section>
