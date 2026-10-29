@@ -9,13 +9,15 @@ import { NextRequest } from 'next/server'
 const h = vi.hoisted(() => ({
   docs: [] as Array<Record<string, string>>,
   alert: vi.fn(),
+  query: '',
 }))
 
 // A tiny store: the query's `nextFollowUpAt != followUpAlertedFor` filter,
 // and a patch that stamps the doc.
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
-    fetch: async () =>
+    fetch: async (query: string) =>
+      (h.query = query) &&
       h.docs.filter(
         (d) => d.nextFollowUpAt && d.nextFollowUpAt !== d.followUpAlertedFor,
       ),
@@ -74,5 +76,11 @@ describe('api/cron/sponsor-follow-ups', () => {
     h.docs[0].nextFollowUpAt = '2021-01-01'
     await run()
     expect(h.alert).toHaveBeenCalledTimes(2)
+  })
+
+  it('skips closed-lost sponsors but keeps closed-won ones', async () => {
+    await run()
+    expect(h.query).toContain('status != "closed-lost"')
+    expect(h.query).not.toContain('closed-won')
   })
 })

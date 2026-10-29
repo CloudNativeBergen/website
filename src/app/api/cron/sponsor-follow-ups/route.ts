@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
       // resolves its tenant (channel, token, domain) off the sponsor's own
       // conference.
       `*[_type == "sponsorForConference"
+        && status != "closed-lost"
         && defined(nextFollowUpAt)
         && nextFollowUpAt != followUpAlertedFor
       ]{ _id, _rev, nextFollowUpAt }`,
