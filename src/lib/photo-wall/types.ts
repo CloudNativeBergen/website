@@ -54,6 +54,8 @@ export interface PhotoWallAdminView {
   wall: PhotoWall | null
   /** Whether a Submit now would find posting open, and if not why (§7). */
   posting: PostingState
+  /** The conference's first day, when posting is `notYetOpen`: when it opens (§7). */
+  opensOn?: string
   links: PhotoWallLinks
   /**
    * How many photos the consented ZIP export would hold now (P5); unknown

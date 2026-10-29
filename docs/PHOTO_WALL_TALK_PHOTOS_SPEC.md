@@ -204,7 +204,7 @@ tag of a post on the wall doesn't take it off.
 - **Unknown or missing room:** ignored; the picker behaves as in §6.1.
 - **Precedence:** a matching URL room beats the `sessionStorage` room for
   that visit and is then stored, so the next post keeps it.
-- **Admin:** the Links card on `/admin/photo-wall` lists one QR per room in
+- **Admin:** the Links card on `/admin/photo-wall/setup` lists one QR per room in
   the conference's schedule, each with its room name, and a PNG download with
   the name printed under the code.
 - **Privacy:** nothing new is stored on the server. The room lives in the

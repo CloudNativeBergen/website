@@ -99,9 +99,12 @@ async function adminView(
   conference: Conference,
   wall: PhotoWall | null,
 ): Promise<PhotoWallAdminView> {
+  const posting = wall ? postingState(wall, conference, new Date()) : 'paused'
   return {
     wall,
-    posting: wall ? postingState(wall, conference, new Date()) : 'paused',
+    posting,
+    ...(posting === 'notYetOpen' &&
+      conference.startDate && { opensOn: conference.startDate }),
     links: photoWallLinks(conference),
     marketingExportCount: wall ? await exportCount(conference._id) : 0,
   }

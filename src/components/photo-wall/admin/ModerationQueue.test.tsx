@@ -79,7 +79,7 @@ vi.mock('@/components/feedback/useFeedbackQrPng', () => ({
 }))
 
 import { ModerationQueue, ModerationQueueView } from './ModerationQueue'
-import { PendingSummary, PendingSummaryView } from './PendingSummary'
+import { PendingSummaryView } from './PendingSummary'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 import { MODERATION_POLL_MS, moderationQueuePolling } from './polling'
 
@@ -500,7 +500,7 @@ describe('ModerationQueue, connected', () => {
   })
 })
 
-describe('the live pending count at the top of the page (§10)', () => {
+describe('the live pending count beside the queue heading (§10)', () => {
   const VIEW: PhotoWallAdminView = {
     wall: {
       _id: 'photoWall-conf-A',
@@ -524,8 +524,12 @@ describe('the live pending count at the top of the page (§10)', () => {
       view={view}
       onSetUp={() => {}}
       onChange={() => {}}
-      summary={<PendingSummaryView pending={queue.posts.length} />}
-      queue={<ModerationQueueView queue={queue} />}
+      queue={
+        <ModerationQueueView
+          queue={queue}
+          summary={<PendingSummaryView pending={queue.posts.length} />}
+        />
+      }
     />
   )
 
@@ -537,24 +541,22 @@ describe('the live pending count at the top of the page (§10)', () => {
     // Announced without interrupting the organizer.
     expect(count()).toHaveAttribute('aria-live', 'polite')
     expect(count()).toHaveAttribute('aria-atomic', 'true')
-    expect(screen.getByRole('link', { name: 'Review' })).toBeInTheDocument()
     rerender(<PendingSummaryView pending={1} />)
     expect(count()).toHaveTextContent(/^1 photo waiting$/)
     rerender(<PendingSummaryView pending={0} />)
     expect(summary).toHaveTextContent(/^Nothing waiting for approval$/)
-    expect(screen.queryByRole('link', { name: 'Review' })).toBeNull()
     rerender(<PendingSummaryView />)
     expect(summary).toHaveTextContent(/^$/)
   })
 
-  it("sits under the page header, above Settings, as the page's one live count", () => {
+  it("sits in the queue, straight under the header, as the page's one live count", () => {
     const { container } = render(page(VIEW, pending(3)))
     const summary = screen.getByTestId('pending-summary')
-    const settings = screen.getByRole('region', { name: 'Settings' })
-    expect(
-      summary.compareDocumentPosition(settings) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Posts' })).toContainElement(
+      summary,
+    )
+    // Settings are on the Setup page now.
+    expect(screen.queryByRole('region', { name: 'Settings' })).toBeNull()
     // Every live region on the page that says anything about the count.
     const live = [
       ...container.querySelectorAll('[aria-live], [role="status"]'),
@@ -573,22 +575,6 @@ describe('the live pending count at the top of the page (§10)', () => {
     expect(screen.queryAllByRole('tab')).toHaveLength(0)
   })
 
-  it('Review selects and focuses the Pending tab of the queue', () => {
-    const scrollIntoView = vi.fn()
-    Element.prototype.scrollIntoView = scrollIntoView
-    render(page(VIEW, QUEUE))
-    fireEvent.click(tab(/Not shown/))
-    expect(tab(/Pending/)).toHaveAttribute('aria-selected', 'false')
-    const review = screen.getByRole('link', { name: 'Review' })
-    expect(review).toHaveAttribute('href', '#photo-wall-posts')
-    fireEvent.click(review)
-    expect(tab(/Pending/)).toHaveAttribute('aria-selected', 'true')
-    expect(tab(/Pending/)).toHaveFocus()
-    expect(scrollIntoView.mock.contexts[0]).toBe(
-      screen.getByRole('region', { name: 'Posts' }),
-    )
-  })
-
   it("reads the queue's own query: one read per tick with both on the page", async () => {
     vi.useFakeTimers()
     const queryFn = vi.fn(async () => QUEUE)
@@ -599,7 +585,6 @@ describe('the live pending count at the top of the page (§10)', () => {
     )
     render(
       <QueryClientProvider client={appQueryClient()}>
-        <PendingSummary />
         <ModerationQueue />
       </QueryClientProvider>,
     )
@@ -627,7 +612,6 @@ describe('the count says when it is not current (§10)', () => {
     )
     render(
       <QueryClientProvider client={appQueryClient()}>
-        <PendingSummary />
         <ModerationQueue />
       </QueryClientProvider>,
     )
@@ -705,6 +689,22 @@ describe('the count says when it is not current (§10)', () => {
     expect(live()).toHaveTextContent(
       /^Couldn’t load the count\. Trying again…$/,
     )
+  })
+})
+
+describe('an empty Pending tab says when posting is shut (§7)', () => {
+  it.each([
+    [undefined, /^Nothing waiting\. New posts show up here/],
+    ['open', /^Nothing waiting\. New posts show up here/],
+    [
+      'paused',
+      /^Nothing waiting\. Posting is paused, so no new photos come in\.$/,
+    ],
+    ['notYetOpen', /^Nothing waiting\. Posting hasn’t opened yet\.$/],
+    ['ended', /^Nothing waiting\. Posting is closed\.$/],
+  ] as const)('posting %s', (posting, text) => {
+    render(<ModerationQueueView queue={{ posts: [] }} posting={posting} />)
+    expect(screen.getByRole('tabpanel')).toHaveTextContent(text)
   })
 })
 

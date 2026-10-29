@@ -1,9 +1,11 @@
 'use client'
 
 import { useId, useState, type ReactNode } from 'react'
+import Link from 'next/link'
 import {
   ArrowDownTrayIcon,
   ArrowTopRightOnSquareIcon,
+  Cog6ToothIcon,
   PhotoIcon,
 } from '@heroicons/react/24/outline'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
@@ -13,6 +15,7 @@ import {
   feedbackCodeDisplayUrl,
   renderFeedbackQrPng,
 } from '@/lib/feedback/code-assets'
+import { formatConferenceDateShort } from '@/lib/time'
 import type {
   PhotoWallAdminView,
   PhotoWallLinks,
@@ -29,6 +32,11 @@ export const BUTTON =
 
 export interface PhotoWallAdminProps {
   view: PhotoWallAdminView
+  /**
+   * `/admin/photo-wall/setup`: settings, links and the export. Otherwise
+   * `/admin/photo-wall`: the moderation queue straight under the header.
+   */
+  setup?: boolean
   conferenceTitle?: string
   /** The schedule's rooms, one QR each (Talk photos spec §6.4). */
   rooms?: string[]
@@ -40,21 +48,22 @@ export interface PhotoWallAdminProps {
   pending?: PhotoWallSettingsChange
   /** The last Set up or change failed. */
   failed?: boolean
-  /** The moderation queue (M4a), shown under the settings once the wall is set up. */
+  /** The moderation queue (M4a), under the header once the wall is set up. */
   queue?: ReactNode
-  /** The live pending count (M4a), under the page header once the wall is set up. */
-  summary?: ReactNode
-  /** The consented ZIP export (P5), under the queue once the wall is set up. */
+  /** The consented ZIP export (P5), on Setup once the wall is set up. */
   marketingExport?: ReactNode
 }
 
 /**
- * `/admin/photo-wall` (Photo Wall spec §10), M1: Set up, the Posting and
- * Sponsor strip switches, and the links with the posting QR. One column on a
+ * `/admin/photo-wall` and its Setup page (Photo Wall spec §10). The header
+ * carries the posting status with a quick Pause or Open on both. The main
+ * page is the queue; Setup holds the Posting and Sponsor strip switches, the
+ * Wall Look, the links with the posting QR and the export. One column on a
  * phone, settings and links side by side on a wide screen.
  */
 export function PhotoWallAdmin({
   view,
+  setup = false,
   conferenceTitle,
   rooms = [],
   onSetUp,
@@ -63,67 +72,156 @@ export function PhotoWallAdmin({
   pending,
   failed = false,
   queue,
-  summary,
   marketingExport,
 }: PhotoWallAdminProps) {
   const wall = view.wall && pending ? { ...view.wall, ...pending } : view.wall
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        icon={<PhotoIcon />}
-        title="Photo Wall"
-        description="Attendees post photos from their phones. Nothing appears until an organizer approves it."
+        icon={setup ? <Cog6ToothIcon /> : <PhotoIcon />}
+        title={setup ? 'Photo Wall setup' : 'Photo Wall'}
+        description={
+          setup
+            ? 'Posting, the screens’ look, and the links and QR codes to share.'
+            : 'Attendees post photos from their phones. Nothing appears until an organizer approves it.'
+        }
         contextHighlight={conferenceTitle}
-      />
-      {wall ? summary : null}
-      {wall ? (
-        <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-          <section aria-labelledby="photo-wall-settings" className={CARD}>
-            <div className="flex items-baseline justify-between gap-4">
-              <h2
-                id="photo-wall-settings"
-                className="text-base font-semibold text-gray-900 dark:text-white"
-              >
-                Settings
-              </h2>
-              <p
-                role="status"
-                className="text-sm text-gray-500 dark:text-gray-400"
-              >
-                {saving ? 'Saving…' : ''}
-              </p>
-            </div>
-            {/* In the card, next to the switch just pressed: on a phone the
-                page top may be out of sight. */}
-            {failed && <SaveFailed />}
-            <div className="mt-4 divide-y divide-gray-200 dark:divide-gray-700">
-              <PostingSetting
-                mode={wall.postingMode}
-                // Until the server answers, why posting is open or closed is
-                // not known yet.
-                state={pending?.postingMode ? 'saving' : view.posting}
-                saving={saving}
+        backLink={
+          setup ? { href: '/admin/photo-wall', label: 'Photo Wall' } : undefined
+        }
+        actions={
+          wall ? (
+            <>
+              <PostingChip
+                view={view}
+                saving={saving || Boolean(pending?.postingMode)}
                 onChange={(postingMode) => onChange({ postingMode })}
               />
-              <SponsorStripSetting
-                on={wall.sponsorStrip}
-                saving={saving}
-                onChange={(sponsorStrip) => onChange({ sponsorStrip })}
-              />
-              <WallLookSetting
-                look={wall.look}
-                saving={saving}
-                onChange={(look) => onChange({ look })}
-              />
-            </div>
-          </section>
-          <WallLinks links={view.links} rooms={rooms} />
-        </div>
-      ) : (
+              {!setup && (
+                <Link href="/admin/photo-wall/setup" className={BUTTON}>
+                  <Cog6ToothIcon className="size-4" aria-hidden="true" />
+                  Setup
+                </Link>
+              )}
+            </>
+          ) : undefined
+        }
+      />
+      {!wall ? (
         <SetUp onSetUp={onSetUp} saving={saving} failed={failed} />
+      ) : !setup ? (
+        <>
+          {failed && <SaveFailed />}
+          {queue}
+        </>
+      ) : (
+        <>
+          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+            <section aria-labelledby="photo-wall-settings" className={CARD}>
+              <div className="flex items-baseline justify-between gap-4">
+                <h2
+                  id="photo-wall-settings"
+                  className="text-base font-semibold text-gray-900 dark:text-white"
+                >
+                  Settings
+                </h2>
+                <p
+                  role="status"
+                  className="text-sm text-gray-500 dark:text-gray-400"
+                >
+                  {saving ? 'Saving…' : ''}
+                </p>
+              </div>
+              {/* In the card, next to the switch just pressed: on a phone the
+                page top may be out of sight. */}
+              {failed && <SaveFailed />}
+              <div className="mt-4 divide-y divide-gray-200 dark:divide-gray-700">
+                <PostingSetting
+                  mode={wall.postingMode}
+                  // Until the server answers, why posting is open or closed is
+                  // not known yet.
+                  state={pending?.postingMode ? 'saving' : view.posting}
+                  saving={saving}
+                  onChange={(postingMode) => onChange({ postingMode })}
+                />
+                <SponsorStripSetting
+                  on={wall.sponsorStrip}
+                  saving={saving}
+                  onChange={(sponsorStrip) => onChange({ sponsorStrip })}
+                />
+                <WallLookSetting
+                  look={wall.look}
+                  saving={saving}
+                  onChange={(look) => onChange({ look })}
+                />
+              </div>
+            </section>
+            <WallLinks links={view.links} rooms={rooms} />
+          </div>
+          {marketingExport}
+        </>
       )}
-      {wall ? queue : null}
-      {wall ? marketingExport : null}
+    </div>
+  )
+}
+
+/** The header's posting status (§7), and the one switch most often needed. */
+function PostingChip({
+  view,
+  saving,
+  onChange,
+}: {
+  view: PhotoWallAdminView
+  saving: boolean
+  onChange: (mode: PostingMode) => void
+}) {
+  const state = view.posting
+  const label =
+    state === 'open'
+      ? view.wall?.postingMode === 'auto'
+        ? 'Open (automatic)'
+        : 'Open'
+      : state === 'paused'
+        ? 'Paused'
+        : state === 'notYetOpen'
+          ? view.opensOn
+            ? `Automatic, opens ${formatConferenceDateShort(view.opensOn)}`
+            : 'Automatic, not open yet'
+          : 'Closed'
+  // Open does not beat an ended conference or a closed wall (§7).
+  const next: PostingMode | null =
+    state === 'open'
+      ? 'paused'
+      : state === 'ended' || state === 'noEndDate' || state === 'closed'
+        ? null
+        : 'open'
+  return (
+    <div className="flex items-center gap-2">
+      <p
+        className={`inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium ring-1 ${
+          state === 'open'
+            ? 'bg-green-50 text-green-800 ring-green-600/30 dark:bg-green-400/10 dark:text-green-300 dark:ring-green-400/30'
+            : 'bg-gray-50 text-gray-700 ring-gray-300 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600'
+        }`}
+      >
+        <span
+          aria-hidden="true"
+          className={`size-2 rounded-full ${state === 'open' ? 'bg-green-600' : 'bg-gray-400'}`}
+        />
+        Posting: {label}
+      </p>
+      {next && (
+        <button
+          type="button"
+          // Not `disabled`, which would drop focus; a press while saving
+          // changes nothing.
+          aria-disabled={saving || undefined}
+          onClick={() => !saving && onChange(next)}
+          className={`${BUTTON} aria-disabled:cursor-wait`}
+        >
+          {next === 'paused' ? 'Pause posting' : 'Open posting'}
+        </button>
+      )}
     </div>
   )
 }
