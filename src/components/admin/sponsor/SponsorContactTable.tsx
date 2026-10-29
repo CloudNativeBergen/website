@@ -61,7 +61,7 @@ const CopyEmailButton = ({ email }: { email: string }) => {
   return (
     <button
       onClick={() => copyToClipboard(email)}
-      className="ml-2 cursor-pointer p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+      className="ml-2 cursor-pointer p-2 text-gray-400 transition-colors hover:text-gray-600 sm:p-1 dark:text-gray-500 dark:hover:text-gray-300"
       title={copied ? 'Copied!' : 'Copy email'}
       aria-label={copied ? 'Copied' : `Copy ${email}`}
     >
@@ -270,7 +270,7 @@ export function SponsorContactTable({
         )}
       </ModalShell>
 
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 lg:hidden">
         {contactRows.map((row, index) => (
           <div
             key={`${row.sfc._id}-${row.contact._key}-${index}`}
@@ -305,7 +305,7 @@ export function SponsorContactTable({
               </div>
               <button
                 onClick={() => handleStartEdit(row.sfc)}
-                className="inline-flex shrink-0 cursor-pointer items-center rounded p-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                className="inline-flex shrink-0 cursor-pointer items-center rounded p-2 text-blue-600 hover:bg-blue-50 sm:p-1 dark:text-blue-400 dark:hover:bg-blue-900/20"
                 title="Manage contacts"
                 aria-label={`Manage contacts for ${row.sfc.sponsor.name}`}
               >
@@ -400,7 +400,7 @@ export function SponsorContactTable({
         ))}
       </div>
 
-      <TableContainer className="hidden md:block">
+      <TableContainer className="hidden lg:block">
         <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
           <TableHeader>
             <tr>
@@ -529,7 +529,7 @@ export function SponsorContactTable({
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleStartEdit(row.sfc)}
-                        className="inline-flex cursor-pointer items-center rounded p-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                        className="inline-flex cursor-pointer items-center rounded p-2 text-blue-600 hover:bg-blue-50 sm:p-1 dark:text-blue-400 dark:hover:bg-blue-900/20"
                         title="Manage contacts"
                         aria-label={`Manage contacts for ${row.sfc.sponsor.name}`}
                       >

@@ -20,7 +20,7 @@ export function nameMatchedCodes<T extends CodeOption>(
 }
 
 const SMALL_BUTTON =
-  'rounded-md px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-300 ring-inset hover:bg-gray-50 disabled:opacity-50 dark:text-gray-300 dark:ring-white/10 dark:hover:bg-white/10'
+  'min-h-10 rounded-md px-2 py-1 text-xs sm:min-h-0 font-medium text-gray-600 ring-1 ring-gray-300 ring-inset hover:bg-gray-50 disabled:opacity-50 dark:text-gray-300 dark:ring-white/10 dark:hover:bg-white/10'
 
 /**
  * The sponsor panel's ticket discount codes (#1704 T1): the codes stored on
@@ -107,7 +107,7 @@ export function SponsorTicketsBlock({
                   type="button"
                   onClick={() => void copyToClipboard(code)}
                   aria-label={`Copy discount code ${code}`}
-                  className="rounded p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  className="rounded p-2 text-gray-400 hover:text-gray-600 sm:p-1 dark:hover:text-gray-300"
                 >
                   <ClipboardIcon aria-hidden className="size-4" />
                 </button>

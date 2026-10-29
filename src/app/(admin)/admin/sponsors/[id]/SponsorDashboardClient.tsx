@@ -143,7 +143,7 @@ export function SponsorDashboardClient({
               </div>
             </div>
 
-            <div className="flex h-[calc(100vh-12rem)] flex-col gap-8 lg:col-span-2">
+            <div className="flex flex-col gap-8 lg:col-span-2 lg:h-[calc(100vh-12rem)]">
               <div id="contract" className="scroll-mt-4">
                 <SponsorContractWidget
                   sponsorId={sponsorId}

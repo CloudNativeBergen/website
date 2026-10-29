@@ -28,7 +28,7 @@ const mockOverview = {
   sponsor: {
     _id: 'sponsor-1',
     name: 'Acme Corp',
-    logo: 'https://via.placeholder.com/150',
+    logo: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="8" fill="#1d4ed8"/><text x="24" y="31" font-size="20" text-anchor="middle" fill="#fff" font-family="sans-serif">AC</text></svg>',
   },
   status: 'negotiating',
   tier: { title: 'Gold Tier', price: 10000 },

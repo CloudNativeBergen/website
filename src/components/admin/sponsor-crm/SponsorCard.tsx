@@ -317,7 +317,7 @@ export function SponsorCard({
         <Menu>
           <MenuButton
             aria-label={`Options for ${name}`}
-            className="flex items-center rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+            className="flex items-center rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 sm:p-1 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
           >
             <EllipsisHorizontalIcon className="h-5 w-5" />
           </MenuButton>

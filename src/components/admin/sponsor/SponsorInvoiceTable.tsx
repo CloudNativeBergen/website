@@ -75,7 +75,7 @@ const CopyValueButton = ({ value, what }: { value: string; what: string }) => {
     <button
       type="button"
       onClick={() => copyToClipboard(value)}
-      className="ml-1.5 cursor-pointer p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+      className="ml-1.5 cursor-pointer p-2 text-gray-400 transition-colors hover:text-gray-600 sm:p-1 dark:text-gray-500 dark:hover:text-gray-300"
       title={copied ? 'Copied!' : `Copy ${what.toLowerCase()}`}
       aria-label={copied ? 'Copied' : `Copy ${what.toLowerCase()}: ${value}`}
     >
@@ -230,7 +230,7 @@ const ACTION_NAME: Partial<Record<InvoiceStatus, (name: string) => string>> = {
 }
 
 const actionButtonClass =
-  'cursor-pointer rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-wait disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+  'cursor-pointer rounded-md border border-gray-300 bg-white px-3 py-1 min-h-10 text-xs font-medium text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 disabled:cursor-wait disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
 
 /**
  * Moves one invoice to its next status through `sponsor.crm.update`, the path
@@ -341,7 +341,7 @@ const InvoiceActions = ({ row }: { row: InvoiceRow }) => {
           ))}
           <Menu as="div" className="relative">
             <MenuButton
-              className="cursor-pointer rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+              className="cursor-pointer rounded p-2 text-gray-500 hover:bg-gray-100 sm:p-1 dark:text-gray-400 dark:hover:bg-gray-800"
               aria-label={`More invoice actions for ${name}`}
               disabled={busy}
             >
@@ -420,7 +420,7 @@ export function SponsorInvoiceTable({
               </div>
               <Link
                 href={crmLink(row.sponsorForConferenceId)}
-                className="shrink-0 rounded p-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                className="shrink-0 rounded p-2 text-blue-600 hover:bg-blue-50 sm:p-1 dark:text-blue-400 dark:hover:bg-blue-900/20"
                 title="Open in CRM"
                 aria-label={`Open ${row.sponsorName} in the CRM`}
               >

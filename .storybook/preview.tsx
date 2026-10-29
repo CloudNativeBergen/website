@@ -186,11 +186,11 @@ const preview: Preview = {
     SessionDecorator,
     ((Story, context) => {
       const theme = context.globals.theme || 'light'
+      // Match the app: `dark` goes on <html>, so portalled dialogs get it too.
+      document.documentElement.classList.toggle('dark', theme === 'dark')
       return (
-        <div className={theme === 'dark' ? 'dark' : ''}>
-          <div className="bg-white p-8 dark:bg-gray-900">
-            <Story />
-          </div>
+        <div className="bg-white p-8 dark:bg-gray-900">
+          <Story />
         </div>
       )
     }) as Decorator,
