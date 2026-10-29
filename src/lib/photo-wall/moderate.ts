@@ -148,6 +148,8 @@ export const APPROVE_ALL_BUDGET_MS = 30_000
 export interface ApproveAllResult {
   /** How many it approved. */
   approved: number
+  /** The ids it approved (acknowledged writes only): what an Undo takes back. */
+  approvedIds: string[]
   /** How many of the posts asked for were pending on this wall when pressed. */
   pending: number
   /**
@@ -221,12 +223,18 @@ export async function approveAllPending({
     )
   })
   if (rows.length && (await isWallClosed(conferenceId))) {
-    return { approved: 0, pending: rows.length, deviceKeys: [], talkIds: [] }
+    return {
+      approved: 0,
+      approvedIds: [],
+      pending: rows.length,
+      deviceKeys: [],
+      talkIds: [],
+    }
   }
   const set = patchFor('approve', now.toISOString())
   const deviceKeys = new Set<string>()
   const talkIds = new Set<string>()
-  let approved = 0
+  const approvedIds: string[] = []
   let next = 0
 
   const worker = async () => {
@@ -247,14 +255,15 @@ export async function approveAllPending({
         }
         continue
       }
-      approved += 1
+      approvedIds.push(row._id)
     }
   }
   await Promise.all(
     Array.from({ length: APPROVE_ALL_CONCURRENCY }, () => worker()),
   )
   return {
-    approved,
+    approved: approvedIds.length,
+    approvedIds,
     pending: rows.length,
     deviceKeys: [...deviceKeys],
     talkIds: [...talkIds],

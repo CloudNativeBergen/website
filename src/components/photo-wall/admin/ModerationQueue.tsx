@@ -193,7 +193,9 @@ export interface ModerationQueueViewProps {
    * Approve all pending of these posts (the Pending cards shown); without it
    * the Pending tab has no such button.
    */
-  onApproveAll?: (posts: ModerationPost[]) => Promise<{ approved: number }>
+  onApproveAll?: (
+    posts: ModerationPost[],
+  ) => Promise<{ approved: number; approvedIds?: string[] }>
   /** The cards' tag picker and its write (Talk photos spec §6.3). */
   talks?: WallPostCardProps['talks']
   onSetTalk?: WallPostCardProps['onSetTalk']
@@ -416,12 +418,23 @@ export function ModerationQueueView({
     setNotice('')
     setUndoable(null)
     try {
-      const { approved } = await onApproveAll(shownNow)
-      setNotice(
-        approved === shownNow.length
-          ? `Approved ${approved} ${approved === 1 ? 'photo' : 'photos'}.`
-          : `Approved ${approved} of ${shownNow.length}. The others changed meanwhile or took too long; any still pending can be approved again.`,
-      )
+      const { approved, approvedIds = [] } = await onApproveAll(shownNow)
+      const photos = `${approved} ${approved === 1 ? 'photo' : 'photos'}`
+      if (approved !== shownNow.length) {
+        setNotice(
+          `Approved ${approved} of ${shownNow.length}. The others changed meanwhile or took too long; any still pending can be approved again.`,
+        )
+      }
+      // One Undo for the batch: exactly the posts it approved.
+      const taken = shownNow.filter((post) => approvedIds.includes(post._id))
+      if (taken.length && onAction) {
+        setUndoable({
+          says: `Approved ${photos} · Undo takes ${taken.length === 1 ? 'it' : 'them'} off the wall`,
+          undo: () => void undoApproveAll(taken),
+        })
+      } else if (approved === shownNow.length) {
+        setNotice(`Approved ${photos}.`)
+      }
       return true
     } catch {
       setApproveAllFailed(true)
@@ -429,6 +442,28 @@ export function ModerationQueueView({
     } finally {
       setApprovingAll(false)
     }
+  }
+
+  /** Undo of Approve all: Remove each post it approved, four at a time. */
+  const undoApproveAll = async (taken: ModerationPost[]) => {
+    if (!onAction) return
+    setNotice('')
+    let next = 0
+    let done = 0
+    const worker = async () => {
+      while (next < taken.length) {
+        const post = taken[next++]
+        const after = { ...post, status: 'approved' as const }
+        if ((await onAction(after, 'remove').catch(() => 'failed')) === 'done')
+          done += 1
+      }
+    }
+    await Promise.all([0, 1, 2, 3].map(worker))
+    setNotice(
+      done === taken.length
+        ? `Took ${done} ${done === 1 ? 'photo' : 'photos'} off the wall. They’re in Not shown.`
+        : `Took ${done} of ${taken.length} off the wall. The others changed meanwhile or failed.`,
+    )
   }
 
   /**

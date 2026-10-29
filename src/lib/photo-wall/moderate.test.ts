@@ -476,6 +476,7 @@ describe('approveAllPending (§10)', () => {
     ])
     await expect(run()).resolves.toEqual({
       approved: 3,
+      approvedIds: [id(1), id(2), id(3)],
       pending: 3,
       deviceKeys: ['device-1'],
       talkIds: ['talk-1'],
@@ -594,6 +595,7 @@ describe('approveAllPending (§10)', () => {
     store().reset([WALL, ...pendingPosts(2)])
     await expect(run(undefined, [])).resolves.toEqual({
       approved: 0,
+      approvedIds: [],
       pending: 0,
       deviceKeys: [],
       talkIds: [],
@@ -650,6 +652,7 @@ describe('approveAllPending (§10)', () => {
     store().reset([WALL, post(P1, { status: 'approved' })])
     await expect(run()).resolves.toEqual({
       approved: 0,
+      approvedIds: [],
       pending: 0,
       deviceKeys: [],
       talkIds: [],
@@ -735,6 +738,7 @@ describe('a wall closed by the retention cron (§11.1)', () => {
     })
     expect(result).toEqual({
       approved: 0,
+      approvedIds: [],
       pending: 2,
       deviceKeys: [],
       talkIds: [],

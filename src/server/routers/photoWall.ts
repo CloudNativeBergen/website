@@ -321,7 +321,11 @@ export const photoWallRouter = router({
         })
         attempted = result.deviceKeys
         talks = result.talkIds
-        return { approved: result.approved, pending: result.pending }
+        return {
+          approved: result.approved,
+          approvedIds: result.approvedIds,
+          pending: result.pending,
+        }
       } finally {
         expirePosts(conference._id, attempted, talks)
       }
