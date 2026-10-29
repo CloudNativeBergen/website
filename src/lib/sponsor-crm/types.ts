@@ -195,6 +195,7 @@ export interface SponsorForConferenceExpanded {
       amount: number
       currency: string
     }>
+    ticketEntitlement?: number | null
   }
   addons?: Array<{
     _id: string
@@ -255,6 +256,7 @@ export interface SponsorForConferenceExpanded {
   registrationToken?: string
   registrationComplete?: boolean
   registrationCompletedAt?: string
+  discountCodes?: LinkedDiscountCode[]
   /**
    * Whether the sponsor has a workshop early-access link (#1346). The token
    * itself is not read with the record: its address is asked for when needed.

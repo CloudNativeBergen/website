@@ -20,6 +20,7 @@ import {
   DealStatusSection,
 } from './form'
 import { ManageCards } from './ManageCards'
+import { SponsorTicketsBlock } from './SponsorTicketsBlock'
 import type { SponsorSubView } from './form/deal-status'
 import { hasPositiveContractValue } from '@/lib/sponsor-crm/contract-readiness'
 import clsx from 'clsx'
@@ -278,6 +279,13 @@ export function SponsorPipelineView({
           </Section>
         )}
 
+        {/* Same gate as the send: ticketing on and discount codes allowed. */}
+        {sponsor && onSendDiscountCodes && (
+          <Section title="Tickets">
+            <SponsorTicketsBlock sponsor={sponsor} />
+          </Section>
+        )}
+
         {sponsor && (
           <Section title="Talk to the sponsor">
             {(onSendEmail || onSendDiscountCodes) && (
@@ -296,11 +304,22 @@ export function SponsorPipelineView({
                   <button
                     type="button"
                     onClick={onSendDiscountCodes}
-                    className={SEND_BUTTON}
+                    disabled={!sponsor.discountCodes?.length}
+                    title={
+                      sponsor.discountCodes?.length
+                        ? undefined
+                        : 'Link a code under Tickets first'
+                    }
+                    className={`${SEND_BUTTON} disabled:cursor-not-allowed disabled:opacity-50`}
                   >
                     <TicketIcon aria-hidden className="size-4" />
                     Send codes
                   </button>
+                )}
+                {onSendDiscountCodes && !sponsor.discountCodes?.length && (
+                  <p className="self-center text-xs text-gray-500 dark:text-gray-400">
+                    No codes linked yet
+                  </p>
                 )}
                 {!sponsor.contactPersons?.length && (
                   <p className="self-center text-xs text-amber-700 dark:text-amber-400">

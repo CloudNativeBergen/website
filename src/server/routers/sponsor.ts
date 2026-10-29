@@ -131,6 +131,7 @@ import {
   SponsorCRMFilterSchema,
   SendCommunicationSchema,
   AssignDiscountCodesSchema,
+  UnassignDiscountCodeSchema,
   SponsorDiscountCodeOptionsSchema,
   CommunicationRecordIdSchema,
   ListCommunicationsSchema,
@@ -157,6 +158,7 @@ import {
 import {
   CLAIM_SETTLE_MS,
   claimDiscountCodes,
+  unlinkDiscountCode,
 } from '@/lib/sponsor-crm/discount-code-claims'
 import { normalizeDiscountCode, sponsorOwningCode } from '@/lib/discounts'
 import {
@@ -3308,6 +3310,11 @@ export const sponsorRouter = router({
               selected:
                 stored(here, code) || (!!here && owner?.id === here.sponsorId),
               linked: stored(here, code),
+              // The provider's own counters and terms, for the sponsor panel.
+              used: d.times,
+              limit: d.timesTotal,
+              type: d.type,
+              value: d.value,
               ...(elsewhere && {
                 linkedTo: elsewhere.name || 'another sponsor',
               }),
@@ -3376,6 +3383,40 @@ export const sponsorRouter = router({
           })
         }
         return { success: true as const, linkedCodes: added.map((c) => c.code) }
+      }),
+
+    /**
+     * Sponsor panel → Tickets (#1704 T1): unlink a stored code. Nothing is
+     * deleted at the provider; the code is free to assign again.
+     */
+    unassignDiscountCode: adminProcedure
+      .input(UnassignDiscountCodeSchema)
+      .mutation(async ({ input, ctx }) => {
+        await refuseIfTicketingDenied(ctx.orgId)
+        await requireDocumentInCurrentConference(
+          input.sponsorForConferenceId,
+          'sponsorForConference',
+        )
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain()
+        if (conferenceError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+        const removed = await unlinkDiscountCode({
+          conferenceId: conference._id,
+          sponsorForConferenceId: input.sponsorForConferenceId,
+          code: input.code,
+        })
+        if (!removed) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: `${input.code} is not linked to this sponsor`,
+          })
+        }
+        return { success: true as const }
       }),
 
     /** The sponsor's workshop early-access link (#1346). */

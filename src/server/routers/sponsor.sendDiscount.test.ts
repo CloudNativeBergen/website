@@ -30,6 +30,8 @@ const h = vi.hoisted(() => ({
   fetches: [] as Array<{ query: string; params?: Record<string, unknown> }>,
   creates: [] as Array<Record<string, unknown>>,
   inserts: [] as Array<{ id: string; at: string; items: unknown[] }>,
+  /** Paths unset on a document, by id (an unlink). */
+  unsets: [] as Array<{ id: string; paths: string[] }>,
   insertShouldThrow: false,
   linksShouldThrow: false,
   /** `discountCodeClaim` documents by id — the atomic ownership lock. */
@@ -73,6 +75,9 @@ vi.mock('@/lib/sanity/client', () => {
         throw new Error('ClientError: projectId abc123 socket hang up')
       return h.links
     }
+    if (query.includes('.discountCodes[]{ _key, code }')) {
+      return (h.sfc?.discountCodes as unknown[] | undefined) ?? null
+    }
     if (query.includes('_type == "sponsorForConference"')) {
       if (h.sfcReadShouldThrow) throw new Error('socket hang up')
       return h.sfc
@@ -99,7 +104,10 @@ vi.mock('@/lib/sanity/client', () => {
         sets = { ...sets, ...v }
         return chain
       },
-      unset: () => chain,
+      unset: (paths: string[]) => {
+        h.unsets.push({ id, paths })
+        return chain
+      },
       setIfMissing: () => chain,
       insert: (_pos: string, at: string, items: unknown[]) => {
         h.inserts.push({ id, at, items })
@@ -252,6 +260,7 @@ beforeEach(() => {
   h.fetches = []
   h.creates = []
   h.inserts = []
+  h.unsets = []
   h.insertShouldThrow = false
   h.linksShouldThrow = false
   h.claims = new Map()
@@ -663,6 +672,62 @@ describe('sponsor.crm.assignDiscountCodes', () => {
   })
 })
 
+/** Sponsor panel → Tickets → Unlink (#1704 T1). */
+describe('sponsor.crm.unassignDiscountCode', () => {
+  const UNASSIGN = { sponsorForConferenceId: SFC, code: 'acme-2026' }
+  const claimId = `discountCodeClaim-${CONF}-ACME-2026`
+
+  beforeEach(() => {
+    h.sfc = {
+      ...h.sfc,
+      discountCodes: [
+        { _key: 'k1', code: 'ACME-2026' },
+        { _key: 'k2', code: 'OTHER' },
+      ],
+    }
+  })
+
+  it('unsets the stored code and gives back this sponsor’s claim', async () => {
+    h.claims.set(claimId, {
+      _id: claimId,
+      _rev: 'r1',
+      sponsorForConference: { _ref: SFC },
+    })
+    await expect(sponsor().crm.unassignDiscountCode(UNASSIGN)).resolves.toEqual(
+      { success: true },
+    )
+    expect(h.unsets).toEqual([
+      { id: SFC, paths: ['discountCodes[_key=="k1"]'] },
+    ])
+    expect(h.claimOps).toContainEqual({ op: 'delete', id: claimId })
+  })
+
+  it('leaves another sponsor’s claim alone', async () => {
+    h.claims.set(claimId, {
+      _id: claimId,
+      _rev: 'r1',
+      sponsorForConference: { _ref: 'sfc-globex' },
+    })
+    await sponsor().crm.unassignDiscountCode(UNASSIGN)
+    expect(h.claimOps).toHaveLength(0)
+  })
+
+  it('answers NOT_FOUND for a code the sponsor does not store', async () => {
+    await expect(
+      sponsor().crm.unassignDiscountCode({ ...UNASSIGN, code: 'NOPE' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.unsets).toHaveLength(0)
+  })
+
+  it("refuses another tenant's sponsor, writing nothing", async () => {
+    h.tenant = { _type: 'sponsorForConference', conferenceId: 'conf-other' }
+    await expect(
+      sponsor().crm.unassignDiscountCode(UNASSIGN),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.unsets).toHaveLength(0)
+  })
+})
+
 /**
  * THE TICKETING KILL SWITCH (#850), carried over from the removed
  * `sendDiscountEmail` onto the discount KIND and the Assign action.
@@ -778,6 +843,13 @@ describe('an operator deny of ticketing (#850)', () => {
  * another sponsor marked so they cannot be picked.
  */
 describe('sponsor.crm.discountCodeOptions', () => {
+  // The provider's counters and terms ride along for the panel; these tests
+  // are about selection and ownership.
+  const withoutTerms = <T extends object>(c: T) => {
+    const rest = { ...c } as Record<string, unknown>
+    for (const k of ['used', 'limit', 'type', 'value']) delete rest[k]
+    return rest
+  }
   const OPTIONS = { sponsorForConferenceId: SFC }
 
   const renameAcme = async (name: string) => {
@@ -802,7 +874,7 @@ describe('sponsor.crm.discountCodeOptions', () => {
       'https://tickets.example.test/sponsor?a=1&b=2',
     )
     expect(result.hasSponsorInviteLink).toBe(true)
-    expect(result.codes).toEqual([
+    expect(result.codes.map(withoutTerms)).toEqual([
       { code: 'ACME-2026', selected: true, linked: false },
       { code: 'ACME-WORKSHOP', selected: true, linked: false },
       {
@@ -815,11 +887,21 @@ describe('sponsor.crm.discountCodeOptions', () => {
     ])
   })
 
+  it("carries the provider's use count, limit and terms for the panel", async () => {
+    const result = await sponsor().crm.discountCodeOptions(OPTIONS)
+    expect(result.codes.find((c) => c.code === 'ACME-WORKSHOP')).toMatchObject({
+      used: 0,
+      limit: 5,
+      type: 'percent',
+      value: '100',
+    })
+  })
+
   it('preselects ONLY the stored codes once the sponsor stores any', async () => {
     await renameAcme('Acme')
     h.links[0].linkedCodes = ['acme-workshop']
     const result = await sponsor().crm.discountCodeOptions(OPTIONS)
-    expect(result.codes.filter((c) => c.selected)).toEqual([
+    expect(result.codes.filter((c) => c.selected).map(withoutTerms)).toEqual([
       { code: 'ACME-WORKSHOP', selected: true, linked: true },
     ])
   })
@@ -838,7 +920,9 @@ describe('sponsor.crm.discountCodeOptions', () => {
       error: null,
     })
     const result = await sponsor().crm.discountCodeOptions(OPTIONS)
-    expect(result.codes.find((c) => c.code === 'ACME-WORKSHOP')).toEqual({
+    expect(
+      withoutTerms(result.codes.find((c) => c.code === 'ACME-WORKSHOP')!),
+    ).toEqual({
       code: 'ACME-WORKSHOP',
       selected: false,
       linked: false,
