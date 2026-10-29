@@ -51,6 +51,7 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   contract_reminder_sent: 'Contract Reminder Sent',
   message: 'Message',
   discount_codes_assigned: 'Discount Codes Assigned',
+  discount_code_unlinked: 'Discount Code Unlinked',
 }
 
 /**
