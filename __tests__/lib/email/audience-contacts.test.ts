@@ -36,6 +36,8 @@ import {
   removeContactFromAudience,
   syncAudienceWithContacts,
   syncSponsorAudience,
+  syncConferenceAudience,
+  addSpeakerToAudience,
   ContactListTruncatedError,
   type Contact,
 } from '@/lib/email/audience'
@@ -655,5 +657,85 @@ describe('the sponsor audience keeps its opt-outs when a send narrows it (#1704)
     expect(onProgress).toHaveBeenCalledTimes(2)
     expect(result.success).toBe(false)
     expect(account.contactsIn(audienceId)).toHaveLength(100)
+  })
+})
+
+describe('the speaker audience keeps its opt-outs (#1715)', () => {
+  const speakers = (list: string[]) =>
+    list.map((email) => ({ email, name: 'A Speaker', proposals: [] })) as never
+
+  it('keeps an unsubscribed speaker who is no longer eligible but still exists', async () => {
+    const { data } = await account.create({
+      name: `Alpha Speakers [${CONF_ID}]`,
+    })
+    account.fillWith(
+      data.id,
+      ['in@a.test', 'out@a.test', 'optout@a.test'],
+      ['optout@a.test'],
+    )
+
+    const result = await syncConferenceAudience(
+      conference,
+      speakers(['in@a.test']),
+      {
+        keepUnsubscribedIn: new Set([
+          'in@a.test',
+          'out@a.test',
+          'optout@a.test',
+        ]),
+      },
+    )
+
+    expect(result.success).toBe(true)
+    expect(account.contactsIn(data.id).sort()).toEqual([
+      'in@a.test',
+      'optout@a.test',
+    ])
+  })
+
+  it('removes the unsubscribed speaker once they no longer exist', async () => {
+    const { data } = await account.create({
+      name: `Alpha Speakers [${CONF_ID}]`,
+    })
+    account.fillWith(data.id, ['in@a.test', 'gone@a.test'], ['gone@a.test'])
+
+    await syncConferenceAudience(conference, speakers(['in@a.test']), {
+      keepUnsubscribedIn: new Set(['in@a.test']),
+    })
+
+    expect(account.contactsIn(data.id)).toEqual(['in@a.test'])
+  })
+
+  it('re-adding an existing unsubscribed speaker leaves them unsubscribed', async () => {
+    const { data } = await account.create({
+      name: `Alpha Speakers [${CONF_ID}]`,
+    })
+    account.fillWith(data.id, ['optout@a.test'], ['optout@a.test'])
+    // Model the worst case: a create that upserts the existing contact.
+    account.contactsCreate.mockImplementationOnce(async (args) => {
+      const listed = await account.contactsList({ audienceId: data.id })
+      const c = listed.data!.data.find((x) => x.email === args.email)! as {
+        id: string
+        unsubscribed?: boolean
+      }
+      if ('unsubscribed' in args) {
+        c.unsubscribed = (args as { unsubscribed?: boolean }).unsubscribed
+      }
+      return { data: { object: 'contact', id: c.id }, error: null } as never
+    })
+
+    const result = await addSpeakerToAudience(account.client, data.id, {
+      email: 'optout@a.test',
+      name: 'Opt Out',
+    } as never)
+
+    expect(result.success).toBe(true)
+    expect(account.contactsCreate.mock.calls[0][0]).not.toHaveProperty(
+      'unsubscribed',
+    )
+    const listed = await account.contactsList({ audienceId: data.id })
+    expect(
+      (listed.data!.data[0] as { unsubscribed?: boolean }).unsubscribed,
+    ).toBe(true)
   })
 })
