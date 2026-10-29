@@ -348,18 +348,25 @@ describe('toPayload — trimming, omission and item filtering', () => {
         _key: 'cd',
         _type: 'homepageCountdown',
         heading: '   ',
-        targetOverride: '2099-09-15T10:00:00.000Z',
+        // Editor rows hold the Oslo wall-clock input value.
+        targetOverride: '2099-09-15T12:00',
         liveMessage: '  ',
       },
       { _key: 'v', _type: 'homepageVenue', description: 'Grieghallen' },
     ])
     expect(cd.heading).toBeUndefined()
     expect(cd.liveMessage).toBeUndefined()
-    expect(cd.targetOverride).toBe(
-      localInputToIso(isoToLocalInput('2099-09-15T10:00:00.000Z')),
-    )
+    expect(cd.targetOverride).toBe('2099-09-15T10:00:00.000Z')
     expect(venue.heading).toBeUndefined()
     expect(venue.description).toBe('Grieghallen')
+  })
+
+  it('round-trips the countdown target as Europe/Oslo wall-clock', () => {
+    // Summer (UTC+2) and winter (UTC+1), independent of the runner's zone.
+    expect(isoToLocalInput('2026-06-10T22:30:00.000Z')).toBe('2026-06-11T00:30')
+    expect(localInputToIso('2026-12-01T00:30')).toBe('2026-11-30T23:30:00.000Z')
+    expect(localInputToIso('not a date')).toBeUndefined()
+    expect(isoToLocalInput('')).toBeUndefined()
   })
 
   it('maps the content bands’ copy overrides in both directions', () => {

@@ -22,6 +22,7 @@ import {
   type HomepageSectionType,
 } from './sections'
 import { defaultVariant, VARIANT_LABELS } from './variants'
+import { instantToOsloLocalInput, osloLocalInputToIso } from '../time'
 
 // Re-exported for the editor surface, which historically imported it from here.
 export { SECTION_LABELS }
@@ -115,23 +116,15 @@ export interface EditorRow {
 
 let keyCounter = 0
 /**
- * Stored ISO instant → the LOCAL wall-clock string a `datetime-local` input
- * expects (and back, below). Same round-trip discipline as the workshop
- * registration editor: local into the input, ISO instant into storage.
+ * Stored ISO instant → the Europe/Oslo wall-clock string a `datetime-local`
+ * input expects (and back, below), whatever the editor's own time zone.
  */
 export function isoToLocalInput(value?: string): string | undefined {
-  if (!value) return undefined
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return undefined
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return instantToOsloLocalInput(value) || undefined
 }
 
 export function localInputToIso(value?: string): string | undefined {
-  const v = value?.trim()
-  if (!v) return undefined
-  const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? undefined : d.toISOString()
+  return osloLocalInputToIso(value) ?? undefined
 }
 
 export const nextKey = () => `hp-${Date.now()}-${++keyCounter}`

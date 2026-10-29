@@ -82,23 +82,9 @@ export function ImageMetadataModal({
     },
   )
 
-  const updateMutation = api.gallery.admin.update.useMutation({
-    onSuccess: (updatedImage: GalleryImageWithSpeakers) => {
-      const message = isBulkMode
-        ? `Successfully updated ${images!.length} images`
-        : 'Image updated successfully'
-      showNotification({ title: message, type: 'success' })
-      onUpdate(updatedImage)
-      setIsSubmitting(false)
-    },
-    onError: (error) => {
-      showNotification({
-        title: error.message || 'Failed to update image',
-        type: 'error',
-      })
-      setIsSubmitting(false)
-    },
-  })
+  // No hook-level callbacks: bulk mode runs one mutateAsync per image and
+  // reports once after all settle; single mode passes its own below.
+  const updateMutation = api.gallery.admin.update.useMutation()
 
   useEffect(() => {
     if (singleImage) {
@@ -215,14 +201,32 @@ export function ImageMetadataModal({
         }
       }
     } else if (singleImage) {
-      updateMutation.mutate({
-        id: singleImage._id,
-        ...formData,
-        speakers: selectedSpeakers.map((s) => s._id),
-        notifySpeakers,
-        hotspot: hotspot || undefined,
-        crop: crop || undefined,
-      })
+      updateMutation.mutate(
+        {
+          id: singleImage._id,
+          ...formData,
+          speakers: selectedSpeakers.map((s) => s._id),
+          notifySpeakers,
+          hotspot: hotspot || undefined,
+          crop: crop || undefined,
+        },
+        {
+          onSuccess: (updatedImage: GalleryImageWithSpeakers) => {
+            showNotification({
+              title: 'Image updated successfully',
+              type: 'success',
+            })
+            onUpdate(updatedImage)
+          },
+          onError: (error) => {
+            showNotification({
+              title: error.message || 'Failed to update image',
+              type: 'error',
+            })
+          },
+          onSettled: () => setIsSubmitting(false),
+        },
+      )
     }
   }
 
