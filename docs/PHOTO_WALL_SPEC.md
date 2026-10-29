@@ -119,7 +119,7 @@ Two new document types. `conference` is **not** touched (it is append-only,
 | `postingMode`                | `'open' \| 'paused'` (M1), `'auto'` (P2)     | Monday offers **Open** and **Paused** only; a missing value reads as `paused`. P2 adds `auto` and makes it the default (§7). |
 | `sponsorStrip`               | boolean, default `false`                     | Screen Mode shows the sponsor strip when true (§9.4).                                                                        |
 | `look`                       | `'pinboard' \| 'mosaic' \| 'spotlight'` (P3) | The Wall Look (§9). Missing or unknown reads as `pinboard`.                                                                  |
-| `trustedPostersSkipApproval` | boolean                                      | Trusted posters skip approval (§6.6). Set up writes `true`; missing reads as `false`.                                        |
+| `trustedPostersSkipApproval` | boolean                                      | The Trusted posters switch (§6.6). Set up writes `true`; a missing value reads as `false`.                                   |
 | `closedAt`                   | datetime                                     | Set by the retention cron before it deletes anything: the wall is closed to writes (§11.1).                                  |
 | `purgedAt`                   | datetime                                     | Set by the retention cron when the deletion is done (§11.1).                                                                 |
 
@@ -146,7 +146,7 @@ appearing on every tenant's domain the day this ships.
 | `submittedAt`      | datetime                                              | When Submit accepted it. Server time. Drives the hourly limit.                                                                                                                                                   |
 | `approvedAt`       | datetime                                              | Set on every approval (also re-approval from Not shown). Orders the wall: newest approval first.                                                                                                                 |
 | `decidedAt`        | datetime                                              | Last Approve, Reject or Remove.                                                                                                                                                                                  |
-| `autoApproval`     | `{ speaker, role, realAdmin? }`                       | Only on a trusted post (§6.6): who posted it signed in, as `organizer` or `speaker`, and the organizer behind an impersonation.                                                                                  |
+| `autoApproval`     | `{ speaker, role, realAdmin? }`                       | Only on a trusted post (§6.6): the signed-in speaker, their role (`organizer` or `speaker`) and, under impersonation, the organizer behind it.                                                                   |
 
 Studio shows both types read-only (organizers moderate on the admin page, not
 in Studio). _Implementation detail._
@@ -372,13 +372,13 @@ signed in, on this conference, as one of:
 The phone still needs the device cookie (§6.1): the post belongs to the
 device, as every post does. The NextAuth session cookie reaches the submit
 route (same origin, path `/`), so Submit reads it there. A submit without a
-session, or with one that isn't trusted, works as before.
+session, or with one that is not trusted, works as before.
 
 **The switch:** `photoWall.trustedPostersSkipApproval` (§4.1), on the admin
 Settings card as **Trusted posters skip approval**. Set up writes it on, so
-new walls have it on. A missing value reads as off, so existing walls keep
-moderating everything until an organizer turns it on; while it is off the
-Settings card shows a one-line hint that the switch exists.
+new walls start with it on. A missing value reads as off, so existing walls
+keep approving every photo until an organizer turns it on; while it is off
+the Settings card shows a one-line hint that the setting is new.
 
 **What changes for a trusted post:** step 5 of §6.2 creates it `approved`,
 with `approvedAt` and `decidedAt` set to `submittedAt`, and an audit trail in
@@ -395,9 +395,11 @@ tags and the speaker opt-out. Organizers can **Remove** or **Delete** a
 trusted post like any other; its admin card says "Auto-approved · <name>"
 with the speaker's name. There is no review flag.
 
-**The composer** shows a trusted poster, signed in, one line above Submit:
-"You're signed in as <name>. Your photo goes straight on the wall." Nobody
-else sees anything new, and there is no sign-in prompt.
+**The composer** tells a signed-in trusted poster, above Submit: "You're
+signed in as <name>. Your photo goes straight on the wall." The landing and
+My posts say the same, with "Your photos go", in place of the line about an
+organizer looking at every photo. Nobody else sees anything new, and there
+is no sign-in prompt.
 
 ## 7. Posting Window
 

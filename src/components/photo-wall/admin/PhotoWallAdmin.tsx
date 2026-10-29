@@ -83,7 +83,7 @@ export function PhotoWallAdmin({
         description={
           setup
             ? 'Posting, the screens’ look, and the links and QR codes to share.'
-            : 'Attendees post photos from their phones. Organizers approve each photo before it appears; with Trusted posters on, organizers’ and confirmed speakers’ photos appear at once.'
+            : 'Attendees post photos from their phones. Organizers decide what stays on the wall.'
         }
         contextHighlight={conferenceTitle}
         backLink={
@@ -153,8 +153,8 @@ export function PhotoWallAdmin({
                 />
                 <SwitchSetting
                   label="Trusted posters skip approval"
-                  note="Photos from organizers and confirmed speakers, signed in, go straight on the wall."
-                  hint="New. Off on this wall until you turn it on."
+                  note="Photos from signed-in organizers and confirmed speakers go straight on the wall."
+                  hint="New setting. New walls start with it on."
                   on={wall.trustedPostersSkipApproval}
                   saving={saving}
                   onChange={(trustedPostersSkipApproval) =>

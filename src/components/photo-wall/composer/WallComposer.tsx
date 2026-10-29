@@ -246,6 +246,7 @@ export function WallComposer({
             headingRef={landingHeading}
             onPick={pick}
             error={stage.kind === 'landing' ? stage.error : null}
+            trustedName={trustedName}
           />
           {stage.kind === 'decoding' && (
             <p

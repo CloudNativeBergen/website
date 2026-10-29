@@ -292,7 +292,17 @@ export function WallPoster({
         My posts
       </h1>
       <p className="mt-3 text-gray-600 dark:text-gray-400">
-        An organizer looks at every photo before it appears on the wall.
+        {trustedName ? (
+          <>
+            You’re signed in as{' '}
+            <span dir="auto" className="font-medium">
+              {trustedName}
+            </span>
+            . Your photos go straight on the wall.
+          </>
+        ) : (
+          'An organizer looks at every photo before it appears on the wall.'
+        )}
       </p>
       <div className="mt-8">
         <MyPosts posts={myPosts} listRead={mine.listRead} {...actions} />
