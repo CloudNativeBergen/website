@@ -321,13 +321,19 @@ function countdownTargetMs(
 }
 
 /**
- * `isProgramPublished` (`@/lib/conference/state`): the programme date exists
- * and has arrived. NOTE the parse — plain `new Date()`, i.e. UTC midnight for
- * a bare date, NOT the noon anchoring above. Mirrored as written.
+ * `isProgramPublished` (`@/lib/conference/state`): public from 00:00 Oslo on
+ * `programDate`, compared as Oslo calendar days. Restated, not imported, to
+ * keep this module import-free (see the server-safety test).
  */
 function isProgramPublished(conference: Conference, now: number): boolean {
-  if (!conference.programDate) return false
-  return now >= new Date(conference.programDate).getTime()
+  if (!conference.programDate || Number.isNaN(now)) return false
+  const osloToday = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Oslo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+  return osloToday >= conference.programDate
 }
 
 /** What the programme band will actually draw, counted the way it draws it. */

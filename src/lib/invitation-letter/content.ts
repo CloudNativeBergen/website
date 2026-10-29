@@ -5,6 +5,7 @@ import {
   hasConferenceDomain,
 } from '@/lib/conference/baseUrl'
 import type { Conference } from '@/lib/conference/types'
+import { isProgramPublished } from '@/lib/conference/state'
 import {
   PARTICIPANT_ROLE_LABELS,
   type ConfirmedSession,
@@ -119,9 +120,8 @@ function capitalize(value: string): string {
  * issued — the same rule as {@link isProgramPublished}, evaluated against
  * `issuedAt` instead of `new Date()`.
  *
- * WHY NOT reuse that helper: it reads the wall clock, which would make the
- * letter unreproducible — regenerating it a week later could add or remove a
- * row. A letter is a dated document and must be derivable from its own inputs.
+ * Evaluated at `issuedAt`, never the wall clock: a letter is a dated document
+ * and must be derivable from its own inputs.
  *
  * WHY IT MATTERS: before `programDate`, `/program` renders "The conference
  * program will be available soon" rather than the schedule. Printing that link
@@ -137,11 +137,7 @@ function capitalize(value: string): string {
  * load the schedule, which is a heavier read on every letter issued.
  */
 function programmeIsPublic(conference: Conference, issuedAt: string): boolean {
-  if (!conference.programDate) return false
-  const publishedFrom = new Date(conference.programDate)
-  const issued = new Date(issuedAt)
-  if (isNaN(publishedFrom.getTime()) || isNaN(issued.getTime())) return false
-  return issued >= publishedFrom
+  return isProgramPublished(conference, new Date(issuedAt))
 }
 
 /**
