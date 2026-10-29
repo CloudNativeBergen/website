@@ -2,6 +2,7 @@ import type { SponsorForConferenceExpanded, InvoiceStatus } from './types'
 import { evaluateBilling, invoiceFormatLabel } from './billing'
 import type { BillingGap } from './billing'
 import { calculateSponsorValue } from './value'
+import { osloTodayDateString } from '@/lib/time'
 
 /**
  * A blocker that stops an invoice from being raised. Billing gaps
@@ -54,6 +55,7 @@ export interface InvoiceRow {
   contractSignedAt?: string
   invoiceStatus: InvoiceStatus
   invoiceSentAt?: string
+  invoiceDueAt?: string
   invoicePaidAt?: string
   readiness: InvoiceReadiness
 }
@@ -115,6 +117,7 @@ export function toInvoiceRow(sfc: SponsorForConferenceExpanded): InvoiceRow {
     contractSignedAt: sfc.contractSignedAt,
     invoiceStatus: sfc.invoiceStatus,
     invoiceSentAt: sfc.invoiceSentAt,
+    invoiceDueAt: sfc.invoiceDueAt,
     invoicePaidAt: sfc.invoicePaidAt,
     readiness: evaluateInvoiceReadiness(sfc),
   }
@@ -142,4 +145,30 @@ export function totalsByCurrency(
           ? 1
           : a.currency.localeCompare(b.currency),
     )
+}
+
+/** Days between sending an invoice and its default due date. */
+export const INVOICE_PAYMENT_TERMS_DAYS = 30
+
+/**
+ * Default due date (YYYY-MM-DD) for an invoice sent at `now`: the Oslo
+ * calendar day plus the payment terms. Calendar arithmetic, so DST shifts
+ * never move the day.
+ */
+export function defaultInvoiceDueDate(now: Date = new Date()): string {
+  const due = new Date(`${osloTodayDateString(now)}T00:00:00Z`)
+  due.setUTCDate(due.getUTCDate() + INVOICE_PAYMENT_TERMS_DAYS)
+  return due.toISOString().slice(0, 10)
+}
+
+/** True when a sent invoice's due date is before today's Oslo date. */
+export function isInvoicePastDue(
+  sfc: { invoiceStatus?: string; invoiceDueAt?: string | null },
+  now: Date = new Date(),
+): boolean {
+  return (
+    sfc.invoiceStatus === 'sent' &&
+    !!sfc.invoiceDueAt &&
+    sfc.invoiceDueAt < osloTodayDateString(now)
+  )
 }

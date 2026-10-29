@@ -374,6 +374,13 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'invoiceDueAt',
+      title: 'Invoice Due Date',
+      type: 'date',
+      description:
+        'When payment is due. Set to 30 days after sending unless already set.',
+    }),
+    defineField({
       name: 'invoicePaidAt',
       title: 'Invoice Paid Date',
       type: 'datetime',
