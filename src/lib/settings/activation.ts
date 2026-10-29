@@ -782,7 +782,7 @@ export function buildActivationChecklist(
       label: 'Programme published',
       done:
         present(conference.programDate) &&
-        now >= new Date(conference.programDate!) &&
+        osloTodayDateString(now) >= conference.programDate! &&
         schedules.length > 0,
       anchor: '/admin/schedule',
       hint: 'Build the schedule and set the date the programme goes public.',

@@ -213,7 +213,7 @@ export function ActivationRowItem({
         {body}
         <span
           aria-hidden="true"
-          className="mt-0.5 shrink-0 text-xs font-medium text-indigo-600 opacity-0 transition-opacity group-hover:opacity-100 dark:text-indigo-400"
+          className="mt-0.5 shrink-0 text-xs font-medium text-indigo-600 opacity-100 transition-opacity sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100 dark:text-indigo-400"
         >
           Configure &rarr;
         </span>
