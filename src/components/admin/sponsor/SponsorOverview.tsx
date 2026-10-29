@@ -77,6 +77,20 @@ function MaybeLink({
   return href ? <Link href={href} {...props} /> : <div {...props} />
 }
 
+/**
+ * One row per sponsor, its most urgent item first (`items` is sorted), capped
+ * at `NEEDS_YOU_LIMIT` sponsors.
+ */
+function bySponsor(items: ActionItem[]): ActionItem[][] {
+  const groups = new Map<string, ActionItem[]>()
+  for (const item of items) {
+    const group = groups.get(item.sponsor.id)
+    if (group) group.push(item)
+    else groups.set(item.sponsor.id, [item])
+  }
+  return [...groups.values()].slice(0, NEEDS_YOU_LIMIT)
+}
+
 export function NeedsYouSection({ items }: { items: ActionItem[] }) {
   const counts = actionTypeCounts(items)
   const boardTotal = counts.reduce((sum, c) => sum + c.count, 0)
@@ -112,7 +126,7 @@ export function NeedsYouSection({ items }: { items: ActionItem[] }) {
             ))}
           </p>
           <ul className="mt-3 divide-y divide-gray-100 dark:divide-gray-700">
-            {items.slice(0, NEEDS_YOU_LIMIT).map((item) => (
+            {bySponsor(items).map(([item, ...rest]) => (
               <li key={item.id}>
                 <MaybeLink
                   href={item.link}
@@ -135,6 +149,14 @@ export function NeedsYouSection({ items }: { items: ActionItem[] }) {
                     )}
                   >
                     {item.title}
+                    {rest.length > 0 && (
+                      <span className="block text-right font-normal text-gray-500 dark:text-gray-400">
+                        <span aria-hidden="true">+{rest.length} more</span>
+                        <span className="sr-only">
+                          , also: {rest.map((r) => r.title).join(', ')}
+                        </span>
+                      </span>
+                    )}
                   </span>
                 </MaybeLink>
               </li>

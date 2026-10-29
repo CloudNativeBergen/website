@@ -107,15 +107,9 @@ export const Overview: Story = {
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             <ComponentCard
-              name="SponsorDashboardMetrics"
-              path="@/components/admin/sponsor/SponsorDashboardMetrics"
-              description="Dashboard metric cards showing revenue, deals, tier utilization, and invoices."
-              hasStory
-            />
-            <ComponentCard
-              name="SponsorActionItems"
-              path="@/components/admin/sponsor/SponsorActionItems"
-              description="List of urgent action items requiring organizer attention."
+              name="SponsorOverview"
+              path="@/components/admin/sponsor/SponsorOverview"
+              description="The sponsor overview: what needs you, pipeline, money, pre-event checklist and latest activity."
               hasStory
             />
             <ComponentCard

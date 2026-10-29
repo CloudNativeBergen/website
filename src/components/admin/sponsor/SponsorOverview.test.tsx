@@ -17,20 +17,28 @@ describe('NeedsYouSection', () => {
     mockSponsor({ _id: `sfc-${i}`, invoiceStatus: 'overdue' }),
   )
 
-  it('lists at most five items and links each count to the board', () => {
+  it('lists one row per sponsor, at most five, and links counts to the board', () => {
     render(<NeedsYouSection items={organizerWorklist(sponsors, 'me')} />)
     const section = screen.getByRole('region', { name: 'Needs you' })
-    expect(within(section).getAllByRole('listitem')).toHaveLength(5)
+    const rows = within(section).getAllByRole('listitem')
+    expect(rows).toHaveLength(5)
+    // Each sponsor has overdue, no owner and stale: the most urgent leads.
+    expect(rows[0]).toHaveTextContent('Invoice Overdue')
+    expect(rows[0]).toHaveTextContent('+2 more')
+    expect(rows[0]).toHaveTextContent('also: Assign an owner')
     expect(
       screen.getByRole('link', { name: '8 overdue invoices' }),
-    ).toHaveAttribute('href', '/admin/sponsors/crm?action=overdue')
+    ).toHaveAttribute(
+      'href',
+      '/admin/sponsors/crm?action=overdue&assignedTo=me-unassigned',
+    )
     expect(screen.getByRole('link', { name: '8 no owner' })).toHaveAttribute(
       'href',
-      '/admin/sponsors/crm?action=unassigned',
+      '/admin/sponsors/crm?action=unassigned&assignedTo=me-unassigned',
     )
     expect(screen.getByRole('link', { name: /^See all \d+$/ })).toHaveAttribute(
       'href',
-      '/admin/sponsors/crm?action=all',
+      '/admin/sponsors/crm?action=all&assignedTo=me-unassigned',
     )
   })
 

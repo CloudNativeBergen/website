@@ -68,9 +68,11 @@ describe('actionTypeCounts', () => {
 
   it('links each type to the board filter', () => {
     expect(boardActionHref('overdue')).toBe(
-      '/admin/sponsors/crm?action=overdue',
+      '/admin/sponsors/crm?action=overdue&assignedTo=me-unassigned',
     )
-    expect(boardActionHref('all')).toBe('/admin/sponsors/crm?action=all')
+    expect(boardActionHref('all')).toBe(
+      '/admin/sponsors/crm?action=all&assignedTo=me-unassigned',
+    )
   })
 })
 

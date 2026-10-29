@@ -435,9 +435,15 @@ export function sponsorHasAction(
   )
 }
 
-/** The CRM board, filtered to sponsors with an open item of this type. */
+/** Board `assignedTo` value for the organizer's own plus unassigned sponsors. */
+export const MINE_AND_UNASSIGNED = 'me-unassigned'
+
+/**
+ * The CRM board, filtered to sponsors with an open item of this type and to
+ * the same owners `organizerWorklist` counts, so the board shows the count.
+ */
 export function boardActionHref(filter: BoardActionFilter): string {
-  return `/admin/sponsors/crm?action=${filter}`
+  return `/admin/sponsors/crm?action=${filter}&assignedTo=${MINE_AND_UNASSIGNED}`
 }
 
 /**

@@ -73,6 +73,7 @@ interface SponsorCRMPipelineProps {
 
 import { useDebounce } from '@/hooks/useDebounce'
 import {
+  MINE_AND_UNASSIGNED,
   sponsorHasAction,
   type BoardActionFilter,
 } from '@/lib/sponsor-crm/action-items'
@@ -192,7 +193,9 @@ export function SponsorCRMPipeline({
       // A team filter (assignedToIds) takes precedence and clears the per-owner
       // assignedTo — the two are mutually exclusive at the URL level too.
       assignedTo:
-        teamMemberIds || assignedToFilter === 'unassigned'
+        teamMemberIds ||
+        assignedToFilter === 'unassigned' ||
+        assignedToFilter === MINE_AND_UNASSIGNED
           ? undefined
           : assignedToFilter,
       assignedToIds: teamMemberIds,
@@ -229,12 +232,18 @@ export function SponsorCRMPipeline({
         (s) =>
           (!needsFollowUpFilter ||
             checkSponsorNeedsFollowUp(s, conference.crmInactivityThresholds)) &&
-          (!actionFilter || sponsorHasAction(s, actionFilter)),
+          (!actionFilter || sponsorHasAction(s, actionFilter)) &&
+          // Mine + unassigned is filtered here; the server reads one owner.
+          (assignedToFilter !== MINE_AND_UNASSIGNED ||
+            !s.assignedTo ||
+            s.assignedTo._id === session?.speaker?._id),
       ),
     [
       sponsors,
       needsFollowUpFilter,
       actionFilter,
+      assignedToFilter,
+      session?.speaker?._id,
       conference.crmInactivityThresholds,
     ],
   )
@@ -896,8 +905,10 @@ export function SponsorCRMPipeline({
                 label={
                   assignedToFilter === 'unassigned'
                     ? 'Unassigned'
-                    : organizers.find((o) => o._id === assignedToFilter)
-                        ?.name || 'Owner'
+                    : assignedToFilter === MINE_AND_UNASSIGNED
+                      ? 'Mine + no owner'
+                      : organizers.find((o) => o._id === assignedToFilter)
+                          ?.name || 'Owner'
                 }
                 category="Owner"
                 onRemove={() => setOrganizerFilter(null)}
