@@ -264,7 +264,9 @@ export function ImageGrid({
             {!readOnly && (
               <div
                 className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center gap-2 transition-opacity ${
-                  hoveredImage === image._id ? 'opacity-100' : 'opacity-0'
+                  hoveredImage === image._id
+                    ? 'opacity-100'
+                    : 'opacity-0 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100'
                 }`}
               >
                 <button
@@ -274,6 +276,7 @@ export function ImageGrid({
                   }}
                   className="rounded-full bg-white p-2 text-gray-700 shadow-lg hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                   title="Edit metadata"
+                  aria-label={`Edit metadata for ${image.imageAlt || 'image'}`}
                 >
                   <PencilIcon className="size-5" />
                 </button>
@@ -287,6 +290,7 @@ export function ImageGrid({
                   title={
                     image.featured ? 'Remove from featured' : 'Add to featured'
                   }
+                  aria-label={`${image.featured ? 'Remove from featured' : 'Add to featured'}: ${image.imageAlt || 'image'}`}
                 >
                   {image.featured ? (
                     <StarIconSolid className="size-5 text-yellow-500" />
@@ -301,6 +305,7 @@ export function ImageGrid({
                   }}
                   className="rounded-full bg-white p-2 text-red-600 shadow-lg hover:bg-red-50 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-gray-700"
                   title="Delete image"
+                  aria-label={`Delete ${image.imageAlt || 'image'}`}
                 >
                   <TrashIcon className="size-5" />
                 </button>

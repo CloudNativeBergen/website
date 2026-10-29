@@ -395,6 +395,7 @@ export function EmailModal({
                       onClick={handleClearDraft}
                       className="ml-1 cursor-pointer rounded p-0.5 hover:bg-blue-100 dark:hover:bg-blue-800/50"
                       title="Clear draft"
+                      aria-label="Clear draft"
                     >
                       <TrashIcon className="h-3 w-3" />
                     </button>
@@ -442,7 +443,8 @@ export function EmailModal({
                 <span className="sm:hidden">Cancel</span>
               </button>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-6">
+            {/* Stays light in dark mode: emails render on white, so the preview matches what recipients see. */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700">
               {previewComponent({
                 subject,
                 message: richTextValue,
