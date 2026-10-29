@@ -121,3 +121,35 @@ describe('SponsorPipelineView — contract value locking', () => {
     ).toBeInTheDocument()
   })
 })
+
+describe('SponsorPipelineView — sections', () => {
+  afterEach(cleanup)
+
+  it('groups the tab into named sections and keeps every tab reachable', () => {
+    renderPipelineView(mockSponsor() as SponsorForConferenceExpanded)
+    for (const name of [
+      'Company',
+      'Deal',
+      'Owner & tags',
+      'Sponsor details',
+      'Talk to the sponsor',
+      'Activity',
+    ]) {
+      expect(screen.getByRole('region', { name })).toBeInTheDocument()
+    }
+    expect(screen.getByRole('link', { name: 'See all' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/admin/sponsors/activity?sponsor='),
+    )
+    for (const name of [
+      /^Contract/,
+      /^Contacts/,
+      /^Logo/,
+      /^Messages/,
+      /^Communications/,
+      'History',
+    ]) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument()
+    }
+  })
+})

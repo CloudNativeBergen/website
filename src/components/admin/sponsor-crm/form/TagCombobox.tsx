@@ -90,7 +90,7 @@ export function TagCombobox({ value, onChange }: TagComboboxProps) {
                   <span className="block truncate font-normal group-data-selected:font-semibold">
                     {tag.label}
                   </span>
-                  <span className="absolute inset-y-0 right-0 hidden items-center pr-4 text-indigo-600 group-data-focus:text-white group-data-selected:flex">
+                  <span className="absolute inset-y-0 right-0 hidden items-center pr-4 text-indigo-600 group-data-focus:text-white group-data-selected:flex dark:text-indigo-400 dark:group-data-focus:text-white">
                     <CheckIcon className="h-5 w-5" aria-hidden="true" />
                   </span>
                 </ComboboxOption>

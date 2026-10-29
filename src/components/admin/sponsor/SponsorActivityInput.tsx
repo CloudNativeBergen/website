@@ -73,32 +73,31 @@ export function SponsorActivityInput({
           ))}
         </div>
 
-        <div className="relative">
+        <div className="flex items-end gap-2">
           <textarea
+            aria-label={`Log a ${activityType}`}
             rows={isFocused || description ? 3 : 1}
             placeholder={`Log a ${activityType}...`}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             onFocus={() => setIsFocused(true)}
             onBlur={() => !description && setIsFocused(false)}
-            className="block w-full rounded-md bg-white px-3 py-2 pr-12 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+            className="block w-full min-w-0 flex-1 rounded-md bg-white px-3 py-2 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
           />
-          <div className="absolute right-2 bottom-2">
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={!description.trim() || isPending}
-              className="flex size-8 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-              title="Post activity"
-              aria-label="Post activity"
-            >
-              {isPending ? (
-                <div className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              ) : (
-                <PaperAirplaneIcon className="size-4" />
-              )}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!description.trim() || isPending}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+            title="Post activity"
+            aria-label="Post activity"
+          >
+            {isPending ? (
+              <div className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            ) : (
+              <PaperAirplaneIcon className="size-4" />
+            )}
+          </button>
         </div>
       </div>
     </div>
