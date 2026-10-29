@@ -200,7 +200,9 @@ const StatusCell = ({ row }: { row: InvoiceRow }) => (
 )
 
 function crmLink(id: string) {
-  return `/admin/sponsors/${encodeURIComponent(id)}?view=pipeline&board=invoice`
+  // A quick edit from the list: the invoice board, with the sponsor in its
+  // side panel.
+  return `/admin/sponsors/crm?board=invoice&sponsor=${encodeURIComponent(id)}&view=pipeline`
 }
 
 export function SponsorInvoiceTable({

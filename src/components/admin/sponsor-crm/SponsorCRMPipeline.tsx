@@ -8,7 +8,9 @@ import type {
 import { useState, useEffect, useRef, useCallback, useMemo, useId } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import Link from 'next/link'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
+import type { ContractSendOptions } from '@/components/admin/sponsor-crm/SponsorContractView'
 import { SponsorSendModal } from '@/components/admin'
 import {
   sponsorFromAddress,
@@ -66,6 +68,19 @@ interface SponsorCRMPipelineProps {
 
 import { useDebounce } from '@/hooks/useDebounce'
 
+type RecordView = NonNullable<
+  React.ComponentProps<typeof SponsorCRMForm>['initialView']
+>
+const RECORD_VIEWS: RecordView[] = [
+  'pipeline',
+  'contacts',
+  'logo',
+  'history',
+  'contract',
+  'communications',
+  'messages',
+]
+
 export function SponsorCRMPipeline({
   conferenceId,
   conference,
@@ -86,6 +101,7 @@ export function SponsorCRMPipeline({
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
   const [emailKind, setEmailKind] = useState<SendableKind>('information')
+  const [contractSend, setContractSend] = useState<ContractSendOptions>({})
   const [deleteConfirmSponsor, setDeleteConfirmSponsor] =
     useState<SponsorForConferenceExpanded | null>(null)
   const [currentView, setCurrentView] = useState<BoardView>(
@@ -102,6 +118,22 @@ export function SponsorCRMPipeline({
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
 
   const utils = api.useUtils()
+
+  // The side panel lives in the URL (`?sponsor=<id>&view=<tab>`), so it is
+  // linkable and the back button closes it. Old modal links land here too.
+  const panelId = searchParams.get('sponsor')
+  const panelView = RECORD_VIEWS.includes(
+    searchParams.get('view') as RecordView,
+  )
+    ? (searchParams.get('view') as RecordView)
+    : 'pipeline'
+  // Whether this visit pushed the panel's history entry: closing then goes
+  // back, so Back afterwards does not reopen it.
+  const pushedPanelRef = useRef(false)
+  const { data: panelSponsor } = api.sponsor.crm.getById.useQuery(
+    { id: panelId ?? '' },
+    { enabled: !!panelId },
+  )
 
   const {
     activeItem,
@@ -157,6 +189,7 @@ export function SponsorCRMPipeline({
   // Pause background refresh when user is actively interacting
   const isUserBusy =
     isFormOpen ||
+    !!panelId ||
     isEmailModalOpen ||
     isDragging ||
     pendingTierMove !== null ||
@@ -222,61 +255,99 @@ export function SponsorCRMPipeline({
     [router, searchParams],
   )
 
+  const openPanel = useCallback(
+    (id: string, view: RecordView = 'pipeline') => {
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('sponsor', id)
+      params.set('view', view)
+      pushedPanelRef.current = true
+      router.push(`?${params.toString()}`, { scroll: false })
+    },
+    [router, searchParams],
+  )
+
+  // The same invalidations as the sponsor page's refresh().
+  const refreshSponsor = useCallback(
+    (id: string) => {
+      utils.sponsor.crm.getById.invalidate({ id })
+      utils.sponsor.crm.getOverview.invalidate({ id })
+      utils.sponsor.crm.getContacts.invalidate({ id })
+      utils.sponsor.crm.getContractDetails.invalidate({ id })
+      utils.sponsor.crm.activities.list.invalidate({
+        sponsorForConferenceId: id,
+      })
+      utils.sponsor.crm.list.invalidate()
+      utils.sponsor.crm.healthViolations.invalidate()
+    },
+    [utils],
+  )
+
+  const closePanel = useCallback(() => {
+    if (panelId) refreshSponsor(panelId)
+    if (pushedPanelRef.current) {
+      pushedPanelRef.current = false
+      router.back()
+    } else {
+      updateUrlParams({ sponsor: null, view: null })
+    }
+  }, [panelId, refreshSponsor, router, updateUrlParams])
+
   // Handlers
   const handleOpenForm = useCallback(
     (
       sponsor?: SponsorForConferenceExpanded,
       formView: 'pipeline' | 'history' | 'contract' = 'pipeline',
     ) => {
-      // An existing sponsor opens on its own page (#1274); only a new one
-      // still uses the form as a modal on the board.
+      // An existing sponsor opens in the side panel; a new one in the form.
       if (sponsor) {
-        router.push(`/admin/sponsors/${sponsor._id}?view=${formView}`)
+        openPanel(sponsor._id, formView)
         return
       }
       setIsFormOpen(true)
     },
-    [router],
+    [openPanel],
   )
 
+  // Stable on purpose: the externalNewTrigger effect below re-runs whenever
+  // this changes, and a URL dependency would reopen the form on every
+  // navigation (e.g. when the new sponsor opens in the panel).
   const handleCreateNew = useCallback(() => {
     setIsFormOpen(true)
-    updateUrlParams({ sponsor: null, view: null })
-  }, [updateUrlParams])
+  }, [])
 
   const handleOpenContract = useCallback(
     (sponsor: SponsorForConferenceExpanded) => {
-      router.push(`/admin/sponsors/${sponsor._id}?view=contract`)
+      openPanel(sponsor._id, 'contract')
     },
-    [router],
+    [openPanel],
   )
 
   const handleCloseForm = useCallback(() => {
     setIsFormOpen(false)
-    updateUrlParams({ sponsor: null, view: null })
     utils.sponsor.crm.list.invalidate()
     utils.sponsor.crm.healthViolations.invalidate()
-  }, [
-    updateUrlParams,
-    utils.sponsor.crm.list,
-    utils.sponsor.crm.healthViolations,
-  ])
+  }, [utils.sponsor.crm.list, utils.sponsor.crm.healthViolations])
 
-  const handleOpenEmail = useCallback(
-    (sponsor: SponsorForConferenceExpanded) => {
-      setEmailKind('information')
+  const openSend = useCallback(
+    (
+      sponsor: SponsorForConferenceExpanded,
+      kind: SendableKind,
+      contractOptions: ContractSendOptions = {},
+    ) => {
+      setEmailKind(kind)
+      setContractSend(contractOptions)
       setEmailSponsor(sponsor)
       setIsEmailModalOpen(true)
     },
     [],
   )
+  const handleOpenEmail = useCallback(
+    (sponsor: SponsorForConferenceExpanded) => openSend(sponsor, 'information'),
+    [openSend],
+  )
   const handleOpenDiscountSend = useCallback(
-    (sponsor: SponsorForConferenceExpanded) => {
-      setEmailKind('discount')
-      setEmailSponsor(sponsor)
-      setIsEmailModalOpen(true)
-    },
-    [],
+    (sponsor: SponsorForConferenceExpanded) => openSend(sponsor, 'discount'),
+    [openSend],
   )
   const handleCloseEmail = useCallback(() => {
     setEmailSponsor(null)
@@ -536,14 +607,50 @@ export function SponsorCRMPipeline({
           sponsor={null}
           isOpen={isFormOpen}
           onClose={handleCloseForm}
-          // A new sponsor continues on its own page (#1274), where the
-          // record and every send live.
+          // A new sponsor continues in the side panel.
           onSuccess={(createdId) => {
             if (createdId) {
-              router.push(`/admin/sponsors/${createdId}?view=pipeline`)
+              handleCloseForm()
+              openPanel(createdId, 'pipeline')
             }
           }}
           existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
+        />
+      )}
+      {panelId && panelSponsor && (
+        <SponsorCRMForm
+          key={panelId}
+          presentation="panel"
+          conferenceId={conferenceId}
+          workshopsEnabled={workshopsEnabled}
+          sponsorStartSet={!!conference.workshopRegistrationSponsorStart}
+          sponsor={panelSponsor}
+          isOpen
+          initialView={panelView}
+          onViewChange={(view) => updateUrlParams({ view })}
+          onClose={closePanel}
+          onSuccess={() => refreshSponsor(panelId)}
+          onSendEmail={() => openSend(panelSponsor, 'information')}
+          onSendDiscountCodes={
+            canSendDiscountCodes
+              ? () => openSend(panelSponsor, 'discount')
+              : undefined
+          }
+          onSendRegistration={() => openSend(panelSponsor, 'registration')}
+          onSendContract={(options) =>
+            openSend(panelSponsor, 'contract', options)
+          }
+          onSendEarlyAccess={() =>
+            openSend(panelSponsor, 'workshop-early-access')
+          }
+          headerActions={
+            <Link
+              href={`/admin/sponsors/${encodeURIComponent(panelId)}`}
+              className="rounded-md px-2 py-1 text-sm font-medium text-brand-cloud-blue hover:bg-gray-100 dark:text-blue-400 dark:hover:bg-gray-800"
+            >
+              Open sponsor page
+            </Link>
+          }
         />
       )}
 
@@ -557,6 +664,7 @@ export function SponsorCRMPipeline({
           onSent={() => utils.sponsor.crm.list.invalidate()}
           sponsorForConference={emailSponsor}
           kind={emailKind}
+          contractSend={emailKind === 'contract' ? contractSend : undefined}
           domain={domain}
           // Mirrors the server's `resolveConferenceFrom(…, 'sponsorEmail')`
           // fallback so the From: line shows what will actually be used.

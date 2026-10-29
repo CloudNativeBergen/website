@@ -51,9 +51,12 @@ interface ModalShellProps {
    * Presentation mode. `'sheet'` (default) renders a bottom sheet below the `sm`
    * breakpoint (rounded top, ≤85dvh, internally scrollable, safe-area padded)
    * and the centered card on `sm+`. `'centered'` forces the centered card at all
-   * sizes (today's behaviour) — an opt-out for edge cases.
+   * sizes (today's behaviour) — an opt-out for edge cases. `'panel'` is a
+   * full-height slide-over on the right, leaving the page beside it visible.
    */
-  presentation?: 'sheet' | 'centered'
+  presentation?: 'sheet' | 'centered' | 'panel'
+  /** Extra controls in the standard header, before the close button. */
+  headerActions?: React.ReactNode
   /**
    * When both this and {@link ModalShellProps.isDirty} are true, a
    * backdrop-click / Escape / header-close first shows an in-dialog
@@ -103,6 +106,7 @@ export function ModalShell({
   icon,
   ariaLabel,
   presentation = 'sheet',
+  headerActions,
   confirmOnDirtyClose = false,
   isDirty = false,
 }: ModalShellProps) {
@@ -137,8 +141,22 @@ export function ModalShell({
   }
 
   const isSheet = presentation === 'sheet'
-  const roundingClass = isSheet ? 'rounded-t-2xl sm:rounded-2xl' : 'rounded-2xl'
-  const widthClass = isSheet ? sheetSizeClasses[size] : sizeClasses[size]
+  const isPanel = presentation === 'panel'
+  const roundingClass = isPanel
+    ? ''
+    : isSheet
+      ? 'rounded-t-2xl sm:rounded-2xl'
+      : 'rounded-2xl'
+  const widthClass =
+    isSheet || isPanel ? sheetSizeClasses[size] : sizeClasses[size]
+  const transitionFrom = isPanel
+    ? 'translate-x-full'
+    : isSheet
+      ? 'opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95'
+      : 'opacity-0 scale-95'
+  const transitionTo = isPanel
+    ? 'translate-x-0'
+    : 'opacity-100 translate-y-0 sm:scale-100'
 
   return (
     <Transition appear show={isOpen} afterLeave={afterLeave}>
@@ -161,31 +179,29 @@ export function ModalShell({
 
         <div className="fixed inset-0 overflow-y-auto">
           <div
-            className={`flex min-h-full justify-center ${
-              isSheet
-                ? 'items-end p-0 sm:items-center sm:p-4'
-                : 'items-center p-4'
+            className={`flex min-h-full ${
+              isPanel
+                ? 'justify-end'
+                : isSheet
+                  ? 'items-end justify-center p-0 sm:items-center sm:p-4'
+                  : 'items-center justify-center p-4'
             }`}
           >
             <TransitionChild
               enter="ease-out duration-300"
-              enterFrom={
-                isSheet
-                  ? 'opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95'
-                  : 'opacity-0 scale-95'
-              }
-              enterTo="opacity-100 translate-y-0 sm:scale-100"
+              enterFrom={transitionFrom}
+              enterTo={transitionTo}
               leave="ease-in duration-200"
-              leaveFrom="opacity-100 translate-y-0 sm:scale-100"
-              leaveTo={
-                isSheet
-                  ? 'opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95'
-                  : 'opacity-0 scale-95'
-              }
+              leaveFrom={transitionTo}
+              leaveTo={transitionFrom}
             >
               <DialogPanel
                 className={`relative flex w-full ${widthClass} flex-col bg-white shadow-2xl dark:bg-gray-900 ${roundingClass} ${
-                  isSheet ? 'max-h-[85dvh] sm:max-h-none' : ''
+                  isPanel
+                    ? 'h-dvh'
+                    : isSheet
+                      ? 'max-h-[85dvh] sm:max-h-none'
+                      : ''
                 } ${className}`}
               >
                 {title ? (
@@ -210,6 +226,11 @@ export function ModalShell({
                         ) : null}
                       </div>
                     </div>
+                    {headerActions ? (
+                      <div className="ml-auto flex shrink-0 items-center gap-2">
+                        {headerActions}
+                      </div>
+                    ) : null}
                     <button
                       type="button"
                       onClick={handleClose}
@@ -223,13 +244,15 @@ export function ModalShell({
 
                 <div
                   className={`${padded ? 'p-6' : ''} ${
-                    isSheet
-                      ? `flex-1 overflow-y-auto overscroll-contain sm:overflow-visible ${
-                          padded
-                            ? 'pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pb-6'
-                            : ''
-                        }`
-                      : ''
+                    isPanel
+                      ? 'flex-1 overflow-y-auto overscroll-contain'
+                      : isSheet
+                        ? `flex-1 overflow-y-auto overscroll-contain sm:overflow-visible ${
+                            padded
+                              ? 'pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pb-6'
+                              : ''
+                          }`
+                        : ''
                   }`}
                 >
                   {children}

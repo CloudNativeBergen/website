@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
@@ -26,6 +26,14 @@ type RecordView = NonNullable<
   React.ComponentProps<typeof SponsorCRMForm>['initialView']
 >
 
+// The page section a `?view=` link scrolls to; other views use their own id.
+const SECTION_FOR_VIEW: Partial<Record<RecordView, string>> = {
+  pipeline: 'overview',
+  logo: 'overview',
+  communications: 'history',
+  messages: 'history',
+}
+
 interface SponsorDashboardClientProps {
   sponsorId: string
   conference: Conference
@@ -33,7 +41,10 @@ interface SponsorDashboardClientProps {
   canSendDiscountCodes?: boolean
   workshopsEnabled?: boolean
   initialOverview?: any
-  /** From `?view=`: opens the record on that tab, as the old modal link did. */
+  /**
+   * From `?view=`: scrolls to the matching section. It no longer opens the
+   * record; only "Open record" and "Manage" do.
+   */
   initialView?: RecordView
   /** Where the back arrow goes: the board the sponsor was opened from. */
   backHref?: string
@@ -57,9 +68,14 @@ export function SponsorDashboardClient({
   // The full record (the former SponsorCRMForm modal) carries every tab:
   // deal status, tags, owner, contacts, logo, contract steps, early access,
   // history, communications and messages.
-  const [recordView, setRecordView] = useState<RecordView | null>(
-    initialView ?? null,
-  )
+  const [recordView, setRecordView] = useState<RecordView | null>(null)
+
+  useEffect(() => {
+    if (!initialView) return
+    document
+      .getElementById(SECTION_FOR_VIEW[initialView] ?? initialView)
+      ?.scrollIntoView?.({ block: 'start' })
+  }, [initialView])
   const { data: sponsor } = api.sponsor.crm.getById.useQuery({
     id: sponsorId,
   })
@@ -130,31 +146,44 @@ export function SponsorDashboardClient({
           )}
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
             <div className="flex flex-col gap-8 lg:col-span-1">
-              <SponsorOverviewWidget
-                sponsorId={sponsorId}
-                initialData={initialOverview}
-                onEdit={() => openRecord('pipeline')}
-              />
-              <SponsorFollowUpWidget
-                sponsorId={sponsorId}
-                initialData={initialOverview}
-                onChanged={refresh}
-              />
-              <SponsorContactsWidget
-                sponsorId={sponsorId}
-                onEdit={() => openRecord('contacts')}
-              />
+              <div id="overview" className="scroll-mt-4">
+                <SponsorOverviewWidget
+                  sponsorId={sponsorId}
+                  initialData={initialOverview}
+                  onEdit={() => openRecord('pipeline')}
+                />
+              </div>
+              <div id="follow-up" className="scroll-mt-4">
+                <SponsorFollowUpWidget
+                  sponsorId={sponsorId}
+                  initialData={initialOverview}
+                  onChanged={refresh}
+                />
+              </div>
+              <div id="contacts" className="scroll-mt-4">
+                <SponsorContactsWidget
+                  sponsorId={sponsorId}
+                  onEdit={() => openRecord('contacts')}
+                />
+              </div>
             </div>
 
             <div className="flex h-[calc(100vh-12rem)] flex-col gap-8 lg:col-span-2">
-              <SponsorContractWidget
-                sponsorId={sponsorId}
-                onEdit={() => openRecord('contract')}
-              />
-              <SponsorActivityFeedWidget
-                sponsorId={sponsorId}
-                onNewActivity={() => openRecord('history')}
-              />
+              <div id="contract" className="scroll-mt-4">
+                <SponsorContractWidget
+                  sponsorId={sponsorId}
+                  onEdit={() => openRecord('contract')}
+                />
+              </div>
+              <div
+                id="history"
+                className="flex min-h-0 flex-1 scroll-mt-4 flex-col"
+              >
+                <SponsorActivityFeedWidget
+                  sponsorId={sponsorId}
+                  onNewActivity={() => openRecord('history')}
+                />
+              </div>
             </div>
           </div>
         </div>

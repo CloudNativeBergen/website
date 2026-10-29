@@ -68,6 +68,10 @@ interface SponsorCRMFormProps {
   sponsorStartSet?: boolean
   /** Send → Workshop early access (#1347), raised from the contract view's early-access section. */
   onSendEarlyAccess?: () => void
+  /** `'panel'`: a slide-over beside the board instead of a centered modal. */
+  presentation?: 'sheet' | 'panel'
+  /** Extra header controls, e.g. a link to the sponsor page. */
+  headerActions?: React.ReactNode
 }
 
 export function SponsorCRMForm({
@@ -86,6 +90,8 @@ export function SponsorCRMForm({
   workshopsEnabled = false,
   sponsorStartSet,
   onSendEarlyAccess,
+  presentation,
+  headerActions,
 }: SponsorCRMFormProps) {
   const [view, setViewState] = useState<FormView>(initialView)
   const setView = useCallback(
@@ -396,6 +402,8 @@ export function SponsorCRMForm({
       onClose={handleClose}
       size="3xl"
       padded={false}
+      presentation={presentation}
+      headerActions={headerActions}
       title={
         view === 'pipeline'
           ? sponsor
