@@ -33,6 +33,10 @@ const mockOverview = {
   status: 'negotiating',
   tier: { title: 'Gold Tier', price: 10000 },
   conference: { _ref: 'conf-1' },
+  nextFollowUpAt: '2026-11-05T08:00:00.000Z',
+  contactInitiatedAt: '2026-09-15T08:00:00.000Z',
+  outreachCount: 4,
+  reminderCount: 1,
 }
 
 const trpcResult = (data: any) => HttpResponse.json({ result: { data } })
@@ -99,3 +103,31 @@ export const Default: Story = {
     },
   },
 }
+
+// The story's overview wins over Default's: MSW uses the first matching handler.
+const withOverview = (overview: any): Story => ({
+  args: { ...Default.args, initialOverview: overview },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/sponsor.crm.getOverview', () =>
+          trpcResult(overview),
+        ),
+        ...(Default.parameters as any).msw.handlers,
+      ],
+    },
+  },
+})
+
+export const OverdueFollowUp: Story = withOverview({
+  ...mockOverview,
+  nextFollowUpAt: '2026-01-05T08:00:00.000Z',
+})
+
+export const NoFollowUp: Story = withOverview({
+  ...mockOverview,
+  nextFollowUpAt: null,
+  contactInitiatedAt: null,
+  outreachCount: 0,
+  reminderCount: 0,
+})

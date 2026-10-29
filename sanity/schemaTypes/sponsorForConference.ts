@@ -279,6 +279,20 @@ export default defineType({
       description: 'When first contact was made with this sponsor',
     }),
     defineField({
+      name: 'nextFollowUpAt',
+      title: 'Next Follow-up',
+      type: 'datetime',
+      description: 'When the owner plans to follow up with this sponsor next',
+    }),
+    defineField({
+      name: 'outreachCount',
+      title: 'Emails Sent',
+      type: 'number',
+      description: 'Number of emails sent to this sponsor',
+      readOnly: true,
+      validation: (Rule) => Rule.min(0),
+    }),
+    defineField({
       name: 'contractSignedAt',
       title: 'Contract Signed Date',
       type: 'datetime',

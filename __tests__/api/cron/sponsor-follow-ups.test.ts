@@ -12,14 +12,16 @@ const h = vi.hoisted(() => ({
   query: '',
 }))
 
-// A tiny store: the query's `nextFollowUpAt != followUpAlertedFor` filter,
+// A tiny store: the query's past-date and not-yet-alerted filter,
 // and a patch that stamps the doc.
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     fetch: async (query: string) =>
       (h.query = query) &&
       h.docs.filter(
-        (d) => d.nextFollowUpAt && d.nextFollowUpAt !== d.followUpAlertedFor,
+        (d) =>
+          new Date(d.nextFollowUpAt) < new Date() &&
+          d.nextFollowUpAt !== d.followUpAlertedFor,
       ),
     patch: (id: string) => ({
       ifRevisionId: () => ({
@@ -82,5 +84,6 @@ describe('api/cron/sponsor-follow-ups', () => {
     await run()
     expect(h.query).toContain('status != "closed-lost"')
     expect(h.query).not.toContain('closed-won')
+    expect(h.query).toContain('dateTime(nextFollowUpAt) < dateTime(now())')
   })
 })

@@ -32,16 +32,13 @@ export async function GET(request: NextRequest) {
       // conference.
       `*[_type == "sponsorForConference"
         && status != "closed-lost"
-        && defined(nextFollowUpAt)
+        && dateTime(nextFollowUpAt) < dateTime(now())
         && nextFollowUpAt != followUpAlertedFor
       ]{ _id, _rev, nextFollowUpAt }`,
     )
 
-    const now = Date.now()
     let alerted = 0
     for (const sfc of candidates ?? []) {
-      // The field holds a date or a datetime; compare in JS, not GROQ.
-      if (!(new Date(sfc.nextFollowUpAt).getTime() < now)) continue
       try {
         await clientWrite
           .patch(sfc._id)
