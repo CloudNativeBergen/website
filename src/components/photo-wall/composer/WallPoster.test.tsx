@@ -238,7 +238,11 @@ describe('WallPoster', () => {
     })
     expect(await request.photo.text()).toBe('fjord')
 
-    expect(screen.getByRole('heading', { name: 'My posts' })).toHaveFocus()
+    // Focus moves in an effect after the screen commits, and press() waits
+    // only for the commit: under load the effect can still be pending.
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'My posts' })).toHaveFocus(),
+    )
     expect(
       screen.queryByRole('button', { name: /Post to the wall/ }),
     ).toBeNull()
