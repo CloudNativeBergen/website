@@ -245,7 +245,6 @@ import {
   acquireBroadcastLock,
   releaseBroadcastLock,
 } from '@/lib/sponsor-crm/broadcast-lock'
-import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { logBulkEmailSent } from '@/lib/sponsor-crm/activity'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
@@ -868,6 +867,29 @@ async function resolveSponsorBroadcastRecipients(
     filters,
   )
   return { recipients, eligibleSponsors: sponsors }
+}
+
+/**
+ * One sponsor send or audience sync at a time per conference: each one
+ * rewrites the shared sponsor audience, so overlapping runs would mail one
+ * send's recipients with another's filters. Released in `finally`.
+ */
+async function withSponsorSendLock<T>(
+  conference: Conference,
+  run: () => Promise<T>,
+): Promise<T> {
+  const lockRev = await acquireBroadcastLock(conference._id)
+  if (!lockRev) {
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message: 'Another sponsor email is being sent. Try again in a minute.',
+    })
+  }
+  try {
+    return await run()
+  } finally {
+    await releaseBroadcastLock(conference._id, lockRev)
+  }
 }
 
 export const sponsorRouter = router({
@@ -3661,45 +3683,35 @@ export const sponsorRouter = router({
           })
         }
 
-        // One send at a time per conference: each send narrows the shared
-        // audience to its own filters, so the lock is held until the
-        // broadcast is queued or has failed.
-        const lockRev = await acquireBroadcastLock(conference._id)
-        if (!lockRev) {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message:
-              'Another sponsor email is being sent. Try again in a minute.',
-          })
-        }
+        // Held until the broadcast is queued or has failed.
+        const { eligibleSponsors, response } = await withSponsorSendLock(
+          conference,
+          async () => {
+            // Sync the matching sponsor contacts into the Resend audience
+            // before sending so broadcasts never target a stale or empty
+            // segment.
+            const { eligibleSponsors } = await syncConfirmedSponsorAudience(
+              conference,
+              input.filters,
+            )
 
-        let eligibleSponsors: SponsorForConferenceExpanded[]
-        let response: Response
-        try {
-          // Sync the matching sponsor contacts into the Resend audience before
-          // sending so broadcasts never target a stale or empty segment.
-          ;({ eligibleSponsors } = await syncConfirmedSponsorAudience(
-            conference,
-            input.filters,
-          ))
-
-          response = await sendBroadcastEmail({
-            conference,
-            subject: input.subject,
-            messagePortableText,
-            audienceType: 'sponsors',
-          })
-
-          if (!response.ok) {
-            const errorData = await response.json()
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: errorData.error || 'Failed to send broadcast email',
+            const response = await sendBroadcastEmail({
+              conference,
+              subject: input.subject,
+              messagePortableText,
+              audienceType: 'sponsors',
             })
-          }
-        } finally {
-          await releaseBroadcastLock(conference._id, lockRev)
-        }
+
+            if (!response.ok) {
+              const errorData = await response.json()
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: errorData.error || 'Failed to send broadcast email',
+              })
+            }
+            return { eligibleSponsors, response }
+          },
+        )
 
         try {
           const userId = ctx.speaker._id
@@ -3725,8 +3737,11 @@ export const sponsorRouter = router({
         })
       }
 
+      // A Sync during a send would reset the audience mid-send.
       const { audienceId, syncedCount, addedCount, removedCount } =
-        await syncConfirmedSponsorAudience(conference)
+        await withSponsorSendLock(conference, () =>
+          syncConfirmedSponsorAudience(conference),
+        )
 
       return {
         success: true,

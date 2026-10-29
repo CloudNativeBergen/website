@@ -1171,6 +1171,22 @@ describe('Email sponsors: one send at a time per conference', () => {
     expect(h.releaseLock).toHaveBeenCalledWith(CONF, 'lock-rev')
   })
 
+  it('refuses a Sync while a send holds the lock', async () => {
+    h.acquireLock.mockResolvedValueOnce(null)
+    await expect(sponsor().crm.syncAudience()).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Another sponsor email is being sent. Try again in a minute.',
+    })
+    expect(h.syncSponsorAudience).not.toHaveBeenCalled()
+    expect(h.releaseLock).not.toHaveBeenCalled()
+  })
+
+  it('a Sync takes and releases the same lock', async () => {
+    await sponsor().crm.syncAudience()
+    expect(h.acquireLock).toHaveBeenCalledWith(CONF)
+    expect(h.releaseLock).toHaveBeenCalledWith(CONF, 'lock-rev')
+  })
+
   it('releases the lock when the audience sync throws', async () => {
     h.syncSponsorAudience.mockResolvedValue({
       success: false,
