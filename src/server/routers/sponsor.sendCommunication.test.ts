@@ -44,6 +44,12 @@ const h = vi.hoisted(() => ({
   syncSponsorAudience: vi.fn(),
   sendBroadcastEmail: vi.fn(),
   listEventDiscounts: vi.fn(),
+  acquireLock: vi.fn(async () => 'lock-rev' as string | null),
+  releaseLock: vi.fn(async () => {}),
+}))
+vi.mock('@/lib/sponsor-crm/broadcast-lock', () => ({
+  acquireBroadcastLock: h.acquireLock,
+  releaseBroadcastLock: h.releaseLock,
 }))
 vi.mock('@/lib/email/audience', () => ({
   syncSponsorAudience: h.syncSponsorAudience,
@@ -1118,6 +1124,63 @@ describe('Email sponsors: recipients resolved on the server from filters (#1704 
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     expect(h.syncSponsorAudience).not.toHaveBeenCalled()
+  })
+})
+
+describe('Email sponsors: one send at a time per conference', () => {
+  beforeEach(() => {
+    h.sfc = { ...h.sfc, status: 'closed-won' }
+    h.syncSponsorAudience.mockResolvedValue({
+      success: true,
+      audienceId: 'aud-1',
+      syncedCount: 2,
+      addedCount: 0,
+      removedCount: 0,
+    })
+  })
+
+  it('refuses a second send while the lock is held, before touching the audience', async () => {
+    h.acquireLock.mockResolvedValueOnce(null)
+    await expect(
+      sponsor().crm.broadcastEmail({ subject: 'Hi', message: MESSAGE }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Another sponsor email is being sent. Try again in a minute.',
+    })
+    expect(h.acquireLock).toHaveBeenCalledWith(CONF)
+    expect(h.syncSponsorAudience).not.toHaveBeenCalled()
+    expect(h.sendBroadcastEmail).not.toHaveBeenCalled()
+    expect(h.releaseLock).not.toHaveBeenCalled()
+  })
+
+  it('releases the lock after a successful send', async () => {
+    h.sendBroadcastEmail.mockResolvedValue(
+      new Response(JSON.stringify({ id: 'b' }), { status: 200 }),
+    )
+    await sponsor().crm.broadcastEmail({ subject: 'Hi', message: MESSAGE })
+    expect(h.releaseLock).toHaveBeenCalledWith(CONF, 'lock-rev')
+  })
+
+  it('releases the lock after a failed send', async () => {
+    h.sendBroadcastEmail.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'down' }), { status: 500 }),
+    )
+    await expect(
+      sponsor().crm.broadcastEmail({ subject: 'Hi', message: MESSAGE }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+    expect(h.releaseLock).toHaveBeenCalledWith(CONF, 'lock-rev')
+  })
+
+  it('releases the lock when the audience sync throws', async () => {
+    h.syncSponsorAudience.mockResolvedValue({
+      success: false,
+      error: new Error('resend down'),
+    })
+    await expect(
+      sponsor().crm.broadcastEmail({ subject: 'Hi', message: MESSAGE }),
+    ).rejects.toBeDefined()
+    expect(h.sendBroadcastEmail).not.toHaveBeenCalled()
+    expect(h.releaseLock).toHaveBeenCalledWith(CONF, 'lock-rev')
   })
 })
 

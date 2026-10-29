@@ -61,7 +61,8 @@ const isBilling = (role?: string) => /billing/i.test(role ?? '')
 /**
  * Pure: the caller passes sponsors ALREADY scoped to one conference. Contacts
  * without an address are skipped and addresses are deduplicated
- * case-insensitively, as the audience sync does. Erased contacts are gone from
+ * case-insensitively, as the audience sync does. "Billing" means contacts with
+ * a billing role plus the sponsor's invoice address (`billing.email`). Erased contacts are gone from
  * `contactPersons`, so they cannot appear; opt-outs are enforced by the
  * audience at send time.
  */
@@ -81,12 +82,24 @@ export function resolveBroadcastRecipients(
     )
       continue
 
+    const candidates = (sfc.contactPersons ?? []).filter((c) =>
+      filters.contactRole === 'primary'
+        ? c.isPrimary
+        : filters.contactRole === 'billing'
+          ? isBilling(c.role)
+          : true,
+    )
+    // The invoice address is a billing recipient too, though not a contact.
+    const billingEmail = sfc.billing?.email
+    const all =
+      filters.contactRole === 'billing' && billingEmail
+        ? [...candidates, { email: billingEmail, name: '' }]
+        : candidates
+
     let added = false
-    for (const c of sfc.contactPersons ?? []) {
+    for (const c of all) {
       const email = c.email?.trim()
       if (!email) continue
-      if (filters.contactRole === 'primary' && !c.isPrimary) continue
-      if (filters.contactRole === 'billing' && !isBilling(c.role)) continue
       const key = email.toLowerCase()
       if (seen.has(key)) continue
       seen.add(key)

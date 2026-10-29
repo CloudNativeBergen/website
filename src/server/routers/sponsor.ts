@@ -241,6 +241,11 @@ import {
   resolveBroadcastRecipients,
   type BroadcastFilters,
 } from '@/lib/sponsor-crm/broadcast-recipients'
+import {
+  acquireBroadcastLock,
+  releaseBroadcastLock,
+} from '@/lib/sponsor-crm/broadcast-lock'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { logBulkEmailSent } from '@/lib/sponsor-crm/activity'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
@@ -3656,26 +3661,44 @@ export const sponsorRouter = router({
           })
         }
 
-        // Sync confirmed (closed-won) sponsor contacts into the Resend audience
-        // before sending so broadcasts never target a stale or empty segment.
-        const { eligibleSponsors } = await syncConfirmedSponsorAudience(
-          conference,
-          input.filters,
-        )
-
-        const response = await sendBroadcastEmail({
-          conference,
-          subject: input.subject,
-          messagePortableText,
-          audienceType: 'sponsors',
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json()
+        // One send at a time per conference: each send narrows the shared
+        // audience to its own filters, so the lock is held until the
+        // broadcast is queued or has failed.
+        const lockRev = await acquireBroadcastLock(conference._id)
+        if (!lockRev) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: errorData.error || 'Failed to send broadcast email',
+            code: 'CONFLICT',
+            message:
+              'Another sponsor email is being sent. Try again in a minute.',
           })
+        }
+
+        let eligibleSponsors: SponsorForConferenceExpanded[]
+        let response: Response
+        try {
+          // Sync the matching sponsor contacts into the Resend audience before
+          // sending so broadcasts never target a stale or empty segment.
+          ;({ eligibleSponsors } = await syncConfirmedSponsorAudience(
+            conference,
+            input.filters,
+          ))
+
+          response = await sendBroadcastEmail({
+            conference,
+            subject: input.subject,
+            messagePortableText,
+            audienceType: 'sponsors',
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json()
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: errorData.error || 'Failed to send broadcast email',
+            })
+          }
+        } finally {
+          await releaseBroadcastLock(conference._id, lockRev)
         }
 
         try {

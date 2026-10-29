@@ -34,6 +34,16 @@ const sponsors = [
     { email: '  ' },
   ]),
   sfc('gamma', 'negotiating', 'gold', [{ email: 'p@gamma.test' }]),
+  {
+    ...sfc('delta', 'closed-won', 'gold', [
+      { email: 'ap@delta.test', role: 'Billing Reference' },
+    ]),
+    billing: { email: 'AP@delta.test ', invoiceFormat: 'pdf' },
+  } as SponsorForConferenceExpanded,
+  {
+    ...sfc('eps', 'closed-won', 'gold', []),
+    billing: { email: 'invoice@eps.test', invoiceFormat: 'ehf' },
+  } as SponsorForConferenceExpanded,
 ]
 
 const emails = (input: unknown) =>
@@ -44,7 +54,12 @@ const emails = (input: unknown) =>
 
 describe('resolveBroadcastRecipients', () => {
   it('defaults to every contact at closed-won sponsors, deduplicated', () => {
-    expect(emails({})).toEqual(['p@acme.test', 'bill@acme.test', 'p@beta.test'])
+    expect(emails({})).toEqual([
+      'p@acme.test',
+      'bill@acme.test',
+      'p@beta.test',
+      'ap@delta.test',
+    ])
   })
 
   it('filters by tier', () => {
@@ -63,7 +78,14 @@ describe('resolveBroadcastRecipients', () => {
       'p@acme.test',
       'p@beta.test',
     ])
-    expect(emails({ contactRole: 'billing' })).toEqual(['bill@acme.test'])
+  })
+
+  it('billing adds the invoice address, deduplicated against contacts', () => {
+    expect(emails({ contactRole: 'billing' })).toEqual([
+      'bill@acme.test',
+      'ap@delta.test',
+      'invoice@eps.test',
+    ])
   })
 
   it('counts only sponsors that contribute a recipient', () => {
@@ -71,7 +93,8 @@ describe('resolveBroadcastRecipients', () => {
       sponsors,
       BroadcastFiltersSchema.parse({ contactRole: 'billing' }),
     )
-    expect(r.sponsors.map((s) => s._id)).toEqual(['acme'])
+    expect(r.sponsors.map((s) => s._id)).toEqual(['acme', 'delta', 'eps'])
+    expect(r.recipients).toHaveLength(3)
   })
 
   it('rejects unknown keys, so no recipient list can ride along', () => {
