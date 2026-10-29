@@ -24,7 +24,7 @@ export default async function SponsorDashboardPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ view?: string }>
+  searchParams: Promise<{ view?: string; board?: string }>
 }) {
   // Same guard as the CRM board: the conference read below carries the
   // sponsor registration link, which must not reach a non-organizer.
@@ -32,7 +32,7 @@ export default async function SponsorDashboardPage({
   if (denied) return denied
 
   const { id } = await params
-  const { view } = await searchParams
+  const { view, board } = await searchParams
   const domain = (await headers()).get('host') || 'localhost:3000'
 
   const { conference, error: conferenceError } =
@@ -64,6 +64,12 @@ export default async function SponsorDashboardPage({
       canSendDiscountCodes={canSendDiscountCodes}
       workshopsEnabled={await isWorkshopsEnabledForConference(conference)}
       initialOverview={initialOverview}
+      // Back to the board the sponsor was opened from (the invoice board).
+      backHref={
+        board === 'invoice'
+          ? '/admin/sponsors/crm?board=invoice'
+          : '/admin/sponsors/crm'
+      }
       initialView={VIEWS.includes(view as View) ? (view as View) : undefined}
     />
   )

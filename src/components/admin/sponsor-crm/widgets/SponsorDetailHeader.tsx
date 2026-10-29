@@ -13,6 +13,8 @@ interface SponsorDetailHeaderProps {
   onOpenRecord: () => void
   /** Opens the Send modal. Omitted when there is no sender identity. */
   onSendEmail?: () => void
+  /** Back arrow target. Defaults to the pipeline board. */
+  backHref?: string
 }
 
 export function SponsorDetailHeader({
@@ -20,6 +22,7 @@ export function SponsorDetailHeader({
   initialData,
   onOpenRecord,
   onSendEmail,
+  backHref = '/admin/sponsors/crm',
 }: SponsorDetailHeaderProps) {
   const trpcUtils = api.useUtils()
 
@@ -52,7 +55,7 @@ export function SponsorDetailHeader({
     <div className="flex flex-col border-b border-gray-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8 dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center gap-4">
         <Link
-          href="/admin/sponsors/crm"
+          href={backHref}
           aria-label="Back to the sponsor pipeline"
           className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
         >

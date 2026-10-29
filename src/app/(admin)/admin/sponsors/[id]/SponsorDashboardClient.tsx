@@ -32,6 +32,8 @@ interface SponsorDashboardClientProps {
   initialOverview?: any
   /** From `?view=`: opens the record on that tab, as the old modal link did. */
   initialView?: RecordView
+  /** Where the back arrow goes: the board the sponsor was opened from. */
+  backHref?: string
 }
 
 export function SponsorDashboardClient({
@@ -42,6 +44,7 @@ export function SponsorDashboardClient({
   workshopsEnabled = false,
   initialOverview,
   initialView,
+  backHref,
 }: SponsorDashboardClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -96,6 +99,7 @@ export function SponsorDashboardClient({
       <SponsorDetailHeader
         sponsorId={sponsorId}
         initialData={initialOverview}
+        backHref={backHref}
         onOpenRecord={() => openRecord('pipeline')}
         onSendEmail={sponsor ? () => setSendKind('information') : undefined}
       />

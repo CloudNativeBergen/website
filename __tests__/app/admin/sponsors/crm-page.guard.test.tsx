@@ -79,4 +79,12 @@ describe('/admin/sponsors/crm', () => {
       }),
     ).rejects.toThrow('REDIRECT /admin/sponsors/sfc-1?view=history')
   })
+
+  it('keeps the invoice board in the redirect', async () => {
+    await expect(
+      AdminSponsorsCRM({
+        searchParams: Promise.resolve({ sponsor: 'sfc-1', board: 'invoice' }),
+      }),
+    ).rejects.toThrow('REDIRECT /admin/sponsors/sfc-1?board=invoice')
+  })
 })
