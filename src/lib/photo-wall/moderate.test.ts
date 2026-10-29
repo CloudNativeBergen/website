@@ -90,6 +90,7 @@ describe('the actions are guarded patches of status and decision times only (§5
     await expect(act('approve', 'pending')).resolves.toEqual({
       status: 'done',
       deviceKey: 'device-1',
+      decidedAt: T,
     })
     expect(store().commits).toEqual([
       [
@@ -180,6 +181,7 @@ describe('allowed from-states (§10): anything else is refused before any write'
     approve: ['pending', 'notShown'],
     reject: ['pending'],
     remove: ['approved'],
+    undoToPending: ['approved', 'notShown'],
   }
   const refused = (Object.keys(ALLOWED) as ModerationAction[]).flatMap(
     (action) =>
@@ -664,8 +666,102 @@ describe('approveAllPending (§10)', () => {
   })
 })
 
-describe('Undo of Approve all (§10): Remove guarded by the batch’s decidedAt', () => {
-  const LATER = new Date('2026-10-26T09:05:00.000Z')
+describe('Undo back to Pending (§10): a true undo, guarded by decidedAt', () => {
+  const SOON = new Date(NOW.getTime() + 30_000)
+  const undo = (
+    from: WallPostStatus,
+    decidedAt: string | null = T,
+    now = SOON,
+  ) =>
+    moderateWallPost({
+      conferenceId: 'conf-A',
+      postId: P1,
+      action: 'undoToPending',
+      from,
+      decidedAt: decidedAt ?? undefined,
+      now,
+    })
+
+  it.each([
+    ['Approve', 'approve', 'approved'],
+    ['Reject', 'reject', 'notShown'],
+  ] as const)(
+    'Undo of %s from Pending restores a pending post, decision times unset',
+    async (_, action, after) => {
+      const done = await act(action, 'pending')
+      expect(done).toMatchObject({ status: 'done', decidedAt: T })
+      expect(store().doc(P1)?.status).toBe(after)
+      await expect(undo(after)).resolves.toEqual({
+        status: 'done',
+        deviceKey: 'device-1',
+        decidedAt: null,
+      })
+      expect(store().commits.at(-1)).toEqual([
+        {
+          patch: {
+            id: P1,
+            ifRevisionID: expect.any(String),
+            set: { status: 'pending' },
+            unset: ['approvedAt', 'decidedAt'],
+          },
+        },
+      ])
+      expect(store().doc(P1)).toEqual({
+        ...post(P1),
+        _rev: expect.any(String),
+      })
+    },
+  )
+
+  it('refuses after another decision: its decidedAt no longer matches', async () => {
+    await act('reject', 'pending')
+    // Another organizer approves it 10 s later.
+    await act('approve', 'notShown', new Date(NOW.getTime() + 10_000))
+    const commits = store().commits.length
+    await expect(undo('approved')).resolves.toEqual({ status: 'changed' })
+    expect(store().commits).toHaveLength(commits)
+    expect(store().doc(P1)?.status).toBe('approved')
+  })
+
+  it('refuses without the decision it undoes', async () => {
+    await act('approve', 'pending')
+    await expect(undo('approved', null)).resolves.toEqual({
+      status: 'changed',
+    })
+    expect(store().doc(P1)?.status).toBe('approved')
+  })
+
+  it('refuses past two minutes: an Undo, not a general unreview', async () => {
+    await act('approve', 'pending')
+    const at = (ms: number) => new Date(NOW.getTime() + ms)
+    await expect(undo('approved', T, at(120_001))).resolves.toEqual({
+      status: 'changed',
+    })
+    expect(store().doc(P1)?.status).toBe('approved')
+    await expect(undo('approved', T, at(120_000))).resolves.toMatchObject({
+      status: 'done',
+    })
+  })
+
+  it('refuses a replacement under the same id', async () => {
+    await act('approve', 'pending')
+    await expect(
+      moderateWallPost({
+        conferenceId: 'conf-A',
+        postId: P1,
+        action: 'undoToPending',
+        from: 'approved',
+        decidedAt: T,
+        shown: { createdAt: '1999-01-01T00:00:00Z', assetId: ASSET },
+        now: SOON,
+      }),
+    ).resolves.toEqual({ status: 'changed' })
+    expect(store().doc(P1)?.status).toBe('approved')
+  })
+})
+
+describe('Undo of Approve all (§10): back to Pending, guarded by the batch’s decidedAt', () => {
+  const LATER = new Date('2026-10-26T09:01:00.000Z')
   const batch = () =>
     approveAllPending({
       conferenceId: 'conf-A',
@@ -683,16 +779,17 @@ describe('Undo of Approve all (§10): Remove guarded by the batch’s decidedAt'
     moderateWallPost({
       conferenceId: 'conf-A',
       postId: P1,
-      action: 'remove',
+      action: 'undoToPending',
       from: 'approved',
       decidedAt,
       now: LATER,
     })
 
-  it('removes a post the batch approved, its answer lost or not', async () => {
+  it('moves a post the batch approved back to Pending, its answer lost or not', async () => {
     const { decidedAt } = await batch()
     await expect(undo(decidedAt)).resolves.toMatchObject({ status: 'done' })
-    expect(store().doc(P1)?.status).toBe('notShown')
+    expect(store().doc(P1)?.status).toBe('pending')
+    expect(store().doc(P1)).not.toHaveProperty('approvedAt')
   })
 
   it('a post the batch never approved is changed, nothing written', async () => {
@@ -711,8 +808,8 @@ describe('Undo of Approve all (§10): Remove guarded by the batch’s decidedAt'
 
   it('removed and approved again since: Undo leaves the newer approval', async () => {
     const { decidedAt } = await batch()
-    await act('remove', 'approved', LATER)
-    await act('approve', 'notShown', new Date('2026-10-26T09:06:00.000Z'))
+    await act('remove', 'approved', new Date('2026-10-26T09:00:20.000Z'))
+    await act('approve', 'notShown', new Date('2026-10-26T09:00:40.000Z'))
     await expect(undo(decidedAt)).resolves.toEqual({ status: 'changed' })
     expect(store().doc(P1)?.status).toBe('approved')
   })

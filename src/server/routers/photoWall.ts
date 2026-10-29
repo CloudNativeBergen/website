@@ -141,7 +141,7 @@ function expirePosts(
 async function moderate(
   orgId: string | null,
   args: Omit<Parameters<typeof moderateWallPost>[0], 'conferenceId' | 'onRead'>,
-): Promise<{ status: ModerationResult['status'] }> {
+): Promise<{ status: ModerationResult['status']; decidedAt?: string | null }> {
   const conference = await requestConference(orgId)
   const devices: (string | null)[] = []
   const talks: (string | null)[] = []
@@ -154,7 +154,9 @@ async function moderate(
         talks.push(talkId)
       },
     })
-    return { status: result.status }
+    return result.status === 'done'
+      ? { status: result.status, decidedAt: result.decidedAt }
+      : { status: result.status }
   } finally {
     expirePosts(conference._id, devices, talks)
   }
@@ -288,6 +290,33 @@ export const photoWallRouter = router({
       moderate(ctx.orgId, {
         postId: input.id,
         action: 'remove',
+        from: input.from,
+        decidedAt: input.decidedAt,
+        shown: input.shown,
+      }),
+    ),
+
+  /**
+   * Undo of an Approve or Reject that started on Pending (§10): back to
+   * Pending, its decision times cleared. `decidedAt` is the time that
+   * decision wrote; a post decided since, or more than two minutes later,
+   * is `changed`.
+   */
+  undoToPending: adminProcedure
+    .input(
+      z
+        .object({
+          id: postId,
+          from: z.enum(ALLOWED_FROM.undoToPending),
+          decidedAt: z.string().max(40),
+          shown,
+        })
+        .strict(),
+    )
+    .mutation(({ ctx, input }) =>
+      moderate(ctx.orgId, {
+        postId: input.id,
+        action: 'undoToPending',
         from: input.from,
         decidedAt: input.decidedAt,
         shown: input.shown,

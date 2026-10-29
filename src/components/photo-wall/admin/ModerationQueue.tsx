@@ -48,6 +48,7 @@ export function ModerationQueue({ posting }: { posting?: PostingState }) {
   const approve = api.photoWall.approve.useMutation()
   const reject = api.photoWall.reject.useMutation()
   const remove = api.photoWall.remove.useMutation()
+  const undoToPending = api.photoWall.undoToPending.useMutation()
   const deletePost = api.photoWall.deletePost.useMutation()
   const withdrawMarketing = api.photoWall.withdrawMarketing.useMutation()
   const approveAll = api.photoWall.approveAllPending.useMutation()
@@ -58,9 +59,9 @@ export function ModerationQueue({ posting }: { posting?: PostingState }) {
 
   const onAction = async (
     post: ModerationPost,
-    action: PostAction,
+    action: QueueAction,
     decidedAt?: string,
-  ): Promise<PostActionOutcome> => {
+  ): Promise<QueueActionOutcome> => {
     const id = post._id
     // Which post the card showed: never an action on a replacement under
     // the same id (§6.2).
@@ -70,15 +71,27 @@ export function ModerationQueue({ posting }: { posting?: PostingState }) {
         case 'approve': {
           // The cards offer Approve only where the transitions allow it.
           if (!allowsFrom('approve', post.status)) return 'changed'
-          return (await approve.mutateAsync({ id, from: post.status, shown }))
-            .status
+          return decided(
+            await approve.mutateAsync({ id, from: post.status, shown }),
+          )
         }
         case 'reject':
-          return (await reject.mutateAsync({ id, shown })).status
+          return decided(await reject.mutateAsync({ id, shown }))
         case 'remove':
           if (!allowsFrom('remove', post.status)) return 'changed'
-          return (
+          return decided(
             await remove.mutateAsync({
+              id,
+              from: post.status,
+              decidedAt,
+              shown,
+            }),
+          )
+        case 'undoToPending':
+          if (!decidedAt || !allowsFrom('undoToPending', post.status))
+            return 'changed'
+          return (
+            await undoToPending.mutateAsync({
               id,
               from: post.status,
               decidedAt,
@@ -157,6 +170,22 @@ function cardKey(post: ModerationPost): string {
   return `${post._id}@${post.incarnation.createdAt ?? ''}`
 }
 
+/** A card's action, or the Undo back to Pending, which no card offers. */
+type QueueAction = PostAction | 'undoToPending'
+
+/** A decision's outcome; `done` may carry the decision time it wrote. */
+type QueueActionOutcome =
+  PostActionOutcome | { status: 'done'; decidedAt?: string | null }
+
+function decided(result: {
+  status: Exclude<PostActionOutcome, 'failed'>
+  decidedAt?: string | null
+}): QueueActionOutcome {
+  return result.status === 'done'
+    ? { status: 'done', decidedAt: result.decidedAt }
+    : result.status
+}
+
 /** A card action that failed, and the post as it was when it did. */
 interface Failure {
   action: PostAction
@@ -171,6 +200,11 @@ function failureOn(failure: Failure | undefined, post: ModerationPost) {
     failure.decidedAt === post.decidedAt
     ? failure.action
     : null
+}
+
+/** What the card shows as running; an Undo to Pending has no button. */
+function busyOn(action: QueueAction | undefined): PostAction | null {
+  return !action || action === 'undoToPending' ? null : action
 }
 
 /** `record` without `key`. */
@@ -192,14 +226,15 @@ export interface ModerationQueueViewProps {
   /** The last read failed; with `queue`, the one before it is still shown. */
   failed?: boolean
   /**
-   * Runs a card's action; without it the cards are read only. `decidedAt`
-   * (Remove only) is the decision time the post must still carry.
+   * Runs a card's action, or an Undo; without it the cards are read only.
+   * `decidedAt` (Remove and Undo to Pending) is the decision time the post
+   * must still carry. A `done` may answer the decision time it wrote.
    */
   onAction?: (
     post: ModerationPost,
-    action: PostAction,
+    action: QueueAction,
     decidedAt?: string,
-  ) => Promise<PostActionOutcome>
+  ) => Promise<QueueActionOutcome>
   /**
    * Approve all pending of these posts (the Pending cards shown); without it
    * the Pending tab has no such button.
@@ -217,7 +252,8 @@ export interface ModerationQueueViewProps {
 }
 
 /** What the queue says after an action, for every outcome but a failure. */
-const DONE: Record<PostAction, string> = {
+const DONE: Record<QueueAction, string> = {
+  undoToPending: 'Moved back to Pending.',
   approve: 'Approved. It shows on the wall within a few seconds.',
   reject: 'Rejected. It’s in Not shown.',
   remove: 'Removed from the wall. It’s in Not shown.',
@@ -232,29 +268,46 @@ const NOTICES: Record<Exclude<PostActionOutcome, 'done' | 'failed'>, string> = {
 }
 
 /**
- * UNDO (§10): what undoes each decision, and what the toast says it does.
- * The spec has no way back to Pending, so undoing an Approve takes the post
- * off the wall to Not shown, whichever tab it came from.
+ * UNDO (§10): a true undo, back to the status the post had before. What
+ * undoes each decision, by the status it started from, and what the toast
+ * says it does.
  */
-const UNDO: Record<
-  Exclude<PostAction, 'withdrawMarketing' | 'delete'>,
-  { after: ModerationPost['status']; reverse: PostAction; says: string }
-> = {
-  approve: {
-    after: 'approved',
-    reverse: 'remove',
-    says: 'Approved · Undo takes it off the wall',
-  },
-  reject: {
-    after: 'notShown',
-    reverse: 'approve',
-    says: 'Rejected · Undo puts it on the wall',
-  },
-  remove: {
-    after: 'notShown',
-    reverse: 'approve',
-    says: 'Removed · Undo puts it back on the wall',
-  },
+function undoOf(
+  action: PostAction,
+  from: ModerationPost['status'],
+): {
+  after: ModerationPost['status']
+  reverse: QueueAction
+  says: string
+} | null {
+  switch (action) {
+    case 'approve':
+      return from === 'pending'
+        ? {
+            after: 'approved',
+            reverse: 'undoToPending',
+            says: 'Approved · Undo moves it back to Pending',
+          }
+        : {
+            after: 'approved',
+            reverse: 'remove',
+            says: 'Approved · Undo moves it back to Not shown',
+          }
+    case 'reject':
+      return {
+        after: 'notShown',
+        reverse: 'undoToPending',
+        says: 'Rejected · Undo moves it back to Pending',
+      }
+    case 'remove':
+      return {
+        after: 'notShown',
+        reverse: 'approve',
+        says: 'Removed · Undo puts it back on the wall',
+      }
+    default:
+      return null
+  }
 }
 
 /** How long the Undo toast stays, unless focus is in it. */
@@ -300,7 +353,7 @@ export function ModerationQueueView({
   // What is in flight, kept HERE and not in the cards or the Approve all
   // row: those unmount on a tab switch, and a lock that went with them would
   // let the same press be sent again on the way back.
-  const [inFlight, setInFlight] = useState<Record<string, PostAction>>({})
+  const [inFlight, setInFlight] = useState<Record<string, QueueAction>>({})
   // The last action that failed on each post, and the post as it was seen
   // then (status and last decision): the card says so, back on its tab too.
   // A new action on the post, or any decision seen since (even one that
@@ -377,7 +430,12 @@ export function ModerationQueueView({
   }, [queue, tab])
 
   const act = onAction
-    ? async (post: ModerationPost, action: PostAction, offerUndo = true) => {
+    ? async (
+        post: ModerationPost,
+        action: QueueAction,
+        offerUndo = true,
+        decidedAt?: string,
+      ): Promise<PostActionOutcome | null> => {
         const key = cardKey(post)
         if (inFlight[key]) return null
         setInFlight((all) => ({ ...all, [key]: action }))
@@ -385,35 +443,47 @@ export function ModerationQueueView({
         setNotice('')
         setUndoable(null)
         let outcome: PostActionOutcome = 'failed'
+        let wrote: string | null | undefined
         try {
-          outcome = await onAction(post, action)
+          const answer = await onAction(post, action, decidedAt)
+          if (typeof answer === 'string') outcome = answer
+          else {
+            outcome = 'done'
+            wrote = answer.decidedAt
+          }
         } catch {
           // A handler that throws is a failed action, never a locked card.
         } finally {
           setInFlight((all) => without(all, key))
         }
-        if (outcome === 'failed') {
+        if (outcome === 'failed' && action === 'undoToPending') {
+          setNotice('Undo failed. The photo is as it was before Undo.')
+        } else if (outcome === 'failed') {
+          const failedAction = action as PostAction
           setFailures((all) => ({
             ...all,
             [key]: {
-              action,
+              action: failedAction,
               status: post.status,
               decidedAt: post.decidedAt,
             },
           }))
         }
         const undo =
-          action === 'approve' || action === 'reject' || action === 'remove'
-            ? UNDO[action]
-            : undefined
+          action === 'undoToPending' ? null : undoOf(action, post.status)
         if (outcome === 'done' && undo && offerUndo) {
-          // The post as the action left it, the same incarnation: the
-          // server's guarded re-read answers `changed` if anyone decided
-          // in between.
-          const after = { ...post, status: undo.after }
+          // The post as the action left it, the same incarnation, and the
+          // decision time it wrote: the server answers `changed` if anyone
+          // decided in between.
+          const after = {
+            ...post,
+            status: undo.after,
+            decidedAt: wrote ?? post.decidedAt,
+          }
           setUndoable({
             says: undo.says,
-            undo: () => void act?.(after, undo.reverse, false),
+            undo: () =>
+              void act?.(after, undo.reverse, false, wrote ?? undefined),
           })
         } else if (outcome === 'done') setNotice(DONE[action])
         else if (outcome !== 'failed') setNotice(NOTICES[outcome])
@@ -437,11 +507,11 @@ export function ModerationQueueView({
         )
       }
       // One Undo for the batch: every post it SENT, acknowledged or not.
-      // Each Remove requires the batch's decision time, so a post that was
+      // Each Undo requires the batch's decision time, so a post that was
       // never approved, or approved by anyone else, is left as it is.
       if (approved && decidedAt && onAction) {
         setUndoable({
-          says: `Approved ${photos} · Undo takes ${approved === 1 ? 'it' : 'them'} off the wall`,
+          says: `Approved ${photos} · Undo moves ${approved === 1 ? 'it' : 'them'} back to Pending`,
           undo: () => void undoApproveAll(shownNow, decidedAt),
         })
       } else if (approved === shownNow.length) {
@@ -457,8 +527,8 @@ export function ModerationQueueView({
   }
 
   /**
-   * Undo of Approve all: Remove each post it sent, four at a time. One not
-   * approved by this batch is refused as `changed`: nothing to undo.
+   * Undo of Approve all: each post it sent back to Pending, four at a time.
+   * One not approved by this batch is refused as `changed`: nothing to undo.
    */
   const undoApproveAll = async (sent: ModerationPost[], decidedAt: string) => {
     if (!onAction) return
@@ -470,9 +540,10 @@ export function ModerationQueueView({
       while (next < sent.length) {
         const post = sent[next++]
         const after = { ...post, status: 'approved' as const }
-        const outcome = await onAction(after, 'remove', decidedAt).catch(
+        const answer = await onAction(after, 'undoToPending', decidedAt).catch(
           () => 'failed' as const,
         )
+        const outcome = typeof answer === 'string' ? answer : answer.status
         if (outcome === 'done') done += 1
         else if (outcome === 'failed') failed += 1
       }
@@ -481,8 +552,8 @@ export function ModerationQueueView({
     const photos = `${done} ${done === 1 ? 'photo' : 'photos'}`
     setNotice(
       failed
-        ? `Took ${photos} off the wall. ${failed} could not be taken off; remove ${failed === 1 ? 'it' : 'them'} by hand.`
-        : `Took ${photos} off the wall. They’re in Not shown.`,
+        ? `Moved ${photos} back to Pending. ${failed} could not be moved; remove ${failed === 1 ? 'it' : 'them'} from the wall by hand.`
+        : `Moved ${photos} back to Pending.`,
     )
   }
 
@@ -669,7 +740,7 @@ export function ModerationQueueView({
                 key={cardKey(post)}
                 post={post}
                 onAction={act}
-                busy={inFlight[cardKey(post)] ?? null}
+                busy={busyOn(inFlight[cardKey(post)])}
                 failed={failureOn(failures[cardKey(post)], post)}
                 talks={talks}
                 onSetTalk={onSetTalk}

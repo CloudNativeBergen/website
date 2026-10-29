@@ -13,8 +13,11 @@ export const WALL_POST_STATUSES = [
 ] as const
 export type WallPostStatus = (typeof WALL_POST_STATUSES)[number]
 
-/** What an organizer can decide about a post (§10); Delete is apart. */
-export type ModerationAction = 'approve' | 'reject' | 'remove'
+/**
+ * What an organizer can decide about a post (§10); Delete is apart.
+ * `undoToPending` is Undo only: no card offers it.
+ */
+export type ModerationAction = 'approve' | 'reject' | 'remove' | 'undoToPending'
 
 /**
  * THE ALLOWED TRANSITIONS (§10): the statuses each decision may start from.
@@ -25,7 +28,14 @@ export const ALLOWED_FROM = {
   approve: ['pending', 'notShown'],
   reject: ['pending'],
   remove: ['approved'],
+  undoToPending: ['approved', 'notShown'],
 } as const satisfies Record<ModerationAction, readonly WallPostStatus[]>
+
+/**
+ * Undo back to Pending is refused this long after the decision it undoes
+ * (§10): it is an Undo, not a general "unreview".
+ */
+export const UNDO_TO_PENDING_MS = 2 * 60_000
 
 /**
  * At most this many posts in one Approve all: the wall's pending cap (§6.3),
