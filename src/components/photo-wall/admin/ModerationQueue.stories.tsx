@@ -7,7 +7,11 @@ import {
   type ModerationQueueData,
   type PhotoWallAdminView,
 } from '@/lib/photo-wall'
-import { ModerationQueue, ModerationQueueView } from './ModerationQueue'
+import {
+  ModerationQueue,
+  ModerationQueueView,
+  type ModerationQueueViewProps,
+} from './ModerationQueue'
 import { PendingSummaryView } from './PendingSummary'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 import type { PostActionOutcome } from './WallPostCard'
@@ -34,6 +38,8 @@ const PANORAMA = {
   width: 2048,
   height: 320,
 }
+
+type ApproveAllFn = NonNullable<ModerationQueueViewProps['onApproveAll']>
 
 let n = 0
 const post = (fields: Partial<ModerationPost>): ModerationPost => ({
@@ -157,7 +163,11 @@ const meta = {
   args: {
     queue: QUEUE,
     onAction: fn(async (): Promise<PostActionOutcome> => 'done'),
-    onApproveAll: fn(async () => ({ approved: 3, pending: 3 })),
+    onApproveAll: fn<ApproveAllFn>(async (posts) => ({
+      approved: posts.length,
+      approvedIds: posts.map((p) => p._id),
+      pending: posts.length,
+    })),
   },
 } satisfies Meta<typeof ModerationQueueView>
 
@@ -814,9 +824,55 @@ export const ApproveAllPhoneDark: Story = {
   parameters: PHONE,
   globals: { theme: 'dark' },
 }
+export const ApproveAllPhone: Story = { ...ApproveAll, parameters: PHONE }
+/**
+ * Approved: one Undo for the whole batch, which removes exactly the posts it
+ * approved.
+ */
+export const ApproveAllUndo: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Approve all pending (3)' }),
+    )
+    await userEvent.click(canvas.getByRole('button', { name: 'Approve all' }))
+    await expect(
+      await canvas.findByText(
+        'Approved 3 photos · Undo takes them off the wall',
+      ),
+    ).toBeVisible()
+    await userEvent.click(canvas.getByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(args.onAction).toHaveBeenCalledTimes(3))
+    for (const [post, action] of (args.onAction as ReturnType<typeof fn>).mock
+      .calls as [ModerationPost, string][]) {
+      await expect(action).toBe('remove')
+      await expect(post.status).toBe('approved')
+    }
+    await canvas.findByText('Took 3 photos off the wall. They’re in Not shown.')
+    // Again, for the picture.
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Approve all pending (3)' }),
+    )
+    await userEvent.click(canvas.getByRole('button', { name: 'Approve all' }))
+    await canvas.findByText('Approved 3 photos · Undo takes them off the wall')
+  },
+}
+export const ApproveAllUndoDark: Story = {
+  ...ApproveAllUndo,
+  globals: { theme: 'dark' },
+}
+export const ApproveAllUndoPhone: Story = {
+  ...ApproveAllUndo,
+  parameters: PHONE,
+}
+export const ApproveAllUndoPhoneDark: Story = {
+  ...ApproveAllUndo,
+  parameters: PHONE,
+  globals: { theme: 'dark' },
+}
 /** Some posts changed meanwhile: it says how many of how many. */
 export const ApproveAllPartly: Story = {
-  args: { onApproveAll: fn(async () => ({ approved: 2, pending: 3 })) },
+  args: { onApproveAll: fn<ApproveAllFn>(async () => ({ approved: 2 })) },
   parameters: PHONE,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
@@ -892,7 +948,7 @@ export const ChangedMeanwhileDark: Story = {
  * back on Pending the row says so and a press sends nothing.
  */
 export const ApproveAllInFlight: Story = {
-  args: { onApproveAll: fn(() => new Promise<{ approved: number }>(() => {})) },
+  args: { onApproveAll: fn<ApproveAllFn>(() => new Promise(() => {})) },
   parameters: PHONE,
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
