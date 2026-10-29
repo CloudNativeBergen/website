@@ -64,10 +64,10 @@ export default async function SponsorDashboardPage({
       canSendDiscountCodes={canSendDiscountCodes}
       workshopsEnabled={await isWorkshopsEnabledForConference(conference)}
       initialOverview={initialOverview}
-      // Back to the board the sponsor was opened from (the invoice board).
+      // Back to the board mode the sponsor was opened from.
       backHref={
-        board === 'invoice'
-          ? '/admin/sponsors/crm?board=invoice'
+        board === 'invoice' || board === 'contract'
+          ? `/admin/sponsors/crm?board=${board}`
           : '/admin/sponsors/crm'
       }
       initialView={VIEWS.includes(view as View) ? (view as View) : undefined}
