@@ -318,7 +318,8 @@ export function generateActionItems(
 
 /** A previous-edition sponsor with no deal this year (R2, #1687). */
 export interface RenewalItemInput {
-  edition: { title: string; domain?: string }
+  /** Null when no domain derives a usable URL; the item then has no link. */
+  edition: { title: string; origin: string | null }
   candidates: Array<{
     _id: string
     name: string
@@ -337,7 +338,6 @@ export function generateRenewalItems(
 ): ActionItem[] {
   if (!renewals) return []
   const { edition } = renewals
-  const base = edition.domain ? `https://${edition.domain}` : ''
   return renewals.candidates
     .filter((c) => !organizerId || c.assignedTo?._id === organizerId)
     .map((c) => ({
@@ -350,7 +350,7 @@ export function generateRenewalItems(
         : undefined,
       description: `Sponsored ${edition.title}, not contacted for this year`,
       priority: 4.5,
-      link: `${base}/admin/sponsors/${c._id}`,
+      link: edition.origin ? `${edition.origin}/admin/sponsors/${c._id}` : '',
     }))
 }
 /** Most urgent priority that counts as "waiting on you" in the event checklist. */

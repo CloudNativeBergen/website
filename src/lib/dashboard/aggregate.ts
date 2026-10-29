@@ -289,8 +289,9 @@ export function buildDashboardQuery(
 export function dashboardQueryParams(
   conferenceId: string,
   now = new Date(),
-  // '' matches no organization, so a conference without one reads nothing.
-  orgId = '',
+  // For the `renewals` root. '' matches no organization, so a conference
+  // without one reads nothing.
+  renewal: { orgId?: string; currentStartDate?: string } = {},
 ) {
   const today = osloTodayDateString(now)
   const tomorrow = new Date(`${today}T12:00:00Z`)
@@ -300,7 +301,8 @@ export function dashboardQueryParams(
       `${tomorrow.toISOString().slice(0, 10)}T00:00`,
     ),
     conferenceId,
-    orgId,
+    orgId: renewal.orgId ?? '',
+    currentStartDate: renewal.currentStartDate ?? '',
     draftStatus: Status.draft,
     pendingVolunteerStatus: VolunteerStatus.PENDING,
   }
@@ -315,13 +317,13 @@ export function dashboardQueryParams(
 export async function fetchDashboardGroq(
   conferenceId: string,
   sources: Iterable<DashboardGroqSource>,
-  orgId?: string,
+  renewal?: { orgId?: string; currentStartDate?: string },
 ): Promise<DashboardGroqResult> {
   const query = buildDashboardQuery(sources)
   if (!query) return {}
   const result = await clientReadUncached.fetch<DashboardGroqResult | null>(
     query,
-    dashboardQueryParams(conferenceId, new Date(), orgId),
+    dashboardQueryParams(conferenceId, new Date(), renewal),
     { cache: 'no-store' },
   )
   return result ?? {}

@@ -3,12 +3,12 @@
 import { ArrowPathIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 
-function recordUrl(id: string, domain: string | null) {
-  return `${domain ? `https://${domain}` : ''}/admin/sponsors/${id}`
+function recordUrl(id: string, origin: string) {
+  return `${origin}/admin/sponsors/${id}`
 }
 
 export interface SponsorRenewalActionProps {
-  nextEdition: { title: string; domain: string | null } | null
+  nextEdition: { title: string; origin: string | null } | null
   existingId: string | null
   isPending?: boolean
   error?: string
@@ -34,12 +34,14 @@ export function SponsorRenewalAction({
             : `Add this sponsor as a prospect for ${nextEdition.title}`}
       </p>
       {nextEdition && existingId ? (
-        <a
-          href={recordUrl(existingId, nextEdition.domain)}
-          className="text-sm font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-        >
-          Open next year&apos;s deal
-        </a>
+        nextEdition.origin && (
+          <a
+            href={recordUrl(existingId, nextEdition.origin)}
+            className="text-sm font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+          >
+            Open next year&apos;s deal
+          </a>
+        )
       ) : (
         <button
           type="button"

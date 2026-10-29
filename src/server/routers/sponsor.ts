@@ -73,7 +73,9 @@ import {
   copyToNextEdition,
   getPreviousEditionRenewals,
   getRenewalContext,
+  hasEnded,
 } from '@/lib/sponsor-crm/renewal'
+import { findOutboundOrigin } from '@/lib/conference/baseUrl'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
 import type {
@@ -518,13 +520,6 @@ async function loadRenewal(orgId: string | null | undefined, id: string) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Sponsor not found' })
   }
   return { source, next }
-}
-
-function hasEnded(endDate?: string) {
-  // `endDate` is a plain date: the event has ended from the next day on.
-  return (
-    !!endDate && endDate.slice(0, 10) < new Date().toISOString().slice(0, 10)
-  )
 }
 
 async function getSponsorForCurrentConference(id: string) {
@@ -2348,11 +2343,12 @@ export const sponsorRouter = router({
     renewal: adminProcedure
       .input(SponsorIdSchema)
       .query(async ({ input, ctx }) => {
+        // The next edition is only read once the event has ended.
         const { source, next } = await loadRenewal(ctx.orgId, input.id)
         return {
           eventEnded: hasEnded(source.conference.endDate),
           nextEdition: next
-            ? { title: next.title, domain: next.domain ?? null }
+            ? { title: next.title, origin: findOutboundOrigin(next) }
             : null,
           existingId: next?.existingId ?? null,
         }
@@ -2376,19 +2372,23 @@ export const sponsorRouter = router({
             message: "Create next year's conference first",
           })
         }
-        const domain = next.domain ?? null
+        const origin = findOutboundOrigin(next)
         if (next.existingId) {
-          return { id: next.existingId, domain, created: false }
+          return { id: next.existingId, origin, created: false }
         }
-        const id = await copyToNextEdition(source, next, ctx.speaker._id)
-        return { id, domain, created: true }
+        const { id, created } = await copyToNextEdition(
+          source,
+          next,
+          ctx.speaker._id,
+        )
+        return { id, origin, created }
       }),
 
     // R2 (#1687): one org-scoped query; null outside the lead window.
     renewalReminders: adminProcedure.query(async ({ ctx }) => {
-      const conferenceId = await resolveConferenceId()
-      if (!ctx.orgId || !conferenceId) return null
-      return getPreviousEditionRenewals(ctx.orgId, conferenceId)
+      const { conference } = await getConferenceForCurrentDomain()
+      if (!ctx.orgId || !conference?._id) return null
+      return getPreviousEditionRenewals(ctx.orgId, conference)
     }),
 
     importAllHistoric: adminProcedure

@@ -5,7 +5,9 @@ import {
   copyToNextEdition,
   getPreviousEditionRenewals,
   getRenewalContext,
+  hasEnded,
   isRenewalWindowOpen,
+  shapeRenewals,
   type NextEdition,
   type RenewalSource,
 } from './renewal'
@@ -30,12 +32,17 @@ const source: RenewalSource = {
   contactPersons: [{ _key: 'c1', name: 'Ada', email: 'ada@acme.test' }],
   billing: { email: 'billing@acme.test', reference: 'PO-1' },
   tierTitle: 'Gold',
-  conference: { _id: 'conf-2025', title: 'CNB 2025', startDate: '2025-10-27' },
+  conference: {
+    _id: 'conf-2025',
+    title: 'CNB 2025',
+    startDate: '2025-10-27',
+    endDate: '2025-10-28',
+  },
 }
 const next: NextEdition = {
   _id: 'conf-2026',
   title: 'CNB 2026',
-  domain: '2026.example.test',
+  domains: ['2026.example.test'],
   organizers: ['org-kari'],
   tierId: 'tier-gold-2026',
 }
@@ -45,6 +52,7 @@ beforeEach(() => vi.clearAllMocks())
 describe('buildRenewalDoc', () => {
   it('copies sponsor, owner, contacts, billing and the same-title tier as a prospect', () => {
     expect(buildRenewalDoc(source, next)).toEqual({
+      _id: 'sfc-renewal-conf-2026-s-1',
       _type: 'sponsorForConference',
       sponsor: { _type: 'reference', _ref: 's-1' },
       conference: { _type: 'reference', _ref: 'conf-2026' },
@@ -131,15 +139,40 @@ describe('getRenewalContext', () => {
     const result = await getRenewalContext('org-a', 'conf-2025', 'sfc-old')
     expect(result.next).toBeNull()
   })
+
+  it('does not read the next edition before the event has ended', async () => {
+    fetchMock
+      .mockResolvedValueOnce(source.conference)
+      .mockResolvedValueOnce(source)
+    const result = await getRenewalContext(
+      'org-a',
+      'conf-2025',
+      'sfc-old',
+      new Date('2025-10-28T12:00:00Z'),
+    )
+    expect(result.next).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('hasEnded', () => {
+  it('flips on the next Oslo day, not the next UTC day', () => {
+    // 23:30 UTC on the 28th is already the 29th in Oslo.
+    expect(hasEnded('2025-10-28', new Date('2025-10-28T21:00:00Z'))).toBe(false)
+    expect(hasEnded('2025-10-28', new Date('2025-10-28T23:30:00Z'))).toBe(true)
+  })
 })
 
 describe('copyToNextEdition', () => {
-  it('logs an activity on both records', async () => {
-    vi.mocked(clientWrite.create).mockResolvedValue({ _id: 'sfc-new' } as never)
-    const id = await copyToNextEdition(source, next, 'user-1')
-    expect(id).toBe('sfc-new')
+  it('creates under the deterministic id and logs on both records', async () => {
+    vi.mocked(clientWrite.create).mockResolvedValue({} as never)
+    const result = await copyToNextEdition(source, next, 'user-1')
+    expect(result).toEqual({ id: 'sfc-renewal-conf-2026-s-1', created: true })
+    expect(clientWrite.create).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: 'sfc-renewal-conf-2026-s-1' }),
+    )
     expect(createSponsorActivity).toHaveBeenCalledWith(
-      'sfc-new',
+      'sfc-renewal-conf-2026-s-1',
       'note',
       'Copied from CNB 2025',
       'user-1',
@@ -150,6 +183,20 @@ describe('copyToNextEdition', () => {
       'Copied to CNB 2026',
       'user-1',
     )
+  })
+
+  it('returns the record a racing organizer created, without logging again', async () => {
+    vi.mocked(clientWrite.create).mockRejectedValue(
+      Object.assign(new Error('Document already exists'), { statusCode: 409 }),
+    )
+    const result = await copyToNextEdition(source, next, 'user-2')
+    expect(result).toEqual({ id: 'sfc-renewal-conf-2026-s-1', created: false })
+    expect(createSponsorActivity).not.toHaveBeenCalled()
+  })
+
+  it('rethrows any other write error', async () => {
+    vi.mocked(clientWrite.create).mockRejectedValue(new Error('boom'))
+    await expect(copyToNextEdition(source, next, 'u')).rejects.toThrow('boom')
   })
 })
 
@@ -163,59 +210,47 @@ describe('renewal reminders (R2)', () => {
     ).toBe(true)
   })
 
+  const current = { _id: 'conf-2026', startDate: '2026-10-27' }
   const row = {
-    currentStartDate: '2026-10-27',
-    edition: {
-      _id: 'conf-2025',
-      title: 'CNB 2025',
-      domain: '2025.example.test',
-    },
+    _id: 'conf-2025',
+    title: 'CNB 2025',
+    domains: ['*.example.test', '2025.example.test'],
     candidates: [{ _id: 'sfc-old', name: 'Acme' }],
   }
 
-  it('returns nothing before the window opens', async () => {
-    fetchMock.mockResolvedValueOnce(row)
+  it('issues no query before the window opens', async () => {
     expect(
       await getPreviousEditionRenewals(
         'org-a',
-        'conf-2026',
+        current,
         new Date('2026-01-01'),
       ),
     ).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('is one org-scoped query that excludes sponsors with a deal this year', async () => {
+  it('is one org-scoped query bound to the current start date', async () => {
     fetchMock.mockResolvedValueOnce(row)
     const result = await getPreviousEditionRenewals(
       'org-a',
-      'conf-2026',
+      current,
       new Date('2026-06-01'),
     )
-    expect(result?.candidates).toHaveLength(1)
+    // The wildcard entry is skipped for the first usable origin.
+    expect(result?.edition.origin).toBe('https://2025.example.test')
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [query, params] = fetchMock.mock.calls[0]
     expect(query).toContain('organization._ref == $orgId')
-    expect(query).toContain(
-      '!(sponsor._ref in *[_type == "sponsorForConference" && conference._ref == $conferenceId].sponsor._ref)',
-    )
-    expect(params).toMatchObject({ orgId: 'org-a', conferenceId: 'conf-2026' })
+    expect(params).toEqual({
+      orgId: 'org-a',
+      conferenceId: 'conf-2026',
+      currentStartDate: '2026-10-27',
+    })
   })
 
-  it('returns nothing when another organization owns the conference', async () => {
-    // The org predicate filters the foreign previous edition out: null row.
-    fetchMock.mockResolvedValueOnce(null)
-    expect(
-      await getPreviousEditionRenewals(
-        'org-b',
-        'conf-2026',
-        new Date('2026-06-01'),
-      ),
-    ).toBeNull()
-  })
-
-  it('maps candidates to items linking to the old record on its domain', () => {
-    const items = generateRenewalItems(row)
-    expect(items).toEqual([
+  it('maps candidates to items linking to the old record', () => {
+    const renewals = shapeRenewals(row)
+    expect(generateRenewalItems(renewals)).toEqual([
       expect.objectContaining({
         id: 'sfc-old-renewal',
         description: 'Sponsored CNB 2025, not contacted for this year',
@@ -223,5 +258,11 @@ describe('renewal reminders (R2)', () => {
       }),
     ])
     expect(generateRenewalItems(null)).toEqual([])
+  })
+
+  it('leaves the link empty when no domain gives a usable origin', () => {
+    const renewals = shapeRenewals({ ...row, domains: ['*.example.test'] })
+    expect(renewals?.edition.origin).toBeNull()
+    expect(generateRenewalItems(renewals)[0].link).toBe('')
   })
 })

@@ -9,7 +9,12 @@ import {
 } from '@/lib/sponsor-crm/renewal'
 
 vi.mock('@/lib/conference/sanity')
-vi.mock('@/lib/sponsor-crm/renewal')
+vi.mock('@/lib/sponsor-crm/renewal', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  copyToNextEdition: vi.fn(),
+  getPreviousEditionRenewals: vi.fn(),
+  getRenewalContext: vi.fn(),
+}))
 vi.mock('@/lib/auth', () => ({ getAuthSession: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
 
@@ -38,7 +43,7 @@ const source = {
     endDate: '2025-10-28',
   },
 }
-const next = { _id: 'conf-2', title: 'CNB 2026', domain: '2026.test' }
+const next = { _id: 'conf-2', title: 'CNB 2026', domains: ['2026.test'] }
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -59,12 +64,15 @@ describe('sponsor.crm.copyToNextYear', () => {
       source,
       next,
     } as any)
-    vi.mocked(copyToNextEdition).mockResolvedValue('sfc-new')
+    vi.mocked(copyToNextEdition).mockResolvedValue({
+      id: 'sfc-new',
+      created: true,
+    })
     const result = await caller().sponsor.crm.copyToNextYear({ id: 'sfc-old' })
     expect(getRenewalContext).toHaveBeenCalledWith(ORG, 'conf-1', 'sfc-old')
     expect(result).toEqual({
       id: 'sfc-new',
-      domain: '2026.test',
+      origin: 'https://2026.test',
       created: true,
     })
   })
@@ -85,7 +93,7 @@ describe('sponsor.crm.copyToNextYear', () => {
     const result = await caller().sponsor.crm.copyToNextYear({ id: 'sfc-old' })
     expect(result).toEqual({
       id: 'sfc-2026',
-      domain: '2026.test',
+      origin: 'https://2026.test',
       created: false,
     })
     expect(copyToNextEdition).not.toHaveBeenCalled()
@@ -136,6 +144,9 @@ describe('sponsor.crm.renewalReminders', () => {
   it('queries with the REQUEST org and conference', async () => {
     vi.mocked(getPreviousEditionRenewals).mockResolvedValue(null)
     await caller().sponsor.crm.renewalReminders()
-    expect(getPreviousEditionRenewals).toHaveBeenCalledWith(ORG, 'conf-1')
+    expect(getPreviousEditionRenewals).toHaveBeenCalledWith(
+      ORG,
+      expect.objectContaining({ _id: 'conf-1' }),
+    )
   })
 })

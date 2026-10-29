@@ -1,12 +1,14 @@
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { findOutboundOrigin } from '@/lib/conference/baseUrl'
+import { osloTodayDateString } from '@/lib/time'
 import { createSponsorActivity } from './activity'
 
 /**
  * Renewal (R1/R2, #1687). Every edition is its own conference on its own
  * domain, so "next" and "previous" edition mean the neighbouring conference of
- * the same organization by `startDate`. Every read here is org-scoped through
- * `scopedFetch`; no conference id ever comes from the client.
+ * the same organization by `startDate`. Every read here is org-scoped; no
+ * conference id ever comes from the client.
  */
 
 // ponytail: no conference setting for when sponsor outreach starts
@@ -15,16 +17,25 @@ import { createSponsorActivity } from './activity'
 export const RENEWAL_LEAD_MONTHS = 6
 
 /** True from `RENEWAL_LEAD_MONTHS` before `startDate` onwards. */
-export function isRenewalWindowOpen(startDate: string, now = new Date()) {
+export function isRenewalWindowOpen(
+  startDate: string | undefined,
+  now = new Date(),
+) {
+  if (!startDate) return false
   const opens = new Date(startDate)
   opens.setUTCMonth(opens.getUTCMonth() - RENEWAL_LEAD_MONTHS)
   return now >= opens
 }
 
-export interface EditionRef {
+/** `endDate` is a plain Oslo date: the event has ended from the next day on. */
+export function hasEnded(endDate?: string, now = new Date()) {
+  return !!endDate && endDate.slice(0, 10) < osloTodayDateString(now)
+}
+
+interface EditionRow {
   _id: string
   title: string
-  domain?: string
+  domains?: string[]
 }
 
 export interface RenewalSource {
@@ -35,10 +46,10 @@ export interface RenewalSource {
   contactPersons?: unknown[]
   billing?: unknown
   tierTitle?: string
-  conference: EditionRef & { startDate: string; endDate?: string }
+  conference: EditionRow & { startDate: string; endDate?: string }
 }
 
-export interface NextEdition extends EditionRef {
+export interface NextEdition extends EditionRow {
   organizers?: string[]
   /** This sponsor's deal in the next edition, if it already has one. */
   existingId?: string
@@ -48,19 +59,21 @@ export interface NextEdition extends EditionRef {
 
 /**
  * The source record (must belong to `conferenceId`, the current domain's
- * conference, which must belong to `orgId`) and the org's next edition.
+ * conference, which must belong to `orgId`) and, once that conference has
+ * ended, the org's next edition. Before that `next` is not read.
  */
 export async function getRenewalContext(
   orgId: string,
   conferenceId: string,
   sponsorForConferenceId: string,
+  now = new Date(),
 ): Promise<{ source: RenewalSource | null; next: NextEdition | null }> {
   const conference = await scopedFetch<
-    (EditionRef & { startDate: string; endDate?: string }) | null
+    (EditionRow & { startDate: string; endDate?: string }) | null
   >(
     clientReadUncached,
     { orgId },
-    `*[_type == "conference" && _id == $conferenceId][0]{ _id, title, startDate, endDate, "domain": domains[0] }`,
+    `*[_type == "conference" && _id == $conferenceId][0]{ _id, title, startDate, endDate, domains }`,
     { conferenceId },
   )
   if (!conference) return { source: null, next: null }
@@ -78,14 +91,15 @@ export async function getRenewalContext(
     { id: sponsorForConferenceId, conferenceId },
   )
   if (!source) return { source: null, next: null }
+  if (!hasEnded(conference.endDate, now)) {
+    return { source: { ...source, conference }, next: null }
+  }
 
   const next = await scopedFetch<NextEdition | null>(
     clientReadUncached,
     { orgId },
-    // groq-global-scoped: the nested reads hang off `^._id`, the next edition
-    // the org-scoped root filter returned.
     `*[_type == "conference" && startDate > $startDate] | order(startDate asc)[0]{
-      _id, title, "domain": domains[0], "organizers": organizers[]._ref,
+      _id, title, domains, "organizers": organizers[]._ref,
       "existingId": *[_type == "sponsorForConference" && conference._ref == ^._id && conference->organization._ref == $orgId && sponsor._ref == $sponsorId][0]._id,
       "tierId": *[_type == "sponsorTier" && conference._ref == ^._id && conference->organization._ref == $orgId && title == $tierTitle][0]._id
     }`,
@@ -98,6 +112,11 @@ export async function getRenewalContext(
   return { source: { ...source, conference }, next }
 }
 
+/** Deterministic, so two organizers copying at once land on one record. */
+export function renewalDocId(nextId: string, sponsorId: string) {
+  return `sfc-renewal-${nextId}-${sponsorId}`
+}
+
 /**
  * The new prospect for the next edition. Copies only the sponsor, owner (if
  * they organize the next edition), contacts, billing and a same-title tier;
@@ -107,6 +126,7 @@ export function buildRenewalDoc(source: RenewalSource, next: NextEdition) {
   const ownerId = source.assignedTo?._ref
   const keepOwner = !!ownerId && !!next.organizers?.includes(ownerId)
   return {
+    _id: renewalDocId(next._id, source.sponsor._ref),
     _type: 'sponsorForConference' as const,
     sponsor: { _type: 'reference' as const, _ref: source.sponsor._ref },
     conference: { _type: 'reference' as const, _ref: next._id },
@@ -123,27 +143,41 @@ export function buildRenewalDoc(source: RenewalSource, next: NextEdition) {
   }
 }
 
+/** Returns the record id and whether this call created it. */
 export async function copyToNextEdition(
   source: RenewalSource,
   next: NextEdition,
   userId: string,
-): Promise<string> {
-  const created = await clientWrite.create(buildRenewalDoc(source, next))
-  await Promise.all([
-    createSponsorActivity(
-      created._id,
-      'note',
-      `Copied from ${source.conference.title}`,
-      userId,
-    ),
-    createSponsorActivity(
-      source._id,
-      'note',
-      `Copied to ${next.title}`,
-      userId,
-    ),
-  ])
-  return created._id
+): Promise<{ id: string; created: boolean }> {
+  const doc = buildRenewalDoc(source, next)
+  // `create` with the deterministic id is atomic: the second of two racing
+  // organizers gets a 409 and is handed the record the first one made.
+  // (`createIfNotExists` would not say which call created it, so the
+  // activities could be logged twice.)
+  let created = true
+  try {
+    await clientWrite.create(doc)
+  } catch (error) {
+    if ((error as { statusCode?: number }).statusCode !== 409) throw error
+    created = false
+  }
+  if (created) {
+    await Promise.all([
+      createSponsorActivity(
+        doc._id,
+        'note',
+        `Copied from ${source.conference.title}`,
+        userId,
+      ),
+      createSponsorActivity(
+        source._id,
+        'note',
+        `Copied to ${next.title}`,
+        userId,
+      ),
+    ])
+  }
+  return { id: doc._id, created }
 }
 
 export interface RenewalCandidate {
@@ -153,18 +187,18 @@ export interface RenewalCandidate {
 }
 
 export interface PreviousEditionRenewals {
-  edition: EditionRef
+  /** `origin` is null when no domain derives a usable URL: hide the link. */
+  edition: { _id: string; title: string; origin: string | null }
   candidates: RenewalCandidate[]
 }
 
 /**
- * The previous edition of `$orgId` before `$conferenceId`, and its closed-won
- * sponsors with no deal (any status) in `$conferenceId`. A root of its own, so
- * the `/admin` dashboard composes it into its single query.
+ * The previous edition of `$orgId` before `$currentStartDate`, and its
+ * closed-won sponsors with no deal (any status) in `$conferenceId`. A root of
+ * its own, so the `/admin` dashboard composes it into its single query.
  */
-export const PREVIOUS_EDITION_RENEWALS_ROOT = `*[_type == "conference" && organization._ref == $orgId && startDate < *[_type == "conference" && _id == $conferenceId && organization._ref == $orgId][0].startDate] | order(startDate desc)[0]{
-  "currentStartDate": *[_type == "conference" && _id == $conferenceId && organization._ref == $orgId][0].startDate,
-  "edition": { _id, title, "domain": domains[0] },
+export const PREVIOUS_EDITION_RENEWALS_ROOT = `*[_type == "conference" && organization._ref == $orgId && startDate < $currentStartDate] | order(startDate desc)[0]{
+  _id, title, domains,
   "candidates": *[_type == "sponsorForConference" && conference._ref == ^._id && conference->organization._ref == $orgId && status == "closed-won"
     && !(sponsor._ref in *[_type == "sponsorForConference" && conference._ref == $conferenceId].sponsor._ref)]{
     _id, "name": sponsor->name, assignedTo->{ _id, name, image }
@@ -172,28 +206,37 @@ export const PREVIOUS_EDITION_RENEWALS_ROOT = `*[_type == "conference" && organi
 }`
 
 export type PreviousEditionRenewalsRow =
-  (PreviousEditionRenewals & { currentStartDate?: string }) | null
+  (EditionRow & { candidates?: RenewalCandidate[] }) | null
 
-/** Null outside the lead window. */
 export function shapeRenewals(
   row: PreviousEditionRenewalsRow | undefined,
-  now = new Date(),
 ): PreviousEditionRenewals | null {
-  if (!row?.currentStartDate) return null
-  if (!isRenewalWindowOpen(row.currentStartDate, now)) return null
-  return { edition: row.edition, candidates: row.candidates ?? [] }
+  if (!row) return null
+  return {
+    edition: {
+      _id: row._id,
+      title: row.title,
+      origin: findOutboundOrigin(row),
+    },
+    candidates: row.candidates ?? [],
+  }
 }
 
-/** ONE query, for the CRM board. */
+/** ONE query, for the CRM board. Null outside the lead window. */
 export async function getPreviousEditionRenewals(
   orgId: string,
-  conferenceId: string,
+  conference: { _id: string; startDate?: string },
   now = new Date(),
 ): Promise<PreviousEditionRenewals | null> {
-  if (!orgId || !conferenceId) return null // FAIL CLOSED: no tenant, no read.
+  if (!orgId || !conference._id) return null // FAIL CLOSED: no tenant.
+  if (!isRenewalWindowOpen(conference.startDate, now)) return null
   const row = await clientReadUncached.fetch<PreviousEditionRenewalsRow>(
     PREVIOUS_EDITION_RENEWALS_ROOT,
-    { orgId, conferenceId },
+    {
+      orgId,
+      conferenceId: conference._id,
+      currentStartDate: conference.startDate,
+    },
   )
-  return shapeRenewals(row, now)
+  return shapeRenewals(row)
 }

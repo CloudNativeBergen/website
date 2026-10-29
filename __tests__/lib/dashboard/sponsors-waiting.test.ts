@@ -96,31 +96,42 @@ describe('renewal reminders in the composed query (R2, #1687)', () => {
     const query = buildDashboardQuery(['renewals'])!
     const result = await evaluate(parse(query), {
       dataset: data,
-      params: dashboardQueryParams('y2026', new Date(), orgId),
+      params: dashboardQueryParams('y2026', new Date(), {
+        orgId,
+        currentStartDate: '2026-10-27',
+      }),
     })
     return (await result.get()).renewals
   }
 
   it('lists previous-edition sponsors with no deal this year, same org only', async () => {
     const row = await run('org-a')
-    expect(row.edition).toEqual({
+    expect(row).toMatchObject({
       _id: 'y2025',
       title: 'y2025',
-      domain: 'y2025.test',
+      domains: ['y2025.test'],
     })
     expect(row.candidates.map((c: { _id: string }) => c._id)).toEqual([
       'old-acme',
     ])
   })
 
-  it('reads nothing for another organization, or for none', async () => {
-    expect(await run('org-b')).toBeNull()
+  it("never reads another organization's editions, and nothing for none", async () => {
+    const other = await run('org-b')
+    expect(other._id).toBe('other')
+    expect(other.candidates.map((c: { _id: string }) => c._id)).toEqual([
+      'foreign',
+    ])
     expect(await run('')).toBeNull()
   })
 
   it('shows mine and unassigned renewals, linking to the old record', () => {
     const renewals = {
-      edition: { _id: 'y2025', title: 'CNB 2025', domain: 'y2025.test' },
+      edition: {
+        _id: 'y2025',
+        title: 'CNB 2025',
+        origin: 'https://y2025.test',
+      },
       candidates: [
         {
           _id: 'old-acme',

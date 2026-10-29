@@ -56,6 +56,7 @@ import {
   generateRenewalItems,
 } from '@/lib/sponsor-crm/action-items'
 import {
+  isRenewalWindowOpen,
   shapeRenewals,
   type PreviousEditionRenewals,
 } from '@/lib/sponsor-crm/renewal'
@@ -1160,12 +1161,15 @@ export async function loadDashboardWidgetData(
   // than an error state.
   let groqResult: DashboardGroqResult = {}
   let groqError: Error | null = null
+  const sources = sourcesForWidgets(wanted, myTeamKeys)
+  // Renewal reminders only exist inside their lead window: skip the root
+  // entirely outside it.
+  if (!isRenewalWindowOpen(ctx.conference.startDate)) sources.delete('renewals')
   try {
-    groqResult = await fetchDashboardGroq(
-      ctx.conferenceId,
-      sourcesForWidgets(wanted, myTeamKeys),
-      ctx.conference.organization?._ref,
-    )
+    groqResult = await fetchDashboardGroq(ctx.conferenceId, sources, {
+      orgId: ctx.conference.organization?._ref,
+      currentStartDate: ctx.conference.startDate,
+    })
   } catch (error) {
     groqError = error instanceof Error ? error : new Error(String(error))
   }

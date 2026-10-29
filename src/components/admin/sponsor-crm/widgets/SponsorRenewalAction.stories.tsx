@@ -4,7 +4,7 @@ import { SponsorRenewalAction } from './SponsorRenewalWidget'
 
 const nextEdition = {
   title: 'Cloud Native Day 2027',
-  domain: '2027.example.test',
+  origin: 'https://2027.example.test',
 }
 
 const meta = {
