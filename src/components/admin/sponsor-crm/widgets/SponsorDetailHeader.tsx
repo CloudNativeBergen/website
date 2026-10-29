@@ -4,6 +4,7 @@
 import { api } from '@/lib/trpc/client'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import clsx from 'clsx'
 import { SponsorLogo } from '@/components/SponsorLogo'
 import { STATUSES } from '@/components/admin/sponsor-crm/form/constants'
 
@@ -59,7 +60,12 @@ export function SponsorDetailHeader({
               logo={data.sponsor.logo}
               logoBright={data.sponsor.logoBright}
               name={data.sponsor.name}
-              className="h-12 w-12 rounded-lg border border-gray-200 bg-white object-contain p-1"
+              // Dark mode shows logoBright, which needs a dark tile; without
+              // one the regular logo keeps its white tile for contrast.
+              className={clsx(
+                'h-12 w-12 rounded-lg border border-gray-200 bg-white object-contain p-1 dark:border-gray-700',
+                data.sponsor.logoBright && 'dark:bg-gray-800',
+              )}
             />
           </div>
         ) : (

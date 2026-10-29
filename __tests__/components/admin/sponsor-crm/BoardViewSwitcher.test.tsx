@@ -44,4 +44,14 @@ describe('BoardViewSwitcher', () => {
     fireEvent.click(screen.getByText('Full Pipeline'))
     expect(onViewChange).toHaveBeenCalledWith('pipeline')
   })
+
+  it('names each button even when the label is hidden on small screens', () => {
+    setup('contract')
+    expect(
+      screen.getByRole('button', { name: 'Contract Board' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      screen.getByRole('button', { name: 'Full Pipeline' }),
+    ).toHaveAttribute('aria-pressed', 'false')
+  })
 })

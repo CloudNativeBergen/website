@@ -14,7 +14,8 @@ import {
   UserIcon,
 } from '@heroicons/react/24/outline'
 import { BoltIcon } from '@heroicons/react/24/solid'
-import { formatDistanceToNow, isToday, isYesterday, format } from 'date-fns'
+import { formatDistanceToNow, format } from 'date-fns'
+import { osloTodayDateString } from '@/lib/time'
 import clsx from 'clsx'
 import {
   getActivityIcon,
@@ -42,15 +43,20 @@ interface SponsorDayGroup {
   }[]
 }
 
-function getDateLabel(dateStr: string): string {
-  const date = new Date(dateStr)
-  if (isToday(date)) return 'Today'
-  if (isYesterday(date)) return 'Yesterday'
-  return format(date, 'EEEE, MMMM d')
+// Days are Oslo calendar days, so a 00:30 Oslo activity is not filed under
+// the previous (UTC) day.
+export function getDateKey(dateStr: string): string {
+  return osloTodayDateString(new Date(dateStr))
 }
 
-function getDateKey(dateStr: string): string {
-  return new Date(dateStr).toISOString().slice(0, 10)
+export function getDateLabel(dateStr: string, now = new Date()): string {
+  const key = getDateKey(dateStr)
+  if (key === osloTodayDateString(now)) return 'Today'
+  // ponytail: 24h back can miss by an hour around DST changes near midnight.
+  if (key === osloTodayDateString(new Date(now.getTime() - 86_400_000)))
+    return 'Yesterday'
+  // Local noon of the Oslo day keeps the weekday stable in any timezone.
+  return format(new Date(`${key}T12:00:00`), 'EEEE, MMMM d')
 }
 
 function groupActivities(

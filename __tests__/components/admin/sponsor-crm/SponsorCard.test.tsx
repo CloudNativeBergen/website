@@ -117,21 +117,27 @@ describe('SponsorCard status line', () => {
 describe('SponsorCard', () => {
   afterEach(cleanup)
 
-  it('has an accessible name with the sponsor name and status', () => {
+  it('has one main button named after the sponsor, not a button root', () => {
     renderCard({ sponsor: mockSponsor({ nextFollowUpAt: '2099-01-02' }) })
+    const main = screen.getByRole('button', { name: 'Acme Corporation' })
+    expect(main.tagName).toBe('BUTTON')
+    expect(main.parentElement!.closest('[role="button"]')).toBeNull()
     expect(
-      screen.getByRole('button', { name: /^Acme Corporation, Follow up/ }),
+      screen.getByRole('checkbox', { name: 'Select Acme Corporation' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Options for Acme Corporation' }),
     ).toBeInTheDocument()
   })
 
   it('opens the panel on click and on Enter', () => {
     const { onEdit } = renderCard()
-    fireEvent.click(screen.getByText('Acme Corporation'))
-    fireEvent.keyDown(
-      screen.getByRole('button', { name: /^Acme Corporation,/ }),
-      { key: 'Enter' },
-    )
-    expect(onEdit).toHaveBeenCalledTimes(2)
+    const main = screen.getByRole('button', { name: 'Acme Corporation' })
+    fireEvent.click(main)
+    // A native button turns Enter into a click; the card must not swallow it.
+    const enter = fireEvent.keyDown(main, { key: 'Enter' })
+    expect(enter).toBe(true)
+    expect(onEdit).toHaveBeenCalledTimes(1)
   })
 
   it('hides the checkbox until hover, focus or selection mode', () => {
@@ -171,6 +177,16 @@ describe('SponsorCard', () => {
       ['Send email', 'Copy link', 'Open sponsor page'],
     )
     expect(onEdit).not.toHaveBeenCalled()
+  })
+
+  it('Open sponsor page keeps the board outside pipeline mode', () => {
+    renderCard({ currentView: 'invoice' })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Options for Acme Corporation' }),
+    )
+    expect(
+      screen.getByRole('menuitem', { name: 'Open sponsor page' }),
+    ).toHaveAttribute('href', '/admin/sponsors/sfc-123?board=invoice')
   })
 
   it('Copy link copies the absolute board URL', async () => {

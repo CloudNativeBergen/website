@@ -2,6 +2,14 @@
 
 import { api } from '@/lib/trpc/client'
 import { DocumentTextIcon } from '@heroicons/react/24/outline'
+import { SIGNATURE_LABELS } from '@/lib/sponsor-crm/labels'
+import { CONTRACT_STATUSES } from '../form/constants'
+
+// The board's column names, so the widget and the contract board agree.
+const contractLabel = (status: string) => {
+  const s = CONTRACT_STATUSES.find((x) => x.value === status)
+  return s ? (s.columnLabel ?? s.label) : status
+}
 
 interface SponsorContractWidgetProps {
   sponsorId: string
@@ -58,17 +66,20 @@ export function SponsorContractWidget({
             <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
               Contract Status
             </dt>
-            <dd className="mt-1 text-sm text-gray-900 capitalize dark:text-white">
-              {(data.contractStatus || 'none').replace(/-/g, ' ')}
+            <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+              {contractLabel(data.contractStatus || 'none')}
             </dd>
           </div>
           <div className="sm:col-span-1">
             <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
               Signature Status
             </dt>
-            <dd className="mt-1 text-sm text-gray-900 capitalize dark:text-white">
-              {data.signatureStatus ? (
-                data.signatureStatus.replace(/-/g, ' ')
+            <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+              {data.signatureStatus &&
+              data.signatureStatus !== 'not-started' ? (
+                SIGNATURE_LABELS[
+                  data.signatureStatus as keyof typeof SIGNATURE_LABELS
+                ]
               ) : (
                 <span className="text-gray-400">Not started</span>
               )}
