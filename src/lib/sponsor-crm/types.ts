@@ -137,6 +137,7 @@ export interface SponsorForConference {
   contractCurrency: 'NOK' | 'USD' | 'EUR'
   invoiceStatus: InvoiceStatus
   invoiceSentAt?: string
+  invoiceDueAt?: string
   invoicePaidAt?: string
   tags?: SponsorTag[]
   registrationToken?: string
@@ -246,6 +247,7 @@ export interface SponsorForConferenceExpanded {
   contractCurrency: 'NOK' | 'USD' | 'EUR' | 'GBP'
   invoiceStatus: InvoiceStatus
   invoiceSentAt?: string
+  invoiceDueAt?: string
   invoicePaidAt?: string
   tags?: SponsorTag[]
   contactPersons?: ContactPerson[]
@@ -344,6 +346,7 @@ export interface SponsorForConferenceInput {
   contractCurrency?: 'NOK' | 'USD' | 'EUR' | 'GBP'
   invoiceStatus: InvoiceStatus
   invoiceSentAt?: string | null
+  invoiceDueAt?: string | null
   invoicePaidAt?: string | null
   tags?: SponsorTag[]
   nextFollowUpAt?: string | null

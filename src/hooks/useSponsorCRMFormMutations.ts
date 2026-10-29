@@ -24,6 +24,8 @@ export interface SponsorCRMFormData {
   contractStatus: ContractStatus
   status: SponsorStatus
   invoiceStatus: InvoiceStatus
+  /** YYYY-MM-DD, '' for none. Sent only when it differs from the record. */
+  invoiceDueAt?: string
   contractValue: string
   contractCurrency: 'NOK' | 'USD' | 'EUR' | 'GBP'
   tags: SponsorTag[]
@@ -156,6 +158,12 @@ export function useSponsorCRMFormMutations({
         contractStatus: formData.contractStatus,
         status: formData.status,
         invoiceStatus: formData.invoiceStatus,
+        // Only send an edited due date, so a stale form never wipes the one
+        // the server set when the invoice was marked sent.
+        ...(formData.invoiceDueAt !== undefined &&
+        formData.invoiceDueAt !== (sponsor.invoiceDueAt ?? '')
+          ? { invoiceDueAt: formData.invoiceDueAt || null }
+          : {}),
         contractValue: formData.contractValue
           ? parseFloat(formData.contractValue)
           : undefined,

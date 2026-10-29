@@ -86,6 +86,8 @@ const roster: SponsorForConferenceExpanded[] = [
     }),
     invoiceStatus: 'sent',
     invoiceSentAt: '2026-04-01T08:00:00Z',
+    // Past due: the table flags it as overdue while the status stays Sent.
+    invoiceDueAt: '2026-05-01',
   }),
   won({
     _id: 'sfc-tiny',

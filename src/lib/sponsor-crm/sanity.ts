@@ -144,6 +144,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   contractCurrency,
   invoiceStatus,
   invoiceSentAt,
+  invoiceDueAt,
   invoicePaidAt,
   tags,
   contactPersons[]{
@@ -266,6 +267,7 @@ export async function createSponsorForConference(
       contractCurrency: data.contractCurrency || 'NOK',
       invoiceStatus: data.invoiceStatus,
       invoiceSentAt: data.invoiceSentAt,
+      invoiceDueAt: data.invoiceDueAt,
       invoicePaidAt: data.invoicePaidAt,
       tags: data.tags,
       contactPersons: data.contactPersons
@@ -345,6 +347,8 @@ export async function updateSponsorForConference(
       updates.invoiceStatus = data.invoiceStatus
     if (data.invoiceSentAt !== undefined)
       updates.invoiceSentAt = data.invoiceSentAt
+    if (data.invoiceDueAt !== undefined)
+      updates.invoiceDueAt = data.invoiceDueAt
     if (data.invoicePaidAt !== undefined)
       updates.invoicePaidAt = data.invoicePaidAt
     if (data.tags !== undefined) updates.tags = data.tags

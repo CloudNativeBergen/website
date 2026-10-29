@@ -78,6 +78,7 @@ export const SponsorForConferenceInputSchema = z.object({
   contractCurrency: CurrencySchema.optional(),
   invoiceStatus: InvoiceStatusSchema,
   invoiceSentAt: z.string().optional(),
+  invoiceDueAt: z.iso.date().optional(),
   invoicePaidAt: z.string().optional(),
   tags: z.array(SponsorTagSchema).optional(),
   contactPersons: z
@@ -123,6 +124,7 @@ export const SponsorForConferenceUpdateSchema = z.object({
   contractCurrency: CurrencySchema.optional(),
   invoiceStatus: InvoiceStatusSchema.optional(),
   invoiceSentAt: z.string().nullable().optional(),
+  invoiceDueAt: z.iso.date().nullable().optional(),
   invoicePaidAt: z.string().nullable().optional(),
   tags: z.array(SponsorTagSchema).optional(),
   contactPersons: z

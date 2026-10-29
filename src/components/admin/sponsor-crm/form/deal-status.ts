@@ -21,6 +21,7 @@ export interface DealStatusFormData {
   status: SponsorStatus
   contractStatus: ContractStatus
   invoiceStatus: InvoiceStatus
+  invoiceDueAt?: string
 }
 
 /** Sub-views the header CTA / Manage cards can open (never the main pipeline). */
