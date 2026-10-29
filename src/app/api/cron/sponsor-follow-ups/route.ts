@@ -7,7 +7,9 @@ import { alertSponsorOwner } from '@/lib/sponsor-crm/slack-alerts'
  * Daily Slack alert for sponsors whose follow-up date has passed (#1687 N1).
  * Once per follow-up date: the date is stamped into `followUpAlertedFor`
  * before the alert, on the revision this sweep read, so a rerun or an
- * overlapping sweep skips it. A new follow-up date alerts again.
+ * overlapping sweep skips it. A new follow-up date alerts again. If Slack
+ * fails, the stamp is removed again (on the revision the stamp wrote), so the
+ * next sweep retries.
  */
 export async function GET(request: NextRequest) {
   noStore()
@@ -38,25 +40,46 @@ export async function GET(request: NextRequest) {
     )
 
     let alerted = 0
+    let failed = 0
     for (const sfc of candidates ?? []) {
+      let stampedRev: string
       try {
-        await clientWrite
-          .patch(sfc._id)
-          .ifRevisionId(sfc._rev)
-          .set({ followUpAlertedFor: sfc.nextFollowUpAt })
-          .commit()
+        stampedRev = (
+          await clientWrite
+            .patch(sfc._id)
+            .ifRevisionId(sfc._rev)
+            .set({ followUpAlertedFor: sfc.nextFollowUpAt })
+            .commit()
+        )._rev
       } catch {
         continue // changed since the read, or another sweep claimed it
       }
-      await alertSponsorOwner(
+      const ok = await alertSponsorOwner(
         sfc._id,
         '📅 Follow-up date passed',
         `The follow-up planned for ${sfc.nextFollowUpAt.slice(0, 10)} is due.`,
       )
-      alerted++
+      if (ok) {
+        alerted++
+        continue
+      }
+      failed++
+      try {
+        await clientWrite
+          .patch(sfc._id)
+          .ifRevisionId(stampedRev)
+          .unset(['followUpAlertedFor'])
+          .commit()
+      } catch (error) {
+        // Changed since the stamp: that edit decides what happens next.
+        console.error(
+          `[sponsor-follow-ups] could not clear the alert stamp on ${sfc._id}:`,
+          error,
+        )
+      }
     }
 
-    return NextResponse.json({ success: true, alerted })
+    return NextResponse.json({ success: true, alerted, failed })
   } catch (error) {
     console.error('Sponsor follow-ups cron error:', error)
     return NextResponse.json(

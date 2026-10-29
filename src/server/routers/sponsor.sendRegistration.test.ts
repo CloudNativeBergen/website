@@ -33,6 +33,8 @@ const h = vi.hoisted(() => ({
   raceToken: null as string | null,
   /** A write lands between the status re-read and the flip patch. */
   bumpRevAfterStatusRead: false,
+  /** The registration-sent status patch fails outright. */
+  statusWriteShouldThrow: false,
   send: vi.fn(),
 }))
 
@@ -88,10 +90,15 @@ vi.mock('@/lib/sanity/client', () => {
         if ('registrationToken' in ifMissing && h.tokenWriteShouldThrow) {
           throw new Error('sanity down')
         }
+        if (sets.contractStatus && h.statusWriteShouldThrow) {
+          throw new Error('sanity down')
+        }
         const doc = h.sfc && id === h.sfc._id ? h.sfc : {}
         if (requiredRev && (doc._rev ?? 'rev-1') !== requiredRev) {
-          throw new Error(
-            'Mutation(s) failed with 1 error(s): revision mismatch',
+          // Sanity answers a revision mismatch with a 409.
+          throw Object.assign(
+            new Error('Mutation(s) failed with 1 error(s): revision mismatch'),
+            { statusCode: 409 },
           )
         }
         // A concurrent writer landed first: Sanity keeps THEIR value.
@@ -206,6 +213,7 @@ beforeEach(() => {
   h.tokenWriteShouldThrow = false
   h.raceToken = null
   h.bumpRevAfterStatusRead = false
+  h.statusWriteShouldThrow = false
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
   h.sfc = {
     _id: SFC,
@@ -449,12 +457,22 @@ describe('the contract status', () => {
   it('is left alone when a write lands between the status re-read and the flip — the patch is revision-conditional', async () => {
     h.bumpRevAfterStatusRead = true
     const result = await sponsor().crm.sendCommunication(INPUT)
-    // The send itself is unaffected.
+    // The send itself is unaffected, and losing the race is not a failure.
     expect(result).toMatchObject({ success: true })
+    expect(result).not.toHaveProperty('registrationStateFailed')
     expect(statusPatches()).toEqual([])
     expect(
       h.creates.find((d) => d.activityType === 'contract_status_change'),
     ).toBeUndefined()
+  })
+
+  it('reports a status write that failed, without failing the send', async () => {
+    h.statusWriteShouldThrow = true
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({
+      success: true,
+      registrationStateFailed: true,
+    })
   })
 
   it('is left alone when the deal is already further along', async () => {

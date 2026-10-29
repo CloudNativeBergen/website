@@ -30,7 +30,17 @@ vi.mock('@/lib/sanity/client', () => ({
             Object.assign(
               h.docs.find((d) => d._id === id)!,
               sets,
+              {
+                _rev: 'r2',
+              },
             ),
+        }),
+        unset: (keys: string[]) => ({
+          commit: async () => {
+            const doc = h.docs.find((d) => d._id === id)!
+            for (const k of keys) delete doc[k]
+            return doc
+          },
         }),
       }),
     }),
@@ -53,6 +63,7 @@ const run = (auth = 'Bearer s') =>
 describe('api/cron/sponsor-follow-ups', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    h.alert.mockResolvedValue(true)
     process.env.CRON_SECRET = 's'
     h.docs = [
       { _id: 'past', _rev: 'r', nextFollowUpAt: '2020-01-01' },
@@ -85,5 +96,17 @@ describe('api/cron/sponsor-follow-ups', () => {
     expect(h.query).toContain('status != "closed-lost"')
     expect(h.query).not.toContain('closed-won')
     expect(h.query).toContain('dateTime(nextFollowUpAt) < dateTime(now())')
+  })
+
+  it('clears the stamp when Slack fails, so the next sweep retries', async () => {
+    h.alert.mockResolvedValueOnce(false)
+    const res = await (await run()).json()
+    expect(res).toMatchObject({ alerted: 0, failed: 1 })
+    expect(h.docs[0].followUpAlertedFor).toBeUndefined()
+
+    const retry = await (await run()).json()
+    expect(retry).toMatchObject({ alerted: 1, failed: 0 })
+    expect(h.alert).toHaveBeenCalledTimes(2)
+    expect(h.docs[0].followUpAlertedFor).toBe('2020-01-01')
   })
 })
