@@ -51,10 +51,7 @@ import { TravelSupportStatus } from '@/lib/travel-support/types'
 import { getWorkshopStatistics } from '@/lib/workshop/sanity'
 import type { WorkshopStatistics } from '@/lib/workshop/types'
 import { getConversationViewCounts } from '@/lib/messaging/sanity'
-import {
-  actionItemsForOrganizer,
-  generateRenewalItems,
-} from '@/lib/sponsor-crm/action-items'
+import { organizerWorklist } from '@/lib/sponsor-crm/action-items'
 import {
   isRenewalWindowOpen,
   shapeRenewals,
@@ -1269,19 +1266,8 @@ export function shapeSponsorsWaiting(
   organizerId: string | null,
   renewals: PreviousEditionRenewals | null = null,
 ): SponsorsWaitingData {
-  // Same rule as actionItemsForOrganizer: mine plus unassigned.
-  const myRenewals = renewals && {
-    ...renewals,
-    candidates: renewals.candidates.filter(
-      (c) => !c.assignedTo || c.assignedTo._id === organizerId,
-    ),
-  }
   return {
-    items: [
-      ...actionItemsForOrganizer(sponsors, organizerId),
-      ...generateRenewalItems(myRenewals),
-    ]
-      .sort((a, b) => a.priority - b.priority)
+    items: organizerWorklist(sponsors, organizerId, renewals)
       .slice(0, SPONSORS_WAITING_LIMIT)
       .map((item) => ({
         id: item.id,

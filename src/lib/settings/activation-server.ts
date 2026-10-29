@@ -24,9 +24,8 @@ import {
 import { readPhotoWall } from '@/lib/photo-wall/sanity'
 import { Status } from '@/lib/proposal/types'
 import {
-  generateActionItems,
+  countSponsorsWaiting,
   SPONSOR_ACTION_ITEM_FIELDS,
-  URGENT_ACTION_PRIORITY,
 } from '@/lib/sponsor-crm/action-items'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import {
@@ -180,11 +179,7 @@ async function resolveEventPrepFacts(
       hasPhotoWall: wall !== null,
       sponsors: counts.sponsors ?? 0,
       sponsorsWithoutLogo: counts.sponsorsWithoutLogo ?? 0,
-      sponsorsWaiting: new Set(
-        generateActionItems(counts.sponsorActions ?? [])
-          .filter((a) => a.priority <= URGENT_ACTION_PRIORITY)
-          .map((a) => a.sponsor.id),
-      ).size,
+      sponsorsWaiting: countSponsorsWaiting(counts.sponsorActions ?? []),
     }
   } catch (error) {
     console.error('Error resolving event-stage facts:', error)

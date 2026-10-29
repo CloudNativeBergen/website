@@ -1,24 +1,16 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getAuthSession } from '@/lib/auth'
+import { isEventHeroWindow } from '@/lib/settings/activation'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
-import { SponsorDashboardMetrics } from '@/components/admin/sponsor/SponsorDashboardMetrics'
-import { SponsorActionItems } from '@/components/admin/sponsor/SponsorActionItems'
-import { SponsorActivityTimeline } from '@/components/admin/sponsor/SponsorActivityTimeline'
+import { SponsorOverview } from '@/components/admin/sponsor/SponsorOverview'
 import { SponsorDashboardBroadcastAction } from '@/components/admin/sponsor/SponsorDashboardBroadcastAction'
-import Link from 'next/link'
-import {
-  RectangleStackIcon,
-  ClipboardDocumentListIcon,
-  ChartBarIcon,
-  BuildingOffice2Icon,
-  UserGroupIcon,
-  EnvelopeIcon,
-  DocumentDuplicateIcon,
-  BanknotesIcon,
-} from '@heroicons/react/24/outline'
+import { BuildingOffice2Icon } from '@heroicons/react/24/outline'
 
 export default async function AdminSponsors() {
-  const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({})
+  const [{ conference, error: conferenceError }, session] = await Promise.all([
+    getConferenceForCurrentDomain({}),
+    getAuthSession(),
+  ])
 
   if (conferenceError) {
     return (
@@ -48,138 +40,11 @@ export default async function AdminSponsors() {
         actions={<SponsorDashboardBroadcastAction conference={conference} />}
       />
 
-      <SponsorDashboardMetrics />
-
-      <div className="grid gap-8 lg:grid-cols-2">
-        <SponsorActionItems />
-        <SponsorActivityTimeline />
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Quick Navigation
-        </h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Link
-            href="/admin/sponsors/crm"
-            className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
-          >
-            <div className="rounded-full bg-indigo-100 p-3 dark:bg-indigo-900/20">
-              <RectangleStackIcon className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-            </div>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white">
-                Sponsor CRM
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Manage pipeline
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/sponsors/tiers"
-            className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
-          >
-            <div className="rounded-full bg-green-100 p-3 dark:bg-green-900/20">
-              <ChartBarIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
-            </div>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white">
-                Sponsor Tiers
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Configure tiers
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/sponsors/contacts"
-            className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
-          >
-            <div className="rounded-full bg-blue-100 p-3 dark:bg-blue-900/20">
-              <UserGroupIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white">
-                Sponsor Contacts
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Manage contacts
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/sponsors/activity"
-            className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
-          >
-            <div className="rounded-full bg-purple-100 p-3 dark:bg-purple-900/20">
-              <ClipboardDocumentListIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-            </div>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white">
-                Activity Log
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Full history
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/sponsors/contracts"
-            className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
-          >
-            <div className="rounded-full bg-amber-100 p-3 dark:bg-amber-900/20">
-              <DocumentDuplicateIcon className="h-6 w-6 text-amber-600 dark:text-amber-400" />
-            </div>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white">
-                Contract Templates
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Manage contracts
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/sponsors/invoices"
-            className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
-          >
-            <div className="rounded-full bg-emerald-100 p-3 dark:bg-emerald-900/20">
-              <BanknotesIcon className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white">
-                Invoices
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Invoice status and export
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/sponsors/templates"
-            className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
-          >
-            <div className="rounded-full bg-rose-100 p-3 dark:bg-rose-900/20">
-              <EnvelopeIcon className="h-6 w-6 text-rose-600 dark:text-rose-400" />
-            </div>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white">
-                Email Templates
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Outreach templates
-              </p>
-            </div>
-          </Link>
-        </div>
-      </div>
+      <SponsorOverview
+        organizerId={session?.speaker?._id ?? null}
+        revenueGoal={conference.sponsorRevenueGoal}
+        showBeforeEvent={isEventHeroWindow(conference)}
+      />
     </div>
   )
 }

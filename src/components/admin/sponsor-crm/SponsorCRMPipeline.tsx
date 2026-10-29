@@ -72,6 +72,11 @@ interface SponsorCRMPipelineProps {
 }
 
 import { useDebounce } from '@/hooks/useDebounce'
+import {
+  sponsorHasAction,
+  type BoardActionFilter,
+} from '@/lib/sponsor-crm/action-items'
+import { actionFilterLabel } from '@/lib/sponsor-crm/overview'
 
 export function SponsorCRMPipeline({
   conferenceId,
@@ -168,6 +173,9 @@ export function SponsorCRMPipeline({
     () => searchParams.get('needsFollowUp') === 'true',
     [searchParams],
   )
+  // `?action=<type|all>`: sponsors with an open action item (the overview's
+  // "Needs you" links here). Filtered on the client like needsFollowUp.
+  const actionFilter = searchParams.get('action') as BoardActionFilter | null
 
   // Pause background refresh when user is actively interacting
   const isUserBusy =
@@ -215,12 +223,21 @@ export function SponsorCRMPipeline({
     })
 
   // All filtering now happens on the server
-  const filteredSponsors = useMemo(() => {
-    if (!needsFollowUpFilter) return sponsors
-    return sponsors.filter((s) =>
-      checkSponsorNeedsFollowUp(s, conference.crmInactivityThresholds),
-    )
-  }, [sponsors, needsFollowUpFilter, conference.crmInactivityThresholds])
+  const filteredSponsors = useMemo(
+    () =>
+      sponsors.filter(
+        (s) =>
+          (!needsFollowUpFilter ||
+            checkSponsorNeedsFollowUp(s, conference.crmInactivityThresholds)) &&
+          (!actionFilter || sponsorHasAction(s, actionFilter)),
+      ),
+    [
+      sponsors,
+      needsFollowUpFilter,
+      actionFilter,
+      conference.crmInactivityThresholds,
+    ],
+  )
 
   // Helper to update URL params without triggering navigation
   const updateUrlParams = useCallback(
@@ -331,7 +348,12 @@ export function SponsorCRMPipeline({
 
     // Don't default to "my sponsors" when a team filter is already active — the
     // team is the intended owner lens for this visit.
-    if (!searchParams.has('assignedTo') && !searchParams.has('team')) {
+    // An action filter covers unassigned sponsors too, so it keeps all owners.
+    if (
+      !searchParams.has('assignedTo') &&
+      !searchParams.has('team') &&
+      !searchParams.has('action')
+    ) {
       const params = new URLSearchParams(searchParams.toString())
       params.set('assignedTo', session.speaker._id)
       router.replace(`?${params.toString()}`, { scroll: false })
@@ -479,7 +501,8 @@ export function SponsorCRMPipeline({
     (assignedToFilter ? 1 : 0) +
     (teamFilter ? 1 : 0) +
     tagsFilter.length +
-    (needsFollowUpFilter ? 1 : 0)
+    (needsFollowUpFilter ? 1 : 0) +
+    (actionFilter ? 1 : 0)
 
   const groupedSponsors = useMemo(() => {
     return filteredSponsors.reduce(
@@ -914,6 +937,14 @@ export function SponsorCRMPipeline({
               />
             )}
 
+            {actionFilter && (
+              <FilterPill
+                label={actionFilterLabel(actionFilter)}
+                category="Needs action"
+                onRemove={() => updateFilters('action', null)}
+              />
+            )}
+
             {/* Search pill */}
             {searchQuery && (
               <FilterPill
@@ -1123,6 +1154,7 @@ function FilterPill({
       <span className="max-w-32 truncate">{label}</span>
       <button
         onClick={onRemove}
+        aria-label={`Remove ${category} filter: ${label}`}
         className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-indigo-200 hover:text-indigo-900 dark:hover:bg-indigo-800 dark:hover:text-indigo-100"
       >
         <XMarkIcon className="h-3 w-3" />

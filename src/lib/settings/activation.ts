@@ -378,14 +378,26 @@ function eventFactRows(f: EventPrepFacts): ActivationRow[] {
       optional: true,
     },
   ]
-  rows.push({
-    id: 'sponsors-waiting',
-    stage: 'event',
-    label: `Sponsors waiting on you (${f.sponsorsWaiting})`,
-    done: f.sponsorsWaiting === 0,
-    anchor: '/admin/sponsors/crm',
-    hint: 'Clear overdue invoices, due follow-ups, contracts and missing contacts.',
-  })
+  return [...rows, ...sponsorEventRows(f)]
+}
+
+/** The sponsor rows of the event stage; the sponsor overview shows them too. */
+export function sponsorEventRows(
+  f: Pick<
+    EventPrepFacts,
+    'sponsors' | 'sponsorsWithoutLogo' | 'sponsorsWaiting'
+  >,
+): ActivationRow[] {
+  const rows: ActivationRow[] = [
+    {
+      id: 'sponsors-waiting',
+      stage: 'event',
+      label: `Sponsors waiting on you (${f.sponsorsWaiting})`,
+      done: f.sponsorsWaiting === 0,
+      anchor: '/admin/sponsors/crm',
+      hint: 'Clear overdue invoices, due follow-ups, contracts and missing contacts.',
+    },
+  ]
   if (f.sponsors > 0) {
     rows.push({
       id: 'sponsor-logos',
