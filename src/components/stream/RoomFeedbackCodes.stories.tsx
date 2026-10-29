@@ -21,7 +21,7 @@ const meta = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(
-      canvas.getByRole('heading', { name: 'Rate the talks' }),
+      canvas.getByRole('heading', { name: 'How were these sessions?' }),
     ).toBeVisible()
     await expect(
       await canvas.findAllByRole('img', { name: /QR code for feedback/ }),

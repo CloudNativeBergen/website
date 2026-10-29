@@ -11,8 +11,6 @@ import {
 } from '@/lib/stream/room-feedback'
 import { useFeedbackQrPng } from '@/components/feedback/useFeedbackQrPng'
 
-export const ROOM_FEEDBACK_HEADING = 'Rate the talks'
-
 function FeedbackCodeCard({ code }: { code: RoomFeedbackCode }) {
   const { src, failed } = useFeedbackQrPng(code.url, 768)
   return (
@@ -51,7 +49,9 @@ export function RoomFeedbackCodeCards({
         id="room-feedback-heading"
         className="font-space-grotesk text-center text-4xl font-bold text-brand-slate-gray dark:text-white"
       >
-        {ROOM_FEEDBACK_HEADING}
+        {codes.length === 1
+          ? 'How was this session?'
+          : 'How were these sessions?'}
       </h2>
       <ul
         className={`mx-auto mt-6 grid gap-8 ${
