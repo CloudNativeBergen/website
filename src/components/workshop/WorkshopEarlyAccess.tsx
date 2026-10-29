@@ -35,10 +35,10 @@ export function WorkshopEarlyAccessBanner({
           {/* A sponsor's name can be one long word: it wraps, it does not
               push the page wide. */}
           <div className="ml-3 min-w-0 break-words">
-            <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
+            <h2 className="text-sm font-medium text-blue-800 dark:text-blue-200">
               Early access through {sponsor} opens{' '}
               {formatRegistrationInstant(opensAt)}
-            </h3>
+            </h2>
             <p className="mt-2 text-sm text-blue-700 dark:text-blue-300">
               You can sign up for workshops from then, before registration opens
               for everyone.

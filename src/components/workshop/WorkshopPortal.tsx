@@ -113,9 +113,9 @@ export function WorkshopPortal({
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                    <h2 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
                       Workshop registration is not yet open
-                    </h3>
+                    </h2>
                     <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
                       <p>
                         Registration will open on{' '}
@@ -144,9 +144,9 @@ export function WorkshopPortal({
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                    <h2 className="text-sm font-medium text-red-800 dark:text-red-200">
                       Workshop registration has closed
-                    </h3>
+                    </h2>
                     <div className="mt-2 text-sm text-red-700 dark:text-red-300">
                       <p>
                         Registration closed on{' '}

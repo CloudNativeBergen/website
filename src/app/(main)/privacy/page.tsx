@@ -1751,9 +1751,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
 
                     {usesWorkOS ? (
                       <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
-                        <h4 className="mb-2 font-semibold text-amber-800 dark:text-amber-200">
+                        <h3 className="mb-2 font-semibold text-amber-800 dark:text-amber-200">
                           WorkOS Authentication
-                        </h4>
+                        </h3>
                         <p className="text-sm text-amber-700 dark:text-amber-300">
                           WorkOS processes workshop authentication data in the
                           United States. We rely on:
@@ -2178,10 +2178,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                     </div>
 
                     <div className="my-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
-                      <h4 className="mb-2 flex items-center font-semibold text-blue-800 dark:text-blue-200">
+                      <h3 className="mb-2 flex items-center font-semibold text-blue-800 dark:text-blue-200">
                         <BookOpenIcon className="mr-2 h-4 w-4" />
                         About Archived Speaker Profiles
-                      </h4>
+                      </h3>
                       <p className="text-sm text-blue-700 dark:text-blue-300">
                         We maintain archived versions of conference programs
                         with speaker information for historical and community
@@ -2604,10 +2604,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
 
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-800 dark:bg-blue-900/20">
-                      <h4 className="mb-4 flex items-center text-lg font-semibold text-blue-800 dark:text-blue-200">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-blue-800 dark:text-blue-200">
                         <ChatBubbleOvalLeftIcon className="mr-2 h-5 w-5" />
                         Contact Us
-                      </h4>
+                      </h3>
                       <div className="space-y-3">
                         <div>
                           <p className="font-medium text-blue-800 dark:text-blue-200">
@@ -2638,10 +2638,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                     </div>
 
                     <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800 dark:bg-red-900/20">
-                      <h4 className="mb-4 flex items-center text-lg font-semibold text-red-800 dark:text-red-200">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-red-800 dark:text-red-200">
                         <ScaleIcon className="mr-2 h-5 w-5" />
                         File a Complaint
-                      </h4>
+                      </h3>
                       <p className="mb-3 text-sm text-red-700 dark:text-red-300">
                         If you believe we have not handled your personal data
                         properly, you have the right to lodge a complaint with

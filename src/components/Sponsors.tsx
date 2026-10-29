@@ -84,10 +84,10 @@ function SponsorsCta({
             />
           </div>
           <div className="flex-1">
-            <h3 className="font-space-grotesk mb-4 text-2xl font-bold tracking-tight text-brand-slate-gray md:text-3xl">
+            <h3 className="font-space-grotesk mb-4 text-2xl font-bold tracking-tight text-brand-slate-gray md:text-3xl dark:text-white">
               {ctaHeading}
             </h3>
-            <p className="font-inter mx-auto mb-8 max-w-2xl text-lg text-brand-slate-gray sm:mx-0">
+            <p className="font-inter mx-auto mb-8 max-w-2xl text-lg text-brand-slate-gray sm:mx-0 dark:text-gray-300">
               {ctaDescription}
             </p>
             {conference.sponsorTiers && conference.sponsorTiers.length > 0 ? (

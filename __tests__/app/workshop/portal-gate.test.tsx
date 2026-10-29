@@ -1023,7 +1023,7 @@ describe('workshop portal: the registration window', () => {
     return {
       // CONTROL for every case: this is the signed-in signup page.
       heading: textOf(elements.find((el) => el.type === 'h1')),
-      banners: elements.filter((el) => el.type === 'h3').map(textOf),
+      banners: elements.filter((el) => el.type === 'h2').map(textOf),
       text: textOf(page).replace(/\s+/g, ' '),
       list: elements.find((el) => 'userWorkOSId' in el.props)?.props,
       /** Every ISO instant among the props of every element, in order. */

@@ -60,7 +60,7 @@ function shown(
     }),
   )
   return elements
-    .filter((el) => el.type === 'h3' || el.props.role === 'status')
+    .filter((el) => el.type === 'h2' || el.props.role === 'status')
     .map((el) => textOf(el).replace(/\s+/g, ' ').trim())
 }
 
