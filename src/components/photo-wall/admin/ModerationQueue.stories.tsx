@@ -240,6 +240,48 @@ export const UndoToastPhoneDark: Story = {
   globals: { theme: 'dark' },
 }
 
+/**
+ * The queue's shortcuts (§10): J/K and the arrow keys move between cards, A
+ * approves, R rejects, Enter opens the photo large, U undoes. The hint line
+ * shows from `sm` up.
+ */
+export const KeyboardShortcuts: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    canvas.getByRole('tab', { name: 'Pending (3)' }).focus()
+    await userEvent.keyboard('jj')
+    const cards = canvas.getAllByRole('article')
+    await expect(
+      within(cards[1]).getByRole('button', { name: /^Enlarge/ }),
+    ).toHaveFocus()
+    await userEvent.keyboard('r')
+    await waitFor(() =>
+      expect(args.onAction).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: 'pending' }),
+        'reject',
+      ),
+    )
+    await canvas.findByText('Rejected · Undo puts it on the wall')
+    await userEvent.keyboard('k')
+    await expect(
+      within(cards[0]).getByRole('button', { name: /^Enlarge/ }),
+    ).toHaveFocus()
+  },
+}
+export const KeyboardShortcutsDark: Story = {
+  ...KeyboardShortcuts,
+  globals: { theme: 'dark' },
+}
+export const KeyboardShortcutsPhone: Story = {
+  ...KeyboardShortcuts,
+  parameters: PHONE,
+}
+export const KeyboardShortcutsPhoneDark: Story = {
+  ...KeyboardShortcuts,
+  parameters: PHONE,
+  globals: { theme: 'dark' },
+}
+
 /** A thumbnail opens the whole photo, its crop outlined, in a dialog. */
 export const Enlarged: Story = {
   play: async ({ canvasElement }) => {

@@ -2015,3 +2015,172 @@ describe('Undo (§10): the latest decision, reversed, on the same post', () => {
     expect(screen.queryByText(/ · Undo /)).toBeNull()
   })
 })
+
+describe('keyboard shortcuts on the queue (§10)', () => {
+  const queue: ModerationQueueData = {
+    posts: [
+      post({ _id: 'wallPost-1', caption: 'One' }),
+      post({
+        _id: 'wallPost-5',
+        caption: 'Two',
+        submittedAt: '2026-10-26T07:40:00Z',
+      }),
+      post({
+        _id: 'wallPost-6',
+        caption: 'Three',
+        submittedAt: '2026-10-26T07:50:00Z',
+      }),
+      post({ _id: 'wallPost-7', status: 'approved', caption: 'Up' }),
+    ],
+  }
+  beforeEach(() => {
+    for (const fn of [h.invalidate, h.approve, h.reject, h.remove]) {
+      fn.mockReset()
+      fn.mockResolvedValue({ status: 'done' })
+    }
+    h.useQuery.mockReturnValue({
+      data: queue,
+      isPending: false,
+      isError: false,
+    })
+  })
+  const card = (name: string) => screen.getByRole('article', { name })
+  const photoOf = (name: string) =>
+    within(card(name)).getByRole('button', { name: /^Enlarge/ })
+  const key = (key: string, init: object = {}) =>
+    fireEvent.keyDown(document.activeElement!, { key, ...init })
+
+  it('says the shortcuts', () => {
+    render(<ModerationQueue />)
+    expect(
+      screen.getByText('J/K move · A approve · R reject · U undo'),
+    ).toBeInTheDocument()
+  })
+
+  it('J/K and the arrow keys move between the cards, from the tab too', () => {
+    render(<ModerationQueue />)
+    tab(/^Pending/).focus()
+    key('j')
+    expect(photoOf('One')).toHaveFocus()
+    key('J')
+    expect(photoOf('Two')).toHaveFocus()
+    key('ArrowDown')
+    expect(photoOf('Three')).toHaveFocus()
+    key('j')
+    expect(photoOf('Three')).toHaveFocus()
+    key('k')
+    expect(photoOf('Two')).toHaveFocus()
+    key('ArrowLeft')
+    expect(photoOf('One')).toHaveFocus()
+    key('ArrowRight')
+    expect(photoOf('Two')).toHaveFocus()
+    key('ArrowUp')
+    expect(photoOf('One')).toHaveFocus()
+  })
+
+  it('the tabs keep their own arrow keys', () => {
+    render(<ModerationQueue />)
+    tab(/^Pending/).focus()
+    key('ArrowRight')
+    expect(tab(/^On the wall/)).toHaveFocus()
+    expect(tab(/^On the wall/)).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('A approves and R rejects the card with focus, and only it', async () => {
+    render(<ModerationQueue />)
+    photoOf('Two').focus()
+    key('a')
+    await vi.waitFor(() =>
+      expect(h.approve).toHaveBeenCalledWith({
+        id: 'wallPost-5',
+        from: 'pending',
+        shown: NO_PHOTO_ID,
+      }),
+    )
+    within(card('Three')).getByRole('button', { name: 'Reject' }).focus()
+    key('R')
+    await vi.waitFor(() =>
+      expect(h.reject).toHaveBeenCalledWith({
+        id: 'wallPost-6',
+        shown: NO_PHOTO_ID,
+      }),
+    )
+    expect(h.approve).toHaveBeenCalledTimes(1)
+    expect(h.reject).toHaveBeenCalledTimes(1)
+  })
+
+  it('A or R outside a card, or with a modifier, does nothing', () => {
+    render(<ModerationQueue />)
+    tab(/^Pending/).focus()
+    key('a')
+    key('r')
+    photoOf('One').focus()
+    key('a', { ctrlKey: true })
+    key('a', { metaKey: true })
+    key('r', { altKey: true })
+    expect(h.approve).not.toHaveBeenCalled()
+    expect(h.reject).not.toHaveBeenCalled()
+  })
+
+  it('Enter on the photo J lands on opens it large', () => {
+    render(<ModerationQueue />)
+    tab(/^Pending/).focus()
+    key('j')
+    fireEvent.click(document.activeElement!) // what Enter does on a button
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('U undoes the latest action', async () => {
+    render(<ModerationQueue />)
+    photoOf('One').focus()
+    key('r')
+    await screen.findByText('Rejected · Undo puts it on the wall')
+    photoOf('Two').focus()
+    key('u')
+    await vi.waitFor(() =>
+      expect(h.approve).toHaveBeenCalledWith({
+        id: 'wallPost-1',
+        from: 'notShown',
+        shown: NO_PHOTO_ID,
+      }),
+    )
+  })
+
+  it('never fires in a field or an open menu', () => {
+    render(<ModerationQueue />)
+    // A field: the talk picker's search.
+    choose(card('One'), 'Add talk')
+    const search = within(card('One')).getByRole('searchbox')
+    search.focus()
+    for (const k of ['a', 'r', 'j', 'u']) key(k)
+    expect(search).toHaveFocus()
+
+    // An open menu.
+    fireEvent.click(
+      within(card('Two')).getByRole('button', { name: 'More actions' }),
+    )
+    const item = screen.getAllByRole('menuitem')[0]
+    for (const k of ['a', 'r']) fireEvent.keyDown(item, { key: k })
+    // Even with focus left on the card while the menu is open.
+    // (The menu hides the page from the accessibility tree meanwhile.)
+    const behind = document
+      .querySelectorAll('article')[1]
+      .querySelector('button')!
+    for (const k of ['a', 'r']) fireEvent.keyDown(behind, { key: k })
+    expect(h.approve).not.toHaveBeenCalled()
+    expect(h.reject).not.toHaveBeenCalled()
+  })
+
+  it('never fires in a dialog', () => {
+    render(<ModerationQueue />)
+    // The photo opened large.
+    fireEvent.click(photoOf('Three'))
+    const dialog = screen.getByRole('dialog')
+    const before = document.activeElement
+    for (const k of ['a', 'r', 'j', 'k']) fireEvent.keyDown(dialog, { key: k })
+    expect(document.activeElement).toBe(before)
+
+    expect(h.approve).not.toHaveBeenCalled()
+    expect(h.reject).not.toHaveBeenCalled()
+  })
+})
