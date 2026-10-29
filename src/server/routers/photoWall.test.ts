@@ -1347,6 +1347,7 @@ describe('the moderation actions (§8, §10, §12)', () => {
       ).resolves.toEqual({
         approved: 3,
         approvedIds: ['wallPost-p1', 'wallPost-p2', 'wallPost-p3'],
+        decidedAt: expect.any(String),
         pending: 3,
       })
       expect(store().doc('wallPost-p4')?.status).toBe('pending')
@@ -1373,6 +1374,7 @@ describe('the moderation actions (§8, §10, §12)', () => {
       ).resolves.toEqual({
         approved: 1,
         approvedIds: ['wallPost-p1'],
+        decidedAt: expect.any(String),
         pending: 1,
       })
       expect(store().doc('wallPost-p1')?.status).toBe('approved')
@@ -1394,6 +1396,7 @@ describe('the moderation actions (§8, §10, §12)', () => {
       ).resolves.toEqual({
         approved: 0,
         approvedIds: [],
+        decidedAt: expect.any(String),
         pending: 0,
       })
       expect(expired().map(([tag]) => tag)).toEqual([
@@ -1418,17 +1421,26 @@ describe('the moderation actions (§8, §10, §12)', () => {
         throw new Error('socket hang up')
       })
       vi.spyOn(console, 'error').mockImplementation(() => {})
-      await expect(
-        organizer().approveAllPending({
-          shown: shownAll(['wallPost-p1', 'wallPost-p2']),
-        }),
-      ).resolves.toEqual({
-        // Only the acknowledged write: an Undo never touches the lost one.
+      const shown = shownAll(['wallPost-p1', 'wallPost-p2'])
+      const result = await organizer().approveAllPending({ shown })
+      expect(result).toEqual({
+        // Only the acknowledged write is counted; Undo still reaches p1.
         approved: 1,
         approvedIds: ['wallPost-p2'],
+        decidedAt: expect.any(String),
         pending: 2,
       })
       expect(store().doc('wallPost-p1')?.status).toBe('approved')
+      const { id, ...card } = shown[0]
+      await expect(
+        organizer().remove({
+          id,
+          from: 'approved',
+          decidedAt: result.decidedAt,
+          shown: card,
+        }),
+      ).resolves.toEqual({ status: 'done' })
+      expect(store().doc('wallPost-p1')?.status).toBe('notShown')
       expect(new Set(expired().map(([tag]) => tag))).toEqual(
         new Set([
           'photo-wall-admin:conf-A',

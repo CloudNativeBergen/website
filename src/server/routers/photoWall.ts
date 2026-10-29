@@ -270,7 +270,8 @@ export const photoWallRouter = router({
 
   /**
    * Remove a post from the wall (§10): Not shown. `from`, optional, is the
-   * status the card (or the Undo of an Approve) showed.
+   * status the card (or the Undo of an Approve) showed; `decidedAt`,
+   * optional, the decision time the Undo of an Approve all expects.
    */
   remove: adminProcedure
     .input(
@@ -278,6 +279,7 @@ export const photoWallRouter = router({
         .object({
           id: postId,
           from: z.enum(ALLOWED_FROM.remove).optional(),
+          decidedAt: z.string().max(40).optional(),
           shown,
         })
         .strict(),
@@ -287,6 +289,7 @@ export const photoWallRouter = router({
         postId: input.id,
         action: 'remove',
         from: input.from,
+        decidedAt: input.decidedAt,
         shown: input.shown,
       }),
     ),
@@ -324,6 +327,7 @@ export const photoWallRouter = router({
         return {
           approved: result.approved,
           approvedIds: result.approvedIds,
+          decidedAt: result.decidedAt,
           pending: result.pending,
         }
       } finally {

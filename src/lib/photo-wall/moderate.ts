@@ -75,6 +75,7 @@ export async function moderateWallPost({
   action,
   from,
   shown,
+  decidedAt,
   onRead,
   now = new Date(),
 }: {
@@ -85,6 +86,12 @@ export async function moderateWallPost({
   from?: WallPostStatus
   /** The post the card showed: a replacement under the id is `changed`. */
   shown?: ShownIncarnation
+  /**
+   * The decision time the caller expects the post to carry: the Undo of an
+   * Approve all sends its batch's, so a post approved by anyone else (in
+   * parallel, or again since) is `changed`, never removed.
+   */
+  decidedAt?: string
   /** Told the device and talk of every post read, before any write. */
   onRead?: (deviceKey: string | null, talkId: string | null) => void
   now?: Date
@@ -99,7 +106,8 @@ export async function moderateWallPost({
   if (
     (shown !== undefined && !isShown(first, shown)) ||
     !allowsFrom(action, first.status) ||
-    (from !== undefined && first.status !== from)
+    (from !== undefined && first.status !== from) ||
+    (decidedAt !== undefined && first.decidedAt !== decidedAt)
   ) {
     return { status: 'changed' }
   }
@@ -148,8 +156,13 @@ export const APPROVE_ALL_BUDGET_MS = 30_000
 export interface ApproveAllResult {
   /** How many it approved. */
   approved: number
-  /** The ids it approved (acknowledged writes only): what an Undo takes back. */
+  /** The ids it approved (acknowledged writes only). */
   approvedIds: string[]
+  /**
+   * The `decidedAt` every patch of this run writes: its Undo removes only
+   * posts still carrying it, acknowledged or not.
+   */
+  decidedAt: string
   /** How many of the posts asked for were pending on this wall when pressed. */
   pending: number
   /**
@@ -222,16 +235,17 @@ export async function approveAllPending({
       (card.assetId === null || (row.assetId ?? null) === card.assetId)
     )
   })
+  const set = patchFor('approve', now.toISOString())
   if (rows.length && (await isWallClosed(conferenceId))) {
     return {
       approved: 0,
       approvedIds: [],
+      decidedAt: set.decidedAt,
       pending: rows.length,
       deviceKeys: [],
       talkIds: [],
     }
   }
-  const set = patchFor('approve', now.toISOString())
   const deviceKeys = new Set<string>()
   const talkIds = new Set<string>()
   const approvedIds: string[] = []
@@ -264,6 +278,7 @@ export async function approveAllPending({
   return {
     approved: approvedIds.length,
     approvedIds,
+    decidedAt: set.decidedAt,
     pending: rows.length,
     deviceKeys: [...deviceKeys],
     talkIds: [...talkIds],
