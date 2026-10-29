@@ -210,6 +210,16 @@ describe('renewal reminders (R2)', () => {
     ).toBe(true)
   })
 
+  it('clamps to the last day of the target month', () => {
+    // 31 Aug - 6 months = 28 Feb (2026 is not a leap year), not 3 March.
+    expect(
+      isRenewalWindowOpen('2026-08-31', new Date('2026-02-27T23:59:59Z')),
+    ).toBe(false)
+    expect(
+      isRenewalWindowOpen('2026-08-31', new Date('2026-02-28T00:00:00Z')),
+    ).toBe(true)
+  })
+
   const current = { _id: 'conf-2026', startDate: '2026-10-27' }
   const row = {
     _id: 'conf-2025',
@@ -253,7 +263,8 @@ describe('renewal reminders (R2)', () => {
     expect(generateRenewalItems(renewals)).toEqual([
       expect.objectContaining({
         id: 'sfc-old-renewal',
-        description: 'Sponsored CNB 2025, not contacted for this year',
+        title: 'Renew Acme',
+        description: 'Acme sponsored CNB 2025, not contacted for this year',
         link: 'https://2025.example.test/admin/sponsors/sfc-old',
       }),
     ])

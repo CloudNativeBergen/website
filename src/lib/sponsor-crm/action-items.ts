@@ -343,12 +343,12 @@ export function generateRenewalItems(
     .map((c) => ({
       id: `${c._id}-renewal`,
       type: 'follow-up' as const,
-      title: 'Renewal',
+      title: `Renew ${c.name}`,
       sponsor: { id: c._id, name: c.name },
       assignedTo: c.assignedTo
         ? { name: c.assignedTo.name, image: c.assignedTo.image }
         : undefined,
-      description: `Sponsored ${edition.title}, not contacted for this year`,
+      description: `${c.name} sponsored ${edition.title}, not contacted for this year`,
       priority: 4.5,
       link: edition.origin ? `${edition.origin}/admin/sponsors/${c._id}` : '',
     }))

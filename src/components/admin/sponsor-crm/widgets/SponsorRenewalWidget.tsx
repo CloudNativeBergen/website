@@ -61,11 +61,21 @@ export function SponsorRenewalAction({
   )
 }
 
-export function SponsorRenewalWidget({ sponsorId }: { sponsorId: string }) {
+export function SponsorRenewalWidget({
+  sponsorId,
+  onChanged,
+}: {
+  sponsorId: string
+  /** The page refresh, so the "Copied to" note shows in the activity feed. */
+  onChanged?: () => void
+}) {
   const utils = api.useUtils()
   const { data } = api.sponsor.crm.renewal.useQuery({ id: sponsorId })
   const copy = api.sponsor.crm.copyToNextYear.useMutation({
-    onSuccess: () => utils.sponsor.crm.renewal.invalidate({ id: sponsorId }),
+    onSuccess: () => {
+      utils.sponsor.crm.renewal.invalidate({ id: sponsorId })
+      onChanged?.()
+    },
   })
   if (!data?.eventEnded) return null
   return (

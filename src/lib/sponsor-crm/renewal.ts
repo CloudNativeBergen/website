@@ -22,8 +22,20 @@ export function isRenewalWindowOpen(
   now = new Date(),
 ) {
   if (!startDate) return false
-  const opens = new Date(startDate)
-  opens.setUTCMonth(opens.getUTCMonth() - RENEWAL_LEAD_MONTHS)
+  const start = new Date(startDate)
+  // Clamp to the target month's last day: 31 Aug minus 6 months is 28 Feb,
+  // not the 3 March `setUTCMonth` would overflow to.
+  const month = start.getUTCMonth() - RENEWAL_LEAD_MONTHS
+  const lastDay = new Date(
+    Date.UTC(start.getUTCFullYear(), month + 1, 0),
+  ).getUTCDate()
+  const opens = new Date(
+    Date.UTC(
+      start.getUTCFullYear(),
+      month,
+      Math.min(start.getUTCDate(), lastDay),
+    ),
+  )
   return now >= opens
 }
 
@@ -201,7 +213,7 @@ export const PREVIOUS_EDITION_RENEWALS_ROOT = `*[_type == "conference" && organi
   _id, title, domains,
   "candidates": *[_type == "sponsorForConference" && conference._ref == ^._id && conference->organization._ref == $orgId && status == "closed-won"
     && !(sponsor._ref in *[_type == "sponsorForConference" && conference._ref == $conferenceId].sponsor._ref)]{
-    _id, "name": sponsor->name, assignedTo->{ _id, name, image }
+    _id, "name": sponsor->name, assignedTo->{ _id, name, "image": coalesce(image.asset->url, imageURL) }
   }
 }`
 
