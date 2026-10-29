@@ -179,7 +179,7 @@ export default defineType({
       validation: (Rule) =>
         Rule.integer()
           .min(1)
-          .max(200)
+          .max(500)
           .custom((capacity, context) => {
             const format = context.document?.format as string | undefined
             const isWorkshop =
