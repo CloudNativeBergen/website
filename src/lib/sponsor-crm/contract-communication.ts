@@ -955,7 +955,7 @@ export async function prepareContractSend(
 }
 
 type SystemReminderOutcome =
-  | { ok: true; recipient: string }
+  | { ok: true; recipient: string; lastReminder: boolean }
   | {
       ok: false
       reason:
@@ -1166,5 +1166,11 @@ export async function sendContractReminderBySystem(
   } catch (error) {
     console.error('[contract-reminders] settling the claim failed:', error)
   }
-  return { ok: true, recipient: signer.email }
+  // The claim makes this count ours alone, so exactly one sweep sends the
+  // last allowed reminder: the "reminders used up" alert fires once.
+  return {
+    ok: true,
+    recipient: signer.email,
+    lastReminder: claimedCount >= options.maxReminders,
+  }
 }

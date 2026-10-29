@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { clientWrite } from '@/lib/sanity/client'
 import { sendContractReminderBySystem } from '@/lib/sponsor-crm/contract-communication'
+import { alertSponsorOwner } from '@/lib/sponsor-crm/slack-alerts'
 import { MAX_REMINDERS } from '@/lib/sponsor-crm/contract-send-state'
 import { unstable_noStore as noStore } from 'next/cache'
 
@@ -71,6 +72,13 @@ export async function GET(request: NextRequest) {
           console.log(
             `Sent signing reminder to ${outcome.recipient} for ${contract.sponsorName} (${contract._id})`,
           )
+          if (outcome.lastReminder) {
+            await alertSponsorOwner(
+              contract._id,
+              '⏰ Contract reminders used up',
+              `The last automatic signing reminder (${MAX_REMINDERS} of ${MAX_REMINDERS}) went out and the contract is still unsigned. Follow up by hand.`,
+            )
+          }
         } else {
           failed++
           console.warn(

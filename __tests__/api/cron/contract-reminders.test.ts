@@ -11,6 +11,7 @@ import { NextRequest } from 'next/server'
 const h = vi.hoisted(() => ({
   fetch: vi.fn(),
   remind: vi.fn(),
+  alert: vi.fn(),
 }))
 
 vi.mock('@/lib/sanity/client', () => ({
@@ -18,6 +19,9 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 vi.mock('@/lib/sponsor-crm/contract-communication', () => ({
   sendContractReminderBySystem: (...args: unknown[]) => h.remind(...args),
+}))
+vi.mock('@/lib/sponsor-crm/slack-alerts', () => ({
+  alertSponsorOwner: (...args: unknown[]) => h.alert(...args),
 }))
 vi.mock('next/cache', () => ({ unstable_noStore: vi.fn() }))
 
@@ -102,5 +106,22 @@ describe('api/cron/contract-reminders', () => {
     const res = await GET(request('Bearer test-cron-secret'))
     expect(await res.json()).toMatchObject({ success: true, sent: 0 })
     expect(h.remind).not.toHaveBeenCalled()
+  })
+
+  it('alerts the owner once, only for the reminder that used the last slot', async () => {
+    h.fetch.mockResolvedValue([
+      { _id: 'sfc-1', sponsorName: 'Acme' },
+      { _id: 'sfc-2', sponsorName: 'Globex' },
+    ])
+    h.remind
+      .mockResolvedValueOnce({
+        ok: true,
+        recipient: 'a@x',
+        lastReminder: false,
+      })
+      .mockResolvedValueOnce({ ok: true, recipient: 'b@x', lastReminder: true })
+    await GET(request('Bearer test-cron-secret'))
+    expect(h.alert).toHaveBeenCalledTimes(1)
+    expect(h.alert.mock.calls[0][0]).toBe('sfc-2')
   })
 })
