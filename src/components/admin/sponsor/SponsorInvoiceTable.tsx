@@ -1,11 +1,14 @@
 'use client'
 
 import Link from 'next/link'
+import { useRef, useState } from 'react'
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import {
   BanknotesIcon,
   ClipboardIcon,
   ExclamationTriangleIcon,
   ArrowTopRightOnSquareIcon,
+  EllipsisVerticalIcon,
 } from '@heroicons/react/24/outline'
 import { CheckIcon } from '@heroicons/react/24/solid'
 import { useNotification } from '@/components/admin'
@@ -20,7 +23,12 @@ import {
   Td,
   TableEmptyState,
 } from '@/components/DataTable'
-import { isInvoicePastDue, type InvoiceRow } from '@/lib/sponsor-crm/invoice'
+import {
+  defaultInvoiceDueDate,
+  isInvoicePastDue,
+  type InvoiceRow,
+} from '@/lib/sponsor-crm/invoice'
+import { api } from '@/lib/trpc/client'
 import { INVOICE_STATUS_LABELS } from '@/lib/sponsor-crm/labels'
 import type { BadgeColor } from '@/components/StatusBadge'
 import type { InvoiceStatus } from '@/lib/sponsor-crm/types'
@@ -199,6 +207,172 @@ const StatusCell = ({ row }: { row: InvoiceRow }) => (
   </div>
 )
 
+/** The next moves the invoice state machine allows from each status. */
+const NEXT_ACTIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
+  'not-sent': ['sent'],
+  sent: ['paid', 'overdue'],
+  overdue: ['paid'],
+  paid: [],
+  cancelled: [],
+}
+
+const ACTION_VERB: Partial<Record<InvoiceStatus, string>> = {
+  sent: 'Mark sent',
+  paid: 'Mark paid',
+  overdue: 'Mark overdue',
+}
+
+/** "Mark Acme invoice paid": the sponsor in every button name. */
+const ACTION_NAME: Partial<Record<InvoiceStatus, (name: string) => string>> = {
+  sent: (name) => `Mark ${name} invoice sent`,
+  paid: (name) => `Mark ${name} invoice paid`,
+  overdue: (name) => `Mark ${name} invoice overdue`,
+}
+
+const actionButtonClass =
+  'cursor-pointer rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-wait disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+
+/**
+ * Moves one invoice to its next status through `sponsor.crm.update`, the path
+ * the record form uses, so the server's state machine guards and timestamp
+ * rules apply unchanged. A refusal is shown on the row and focus goes back to
+ * the button that was pressed.
+ */
+const InvoiceActions = ({ row }: { row: InvoiceRow }) => {
+  const utils = api.useUtils()
+  const { showNotification } = useNotification()
+  const [error, setError] = useState<string | null>(null)
+  const [dueAt, setDueAt] = useState<string | null>(null)
+  const lastButton = useRef<HTMLButtonElement | null>(null)
+  const update = api.sponsor.crm.update.useMutation()
+  const name = row.sponsorName
+  const next = NEXT_ACTIONS[row.invoiceStatus] ?? []
+
+  const run = async (
+    status: InvoiceStatus,
+    button: HTMLButtonElement | null,
+    invoiceDueAt?: string,
+  ) => {
+    lastButton.current = button
+    setError(null)
+    try {
+      await update.mutateAsync({
+        id: row.sponsorForConferenceId,
+        invoiceStatus: status,
+        ...(invoiceDueAt ? { invoiceDueAt } : {}),
+      })
+      setDueAt(null)
+      // The whole CRM subtree: this table's list plus the board, the panel's
+      // getById and the health checks.
+      await utils.sponsor.crm.invalidate()
+      showNotification({
+        type: 'success',
+        title: 'Invoice updated',
+        message: `${name}: ${INVOICE_STATUS_LABELS[status] ?? status}`,
+      })
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Could not update the invoice.'
+      setError(message)
+      showNotification({
+        type: 'error',
+        title: `Could not update ${name}`,
+        message,
+      })
+      lastButton.current?.focus()
+    }
+  }
+
+  if (next.length === 0) return null
+  const busy = update.isPending
+
+  return (
+    <div className="space-y-1">
+      {dueAt !== null ? (
+        <div className="flex flex-wrap items-center gap-1">
+          <label className="text-xs text-gray-600 dark:text-gray-400">
+            Due
+            <input
+              type="date"
+              value={dueAt}
+              onChange={(e) => setDueAt(e.target.value)}
+              aria-label={`Due date for ${name} invoice`}
+              className="ml-1 rounded border border-gray-300 px-1 py-0.5 text-xs dark:border-gray-600 dark:bg-gray-800"
+            />
+          </label>
+          <button
+            type="button"
+            className={actionButtonClass}
+            disabled={busy || !dueAt}
+            aria-busy={busy}
+            aria-label={`Confirm ${name} invoice sent`}
+            onClick={(e) => run('sent', e.currentTarget, dueAt)}
+          >
+            {busy ? 'Saving…' : 'Confirm'}
+          </button>
+          <button
+            type="button"
+            className={actionButtonClass}
+            disabled={busy}
+            onClick={() => setDueAt(null)}
+            aria-label={`Keep ${name} invoice unsent`}
+          >
+            Back
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-1">
+          {next.map((status) => (
+            <button
+              key={status}
+              type="button"
+              className={actionButtonClass}
+              disabled={busy}
+              aria-busy={busy}
+              aria-label={ACTION_NAME[status]?.(name)}
+              onClick={(e) =>
+                status === 'sent'
+                  ? setDueAt(defaultInvoiceDueDate())
+                  : run(status, e.currentTarget)
+              }
+            >
+              {busy ? 'Saving…' : ACTION_VERB[status]}
+            </button>
+          ))}
+          <Menu as="div" className="relative">
+            <MenuButton
+              className="cursor-pointer rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+              aria-label={`More invoice actions for ${name}`}
+              disabled={busy}
+            >
+              <EllipsisVerticalIcon className="h-4 w-4" />
+            </MenuButton>
+            <MenuItems
+              anchor="bottom end"
+              className="z-50 rounded-md border border-gray-200 bg-white p-1 shadow-lg focus:outline-none dark:border-gray-600 dark:bg-gray-800"
+            >
+              <MenuItem>
+                <button
+                  type="button"
+                  className="block w-full cursor-pointer rounded px-3 py-1.5 text-left text-xs text-red-700 data-focus:bg-red-50 dark:text-red-400 dark:data-focus:bg-red-900/20"
+                  onClick={() => run('cancelled', null)}
+                >
+                  Cancel {name} invoice
+                </button>
+              </MenuItem>
+            </MenuItems>
+          </Menu>
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function crmLink(id: string) {
   // A quick edit from the list: the invoice board, with the sponsor in its
   // side panel.
@@ -266,6 +440,10 @@ export function SponsorInvoiceTable({
             <div className="mt-3">
               <Blockers row={row} />
             </div>
+
+            <div className="mt-3">
+              <InvoiceActions row={row} />
+            </div>
           </div>
         ))}
       </div>
@@ -280,6 +458,7 @@ export function SponsorInvoiceTable({
               <Th>Contract</Th>
               <Th>Status</Th>
               <Th>Ready</Th>
+              <Th>Actions</Th>
               <Th width="4rem">Open</Th>
             </tr>
           </TableHeader>
@@ -340,6 +519,9 @@ export function SponsorInvoiceTable({
                 </Td>
                 <Td>
                   <Blockers row={row} />
+                </Td>
+                <Td>
+                  <InvoiceActions row={row} />
                 </Td>
                 <Td>
                   <Link
