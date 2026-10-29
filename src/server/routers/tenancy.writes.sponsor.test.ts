@@ -1027,6 +1027,35 @@ describe('CRM references must belong to this tenant (#863 row 7)', () => {
       expect.objectContaining({ tier: 'tier-A' }),
     )
   })
+
+  // The phase card's "Mark invoice sent/paid" sends only invoiceStatus, like
+  // the record form; the router stamps the matching timestamp.
+  it.each([
+    ['sent', 'not-sent', 'invoiceSentAt'],
+    ['paid', 'sent', 'invoicePaidAt'],
+  ] as const)('update to invoice %s stamps %s', async (target, from, field) => {
+    h.tenantById = { 'sfc-A': tenantOf('ours', 'sponsorForConference') }
+    lib.getSponsorForConference.mockResolvedValue({
+      sponsorForConference: {
+        ...CONTRACT_READY_SFC,
+        _id: 'sfc-A',
+        status: 'closed-won',
+        contractStatus: 'contract-signed',
+        invoiceStatus: from,
+        billing: { email: 'billing@acme.test' },
+      },
+      error: undefined,
+    })
+
+    await sponsor().crm.update({ id: 'sfc-A', invoiceStatus: target })
+    expect(lib.updateSponsorForConference).toHaveBeenCalledWith(
+      'sfc-A',
+      expect.objectContaining({
+        invoiceStatus: target,
+        [field]: expect.any(String),
+      }),
+    )
+  })
 })
 
 /**

@@ -112,17 +112,6 @@ export function SponsorDetailHeader({
         </div>
       </div>
       <div className="mt-4 flex gap-3 sm:mt-0">
-        {data.status !== 'closed-won' && (
-          <button
-            onClick={() =>
-              updateMutation.mutate({ id: sponsorId, newStatus: 'closed-won' })
-            }
-            disabled={updateMutation.isPending}
-            className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-          >
-            Mark as Won
-          </button>
-        )}
         <button
           onClick={onOpenRecord}
           className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
