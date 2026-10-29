@@ -236,7 +236,17 @@ export const UndoToast: Story = {
     await expect(canvas.queryByRole('button', { name: 'Undo' })).toBeNull()
     // Again, for the picture.
     await userEvent.click(within(first).getByRole('button', { name: 'Reject' }))
-    await canvas.findByText('Rejected · Undo puts it on the wall')
+    const toast = (
+      await canvas.findByText('Rejected · Undo puts it on the wall')
+    ).parentElement!
+    // Scrolled to the end, the last card clears the toast (a phone too).
+    window.scrollTo(0, document.documentElement.scrollHeight)
+    const cards = canvas.getAllByRole('article')
+    await waitFor(() =>
+      expect(cards.at(-1)!.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        toast.getBoundingClientRect().top,
+      ),
+    )
   },
 }
 export const UndoToastDark: Story = {

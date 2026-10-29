@@ -82,7 +82,11 @@ export function Header({
                   photoWall={photoWall}
                 />
               ) : (
-                <Link href="/cfp/list" className="flex items-center">
+                <Link
+                  href="/cfp/list"
+                  aria-label="Sign in"
+                  className="flex items-center"
+                >
                   <UserCircleIcon className="h-10 w-10 text-brand-slate-gray dark:text-white" />
                 </Link>
               )}

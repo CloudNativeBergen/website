@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
+import { expect, within } from 'storybook/test'
 import { SessionProvider } from 'next-auth/react'
 import type { Session } from 'next-auth'
 import { mockDateBeforeEach } from '@/lib/storybook'
@@ -139,6 +140,12 @@ function withProviders(session: Session | null, c: Conference) {
 export const Default: Story = {
   args: { c: conference },
   render: () => withProviders(null, conference),
+  play: async ({ canvasElement }) => {
+    // The signed-out profile icon has a name for screen readers.
+    await expect(
+      within(canvasElement).getByRole('link', { name: 'Sign in' }),
+    ).toHaveAttribute('href', '/cfp/list')
+  },
 }
 
 export const LoggedIn: Story = {

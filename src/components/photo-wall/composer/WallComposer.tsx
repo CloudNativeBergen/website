@@ -23,9 +23,9 @@ import { WallChrome } from '../WallPage'
 import {
   ComposerLanding,
   DECODE_FAILED_MESSAGE,
-  PRIMARY_BUTTON,
   TOO_SMALL_MESSAGE,
 } from './ComposerLanding'
+import { PRIMARY_BUTTON } from './buttons'
 import { FilterStrip } from './FilterStrip'
 import { PolaroidEditor } from './PolaroidEditor'
 import { TalkPicker } from './TalkPicker'

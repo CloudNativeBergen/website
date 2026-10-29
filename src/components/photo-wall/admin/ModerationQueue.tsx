@@ -523,7 +523,9 @@ export function ModerationQueueView({
       ref={sectionRef}
       id={MODERATION_QUEUE_ID}
       aria-labelledby={`${MODERATION_QUEUE_ID}-title`}
-      className="scroll-mt-20 space-y-4"
+      // While the Undo toast shows, room below the last card to scroll it
+      // clear of the toast (a phone has no margin beside it).
+      className={`scroll-mt-20 space-y-4 ${undoable ? 'pb-28' : ''}`}
       onKeyDown={onQueueKeyDown}
     >
       {/* The live pending count (`PendingSummary`) sits beside the heading,
@@ -562,7 +564,7 @@ export function ModerationQueueView({
       <div
         role="tablist"
         aria-label="Posts by status"
-        className="flex gap-1 overflow-x-auto rounded-lg bg-gray-100 p-1 dark:bg-gray-900"
+        className="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-900"
       >
         {MODERATION_TABS.map((t) => {
           const selected = t === tab

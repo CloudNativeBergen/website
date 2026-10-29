@@ -11,7 +11,7 @@ import {
   type WallPostRequest,
 } from '@/lib/photo-wall/post'
 import { WallChrome } from '../WallPage'
-import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './ComposerLanding'
+import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './buttons'
 import { MyPosts, MyPostsSection, type MyPostView } from './MyPosts'
 import { myPostsActions, type MyPostsActions } from './MyPostsPanel'
 import { useMyPosts } from './useMyPosts'
