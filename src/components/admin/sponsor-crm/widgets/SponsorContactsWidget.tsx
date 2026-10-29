@@ -6,6 +6,7 @@ import {
   UserGroupIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
+import { invoiceFormatLabel } from '@/lib/sponsor-crm/billing'
 
 interface SponsorContactsWidgetProps {
   sponsorId: string
@@ -89,7 +90,10 @@ export function SponsorContactsWidget({
           {hasBilling ? (
             <div className="text-sm text-gray-600 dark:text-gray-400">
               <p>Email: {data.billing.email}</p>
-              <p>Format: {data.billing.invoiceFormat}</p>
+              <p>
+                Format:{' '}
+                {invoiceFormatLabel(data.billing.invoiceFormat) ?? 'not set'}
+              </p>
               {data.billing.reference && <p>Ref: {data.billing.reference}</p>}
             </div>
           ) : (
