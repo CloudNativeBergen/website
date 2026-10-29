@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { SponsorBoardColumn } from './SponsorBoardColumn'
 import { mockSponsors, mockSponsor } from '@/__mocks__/sponsor-data'
 import { DndContext } from '@dnd-kit/core'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
 
 const meta: Meta<typeof SponsorBoardColumn> = {
   title: 'Systems/Sponsors/Admin/Pipeline/SponsorBoardColumn',
@@ -17,11 +18,13 @@ const meta: Meta<typeof SponsorBoardColumn> = {
   },
   decorators: [
     (Story) => (
-      <DndContext>
-        <div className="h-150 p-8">
-          <Story />
-        </div>
-      </DndContext>
+      <NotificationProvider>
+        <DndContext>
+          <div className="h-150 p-8">
+            <Story />
+          </div>
+        </DndContext>
+      </NotificationProvider>
     ),
   ],
 }
