@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  *
  * Single delete lives in the side panel: the footer action asks for
- * confirmation naming the sponsor, deletes, and closes the panel.
+ * confirmation with the cleanup choices, deletes, and closes the panel.
  */
 import {
   render,
@@ -40,6 +40,7 @@ vi.mock('@/lib/trpc/client', () => ({
               sponsor: { name: 'Acme' },
               signatureStatus: 'pending',
               signatureId: 'sig-1',
+              contractDocument: { asset: { _ref: 'file-1' } },
             },
           }),
         },
@@ -66,9 +67,12 @@ vi.mock('@/components/admin/sponsor/SponsorSendModal', () => ({
   sponsorFromAddress: () => '',
 }))
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  h.mutate.mockClear()
+})
 
-it('confirms, deletes, refreshes the board and closes the panel', () => {
+function renderPanel() {
   const onClose = vi.fn()
   render(
     <SponsorRecordPanel
@@ -81,17 +85,41 @@ it('confirms, deletes, refreshes the board and closes the panel', () => {
       domain="example.test"
     />,
   )
-
   fireEvent.click(screen.getByText('Delete from footer'))
-  const dialog = screen.getByRole('dialog')
-  expect(dialog).toHaveTextContent('Delete Acme')
-  expect(h.mutate).not.toHaveBeenCalled()
+  return { onClose, dialog: screen.getByRole('dialog') }
+}
 
+const confirm = (dialog: HTMLElement) =>
   fireEvent.click(
     within(dialog).getByRole('button', { name: 'Delete sponsor' }),
   )
 
-  expect(h.mutate).toHaveBeenCalledWith({ id: 'sfc-1', cancelAgreement: true })
+it('confirms, deletes, refreshes the board and closes the panel', () => {
+  const { onClose, dialog } = renderPanel()
+  expect(h.mutate).not.toHaveBeenCalled()
+  confirm(dialog)
+  // Defaults: cancel the pending agreement, keep the contract PDF.
+  expect(h.mutate).toHaveBeenCalledWith({
+    id: 'sfc-1',
+    cancelAgreement: true,
+    deleteContractAsset: false,
+  })
   expect(h.invalidate).toHaveBeenCalled()
   expect(onClose).toHaveBeenCalledTimes(1)
+})
+
+it('passes each cleanup choice the organizer makes', () => {
+  const { dialog } = renderPanel()
+  fireEvent.click(
+    within(dialog).getByRole('checkbox', { name: /Cancel pending signing/ }),
+  )
+  fireEvent.click(
+    within(dialog).getByRole('checkbox', { name: /Delete contract PDF/ }),
+  )
+  confirm(dialog)
+  expect(h.mutate).toHaveBeenCalledWith({
+    id: 'sfc-1',
+    cancelAgreement: false,
+    deleteContractAsset: true,
+  })
 })

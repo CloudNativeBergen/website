@@ -234,13 +234,13 @@ it('deleting from the panel goes back to the board', () => {
   renderPage()
   fireEvent.click(screen.getByText('Delete from footer'))
   const dialog = screen.getByRole('dialog')
-  expect(dialog).toHaveTextContent('Acme')
   fireEvent.click(
     within(dialog).getByRole('button', { name: 'Delete sponsor' }),
   )
   expect(nav.deleted).toHaveBeenCalledWith({
     id: 'sfc-1',
     cancelAgreement: false,
+    deleteContractAsset: false,
   })
   expect(nav.push).toHaveBeenCalledWith('/admin/sponsors/crm')
 })

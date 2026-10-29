@@ -8,7 +8,7 @@ import type { Conference } from '@/lib/conference/types'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
 import type { ContractSendOptions } from '@/components/admin/sponsor-crm/SponsorContractView'
 import { SponsorSendModal } from '@/components/admin'
-import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { SponsorDeleteModal } from '@/components/admin/sponsor-crm/SponsorDeleteModal'
 import {
   sponsorFromAddress,
   type SendableKind,
@@ -199,22 +199,17 @@ export function SponsorRecordPanel({
         headerActions={headerActions}
         onDelete={() => setConfirmDelete(true)}
       />
-      <ConfirmationModal
+      <SponsorDeleteModal
         isOpen={confirmDelete}
         onClose={() => setConfirmDelete(false)}
-        onConfirm={() =>
-          deleteMutation.mutate({
-            id: sponsor._id,
-            // A signing link left open would let the sponsor sign a deal
-            // that no longer exists.
-            cancelAgreement:
-              sponsor.signatureStatus === 'pending' && !!sponsor.signatureId,
-          })
+        onConfirm={(options) =>
+          deleteMutation.mutate({ id: sponsor._id, ...options })
         }
-        title="Delete sponsor"
-        message={`Delete ${sponsor.sponsor.name} from this conference's pipeline? This cannot be undone.`}
-        confirmButtonText="Delete sponsor"
-        variant="danger"
+        count={1}
+        hasPendingAgreement={
+          sponsor.signatureStatus === 'pending' && !!sponsor.signatureId
+        }
+        hasContractDocument={!!sponsor.contractDocument}
         isLoading={deleteMutation.isPending}
       />
       {sendKind && (
