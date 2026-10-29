@@ -1112,6 +1112,7 @@ export async function syncAudienceWithContacts(
   conference: Conference,
   audienceType: AudienceType,
   contacts: Contact[],
+  options: { keepUnsubscribed?: boolean } = {},
 ): Promise<{
   success: boolean
   audienceId: string
@@ -1180,8 +1181,14 @@ export async function syncAudienceWithContacts(
     const contactsToAdd = deduplicatedContacts.filter(
       (c) => !existingEmails.has(normalizeEmail(c.email)),
     )
+    // An opted-out contact left in place receives nothing; removing it and
+    // re-adding it later (`unsubscribed: false`) could resurrect the opt-out.
+    // The sponsor audience narrows on every filtered send (#1704), so it keeps
+    // its opt-outs.
     const contactsToRemove = existingContacts.filter(
-      (c) => !currentContactEmails.has(normalizeEmail(c.email)),
+      (c) =>
+        !currentContactEmails.has(normalizeEmail(c.email)) &&
+        !(options.keepUnsubscribed && c.unsubscribed),
     )
 
     let addedCount = 0
@@ -1296,5 +1303,7 @@ export async function syncSponsorAudience(
   removedCount: number
   error?: Error
 }> {
-  return syncAudienceWithContacts(conference, 'sponsors', sponsorContacts)
+  return syncAudienceWithContacts(conference, 'sponsors', sponsorContacts, {
+    keepUnsubscribed: true,
+  })
 }

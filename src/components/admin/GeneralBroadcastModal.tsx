@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { useNotification } from './NotificationProvider'
 import { EmailModal } from './EmailModal'
 import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
@@ -51,6 +51,9 @@ interface GeneralBroadcastModalProps {
   socialLinks: string[]
   /** Tenant brand primary (THEMING L1) for the preview and the sent email. */
   brandColor?: string
+  /** Replaces the default count-and-sync line, e.g. with a recipient picker. */
+  recipientInfo?: ReactNode
+  title?: string
 }
 
 export function GeneralBroadcastModal({
@@ -67,6 +70,8 @@ export function GeneralBroadcastModal({
   eventUrl,
   socialLinks,
   brandColor,
+  recipientInfo,
+  title = 'Send Broadcast Email',
 }: GeneralBroadcastModalProps) {
   const { showNotification } = useNotification()
 
@@ -161,8 +166,8 @@ export function GeneralBroadcastModal({
     <EmailModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Send Broadcast Email"
-      recipientInfo={recipientDisplay}
+      title={title}
+      recipientInfo={recipientInfo ?? recipientDisplay}
       brandColor={brandColor}
       onSend={handleSend}
       submitButtonText={`Send to ${recipientCount} ${recipientType}`}

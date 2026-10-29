@@ -1045,6 +1045,82 @@ describe('crm.broadcastEmail — auto-sync audience and refuse unmerged variable
   })
 })
 
+describe('Email sponsors: recipients resolved on the server from filters (#1704 C1)', () => {
+  const ok = () => {
+    h.syncSponsorAudience.mockResolvedValue({
+      success: true,
+      audienceId: 'aud-1',
+      syncedCount: 1,
+      addedCount: 0,
+      removedCount: 0,
+    })
+    h.sendBroadcastEmail.mockResolvedValue(
+      new Response(JSON.stringify({ id: 'bcast-f' }), { status: 200 }),
+    )
+  }
+
+  it("reads only the current conference's sponsors, and the count matches the list", async () => {
+    h.sfc = { ...h.sfc, status: 'closed-won' }
+    const result = await sponsor().crm.broadcastRecipients({
+      contactRole: 'all',
+    })
+    const listRead = h.fetches.find((f) =>
+      f.query.includes('order(status asc, _createdAt desc)'),
+    )
+    expect(listRead?.query).toContain('conference._ref == $conferenceId')
+    expect(listRead?.params?.conferenceId).toBe(CONF)
+    expect(result.contactCount).toBe(result.recipients.length)
+    expect(result.recipients.map((r) => r.email)).toEqual([
+      'kari@acme.test',
+      'ola@acme.test',
+    ])
+    expect(result.sponsorCount).toBe(1)
+  })
+
+  it('syncs only the contacts the filters match before sending', async () => {
+    h.sfc = { ...h.sfc, status: 'closed-won' }
+    ok()
+    await sponsor().crm.broadcastEmail({
+      subject: 'Billing update',
+      message: MESSAGE,
+      filters: { contactRole: 'billing' },
+    })
+    const synced = h.syncSponsorAudience.mock.calls[0][1] as Array<{
+      email: string
+    }>
+    expect(synced.map((c) => c.email)).toEqual(['ola@acme.test'])
+  })
+
+  it('refuses a send whose filters match nobody', async () => {
+    h.sfc = { ...h.sfc, status: 'negotiating' }
+    ok()
+    await expect(
+      sponsor().crm.broadcastEmail({ subject: 'Hi', message: MESSAGE }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.sendBroadcastEmail).not.toHaveBeenCalled()
+  })
+
+  it('rejects a client-supplied recipient list', async () => {
+    h.sfc = { ...h.sfc, status: 'closed-won' }
+    ok()
+    await expect(
+      sponsor().crm.broadcastEmail({
+        subject: 'Hi',
+        message: MESSAGE,
+        // @ts-expect-error the input schema has no such field
+        recipients: ['attacker@evil.test'],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    await expect(
+      sponsor().crm.broadcastRecipients({
+        // @ts-expect-error the filters have no such field
+        emails: ['attacker@evil.test'],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.syncSponsorAudience).not.toHaveBeenCalled()
+  })
+})
+
 describe('registration portal placeholder with fallback syntax', () => {
   it('refuses {{{SPONSOR_PORTAL_URL|fallback}}} on non-registration send and merges it via mergePortalUrl', async () => {
     const { mergePortalUrl, carriesPortalPlaceholder } =

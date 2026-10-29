@@ -1,6 +1,9 @@
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import { ErrorDisplay } from '@/components/admin'
 import { SponsorContactsPageClient } from '@/components/admin/sponsor/SponsorContactsPageClient'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+
+export const metadata = { title: SPONSOR_PAGE_TITLES.contacts }
 
 export default async function AdminSponsorContacts() {
   const { conference, error: conferenceError } =

@@ -233,6 +233,12 @@ import {
 } from '@/lib/contract-signing'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
 import { syncSponsorAudience, type Contact } from '@/lib/email/audience'
+import {
+  BroadcastFiltersSchema,
+  DEFAULT_BROADCAST_FILTERS,
+  resolveBroadcastRecipients,
+  type BroadcastFilters,
+} from '@/lib/sponsor-crm/broadcast-recipients'
 import { logBulkEmailSent } from '@/lib/sponsor-crm/activity'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
@@ -784,46 +790,27 @@ function sanitizeSponsorLogoInput<
   return out
 }
 
-async function syncConfirmedSponsorAudience(conference: Conference) {
-  const { sponsors: crmSponsors, error: crmError } =
-    await listSponsorsForConference(conference._id)
+async function syncConfirmedSponsorAudience(
+  conference: Conference,
+  filters: BroadcastFilters = DEFAULT_BROADCAST_FILTERS,
+) {
+  const { eligibleSponsors, recipients } =
+    await resolveSponsorBroadcastRecipients(conference, filters)
 
-  if (crmError || !crmSponsors) {
-    throw new TRPCError({
-      code: 'INTERNAL_SERVER_ERROR',
-      message: 'Failed to load sponsor CRM data',
-    })
-  }
-
-  // Audiences are scoped to confirmed (closed-won) sponsors. Prospects
-  // and negotiating sponsors must not receive general sponsor broadcasts.
-  const eligibleSponsors = crmSponsors.filter(
-    (s: SponsorForConferenceExpanded) =>
-      s.status === 'closed-won' &&
-      s.contactPersons &&
-      s.contactPersons.length > 0 &&
-      s.contactPersons.some((contact) => Boolean(contact.email?.trim())),
-  )
-
-  if (eligibleSponsors.length === 0) {
+  if (recipients.length === 0) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
       message:
-        'No confirmed sponsors with contact information found. Add contact information to closed-won sponsors before syncing.',
+        'No sponsor contacts match these filters. Add contact information or widen the filters.',
     })
   }
 
-  const sponsorContacts: Contact[] = eligibleSponsors.flatMap(
-    (s: SponsorForConferenceExpanded) =>
-      s.contactPersons
-        ?.filter((contact) => Boolean(contact.email?.trim()))
-        .map((contact) => ({
-          email: contact.email.trim(),
-          firstName: contact.name?.trim().split(' ')[0] || '',
-          lastName: contact.name?.trim().split(' ').slice(1).join(' ') || '',
-          organization: s.sponsor.name,
-        })) || [],
-  )
+  const sponsorContacts: Contact[] = recipients.map((r) => ({
+    email: r.email,
+    firstName: r.name.split(' ')[0] || '',
+    lastName: r.name.split(' ').slice(1).join(' ') || '',
+    organization: r.sponsorName,
+  }))
 
   const {
     success,
@@ -849,6 +836,32 @@ async function syncConfirmedSponsorAudience(conference: Conference) {
     addedCount,
     removedCount,
   }
+}
+
+/**
+ * The recipients of an "Email sponsors" broadcast, resolved on the server
+ * from the CURRENT conference's sponsors only (#1704 C1). Prospects and
+ * negotiating sponsors are left out unless the filters ask for them.
+ */
+async function resolveSponsorBroadcastRecipients(
+  conference: Conference,
+  filters: BroadcastFilters,
+) {
+  const { sponsors: crmSponsors, error: crmError } =
+    await listSponsorsForConference(conference._id)
+
+  if (crmError || !crmSponsors) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to load sponsor CRM data',
+    })
+  }
+
+  const { recipients, sponsors } = resolveBroadcastRecipients(
+    crmSponsors,
+    filters,
+  )
+  return { recipients, eligibleSponsors: sponsors }
 }
 
 export const sponsorRouter = router({
@@ -3527,12 +3540,37 @@ export const sponsorRouter = router({
         }
       }),
 
+    /** Count and preview for the "Email sponsors" recipient step. */
+    broadcastRecipients: adminProcedure
+      .input(BroadcastFiltersSchema)
+      .query(async ({ input }) => {
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain()
+        if (conferenceError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+        const { recipients, eligibleSponsors } =
+          await resolveSponsorBroadcastRecipients(conference, input)
+        return {
+          contactCount: recipients.length,
+          sponsorCount: eligibleSponsors.length,
+          recipients,
+        }
+      }),
+
     broadcastEmail: adminProcedure
       .input(
-        z.object({
-          subject: z.string().min(1),
-          message: z.string().min(1),
-        }),
+        z
+          .object({
+            subject: z.string().min(1),
+            message: z.string().min(1),
+            // Filters only: the recipients are resolved on the server.
+            filters: BroadcastFiltersSchema.default(DEFAULT_BROADCAST_FILTERS),
+          })
+          .strict(),
       )
       .mutation(async ({ input, ctx }) => {
         const { conference, error: conferenceError } =
@@ -3573,8 +3611,10 @@ export const sponsorRouter = router({
 
         // Sync confirmed (closed-won) sponsor contacts into the Resend audience
         // before sending so broadcasts never target a stale or empty segment.
-        const { eligibleSponsors } =
-          await syncConfirmedSponsorAudience(conference)
+        const { eligibleSponsors } = await syncConfirmedSponsorAudience(
+          conference,
+          input.filters,
+        )
 
         const response = await sendBroadcastEmail({
           conference,

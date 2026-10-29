@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { api } from '@/lib/trpc/client'
+import type { BroadcastFilters } from '@/lib/sponsor-crm/broadcast-recipients'
 
 export function useSponsorBroadcast() {
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false)
@@ -8,8 +9,12 @@ export function useSponsorBroadcast() {
   const broadcastMutation = api.sponsor.crm.broadcastEmail.useMutation()
   const syncMutation = api.sponsor.crm.syncAudience.useMutation()
 
-  const handleBroadcastEmail = async (subject: string, message: string) => {
-    await broadcastMutation.mutateAsync({ subject, message })
+  const handleBroadcastEmail = async (
+    subject: string,
+    message: string,
+    filters?: BroadcastFilters,
+  ) => {
+    await broadcastMutation.mutateAsync({ subject, message, filters })
   }
 
   const handleSyncContacts = async () => {

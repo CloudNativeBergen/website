@@ -1,9 +1,10 @@
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { SponsorDashboardMetrics } from '@/components/admin/sponsor/SponsorDashboardMetrics'
 import { SponsorActionItems } from '@/components/admin/sponsor/SponsorActionItems'
 import { SponsorActivityTimeline } from '@/components/admin/sponsor/SponsorActivityTimeline'
-import { SponsorDashboardBroadcastAction } from '@/components/admin/sponsor/SponsorDashboardBroadcastAction'
+import { SponsorEmailAction } from '@/components/admin/sponsor/SponsorEmailAction'
 import Link from 'next/link'
 import {
   RectangleStackIcon,
@@ -45,7 +46,7 @@ export default async function AdminSponsors() {
         title="Sponsor Management"
         description="Manage sponsorships, track revenue, and monitor pipeline health for"
         contextHighlight={conference.title}
-        actions={<SponsorDashboardBroadcastAction conference={conference} />}
+        actions={<SponsorEmailAction conference={conference} />}
       />
 
       <SponsorDashboardMetrics />
@@ -69,7 +70,7 @@ export default async function AdminSponsors() {
             </div>
             <div>
               <p className="font-medium text-gray-900 dark:text-white">
-                Sponsor CRM
+                {SPONSOR_PAGE_TITLES.crm}
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Manage pipeline
@@ -86,7 +87,7 @@ export default async function AdminSponsors() {
             </div>
             <div>
               <p className="font-medium text-gray-900 dark:text-white">
-                Sponsor Tiers
+                {SPONSOR_PAGE_TITLES.tiers}
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Configure tiers
@@ -103,7 +104,7 @@ export default async function AdminSponsors() {
             </div>
             <div>
               <p className="font-medium text-gray-900 dark:text-white">
-                Sponsor Contacts
+                {SPONSOR_PAGE_TITLES.contacts}
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Manage contacts
@@ -120,7 +121,7 @@ export default async function AdminSponsors() {
             </div>
             <div>
               <p className="font-medium text-gray-900 dark:text-white">
-                Activity Log
+                {SPONSOR_PAGE_TITLES.activity}
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Full history
@@ -137,7 +138,7 @@ export default async function AdminSponsors() {
             </div>
             <div>
               <p className="font-medium text-gray-900 dark:text-white">
-                Contract Templates
+                {SPONSOR_PAGE_TITLES.contracts}
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Manage contracts
@@ -154,7 +155,7 @@ export default async function AdminSponsors() {
             </div>
             <div>
               <p className="font-medium text-gray-900 dark:text-white">
-                Invoices
+                {SPONSOR_PAGE_TITLES.invoices}
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Invoice status and export
@@ -171,7 +172,7 @@ export default async function AdminSponsors() {
             </div>
             <div>
               <p className="font-medium text-gray-900 dark:text-white">
-                Email Templates
+                {SPONSOR_PAGE_TITLES.templates}
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Outreach templates

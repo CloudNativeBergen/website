@@ -1,5 +1,6 @@
 'use client'
 
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import { AdminPageHeader } from '@/components/admin'
@@ -37,7 +38,7 @@ export function SponsorEmailTemplateEditorPage({
           description="Loading template..."
           backLink={{
             href: '/admin/sponsors/templates',
-            label: 'Back to Templates',
+            label: `Back to ${SPONSOR_PAGE_TITLES.templates}`,
           }}
         />
         <div className="mt-8 space-y-4">

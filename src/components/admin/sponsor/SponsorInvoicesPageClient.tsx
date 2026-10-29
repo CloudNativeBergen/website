@@ -1,5 +1,6 @@
 'use client'
 
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
@@ -187,7 +188,7 @@ export function SponsorInvoicesPageClient({
     <div className="space-y-6">
       <AdminPageHeader
         icon={<BanknotesIcon />}
-        title="Sponsor Invoicing"
+        title={SPONSOR_PAGE_TITLES.invoices}
         description="Everything needed to raise sponsor invoices for"
         contextHighlight={conference.title}
         // Alert cards double as the readiness filter. Hidden at 0 unless the

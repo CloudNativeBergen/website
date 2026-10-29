@@ -62,6 +62,7 @@ interface FakeAudience {
 interface FakeContact {
   id: string
   email: string
+  unsubscribed?: boolean
 }
 
 /** The faults a real server can present on a paginated list. */
@@ -260,10 +261,18 @@ export function fakeAccount() {
     },
   }
 
-  const putContacts = (audienceId: string, emails: string[]) => {
+  const putContacts = (
+    audienceId: string,
+    emails: string[],
+    unsubscribed: string[] = [],
+  ) => {
     contactsByAudience.set(
       audienceId,
-      emails.map((email) => ({ id: `${audienceId}-c${++contactN}`, email })),
+      emails.map((email) => ({
+        id: `${audienceId}-c${++contactN}`,
+        email,
+        unsubscribed: unsubscribed.includes(email),
+      })),
     )
   }
 
