@@ -139,7 +139,12 @@ export function SpeakerDetailsForm({
   const [socialTagSaveState, setSocialTagSaveState] = useState<
     'idle' | 'saving' | 'saved' | 'error'
   >('idle')
-  const socialTagMutation = api.speaker.setSocialTagOptOut.useMutation()
+  const utils = api.useUtils()
+  // The profile page reads the speaker through `speaker.getCurrent`; refetch
+  // it so the stored opt-out and primary email match what was just saved.
+  const socialTagMutation = api.speaker.setSocialTagOptOut.useMutation({
+    onSuccess: () => utils.speaker.getCurrent.invalidate(),
+  })
   // ONE-WAY for an organizer: they may set an opt-out on a speaker's behalf but
   // never withdraw one, so once it is set the control stops being an action
   // they can take. Without this the form invites a click the server answers
@@ -200,7 +205,9 @@ export function SpeakerDetailsForm({
   const [isUploading, setIsUploading] = useState(false)
   const isMounted = useRef(false)
   const previousSpeakerRef = useRef(speaker)
-  const updateEmailMutation = api.speaker.updateEmail.useMutation()
+  const updateEmailMutation = api.speaker.updateEmail.useMutation({
+    onSuccess: () => utils.speaker.getCurrent.invalidate(),
+  })
 
   // Initialize local state from props only on mount or when switching speakers
   useEffect(() => {

@@ -54,7 +54,16 @@ export default async function TravelExpensePage({
   const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
-    return redirect('/api/auth/signin?callbackUrl=/cfp/expense')
+    // Keep `?conferenceId=` so the speaker lands on the edition they asked
+    // for. The path stays relative, so the callback cannot leave the site.
+    const { conferenceId } = await searchParams
+    const query = new URLSearchParams(
+      [conferenceId ?? []].flat().map((id) => ['conferenceId', id]),
+    ).toString()
+    const callbackUrl = encodeURIComponent(
+      query ? `/cfp/expense?${query}` : '/cfp/expense',
+    )
+    return redirect(`/api/auth/signin?callbackUrl=${callbackUrl}`)
   }
 
   const isEligibleForTravelSupport =

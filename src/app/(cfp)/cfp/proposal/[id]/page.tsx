@@ -287,7 +287,7 @@ export default async function ProposalViewPage({
         </h1>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
           {editingClosed
-            ? 'The conference is over, so the proposal can no longer be edited. You can still upload slides.'
+            ? `The conference is over, so the proposal can no longer be edited.${isAcceptedOrConfirmed ? ' You can still upload slides.' : ''}`
             : 'Read-only view of your proposal'}
         </p>
         {unreadMessagesLink}

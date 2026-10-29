@@ -127,13 +127,15 @@ export function ProposalReadOnlyView({ proposal }: ProposalReadOnlyViewProps) {
               return topicObj ? (
                 <span
                   key={topicObj._id}
-                  className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium"
-                  style={{
-                    backgroundColor: topicObj.color
-                      ? `${topicObj.color}20`
-                      : 'rgb(243 244 246)',
-                    color: topicObj.color || 'rgb(55 65 81)',
-                  }}
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${topicObj.color ? '' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'}`}
+                  style={
+                    topicObj.color
+                      ? {
+                          backgroundColor: `${topicObj.color}20`,
+                          color: topicObj.color,
+                        }
+                      : undefined
+                  }
                 >
                   {topicObj.title}
                 </span>
