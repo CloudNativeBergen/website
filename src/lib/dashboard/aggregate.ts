@@ -28,6 +28,8 @@
 
 import { scopedQuery } from '@/lib/sanity/scoped'
 import { osloTodayDateString, osloLocalInputToIso } from '@/lib/time'
+import { SPONSOR_ACTION_ITEM_FIELDS } from '@/lib/sponsor-crm/action-items'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { groq } from 'next-sanity'
 import { Status } from '@/lib/proposal/types'
 import type { TravelSupportStatus } from '@/lib/travel-support/types'
@@ -53,6 +55,7 @@ export type DashboardGroqSource =
   | 'proposals'
   | 'reviews'
   | 'sponsors'
+  | 'sponsorActions'
   | 'activities'
   | 'recentProposals'
   | 'travelSupports'
@@ -141,6 +144,8 @@ export interface DashboardGroqResult {
   proposals?: DashboardProposalRow[] | null
   reviews?: DashboardReviewRow[] | null
   sponsors?: DashboardSponsorRow[] | null
+  /** Lean rows for `generateActionItems` (see SPONSOR_ACTION_ITEM_FIELDS). */
+  sponsorActions?: SponsorForConferenceExpanded[] | null
   activities?: DashboardActivityRow[] | null
   recentProposals?: DashboardRecentProposalRow[] | null
   travelSupports?: DashboardTravelSupportRow[] | null
@@ -204,6 +209,8 @@ const DASHBOARD_ROOTS: Record<DashboardGroqSource, string> = {
     sponsor->{ name, logo, logoBright }
   }`,
 
+  sponsorActions: groq`*[_type == "sponsorForConference" && conference._ref == $conferenceId]{${SPONSOR_ACTION_ITEM_FIELDS}}`,
+
   activities: groq`*[_type == "sponsorActivity" && sponsorForConference->conference._ref == $conferenceId] | order(createdAt desc)[0...${RECENT_ACTIVITY_LIMIT}]{
     _id, description, createdAt, _createdAt,
     "sponsorName": sponsorForConference->sponsor->name,
@@ -238,6 +245,7 @@ const SOURCE_ORDER: DashboardGroqSource[] = [
   'proposals',
   'reviews',
   'sponsors',
+  'sponsorActions',
   'activities',
   'recentProposals',
   'travelSupports',

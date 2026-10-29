@@ -175,6 +175,7 @@ export const EventPrep: Story = {
           hasPhotoWall: false,
           sponsors: 4,
           sponsorsWithoutLogo: 1,
+          sponsorsWaiting: 2,
         },
       },
     ),

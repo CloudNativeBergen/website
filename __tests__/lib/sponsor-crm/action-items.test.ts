@@ -1,4 +1,7 @@
-import { generateActionItems } from '@/lib/sponsor-crm/action-items'
+import {
+  actionItemsForOrganizer,
+  generateActionItems,
+} from '@/lib/sponsor-crm/action-items'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 
 function createSponsor(
@@ -30,9 +33,12 @@ describe('generateActionItems', () => {
   })
 
   it('returns empty array when no conditions match', () => {
-    const sponsor = createSponsor({ status: 'prospect' })
+    const sponsor = createSponsor({
+      status: 'prospect',
+      assignedTo: { _id: 'org-1', name: 'Alice', email: 'a@org.com' },
+    })
     const items = generateActionItems([sponsor])
-    // prospect with no special tags/value generates nothing
+    // assigned prospect with no special tags/value generates nothing
     expect(items).toEqual([])
   })
 
@@ -808,5 +814,64 @@ describe('generateActionItems', () => {
       expect(types).toContain('needs-contract')
       expect(types).toContain('registration-complete')
     })
+  })
+})
+
+describe('assign an owner (priority 3.8)', () => {
+  it('asks for an owner on an unassigned sponsor', () => {
+    expect(generateActionItems([createSponsor()])).toEqual([
+      expect.objectContaining({
+        id: 'sfc-1-unassigned',
+        type: 'unassigned',
+        title: 'Assign an owner',
+        priority: 3.8,
+        link: '/admin/sponsors/sfc-1?view=pipeline',
+      }),
+    ])
+  })
+
+  it('skips assigned and closed-lost sponsors', () => {
+    const items = generateActionItems([
+      createSponsor({
+        assignedTo: { _id: 'org-1', name: 'Alice', email: 'a@org.com' },
+      }),
+      createSponsor({ _id: 'sfc-2', status: 'closed-lost' }),
+    ])
+    expect(items.filter((i) => i.type === 'unassigned')).toEqual([])
+  })
+})
+
+describe('actionItemsForOrganizer', () => {
+  const alice = { _id: 'org-1', name: 'Alice', email: 'a@org.com' }
+  const bob = { _id: 'org-2', name: 'Bob', email: 'b@org.com' }
+  const sponsors = [
+    createSponsor({
+      _id: 'mine',
+      assignedTo: alice,
+      tags: ['needs-follow-up'],
+    }),
+    createSponsor({ _id: 'bobs', assignedTo: bob, invoiceStatus: 'overdue' }),
+    createSponsor({ _id: 'nobody' }),
+    createSponsor({ _id: 'mine-overdue', assignedTo: alice }),
+  ]
+  sponsors[3].invoiceStatus = 'overdue'
+
+  it('keeps my sponsors and unassigned ones, sorted by priority', () => {
+    expect(
+      actionItemsForOrganizer(sponsors, 'org-1').map((i) => [
+        i.sponsor.id,
+        i.priority,
+      ]),
+    ).toEqual([
+      ['mine-overdue', 1],
+      ['nobody', 3.8],
+      ['mine', 4.5],
+    ])
+  })
+
+  it('shows only unassigned sponsors without an organizer id', () => {
+    expect(
+      actionItemsForOrganizer(sponsors, null).map((i) => i.sponsor.id),
+    ).toEqual(['nobody'])
   })
 })
