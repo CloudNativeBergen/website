@@ -671,6 +671,11 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
   and Undo of a Reject or Remove is an Approve. Undo sends the status the
   action left and the same incarnation, so the usual guards answer
   `changed` if someone else decided in between, and the queue says so.
+- **Keyboard:** in the queue, J/K and the arrow keys move between cards (to
+  the card's photo, so Enter opens it large), A approves, R rejects and U
+  undoes. Shortcuts never fire in a field, an open menu or a dialog, nor with
+  Ctrl, Cmd or Alt; the tabs keep their own arrow keys. A hint line
+  ("J/K move · A approve · R reject · U undo") shows on wider screens.
 - The contributor's My posts says **Not shown**, with no reason.
 
 ## 11. Retention

@@ -31,7 +31,7 @@
  * this one:
  *
  *                              data queries   conference resolutions
- *   planning preset (7 widgets, the default)
+ *   planning preset (8 widgets, the default)
  *                    BEFORE          9                  7
  *                    AFTER           2                  1
  *   all 13 widgets   BEFORE         17                 13
@@ -160,7 +160,7 @@ beforeEach(() => {
 })
 
 describe('dashboard Sanity round-trips', () => {
-  it('is the 7-widget planning preset the numbers are about', () => {
+  it('is the 8-widget planning preset the numbers are about', () => {
     // Pin the widget set, so a preset change cannot silently move the goalposts.
     expect(PLANNING_WIDGETS).toEqual([
       'quick-actions',
@@ -170,6 +170,7 @@ describe('dashboard Sanity round-trips', () => {
       'recent-activity',
       'ticket-sales',
       'speaker-engagement',
+      'sponsors-waiting',
     ])
   })
 

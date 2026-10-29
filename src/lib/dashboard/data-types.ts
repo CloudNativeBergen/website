@@ -178,6 +178,17 @@ export interface MyAreasData {
   areas: MyAreaCard[]
 }
 
+/** Sponsor action items for the viewer: assigned to them, or unassigned. */
+export interface SponsorsWaitingData {
+  items: {
+    id: string
+    title: string
+    sponsorName: string
+    priority: number
+    href: string
+  }[]
+}
+
 /** Conference-wide open work due today or earlier. */
 export interface MarketingDueData {
   tasks: {

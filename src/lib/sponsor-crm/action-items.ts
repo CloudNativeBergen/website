@@ -222,6 +222,19 @@ export function generateActionItems(
       })
     }
 
+    // Priority 3: Nobody owns this deal yet, so nobody will chase it
+    if (!sponsor.assignedTo && sponsor.status !== 'closed-lost') {
+      actions.push({
+        id: `${sponsor._id}-unassigned`,
+        type: 'unassigned',
+        title: 'Assign an owner',
+        sponsor: { id: sponsor._id, name },
+        description: `Nobody owns ${name} yet. Assign an organizer to follow up`,
+        priority: 3,
+        link,
+      })
+    }
+
     // Priority 4: Contract in progress (not signed yet)
     if (
       sponsor.status === 'closed-won' &&
@@ -319,3 +332,39 @@ export function generateActionItems(
 
   return actions.sort((a, b) => a.priority - b.priority)
 }
+
+/** Most urgent priority that counts as "waiting on you" in the event checklist. */
+export const URGENT_ACTION_PRIORITY = 3
+
+/**
+ * Action items for one organizer: sponsors assigned to them plus unassigned
+ * sponsors, which every organizer sees. Sorted by priority.
+ */
+export function actionItemsForOrganizer(
+  sponsors: SponsorForConferenceExpanded[],
+  organizerId: string | null,
+): ActionItem[] {
+  return generateActionItems(
+    sponsors.filter(
+      (s) =>
+        !s.assignedTo || (!!organizerId && s.assignedTo._id === organizerId),
+    ),
+  )
+}
+
+/**
+ * The lean projection `generateActionItems` reads. Shared by the `/admin`
+ * dashboard and the event checklist so both ride reads they already make.
+ */
+// groq-global-scoped: lastActivity is correlated to the projected sponsor (`^._id`); every reader of these fields filters sponsors by conference.
+export const SPONSOR_ACTION_ITEM_FIELDS = `
+  _id, _updatedAt, status, tags, invoiceStatus, contractStatus, contractValue,
+  contractCurrency, signatureStatus, registrationComplete,
+  "registrationToken": select(defined(registrationToken) => "set"),
+  nextFollowUpAt,
+  "contactPersons": contactPersons[]{ _key },
+  sponsor->{ name },
+  tier->{ price[]{ amount, currency } },
+  assignedTo->{ _id, name },
+  "lastActivity": *[_type == "sponsorActivity" && sponsorForConference._ref == ^._id] | order(createdAt desc)[0]{ createdAt }
+`

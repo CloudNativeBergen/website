@@ -44,6 +44,36 @@ vi.mock('@/lib/sanity/scoped', () => ({
     schedules: [],
     sponsors: 1,
     sponsorsWithoutLogo: 1,
+    sponsorActions: [
+      // Overdue invoice (priority 1) and no owner: waiting.
+      {
+        _id: 'sfc-1',
+        _updatedAt: '2999-01-01T00:00:00Z',
+        status: 'closed-won',
+        invoiceStatus: 'overdue',
+        contractStatus: 'contract-signed',
+        sponsor: { name: 'Acme' },
+      },
+      // Only an "Assign an owner" item (priority 3): still waiting.
+      {
+        _id: 'sfc-2',
+        _updatedAt: '2999-01-01T00:00:00Z',
+        status: 'closed-won',
+        invoiceStatus: 'paid',
+        contractStatus: 'contract-signed',
+        sponsor: { name: 'Beta' },
+      },
+      // Owned and nothing urgent: not waiting.
+      {
+        _id: 'sfc-3',
+        _updatedAt: '2999-01-01T00:00:00Z',
+        status: 'closed-won',
+        invoiceStatus: 'paid',
+        contractStatus: 'contract-signed',
+        sponsor: { name: 'Gamma' },
+        assignedTo: { _id: 'org-1', name: 'Alice' },
+      },
+    ],
   }),
 }))
 
@@ -221,6 +251,9 @@ describe('resolveActivationChecklist — event-stage facts', () => {
     const ids = checklist.event!.rows.map((r) => r.id)
     expect(ids).toContain('speaker-info-email')
     expect(ids).toContain('sponsor-logos')
+    expect(
+      checklist.event!.rows.find((r) => r.id === 'sponsors-waiting'),
+    ).toMatchObject({ label: 'Sponsors waiting on you (2)', done: false })
     // No confirmed speakers yet: nothing has been sent.
     expect(
       checklist.event!.rows.find((r) => r.id === 'speaker-info-email')!.done,

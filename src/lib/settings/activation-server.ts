@@ -24,6 +24,12 @@ import {
 import { readPhotoWall } from '@/lib/photo-wall/sanity'
 import { Status } from '@/lib/proposal/types'
 import {
+  generateActionItems,
+  SPONSOR_ACTION_ITEM_FIELDS,
+  URGENT_ACTION_PRIORITY,
+} from '@/lib/sponsor-crm/action-items'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import {
   buildActivationChecklist,
   isEventStageRelevant,
   type ActivationChecklist,
@@ -112,12 +118,13 @@ interface EventPrepCounts {
   schedules: ConferenceSchedule[]
   sponsors: number
   sponsorsWithoutLogo: number
+  sponsorActions: SponsorForConferenceExpanded[]
 }
 
 /**
  * The event-stage facts. Cost: the briefing speaker load (proposals, one batch
  * ticket-provider call, travel support), the send log, the photo wall and one
- * schedule/sponsor read. Any failure leaves the rows out.
+ * schedule/sponsor read (which also carries the lean sponsor action rows). Any failure leaves the rows out.
  */
 async function resolveEventPrepFacts(
   conference: Conference,
@@ -134,7 +141,8 @@ async function resolveEventPrepFacts(
             tracks[]{ talks[]{ startTime, endTime, "talk": select(defined(talk) => { "_id": talk._ref }) } }
           },
           "sponsors": count(*[_type == "sponsorForConference" && conference._ref == $conferenceId && status == "closed-won" && defined(sponsor->_id)]),
-          "sponsorsWithoutLogo": count(*[_type == "sponsorForConference" && conference._ref == $conferenceId && status == "closed-won" && defined(sponsor->_id) && !defined(sponsor->logo) && !defined(sponsor->logoBright)])
+          "sponsorsWithoutLogo": count(*[_type == "sponsorForConference" && conference._ref == $conferenceId && status == "closed-won" && defined(sponsor->_id) && !defined(sponsor->logo) && !defined(sponsor->logoBright)]),
+          "sponsorActions": *[_type == "sponsorForConference" && conference._ref == $conferenceId]{${SPONSOR_ACTION_ITEM_FIELDS}}
         }`,
       ),
       readPhotoWall(conferenceId),
@@ -172,6 +180,11 @@ async function resolveEventPrepFacts(
       hasPhotoWall: wall !== null,
       sponsors: counts.sponsors ?? 0,
       sponsorsWithoutLogo: counts.sponsorsWithoutLogo ?? 0,
+      sponsorsWaiting: new Set(
+        generateActionItems(counts.sponsorActions ?? [])
+          .filter((a) => a.priority <= URGENT_ACTION_PRIORITY)
+          .map((a) => a.sponsor.id),
+      ).size,
     }
   } catch (error) {
     console.error('Error resolving event-stage facts:', error)

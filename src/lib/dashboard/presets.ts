@@ -54,6 +54,12 @@ export const PRESET_CONFIGS: Record<string, PresetConfig> = {
         title: 'Speaker Engagement',
         position: { row: 5, col: 0, rowSpan: 2, colSpan: 3 },
       },
+      {
+        id: 'sponsors-waiting',
+        type: 'sponsors-waiting',
+        title: 'Sponsors waiting on you',
+        position: { row: 7, col: 0, rowSpan: 3, colSpan: 6 },
+      },
     ],
   },
   execution: {
@@ -221,6 +227,12 @@ export const PRESET_CONFIGS: Record<string, PresetConfig> = {
         type: 'my-areas',
         title: 'My Areas',
         position: { row: 16, col: 0, rowSpan: 2, colSpan: 4 },
+      },
+      {
+        id: 'sponsors-waiting',
+        type: 'sponsors-waiting',
+        title: 'Sponsors waiting on you',
+        position: { row: 16, col: 4, rowSpan: 3, colSpan: 4 },
       },
     ],
   },
