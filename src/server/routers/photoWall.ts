@@ -174,6 +174,7 @@ const settingsInput = z
   .object({
     postingMode: z.enum(POSTING_MODES).optional(),
     sponsorStrip: z.boolean().optional(),
+    trustedPostersSkipApproval: z.boolean().optional(),
     look: z.enum(WALL_LOOKS).optional(),
   })
   .strict()

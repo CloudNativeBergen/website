@@ -49,6 +49,13 @@ export default defineType({
       initialValue: false,
     }),
     defineField({
+      name: 'trustedPostersSkipApproval',
+      title: 'Trusted posters skip approval',
+      description:
+        'Posts from organizers and confirmed speakers, signed in, go straight on the wall. A missing value reads as off.',
+      type: 'boolean',
+    }),
+    defineField({
       name: 'look',
       title: 'Wall Look',
       description: 'A missing value reads as Pinboard.',

@@ -44,6 +44,8 @@ export interface PhotoWall {
   sponsorStrip: boolean
   /** Missing or unknown reads as Pinboard (§4.1). */
   look: WallLook
+  /** Trusted posters skip approval (§6.6); missing reads as off. */
+  trustedPostersSkipApproval: boolean
   /** Set by the retention cron (P1): closed to writes. */
   closedAt: string | null
 }
@@ -76,4 +78,5 @@ export interface PhotoWallSettingsChange {
   postingMode?: PostingMode
   sponsorStrip?: boolean
   look?: WallLook
+  trustedPostersSkipApproval?: boolean
 }

@@ -69,9 +69,12 @@ export function ComposerLanding({
   onPick,
   error,
   headingRef,
+  trustedName,
 }: {
   onPick: (file: File) => void
   error?: string | null
+  /** A signed-in trusted poster's name (§6.6): their photos skip approval. */
+  trustedName?: string
   /** Focused when the composer closes, so a screen reader lands here. */
   headingRef?: Ref<HTMLHeadingElement>
 }) {
@@ -107,7 +110,17 @@ export function ComposerLanding({
         </PickPhotoButton>
       </div>
       <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">
-        An organizer looks at every photo before it appears.
+        {trustedName ? (
+          <>
+            You’re signed in as{' '}
+            <span dir="auto" className="font-medium">
+              {trustedName}
+            </span>
+            . Your photos go straight on the wall.
+          </>
+        ) : (
+          'An organizer looks at every photo before it appears.'
+        )}
       </p>
     </div>
   )

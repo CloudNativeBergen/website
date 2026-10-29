@@ -507,6 +507,7 @@ describe('the live pending count beside the queue heading (§10)', () => {
       postingMode: 'open',
       sponsorStrip: false,
       look: 'pinboard',
+      trustedPostersSkipApproval: false,
       closedAt: null,
     },
     posting: 'open',

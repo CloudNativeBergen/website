@@ -8,7 +8,9 @@ import { pickConferenceLogoProps } from '@/lib/conference/logo'
 import { isProgramPublished } from '@/lib/conference/state'
 import type { ConferenceSchedule } from '@/lib/conference/types'
 import { deletionDate } from '@/lib/photo-wall/deletion'
+import { getAuthSession } from '@/lib/auth'
 import { requirePhotoWall } from '@/lib/photo-wall/page'
+import { trustedPoster } from '@/lib/photo-wall/trusted'
 import { isPostingOpen } from '@/lib/photo-wall/window'
 import {
   deleteMyPost,
@@ -80,6 +82,11 @@ export default async function ComposerPage({
       ensureDevice={ensureDevice}
       schedules={taggableSchedules(conference)}
       room={typeof room === 'string' ? room : undefined}
+      trustedName={
+        wall.trustedPostersSkipApproval
+          ? (await trustedPoster(await getAuthSession(), conference))?.name
+          : undefined
+      }
       {...actions}
     />
   )

@@ -84,6 +84,11 @@ export interface ModerationPost {
   approvedAt: string | null
   decidedAt: string | null
   incarnation: ShownIncarnation
+  /**
+   * A trusted poster's post (§6.6): the speaker's name, or the role when
+   * the speaker is gone. Absent on every other post.
+   */
+  autoApprovedBy?: string | null
   /** The tagged talk (Talk photos spec §6.3); null when untagged or gone. */
   talk?: WallPostTalk | null
 }

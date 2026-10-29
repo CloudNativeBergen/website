@@ -74,6 +74,8 @@ export interface WallComposerProps {
   schedules?: ConferenceSchedule[]
   /** `?room=` from a room's QR (Talk photos spec §6.4). */
   room?: string
+  /** A signed-in trusted poster's name (§6.6): the line above Post. */
+  trustedName?: string
   /** Conference time for the Talk row; the clock when absent. */
   now?: Date
 }
@@ -112,6 +114,7 @@ export function WallComposer({
   below,
   schedules = [],
   room,
+  trustedName,
   now,
 }: WallComposerProps) {
   const [stage, setStage] = useState<Stage>({ kind: 'landing', error: null })
@@ -243,6 +246,7 @@ export function WallComposer({
             headingRef={landingHeading}
             onPick={pick}
             error={stage.kind === 'landing' ? stage.error : null}
+            trustedName={trustedName}
           />
           {stage.kind === 'decoding' && (
             <p
@@ -365,6 +369,16 @@ export function WallComposer({
                   </a>
                 </>
               )}
+          </p>
+        )}
+
+        {trustedName && (
+          <p className="mt-4 text-sm text-gray-700 dark:text-gray-300">
+            You’re signed in as{' '}
+            <span dir="auto" className="font-medium">
+              {trustedName}
+            </span>
+            . Your photo goes straight on the wall.
           </p>
         )}
 

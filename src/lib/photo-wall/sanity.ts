@@ -24,6 +24,7 @@ interface PhotoWallRow {
   postingMode?: string | null
   sponsorStrip?: boolean | null
   look?: string | null
+  trustedPostersSkipApproval?: boolean | null
   closedAt?: string | null
 }
 
@@ -34,7 +35,7 @@ export async function readPhotoWall(
   const row = await scopedFetch<PhotoWallRow | null>(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "photoWall" && _id == $id][0]{ _id, postingMode, sponsorStrip, look, closedAt }`,
+    `*[_type == "photoWall" && _id == $id][0]{ _id, postingMode, sponsorStrip, look, trustedPostersSkipApproval, closedAt }`,
     { id: photoWallId(conferenceId) },
   )
   if (!row) return null
@@ -43,6 +44,7 @@ export async function readPhotoWall(
     postingMode: postingModeOf(row.postingMode),
     sponsorStrip: row.sponsorStrip === true,
     look: wallLookOf(row.look),
+    trustedPostersSkipApproval: row.trustedPostersSkipApproval === true,
     closedAt: row.closedAt ?? null,
   }
 }
@@ -60,6 +62,8 @@ export async function setUpPhotoWall(conferenceId: string): Promise<PhotoWall> {
       conference: { _type: 'reference', _ref: conferenceId },
       postingMode: 'auto',
       sponsorStrip: false,
+      // New walls only: an existing wall reads a missing value as off (§6.6).
+      trustedPostersSkipApproval: true,
     })
     .commit()
   const wall = await readPhotoWall(conferenceId)

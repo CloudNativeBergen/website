@@ -16,6 +16,7 @@
  * retries with the same `uploadId`, which converges on the post if it landed.
  */
 import 'server-only'
+import type { Session } from 'next-auth'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { sanityStatus } from '@/lib/sanity/status'
 import { expireWallPost } from './cache'
@@ -27,6 +28,7 @@ import { postingLimitHit, readPostingCounts } from './limits'
 import type { WallSubmitRefusal } from './post'
 import { readPhotoWall } from './sanity'
 import { isConferenceTalk } from './talk-tag'
+import { trustedPoster, type TrustedPoster } from './trusted'
 import { isPostingOpen } from './window'
 
 /**
@@ -43,7 +45,10 @@ export interface WallSubmitRequest {
     _id: string
     startDate?: string | null
     endDate?: string | null
+    organization?: { _ref?: string } | null
   }
+  /** The NextAuth session, if any: a trusted poster skips approval (§6.6). */
+  session?: Session | null
   /** The `/wall` cookie's device, or null without a valid one (§6.1). */
   device: WallDevice | null
   /** The multipart body, parsed once. */
@@ -57,6 +62,8 @@ interface StoredPost {
   _type?: string
   conference?: { _ref?: string }
   deviceKey?: string
+  status?: string
+  talk?: { _ref?: string }
 }
 
 /** This device's post on this conference's wall. */
@@ -91,6 +98,7 @@ export async function submitWallPost({
   device,
   form,
   now,
+  session = null,
 }: WallSubmitRequest): Promise<WallSubmitOutcome> {
   const conferenceId = conference._id
 
@@ -109,7 +117,12 @@ export async function submitWallPost({
   const taken = !!existing && !isOwnPost(existing, conferenceId, device.key)
   if (existing && !taken) {
     // Again: the first run may have stopped between its create and expiry.
-    expireWallPost(conferenceId, device.key, { wall: false })
+    // A trusted post (§6.6) is on the wall already.
+    const shown = existing.status === 'approved'
+    expireWallPost(conferenceId, device.key, {
+      wall: shown,
+      talks: shown ? [existing.talk?._ref ?? null] : [],
+    })
     return { ok: true }
   }
 
@@ -142,7 +155,17 @@ export async function submitWallPost({
 
   // 5. Upload, then create; not under another's id.
   if (taken) return refuse('failed', 'uploadId taken')
-  return createPost({ conferenceId, deviceKey: device.key, fields, bytes, now })
+  const trusted = wall.trustedPostersSkipApproval
+    ? await trustedPoster(session, conference)
+    : null
+  return createPost({
+    conferenceId,
+    deviceKey: device.key,
+    fields,
+    bytes,
+    now,
+    trusted,
+  })
 }
 
 interface NewPost {
@@ -152,6 +175,8 @@ interface NewPost {
   /** The photo, checked. */
   bytes: Uint8Array
   now: Date
+  /** Approved at once, with its audit trail (§6.6). */
+  trusted: TrustedPoster | null
 }
 
 async function createPost({
@@ -160,6 +185,7 @@ async function createPost({
   fields,
   bytes,
   now,
+  trusted,
 }: NewPost): Promise<WallSubmitOutcome> {
   const { uploadId } = fields
   const asset = await clientWrite.assets.upload('image', Buffer.from(bytes), {
@@ -186,7 +212,20 @@ async function createPost({
         _id: wallPostId(uploadId),
         _type: 'wallPost',
         conference: { _type: 'reference', _ref: conferenceId },
-        status: 'pending',
+        ...(trusted
+          ? {
+              status: 'approved',
+              approvedAt: now.toISOString(),
+              decidedAt: now.toISOString(),
+              autoApproval: {
+                speaker: weakRef(trusted.speakerId),
+                role: trusted.role,
+                ...(trusted.realAdminId
+                  ? { realAdmin: weakRef(trusted.realAdminId) }
+                  : {}),
+              },
+            }
+          : { status: 'pending' }),
         photo: {
           _type: 'image',
           asset: { _type: 'reference', _ref: asset._id },
@@ -232,6 +271,19 @@ async function createPost({
     }
   }
 
-  expireWallPost(conferenceId, deviceKey, { wall: false })
+  if (trusted) {
+    console.log(
+      `[AUDIT] Photo Wall post ${wallPostId(uploadId)} auto-approved for ${trusted.role} ${trusted.speakerId}` +
+        (trusted.realAdminId
+          ? ` (impersonated by ${trusted.realAdminId})`
+          : ''),
+    )
+  }
+  expireWallPost(conferenceId, deviceKey, {
+    wall: !!trusted,
+    talks: trusted ? [fields.talkId ?? null] : [],
+  })
   return { ok: true }
 }
+
+const weakRef = (id: string) => ({ _type: 'reference', _ref: id, _weak: true })

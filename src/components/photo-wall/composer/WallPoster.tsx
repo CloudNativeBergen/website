@@ -52,6 +52,8 @@ export interface WallPosterProps extends MyPostsActions {
   schedules?: ConferenceSchedule[]
   /** `?room=` from a room's QR (Talk photos spec §6.4). */
   room?: string
+  /** A signed-in trusted poster's name: their posts skip approval (§6.6). */
+  trustedName?: string
   /** The submit; `postToWall` unless a story stands in for the server. */
   post?: (
     request: WallPostRequest,
@@ -118,6 +120,7 @@ export function WallPoster({
   post = postToWall,
   schedules,
   room,
+  trustedName,
 }: WallPosterProps) {
   const [device, setDevice] = useState<'pending' | 'ready' | 'failed'>(
     'pending',
@@ -244,7 +247,7 @@ export function WallPoster({
   const myPosts: MyPostView[] = [
     ...posted.map((photo) => ({
       _id: postIdOf(photo.uploadId),
-      status: 'pending' as const,
+      status: trustedName ? ('approved' as const) : ('pending' as const),
       src: photo.url,
       objectPosition: objectPosition(photo.crop),
       caption: photo.caption || null,
@@ -265,6 +268,7 @@ export function WallPoster({
         uploadProgress={progress}
         schedules={schedules}
         room={room}
+        trustedName={trustedName}
         below={
           myPosts.length > 0 && (
             <MyPostsSection
@@ -288,7 +292,17 @@ export function WallPoster({
         My posts
       </h1>
       <p className="mt-3 text-gray-600 dark:text-gray-400">
-        An organizer looks at every photo before it appears on the wall.
+        {trustedName ? (
+          <>
+            You’re signed in as{' '}
+            <span dir="auto" className="font-medium">
+              {trustedName}
+            </span>
+            . Your photos go straight on the wall.
+          </>
+        ) : (
+          'An organizer looks at every photo before it appears on the wall.'
+        )}
       </p>
       <div className="mt-8">
         <MyPosts posts={myPosts} listRead={mine.listRead} {...actions} />

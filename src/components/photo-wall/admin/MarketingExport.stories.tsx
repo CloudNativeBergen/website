@@ -88,6 +88,7 @@ const VIEW: PhotoWallAdminView = {
     postingMode: 'auto',
     sponsorStrip: false,
     look: 'pinboard',
+    trustedPostersSkipApproval: false,
     closedAt: null,
   },
   posting: 'ended',

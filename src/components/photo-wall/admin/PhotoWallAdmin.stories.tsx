@@ -20,6 +20,7 @@ const WALL: PhotoWall = {
   postingMode: 'paused',
   sponsorStrip: false,
   look: 'pinboard',
+  trustedPostersSkipApproval: false,
   closedAt: null,
 }
 const view = (
