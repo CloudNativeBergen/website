@@ -1,6 +1,13 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  ReactNode,
+} from 'react'
 import { NotificationToast } from './NotificationToast'
 import type { NotificationType } from './NotificationToast'
 
@@ -29,6 +36,17 @@ interface NotificationProviderProps {
 
 export function NotificationProvider({ children }: NotificationProviderProps) {
   const [notifications, setNotifications] = useState<Notification[]>([])
+
+  // A toast's dismiss timer must not outlive the provider: firing after
+  // unmount sets state on a dead tree (in tests, after jsdom is torn down).
+  const latest = useRef(notifications)
+  useEffect(() => {
+    latest.current = notifications
+  }, [notifications])
+  useEffect(
+    () => () => latest.current.forEach((n) => clearTimeout(n.timeoutId)),
+    [],
+  )
 
   const showNotification = (notification: Omit<Notification, 'id'>) => {
     const duration = notification.duration ?? 5000
