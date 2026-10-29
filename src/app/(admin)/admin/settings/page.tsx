@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { getSpeakerBriefing } from '@/lib/speaker/briefing'
 import { denyNonOrganizer } from '@/lib/authz/page-guard'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -258,7 +259,10 @@ export default async function AdminSettings() {
 
         {/* "Get started" — the onboarding checklist. Sits above the grouped
             configuration cards and deep-links into them. */}
-        <ActivationChecklist checklist={activation} />
+        <ActivationChecklist
+          checklist={activation}
+          baseUrl={conferenceBaseUrl(conference)}
+        />
 
         <SettingsFilter>
           {/* ---- Identity & Brand ---- */}

@@ -5,6 +5,7 @@ import {
   currentActivationStage,
   hasCustomDomain,
   hasTicketingBinding,
+  isEventHeroWindow,
   isUntouchedStarterFormatSet,
   nextActivationSteps,
   type ConferenceForActivation,
@@ -757,7 +758,7 @@ describe('event stage', () => {
   const EVENT_READY: ConferenceForActivation = {
     ...FULLY_LIVE,
     programDate: '2026-04-01',
-    schedules: [{ tracks: [{ sponsor: { _ref: 's1' } }] }],
+    schedules: [{ tracks: [{ trackTitle: 'Main', sponsor: { _ref: 's1' } }] }],
     socialHashtag: '#cnd26',
     socialLinks: ['https://bsky.app/profile/cnd.example'],
     venueTravelInfo: 'Take the light rail to Byparken.',
@@ -773,6 +774,7 @@ describe('event stage', () => {
       ['bluesky', true],
       ['venue-travel', true],
       ['track-sponsors', true],
+      ['room-screens', true],
     ])
     expect(group).toMatchObject({ done: 4, required: 4, allDone: true })
   })
@@ -847,7 +849,7 @@ describe('event stage', () => {
 
     it('adds every row, done, for a ready event', () => {
       const group = withFacts({}).event!
-      expect(group.rows.slice(5).map((r) => [r.id, r.done])).toEqual([
+      expect(group.rows.slice(6).map((r) => [r.id, r.done])).toEqual([
         ['program-unscheduled', true],
         ['speaker-info', true],
         ['speaker-info-email', true],
@@ -894,5 +896,60 @@ describe('event stage', () => {
       expect(c.allDone).toBe(true)
       expect(c.readyToGoLive).toBe(true)
     })
+  })
+})
+
+describe('room screens row', () => {
+  const now = new Date('2026-04-20T12:00:00Z')
+  const row = (c: ConferenceForActivation) =>
+    buildActivationChecklist(c, CHECKS_OK, { now }).event!.rows.find(
+      (r) => r.id === 'room-screens',
+    )!
+
+  it('lists each room once and is done when the schedule has rooms', () => {
+    const r = row({
+      ...FULLY_LIVE,
+      schedules: [
+        { tracks: [{ trackTitle: 'Main' }, { trackTitle: 'Side room' }] },
+        { tracks: [{ trackTitle: 'Main' }, {}] },
+      ],
+    })
+    expect(r).toMatchObject({
+      done: true,
+      optional: true,
+      rooms: ['Main', 'Side room'],
+    })
+  })
+
+  it('is outstanding without rooms', () => {
+    expect(row(FULLY_LIVE)).toMatchObject({ done: false, rooms: [] })
+  })
+})
+
+describe('isEventHeroWindow', () => {
+  // FULLY_LIVE runs 2026-05-01 to 2026-05-02; six weeks before is 2026-03-20.
+  const at = (iso: string, c: ConferenceForActivation = FULLY_LIVE) =>
+    isEventHeroWindow(c, new Date(iso))
+
+  it('opens six weeks before startDate, by the Oslo date', () => {
+    expect(at('2026-03-19T12:00:00Z')).toBe(false)
+    // 23:30 UTC on the 19th is already the 20th in Oslo.
+    expect(at('2026-03-19T23:30:00Z')).toBe(true)
+    expect(at('2026-03-20T12:00:00Z')).toBe(true)
+  })
+
+  it('stays open through endDate and closes after it', () => {
+    expect(at('2026-05-01T12:00:00Z')).toBe(true)
+    expect(at('2026-05-02T21:00:00Z')).toBe(true)
+    expect(at('2026-05-03T12:00:00Z')).toBe(false)
+  })
+
+  it('is closed while the site is unlisted or has no start date', () => {
+    expect(
+      at('2026-04-20T12:00:00Z', { ...FULLY_LIVE, visibility: 'unlisted' }),
+    ).toBe(false)
+    expect(
+      at('2026-04-20T12:00:00Z', { ...FULLY_LIVE, startDate: undefined }),
+    ).toBe(false)
   })
 })
