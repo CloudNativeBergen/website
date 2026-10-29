@@ -1333,6 +1333,14 @@ function SponsorSendComposer({
           'The email went out, but the sponsor record could not be updated. Check the contract status and the signing link on the sponsor.',
       })
     }
+    if ('registrationStateFailed' in result && result.registrationStateFailed) {
+      showNotification({
+        type: 'warning',
+        title: 'Deal not updated',
+        message:
+          'The email went out, but the sponsor could not be moved to registration sent. Set the contract status on the sponsor.',
+      })
+    }
     if ('earlyAccessCopiesBehind' in result && result.earlyAccessCopiesBehind) {
       const behind = result.earlyAccessCopiesBehind
       showNotification({
