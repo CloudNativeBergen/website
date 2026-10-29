@@ -233,6 +233,7 @@ const CopyEmailButton = ({ email }: { email: string }) => {
       onClick={() => copyToClipboard(email)}
       className="ml-2 cursor-pointer p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
       title={copied ? 'Copied!' : 'Copy email'}
+      aria-label={copied ? 'Email copied' : `Copy email ${email}`}
     >
       {copied ? (
         <CheckIcon className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -260,6 +261,7 @@ const CopyBlueskyUsernameButton = ({
       onClick={handleCopy}
       className="ml-2 cursor-pointer p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
       title={copied ? 'Copied username!' : 'Copy username'}
+      aria-label={copied ? 'Bluesky username copied' : 'Copy Bluesky username'}
     >
       {copied ? (
         <CheckIcon className="h-4 w-4 text-green-600 dark:text-green-400" />

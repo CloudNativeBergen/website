@@ -129,6 +129,9 @@ describe('ImageUploadZone (react-dropzone integration)', () => {
     expect(
       screen.getByRole('button', { name: /Upload 1 Image/ }),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Remove keynote.jpg' }),
+    ).toBeInTheDocument()
   })
 
   it('rejects a non-image with the file-invalid-type error code', async () => {

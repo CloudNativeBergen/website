@@ -701,12 +701,13 @@ export function ImageUploadZone({
                 {!isUploading && file.status === 'pending' && (
                   <button
                     onClick={() => removeFile(index)}
-                    className="absolute top-1 right-1 rounded-full bg-white p-1 text-gray-500 hover:text-gray-700"
+                    aria-label={`Remove ${file.file.name}`}
+                    className="absolute top-1 right-1 rounded-full bg-white p-1 text-gray-500 hover:text-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
                   >
                     <XMarkIcon className="h-4 w-4" />
                   </button>
                 )}
-                <p className="mt-1 truncate text-xs text-gray-600">
+                <p className="mt-1 truncate text-xs text-gray-600 dark:text-gray-400">
                   {file.file.name}
                 </p>
               </div>
