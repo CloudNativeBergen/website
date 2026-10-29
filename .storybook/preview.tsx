@@ -4,6 +4,7 @@ import { mswLoader } from 'msw-storybook-addon/csf3'
 import { TRPCDecorator } from './decorators/TRPCDecorator'
 import { SessionDecorator } from './decorators/SessionDecorator'
 import '../src/styles/tailwind.css'
+import './fonts.css'
 
 const preview: Preview = {
   parameters: {

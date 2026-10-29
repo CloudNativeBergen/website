@@ -1,14 +1,5 @@
 import { type Metadata, type Viewport } from 'next'
-import {
-  Inter,
-  JetBrains_Mono,
-  Space_Grotesk,
-  IBM_Plex_Sans,
-  IBM_Plex_Mono,
-  Bricolage_Grotesque,
-  Atkinson_Hyperlegible,
-  Caveat,
-} from 'next/font/google'
+import localFont from 'next/font/local'
 import Script from 'next/script'
 import clsx from 'clsx'
 import { headers } from 'next/headers'
@@ -38,20 +29,28 @@ import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { TRPCProvider } from '@/components/providers/TRPCProvider'
 import { SessionProviderWrapper } from '@/components/providers/SessionProviderWrapper'
 
-const inter = Inter({
-  subsets: ['latin'],
+// Self-hosted so `next build` needs no network. These are the Google Fonts
+// files, all SIL Open Font License 1.1: from the Fontsource packages, and for
+// Caveat from src/fonts/caveat. Subsets, weights and `display` match what
+// `next/font/google` used to fetch; the variable fonts keep Google's weight
+// range.
+const inter = localFont({
+  src: '../../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2',
+  weight: '100 900',
   display: 'swap',
   variable: '--font-inter',
 })
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
+const jetbrainsMono = localFont({
+  src: '../../node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2',
+  weight: '100 800',
   display: 'swap',
   variable: '--font-jetbrains',
 })
 
-const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin'],
+const spaceGrotesk = localFont({
+  src: '../../node_modules/@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2',
+  weight: '300 700',
   display: 'swap',
   variable: '--font-space-grotesk',
 })
@@ -61,24 +60,57 @@ const spaceGrotesk = Space_Grotesk({
 // `preload: false` drops the eager `<link rel="preload">` for every visitor
 // while keeping the `@font-face` rules — a browser still fetches the file if
 // text ever matches, so the remaining call sites keep working.
-const ibmPlexSans = IBM_Plex_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+const ibmPlexSans = localFont({
+  src: [
+    {
+      path: '../../node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff2',
+      weight: '400',
+    },
+    {
+      path: '../../node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-500-normal.woff2',
+      weight: '500',
+    },
+    {
+      path: '../../node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-600-normal.woff2',
+      weight: '600',
+    },
+    {
+      path: '../../node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-700-normal.woff2',
+      weight: '700',
+    },
+  ],
   display: 'swap',
   variable: '--font-ibm-plex-sans',
   preload: false,
 })
 
-const ibmPlexMono = IBM_Plex_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+const ibmPlexMono = localFont({
+  src: [
+    {
+      path: '../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2',
+      weight: '400',
+    },
+    {
+      path: '../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2',
+      weight: '500',
+    },
+    {
+      path: '../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2',
+      weight: '600',
+    },
+    {
+      path: '../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-700-normal.woff2',
+      weight: '700',
+    },
+  ],
   display: 'swap',
   variable: '--font-ibm-plex-mono',
   preload: false,
 })
 
-const bricolageGrotesque = Bricolage_Grotesque({
-  subsets: ['latin'],
+const bricolageGrotesque = localFont({
+  src: '../../node_modules/@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2',
+  weight: '200 800',
   display: 'swap',
   variable: '--font-bricolage',
   preload: false,
@@ -86,9 +118,17 @@ const bricolageGrotesque = Bricolage_Grotesque({
 
 // Offered by the meme generator's font picker. Without a face of its own it
 // rendered in whatever the visitor's machine had installed, if anything.
-const atkinsonHyperlegible = Atkinson_Hyperlegible({
-  subsets: ['latin'],
-  weight: ['400', '700'],
+const atkinsonHyperlegible = localFont({
+  src: [
+    {
+      path: '../../node_modules/@fontsource/atkinson-hyperlegible/files/atkinson-hyperlegible-latin-400-normal.woff2',
+      weight: '400',
+    },
+    {
+      path: '../../node_modules/@fontsource/atkinson-hyperlegible/files/atkinson-hyperlegible-latin-700-normal.woff2',
+      weight: '700',
+    },
+  ],
   display: 'swap',
   variable: '--font-atkinson',
   preload: false,
@@ -98,9 +138,20 @@ const atkinsonHyperlegible = Atkinson_Hyperlegible({
 // Wall Post's polaroid card. Registered here on every route like the other
 // optional faces, with `preload: false` so no page preloads it; only the
 // `/wall` routes render text in it, and only they fetch the file.
-const caveat = Caveat({
-  subsets: ['latin', 'latin-ext'],
-  weight: ['500', '700'],
+// `next/font/local` cannot give one weight two files split by unicode-range,
+// so each weight is one file holding both the latin and latin-ext subsets,
+// cut from Google's Caveat[wght].ttf with fonttools.
+const caveat = localFont({
+  src: [
+    {
+      path: '../fonts/caveat/caveat-latin-latin-ext-500-normal.woff2',
+      weight: '500',
+    },
+    {
+      path: '../fonts/caveat/caveat-latin-latin-ext-700-normal.woff2',
+      weight: '700',
+    },
+  ],
   display: 'swap',
   variable: '--font-caveat',
   preload: false,
