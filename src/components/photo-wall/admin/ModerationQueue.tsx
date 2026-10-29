@@ -431,6 +431,45 @@ export function ModerationQueueView({
     }
   }
 
+  /**
+   * THE QUEUE'S SHORTCUTS (§10): J/K and the arrow keys move between cards
+   * (to each card's first control, the photo, so Enter opens it large), A
+   * approves and R rejects the card with focus, U undoes. Never from a
+   * field, an open menu or a dialog, nor with a modifier; the tabs keep
+   * their own arrow keys (they handle them first).
+   */
+  const onQueueKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey) return
+    if (event.altKey) return
+    const target = event.target as HTMLElement
+    if (target.closest(NO_SHORTCUTS) || document.querySelector('[role="menu"]'))
+      return
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key
+    if (key === 'u') {
+      if (!undoable) return
+      event.preventDefault()
+      setUndoable(null)
+      undoable.undo()
+      return
+    }
+    const cards = [...(panelRef.current?.querySelectorAll('article') ?? [])]
+    const card = target.closest('article')
+    const at = card ? cards.indexOf(card) : -1
+    const step = CARD_STEPS[key]
+    if (step) {
+      const next = cards[Math.max(0, Math.min(cards.length - 1, at + step))]
+      if (!next) return
+      event.preventDefault()
+      next.querySelector<HTMLElement>(FOCUSABLE)?.focus()
+      return
+    }
+    const action = key === 'a' ? 'approve' : key === 'r' ? 'reject' : null
+    const post = at < 0 ? undefined : posts[at]
+    if (!action || !post || !act || !allowsFrom(action, post.status)) return
+    event.preventDefault()
+    void act(post, action)
+  }
+
   /** Arrow keys, Home and End move between the tabs and select (WAI-ARIA). */
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     const move = KEY_MOVES[event.key]
@@ -450,6 +489,7 @@ export function ModerationQueueView({
       id={MODERATION_QUEUE_ID}
       aria-labelledby={`${MODERATION_QUEUE_ID}-title`}
       className="scroll-mt-20 space-y-4"
+      onKeyDown={onQueueKeyDown}
     >
       {/* The live pending count (`PendingSummary`) sits beside the heading,
           the page's one live region for it. */}
@@ -533,6 +573,12 @@ export function ModerationQueueView({
           )
         })}
       </div>
+      {onAction && (
+        // A keyboard's shortcuts: not on a phone.
+        <p className="hidden text-xs text-gray-600 sm:block dark:text-gray-400">
+          J/K move · A approve · R reject · U undo
+        </p>
+      )}
       <div
         ref={panelRef}
         role="tabpanel"
@@ -580,6 +626,20 @@ export function ModerationQueueView({
 }
 
 /** Each key's next tab index, from the current one and the last (WAI-ARIA). */
+/** Where the queue's shortcuts never fire: typing, a menu, a dialog. */
+const NO_SHORTCUTS =
+  'input, textarea, select, [contenteditable="true"], [role="menu"], [role="dialog"]'
+
+/** J/K and the arrow keys: one card on or back. */
+const CARD_STEPS: Partial<Record<string, number>> = {
+  j: 1,
+  k: -1,
+  ArrowDown: 1,
+  ArrowRight: 1,
+  ArrowUp: -1,
+  ArrowLeft: -1,
+}
+
 const KEY_MOVES: Partial<Record<string, (at: number, last: number) => number>> =
   {
     ArrowRight: (at, last) => (at === last ? 0 : at + 1),
