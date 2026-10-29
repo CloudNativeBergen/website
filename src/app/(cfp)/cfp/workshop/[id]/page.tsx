@@ -306,7 +306,7 @@ export default async function WorkshopDetailsPage({
                 No confirmed participants yet.
               </p>
             ) : (
-              <div className="mt-4 overflow-hidden">
+              <div className="mt-4 overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                   <thead>
                     <tr>
@@ -365,7 +365,7 @@ export default async function WorkshopDetailsPage({
                 </span>
               </div>
 
-              <div className="mt-4 overflow-hidden">
+              <div className="mt-4 overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                   <thead>
                     <tr>

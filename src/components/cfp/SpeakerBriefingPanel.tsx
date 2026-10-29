@@ -130,7 +130,7 @@ function Fold({ title, children }: { title: string; children: ReactNode }) {
         </h5>
         <ChevronDownIcon
           aria-hidden="true"
-          className="h-5 w-5 shrink-0 text-gray-500 transition-transform group-open:rotate-180"
+          className="h-5 w-5 shrink-0 text-gray-500 transition-transform group-open:rotate-180 dark:text-gray-400"
         />
       </summary>
       <div className="pb-1 text-sm text-gray-700 dark:text-gray-300">
@@ -169,7 +169,7 @@ export function SpeakerBriefingPanel({
     <p className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
       <TicketIcon
         aria-hidden="true"
-        className="h-4 w-4 shrink-0 text-gray-500"
+        className="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400"
       />
       Speaker ticket sent {formatConferenceDayDate(osloDay(ticketSentAt))}
     </p>
@@ -294,7 +294,7 @@ export function SpeakerBriefingPanel({
             <li className="flex items-start gap-2">
               <CalendarIcon
                 aria-hidden="true"
-                className="mt-0.5 h-4 w-4 shrink-0 text-gray-500"
+                className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400"
               />
               <span>{dayTime(d.startsAt)} (local time)</span>
             </li>
@@ -303,7 +303,7 @@ export function SpeakerBriefingPanel({
             <li className="flex items-start gap-2">
               <MapPinIcon
                 aria-hidden="true"
-                className="mt-0.5 h-4 w-4 shrink-0 text-gray-500"
+                className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400"
               />
               <span>
                 {[d.venueName, d.address].filter(Boolean).join(' · ')}
@@ -367,7 +367,7 @@ export function SpeakerBriefingPanel({
                   <p className="mt-1 flex items-start gap-2">
                     <MapPinIcon
                       aria-hidden="true"
-                      className="mt-0.5 h-4 w-4 shrink-0 text-gray-500"
+                      className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400"
                     />
                     {isHttpUrl(r.meetingPointMapUrl) ? (
                       <a

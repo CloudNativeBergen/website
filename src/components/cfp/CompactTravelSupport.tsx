@@ -7,6 +7,7 @@ import {
   DocumentTextIcon,
 } from '@heroicons/react/24/solid'
 import type { TravelSupportWithExpenses } from '@/lib/travel-support/types'
+import { TravelSupportService } from '@/lib/travel-support/service'
 import { useImpersonateQueryString } from '@/lib/impersonation'
 import { formatCurrency } from '@/lib/format'
 import { formatConferenceDayDate, osloTodayDateString } from '@/lib/time'
@@ -45,7 +46,7 @@ export function CompactTravelSupport({
       case 'submitted':
         return {
           icon: ClockIcon,
-          text: 'Under Review',
+          text: TravelSupportService.getStatusDisplayName(travelSupport.status),
           color:
             'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
         }
@@ -135,8 +136,9 @@ export function CompactTravelSupport({
               href={expenseHref}
               className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
               title="Edit travel support"
+              aria-label="Edit travel support"
             >
-              <PencilIcon className="h-4 w-4" />
+              <PencilIcon className="h-4 w-4" aria-hidden="true" />
             </Link>
           )}
         </div>

@@ -16,6 +16,7 @@ import {
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import type { BadgeRecord } from '@/lib/badge/types'
 import Link from 'next/link'
+import { osloTodayDateString } from '@/lib/time'
 
 interface BadgeShareProps {
   badge: BadgeRecord
@@ -52,7 +53,12 @@ export function BadgeShare({
   }
 
   const handleAddToLinkedIn = () => {
-    const issueDate = new Date(badge.issuedAt)
+    // The Oslo calendar month, not the browser's local one.
+    const [issueYear, issueMonth] = osloTodayDateString(
+      new Date(badge.issuedAt),
+    )
+      .split('-')
+      .map(Number)
     // Extract organization name from badge or use default
     const organizationName =
       typeof badge.conference === 'object' &&
@@ -64,8 +70,8 @@ export function BadgeShare({
     addToLinkedInProfile({
       name: `${eventName} ${badgeTypeName} Badge`,
       organizationName,
-      issueYear: issueDate.getFullYear(),
-      issueMonth: issueDate.getMonth() + 1,
+      issueYear,
+      issueMonth,
       certUrl: fullBadgeUrl,
       certId: badge.badgeId,
     })

@@ -66,7 +66,7 @@ export function SpeakerShareWrapper({
       tags={tags}
     >
       <div
-        className={`group @container relative aspect-square w-full overflow-hidden rounded-2xl bg-linear-to-br ${backgroundStyle} border border-gray-200 transition-all duration-300 hover:shadow-xl ${className}`}
+        className={`group @container relative aspect-square w-full overflow-hidden rounded-2xl bg-linear-to-br ${backgroundStyle} border border-gray-200 transition-all duration-300 hover:shadow-xl dark:border-gray-700 ${className}`}
       >
         {showCloudNativePattern && (
           <CloudNativePattern

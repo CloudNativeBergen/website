@@ -79,29 +79,41 @@ export function CompactBadges({ badges }: CompactBadgesProps) {
                   href={`/badge/${badge.badgeId}`}
                   className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                   title="View badge"
+                  aria-label="View badge"
                 >
-                  <EyeIcon className="h-4 w-4" />
+                  <EyeIcon className="h-4 w-4" aria-hidden="true" />
                 </Link>
 
                 <button
+                  type="button"
                   onClick={() => handleDownload(badge)}
                   className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                   title="Download badge"
+                  aria-label="Download badge"
                   disabled={!badge.bakedSvg?.asset?.url}
                 >
-                  <ArrowDownTrayIcon className="h-4 w-4" />
+                  <ArrowDownTrayIcon className="h-4 w-4" aria-hidden="true" />
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => handleCopyUrl(badge)}
                   className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                   title="Copy verification URL"
+                  aria-label={
+                    copiedId === badge._id
+                      ? 'Verification URL copied'
+                      : 'Copy verification URL'
+                  }
                   disabled={!badge.verificationUrl}
                 >
                   {copiedId === badge._id ? (
-                    <CheckIcon className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    <CheckIcon
+                      className="h-4 w-4 text-green-600 dark:text-green-400"
+                      aria-hidden="true"
+                    />
                   ) : (
-                    <ClipboardIcon className="h-4 w-4" />
+                    <ClipboardIcon className="h-4 w-4" aria-hidden="true" />
                   )}
                 </button>
               </div>

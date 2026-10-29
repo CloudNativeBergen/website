@@ -282,7 +282,10 @@ export function ProposalCoSpeaker({
   const cancelInvitation = api.proposal.invitation.cancel.useMutation()
   const remindInvitation = api.proposal.invitation.remind.useMutation()
   const resendInvitation = api.proposal.invitation.resend.useMutation()
-  const createProfile = api.proposal.addCoSpeakerProfile.useMutation()
+  // The new profile belongs in the speaker directory the picker lists.
+  const createProfile = api.proposal.addCoSpeakerProfile.useMutation({
+    onSuccess: () => utils.speaker.admin.list.invalidate(),
+  })
 
   // Only organizers may browse the speaker directory; the query never runs in
   // the CFP form.
