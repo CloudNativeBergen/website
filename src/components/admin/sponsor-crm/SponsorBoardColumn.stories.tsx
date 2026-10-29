@@ -48,7 +48,6 @@ export const Interactive: Story = {
     ],
     currentView: 'pipeline',
     onSponsorClick: (sponsor) => console.log('Sponsor clicked', sponsor),
-    onSponsorDelete: (id) => console.log('Delete sponsor', id),
     onSponsorEmail: (sponsor) => console.log('Email sponsor', sponsor),
     onAddClick: () => console.log('Add sponsor'),
   },
@@ -68,7 +67,6 @@ export const ProspectColumn: Story = {
     ],
     currentView: 'pipeline',
     onSponsorClick: (sponsor) => console.log('Sponsor clicked', sponsor),
-    onSponsorDelete: (id) => console.log('Delete sponsor', id),
     onAddClick: () => console.log('Add sponsor'),
   },
 }
@@ -91,7 +89,6 @@ export const ContactedColumn: Story = {
     ],
     currentView: 'pipeline',
     onSponsorClick: (sponsor) => console.log('Sponsor clicked', sponsor),
-    onSponsorDelete: (id) => console.log('Delete sponsor', id),
     onSponsorEmail: (sponsor) => console.log('Email sponsor', sponsor),
     onAddClick: () => console.log('Add sponsor'),
   },
@@ -115,7 +112,6 @@ export const NegotiatingColumn: Story = {
     ],
     currentView: 'pipeline',
     onSponsorClick: (sponsor) => console.log('Sponsor clicked', sponsor),
-    onSponsorDelete: (id) => console.log('Delete sponsor', id),
     onSponsorEmail: (sponsor) => console.log('Email sponsor', sponsor),
     onAddClick: () => console.log('Add sponsor'),
   },
@@ -134,8 +130,6 @@ export const ContractBoard: Story = {
     ],
     currentView: 'contract',
     onSponsorClick: (sponsor) => console.log('Sponsor clicked', sponsor),
-    onSponsorDelete: (id) => console.log('Delete sponsor', id),
-    onSponsorContract: (sponsor) => console.log('Contract sponsor', sponsor),
     onAddClick: () => console.log('Add sponsor'),
   },
 }
@@ -153,7 +147,6 @@ export const InvoiceBoard: Story = {
     ],
     currentView: 'invoice',
     onSponsorClick: (sponsor) => console.log('Sponsor clicked', sponsor),
-    onSponsorDelete: (id) => console.log('Delete sponsor', id),
     onAddClick: () => console.log('Add sponsor'),
   },
 }
@@ -165,7 +158,6 @@ export const EmptyColumn: Story = {
     sponsors: [],
     currentView: 'pipeline',
     onSponsorClick: (sponsor) => console.log('Sponsor clicked', sponsor),
-    onSponsorDelete: (id) => console.log('Delete sponsor', id),
     onAddClick: () => console.log('Add sponsor'),
   },
 }
@@ -178,7 +170,6 @@ export const Loading: Story = {
     isLoading: true,
     currentView: 'pipeline',
     onSponsorClick: (sponsor) => console.log('Sponsor clicked', sponsor),
-    onSponsorDelete: (id) => console.log('Delete sponsor', id),
     onAddClick: () => console.log('Add sponsor'),
   },
 }
@@ -199,7 +190,6 @@ export const WithSelection: Story = {
     selectedIds: ['sfc-123'],
     isSelectionMode: true,
     onSponsorClick: (sponsor) => console.log('Sponsor clicked', sponsor),
-    onSponsorDelete: (id) => console.log('Delete sponsor', id),
     onSponsorToggleSelect: (id) => console.log('Toggle select', id),
     onAddClick: () => console.log('Add sponsor'),
   },

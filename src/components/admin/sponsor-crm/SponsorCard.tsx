@@ -12,7 +12,6 @@ import {
   formatInvoiceStatusLabel,
   formatStatusName,
   calculateSponsorValue,
-  getSignatureStatusBadgeProps,
   getDaysPending,
   checkSponsorNeedsFollowUp,
   getDaysInactive,
@@ -38,6 +37,13 @@ interface SponsorCardProps {
 }
 
 const STALE_DAYS = 7
+
+const SIGNATURE_LABELS = {
+  pending: 'Awaiting signature',
+  signed: 'Signed',
+  rejected: 'Signature rejected',
+  expired: 'Signature expired',
+} as const
 
 const shortDate = (date: string) =>
   formatConferenceDate(date, { day: 'numeric', month: 'short' })
@@ -84,7 +90,7 @@ export function getCardStatus(
       sig === 'signed' || sponsor.contractStatus === 'contract-signed'
     const label =
       sig && sig !== 'not-started'
-        ? `Signature ${getSignatureStatusBadgeProps(sig).label.toLowerCase()}`
+        ? SIGNATURE_LABELS[sig]
         : !sponsor.contractStatus || sponsor.contractStatus === 'none'
           ? 'No contract yet'
           : formatStatusName(sponsor.contractStatus)
@@ -119,17 +125,18 @@ export function getCardStatus(
   }
 
   if (sponsor.nextFollowUpAt) {
-    const overdue =
-      sponsor.nextFollowUpAt.slice(0, 10) < osloTodayDateString()
+    const overdue = sponsor.nextFollowUpAt.slice(0, 10) < osloTodayDateString()
     return {
       text: `Follow up ${shortDate(sponsor.nextFollowUpAt)}`,
       overdue,
       warning,
     }
   }
-  if (inactive === null) return { text: 'No activity yet', overdue: false, warning }
+  if (inactive === null)
+    return { text: 'No activity yet', overdue: false, warning }
   return {
-    text: inactive === 0 ? 'In contact today' : `No contact for ${days(inactive)}`,
+    text:
+      inactive === 0 ? 'In contact today' : `No contact for ${days(inactive)}`,
     overdue: false,
     warning,
   }
@@ -249,7 +256,6 @@ export function SponsorCard({
         <span className="ml-auto shrink-0">
           {owner ? (
             owner.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={owner.image}
                 alt={owner.name}
@@ -292,7 +298,7 @@ export function SponsorCard({
       {/* Selection checkbox */}
       <div
         className={clsx(
-          'absolute top-1 left-1 z-10 leading-none transition-opacity focus-within:opacity-100 group-hover:opacity-100 group-focus-visible:opacity-100',
+          'absolute top-1 left-1 z-10 leading-none transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 focus-within:opacity-100',
           isSelected || isSelectionMode ? 'opacity-100' : 'opacity-0',
         )}
         {...stop}

@@ -69,6 +69,10 @@ vi.mock('@/hooks/useSponsorDragDrop', () => ({
 }))
 
 vi.mock('@dnd-kit/core', () => ({
+  PointerSensor: vi.fn(),
+  KeyboardSensor: vi.fn(),
+  useSensor: vi.fn(),
+  useSensors: vi.fn(),
   __esModule: true,
   DndContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   DragOverlay: () => null,

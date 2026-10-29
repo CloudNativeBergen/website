@@ -56,15 +56,17 @@ describe('SponsorCard status line', () => {
   afterEach(() => vi.useRealTimers())
 
   it('pipeline: a past follow-up is overdue', () => {
-    expect(status({ nextFollowUpAt: '2026-02-10' }, 'pipeline')).toMatchObject(
-      { text: 'Follow up 10. feb.', overdue: true },
-    )
+    expect(status({ nextFollowUpAt: '2026-02-10' }, 'pipeline')).toMatchObject({
+      text: 'Follow up 10. feb.',
+      overdue: true,
+    })
   })
 
   it('pipeline: a future follow-up is not overdue', () => {
-    expect(status({ nextFollowUpAt: '2026-02-20' }, 'pipeline')).toMatchObject(
-      { text: 'Follow up 20. feb.', overdue: false },
-    )
+    expect(status({ nextFollowUpAt: '2026-02-20' }, 'pipeline')).toMatchObject({
+      text: 'Follow up 20. feb.',
+      overdue: false,
+    })
   })
 
   it('pipeline: no follow-up shows days since contact, warned when stale', () => {
@@ -96,7 +98,7 @@ describe('SponsorCard status line', () => {
         },
         'contract',
       ).text,
-    ).toBe('Signature pending · waiting 5 days')
+    ).toBe('Awaiting signature · waiting 5 days')
   })
 
   it('invoice: due date while it is still in time', () => {
@@ -165,9 +167,9 @@ describe('SponsorCard', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Options for Acme Corporation' }),
     )
-    expect(
-      screen.getAllByRole('menuitem').map((el) => el.textContent),
-    ).toEqual(['Send email', 'Copy link', 'Open sponsor page'])
+    expect(screen.getAllByRole('menuitem').map((el) => el.textContent)).toEqual(
+      ['Send email', 'Copy link', 'Open sponsor page'],
+    )
     expect(onEdit).not.toHaveBeenCalled()
   })
 
