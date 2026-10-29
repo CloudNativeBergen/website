@@ -75,6 +75,13 @@ export function SponsorDashboardClient({
 
   // "Send Email" opens the panel with its send modal: one send path.
   const [sendOnOpen, setSendOnOpen] = useState<SendableKind>()
+  // Clear it whenever the panel closes, Back and URL changes included, so a
+  // later "Edit" never reopens the send modal.
+  const [prevPanelId, setPrevPanelId] = useState(panel.id)
+  if (prevPanelId !== panel.id) {
+    setPrevPanelId(panel.id)
+    if (!panel.id) setSendOnOpen(undefined)
+  }
   const refreshSponsor = useRefreshSponsor()
   const refresh = () => refreshSponsor(sponsorId)
 
@@ -160,14 +167,8 @@ export function SponsorDashboardClient({
           sponsorId={sponsorId}
           view={panel.view}
           onViewChange={panel.setView}
-          onClose={() => {
-            setSendOnOpen(undefined)
-            panel.close()
-          }}
-          onChanged={() => {
-            setSendOnOpen(undefined)
-            refresh()
-          }}
+          onClose={panel.close}
+          onChanged={refresh}
           initialSendKind={sendOnOpen}
           conference={conference}
           domain={domain}

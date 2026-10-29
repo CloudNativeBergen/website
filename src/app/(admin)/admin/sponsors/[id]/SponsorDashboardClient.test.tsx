@@ -169,3 +169,28 @@ it('header "Send Email" opens the panel with its send modal', () => {
   expect(screen.getByTestId('record')).toHaveTextContent('communications')
   expect(screen.getByTestId('send')).toHaveTextContent('information')
 })
+
+it('Back after "Send Email", then Edit, does not reopen the send modal', () => {
+  nav.query = 'view=contract'
+  const page = () => (
+    <SponsorDashboardClient
+      sponsorId="sfc-1"
+      conference={{ _id: 'conf' } as Conference}
+      domain="example.test"
+      initialView="contract"
+    />
+  )
+  const { rerender } = render(page())
+  fireEvent.click(screen.getByText('Send Email'))
+  nav.query = 'edit=communications'
+  rerender(page())
+  expect(screen.getByTestId('send')).toBeInTheDocument()
+  // Browser Back: the URL drops ?edit= without the panel's onClose.
+  nav.query = 'view=contract'
+  rerender(page())
+  expect(screen.queryByTestId('record')).not.toBeInTheDocument()
+  nav.query = 'edit=contacts'
+  rerender(page())
+  expect(screen.getByTestId('record')).toHaveTextContent('contacts')
+  expect(screen.queryByTestId('send')).not.toBeInTheDocument()
+})
