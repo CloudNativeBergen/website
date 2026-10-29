@@ -1,7 +1,7 @@
 import type { ConferenceLogoData } from '@/lib/conference/logo'
 import { REFUSAL_MESSAGES } from '@/lib/photo-wall/post'
 import { WallChrome } from '../WallPage'
-import { SECONDARY_BUTTON } from './ComposerLanding'
+import { SECONDARY_BUTTON } from './buttons'
 
 /** What the composer says once the retention cron closed the wall (§11.1). */
 export const WALL_CLOSED_MESSAGE = 'This wall has closed.'
