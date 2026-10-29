@@ -7,8 +7,6 @@ import {
   PhotoIcon,
   ClockIcon,
   ChatBubbleLeftRightIcon,
-  EnvelopeIcon,
-  TicketIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
@@ -25,11 +23,6 @@ interface ManageCard {
   dot: DotTone
   /** Pulse the dot when the card is calling for action (e.g. ready to send). */
   pulse?: boolean
-  /**
-   * What the card does. MOST cards navigate to a focused sub-view; "Email" is
-   * an ACTION — it opens the existing composed-email modal over this one rather
-   * than swapping the modal body.
-   */
   onSelect: () => void
 }
 
@@ -72,36 +65,25 @@ interface ManageCardsProps {
   sponsor: SponsorForConferenceExpanded
   hasLogo: boolean
   onOpen: (view: SponsorSubView) => void
-  /**
-   * Send an email to a chosen contact of this sponsor — the SAME
-   * `SponsorSendModal` the board card's "Send Email" overflow item opens,
-   * surfaced here so the detail modal isn't a dead end for the action.
-   * Omitted ⇒ no Email card (e.g. a host that can't supply the conference
-   * sender identity the modal needs).
-   */
-  onEmail?: () => void
-  /** Send → Discount codes (#1262). Omitted when ticketing is off. */
-  onSendDiscountCodes?: () => void
+  /** Which cards to show, in this order. */
+  views: SponsorSubView[]
 }
 
 /**
- * Entry points to the focused sub-views (contract workflow, contacts/billing,
- * logo, history, messages) plus the one-off Email action. Each is a labeled
- * card with a plain-language status line and an optional coloured dot as a
- * secondary signal — replacing the row of caption-less icon buttons whose only
- * state was a cryptic corner dot.
+ * Entry points to the focused sub-views (contract, contacts, logo, history,
+ * messages, communications). Each is a labeled card with a plain-language
+ * status line and an optional coloured dot.
  */
 export function ManageCards({
   sponsor,
   hasLogo,
   onOpen,
-  onEmail,
-  onSendDiscountCodes,
+  views,
 }: ManageCardsProps) {
   const contactCount = sponsor.contactPersons?.length ?? 0
   const activityCount = sponsor.activityCount ?? 0
 
-  const cards: ManageCard[] = [
+  const allCards: ManageCard[] = [
     contractCard(sponsor, onOpen),
     {
       key: 'contacts',
@@ -146,66 +128,45 @@ export function ManageCards({
       dot: null,
       onSelect: () => onOpen('communications'),
     },
-    // Send email. Kept LAST, and always offered when the host wires it: the
-    // modal itself explains a missing recipient, which is more useful than a
-    // card that silently vanishes.
-    ...(onEmail
-      ? [
-          {
-            key: 'email',
-            label: 'Send email',
-            icon: EnvelopeIcon,
-            status:
-              contactCount > 0 ? 'To a chosen contact' : 'Add a contact first',
-            dot: contactCount > 0 ? null : ('amber' as const),
-            onSelect: onEmail,
-          } satisfies ManageCard,
-        ]
-      : []),
-    ...(onSendDiscountCodes
-      ? [
-          {
-            key: 'discount-codes',
-            label: 'Send codes',
-            icon: TicketIcon,
-            status:
-              contactCount > 0
-                ? 'Ticket discount codes'
-                : 'Add a contact first',
-            dot: contactCount > 0 ? null : ('amber' as const),
-            onSelect: onSendDiscountCodes,
-          } satisfies ManageCard,
-        ]
-      : []),
   ]
+  const cards = allCards.filter((card) =>
+    views.includes(card.key as SponsorSubView),
+  )
+  cards.sort(
+    (a, b) =>
+      views.indexOf(a.key as SponsorSubView) -
+      views.indexOf(b.key as SponsorSubView),
+  )
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {cards.map((card) => (
-        <button
-          key={card.key}
-          type="button"
-          onClick={card.onSelect}
-          className="group relative flex flex-col gap-1 rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2.5 text-left transition-colors hover:border-indigo-300 hover:bg-white dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-indigo-500/50 dark:hover:bg-gray-800"
-        >
-          {card.dot && (
-            <span
-              className={clsx(
-                'absolute top-2.5 right-2.5 h-2 w-2 rounded-full ring-2 ring-gray-50 dark:ring-gray-800',
-                DOT_CLASSES[card.dot],
-                card.pulse && 'animate-pulse',
-              )}
-            />
-          )}
-          <card.icon className="h-5 w-5 text-gray-400 group-hover:text-indigo-500 dark:text-gray-500" />
-          <span className="text-sm font-semibold text-gray-900 dark:text-white">
-            {card.label}
-          </span>
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            {card.status}
-          </span>
-        </button>
-      ))}
+    <div className="@container">
+      <div className="grid grid-cols-1 gap-2 @xl:grid-cols-3">
+        {cards.map((card) => (
+          <button
+            key={card.key}
+            type="button"
+            onClick={card.onSelect}
+            className="group relative flex flex-col gap-1 rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2.5 text-left transition-colors hover:border-indigo-300 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-indigo-500/50 dark:hover:bg-gray-700/60 dark:focus-visible:outline-indigo-400"
+          >
+            {card.dot && (
+              <span
+                className={clsx(
+                  'absolute top-2.5 right-2.5 h-2 w-2 rounded-full ring-2 ring-white dark:ring-gray-900',
+                  DOT_CLASSES[card.dot],
+                  card.pulse && 'animate-pulse',
+                )}
+              />
+            )}
+            <card.icon className="h-5 w-5 text-gray-400 group-hover:text-indigo-500 dark:text-gray-500 dark:group-hover:text-indigo-400" />
+            <span className="text-sm font-semibold text-gray-900 dark:text-white">
+              {card.label}
+            </span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {card.status}
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

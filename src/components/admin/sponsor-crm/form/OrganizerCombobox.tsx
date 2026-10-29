@@ -118,13 +118,13 @@ export function OrganizerCombobox({
                         {org.name}
                       </span>
                       {org.email && (
-                        <span className="block truncate text-xs text-gray-500 group-data-focus:text-indigo-200">
+                        <span className="block truncate text-xs text-gray-500 group-data-focus:text-indigo-200 dark:text-gray-400 dark:group-data-focus:text-indigo-200">
                           {org.email}
                         </span>
                       )}
                     </div>
                   </div>
-                  <span className="absolute inset-y-0 right-0 hidden items-center pr-4 text-indigo-600 group-data-focus:text-white group-data-selected:flex">
+                  <span className="absolute inset-y-0 right-0 hidden items-center pr-4 text-indigo-600 group-data-focus:text-white group-data-selected:flex dark:text-indigo-400 dark:group-data-focus:text-white">
                     <CheckIcon className="h-5 w-5" aria-hidden="true" />
                   </span>
                 </ComboboxOption>

@@ -23,6 +23,8 @@ import { ManageCards } from './ManageCards'
 import type { SponsorSubView } from './form/deal-status'
 import { hasPositiveContractValue } from '@/lib/sponsor-crm/contract-readiness'
 import clsx from 'clsx'
+import Link from 'next/link'
+import { EnvelopeIcon, TicketIcon } from '@heroicons/react/24/outline'
 
 export interface SponsorPipelineFormData {
   sponsorId: string
@@ -89,27 +91,38 @@ export interface SponsorPipelineViewProps {
 /** A titled block with an uppercase eyebrow, separated by hairline dividers. */
 function Section({
   title,
+  action,
   children,
 }: {
   title: string
+  /** A link or button beside the heading. */
+  action?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
-    <section className="py-5 first:pt-0 last:pb-0">
-      <h3 className="mb-3 text-xs font-semibold tracking-wide text-gray-400 uppercase dark:text-gray-500">
-        {title}
-      </h3>
+    <section aria-label={title} className="py-5 first:pt-0 last:pb-0">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold tracking-wide text-gray-400 uppercase dark:text-gray-500">
+          {title}
+        </h3>
+        {action}
+      </div>
       {children}
     </section>
   )
 }
 
+const SEND_BUTTON =
+  'inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/10 dark:text-white dark:ring-white/10 dark:hover:bg-white/20 dark:focus-visible:outline-indigo-400'
+
+const LINK =
+  'rounded text-xs font-medium text-indigo-600 hover:text-indigo-500 focus-visible:outline-2 focus-visible:outline-indigo-600 dark:text-indigo-400 dark:hover:text-indigo-300'
+
 /**
- * The sponsor detail form as a single scrollable column of labeled sections:
- * Identity → Deal status → Commercial terms → Ownership & tags → Manage →
- * Recent activity. Replaces the former 3/2 split that mixed unlike things
- * (identity + tier on the left; value + tags + activity on the right) and hid
- * the status controls in the modal header.
+ * The sponsor detail form as one scrollable column of sections: Company →
+ * Deal (stage, tier, add-ons, value) → Owner & tags → Sponsor details
+ * (contract, contacts, logo) → Talk to the sponsor (sends, messages,
+ * communications) → Activity (recent list, composer, history).
  */
 export function SponsorPipelineView({
   formData,
@@ -177,29 +190,25 @@ export function SponsorPipelineView({
           )}
         </Section>
 
-        {/* Deal status — the three coordinated tracks, labeled + gated */}
-        <Section title="Deal status">
-          <DealStatusSection
-            formData={formData}
-            sponsor={sponsor}
-            onStatusChange={(status) =>
-              onFormDataChange((prev) => ({ ...prev, status }))
-            }
-            onContractStatusChange={(contractStatus) =>
-              onFormDataChange((prev) => ({ ...prev, contractStatus }))
-            }
-            onInvoiceStatusChange={(invoiceStatus) =>
-              onFormDataChange((prev) => ({ ...prev, invoiceStatus }))
-            }
-            onInvoiceDueAtChange={(invoiceDueAt) =>
-              onFormDataChange((prev) => ({ ...prev, invoiceDueAt }))
-            }
-          />
-        </Section>
-
-        {/* Commercial terms — tier & add-ons drive the value that sits with them */}
-        <Section title="Commercial terms">
+        {/* Deal — the three coordinated tracks, then the commercial terms */}
+        <Section title="Deal">
           <div className="space-y-4">
+            <DealStatusSection
+              formData={formData}
+              sponsor={sponsor}
+              onStatusChange={(status) =>
+                onFormDataChange((prev) => ({ ...prev, status }))
+              }
+              onContractStatusChange={(contractStatus) =>
+                onFormDataChange((prev) => ({ ...prev, contractStatus }))
+              }
+              onInvoiceStatusChange={(invoiceStatus) =>
+                onFormDataChange((prev) => ({ ...prev, invoiceStatus }))
+              }
+              onInvoiceDueAtChange={(invoiceDueAt) =>
+                onFormDataChange((prev) => ({ ...prev, invoiceDueAt }))
+              }
+            />
             <TierRadioGroup
               tiers={regularTiers}
               value={formData.tierId}
@@ -237,41 +246,99 @@ export function SponsorPipelineView({
           </div>
         </Section>
 
-        {/* Ownership & tags */}
-        <Section title="Ownership & tags">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <OrganizerCombobox
-              value={formData.assignedTo}
-              onChange={(value) =>
-                onFormDataChange((prev) => ({ ...prev, assignedTo: value }))
-              }
-              organizers={organizers}
-            />
-            <TagCombobox
-              value={formData.tags}
-              onChange={(tags) =>
-                onFormDataChange((prev) => ({ ...prev, tags }))
-              }
-            />
+        {/* Owner & tags */}
+        <Section title="Owner & tags">
+          <div className="@container">
+            <div className="grid grid-cols-1 gap-4 @xl:grid-cols-2">
+              <OrganizerCombobox
+                value={formData.assignedTo}
+                onChange={(value) =>
+                  onFormDataChange((prev) => ({ ...prev, assignedTo: value }))
+                }
+                organizers={organizers}
+              />
+              <TagCombobox
+                value={formData.tags}
+                onChange={(tags) =>
+                  onFormDataChange((prev) => ({ ...prev, tags }))
+                }
+              />
+            </div>
           </div>
         </Section>
 
-        {/* Manage — entry points to the focused sub-views */}
         {sponsor && (
-          <Section title="Manage">
+          <Section title="Sponsor details">
             <ManageCards
               sponsor={sponsor}
               hasLogo={Boolean(formData.logo)}
               onOpen={onOpenView}
-              onEmail={onSendEmail}
-              onSendDiscountCodes={onSendDiscountCodes}
+              views={['contract', 'contacts', 'logo']}
             />
           </Section>
         )}
 
-        {/* Recent activity */}
         {sponsor && (
-          <Section title="Recent activity">
+          <Section title="Talk to the sponsor">
+            {(onSendEmail || onSendDiscountCodes) && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {onSendEmail && (
+                  <button
+                    type="button"
+                    onClick={onSendEmail}
+                    className={SEND_BUTTON}
+                  >
+                    <EnvelopeIcon aria-hidden className="size-4" />
+                    Send email
+                  </button>
+                )}
+                {onSendDiscountCodes && (
+                  <button
+                    type="button"
+                    onClick={onSendDiscountCodes}
+                    className={SEND_BUTTON}
+                  >
+                    <TicketIcon aria-hidden className="size-4" />
+                    Send codes
+                  </button>
+                )}
+                {!sponsor.contactPersons?.length && (
+                  <p className="self-center text-xs text-amber-700 dark:text-amber-400">
+                    Add a contact first
+                  </p>
+                )}
+              </div>
+            )}
+            <ManageCards
+              sponsor={sponsor}
+              hasLogo={Boolean(formData.logo)}
+              onOpen={onOpenView}
+              views={['messages', 'communications']}
+            />
+          </Section>
+        )}
+
+        {sponsor && (
+          <Section
+            title="Activity"
+            action={
+              <span className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => onOpenView('history')}
+                  className={LINK}
+                >
+                  History
+                </button>
+                <Link
+                  href={`/admin/sponsors/activity?sponsor=${encodeURIComponent(sponsor._id)}`}
+                  className={LINK}
+                >
+                  See all
+                </Link>
+              </span>
+            }
+          >
             <SponsorActivityTimeline
               sponsorForConferenceId={sponsor._id}
               limit={2}

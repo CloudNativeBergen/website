@@ -10,6 +10,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
+import {
+  SponsorRecordPanel,
+  useRefreshSponsor,
+  useSponsorRecordPanel,
+} from '@/components/admin/sponsor-crm/SponsorRecordPanel'
 import type { ContractSendOptions } from '@/components/admin/sponsor-crm/SponsorContractView'
 import { SponsorSendModal } from '@/components/admin'
 import {
@@ -68,19 +73,6 @@ interface SponsorCRMPipelineProps {
 
 import { useDebounce } from '@/hooks/useDebounce'
 
-type RecordView = NonNullable<
-  React.ComponentProps<typeof SponsorCRMForm>['initialView']
->
-const RECORD_VIEWS: RecordView[] = [
-  'pipeline',
-  'contacts',
-  'logo',
-  'history',
-  'contract',
-  'communications',
-  'messages',
-]
-
 export function SponsorCRMPipeline({
   conferenceId,
   conference,
@@ -121,19 +113,10 @@ export function SponsorCRMPipeline({
 
   // The side panel lives in the URL (`?sponsor=<id>&view=<tab>`), so it is
   // linkable and the back button closes it. Old modal links land here too.
-  const panelId = searchParams.get('sponsor')
-  const panelView = RECORD_VIEWS.includes(
-    searchParams.get('view') as RecordView,
-  )
-    ? (searchParams.get('view') as RecordView)
-    : 'pipeline'
-  // Whether this visit pushed the panel's history entry: closing then goes
-  // back, so Back afterwards does not reopen it.
-  const pushedPanelRef = useRef(false)
-  const { data: panelSponsor } = api.sponsor.crm.getById.useQuery(
-    { id: panelId ?? '' },
-    { enabled: !!panelId },
-  )
+  const panel = useSponsorRecordPanel({ idParam: 'sponsor', viewParam: 'view' })
+  const panelId = panel.id
+  const openPanel = panel.open
+  const refreshSponsor = useRefreshSponsor()
 
   const {
     activeItem,
@@ -254,43 +237,6 @@ export function SponsorCRMPipeline({
     },
     [router, searchParams],
   )
-
-  const openPanel = useCallback(
-    (id: string, view: RecordView = 'pipeline') => {
-      const params = new URLSearchParams(searchParams.toString())
-      params.set('sponsor', id)
-      params.set('view', view)
-      pushedPanelRef.current = true
-      router.push(`?${params.toString()}`, { scroll: false })
-    },
-    [router, searchParams],
-  )
-
-  // The same invalidations as the sponsor page's refresh().
-  const refreshSponsor = useCallback(
-    (id: string) => {
-      utils.sponsor.crm.getById.invalidate({ id })
-      utils.sponsor.crm.getOverview.invalidate({ id })
-      utils.sponsor.crm.getContacts.invalidate({ id })
-      utils.sponsor.crm.getContractDetails.invalidate({ id })
-      utils.sponsor.crm.activities.list.invalidate({
-        sponsorForConferenceId: id,
-      })
-      utils.sponsor.crm.list.invalidate()
-      utils.sponsor.crm.healthViolations.invalidate()
-    },
-    [utils],
-  )
-
-  const closePanel = useCallback(() => {
-    if (panelId) refreshSponsor(panelId)
-    if (pushedPanelRef.current) {
-      pushedPanelRef.current = false
-      router.back()
-    } else {
-      updateUrlParams({ sponsor: null, view: null })
-    }
-  }, [panelId, refreshSponsor, router, updateUrlParams])
 
   // Handlers
   const handleOpenForm = useCallback(
@@ -617,32 +563,17 @@ export function SponsorCRMPipeline({
           existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
         />
       )}
-      {panelId && panelSponsor && (
-        <SponsorCRMForm
-          key={panelId}
-          presentation="panel"
-          conferenceId={conferenceId}
+      {panelId && (
+        <SponsorRecordPanel
+          sponsorId={panelId}
+          view={panel.view}
+          onViewChange={panel.setView}
+          onClose={panel.close}
+          onChanged={() => refreshSponsor(panelId)}
+          conference={conference}
+          domain={domain}
+          canSendDiscountCodes={canSendDiscountCodes}
           workshopsEnabled={workshopsEnabled}
-          sponsorStartSet={!!conference.workshopRegistrationSponsorStart}
-          sponsor={panelSponsor}
-          isOpen
-          initialView={panelView}
-          onViewChange={(view) => updateUrlParams({ view })}
-          onClose={closePanel}
-          onSuccess={() => refreshSponsor(panelId)}
-          onSendEmail={() => openSend(panelSponsor, 'information')}
-          onSendDiscountCodes={
-            canSendDiscountCodes
-              ? () => openSend(panelSponsor, 'discount')
-              : undefined
-          }
-          onSendRegistration={() => openSend(panelSponsor, 'registration')}
-          onSendContract={(options) =>
-            openSend(panelSponsor, 'contract', options)
-          }
-          onSendEarlyAccess={() =>
-            openSend(panelSponsor, 'workshop-early-access')
-          }
           headerActions={
             <Link
               href={`/admin/sponsors/${encodeURIComponent(panelId)}${currentView === 'pipeline' ? '' : `?board=${currentView}`}`}

@@ -165,12 +165,10 @@ export const AddNew: Story = {
 }
 
 /**
- * The Manage grid with the "Send email" action card (last cell): emailing a
- * sponsor contact is reachable from the DETAIL modal, not just the board card's
- * overflow menu. Selecting it raises `onSendEmail` so the host opens the shared
- * `SponsorSendModal` over this one — there is no second email path. The
- * "Communications" card beside it opens the send audit (#1261).
- * Inspect at 393px: seven cards wrap 2-up without clipping.
+ * "Talk to the sponsor": Send email and Send codes are buttons that raise the
+ * intent, so the host opens the shared `SponsorSendModal` over this one.
+ * Messages and Communications sit beside them as cards. Inspect at 393px:
+ * the cards stack in one column.
  */
 export const ManageGridWithEmail: Story = {
   args: {
@@ -187,21 +185,21 @@ export const ManageGridWithEmail: Story = {
     organizers: mockOrganizers,
     isPending: false,
     onSendEmail: fn(),
+    onSendDiscountCodes: fn(),
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
-    const emailCard = canvas.getByRole('button', { name: /Send email/ })
-    expect(emailCard).toHaveTextContent('To a chosen contact')
-    await userEvent.click(emailCard)
-    // The card RAISES the intent; it never swaps the modal body to a sub-view.
+    const emailButton = canvas.getByRole('button', { name: 'Send email' })
+    expect(canvas.queryByText('Add a contact first')).toBeNull()
+    await userEvent.click(emailButton)
+    // The button RAISES the intent; it never swaps the body to a sub-view.
     expect(args.onSendEmail).toHaveBeenCalledTimes(1)
     expect(args.onOpenView).not.toHaveBeenCalled()
   },
 }
 
-/** No contacts on record yet — the Email card stays offered (the compose modal
- *  explains the missing recipient) but carries the amber "needs attention" dot,
- *  matching the Contacts card. */
+/** No contacts yet: Send email stays offered (the compose modal explains the
+ *  missing recipient), with a hint beside it. */
 export const ManageGridEmailWithoutContacts: Story = {
   args: {
     formData: defaultFormData,
@@ -215,9 +213,8 @@ export const ManageGridEmailWithoutContacts: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    expect(
-      canvas.getByRole('button', { name: /Send email/ }),
-    ).toHaveTextContent('Add a contact first')
+    expect(canvas.getByRole('button', { name: 'Send email' })).toBeVisible()
+    expect(canvas.getByText('Add a contact first')).toBeVisible()
   },
 }
 
@@ -309,4 +306,15 @@ export const InvoiceGuardsValidation: Story = {
       expect(title).toContain('Set a contract value before')
     }
   },
+}
+
+export const EditExistingDark: Story = {
+  ...EditExisting,
+  globals: { theme: 'dark' },
+}
+
+/** The contract card in dark mode keeps its title readable on hover. */
+export const ManageGridWithEmailDark: Story = {
+  ...ManageGridWithEmail,
+  globals: { theme: 'dark' },
 }
