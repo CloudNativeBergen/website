@@ -674,31 +674,6 @@
   font-family: var(--font-family-caveat);
 }
 
-/* Hover Utilities */
-.hover\:bg-brand-cloud-blue:hover {
-  background-color: var(--color-brand-cloud-blue);
-}
-
-.hover\:bg-brand-sky-mist:hover {
-  background-color: var(--color-brand-sky-mist);
-}
-
-.hover\:bg-blue-700:hover {
-  background-color: var(--color-blue-700);
-}
-
-.hover\:bg-white:hover {
-  background-color: var(--color-white);
-}
-
-.hover\:text-brand-cloud-blue:hover {
-  color: var(--color-brand-cloud-blue);
-}
-
-.hover\:text-white:hover {
-  color: var(--color-white);
-}
-
 .tooltip {
   visibility: hidden;
   position: absolute;
