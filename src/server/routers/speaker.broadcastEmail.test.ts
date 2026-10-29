@@ -180,6 +180,7 @@ describe('speaker.admin.broadcastEmail', () => {
     expect(h.syncConferenceAudience).toHaveBeenCalledWith(
       expect.objectContaining({ _id: 'conf-A' }),
       [confirmedSpeaker],
+      { keepUnsubscribedIn: new Set(['ada@example.test']) },
     )
     expect(h.sendBroadcastEmail).toHaveBeenCalledTimes(1)
     expect(result).toEqual({ success: true, broadcastId: 'bc-1' })

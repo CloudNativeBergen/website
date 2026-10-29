@@ -64,6 +64,7 @@ import type { ProposalExisting } from '@/lib/proposal/types'
 import { sendMultiSpeakerEmail } from '@/lib/email/speaker'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
 import { syncConferenceAudience } from '@/lib/email/audience'
+import { removeFromSpeakerAudiences } from '@/lib/speaker/audience-erasure'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import {
@@ -167,9 +168,31 @@ async function syncConfirmedSpeakerAudience(
     })
   }
 
+  // Every speaker who still exists for the conference, in any status: their
+  // opt-out stays in the audience so a later re-add cannot resurrect it (#1715).
+  const { speakers: existingSpeakers, err: existingErr } =
+    await getSpeakersUncached(
+      conferenceId,
+      Object.values(Status),
+      false,
+      conference.organization?._ref ?? null,
+    )
+  if (existingErr) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to fetch speakers',
+    })
+  }
+  const keepUnsubscribedIn = new Set(
+    existingSpeakers
+      .map((s) => s.email?.trim().toLowerCase())
+      .filter((email): email is string => Boolean(email)),
+  )
+
   const { audienceId, syncedCount, error } = await syncConferenceAudience(
     conference,
     eligibleSpeakers,
+    { keepUnsubscribedIn },
   )
 
   if (error) {
@@ -1013,8 +1036,26 @@ export const speakerRouter = router({
         // refuses a speaker who belongs to another tenant too — this org has
         // standing to manage them, but not to delete the person out from under
         // the other one.
-        await requireSpeakerInCurrentOrg(input.id, { requireExclusive: true })
+        const orgId = await requireSpeakerInCurrentOrg(input.id, {
+          requireExclusive: true,
+        })
+        const email = await clientWrite.fetch<string | null>(
+          // groq-global-scoped: ownership checked by requireSpeakerInCurrentOrg above.
+          `*[_type == "speaker" && _id == $id][0].email`,
+          { id: input.id },
+        )
         await clientWrite.delete(input.id)
+        // Best effort, after the delete: the sync keeps opt-outs of existing
+        // speakers, so a deleted one is taken out here (#1715).
+        if (email?.trim()) {
+          const failures = await removeFromSpeakerAudiences(email, orgId)
+          if (failures.length > 0) {
+            console.warn('[speaker.delete] audience removal incomplete:', {
+              speakerId: input.id,
+              failures,
+            })
+          }
+        }
         return { success: true }
       } catch (error) {
         // Preserve the fail-closed refusal instead of masking it as a 500.

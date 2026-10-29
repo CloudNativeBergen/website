@@ -919,6 +919,12 @@ export async function addContactToAudience(
   client: Resend,
   audienceId: string,
   contact: Contact,
+  /**
+   * Leave out `unsubscribed: false`, so a create that lands on an existing
+   * opted-out contact cannot flip it back to subscribed. New contacts are
+   * subscribed by default either way.
+   */
+  options: { preserveOptOut?: boolean } = {},
 ): Promise<{ success: boolean; error?: Error }> {
   const trimmedEmail = contact.email?.trim()
   try {
@@ -937,7 +943,7 @@ export async function addContactToAudience(
           email: trimmedEmail,
           firstName: contact.firstName,
           lastName: contact.lastName,
-          unsubscribed: false,
+          ...(options.preserveOptOut ? {} : { unsubscribed: false }),
         }),
     )
 
@@ -1101,7 +1107,10 @@ export async function addSpeakerToAudience(
     firstName: speaker.name.split(' ')[0] || '',
     lastName: speaker.name.split(' ').slice(1).join(' ') || '',
   }
-  return addContactToAudience(client, audienceId, contact)
+  // Speakers never re-subscribe on re-add (#1715).
+  return addContactToAudience(client, audienceId, contact, {
+    preserveOptOut: true,
+  })
 }
 
 export async function removeSpeakerFromAudience(
@@ -1225,6 +1234,7 @@ export async function syncAudienceWithContacts(
         client,
         audienceId,
         contact,
+        { preserveOptOut: audienceType === 'speakers' },
       )
       if (success) {
         addedCount++
@@ -1293,6 +1303,7 @@ export async function syncAudienceWithContacts(
 export async function syncConferenceAudience(
   conference: Conference,
   eligibleSpeakers: (Speaker & { proposals: ProposalExisting[] })[],
+  options: SyncAudienceOptions = {},
 ): Promise<{
   success: boolean
   audienceId: string
@@ -1311,6 +1322,7 @@ export async function syncConferenceAudience(
     conference,
     'speakers',
     contacts,
+    options,
   )
 
   return {
