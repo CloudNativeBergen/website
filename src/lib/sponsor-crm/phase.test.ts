@@ -24,7 +24,7 @@ describe('sponsorPhase', () => {
         contractStatus: 'registration-sent',
         registrationComplete: true,
       },
-      'Won – contract',
+      'Won – registration',
     ],
     [
       { status: 'closed-won', contractStatus: 'contract-sent' },

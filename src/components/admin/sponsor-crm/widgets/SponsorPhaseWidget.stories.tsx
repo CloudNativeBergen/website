@@ -64,6 +64,22 @@ export const Negotiating: Story = {
   },
 }
 
+/** Registration done, contract not sent yet: still "Won – registration". */
+export const WonRegistrationComplete: Story = {
+  args: {
+    sponsor: {
+      ...base,
+      status: 'closed-won',
+      contractStatus: 'registration-sent',
+      assignedTo: owner,
+      contactInitiatedAt: '2026-09-01T10:00:00Z',
+      registrationComplete: true,
+      registrationCompletedAt: '2026-09-20T10:00:00Z',
+    } as SponsorForConferenceExpanded,
+    activities: [stage('closed-won', '2026-09-15T10:00:00Z')],
+  },
+}
+
 export const WonAwaitingSignature: Story = {
   args: {
     sponsor: {

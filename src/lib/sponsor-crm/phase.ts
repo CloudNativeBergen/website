@@ -46,11 +46,9 @@ export function sponsorPhase(sponsor: PhaseInput): SponsorPhase {
     sponsor.signatureStatus === 'signed'
   )
     return 'Won – invoice'
-  if (
-    sponsor.contractStatus === 'contract-sent' ||
-    sponsor.registrationComplete
-  )
-    return 'Won – contract'
+  // A finished registration alone stays "Won – registration": the contract
+  // phase starts when the contract is sent.
+  if (sponsor.contractStatus === 'contract-sent') return 'Won – contract'
   return 'Won – registration'
 }
 
