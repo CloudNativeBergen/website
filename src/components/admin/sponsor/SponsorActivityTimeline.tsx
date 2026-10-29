@@ -170,7 +170,7 @@ const EDITABLE_ACTIVITY_TYPES: ReadonlySet<ActivityType> = new Set([
   'email',
 ])
 
-function ActivityLine({
+export function ActivityLine({
   activity,
   compact,
   onSave,
