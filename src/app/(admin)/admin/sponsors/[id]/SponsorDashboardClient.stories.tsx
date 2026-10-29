@@ -4,6 +4,7 @@ import type { Conference } from '@/lib/conference/types'
 import { SponsorDashboardClient } from './SponsorDashboardClient'
 import { http, HttpResponse } from 'msw'
 import { mockSponsor } from '@/__mocks__/sponsor-data'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
 
 const meta: Meta<typeof SponsorDashboardClient> = {
   title: 'Admin/Sponsor CRM/SponsorDashboardClient',
@@ -11,6 +12,13 @@ const meta: Meta<typeof SponsorDashboardClient> = {
   parameters: {
     layout: 'fullscreen',
   },
+  decorators: [
+    (Story) => (
+      <NotificationProvider>
+        <Story />
+      </NotificationProvider>
+    ),
+  ],
 }
 
 export default meta
