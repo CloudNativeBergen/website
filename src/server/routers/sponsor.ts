@@ -10,6 +10,8 @@ import {
 } from './sponsorEarlyAccess'
 import { requireWorkshopsEnabled } from '../workshopAdmin'
 import { earlyAccessCopiesBehindNotice } from '@/lib/sponsor-crm/early-access-email'
+import { isFollowUpOverdue } from '@/lib/sponsor-crm/follow-up'
+import { sponsorValueNOK } from '@/lib/sponsor-crm/value'
 import { expireEarlyAccessLinks } from '@/lib/workshop/early-access'
 import {
   requireDocumentInCurrentConference,
@@ -1559,8 +1561,8 @@ export const sponsorRouter = router({
         // Filter: follow-up due (scheduled date has passed)
         if (input?.followUpDue) {
           const now = new Date()
-          filtered = filtered.filter(
-            (s) => s.nextFollowUpAt && new Date(s.nextFollowUpAt) <= now,
+          filtered = filtered.filter((s) =>
+            isFollowUpOverdue(s.nextFollowUpAt, now),
           )
         }
 
@@ -1585,7 +1587,7 @@ export const sponsorRouter = router({
                 break
               }
               case 'value':
-                cmp = (a.contractValue || 0) - (b.contractValue || 0)
+                cmp = sponsorValueNOK(a) - sponsorValueNOK(b)
                 break
               case 'stale': {
                 const aStale = a.lastActivity?.createdAt || a._updatedAt

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { unstable_noStore as noStore } from 'next/cache'
 import { clientWrite } from '@/lib/sanity/client'
 import { alertSponsorOwner } from '@/lib/sponsor-crm/slack-alerts'
+import { osloTodayDateString } from '@/lib/time'
 
 /**
  * Daily Slack alert for sponsors whose follow-up date has passed (#1687 N1).
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
       const ok = await alertSponsorOwner(
         sfc._id,
         '📅 Follow-up date passed',
-        `The follow-up planned for ${sfc.nextFollowUpAt.slice(0, 10)} is due.`,
+        `The follow-up planned for ${osloTodayDateString(new Date(sfc.nextFollowUpAt))} is due.`,
       )
       if (ok) {
         alerted++

@@ -120,12 +120,12 @@ describe('api/cron/weekly-update', () => {
       expect(result.totalSponsors).toBe(7)
     })
 
-    it('should derive currency from first sponsor', () => {
+    it('reports the total in NOK whatever the deal currency', () => {
       const sponsors = [createSponsor({ contractCurrency: 'EUR' })]
 
       const result = aggregateSponsorPipeline(sponsors)
 
-      expect(result.contractCurrency).toBe('EUR')
+      expect(result.contractCurrency).toBe('NOK')
     })
   })
 })

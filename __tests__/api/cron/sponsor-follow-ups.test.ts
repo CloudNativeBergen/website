@@ -91,6 +91,15 @@ describe('api/cron/sponsor-follow-ups', () => {
     expect(h.alert).toHaveBeenCalledTimes(2)
   })
 
+  it('names the follow-up by its Oslo date', async () => {
+    // 23:30Z on 31 Dec is already 1 Jan in Oslo.
+    h.docs = [
+      { _id: 'late', _rev: 'r', nextFollowUpAt: '2020-12-31T23:30:00Z' },
+    ]
+    await run()
+    expect(h.alert.mock.calls[0][2]).toContain('2021-01-01')
+  })
+
   it('skips closed-lost sponsors but keeps closed-won ones', async () => {
     await run()
     expect(h.query).toContain('status != "closed-lost"')

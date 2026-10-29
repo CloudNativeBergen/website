@@ -65,6 +65,7 @@ import {
   formatLabel,
   formatConferenceDateShort,
 } from '@/lib/time'
+import { sponsorValueNOK } from '@/lib/sponsor-crm/value'
 import type {
   MarketingDueData,
   SponsorsWaitingData,
@@ -466,11 +467,12 @@ export function shapeSponsorPipeline(
 
   for (const s of sponsors) {
     byStatus[s.status] = (byStatus[s.status] || 0) + 1
-    byStatusValue[s.status] =
-      (byStatusValue[s.status] || 0) + (s.contractValue || 0)
+    // NOK, like the weekly update's pipeline: currencies can't be summed raw.
+    const valueNOK = sponsorValueNOK(s)
+    byStatusValue[s.status] = (byStatusValue[s.status] || 0) + valueNOK
     if (s.status === 'closed-won') {
       closedWonCount++
-      if (s.contractValue) totalContractValue += s.contractValue
+      totalContractValue += valueNOK
     } else if (s.status === 'closed-lost') {
       closedLostCount++
     }
