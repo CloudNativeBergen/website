@@ -2508,7 +2508,7 @@ export const sponsorRouter = router({
                 ],
               )
               .optional(),
-            cursor: z.number().int().min(0).nullish(),
+            cursor: z.number().int().min(0).max(100000).nullish(),
           }),
         )
         .query(async ({ input }) => {

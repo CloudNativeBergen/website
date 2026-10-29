@@ -164,7 +164,16 @@ export interface ActivityLogFilters {
  * their own, so the scope goes through the parent sponsorForConference. One
  * row past the page is read to tell whether another page exists.
  */
-export function buildActivityLogQuery(filters: ActivityLogFilters): string {
+export function buildActivityLogQuery(
+  filters: ActivityLogFilters,
+  offset: number,
+): string {
+  // Sanity's API rejects params as slice bounds, so the bounds are inlined.
+  // They are server-computed integers (the router caps the cursor), never text.
+  if (!Number.isSafeInteger(offset) || offset < 0) {
+    throw new Error('Invalid activity log offset')
+  }
+  const end = offset + ACTIVITY_LOG_PAGE_SIZE + 1
   // Only fixed, param-bound clauses are appended; never user text.
   const extra = [
     filters.sponsor && ' && sponsorForConference._ref == $sponsor',
@@ -174,21 +183,18 @@ export function buildActivityLogQuery(filters: ActivityLogFilters): string {
     .filter(Boolean)
     .join('')
   // groq-global-scoped: the literal conference predicate leads the filter; `extra` only narrows it with fixed param-bound clauses.
-  return `*[_type == "sponsorActivity" && sponsorForConference->conference._ref == $conferenceId${extra}] | order(createdAt desc, _id desc) [$offset...$end]{${SPONSOR_ACTIVITY_FIELDS}}`
+  return `*[_type == "sponsorActivity" && sponsorForConference->conference._ref == $conferenceId${extra}] | order(createdAt desc, _id desc) [${offset}...${end}]{${SPONSOR_ACTIVITY_FIELDS}}`
 }
 
 export function activityLogParams(
   conferenceId: string,
   filters: ActivityLogFilters,
-  offset: number,
 ) {
   return {
     conferenceId,
     ...(filters.sponsor && { sponsor: filters.sponsor }),
     ...(filters.owner && { owner: filters.owner }),
     ...(filters.type && { type: filters.type }),
-    offset,
-    end: offset + ACTIVITY_LOG_PAGE_SIZE + 1,
   }
 }
 
@@ -211,8 +217,8 @@ export async function listActivityLog(
   offset = 0,
 ) {
   const rows = await clientRead.fetch<SponsorActivityExpanded[]>(
-    buildActivityLogQuery(filters),
-    activityLogParams(conferenceId, filters, offset),
+    buildActivityLogQuery(filters, offset),
+    activityLogParams(conferenceId, filters),
   )
   return toActivityLogPage(rows, offset)
 }

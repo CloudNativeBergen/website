@@ -50,9 +50,8 @@ async function run(
   offset = 0,
   data: unknown[] = dataset,
 ) {
-  // Slice bounds are params, so groq-js needs them at parse time too.
-  const params = activityLogParams('conf-a', filters, offset)
-  const tree = parse(buildActivityLogQuery(filters), { params })
+  const params = activityLogParams('conf-a', filters)
+  const tree = parse(buildActivityLogQuery(filters, offset))
   const rows = (await (
     await evaluate(tree, { dataset: data, params })
   ).get()) as SponsorActivityExpanded[]
