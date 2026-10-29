@@ -113,4 +113,24 @@ describe('useAdminNavCounts', () => {
     await settle()
     expect(result.current.pendingWallPosts).toBe(4)
   })
+
+  it('polls the pending count every minute on any admin page, not while hidden', async () => {
+    h.pending.mockResolvedValue(1)
+    const { result } = mount()
+    await settle()
+    h.pending.mockResolvedValue(6)
+    await act(() => vi.advanceTimersByTimeAsync(60_000))
+    await act(() => vi.advanceTimersByTimeAsync(1_000))
+    expect(result.current.pendingWallPosts).toBe(6)
+    expect(h.pending).toHaveBeenCalledTimes(2)
+    expect(h.flagged).toHaveBeenCalledTimes(1)
+
+    const hidden = vi
+      .spyOn(document, 'visibilityState', 'get')
+      .mockReturnValue('hidden')
+    act(() => window.dispatchEvent(new Event('visibilitychange')))
+    await act(() => vi.advanceTimersByTimeAsync(180_000))
+    expect(h.pending).toHaveBeenCalledTimes(2)
+    hidden.mockRestore()
+  })
 })
