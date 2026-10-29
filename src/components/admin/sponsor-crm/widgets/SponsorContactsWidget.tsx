@@ -54,7 +54,7 @@ export function SponsorContactsWidget({
         </div>
         <button
           onClick={onEdit}
-          className="text-sm font-medium text-brand-cloud-blue hover:text-indigo-500 dark:text-indigo-400"
+          className="inline-flex min-h-10 items-center px-2 text-sm font-medium text-brand-cloud-blue hover:text-indigo-500 sm:min-h-0 sm:px-0 dark:text-indigo-400"
         >
           Manage
         </button>

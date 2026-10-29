@@ -201,7 +201,7 @@ export function SponsorTierManagement({
                         key={`${sponsor.name}-${index}`}
                         className="group relative rounded-lg border border-gray-300 bg-white p-4 shadow-sm hover:border-gray-400 sm:p-6 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-gray-500"
                       >
-                        <div className="absolute top-2 right-2 flex space-x-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <div className="absolute top-2 right-2 flex space-x-1 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 sm:opacity-0">
                           {sponsor.logo && (
                             <button
                               onClick={() =>

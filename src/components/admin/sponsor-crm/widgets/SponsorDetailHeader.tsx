@@ -44,32 +44,34 @@ export function SponsorDetailHeader({
   if (!data) return null
 
   return (
-    <div className="flex flex-col border-b border-gray-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8 dark:border-gray-800 dark:bg-gray-900">
-      <div className="flex items-center gap-4">
+    <div className="flex flex-col border-b border-gray-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 lg:px-8 dark:border-gray-800 dark:bg-gray-900">
+      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
         <Link
           href={backHref}
           aria-label="Back to the sponsor pipeline"
-          className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+          className="shrink-0 rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
         >
           <ArrowLeftIcon className="h-5 w-5" />
         </Link>
         {data.sponsor?.logo ? (
-          <SponsorLogo
-            logo={data.sponsor.logo}
-            logoBright={data.sponsor.logoBright}
-            name={data.sponsor.name}
-            className="h-12 w-12 rounded-lg border border-gray-200 bg-white object-contain p-1"
-          />
+          <div className="h-12 w-12 shrink-0 overflow-hidden">
+            <SponsorLogo
+              logo={data.sponsor.logo}
+              logoBright={data.sponsor.logoBright}
+              name={data.sponsor.name}
+              className="h-12 w-12 rounded-lg border border-gray-200 bg-white object-contain p-1"
+            />
+          </div>
         ) : (
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-xl font-bold text-gray-400 dark:border-gray-700 dark:bg-gray-800">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-xl font-bold text-gray-400 dark:border-gray-700 dark:bg-gray-800">
             {data.sponsor?.name?.charAt(0) || '?'}
           </div>
         )}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-xl font-bold text-gray-900 sm:text-2xl dark:text-white">
             {data.sponsor?.name || 'Unknown Sponsor'}
           </h1>
-          <div className="mt-1 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
             {/* Read-only: stages change on the board, through the phase
                 card's next action, or in the record panel. */}
             <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-700/10 ring-inset dark:bg-blue-900/30 dark:text-blue-400 dark:ring-blue-400/20">
@@ -81,7 +83,7 @@ export function SponsorDetailHeader({
           </div>
         </div>
       </div>
-      <div className="mt-4 flex gap-3 sm:mt-0">
+      <div className="mt-4 flex shrink-0 flex-wrap gap-3 sm:mt-0">
         <button
           onClick={onOpenRecord}
           className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"

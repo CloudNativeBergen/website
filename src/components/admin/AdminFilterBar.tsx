@@ -249,7 +249,8 @@ export function AdminFilterBar({
         <div
           className={clsx(
             'flex w-full items-center gap-2 lg:w-auto lg:flex-none',
-            search && 'flex-1',
+            // Full row below lg so the search isn't squeezed by Filters.
+            search && 'basis-full lg:basis-auto',
           )}
         >
           {search && (

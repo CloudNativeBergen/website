@@ -109,7 +109,7 @@ export function SponsorPortalSection({
             <button
               type="button"
               onClick={handleCopy}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1.5 text-xs font-medium text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-white/10"
+              className="inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1.5 text-xs font-medium text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:min-h-0 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-white/10"
               title="Copy to clipboard"
             >
               {copied ? (
@@ -123,7 +123,7 @@ export function SponsorPortalSection({
               <button
                 type="button"
                 onClick={onSendInvite}
-                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                className="inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-md bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:min-h-0 dark:bg-indigo-500 dark:hover:bg-indigo-400"
                 title={
                   emailSent
                     ? 'Resend registration link via email'
@@ -139,7 +139,7 @@ export function SponsorPortalSection({
             <button
               type="button"
               onClick={onCheckStatus}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/5 dark:text-gray-400 dark:outline-white/10 dark:hover:bg-white/10"
+              className="inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:min-h-0 dark:bg-white/5 dark:text-gray-400 dark:outline-white/10 dark:hover:bg-white/10"
               title="Check if sponsor completed registration"
             >
               <ArrowPathIcon className="size-3.5" />
