@@ -163,7 +163,13 @@ export default async function AdminSettings() {
   // SAME resolver backs the /admin hero and the unlisted banner, so all three
   // surfaces agree on what is outstanding and on which rows are not this
   // tenant's to complete (#839).
-  const activation = await resolveActivationChecklist(conference, systemChecks)
+  const activation = await resolveActivationChecklist(
+    conference,
+    systemChecks,
+    {
+      eventFacts: true,
+    },
+  )
   const currentUserId = session?.speaker?._id ?? ''
   const organizerRows = (conference.organizers ?? []).map((org) => ({
     _id: org._id,
