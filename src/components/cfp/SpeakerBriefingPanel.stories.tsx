@@ -129,6 +129,17 @@ export const ConferenceDay: Story = {
   },
 }
 
+/** The day before: all the speaker's talks and the dinner are pinned. */
+export const DayBefore: Story = {
+  args: {
+    briefing: full,
+    dayBefore: true,
+    pinDinner: true,
+    ticketSentAt: '2026-10-01T09:00:00Z',
+    changesEmail: 'cfp@example.com',
+  },
+}
+
 export const Minimal: Story = { args: { briefing: { talks, todos } } }
 
 /** An organizer of the edition: the shared info and an edit button. */

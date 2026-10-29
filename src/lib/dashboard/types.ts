@@ -1,3 +1,4 @@
+import type { ThankYouTalk } from '@/lib/speaker/dashboardBriefing'
 import type { Conference } from '@/lib/conference/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
@@ -54,6 +55,12 @@ export interface ConferenceWithSpeakerData {
   dinnerChoice?: string | null
   /** The briefing is shown because the speaker organizes the edition. */
   asOrganizer?: boolean
+  /** Today is the day before the conference. */
+  dayBefore?: boolean
+  /** When the speaker ticket was emailed. */
+  ticketSentAt?: string
+  /** After the event, for a while: the confirmed talks to thank for. */
+  thankYou?: ThankYouTalk[]
 }
 
 export interface GridPosition {

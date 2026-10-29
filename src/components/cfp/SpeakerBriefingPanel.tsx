@@ -17,6 +17,7 @@ import {
   InformationCircleIcon,
   MapPinIcon,
   PhoneIcon,
+  TicketIcon,
 } from '@heroicons/react/24/outline'
 import {
   formatConferenceClock,
@@ -31,6 +32,10 @@ interface SpeakerBriefingPanelProps {
   briefing: SpeakerBriefing
   /** The Oslo date (YYYY-MM-DD) when today is a conference day. */
   conferenceDay?: string
+  /** Today is the day before the conference: pin all the speaker's talks. */
+  dayBefore?: boolean
+  /** When the speaker ticket was emailed; shown without the address. */
+  ticketSentAt?: string
   /** Pin the dinner: from the start of its day until it begins. */
   pinDinner?: boolean
   /** Where a speaker writes when their dinner plans change. */
@@ -146,6 +151,8 @@ function Rich({ value }: { value: TypedObject[] }) {
 export function SpeakerBriefingPanel({
   briefing: b,
   conferenceDay,
+  dayBefore,
+  ticketSentAt,
   pinDinner,
   changesEmail,
   dinnerChoice,
@@ -154,7 +161,19 @@ export function SpeakerBriefingPanel({
 }: SpeakerBriefingPanelProps) {
   const todayTalks = conferenceDay
     ? (b.talks ?? []).filter((t) => t.date === conferenceDay)
-    : []
+    : dayBefore
+      ? (b.talks ?? [])
+      : []
+
+  const ticket = validInstant(ticketSentAt) && (
+    <p className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+      <TicketIcon
+        aria-hidden="true"
+        className="h-4 w-4 shrink-0 text-gray-500"
+      />
+      Speaker ticket sent {formatConferenceDayDate(osloDay(ticketSentAt))}
+    </p>
+  )
 
   const todos = b.todos && (
     <Section title="Still to do">
@@ -499,11 +518,13 @@ export function SpeakerBriefingPanel({
       </div>
       {pinned ? (
         <>
-          {pinTalks && talkList(talksHeading(todayTalks, true), todayTalks)}
+          {pinTalks &&
+            talkList(talksHeading(todayTalks, !dayBefore), todayTalks)}
           {pinDin && dinner}
           {pinCheckIn && checkIn(false)}
           {pinContact && contact}
           {todos}
+          {ticket}
           <details>
             <summary className="flex min-h-11 cursor-pointer items-center rounded text-sm font-medium text-gray-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-gray-300">
               More details
@@ -514,6 +535,7 @@ export function SpeakerBriefingPanel({
       ) : (
         <>
           {todos}
+          {ticket}
           {rest}
         </>
       )}

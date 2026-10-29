@@ -42,7 +42,7 @@ describe('loadDashboardBriefing', () => {
     ).toBeUndefined()
     expect(
       await loadDashboardBriefing({ ...base, isOver: true, fetchFields }),
-    ).toBeUndefined()
+    ).not.toHaveProperty('briefing')
     expect(
       await loadDashboardBriefing({
         ...base,
@@ -63,7 +63,7 @@ describe('loadDashboardBriefing', () => {
         throw new Error('sanity down')
       },
     })
-    expect(result?.briefing.talks).toHaveLength(1)
+    expect(result?.briefing?.talks).toHaveLength(1)
   })
 
   it('does not throw on an invalid dinner start; pins on conference days', async () => {
@@ -163,9 +163,9 @@ describe('loadDashboardBriefing dinner choice', () => {
         fetchDinnerChoice,
       })
       expect(result?.asOrganizer).toBe(true)
-      expect(result?.briefing.dinner?.venueName).toBe('Bryggen')
-      expect(result?.briefing.talks).toBeUndefined()
-      expect(result?.briefing.todos).toBeUndefined()
+      expect(result?.briefing?.dinner?.venueName).toBe('Bryggen')
+      expect(result?.briefing?.talks).toBeUndefined()
+      expect(result?.briefing?.todos).toBeUndefined()
       expect(result?.dinnerChoice).toBeUndefined()
       expect(fetchDinnerChoice).not.toHaveBeenCalled()
     })
@@ -193,8 +193,68 @@ describe('loadDashboardBriefing dinner choice', () => {
         fetchDinnerChoice: async () => null,
       })
       expect(result?.asOrganizer).toBeUndefined()
-      expect(result?.briefing.talks).toHaveLength(1)
+      expect(result?.briefing?.talks).toHaveLength(1)
       expect(result?.dinnerChoice).toBeNull()
     })
+  })
+
+  it('pins the talks and the dinner the day before', async () => {
+    const result = await loadDashboardBriefing({
+      ...base,
+      fetchFields: dinner('2026-10-27T17:00:00Z'),
+      now: new Date('2026-10-26T10:00:00Z'),
+    })
+    expect(result).toMatchObject({ dayBefore: true, pinDinner: true })
+    expect(result).toMatchObject({ conferenceDay: undefined })
+  })
+
+  it('does not pin a day-2 dinner the day before', async () => {
+    const result = await loadDashboardBriefing({
+      ...base,
+      fetchFields: dinner('2026-10-28T17:00:00Z'),
+      now: new Date('2026-10-26T10:00:00Z'),
+    })
+    expect(result).toMatchObject({ dayBefore: true, pinDinner: false })
+  })
+
+  it('shows when the speaker ticket was sent, not to whom', async () => {
+    const result = await loadDashboardBriefing({
+      ...base,
+      proposals: [
+        {
+          ...proposals[0],
+          issuedSpeakerTickets: [
+            {
+              speakerId: 's2',
+              email: 'b@x.no',
+              emailedAt: '2026-10-20T00:00:00Z',
+            },
+            {
+              speakerId: 's1',
+              email: 'a@x.no',
+              emailedAt: '2026-10-01T00:00:00Z',
+            },
+          ],
+        },
+      ],
+      fetchFields: async () => null,
+    })
+    expect(result).toMatchObject({ ticketSentAt: '2026-10-01T00:00:00Z' })
+  })
+
+  it('thanks the speaker for 60 days after the event', async () => {
+    const fetchFields = vi.fn(async () => null)
+    const after = (now: string) =>
+      loadDashboardBriefing({
+        ...base,
+        isOver: true,
+        fetchFields,
+        now: new Date(now),
+      })
+    expect(await after('2026-12-27T10:00:00Z')).toEqual({
+      thankYou: [{ proposalId: 'p1', title: 'Talk', hasSlides: false }],
+    })
+    expect(await after('2026-12-28T10:00:00Z')).toBeUndefined()
+    expect(fetchFields).not.toHaveBeenCalled()
   })
 })
