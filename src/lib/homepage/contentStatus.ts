@@ -325,7 +325,10 @@ function countdownTargetMs(
  * `programDate`, compared as Oslo calendar days. Restated, not imported, to
  * keep this module import-free (see the server-safety test).
  */
-function isProgramPublished(conference: Conference, now: number): boolean {
+export function isProgramPublished(
+  conference: Conference,
+  now: number,
+): boolean {
   if (!conference.programDate || Number.isNaN(now)) return false
   const osloToday = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Oslo',
