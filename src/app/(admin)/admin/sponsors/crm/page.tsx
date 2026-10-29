@@ -1,3 +1,4 @@
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import { denyNonOrganizer } from '@/lib/authz/page-guard'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay } from '@/components/admin'
@@ -8,6 +9,8 @@ import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 
 // `?sponsor=<id>&view=<tab>` (old notification links included) is read on the
 // client: the board opens that sponsor in its side panel.
+export const metadata = { title: SPONSOR_PAGE_TITLES.crm }
+
 export default async function AdminSponsorsCRM() {
   const headerList = await headers()
   const domain = headerList.get('host') || 'localhost:3000'

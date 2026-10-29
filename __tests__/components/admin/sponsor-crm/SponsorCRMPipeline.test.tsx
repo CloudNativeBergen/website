@@ -44,7 +44,9 @@ vi.mock('@/lib/trpc/client', () => ({
       crm: {
         list: { useQuery: () => listData() },
         getById: {
-          useQuery: ({ id }: { id: string }) => ({ data: { _id: id } }),
+          useQuery: ({ id }: { id: string }) => ({
+            data: { _id: id, sponsor: { name: 'Acme' } },
+          }),
         },
         healthViolations: { useQuery: () => ({ data: [], isError: false }) },
         delete: { useMutation: () => ({ mutateAsync: vi.fn() }) },
@@ -69,6 +71,10 @@ vi.mock('@/hooks/useSponsorDragDrop', () => ({
 }))
 
 vi.mock('@dnd-kit/core', () => ({
+  PointerSensor: vi.fn(),
+  KeyboardSensor: vi.fn(),
+  useSensor: vi.fn(),
+  useSensors: vi.fn(),
   __esModule: true,
   DndContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   DragOverlay: () => null,

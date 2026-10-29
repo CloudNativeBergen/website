@@ -1,3 +1,4 @@
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ConferenceSponsor } from '@/lib/sponsor/types'
 import { ErrorDisplay, SponsorTiersPageClient } from '@/components/admin'
@@ -8,6 +9,8 @@ import { isTicketingEnabledForConference } from '@/lib/features/ticketing'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 
 // `?sponsor=<id>&view=<tab>` opens that sponsor in the shared record panel.
+export const metadata = { title: SPONSOR_PAGE_TITLES.tiers }
+
 export default async function AdminSponsorTiers() {
   const domain = (await headers()).get('host') || 'localhost:3000'
 

@@ -74,7 +74,7 @@ export const Default: Story = {
           />
           <ActionButton
             icon={<EnvelopeIcon className="h-4 w-4" />}
-            label="Send Broadcast (15)"
+            label="Email sponsors"
           />
         </div>
       </div>
@@ -109,8 +109,7 @@ export const NoContacts: Story = {
           />
           <ActionButton
             icon={<EnvelopeIcon className="h-4 w-4" />}
-            label="Send Broadcast (0)"
-            disabled
+            label="Email sponsors"
           />
         </div>
       </div>
@@ -137,15 +136,9 @@ export const Documentation: Story = {
         <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
           <li>
             <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              sponsorsWithContactsCount
+              visibleSponsors
             </code>{' '}
-            - Number of sponsors with contacts
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              fromEmail
-            </code>{' '}
-            - Email address for broadcast sender
+            - The rows the table shows, for export and copy
           </li>
           <li>
             <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
@@ -168,8 +161,8 @@ export const Documentation: Story = {
             the visible rows, comma-separated, for Slack invites
           </li>
           <li>
-            <strong>Send Broadcast</strong> - Opens modal to compose and send
-            email to all sponsors
+            <strong>Email sponsors</strong> - Opens SponsorEmailAction: pick
+            tiers, stages and contact roles, then compose and send
           </li>
         </ul>
       </div>
@@ -180,7 +173,8 @@ export const Documentation: Story = {
         </h3>
         <p className="mt-2 text-sm text-blue-700 dark:text-blue-300">
           Used on the /admin/sponsors/contacts page as the header action bar.
-          Integrates with GeneralBroadcastModal for email composition.
+          Renders SponsorEmailAction, the same action as the overview and tiers
+          pages.
         </p>
       </div>
     </div>

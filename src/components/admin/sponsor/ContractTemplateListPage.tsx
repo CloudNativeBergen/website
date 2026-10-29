@@ -1,5 +1,6 @@
 'use client'
 
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import { useState } from 'react'
 import Link from 'next/link'
 import { api } from '@/lib/trpc/client'
@@ -136,7 +137,7 @@ export function ContractTemplateListPage({
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="Contract Templates"
+        title={SPONSOR_PAGE_TITLES.contracts}
         description="Manage contract templates for sponsor agreements"
         icon={<DocumentTextIcon />}
         backLink={{ href: '/admin/sponsors', label: 'Sponsors' }}

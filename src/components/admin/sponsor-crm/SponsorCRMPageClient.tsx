@@ -1,5 +1,6 @@
 'use client'
 
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import React from 'react'
 import { AdminPageHeader } from '@/components/admin'
 import { SponsorCRMPipeline } from './SponsorCRMPipeline'
@@ -32,7 +33,7 @@ export function SponsorCRMPageClient({
     <div className="flex h-[calc(100dvh-9rem)] flex-col overflow-hidden lg:h-[calc(100vh-9rem)]">
       <AdminPageHeader
         icon={<RectangleStackIcon />}
-        title="Sponsor Pipeline"
+        title={SPONSOR_PAGE_TITLES.crm}
         description={
           <span>
             Manage relationships for{' '}

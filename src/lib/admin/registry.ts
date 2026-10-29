@@ -45,6 +45,7 @@ import {
   MegaphoneIcon,
   InformationCircleIcon,
 } from '@heroicons/react/24/outline'
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import type { NavigationItem } from '@/components/common/DashboardLayout'
 import { SETTINGS_GROUPS, SETTINGS_TIERS } from '@/lib/settings/groups'
 import type { FeatureId } from '@/lib/features/registry'
@@ -396,7 +397,7 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
   },
   {
     id: 'sponsors-crm',
-    title: 'Sponsor CRM',
+    title: SPONSOR_PAGE_TITLES.crm,
     href: '/admin/sponsors/crm',
     group: 'Events & Content',
     keywords: ['crm', 'pipeline', 'leads', 'deals', 'prospects'],
@@ -404,7 +405,7 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
   },
   {
     id: 'sponsors-contacts',
-    title: 'Sponsor Contacts',
+    title: SPONSOR_PAGE_TITLES.contacts,
     href: '/admin/sponsors/contacts',
     group: 'Events & Content',
     keywords: ['contacts', 'people', 'email'],
@@ -412,7 +413,7 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
   },
   {
     id: 'sponsors-invoices',
-    title: 'Sponsor Invoicing',
+    title: SPONSOR_PAGE_TITLES.invoices,
     href: '/admin/sponsors/invoices',
     group: 'Events & Content',
     keywords: ['invoice', 'invoicing', 'billing', 'faktura', 'finance', 'ehf'],
@@ -420,7 +421,7 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
   },
   {
     id: 'sponsors-contracts',
-    title: 'Sponsor Contracts',
+    title: SPONSOR_PAGE_TITLES.contracts,
     href: '/admin/sponsors/contracts',
     group: 'Events & Content',
     keywords: ['contracts', 'agreements', 'signing', 'invoices'],
@@ -428,7 +429,7 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
   },
   {
     id: 'sponsors-activity',
-    title: 'Sponsor Activity Log',
+    title: SPONSOR_PAGE_TITLES.activity,
     href: '/admin/sponsors/activity',
     group: 'Events & Content',
     keywords: ['activity', 'audit', 'log', 'history'],
@@ -436,7 +437,7 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
   },
   {
     id: 'sponsors-tiers',
-    title: 'Sponsor Tiers',
+    title: SPONSOR_PAGE_TITLES.tiers,
     href: '/admin/sponsors/tiers',
     group: 'Events & Content',
     keywords: ['tiers', 'levels', 'packages', 'pricing'],
@@ -444,7 +445,7 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
   },
   {
     id: 'sponsors-templates',
-    title: 'Sponsor Email Templates',
+    title: SPONSOR_PAGE_TITLES.templates,
     href: '/admin/sponsors/templates',
     group: 'Events & Content',
     keywords: ['templates', 'emails', 'outreach'],

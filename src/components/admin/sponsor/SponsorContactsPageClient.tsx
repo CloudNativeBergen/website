@@ -23,7 +23,6 @@ import { Conference } from '@/lib/conference/types'
 import type { SponsorStatus } from '@/lib/sponsor-crm/types'
 import { ACCEPTED_SPONSOR_STATUS } from '@/lib/sponsor-crm/labels'
 import { evaluateBilling } from '@/lib/sponsor-crm/billing'
-import { contactEmails } from '@/lib/sponsor-crm/contacts-csv'
 
 /**
  * Pipeline stages offered as filters, ordered as they appear on the sponsor
@@ -79,16 +78,8 @@ export function SponsorContactsPageClient({
         : undefined,
   })
 
-  // The unfiltered roster, used for the "of N" total and for the broadcast
-  // recipient count. The broadcast targets the synced sponsor audience — every
-  // sponsor's contacts, regardless of what this page is filtered to — so its
-  // count must come from here and not from the visible rows.
+  // The unfiltered roster, used for the "of N" total.
   const { data: allSponsors = [] } = api.sponsor.crm.list.useQuery({})
-
-  const broadcastRecipientCount = useMemo(
-    () => contactEmails(allSponsors).length,
-    [allSponsors],
-  )
 
   const stats = useMemo(() => {
     let billingReady = 0
@@ -157,17 +148,6 @@ export function SponsorContactsPageClient({
     setSearchQuery('')
   }
 
-  // Mirrors the server's own from-address resolution (see
-  // `lib/email/broadcast.ts`) so the modal cannot advertise an address the
-  // send would never use.
-  const fromAddress = conference.sponsorEmail || conference.contactEmail
-  const organizerName = conference.organizer?.trim()
-  const fromEmail = fromAddress
-    ? organizerName
-      ? `${organizerName} <${fromAddress}>`
-      : fromAddress
-    : 'No sponsor or contact email configured'
-
   const isFiltered =
     statuses.length > 0 ||
     billingFilter !== '' ||
@@ -212,8 +192,6 @@ export function SponsorContactsPageClient({
         actions={
           <SponsorContactActions
             visibleSponsors={sponsors}
-            broadcastRecipientCount={broadcastRecipientCount}
-            fromEmail={fromEmail}
             conference={conference}
           />
         }

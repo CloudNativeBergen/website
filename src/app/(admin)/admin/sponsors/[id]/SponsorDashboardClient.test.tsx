@@ -5,11 +5,21 @@
  * the record. "Open record", "Manage" and each "Edit" open the board's side
  * panel over the page, kept in `?edit=<tab>`. There is no centered modal.
  */
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  within,
+} from '@testing-library/react'
 import type { Conference } from '@/lib/conference/types'
 import { SponsorDashboardClient } from './SponsorDashboardClient'
 
-const nav = vi.hoisted(() => ({ push: vi.fn(), query: 'view=contract' }))
+const nav = vi.hoisted(() => ({
+  push: vi.fn(),
+  query: 'view=contract',
+  deleted: vi.fn(),
+}))
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: nav.push, back: vi.fn() }),
   useSearchParams: () => new URLSearchParams(nav.query),
@@ -17,10 +27,30 @@ vi.mock('next/navigation', () => ({
 vi.mock('next-auth/react', () => ({ useSession: () => ({ data: null }) }))
 vi.mock('@/lib/trpc/client', () => ({
   api: {
-    useUtils: () => ({}),
+    useUtils: () => ({
+      sponsor: {
+        crm: {
+          list: { invalidate: vi.fn() },
+          healthViolations: { invalidate: vi.fn() },
+        },
+      },
+    }),
     sponsor: {
       crm: {
-        getById: { useQuery: () => ({ data: { _id: 'sfc-1' } }) },
+        getById: {
+          useQuery: () => ({
+            data: { _id: 'sfc-1', sponsor: { name: 'Acme' } },
+          }),
+        },
+        delete: {
+          useMutation: (opts: { onSuccess: () => void }) => ({
+            mutate: (input: unknown) => {
+              nav.deleted(input)
+              opts.onSuccess()
+            },
+            isPending: false,
+          }),
+        },
         activities: { list: { useQuery: () => ({ data: [] }) } },
       },
     },
@@ -30,12 +60,15 @@ vi.mock('@/components/admin/sponsor-crm/SponsorCRMForm', () => ({
   SponsorCRMForm: ({
     presentation,
     initialView,
+    onDelete,
   }: {
     presentation?: string
     initialView?: string
+    onDelete?: () => void
   }) => (
     <div data-testid="record" data-presentation={presentation}>
       {initialView}
+      <button onClick={onDelete}>Delete from footer</button>
     </div>
   ),
 }))
@@ -193,4 +226,21 @@ it('Back after "Send Email", then Edit, does not reopen the send modal', () => {
   rerender(page())
   expect(screen.getByTestId('record')).toHaveTextContent('contacts')
   expect(screen.queryByTestId('send')).not.toBeInTheDocument()
+})
+
+it('deleting from the panel goes back to the board', () => {
+  nav.query = 'edit=pipeline'
+  nav.push.mockClear()
+  renderPage()
+  fireEvent.click(screen.getByText('Delete from footer'))
+  const dialog = screen.getByRole('dialog')
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: 'Delete sponsor' }),
+  )
+  expect(nav.deleted).toHaveBeenCalledWith({
+    id: 'sfc-1',
+    cancelAgreement: false,
+    deleteContractAsset: false,
+  })
+  expect(nav.push).toHaveBeenCalledWith('/admin/sponsors/crm')
 })

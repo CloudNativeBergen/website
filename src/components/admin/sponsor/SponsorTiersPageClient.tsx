@@ -1,11 +1,10 @@
 'use client'
 
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import React from 'react'
-import { api } from '@/lib/trpc/client'
-import { emailBrandColor } from '@/lib/branding/theme'
 import { AdminPageHeader } from '@/components/admin'
-import { GeneralBroadcastModal } from '@/components/admin'
 import { SponsorTierEditor } from './SponsorTierEditor'
+import { SponsorEmailAction } from './SponsorEmailAction'
 import { SponsorTierManagement } from './SponsorTierManagement'
 import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
@@ -16,17 +15,12 @@ import {
   ChartBarIcon,
   CurrencyDollarIcon,
   DocumentTextIcon,
-  EnvelopeIcon,
 } from '@heroicons/react/24/outline'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { ConferenceSponsor } from '@/lib/sponsor/types'
 import { Conference } from '@/lib/conference/types'
-import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
-import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { SponsorTier } from '@/lib/sponsor/types'
-import { formatConferenceDateLong } from '@/lib/time'
-import { useSponsorBroadcast } from '@/hooks/useSponsorBroadcast'
 
 interface SponsorTiersPageClientProps {
   conference: Conference
@@ -49,46 +43,16 @@ export function SponsorTiersPageClient({
   sponsorsByTier,
   sortedTierNames,
 }: SponsorTiersPageClientProps) {
-  const {
-    isBroadcastModalOpen,
-    setIsBroadcastModalOpen,
-    handleBroadcastEmail,
-    handleSyncContacts,
-  } = useSponsorBroadcast()
-
-  const sponsorsQuery = api.sponsor.crm.list.useQuery(
-    { status: ['closed-won'] },
-    { staleTime: 30000 },
-  )
-
-  const recipientCount = React.useMemo(() => {
-    if (!sponsorsQuery.data) return 0
-    const emails = new Set<string>()
-    for (const s of sponsorsQuery.data) {
-      for (const c of s.contactPersons ?? []) {
-        if (c.email) emails.add(c.email.trim().toLowerCase())
-      }
-    }
-    return emails.size
-  }, [sponsorsQuery.data])
-
   return (
     <>
       <div className="space-y-6">
         <AdminPageHeader
           icon={<ChartBarIcon />}
-          title="Sponsor Tiers"
+          title={SPONSOR_PAGE_TITLES.tiers}
           description="Configure sponsorship tiers and manage sponsor assignments for"
           contextHighlight={conference.title}
           backLink={{ href: '/admin/sponsors', label: 'Back to Dashboard' }}
-          actionItems={[
-            {
-              label: `Send Broadcast (${recipientCount})`,
-              icon: <EnvelopeIcon className="h-4 w-4" />,
-              onClick: () => setIsBroadcastModalOpen(true),
-              disabled: recipientCount === 0,
-            },
-          ]}
+          actions={<SponsorEmailAction conference={conference} />}
         />
 
         <div className="mt-8">
@@ -233,22 +197,6 @@ export function SponsorTiersPageClient({
           </CollapsibleSection>
         </div>
       </div>
-
-      <GeneralBroadcastModal
-        isOpen={isBroadcastModalOpen}
-        onClose={() => setIsBroadcastModalOpen(false)}
-        onSend={handleBroadcastEmail}
-        onSyncContacts={handleSyncContacts}
-        recipientCount={recipientCount}
-        recipientType="sponsors"
-        fromEmail={`${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail || conference.contactEmail || ''}>`}
-        eventName={conference.title}
-        eventLocation={`${conference.city}, ${conference.country}`}
-        eventDate={formatConferenceDateLong(conference.startDate)}
-        eventUrl={conferenceBaseUrl(conference)}
-        socialLinks={conference.socialLinks || []}
-        brandColor={emailBrandColor(conference.theme)}
-      />
     </>
   )
 }

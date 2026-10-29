@@ -8,6 +8,7 @@ import type { Conference } from '@/lib/conference/types'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
 import type { ContractSendOptions } from '@/components/admin/sponsor-crm/SponsorContractView'
 import { SponsorSendModal } from '@/components/admin'
+import { SponsorDeleteModal } from '@/components/admin/sponsor-crm/SponsorDeleteModal'
 import {
   sponsorFromAddress,
   type SendableKind,
@@ -129,6 +130,8 @@ interface SponsorRecordPanelProps {
   headerActions?: ReactNode
   /** Open this send on mount, e.g. the sponsor page's "Send Email". */
   initialSendKind?: SendableKind
+  /** After the sponsor is deleted. Defaults to closing the panel. */
+  onDeleted?: () => void
 }
 
 /** The sponsor record side panel, shared by the board and the sponsor page. */
@@ -144,6 +147,7 @@ export function SponsorRecordPanel({
   workshopsEnabled = false,
   headerActions,
   initialSendKind,
+  onDeleted,
 }: SponsorRecordPanelProps) {
   const { data: session } = useSession()
   const { data: sponsor } = api.sponsor.crm.getById.useQuery({ id: sponsorId })
@@ -151,6 +155,17 @@ export function SponsorRecordPanel({
     initialSendKind ?? null,
   )
   const [contractSend, setContractSend] = useState<ContractSendOptions>({})
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const utils = api.useUtils()
+  const deleteMutation = api.sponsor.crm.delete.useMutation({
+    onSuccess: () => {
+      utils.sponsor.crm.list.invalidate()
+      utils.sponsor.crm.healthViolations.invalidate()
+      setConfirmDelete(false)
+      if (onDeleted) onDeleted()
+      else onClose()
+    },
+  })
 
   if (!sponsor) return null
 
@@ -182,6 +197,20 @@ export function SponsorRecordPanel({
         }}
         onSendEarlyAccess={() => setSendKind('workshop-early-access')}
         headerActions={headerActions}
+        onDelete={() => setConfirmDelete(true)}
+      />
+      <SponsorDeleteModal
+        isOpen={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={(options) =>
+          deleteMutation.mutate({ id: sponsor._id, ...options })
+        }
+        count={1}
+        hasPendingAgreement={
+          sponsor.signatureStatus === 'pending' && !!sponsor.signatureId
+        }
+        hasContractDocument={!!sponsor.contractDocument}
+        isLoading={deleteMutation.isPending}
       />
       {sendKind && (
         <SponsorSendModal

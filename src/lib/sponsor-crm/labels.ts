@@ -25,3 +25,18 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   overdue: 'Overdue',
   cancelled: 'Cancelled',
 }
+
+/**
+ * One name per sponsor admin page (#1704 C2), used by the admin nav and the
+ * command palette registry, the sponsors overview cards, the page headers and
+ * `<title>`. Keyed by URL segment; the URLs themselves never change.
+ */
+export const SPONSOR_PAGE_TITLES = {
+  crm: 'Sponsor Pipeline',
+  contacts: 'Sponsor Contacts',
+  invoices: 'Sponsor Invoices',
+  contracts: 'Contract Templates',
+  activity: 'Sponsor Activity',
+  tiers: 'Sponsor Tiers',
+  templates: 'Sponsor Email Templates',
+} as const

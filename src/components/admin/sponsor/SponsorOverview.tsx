@@ -1,5 +1,6 @@
 'use client'
 
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import Link from 'next/link'
 import { useMemo, type ReactNode } from 'react'
 import clsx from 'clsx'
@@ -347,29 +348,37 @@ export function LatestActivitySection() {
 const SUB_PAGES = [
   {
     href: '/admin/sponsors/crm',
-    label: 'Sponsor CRM',
+    label: SPONSOR_PAGE_TITLES.crm,
     icon: RectangleStackIcon,
   },
-  { href: '/admin/sponsors/tiers', label: 'Sponsor Tiers', icon: ChartBarIcon },
+  {
+    href: '/admin/sponsors/tiers',
+    label: SPONSOR_PAGE_TITLES.tiers,
+    icon: ChartBarIcon,
+  },
   {
     href: '/admin/sponsors/contacts',
-    label: 'Sponsor Contacts',
+    label: SPONSOR_PAGE_TITLES.contacts,
     icon: UserGroupIcon,
   },
   {
     href: '/admin/sponsors/activity',
-    label: 'Activity Log',
+    label: SPONSOR_PAGE_TITLES.activity,
     icon: ClipboardDocumentListIcon,
   },
   {
     href: '/admin/sponsors/contracts',
-    label: 'Contract Templates',
+    label: SPONSOR_PAGE_TITLES.contracts,
     icon: DocumentDuplicateIcon,
   },
-  { href: '/admin/sponsors/invoices', label: 'Invoices', icon: BanknotesIcon },
+  {
+    href: '/admin/sponsors/invoices',
+    label: SPONSOR_PAGE_TITLES.invoices,
+    icon: BanknotesIcon,
+  },
   {
     href: '/admin/sponsors/templates',
-    label: 'Email Templates',
+    label: SPONSOR_PAGE_TITLES.templates,
     icon: EnvelopeIcon,
   },
 ]

@@ -3,7 +3,7 @@ import { getAuthSession } from '@/lib/auth'
 import { isEventHeroWindow } from '@/lib/settings/activation'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { SponsorOverview } from '@/components/admin/sponsor/SponsorOverview'
-import { SponsorDashboardBroadcastAction } from '@/components/admin/sponsor/SponsorDashboardBroadcastAction'
+import { SponsorEmailAction } from '@/components/admin/sponsor/SponsorEmailAction'
 import { BuildingOffice2Icon } from '@heroicons/react/24/outline'
 
 export default async function AdminSponsors() {
@@ -37,7 +37,7 @@ export default async function AdminSponsors() {
         title="Sponsor Management"
         description="Manage sponsorships, track revenue, and monitor pipeline health for"
         contextHighlight={conference.title}
-        actions={<SponsorDashboardBroadcastAction conference={conference} />}
+        actions={<SponsorEmailAction conference={conference} />}
       />
 
       <SponsorOverview

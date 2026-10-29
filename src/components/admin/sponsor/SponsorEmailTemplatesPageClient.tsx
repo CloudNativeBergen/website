@@ -1,5 +1,6 @@
 'use client'
 
+import { SPONSOR_PAGE_TITLES } from '@/lib/sponsor-crm/labels'
 import { useState, useMemo, useId } from 'react'
 import Link from 'next/link'
 import { api } from '@/lib/trpc/client'
@@ -174,7 +175,7 @@ export function SponsorEmailTemplatesPageClient({
     <div className="space-y-6">
       <AdminPageHeader
         icon={<EnvelopeIcon />}
-        title="Email Templates"
+        title={SPONSOR_PAGE_TITLES.templates}
         description="Manage outreach email templates for"
         contextHighlight={conference.title}
         actionItems={[

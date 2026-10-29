@@ -65,6 +65,10 @@ async function main(): Promise<number> {
     return 0
   }
   console.log(`\nCommitted: ${result.committed}`)
+  if (result.audienceFailures.length > 0) {
+    console.log('\nNOT REMOVED from these sponsor audiences (remove by hand):')
+    for (const failure of result.audienceFailures) console.log(`  - ${failure}`)
+  }
   console.log(
     `Verification: ${result.residual === 0 ? 'CLEAN' : `RESIDUAL DATA FOUND (${result.residual})`}`,
   )

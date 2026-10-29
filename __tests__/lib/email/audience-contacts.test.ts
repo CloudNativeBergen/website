@@ -35,6 +35,7 @@ import type { Conference } from '@/lib/conference/types'
 import {
   removeContactFromAudience,
   syncAudienceWithContacts,
+  syncSponsorAudience,
   ContactListTruncatedError,
   type Contact,
 } from '@/lib/email/audience'
@@ -586,5 +587,73 @@ describe('a sync refuses to reconcile against a partial roster (#895)', () => {
     expect(result.error?.message).toContain(
       'Failed to reconcile 1 contact(s) in speakers audience: remove stale@example.test: Failed to remove contact: Resend 500 on remove',
     )
+  })
+})
+
+describe('the sponsor audience keeps its opt-outs when a send narrows it (#1704)', () => {
+  it('removes subscribed contacts outside the filter but keeps unsubscribed ones', async () => {
+    const created = await account.create({
+      name: `Alpha Sponsors [${CONF_ID}]`,
+    })
+    const audienceId = created.data.id
+    account.fillWith(
+      audienceId,
+      ['in@a.test', 'out@a.test', 'optout@a.test'],
+      ['optout@a.test'],
+    )
+
+    const result = await syncSponsorAudience(
+      conference,
+      asContacts(['in@a.test']),
+      {
+        keepUnsubscribedIn: new Set([
+          'in@a.test',
+          'out@a.test',
+          'optout@a.test',
+        ]),
+      },
+    )
+
+    expect(result.success).toBe(true)
+    expect(account.contactsIn(audienceId).sort()).toEqual([
+      'in@a.test',
+      'optout@a.test',
+    ])
+  })
+
+  it('drops an unsubscribed contact the CRM no longer holds (erased or removed)', async () => {
+    const created = await account.create({
+      name: `Alpha Sponsors [${CONF_ID}]`,
+    })
+    const audienceId = created.data.id
+    account.fillWith(audienceId, ['in@a.test', 'Gone@a.test'], ['Gone@a.test'])
+
+    await syncSponsorAudience(conference, asContacts(['in@a.test']), {
+      keepUnsubscribedIn: new Set(['in@a.test']),
+    })
+
+    expect(account.contactsIn(audienceId)).toEqual(['in@a.test'])
+  })
+
+  it('calls onProgress every 50 contact writes, and a throw aborts the sync', async () => {
+    const created = await account.create({
+      name: `Alpha Sponsors [${CONF_ID}]`,
+    })
+    const audienceId = created.data.id
+    account.fillWith(audienceId, [])
+    const onProgress = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('lock lost'))
+
+    const result = await syncSponsorAudience(
+      conference,
+      asContacts(emails(120)),
+      { onProgress },
+    )
+
+    expect(onProgress).toHaveBeenCalledTimes(2)
+    expect(result.success).toBe(false)
+    expect(account.contactsIn(audienceId)).toHaveLength(100)
   })
 })

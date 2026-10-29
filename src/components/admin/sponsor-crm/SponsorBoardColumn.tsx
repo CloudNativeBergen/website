@@ -22,15 +22,7 @@ interface SponsorBoardColumnProps {
   isSelectionMode?: boolean
   thresholds?: CrmActivityThreshold[]
   onSponsorClick: (sponsor: SponsorForConferenceExpanded) => void
-  onSponsorDelete: (sponsorId: string) => void
   onSponsorEmail?: (sponsor: SponsorForConferenceExpanded) => void
-  onSponsorSendDiscountCodes?: (sponsor: SponsorForConferenceExpanded) => void
-  onSponsorContract?: (sponsor: SponsorForConferenceExpanded) => void
-  onSponsorOpenHistory?: (sponsor: SponsorForConferenceExpanded) => void
-  onSponsorAdvanceStage?: (
-    sponsor: SponsorForConferenceExpanded,
-    targetStage: string,
-  ) => void
   onSponsorToggleSelect?: (id: string) => void
   onAddClick: () => void
 }
@@ -45,12 +37,7 @@ export function SponsorBoardColumn({
   isSelectionMode = false,
   thresholds,
   onSponsorClick,
-  onSponsorDelete,
   onSponsorEmail,
-  onSponsorSendDiscountCodes,
-  onSponsorContract,
-  onSponsorOpenHistory,
-  onSponsorAdvanceStage,
   onSponsorToggleSelect,
   onAddClick,
 }: SponsorBoardColumnProps) {
@@ -172,27 +159,8 @@ export function SponsorBoardColumn({
               thresholds={thresholds}
               onToggleSelect={() => onSponsorToggleSelect?.(sponsor._id)}
               onEdit={() => onSponsorClick(sponsor)}
-              onDelete={() => onSponsorDelete(sponsor._id)}
               onEmail={
                 onSponsorEmail ? () => onSponsorEmail(sponsor) : undefined
-              }
-              onSendDiscountCodes={
-                onSponsorSendDiscountCodes
-                  ? () => onSponsorSendDiscountCodes(sponsor)
-                  : undefined
-              }
-              onContract={
-                onSponsorContract ? () => onSponsorContract(sponsor) : undefined
-              }
-              onOpenHistory={
-                onSponsorOpenHistory
-                  ? () => onSponsorOpenHistory(sponsor)
-                  : undefined
-              }
-              onAdvanceStage={
-                onSponsorAdvanceStage
-                  ? (targetStage) => onSponsorAdvanceStage(sponsor, targetStage)
-                  : undefined
               }
             />
           ))}
