@@ -104,7 +104,7 @@ export function SponsorDashboardClient({
         }
       />
 
-      <main className="flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
+      <main className="flex-1 overflow-y-auto py-8 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="mb-8 empty:hidden">
             <SponsorRenewalWidget sponsorId={sponsorId} onChanged={refresh} />
