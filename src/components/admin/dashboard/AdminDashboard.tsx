@@ -156,8 +156,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
           setHadSavedLayout(true)
           try {
             setHintDismissed(
-              window.localStorage.getItem(SPONSORS_WAITING_HINT_KEY) ===
-                'true',
+              window.localStorage.getItem(SPONSORS_WAITING_HINT_KEY) === 'true',
             )
           } catch {
             setHintDismissed(false)
