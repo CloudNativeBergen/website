@@ -666,7 +666,9 @@ From [Decide how organizers moderate Wall Posts](https://github.com/CloudNativeB
 - **Undo to Pending** patches `status: pending` and unsets `approvedAt` and
   `decidedAt`, so the post is as a pending post is. It must name the
   `decidedAt` of the decision it undoes (the post must still carry it) and
-  come within 2 minutes of it; otherwise it is refused as `changed`. It
+  come within 2 minutes of it. A post decided since is refused as `changed`;
+  a late one as `tooLate`, and the queue says "Too late to undo." The toast
+  drops its Undo button 5 s before that, even while focused. It
   expires the wall, the queue, the device and the talk like every
   moderation write.
 - **Approve all pending** approves the posts pending when pressed, one guarded patch per post, four at a time, within a 30 s budget (a transaction is all-or-nothing, so one conflicted post would sink a whole batch). A conflicted post is skipped and stays pending. It reports how many it approved; pressing again picks up the rest. Its confirm names the exact count. It also answers the decision time all its patches write, and the Undo toast offers one Undo for the batch: a guarded Undo to Pending of every post it sent, four at a time, each requiring that decision time, so a post whose answer was lost is still undone, while one never approved, or approved by another organizer, is left as it is. The queue then says how many went back to Pending.

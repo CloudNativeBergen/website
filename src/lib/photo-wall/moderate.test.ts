@@ -734,9 +734,12 @@ describe('Undo back to Pending (§10): a true undo, guarded by decidedAt', () =>
   it('refuses past two minutes: an Undo, not a general unreview', async () => {
     await act('approve', 'pending')
     const at = (ms: number) => new Date(NOW.getTime() + ms)
+    // Its own refusal, so the queue says "Too late to undo", not that
+    // someone else decided.
     await expect(undo('approved', T, at(120_001))).resolves.toEqual({
-      status: 'changed',
+      status: 'tooLate',
     })
+    expect(store().commits).toHaveLength(1)
     expect(store().doc(P1)?.status).toBe('approved')
     await expect(undo('approved', T, at(120_000))).resolves.toMatchObject({
       status: 'done',

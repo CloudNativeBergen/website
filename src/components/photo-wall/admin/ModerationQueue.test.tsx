@@ -80,7 +80,11 @@ vi.mock('@/components/feedback/useFeedbackQrPng', () => ({
   useFeedbackQrPng: () => ({ failed: false }),
 }))
 
-import { ModerationQueue, ModerationQueueView } from './ModerationQueue'
+import {
+  ModerationQueue,
+  ModerationQueueView,
+  UNDO_LAPSES_MS,
+} from './ModerationQueue'
 import { PendingSummaryView } from './PendingSummary'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 import { MODERATION_POLL_MS, moderationQueuePolling } from './polling'
@@ -2049,6 +2053,50 @@ describe('Undo (§10): the latest decision, reversed, on the same post', () => {
     expect(screen.getByText(/ · Undo /)).toBeInTheDocument()
     await act(() => vi.advanceTimersByTimeAsync(200))
     expect(screen.queryByText(/ · Undo /)).toBeNull()
+  })
+
+  it('held open by focus, an Undo to Pending lapses 5 s before the server’s window: Too late to undo', async () => {
+    vi.useFakeTimers()
+    render(<ModerationQueue />)
+    press('Pending one', 'Reject')
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    act(() => screen.getByRole('button', { name: 'Undo' }).focus())
+    await act(() => vi.advanceTimersByTimeAsync(UNDO_LAPSES_MS - 100))
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+    await act(() => vi.advanceTimersByTimeAsync(100))
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+    expect(screen.getByText('Too late to undo.')).toBeInTheDocument()
+    // Focus moved to Dismiss, so the toast stays until dismissed.
+    const dismiss = screen.getByRole('button', { name: 'Dismiss' })
+    expect(dismiss).toHaveFocus()
+    // U no longer undoes.
+    fireEvent.keyDown(document.body, { key: 'u' })
+    expect(h.undoToPending).not.toHaveBeenCalled()
+    fireEvent.click(dismiss)
+    expect(screen.queryByText('Too late to undo.')).toBeNull()
+  })
+
+  it('a Remove’s Undo (an Approve) does not lapse', async () => {
+    vi.useFakeTimers()
+    render(<ModerationQueue />)
+    fireEvent.click(tab(/^On the wall/))
+    press('Up', 'Remove')
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    act(() => screen.getByRole('button', { name: 'Undo' }).focus())
+    await act(() => vi.advanceTimersByTimeAsync(UNDO_LAPSES_MS + 1000))
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+  })
+
+  it('the server says the window passed (clock skew): Too late to undo, not another organizer', async () => {
+    render(<ModerationQueue />)
+    press('Pending one', 'Reject')
+    await toast()
+    h.undoToPending.mockResolvedValueOnce({ status: 'tooLate' })
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await screen.findByText('Too late to undo.')
+    expect(
+      screen.queryByText(/Another organizer changed this photo first/),
+    ).toBeNull()
   })
 })
 

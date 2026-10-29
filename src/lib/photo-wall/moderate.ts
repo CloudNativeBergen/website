@@ -34,6 +34,8 @@ export type ModerationResult =
   | { status: 'changed' }
   /** No such post on this wall any more: "This photo was deleted". */
   | { status: 'gone' }
+  /** Undo to Pending past its window (§10); nothing written. */
+  | { status: 'tooLate' }
 
 /**
  * Whether the wall is closed by the retention cron (§11.1): Approve refuses
@@ -120,9 +122,12 @@ export async function moderateWallPost({
     !allowsFrom(action, first.status) ||
     (from !== undefined && first.status !== from) ||
     (decidedAt !== undefined && first.decidedAt !== decidedAt) ||
-    (action === 'undoToPending' && !undoInTime(decidedAt, now))
+    (action === 'undoToPending' && decidedAt === undefined)
   ) {
     return { status: 'changed' }
+  }
+  if (action === 'undoToPending' && !undoInTime(decidedAt, now)) {
+    return { status: 'tooLate' }
   }
 
   // Back to Pending restores what a pending post has: no decision times.

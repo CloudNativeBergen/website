@@ -15,6 +15,7 @@ import {
   MODERATION_TAB_LABELS,
   countByTab,
   postsInTab,
+  UNDO_TO_PENDING_MS,
   type ModerationPost,
   type ModerationQueueData,
   type ModerationTab,
@@ -175,10 +176,10 @@ type QueueAction = PostAction | 'undoToPending'
 
 /** A decision's outcome; `done` may carry the decision time it wrote. */
 type QueueActionOutcome =
-  PostActionOutcome | { status: 'done'; decidedAt?: string | null }
+  PostActionOutcome | 'tooLate' | { status: 'done'; decidedAt?: string | null }
 
 function decided(result: {
-  status: Exclude<PostActionOutcome, 'failed'>
+  status: Exclude<PostActionOutcome, 'failed'> | 'tooLate'
   decidedAt?: string | null
 }): QueueActionOutcome {
   return result.status === 'done'
@@ -310,6 +311,13 @@ function undoOf(
   }
 }
 
+/**
+ * An Undo to Pending lapses this long after its toast appears: the
+ * server's window less a margin for the round trip and clock skew.
+ */
+export const UNDO_LAPSES_MS = UNDO_TO_PENDING_MS - 5000
+const TOO_LATE = 'Too late to undo.'
+
 /** How long the Undo toast stays, unless focus is in it. */
 export const UNDO_MS = 8000
 
@@ -317,7 +325,15 @@ export const UNDO_MS = 8000
 interface Undoable {
   says: string
   undo: () => void
+  /** `Date.now()` from which Undo is no longer offered. */
+  lapsesAt?: number
 }
+
+/** When an Undo to Pending offered now lapses. */
+const lapsesFromNow = () => Date.now() + UNDO_LAPSES_MS
+
+const lapsed = (undoable: Undoable) =>
+  undoable.lapsesAt !== undefined && Date.now() >= undoable.lapsesAt
 
 /** An empty Pending tab while posting is shut: no new posts are coming. */
 const emptyPending = (posting?: PostingState) =>
@@ -444,9 +460,14 @@ export function ModerationQueueView({
         setUndoable(null)
         let outcome: PostActionOutcome = 'failed'
         let wrote: string | null | undefined
+        let tooLate = false
         try {
           const answer = await onAction(post, action, decidedAt)
-          if (typeof answer === 'string') outcome = answer
+          if (answer === 'tooLate') {
+            // The server's own clock says the window has passed.
+            outcome = 'changed'
+            tooLate = true
+          } else if (typeof answer === 'string') outcome = answer
           else {
             outcome = 'done'
             wrote = answer.decidedAt
@@ -484,8 +505,12 @@ export function ModerationQueueView({
             says: undo.says,
             undo: () =>
               void act?.(after, undo.reverse, false, wrote ?? undefined),
+            ...(undo.reverse === 'undoToPending' && {
+              lapsesAt: lapsesFromNow(),
+            }),
           })
         } else if (outcome === 'done') setNotice(DONE[action])
+        else if (tooLate) setNotice(TOO_LATE)
         else if (outcome !== 'failed') setNotice(NOTICES[outcome])
         return outcome
       }
@@ -513,6 +538,7 @@ export function ModerationQueueView({
         setUndoable({
           says: `Approved ${photos} · Undo moves ${approved === 1 ? 'it' : 'them'} back to Pending`,
           undo: () => void undoApproveAll(shownNow, decidedAt),
+          lapsesAt: lapsesFromNow(),
         })
       } else if (approved === shownNow.length) {
         setNotice(`Approved ${photos}.`)
@@ -536,6 +562,7 @@ export function ModerationQueueView({
     let next = 0
     let done = 0
     let failed = 0
+    let late = 0
     const worker = async () => {
       while (next < sent.length) {
         const post = sent[next++]
@@ -546,14 +573,17 @@ export function ModerationQueueView({
         const outcome = typeof answer === 'string' ? answer : answer.status
         if (outcome === 'done') done += 1
         else if (outcome === 'failed') failed += 1
+        else if (outcome === 'tooLate') late += 1
       }
     }
     await Promise.all([0, 1, 2, 3].map(worker))
     const photos = `${done} ${done === 1 ? 'photo' : 'photos'}`
     setNotice(
-      failed
-        ? `Moved ${photos} back to Pending. ${failed} could not be moved; remove ${failed === 1 ? 'it' : 'them'} from the wall by hand.`
-        : `Moved ${photos} back to Pending.`,
+      late && !done
+        ? TOO_LATE
+        : failed + late
+          ? `Moved ${photos} back to Pending. ${failed + late} could not be moved; remove ${failed + late === 1 ? 'it' : 'them'} from the wall by hand.`
+          : `Moved ${photos} back to Pending.`,
     )
   }
 
@@ -572,7 +602,7 @@ export function ModerationQueueView({
       return
     const key = event.key.length === 1 ? event.key.toLowerCase() : event.key
     if (key === 'u') {
-      if (!undoable) return
+      if (!undoable || lapsed(undoable)) return
       event.preventDefault()
       setUndoable(null)
       undoable.undo()
@@ -789,11 +819,31 @@ function UndoToast({
   onDismiss: () => void
 }) {
   const [held, setHeld] = useState(false)
+  // Which toast has lapsed: a new action's toast starts afresh.
+  const [lapsedFor, setLapsedFor] = useState<Undoable | null>(null)
+  const late = lapsedFor === undoable
+  const undoRef = useRef<HTMLButtonElement>(null)
+  const dismissRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     if (held) return
     const timer = setTimeout(onDismiss, UNDO_MS)
     return () => clearTimeout(timer)
   }, [undoable, held, onDismiss])
+  // Held open by focus, an Undo to Pending still lapses before the
+  // server's window closes: the button goes, the toast says why.
+  useEffect(() => {
+    if (undoable.lapsesAt === undefined) return
+    const timer = setTimeout(
+      () => {
+        // Focus on the Undo button stays in the toast, on Dismiss.
+        if (undoRef.current === document.activeElement)
+          dismissRef.current?.focus()
+        setLapsedFor(undoable)
+      },
+      Math.max(0, undoable.lapsesAt - Date.now()),
+    )
+    return () => clearTimeout(timer)
+  }, [undoable])
   return (
     <div
       role="status"
@@ -810,18 +860,22 @@ function UndoToast({
       }}
       className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-md items-center gap-3 rounded-lg bg-gray-900 px-4 py-3 text-sm text-white shadow-lg ring-1 ring-black/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:bg-gray-700 dark:ring-white/10"
     >
-      <span className="flex-1">{undoable.says}</span>
+      <span className="flex-1">{late ? TOO_LATE : undoable.says}</span>
+      {!late && (
+        <button
+          ref={undoRef}
+          type="button"
+          onClick={() => {
+            onDismiss()
+            undoable.undo()
+          }}
+          className="inline-flex min-h-10 items-center rounded-md px-3 font-semibold text-indigo-200 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-indigo-300"
+        >
+          Undo
+        </button>
+      )}
       <button
-        type="button"
-        onClick={() => {
-          onDismiss()
-          undoable.undo()
-        }}
-        className="inline-flex min-h-10 items-center rounded-md px-3 font-semibold text-indigo-200 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-indigo-300"
-      >
-        Undo
-      </button>
-      <button
+        ref={dismissRef}
         type="button"
         aria-label="Dismiss"
         onClick={onDismiss}
