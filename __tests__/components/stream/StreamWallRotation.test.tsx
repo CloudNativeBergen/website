@@ -166,7 +166,7 @@ const roomInert = () =>
 beforeEach(() => {
   vi.useFakeTimers()
   // Local time: the screen reads the talk times on its own clock.
-  vi.setSystemTime(new Date('2026-10-27T09:00:00'))
+  vi.setSystemTime(new Date('2026-10-27T09:00:00+01:00'))
   h.answer.mockReset()
   vi.stubGlobal('fetch', screenFetch)
   // The tRPC logger reports every failed poll; some tests fail polls on purpose.
@@ -295,7 +295,7 @@ describe('StreamWallRotation', () => {
   })
 
   it('holds the room view in the five minutes before the next talk, then resumes', async () => {
-    vi.setSystemTime(new Date('2026-10-27T09:54:30'))
+    vi.setSystemTime(new Date('2026-10-27T09:54:30+01:00'))
     mount(view(), schedules([slot('10:00', '10:40')]))
     // 09:55:30: the room's turn is over, but the talk is 4.5 min away.
     await advance(ROOM_TURN_MS)
