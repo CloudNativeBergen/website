@@ -331,7 +331,7 @@ async function view(query: Record<string, string> = {}) {
   return {
     heading: textOf(elements.find((el) => el.type === 'h1')),
     /** The headings of the banners shown. */
-    banners: elements.filter((el) => el.type === 'h3').map(textOf),
+    banners: elements.filter((el) => el.type === 'h2').map(textOf),
     /** Every line of status text. */
     status: elements
       .filter((el) => el.props.role === 'status')
