@@ -41,6 +41,7 @@ vi.mock('@/lib/sanity/client', () => ({
 import {
   FEEDBACK_CODE_INDEX_LIFE,
   feedbackCodeForTalk,
+  feedbackCodesForTalks,
   feedbackCodeIndex,
   resolveFeedbackTarget,
 } from './attendee'
@@ -583,5 +584,31 @@ describe('feedbackCodeForTalk — the programme link (#1472)', () => {
     h.dataset.push(talk('talk-dup', 'conf-A', { feedbackCode: 'k7m2qx' }))
     expect(await feedbackCodeForTalk(CONF, 'talk-open', DURING)).toBeNull()
     expect(await feedbackCodeForTalk(CONF, 'talk-dup', DURING)).toBeNull()
+  })
+})
+
+describe('feedbackCodesForTalks — the room screen (spec §7.6)', () => {
+  it('gives the codes of the asked public talks only', async () => {
+    h.dataset.push(
+      talk('talk-drafted', 'conf-A', { feedbackCode: 'dft234' }),
+      day('day-draft', 'conf-A', '2026-10-26', 'draft', [
+        slot('talk-drafted', '11:00', '11:40'),
+      ]),
+    )
+    const codes = await feedbackCodesForTalks(
+      CONF,
+      new Set(['talk-open', 'talk-drafted', 'talk-missing']),
+      DURING,
+    )
+    expect([...codes]).toEqual([['talk-open', 'k7m2qx']])
+  })
+
+  it('gives none before the program is published', async () => {
+    const codes = await feedbackCodesForTalks(
+      { ...CONF, programDate: '2026-11-01' },
+      new Set(['talk-open']),
+      DURING,
+    )
+    expect(codes.size).toBe(0)
   })
 })

@@ -559,6 +559,47 @@ A second way into `/f/<code>` for attendees who miss or skip the room's QR.
   leaks the code to anyone who photographs it. Whole-talk list reads still
   never carry the code (`public-exposure.sanity.test.ts`).
 
+### 7.6 The room screen
+
+A third way into `/f/<code>`: the room screen, `/stream/<room>`, shows the QR
+codes of the talks that just ended in that room, so attendees can scan while
+they get up for the break.
+
+- **Which talks:** today's ended talks in this room since its last break,
+  oldest first. A **break** is a placeholder slot (no talk: "Lunch Break",
+  "Coffee Break") in this room's own track, or a placeholder in another track
+  that overlaps none of this room's talks, so a lunch entered in one track
+  counts for every room with no talk during it. Walking back from now, the
+  screen collects ended talks and stops at the first break before them. A
+  break that is running now, or that ended with no talk after it, is not a
+  boundary. Before the day's first break: every ended talk of the day. A gap
+  with no placeholder is not a break. A canceled or withdrawn talk is skipped
+  and does not end the run.
+- **Only talks that hold a code**, and only public ones (§7.2), the same rule
+  as `feedbackCodeForTalk` (§7.5). A talk without a code is skipped; the
+  screen never mints.
+- **When:** only between talks. While a talk in this room is running, nothing
+  shows. The codes show from the end of a talk until the next talk in the room
+  starts, or for the rest of the day after the last one.
+- **How many:** the latest **3**. More would not read from the back of the
+  room.
+- **Layout:** a full-width row under the next-talk card and the social feed,
+  headed "How was this session?" for one talk and "How were these sessions?"
+  for more: one card per talk with a large QR (black on white in both themes),
+  the title and the short URL without scheme (`feedbackCodeDisplayUrl`),
+  centred so one or two cards sit in the middle. With `?wall=1` the row is
+  part of the room view, so it shows in the room's turns and not on the Photo
+  Wall's.
+- **Read:** the page reads the cached Feedback Code index (§5.1) on the server
+  and hands the client the URLs of this room's public talks with a code, keyed
+  by talk id. The client picks which to show from the conference time
+  (`getCurrentConferenceTime`, so the dev-time control works), as the
+  next-talk card does. The page refreshes on its own interval, so a rotation
+  or a new mint shows within one refresh after the index expires. This carries
+  a code no further than the programme link (§7.5) already does.
+- **Opt-outs:** none. The spec has no speaker or tenant opt-out; a talk
+  without a code is the only way to keep it off the screen.
+
 ## 8. Privacy copy
 
 A new **Session Feedback** section on `/privacy`

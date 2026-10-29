@@ -15,6 +15,9 @@ import { DevTimeControl } from '@/components/program/DevTimeControl'
 import { StreamWallRotation } from '@/components/stream/StreamWallRotation'
 import { SCREEN_LOOK_PARAM, screenLookOverride } from '@/lib/photo-wall/screen'
 import { readStreamWall } from '@/lib/stream/wall'
+import { feedbackCodesForTalks } from '@/lib/feedback/server'
+import { feedbackCodeUrl } from '@/lib/feedback/url'
+import { RoomFeedbackCodes } from '@/components/stream/RoomFeedbackCodes'
 import {
   WALL_ROTATION_PARAM,
   wallRotationRequested,
@@ -93,6 +96,30 @@ export default async function StreamRoomPage({ params, searchParams }: Props) {
 
   const sponsors = (conference.sponsors ?? []) as ConferenceSponsor[]
   const query = await searchParams
+
+  // This room's talks only, from the cached code index (spec §7.6); the
+  // client picks which to show from the time.
+  const roomTalkIds = new Set(
+    conference.schedules.flatMap((s) =>
+      (s.tracks ?? [])
+        .filter((t) => t.trackTitle === matchedTrack.trackTitle)
+        .flatMap((t) => t.talks ?? [])
+        .flatMap((slot) => (slot.talk?._id ? [slot.talk._id] : [])),
+    ),
+  )
+  const feedbackUrls = Object.fromEntries(
+    // A failed read hides the codes; it never takes the room screen down.
+    [
+      ...(await feedbackCodesForTalks(
+        conference,
+        roomTalkIds,
+        new Date(),
+      ).catch((error) => {
+        console.error('Could not read the room feedback codes', error)
+        return new Map<string, string>()
+      })),
+    ].map(([talkId, code]) => [talkId, feedbackCodeUrl(conference, code)]),
+  )
   const wall = wallRotationRequested(query[WALL_ROTATION_PARAM])
     ? await readStreamWall(
         conference,
@@ -144,6 +171,12 @@ export default async function StreamRoomPage({ params, searchParams }: Props) {
               />
             )}
           </div>
+
+          <RoomFeedbackCodes
+            schedules={conference.schedules}
+            roomTrackTitle={matchedTrack.trackTitle}
+            urls={feedbackUrls}
+          />
         </div>
       </Container>
     </div>
