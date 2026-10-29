@@ -89,24 +89,24 @@ export function PhotoWallAdmin({
         backLink={
           setup ? { href: '/admin/photo-wall', label: 'Photo Wall' } : undefined
         }
-        actions={
-          wall ? (
-            <>
-              <PostingChip
-                view={view}
-                saving={saving || Boolean(pending?.postingMode)}
-                onChange={(postingMode) => onChange({ postingMode })}
-              />
-              {!setup && (
-                <Link href="/admin/photo-wall/setup" className={BUTTON}>
-                  <Cog6ToothIcon className="size-4" aria-hidden="true" />
-                  Setup
-                </Link>
-              )}
-            </>
-          ) : undefined
-        }
       />
+      {/* Under the title rather than in `actions`: beside it, three controls
+          squeeze the title to one word a line on a phone. */}
+      {wall && (
+        <div className="-mt-4 flex flex-wrap items-center gap-2">
+          <PostingChip
+            view={view}
+            saving={saving || Boolean(pending?.postingMode)}
+            onChange={(postingMode) => onChange({ postingMode })}
+          />
+          {!setup && (
+            <Link href="/admin/photo-wall/setup" className={BUTTON}>
+              <Cog6ToothIcon className="size-4" aria-hidden="true" />
+              Setup
+            </Link>
+          )}
+        </div>
+      )}
       {!wall ? (
         <SetUp onSetUp={onSetUp} saving={saving} failed={failed} />
       ) : !setup ? (
