@@ -16,9 +16,6 @@ export { sortSponsorTiers, formatTierLabel } from '@/lib/sponsor/utils'
 export { calculateSponsorValue } from '@/lib/sponsor-crm/value'
 import type { BadgeColor } from '@/components/StatusBadge'
 import {
-  ExclamationTriangleIcon,
-  ClockIcon,
-  DocumentTextIcon,
   CheckCircleIcon,
   ArrowPathIcon,
   BanknotesIcon,
@@ -29,12 +26,8 @@ import {
   TicketIcon,
   PhoneIcon,
   CalendarIcon,
-  FireIcon,
-  ArrowPathRoundedSquareIcon,
-  PaperAirplaneIcon,
   ShieldCheckIcon,
   BellAlertIcon,
-  UserGroupIcon,
 } from '@heroicons/react/24/outline'
 
 // Invoice Status Utilities
@@ -146,70 +139,6 @@ export type ActionItemType =
   | 'registration-pending'
   | 'registration-complete'
   | 'unassigned'
-
-export function getActionItemIcon(type: ActionItemType) {
-  switch (type) {
-    case 'overdue':
-      return ExclamationTriangleIcon
-    case 'needs-contract':
-    case 'missing-contract':
-      return DocumentTextIcon
-    case 'awaiting-signature':
-      return ClockIcon
-    case 'needs-invoice':
-      return DocumentTextIcon
-    case 'stale':
-      return CheckCircleIcon
-    case 'high-priority':
-      return FireIcon
-    case 'follow-up':
-      return ArrowPathRoundedSquareIcon
-    case 'missing-contact':
-      return UserGroupIcon
-    case 'signature-rejected':
-      return ExclamationTriangleIcon
-    case 'signature-expired':
-      return ClockIcon
-    case 'registration-pending':
-      return PaperAirplaneIcon
-    case 'registration-complete':
-      return DocumentTextIcon
-    case 'unassigned':
-      return UserGroupIcon
-  }
-}
-
-export function getActionItemColor(type: ActionItemType): string {
-  switch (type) {
-    case 'overdue':
-      return 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/20'
-    case 'needs-contract':
-    case 'missing-contract':
-      return 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/20'
-    case 'awaiting-signature':
-      return 'text-yellow-600 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-900/20'
-    case 'needs-invoice':
-      return 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/20'
-    case 'stale':
-      return 'text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-gray-700'
-    case 'high-priority':
-      return 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/20'
-    case 'follow-up':
-      return 'text-indigo-600 bg-indigo-100 dark:text-indigo-400 dark:bg-indigo-900/20'
-    case 'missing-contact':
-      return 'text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/20'
-    case 'signature-rejected':
-      return 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/20'
-    case 'signature-expired':
-      return 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/20'
-    case 'registration-pending':
-      return 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/20'
-    case 'registration-complete':
-      return 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/20'
-    case 'unassigned':
-      return 'text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-gray-700'
-  }
-}
 
 // Signature Status Badge Utilities
 export function getSignatureStatusBadgeProps(status: SignatureStatus): {
