@@ -118,8 +118,10 @@ function fakeProjects(overrides: Partial<VideoProjects> = {}) {
 }
 
 beforeEach(() => {
-  // jsdom keeps one history across tests: start each on a plain entry.
-  window.history.replaceState(null, '', window.location.href)
+  // jsdom keeps one history across tests. Push a plain entry: it starts each
+  // test off a guard entry an earlier test left, and drops forward entries an
+  // earlier Back left, so the next push grows the history.
+  window.history.pushState(null, '', window.location.href)
   drawDesign.mockReset()
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
     {} as unknown as CanvasRenderingContext2D,

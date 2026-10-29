@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // --- Boundary mocks --------------------------------------------------------
 
-const upsertMock = vi.fn().mockResolvedValue(undefined)
-const getOrganizerSpeakerIdsMock = vi
-  .fn()
-  .mockResolvedValue(['org-1', 'org-2', 'org-3'])
+const upsertMock = vi.fn<(...args: unknown[]) => Promise<unknown>>(
+  async () => undefined,
+)
+const getOrganizerSpeakerIdsMock = vi.fn<
+  (...args: unknown[]) => Promise<unknown>
+>(async () => ['org-1', 'org-2', 'org-3'])
 vi.mock('@/lib/notification/sanity', () => ({
   upsertMessageNotifications: (...a: unknown[]) => upsertMock(...a),
   // The fan-out passes the CONFERENCE's own org id (#723): no request-domain
@@ -16,17 +18,25 @@ vi.mock('@/lib/notification/sanity', () => ({
 
 // TEAMS-2 teams SOURCE: default [] ⇒ ABSENT-MEANS-TODAY (all organizers);
 // per-test override narrows to a configured `cfp` team.
-const getConferenceTeamsMock = vi.fn().mockResolvedValue([])
+const getConferenceTeamsMock = vi.fn<
+  (...args: unknown[]) => Promise<unknown[]>
+>(async () => [])
 vi.mock('@/lib/teams/sanity', () => ({
   getConferenceTeams: (...a: unknown[]) => getConferenceTeamsMock(...a),
 }))
 
 vi.mock('@/lib/slack/notify', () => ({
-  notifyNewSpeakerMessage: vi.fn().mockResolvedValue(undefined),
-  notifySponsorMessage: vi.fn().mockResolvedValue(undefined),
+  notifyNewSpeakerMessage: vi.fn<(...args: unknown[]) => Promise<unknown>>(
+    async () => undefined,
+  ),
+  notifySponsorMessage: vi.fn<(...args: unknown[]) => Promise<unknown>>(
+    async () => undefined,
+  ),
 }))
 
-const emailMock = vi.fn().mockResolvedValue(undefined)
+const emailMock = vi.fn<(...args: unknown[]) => Promise<unknown>>(
+  async () => undefined,
+)
 vi.mock('./email', () => ({
   sendMessageEmails: (...a: unknown[]) => emailMock(...a),
 }))
@@ -91,7 +101,7 @@ const message: Message = {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
 })
 
 function hubRecipients(): string[] {

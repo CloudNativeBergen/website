@@ -96,6 +96,30 @@ describe('Badge System E2E', () => {
   let badgeId: string
   let decodedCredential: BadgeAssertion | null = null // Decoded JWT credential
 
+  // Every block reads the same credential, so it is generated once here
+  // rather than by whichever test happens to run first.
+  beforeAll(async () => {
+    const config = createTestConfiguration({
+      baseUrl: `https://${TEST_HOST}`,
+      issuer: {
+        id: `https://${TEST_HOST}/api/badge/issuer`,
+        name: testConference.organizer,
+        url: `https://${TEST_HOST}`,
+        email: testConference.contactEmail,
+        description: `Test organization for ${testConference.title}`,
+      },
+    })
+    const result = await generateBadgeCredential(testBadgeParams, config)
+    badgeCredential = result.credentialJwt
+    badgeId = result.badgeId
+    const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
+    if (!publicKey) throw new Error('BADGE_ISSUER_RSA_PUBLIC_KEY not set')
+    decodedCredential = (await verifyCredentialJWT(
+      badgeCredential,
+      publicKey,
+    )) as unknown as BadgeAssertion
+  })
+
   describe('Badge Generation', () => {
     it('should generate valid OpenBadges 3.0 credential as JWT', async () => {
       const config = createTestConfiguration({
@@ -111,8 +135,8 @@ describe('Badge System E2E', () => {
 
       const result = await generateBadgeCredential(testBadgeParams, config)
 
-      badgeCredential = result.credentialJwt
-      badgeId = result.badgeId
+      const badgeCredential = result.credentialJwt
+      const badgeId = result.badgeId
 
       // Badge is now JWT format
       expect(badgeCredential).toBeDefined()
@@ -124,8 +148,8 @@ describe('Badge System E2E', () => {
       if (!publicKey) {
         throw new Error('BADGE_ISSUER_RSA_PUBLIC_KEY not set')
       }
-      decodedCredential = (await verifyCredentialJWT(
-        badgeCredential as string,
+      const decodedCredential = (await verifyCredentialJWT(
+        badgeCredential,
         publicKey,
       )) as unknown as BadgeAssertion
 
@@ -337,35 +361,8 @@ describe('Badge System E2E', () => {
   })
 
   describe('API Endpoints', () => {
-    // Self-seed the shared credential state when this block runs in isolation
-    // (e.g. via .only or test filtering) — the legacy flow blocks above seed it
-    // when the whole file runs in order, but this block must not DEPEND on that
-    // ordering. The guard keeps the full-file run generating exactly once.
-    beforeAll(async () => {
-      if (badgeCredential && badgeId) return
-      const config = createTestConfiguration({
-        baseUrl: `https://${TEST_HOST}`,
-        issuer: {
-          id: `https://${TEST_HOST}/api/badge/issuer`,
-          name: testConference.organizer,
-          url: `https://${TEST_HOST}`,
-          email: testConference.contactEmail,
-          description: `Test organization for ${testConference.title}`,
-        },
-      })
-      const result = await generateBadgeCredential(testBadgeParams, config)
-      badgeCredential = result.credentialJwt
-      badgeId = result.badgeId
-      const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
-      if (!publicKey) throw new Error('BADGE_ISSUER_RSA_PUBLIC_KEY not set')
-      decodedCredential = (await verifyCredentialJWT(
-        badgeCredential,
-        publicKey,
-      )) as unknown as BadgeAssertion
-    })
-
     // Build a badge document whose stored badgeJson is the JWT credential
-    // generated above (or by the flow blocks when the file runs in order).
+    // generated in the top-level beforeAll.
     // getBadgeById is mocked, so the badgeId is irrelevant to lookup — the
     // route always receives this fixture.
     const badgeRecord = (overrides: Partial<BadgeRecord>): BadgeRecord => ({

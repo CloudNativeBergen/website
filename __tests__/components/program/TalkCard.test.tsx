@@ -75,9 +75,10 @@ describe('TalkCard service session vs dangling reference', () => {
  */
 describe('TalkCard feedback sheet', () => {
   afterEach(cleanup)
-  // jsdom's history outlives each test: start every test on a plain entry,
-  // not on the sheet entry an earlier test left open.
-  beforeEach(() => window.history.replaceState(null, ''))
+  // jsdom's history outlives each test. Push a plain entry: it starts the test
+  // off the sheet entry an earlier test left open, and drops any forward
+  // entries an earlier Back left, so the next push grows the history.
+  beforeEach(() => window.history.pushState(null, ''))
 
   const confirmed = {
     ...baseSlot,
@@ -187,7 +188,9 @@ describe('TalkCard feedback sheet', () => {
       await settled()
 
       expect(back).toHaveBeenCalledTimes(1)
-      expect(window.history.state).toEqual({ entry: 'programme' })
+      await waitFor(() =>
+        expect(window.history.state).toEqual({ entry: 'programme' }),
+      )
     } finally {
       back.mockRestore()
     }
@@ -200,15 +203,20 @@ describe('TalkCard feedback sheet', () => {
     act(() => window.history.back())
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     act(() => window.history.forward())
-    await settled()
+    // jsdom traverses on a task: wait for it rather than a fixed delay, which
+    // a loaded runner can outlast.
+    await waitFor(() =>
+      expect(window.history.state).toEqual({ feedbackSheet: true }),
+    )
     const length = window.history.length
 
     fireEvent.click(link())
     expect(window.history.length).toBe(length)
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-    await settled()
 
-    expect(window.history.state).toEqual({ entry: 'programme' })
+    await waitFor(() =>
+      expect(window.history.state).toEqual({ entry: 'programme' }),
+    )
   })
 
   it('keeps the plain link for navigation without the sheet', () => {
