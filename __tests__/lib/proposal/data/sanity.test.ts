@@ -89,6 +89,14 @@ import {
 } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
 
+// clearAllMocks keeps queued once-values and set implementations, so a case
+// whose lookup throws early, or that sets a lasting answer, would feed the
+// next case. Reset the two fetches before every case in the file.
+beforeEach(() => {
+  mockFetch.mockReset()
+  mockWriteFetch.mockReset()
+})
+
 describe('deleteProposal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
