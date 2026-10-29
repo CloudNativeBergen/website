@@ -51,7 +51,9 @@ export const SPONSOR_OVERVIEW_FIELDS = `
   contractCurrency,
   tags,
   nextFollowUpAt,
-  outreachCount
+  outreachCount,
+  contactInitiatedAt,
+  reminderCount
 `
 
 export const SPONSOR_CONTACTS_FIELDS = `
