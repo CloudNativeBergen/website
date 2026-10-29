@@ -168,6 +168,7 @@ export default function VolunteerForm() {
               <button
                 type="button"
                 onClick={() => setShowSuccess(false)}
+                aria-label="Dismiss"
                 className="inline-flex rounded-md bg-green-50 p-1.5 text-green-500 hover:bg-green-100 focus:ring-2 focus:ring-green-600 focus:ring-offset-2 focus:ring-offset-green-50 focus:outline-none dark:bg-green-900/20 dark:hover:bg-green-900/30"
               >
                 <XMarkIcon className="h-5 w-5" aria-hidden="true" />

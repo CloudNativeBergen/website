@@ -118,7 +118,7 @@ export function Header({
                 <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
                 <a
                   href={`https://${previousDomain}`}
-                  className="text-brand-cloud-blue hover:text-brand-slate-gray"
+                  className="text-brand-cloud-blue hover:text-brand-slate-gray dark:hover:text-white"
                 >
                   {previousYear} Conference
                 </a>

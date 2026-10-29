@@ -19,13 +19,13 @@ export function Footer({ c }: { c: Conference }) {
           <nav className="flex flex-col items-center space-y-2 md:flex-row md:space-y-0 md:space-x-6">
             <Link
               href="/conduct"
-              className="font-inter text-base text-brand-cloud-blue transition-colors hover:text-brand-slate-gray"
+              className="font-inter text-base text-brand-cloud-blue transition-colors hover:text-brand-slate-gray dark:hover:text-white"
             >
               Code of Conduct
             </Link>
             <Link
               href="/privacy"
-              className="font-inter text-base text-brand-cloud-blue transition-colors hover:text-brand-slate-gray"
+              className="font-inter text-base text-brand-cloud-blue transition-colors hover:text-brand-slate-gray dark:hover:text-white"
             >
               Privacy Policy
             </Link>
@@ -34,7 +34,7 @@ export function Footer({ c }: { c: Conference }) {
                 control lives on sites running PostHog. */}
             <Link
               href="/privacy#cookies-tracking"
-              className="font-inter text-base text-brand-cloud-blue transition-colors hover:text-brand-slate-gray"
+              className="font-inter text-base text-brand-cloud-blue transition-colors hover:text-brand-slate-gray dark:hover:text-white"
             >
               Cookie settings
             </Link>
@@ -44,7 +44,7 @@ export function Footer({ c }: { c: Conference }) {
               <a
                 key={link}
                 href={link}
-                className="text-brand-cloud-blue hover:text-brand-slate-gray"
+                className="text-brand-cloud-blue hover:text-brand-slate-gray dark:hover:text-white"
               >
                 {iconForLink(link, 'h-12 w-12')}
               </a>

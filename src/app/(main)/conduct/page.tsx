@@ -51,9 +51,8 @@ async function CachedConductContent({ domain }: { domain: string }) {
             <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray dark:text-gray-300 print:mt-4 print:space-y-4 print:text-base print:text-black">
               <p className="print:leading-relaxed">
                 As participants, speakers, sponsors, volunteers, organizers, and
-                contributors in the
-                {organizerName} community, we pledge to respect all people who
-                participate in our events and activities.
+                contributors in the {organizerName} community, we pledge to
+                respect all people who participate in our events and activities.
               </p>
               <p className="print:leading-relaxed">
                 We are committed to making participation in {organizerName}{' '}

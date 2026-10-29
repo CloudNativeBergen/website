@@ -108,7 +108,7 @@ export function SponsorProspectus({
         {conference.vanityMetrics && conference.vanityMetrics.length > 0 && (
           <Container className="relative z-10 mt-16">
             <div className="rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-900">
-              <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+              <dl className="grid grid-cols-2 gap-1 sm:grid-cols-3">
                 {conference.vanityMetrics.map((metric, index) => (
                   <div
                     key={metric.label}
@@ -136,7 +136,7 @@ export function SponsorProspectus({
                     </dd>
                   </div>
                 ))}
-              </div>
+              </dl>
             </div>
           </Container>
         )}
@@ -184,9 +184,9 @@ export function SponsorProspectus({
                           />
                         </div>
                       )}
-                      <h3 className="text-xl leading-7 font-semibold text-gray-900 dark:text-white">
+                      <h2 className="text-xl leading-7 font-semibold text-gray-900 dark:text-white">
                         {benefit.title}
-                      </h3>
+                      </h2>
                       <p className="mt-4 text-base leading-7 text-gray-700 dark:text-gray-200">
                         {benefit.description}
                       </p>

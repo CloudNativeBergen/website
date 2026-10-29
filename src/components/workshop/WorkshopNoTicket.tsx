@@ -62,11 +62,11 @@ export function WorkshopNoTicket({
                 </svg>
               </div>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                <h2 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
                   {denial === 'email-unverified'
                     ? 'Email Address Not Verified'
                     : 'Workshop Ticket Required'}
-                </h3>
+                </h2>
                 <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
                   <p>{reason}</p>
                   {tickets.length > 0 && (
