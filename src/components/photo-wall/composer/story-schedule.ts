@@ -49,5 +49,8 @@ export const STORY_SCHEDULES = [
   },
 ] as ConferenceSchedule[]
 
-/** During the first talk on the main stage, day two. */
-export const STORY_NOW = new Date('2026-11-05T09:20:00')
+/**
+ * During the first talk on the main stage, day two. Schedule times are Oslo
+ * time (CET in November), so the instant carries the offset.
+ */
+export const STORY_NOW = new Date('2026-11-05T09:20:00+01:00')

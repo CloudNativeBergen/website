@@ -26,28 +26,12 @@ describe('Workshop Utils', () => {
   })
 
   describe('formatTime', () => {
-    it('formats morning times correctly', () => {
-      expect(formatTime('09:00')).toBe('9:00 AM')
-      expect(formatTime('08:30')).toBe('8:30 AM')
-    })
-
-    it('formats noon correctly', () => {
-      expect(formatTime('12:00')).toBe('12:00 PM')
-    })
-
-    it('formats afternoon times correctly', () => {
-      expect(formatTime('13:00')).toBe('1:00 PM')
-      expect(formatTime('15:30')).toBe('3:30 PM')
-      expect(formatTime('18:45')).toBe('6:45 PM')
-    })
-
-    it('formats midnight correctly', () => {
-      expect(formatTime('00:00')).toBe('12:00 AM')
-    })
-
-    it('preserves minutes', () => {
-      expect(formatTime('14:15')).toBe('2:15 PM')
-      expect(formatTime('09:45')).toBe('9:45 AM')
+    it('shows 24-hour HH:MM, the house style', () => {
+      expect(formatTime('09:00')).toBe('09:00')
+      expect(formatTime('12:00')).toBe('12:00')
+      expect(formatTime('15:30')).toBe('15:30')
+      expect(formatTime('00:00')).toBe('00:00')
+      expect(formatTime('14:15:00')).toBe('14:15')
     })
   })
 

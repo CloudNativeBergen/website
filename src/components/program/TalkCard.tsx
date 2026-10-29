@@ -144,9 +144,11 @@ const calculateDurationMinutes = (
   startTime: string,
   endTime: string,
 ): number => {
-  const start = new Date(`2000-01-01T${startTime}:00`)
-  const end = new Date(`2000-01-01T${endTime}:00`)
-  return Math.round((end.getTime() - start.getTime()) / (1000 * 60))
+  const toMinutes = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map(Number)
+    return h * 60 + m
+  }
+  return toMinutes(endTime) - toMinutes(startTime)
 }
 
 export function TalkCard({

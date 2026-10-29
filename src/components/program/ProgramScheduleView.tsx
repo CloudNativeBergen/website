@@ -273,7 +273,7 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
               <h3 className="font-space-grotesk text-lg font-semibold text-brand-cloud-blue dark:text-blue-400">
                 <Tab className="ui-not-focus-visible:outline-none">
                   <span className="absolute inset-0" />
-                  <time dateTime={date}>{track.trackTitle}</time>
+                  <span>{track.trackTitle}</span>
                 </Tab>
               </h3>
               <p className="font-inter mt-1 text-sm text-brand-slate-gray dark:text-gray-300">
@@ -489,22 +489,24 @@ const DaySchedule = React.memo(function DaySchedule({
     <div className="space-y-6">
       <div className="text-center">
         {isPast ? (
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="group inline-flex items-center gap-2 transition-colors hover:text-brand-cloud-blue dark:hover:text-blue-400"
-            aria-expanded={isOpen}
-          >
-            <h2 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
-              {formatConferenceDateLong(schedule.date)}
-            </h2>
-            <span className="text-brand-slate-gray dark:text-gray-400">
-              {isOpen ? (
-                <ChevronDownIcon className="h-6 w-6 transition-transform group-hover:scale-110" />
-              ) : (
-                <ChevronRightIcon className="h-6 w-6 transition-transform group-hover:scale-110" />
-              )}
-            </span>
-          </button>
+          <h2 className="font-space-grotesk text-2xl font-semibold">
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="group inline-flex items-center gap-2 transition-colors hover:text-brand-cloud-blue dark:hover:text-blue-400"
+              aria-expanded={isOpen}
+            >
+              <span className="text-brand-slate-gray dark:text-white">
+                {formatConferenceDateLong(schedule.date)}
+              </span>
+              <span className="text-brand-slate-gray dark:text-gray-400">
+                {isOpen ? (
+                  <ChevronDownIcon className="h-6 w-6 transition-transform group-hover:scale-110" />
+                ) : (
+                  <ChevronRightIcon className="h-6 w-6 transition-transform group-hover:scale-110" />
+                )}
+              </span>
+            </button>
+          </h2>
         ) : (
           <h2 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
             {formatConferenceDateLong(schedule.date)}

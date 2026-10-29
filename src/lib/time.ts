@@ -484,19 +484,6 @@ export function exifDateTimeToISO(exifDateTime: string): string {
 }
 
 /**
- * Converts 24-hour time format to 12-hour AM/PM format.
- * @param timeString Time in HH:MM format (e.g., "13:00")
- * @returns Formatted time in 12-hour format (e.g., "1:00 PM")
- */
-export function formatTime12Hour(timeString: string): string {
-  const [hours, minutes] = timeString.split(':')
-  const hour = parseInt(hours)
-  const ampm = hour >= 12 ? 'PM' : 'AM'
-  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
-  return `${displayHour}:${minutes} ${ampm}`
-}
-
-/**
  * Formats an ISO date string as a human-readable relative time (e.g. "5 minutes ago").
  */
 export function formatRelativeTime(isoDate: string): string {

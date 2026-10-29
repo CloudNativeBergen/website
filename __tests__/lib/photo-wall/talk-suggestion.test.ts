@@ -1,6 +1,7 @@
 import type { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
 import { suggestTalks } from '@/lib/photo-wall/talk-suggestion'
 import { clearSimulatedTime, setSimulatedTime } from '@/lib/program/dev-time'
+import { osloLocalInputToIso } from '@/lib/time'
 
 const slot = (id: string, startTime: string, endTime: string): TrackTalk =>
   ({ talk: { _id: id }, startTime, endTime }) as TrackTalk
@@ -33,8 +34,13 @@ const schedules = [
 ]
 
 const ids = (list: { slot: TrackTalk }[]) => list.map((t) => t.slot.talk?._id)
+// Schedule times are Oslo wall-clock, whatever the machine's zone.
 const at = (time: string, room = 'Room A', date = '2026-11-05') =>
-  suggestTalks(schedules, room, new Date(`${date}T${time}:00`))
+  suggestTalks(
+    schedules,
+    room,
+    new Date(osloLocalInputToIso(`${date}T${time}`)!),
+  )
 
 describe('suggestTalks', () => {
   it.each([
@@ -81,7 +87,7 @@ describe('suggestTalks', () => {
 
   it('defaults to the simulated conference time', () => {
     vi.stubEnv('NODE_ENV', 'development')
-    setSimulatedTime('2026-11-05T09:20:00')
+    setSimulatedTime('2026-11-05T09:20:00+01:00')
     try {
       expect(suggestTalks(schedules, 'Room A').suggested?.slot.talk?._id).toBe(
         'a1',

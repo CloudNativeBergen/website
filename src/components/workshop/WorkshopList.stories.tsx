@@ -33,7 +33,7 @@ const makeWorkshop = (
     signups: 30 - available,
     available,
     waitlistCount: available === 0 ? 4 : 0,
-    // startTime/endTime are "HH:MM" (the shape `formatTime12Hour` and the
+    // startTime/endTime are "HH:MM" (the shape `formatTime` and the
     // overlap check expect) — NOT full ISO datetimes.
     date: '2026-09-10',
     startTime: '09:00',

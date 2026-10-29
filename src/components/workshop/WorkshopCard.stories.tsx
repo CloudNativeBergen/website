@@ -19,7 +19,7 @@ const workshop = {
   available: 18,
   waitlistCount: 0,
   date: '2026-09-10',
-  // "HH:MM", the shape the schedule stores and `formatTime12Hour` reads. (An
+  // "HH:MM", the shape the schedule stores and `formatTime` reads. (An
   // ISO string here rendered as "2014:00 PM": `parseInt` read the year.)
   startTime: '09:00',
   endTime: '11:00',
