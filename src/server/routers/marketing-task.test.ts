@@ -281,7 +281,7 @@ const CHECKLIST = {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   h.getConference.mockResolvedValue({
     conference: CONFERENCE,
     domain: 'cloudnativebergen.dev',

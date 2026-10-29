@@ -7,7 +7,7 @@ vi.mock('@/lib/sanity/client', () => ({
 
 import { speakerHasStandingInConference } from './standing'
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => vi.resetAllMocks())
 
 /** First fetch resolves the conference's org; second runs the standing query. */
 function primeFetches(orgId: string | null, standingId: string | null) {

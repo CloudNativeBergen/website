@@ -45,7 +45,7 @@ function signInChecks(checks: SystemCheck[]): SystemCheck[] {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   records.length = 0
   records.push(
     verifiedHost('ready.example.org'),

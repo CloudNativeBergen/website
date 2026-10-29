@@ -591,7 +591,7 @@ function pendingData(): TaskEditorData {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   mocks.query.mockImplementation(() => ({
     data: mocks.data,
     isFetching: false,
