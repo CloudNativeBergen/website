@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
-import { expect, fn, userEvent, within } from 'storybook/test'
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import {
   countByTab,
   type ModerationPost,
@@ -150,7 +150,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The moderation queue on `/admin/photo-wall` (Photo Wall spec §8, §10), slices M4a and M4b: the tabs **Pending**, **On the wall** and **Not shown**, and a card per Wall Post with the whole photo, the square crop the wall shows outlined, caption, name, submitted time and the Marketing OK mark. Each card offers the actions of its status: Pending **Approve**, **Reject**; On the wall **Remove**; Not shown **Approve**; a card with the Marketing OK mark **Withdraw marketing OK** (unticks it only, never ticks: for a contributor who lost the phone’s cookie, §12); every tab **Delete now**; both with an inline confirm. A `deleting` post sits in Not shown with no image, "Couldn’t delete. Try again." and only **Try again** (§12). The Pending tab has **Approve all pending (N)** with an inline confirm. What an action did is said once, politely, above the tabs. Photos are plain `<img>` elements of their Sanity URLs, never `next/image` (§5.1). One column on a phone, a grid on desktop. Dark mode follows the global `theme` toolbar (story-level `globals`).',
+          'The moderation queue on `/admin/photo-wall` (Photo Wall spec §8, §10), slices M4a and M4b: the tabs **Pending**, **On the wall** and **Not shown**, and a card per Wall Post with the whole photo, the square crop the wall shows outlined, caption, name, submitted time and the Marketing OK mark. Each card offers the actions of its status: Pending **Approve**, **Reject**; On the wall **Remove**; Not shown **Approve**; a card with the Marketing OK mark **Withdraw marketing OK** (unticks it only, never ticks: for a contributor who lost the phone’s cookie, §12); every tab **Delete now**; both with an inline confirm, and in the card’s ⋯ menu with the talk tag. A `deleting` post sits in Not shown with no image, "Couldn’t delete. Try again." and only **Try again** (§12). The Pending tab has **Approve all pending (N)** with an inline confirm. What an action did is said once, politely, above the tabs. Photos are plain `<img>` elements of their Sanity URLs, never `next/image` (§5.1). Cards show a square thumbnail (click to enlarge), two columns on a phone, up to five on a wide screen. Dark mode follows the global `theme` toolbar (story-level `globals`).',
       },
     },
   },
@@ -165,6 +165,56 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 const PHONE = { viewport: { defaultViewport: 'mobile1' } }
+
+/** The ⋯ menu's items render in a portal, outside the card. */
+const page = () => within(document.body)
+const openMenu = (card: HTMLElement) =>
+  userEvent.click(within(card).getByRole('button', { name: 'More actions' }))
+const choose = async (card: HTMLElement, name: string) => {
+  await openMenu(card)
+  await userEvent.click(page().getByRole('menuitem', { name }))
+}
+
+/**
+ * The ⋯ menu: the talk tag, Withdraw marketing OK (only with the mark) and
+ * Delete now. Approve and Reject stay on the card.
+ */
+export const MoreActions: Story = {
+  play: async ({ canvasElement }) => {
+    const [first] = within(canvasElement).getAllByRole('article')
+    await openMenu(first)
+    await expect(
+      page()
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Withdraw marketing OK', 'Delete now'])
+  },
+}
+export const MoreActionsDark: Story = {
+  ...MoreActions,
+  globals: { theme: 'dark' },
+}
+export const MoreActionsPhone: Story = { ...MoreActions, parameters: PHONE }
+export const MoreActionsPhoneDark: Story = {
+  ...MoreActions,
+  parameters: PHONE,
+  globals: { theme: 'dark' },
+}
+
+/** A thumbnail opens the whole photo, its crop outlined, in a dialog. */
+export const Enlarged: Story = {
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(canvasElement).getAllByRole('button', { name: /^Enlarge/ })[0],
+    )
+    const dialog = await page().findByRole('dialog')
+    await waitFor(() =>
+      expect(within(dialog).getByTestId('crop-outline')).toBeVisible(),
+    )
+  },
+}
+export const EnlargedDark: Story = { ...Enlarged, globals: { theme: 'dark' } }
+export const EnlargedPhone: Story = { ...Enlarged, parameters: PHONE }
 
 export const Pending: Story = {
   play: async ({ canvasElement }) => {
@@ -341,7 +391,18 @@ export const ExtremeShapes: Story = {
   parameters: PHONE,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    const tall = within(canvas.getByRole('article', { name: 'Tall one' }))
+    const tallCard = canvas.getByRole('article', { name: 'Tall one' })
+    // The thumbnail is square, the photo fitted into it.
+    const thumb = within(tallCard).getByTestId('thumb-box')
+    const frame = thumb.parentElement!.getBoundingClientRect()
+    await expect(Math.abs(frame.width - frame.height)).toBeLessThan(1)
+    await expect(
+      Math.abs(thumb.getBoundingClientRect().height - frame.height),
+    ).toBeLessThan(1)
+    await userEvent.click(
+      within(tallCard).getByRole('button', { name: /^Enlarge/ }),
+    )
+    const tall = within(await page().findByRole('dialog'))
     const box = tall.getByTestId('photo-box').getBoundingClientRect()
     await expect(box.height).toBeLessThanOrEqual(window.innerHeight * 0.7 + 1)
     // The rendered photo is the box: the outline is placed on the photo.
@@ -592,9 +653,7 @@ export const DeleteConfirm: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     const first = canvas.getAllByRole('article')[0]
-    await userEvent.click(
-      within(first).getByRole('button', { name: 'Delete now' }),
-    )
+    await choose(first, 'Delete now')
     const confirm = within(first).getByRole('group', {
       name: 'Delete this photo for good? It can’t be undone.',
     })
@@ -625,17 +684,14 @@ export const DeleteConfirmPhoneDark: Story = {
 export const WithdrawMarketingConfirm: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
-    const [first, second, third] = canvas.getAllByRole('article')
+    const [first, second] = canvas.getAllByRole('article')
     // Only the first Pending card has the mark.
+    await openMenu(second)
     await expect(
-      within(second).queryByRole('button', { name: 'Withdraw marketing OK' }),
+      page().queryByRole('menuitem', { name: 'Withdraw marketing OK' }),
     ).toBeNull()
-    await expect(
-      within(third).queryByRole('button', { name: 'Withdraw marketing OK' }),
-    ).toBeNull()
-    await userEvent.click(
-      within(first).getByRole('button', { name: 'Withdraw marketing OK' }),
-    )
+    await userEvent.keyboard('{Escape}')
+    await choose(first, 'Withdraw marketing OK')
     const confirm = within(first).getByRole('group', {
       name: 'Withdraw marketing OK? The photo leaves the marketing export. Only the contributor can give it again.',
     })
@@ -793,11 +849,14 @@ export const TalkTag: Story = {
     await expect(within(tagged).getByTestId('talk-tag')).toHaveTextContent(
       'Talk: Opening keynote: ten years of cloud native · Ada Lovelace',
     )
+    await openMenu(tagged)
     await expect(
-      within(tagged).getByRole('button', { name: 'Clear tag' }),
+      page().getByRole('menuitem', { name: 'Clear tag' }),
     ).toBeVisible()
+    await userEvent.keyboard('{Escape}')
+    await openMenu(untagged)
     await expect(
-      within(untagged).getByRole('button', { name: 'Add talk' }),
+      page().getByRole('menuitem', { name: 'Add talk' }),
     ).toBeVisible()
   },
 }
@@ -808,9 +867,7 @@ export const TalkTagPicker: Story = {
   args: TalkTag.args,
   play: async ({ canvasElement, args }) => {
     const second = within(canvasElement).getAllByRole('article')[1]
-    await userEvent.click(
-      within(second).getByRole('button', { name: 'Add talk' }),
-    )
+    await choose(second, 'Add talk')
     await userEvent.type(within(second).getByRole('searchbox'), 'k')
     await userEvent.click(
       within(second).getByRole('button', { name: /Kubernetes at scale/ }),
@@ -819,9 +876,7 @@ export const TalkTagPicker: Story = {
       expect.objectContaining({ caption: 'Hallway track' }),
       'talk-2',
     )
-    await userEvent.click(
-      within(second).getByRole('button', { name: 'Add talk' }),
-    )
+    await choose(second, 'Add talk')
   },
 }
 export const TalkTagPickerDark: Story = {

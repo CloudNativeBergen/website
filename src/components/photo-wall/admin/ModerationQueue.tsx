@@ -316,7 +316,9 @@ export function ModerationQueueView({
       last.card === null
         ? undefined
         : cards[Math.min(last.card, cards.length - 1)]
-    const target = card?.querySelector('button') ?? tabRefs.current[tab]
+    const target =
+      card?.querySelector<HTMLElement>('[data-decision]') ??
+      tabRefs.current[tab]
     target?.focus()
   }, [queue, tab])
 
@@ -501,7 +503,7 @@ export function ModerationQueueView({
             {tab === 'pending' ? emptyPending(posting) : EMPTY[tab]}
           </p>
         ) : (
-          <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-2 items-start gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {posts.map((post) => (
               <WallPostCard
                 key={cardKey(post)}
@@ -533,12 +535,12 @@ function Skeleton() {
   return (
     <div
       aria-hidden="true"
-      className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+      className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
     >
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="aspect-4/3 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800"
+          className="aspect-square animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800"
         />
       ))}
     </div>

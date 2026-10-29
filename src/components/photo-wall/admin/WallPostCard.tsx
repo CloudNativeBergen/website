@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import { CheckBadgeIcon } from '@heroicons/react/24/solid'
-import { PhotoIcon } from '@heroicons/react/24/outline'
+import { EllipsisHorizontalIcon, PhotoIcon } from '@heroicons/react/24/outline'
+import { ModalShell } from '@/components/ModalShell'
 import {
   allowsFrom,
   cropOutline,
@@ -65,19 +67,43 @@ export function WallPostCard({
   talks = [],
   onSetTalk,
 }: WallPostCardProps) {
+  const [enlarged, setEnlarged] = useState(false)
+  const tagging = useTalkTag(
+    post,
+    post.status === 'deleting' ? undefined : onSetTalk,
+  )
+  const alt = photoAlt(post.name)
   return (
     // Named by its caption; without one the photo's "Photo by …" says who,
     // and the card does not repeat it.
     <article
       aria-label={post.caption ?? undefined}
-      className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+      className="relative overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
     >
       {post.photo ? (
-        <Photo photo={post.photo} crop={post.crop} name={post.name} />
+        <>
+          <button
+            type="button"
+            aria-label={`Enlarge: ${alt}`}
+            onClick={() => setEnlarged(true)}
+            className="block w-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-cloud-blue dark:focus-visible:outline-indigo-400"
+          >
+            <Photo photo={post.photo} crop={post.crop} alt={alt} thumb />
+          </button>
+          <ModalShell
+            isOpen={enlarged}
+            onClose={() => setEnlarged(false)}
+            size="4xl"
+            ariaLabel={alt}
+            padded={false}
+          >
+            <Photo photo={post.photo} crop={post.crop} alt={alt} />
+          </ModalShell>
+        </>
       ) : (
         <NoPhoto />
       )}
-      <div className="space-y-1.5 p-3 sm:p-4">
+      <div className="space-y-1.5 p-2.5 sm:p-3">
         {post.status === 'deleting' && (
           <p className="text-sm font-medium text-red-700 dark:text-red-400">
             Couldn’t delete. Try again.
@@ -86,7 +112,8 @@ export function WallPostCard({
         {post.caption && (
           <p
             dir="auto"
-            className="text-sm wrap-anywhere text-gray-900 dark:text-white"
+            title={post.caption}
+            className="line-clamp-2 text-sm wrap-anywhere text-gray-900 dark:text-white"
           >
             {post.caption}
           </p>
@@ -123,29 +150,26 @@ export function WallPostCard({
             onAction={onAction}
             busy={busy}
             failed={failed}
+            tagging={tagging}
           />
         )}
-        <TalkTag
-          post={post}
-          talks={talks}
-          onSetTalk={post.status === 'deleting' ? undefined : onSetTalk}
-        />
+        <TalkTag post={post} talks={talks} tagging={tagging} />
       </div>
     </article>
   )
 }
 
 /**
- * The actions a status offers: the decisions its transitions allow (§10),
- * and Delete, which every status allows; a `deleting` post only that, as
- * Try again.
+ * The decisions a status's transitions allow (§10), as buttons on the card.
+ * Delete, which every status allows, is in the ⋯ menu; a `deleting` post
+ * offers only it, as a Try again button.
  */
-const actionsFor = (status: ModerationPost['status']): PostAction[] => [
-  ...(['approve', 'reject', 'remove'] as const).filter((action) =>
-    allowsFrom(action, status),
-  ),
-  'delete',
-]
+const decisionsFor = (status: ModerationPost['status']): PostAction[] =>
+  status === 'deleting'
+    ? ['delete']
+    : (['approve', 'reject', 'remove'] as const).filter((action) =>
+        allowsFrom(action, status),
+      )
 
 /**
  * Withdraw marketing OK, on its own quiet line, while the post has the mark
@@ -191,9 +215,9 @@ const BUTTON =
 const PRIMARY = `${BUTTON} bg-green-700 text-white hover:bg-green-800`
 const SECONDARY = `${BUTTON} bg-white text-gray-900 ring-1 ring-gray-300 hover:bg-gray-50 ring-inset dark:bg-gray-700 dark:text-white dark:ring-gray-500 dark:hover:bg-gray-600`
 const DANGER = `${BUTTON} bg-red-700 text-white hover:bg-red-800 dark:bg-red-600 dark:hover:bg-red-500`
-const QUIET =
-  'inline-flex min-h-10 items-center rounded-md text-sm font-medium text-gray-600 underline underline-offset-2 hover:text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-disabled:cursor-wait aria-disabled:opacity-60 dark:text-gray-300 dark:hover:text-white dark:focus-visible:outline-indigo-400'
 const DANGER_QUIET = `${BUTTON} bg-white text-red-700 ring-1 ring-red-300 hover:bg-red-50 ring-inset dark:bg-gray-800 dark:text-red-400 dark:ring-red-500/60 dark:hover:bg-red-950`
+const MENU_ITEM =
+  'block w-full rounded-md px-3 py-2 text-left text-sm text-gray-900 data-focus:bg-gray-100 dark:text-white dark:data-focus:bg-gray-700'
 
 /** What each inline confirm asks, and how it looks. */
 const CONFIRMS: Record<
@@ -221,47 +245,50 @@ function Actions({
   onAction,
   busy,
   failed,
+  tagging,
 }: {
   post: ModerationPost
   onAction: NonNullable<WallPostCardProps['onAction']>
   busy: PostAction | null
   failed: PostAction | null
+  tagging: TalkTagging
 }) {
   const [confirming, setConfirming] = useState<Confirmed | null>(null)
   const confirmId = useId()
-  // The pressed button leaves the page as the confirm replaces it, and back:
-  // focus follows, to Cancel (never the irreversible choice) and to the
-  // button that asked.
+  // The ⋯ menu leaves the page as the confirm replaces it, and back: focus
+  // follows, to Cancel (never the irreversible choice) and to the ⋯ button
+  // the choice was made from.
   const cancelRef = useRef<HTMLButtonElement>(null)
-  const askedRefs = useRef<Partial<Record<Confirmed, HTMLButtonElement>>>({})
+  // The ⋯ button, or Try again on a `deleting` post (which has no menu).
+  const menuRef = useRef<HTMLButtonElement>(null)
   const groupRef = useRef<HTMLDivElement>(null)
   // The button to hand focus back to on the next render, if any.
-  const handBackTo = useRef<Confirmed | 'cancel' | null>(null)
+  const handBackTo = useRef<'menu' | 'cancel' | null>(null)
   useEffect(() => {
     const to = handBackTo.current
     if (!to) return
     handBackTo.current = null
-    ;(to === 'cancel' ? cancelRef.current : askedRefs.current[to])?.focus()
+    ;(to === 'cancel' ? cancelRef : menuRef).current?.focus()
   }, [confirming])
   const ask = (action: Confirmed) => {
     handBackTo.current = 'cancel'
     setConfirming(action)
   }
   const close = (handBack = true) => {
-    handBackTo.current = handBack ? confirming : null
+    handBackTo.current = handBack ? 'menu' : null
     setConfirming(null)
   }
   // A poll can take Withdraw away while it asks: another organizer withdrew
   // the mark, or started a Delete. The confirm closes for good in that
   // render (never a Withdraw without the mark, nor in place of Try again),
-  // and focus, if it went with it, goes to Delete now (or Try again).
+  // and focus, if it went with it, goes to the ⋯ button (or Try again).
   const [dismissals, setDismissals] = useState(0)
   if (confirming === 'withdrawMarketing' && !offersWithdraw(post)) {
     setConfirming(null)
     setDismissals((n) => n + 1)
   }
   useEffect(() => {
-    if (dismissals && focusIsWith(null)) askedRefs.current.delete?.focus()
+    if (dismissals && focusIsWith(null)) menuRef.current?.focus()
   }, [dismissals])
 
   const run = async (action: PostAction) => {
@@ -322,86 +349,114 @@ function Actions({
           {LABELS[failed].failed}
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
-        {actionsFor(post.status).map((action) => {
-          const label =
-            busy === action
+      <div className="flex gap-1.5">
+        {decisionsFor(post.status).map((action) => (
+          <button
+            key={action}
+            ref={action === 'delete' ? menuRef : undefined}
+            data-decision
+            type="button"
+            aria-disabled={busy !== null || undefined}
+            // Try again finishes a delete already confirmed.
+            onClick={() => run(action)}
+            className={`min-w-0 flex-1 basis-0 px-1 text-xs sm:px-2 sm:text-sm ${(action ===
+            'approve'
+              ? PRIMARY
+              : action === 'delete'
+                ? DANGER_QUIET
+                : SECONDARY
+            ).replace('px-3 text-sm', '')}`}
+          >
+            {busy === action
               ? LABELS[action].busy
               : deleting
                 ? 'Try again'
-                : LABELS[action].idle
-          return (
-            <button
-              key={action}
-              ref={
-                action === 'delete'
-                  ? (node) => {
-                      askedRefs.current.delete = node ?? undefined
-                    }
-                  : undefined
-              }
-              type="button"
-              aria-disabled={busy !== null || undefined}
-              onClick={() =>
-                // Delete now asks first; Try again finishes a delete
-                // already confirmed.
-                action === 'delete' && !deleting
-                  ? !busy && ask(action)
-                  : run(action)
-              }
-              className={
-                action === 'approve'
-                  ? PRIMARY
-                  : action === 'delete'
-                    ? `${DANGER_QUIET} ${deleting ? '' : 'ml-auto'}`
-                    : SECONDARY
-              }
-            >
-              {label}
-            </button>
-          )
-        })}
+                : LABELS[action].idle}
+          </button>
+        ))}
       </div>
-      {offersWithdraw(post) && (
-        <button
-          ref={(node) => {
-            askedRefs.current.withdrawMarketing = node ?? undefined
-          }}
-          type="button"
-          aria-disabled={busy !== null || undefined}
-          onClick={() => !busy && ask('withdrawMarketing')}
-          className={QUIET}
-        >
-          {busy === 'withdrawMarketing'
-            ? LABELS.withdrawMarketing.busy
-            : LABELS.withdrawMarketing.idle}
-        </button>
+      {!deleting && (
+        <Menu>
+          <MenuButton
+            ref={menuRef}
+            aria-label="More actions"
+            aria-disabled={busy !== null || undefined}
+            className="absolute top-2 right-2 inline-flex size-9 items-center justify-center rounded-full bg-white/90 text-gray-700 shadow-sm ring-1 ring-gray-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue aria-disabled:cursor-wait dark:bg-gray-800/90 dark:text-gray-200 dark:ring-gray-600 dark:focus-visible:outline-indigo-400"
+          >
+            <EllipsisHorizontalIcon className="size-5" aria-hidden="true" />
+          </MenuButton>
+          <MenuItems
+            anchor="bottom end"
+            className="z-50 w-56 rounded-lg border border-gray-200 bg-white p-1 shadow-lg [--anchor-gap:4px] focus:outline-none dark:border-gray-600 dark:bg-gray-800"
+          >
+            {tagging.onSetTalk && (
+              <MenuItem>
+                <button
+                  type="button"
+                  onClick={() => tagging.setPicking(true)}
+                  className={MENU_ITEM}
+                >
+                  {post.talk ? 'Change talk' : 'Add talk'}
+                </button>
+              </MenuItem>
+            )}
+            {tagging.onSetTalk && post.talk && (
+              <MenuItem>
+                <button
+                  type="button"
+                  onClick={() => tagging.set(null)}
+                  className={MENU_ITEM}
+                >
+                  Clear tag
+                </button>
+              </MenuItem>
+            )}
+            {offersWithdraw(post) && (
+              <MenuItem>
+                <button
+                  type="button"
+                  onClick={() => !busy && ask('withdrawMarketing')}
+                  className={MENU_ITEM}
+                >
+                  {busy === 'withdrawMarketing'
+                    ? LABELS.withdrawMarketing.busy
+                    : LABELS.withdrawMarketing.idle}
+                </button>
+              </MenuItem>
+            )}
+            <MenuItem>
+              <button
+                type="button"
+                onClick={() => !busy && ask('delete')}
+                className={`${MENU_ITEM} text-red-700 dark:text-red-400`}
+              >
+                {busy === 'delete' ? LABELS.delete.busy : LABELS.delete.idle}
+              </button>
+            </MenuItem>
+          </MenuItems>
+        </Menu>
       )}
     </div>
   )
 }
 
-/**
- * The post's talk tag (Talk photos spec §6.3): the talk and its speakers, or
- * that there is none; with `onSetTalk`, Add talk or Change (a searchable
- * list of this conference's talks) and Clear tag. Only the tag changes.
- */
-function TalkTag({
-  post,
-  talks,
-  onSetTalk,
-}: {
-  post: ModerationPost
-  talks: WallPostTalk[]
+/** A post's talk tag and its write, shared by the ⋯ menu and the picker. */
+interface TalkTagging {
   onSetTalk?: WallPostCardProps['onSetTalk']
-}) {
+  picking: boolean
+  setPicking: (on: boolean) => void
+  busy: boolean
+  failed: boolean
+  set: (talkId: string | null) => Promise<void>
+}
+
+function useTalkTag(
+  post: ModerationPost,
+  onSetTalk?: WallPostCardProps['onSetTalk'],
+): TalkTagging {
   const [picking, setPicking] = useState(false)
-  const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
-  const listId = useId()
-  const tag = post.talk ?? null
-
   const set = async (talkId: string | null) => {
     if (!onSetTalk || busy) return
     setBusy(true)
@@ -413,6 +468,26 @@ function TalkTag({
     setFailed(outcome === 'failed')
     if (outcome !== 'failed') setPicking(false)
   }
+  return { onSetTalk, picking, setPicking, busy, failed, set }
+}
+
+/**
+ * The post's talk tag (Talk photos spec §6.3): the talk and its speakers, or
+ * that there is none; the ⋯ menu's Add talk or Change talk opens a
+ * searchable list of this conference's talks here. Only the tag changes.
+ */
+function TalkTag({
+  post,
+  talks,
+  tagging: { onSetTalk, picking, setPicking, busy, failed, set },
+}: {
+  post: ModerationPost
+  talks: WallPostTalk[]
+  tagging: TalkTagging
+}) {
+  const [search, setSearch] = useState('')
+  const listId = useId()
+  const tag = post.talk ?? null
 
   const needle = search.trim().toLowerCase()
   const found = talks.filter((talk) =>
@@ -435,33 +510,12 @@ function TalkTag({
         ) : (
           'No talk tagged.'
         )}
+        {busy && ' Saving…'}
       </p>
       {failed && (
         <p role="alert" className="text-sm text-red-700 dark:text-red-400">
           Couldn’t change the tag. Try again.
         </p>
-      )}
-      {onSetTalk && !picking && (
-        <div className="flex flex-wrap gap-x-4">
-          <button
-            type="button"
-            aria-disabled={busy || undefined}
-            onClick={() => !busy && setPicking(true)}
-            className={QUIET}
-          >
-            {tag ? 'Change' : 'Add talk'}
-          </button>
-          {tag && (
-            <button
-              type="button"
-              aria-disabled={busy || undefined}
-              onClick={() => set(null)}
-              className={QUIET}
-            >
-              {busy ? 'Clearing…' : 'Clear tag'}
-            </button>
-          )}
-        </div>
       )}
       {onSetTalk && picking && (
         <div className="space-y-2 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-900/40">
@@ -515,6 +569,9 @@ function TalkTag({
 
 const pct = (fraction: number) => `${fraction * 100}%`
 
+const photoAlt = (name: string | null) =>
+  name ? `Photo by ${name}` : 'Posted photo'
+
 /** A tall photo is shown no taller than this share of the viewport. */
 const MAX_PHOTO_VH = 70
 
@@ -530,26 +587,35 @@ const MAX_PHOTO_VH = 70
 function Photo({
   photo,
   crop,
-  name,
+  alt,
+  thumb = false,
 }: {
   photo: ModerationPhoto
   crop: WallPostCrop
-  name: string | null
+  alt: string
+  /** The card's square thumbnail: the whole photo fitted into a square. */
+  thumb?: boolean
 }) {
   const box = cropOutline(photo, crop)
+  const ratio = photo.width / photo.height
   return (
-    <div className="flex min-h-32 items-center justify-center bg-gray-100 dark:bg-gray-900">
+    <div
+      className={`flex items-center justify-center bg-gray-100 dark:bg-gray-900 ${thumb ? 'aspect-square' : 'min-h-32'}`}
+    >
       <div
-        data-testid="photo-box"
+        data-testid={thumb ? 'thumb-box' : 'photo-box'}
         className="relative overflow-hidden"
         style={{
           aspectRatio: `${photo.width} / ${photo.height}`,
-          width: `min(100%, ${MAX_PHOTO_VH}vh * ${photo.width / photo.height})`,
+          // In the square, a portrait is as tall as the square.
+          width: thumb
+            ? `${Math.min(1, ratio) * 100}%`
+            : `min(100%, ${MAX_PHOTO_VH}vh * ${ratio})`,
         }}
       >
         <img
           src={photo.url}
-          alt={name ? `Photo by ${name}` : 'Posted photo'}
+          alt={alt}
           width={photo.width}
           height={photo.height}
           loading="lazy"
@@ -558,7 +624,7 @@ function Photo({
         />
         {/* The square the wall shows; what lies outside it is dimmed. */}
         <div
-          data-testid="crop-outline"
+          data-testid={thumb ? 'thumb-outline' : 'crop-outline'}
           aria-hidden="true"
           className="pointer-events-none absolute shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] outline-2 -outline-offset-2 outline-white/90"
           style={{
