@@ -861,3 +861,126 @@ describe('submitWallPost: the wall closes during the upload (§11.1)', () => {
     expect(store().commits).toHaveLength(1)
   })
 })
+
+describe('submitWallPost: trusted posters skip approval (§6.6)', () => {
+  const orgConference = { ...conference, organization: { _ref: 'org-A' } }
+  const session = (
+    speaker: Record<string, unknown>,
+    extra: Record<string, unknown> = {},
+  ) =>
+    ({
+      user: { name: 'x', email: 'x@example.com', picture: '' },
+      speaker: { name: 'Ola Speaker', organizerOrgIds: [], ...speaker },
+      ...extra,
+    }) as unknown as WallSubmitRequest['session']
+  const ORGANIZER = session({ _id: 'speaker-org', organizerOrgIds: ['org-A'] })
+  const speakerTalk = (status: string, conferenceRef = 'conf-A'): Doc => ({
+    ...talk(`talk-${status}-${conferenceRef}`, conferenceRef),
+    status,
+    speakers: [{ _type: 'reference', _ref: 'speaker-1' }],
+  })
+  const trustedSubmit = (overrides: Partial<WallSubmitRequest> = {}) =>
+    submit({ conference: orgConference, ...overrides })
+  const stored = () => store().doc(`wallPost-${UPLOAD_ID}`)!
+
+  beforeEach(() => store().reset([wall({ trustedPostersSkipApproval: true })]))
+
+  it('approves an organizer of this conference’s organization at once, with the audit trail', async () => {
+    await expect(trustedSubmit({ session: ORGANIZER })).resolves.toEqual({
+      ok: true,
+    })
+    expect(stored()).toMatchObject({
+      status: 'approved',
+      approvedAt: NOW.toISOString(),
+      decidedAt: NOW.toISOString(),
+      name: 'Kari',
+      autoApproval: {
+        speaker: { _type: 'reference', _ref: 'speaker-org', _weak: true },
+        role: 'organizer',
+      },
+    })
+    expect(stored().autoApproval).not.toHaveProperty('realAdmin')
+  })
+
+  it('records the real admin behind an impersonation', async () => {
+    store().put(speakerTalk('confirmed'))
+    await trustedSubmit({
+      session: session(
+        { _id: 'speaker-1' },
+        { isImpersonating: true, realAdmin: { _id: 'speaker-admin' } },
+      ),
+    })
+    expect(stored().autoApproval).toEqual({
+      speaker: { _type: 'reference', _ref: 'speaker-1', _weak: true },
+      role: 'speaker',
+      realAdmin: { _type: 'reference', _ref: 'speaker-admin', _weak: true },
+    })
+  })
+
+  it('approves a speaker with a confirmed talk at this conference', async () => {
+    store().put(speakerTalk('confirmed'))
+    await trustedSubmit({ session: session({ _id: 'speaker-1' }) })
+    expect(stored()).toMatchObject({
+      status: 'approved',
+      autoApproval: { role: 'speaker' },
+    })
+  })
+
+  it.each([
+    [
+      'an accepted but unconfirmed speaker',
+      () => store().put(speakerTalk('accepted')),
+      session({ _id: 'speaker-1' }),
+    ],
+    [
+      'a speaker confirmed at another conference',
+      () => store().put(speakerTalk('confirmed', 'conf-B')),
+      session({ _id: 'speaker-1' }),
+    ],
+    [
+      'an organizer of another organization',
+      () => {},
+      session({ _id: 'speaker-org', organizerOrgIds: ['org-B'] }),
+    ],
+    ['a signed-out poster', () => {}, null],
+  ])('keeps %s pending', async (_, seed, who) => {
+    seed()
+    await trustedSubmit({ session: who })
+    expect(stored().status).toBe('pending')
+    expect(stored()).not.toHaveProperty('autoApproval')
+    expect(stored()).not.toHaveProperty('approvedAt')
+  })
+
+  it('keeps everyone pending while the switch is off (a missing value is off)', async () => {
+    store().reset([wall(), speakerTalk('confirmed')])
+    await trustedSubmit({ session: ORGANIZER })
+    expect(stored().status).toBe('pending')
+    await trustedSubmit({
+      session: session({ _id: 'speaker-1' }),
+      form: form({ uploadId: OTHER_UPLOAD_ID }),
+    })
+    expect(store().doc(`wallPost-${OTHER_UPLOAD_ID}`)!.status).toBe('pending')
+  })
+
+  it('expires the public wall and the tagged talk', async () => {
+    store().put(talk('talk-A', 'conf-A'))
+    await trustedSubmit({
+      session: ORGANIZER,
+      form: form({ talkId: 'talk-A' }),
+    })
+    expect(h.revalidateTag.mock.calls).toEqual([
+      ['photo-wall-admin:conf-A', { expire: 0 }],
+      [`photo-wall-device:${DEVICE.key}`, { expire: 0 }],
+      ['photo-wall:conf-A', { expire: 0 }],
+      ['photo-wall-talk:talk-A', { expire: 0 }],
+    ])
+  })
+
+  it('without the device cookie, refuses as today, whoever is signed in', async () => {
+    await expect(
+      trustedSubmit({ session: ORGANIZER, device: null }),
+    ).resolves.toEqual({ ok: false, refusal: 'failed' })
+    expect(h.uploads).toHaveLength(0)
+    expect(posts()).toHaveLength(0)
+  })
+})

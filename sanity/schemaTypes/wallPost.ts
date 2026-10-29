@@ -103,6 +103,32 @@ export default defineType({
       description: 'The last Approve, Reject or Remove.',
       type: 'datetime',
     }),
+    defineField({
+      name: 'autoApproval',
+      title: 'Auto-approved',
+      description:
+        'A trusted poster’s post, approved at Submit: who, as which role, and the organizer behind an impersonation.',
+      type: 'object',
+      fields: [
+        defineField({
+          name: 'speaker',
+          type: 'reference',
+          to: [{ type: 'speaker' }],
+          weak: true,
+        }),
+        defineField({
+          name: 'role',
+          type: 'string',
+          options: { list: ['organizer', 'speaker'] },
+        }),
+        defineField({
+          name: 'realAdmin',
+          type: 'reference',
+          to: [{ type: 'speaker' }],
+          weak: true,
+        }),
+      ],
+    }),
   ],
   preview: {
     select: { caption: 'caption', status: 'status', media: 'photo' },

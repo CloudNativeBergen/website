@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getAuthSession } from '@/lib/auth'
 import type { WallSubmitRefusal } from '@/lib/photo-wall/post'
 import { readDeviceCookie, wallConference } from '@/lib/photo-wall/request'
 import { submitWallPost } from '@/lib/photo-wall/submit'
@@ -103,6 +104,8 @@ export async function POST(request: Request) {
     device: await readDeviceCookie(),
     form,
     now: new Date(),
+    // The session cookie is on `Path=/`, so it arrives here too (§6.6).
+    session: await getAuthSession({ url: request.url, headers: request.headers }),
   })
   return outcome.ok ? NextResponse.json({ ok: true }) : refused(outcome.refusal)
 }

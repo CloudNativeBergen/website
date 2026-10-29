@@ -367,6 +367,7 @@ const VIEW: PhotoWallAdminView = {
     postingMode: 'open',
     sponsorStrip: false,
     look: 'pinboard',
+    trustedPostersSkipApproval: false,
     closedAt: null,
   },
   posting: 'open',
