@@ -15,6 +15,7 @@ import {
 } from '@/components/admin/sponsor/SponsorSendModal'
 import { SponsorDetailHeader } from '@/components/admin/sponsor-crm/widgets/SponsorDetailHeader'
 import { SponsorOverviewWidget } from '@/components/admin/sponsor-crm/widgets/SponsorOverviewWidget'
+import { SponsorFollowUpWidget } from '@/components/admin/sponsor-crm/widgets/SponsorFollowUpWidget'
 import { SponsorContactsWidget } from '@/components/admin/sponsor-crm/widgets/SponsorContactsWidget'
 import { SponsorContractWidget } from '@/components/admin/sponsor-crm/widgets/SponsorContractWidget'
 import { SponsorActivityFeedWidget } from '@/components/admin/sponsor-crm/widgets/SponsorActivityFeedWidget'
@@ -114,6 +115,11 @@ export function SponsorDashboardClient({
                 sponsorId={sponsorId}
                 initialData={initialOverview}
                 onEdit={() => openRecord('pipeline')}
+              />
+              <SponsorFollowUpWidget
+                sponsorId={sponsorId}
+                initialData={initialOverview}
+                onChanged={refresh}
               />
               <SponsorContactsWidget
                 sponsorId={sponsorId}

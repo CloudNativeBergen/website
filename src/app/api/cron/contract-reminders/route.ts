@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { clientWrite } from '@/lib/sanity/client'
 import { sendContractReminderBySystem } from '@/lib/sponsor-crm/contract-communication'
+import { MAX_REMINDERS } from '@/lib/sponsor-crm/contract-send-state'
 import { unstable_noStore as noStore } from 'next/cache'
 
-const MAX_REMINDERS = 2
 const REMINDER_THRESHOLD_DAYS = 5
 
 /**
