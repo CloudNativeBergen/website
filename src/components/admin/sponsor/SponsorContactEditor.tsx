@@ -16,6 +16,7 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import { SponsorContactRoleSelect } from '@/components/admin/sponsor/SponsorContactRoleSelect'
 import { nanoid } from 'nanoid'
 import { api } from '@/lib/trpc/client'
+import { useRefreshSponsor } from '@/hooks/useRefreshSponsor'
 import { useNotification } from '../NotificationProvider'
 
 interface SponsorContactEditorProps {
@@ -70,11 +71,11 @@ export function SponsorContactEditor({
     )
   }, [contacts, billing])
   const { showNotification } = useNotification()
-  const utils = api.useUtils()
+  const refreshSponsor = useRefreshSponsor()
 
   const updateCRMMutation = api.sponsor.crm.update.useMutation({
-    onSuccess: async () => {
-      await utils.sponsor.crm.list.invalidate()
+    onSuccess: () => {
+      refreshSponsor(sponsorForConference._id)
       showNotification({
         type: 'success',
         title: 'Contacts updated',

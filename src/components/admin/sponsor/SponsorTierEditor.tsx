@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import { useTheme } from 'next-themes'
+import { useRouter } from 'next/navigation'
 import {
   PlusIcon,
   PencilIcon,
@@ -718,6 +719,13 @@ export function SponsorTierEditor({
     SponsorTierExisting | undefined
   >()
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const router = useRouter()
+  const utils = api.useUtils()
+  // The tier management below reads the tiers from the server render.
+  const refresh = () => {
+    utils.sponsor.tiers.listByConference.invalidate()
+    router.refresh()
+  }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -751,12 +759,14 @@ export function SponsorTierEditor({
       setSponsorTiers(updatedTiers)
       onTierUpdate?.(updatedTiers)
     }
+    refresh()
   }
 
   const handleDelete = (tierId: string) => {
     const updatedTiers = sponsorTiers.filter((t) => t._id !== tierId)
     setSponsorTiers(updatedTiers)
     onTierUpdate?.(updatedTiers)
+    refresh()
   }
 
   return (

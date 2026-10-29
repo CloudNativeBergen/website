@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { api } from '@/lib/trpc/client'
+import { useRefreshSponsor } from '@/hooks/useRefreshSponsor'
 import {
   ChatBubbleBottomCenterTextIcon,
   PhoneIcon,
@@ -30,13 +31,13 @@ export function SponsorActivityInput({
     useState<(typeof ACTIVITY_TYPES)[number]['id']>('note')
   const [isFocused, setIsFocused] = useState(false)
 
-  const utils = api.useUtils()
+  const refreshSponsor = useRefreshSponsor()
 
   const { mutate: createActivity, isPending } =
     api.sponsor.crm.activities.create.useMutation({
       onSuccess: () => {
         setDescription('')
-        utils.sponsor.crm.activities.list.invalidate({ sponsorForConferenceId })
+        refreshSponsor(sponsorForConferenceId)
       },
     })
 
