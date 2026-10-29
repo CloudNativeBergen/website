@@ -166,6 +166,46 @@ describe('ActivationHero — later in setup', () => {
   })
 })
 
+describe('ActivationHero — the event stage', () => {
+  const now = new Date('2026-04-20T12:00:00Z')
+  const live = buildActivationChecklist(ACTIVATED, CHECKS_OK, {
+    ...SHARED_TENANT,
+    now,
+  })
+
+  it('shows the event stage and its own count when asked', () => {
+    render(<ActivationHero checklist={live} showEvent />)
+    expect(
+      screen.getByRole('heading', { name: /get ready for the event/i }),
+    ).toBeTruthy()
+    const bar = screen.getByRole('progressbar', { name: /event readiness/i })
+    expect(bar.getAttribute('aria-valuenow')).toBe(String(live.event!.done))
+    expect(bar.getAttribute('aria-valuemax')).toBe(String(live.event!.required))
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.getByText(/left before the event/i)).toBeTruthy()
+    expect(
+      screen.getByRole('link', { name: /see the full checklist/i }),
+    ).toHaveAttribute('href', ACTIVATION_CHECKLIST_HREF)
+  })
+
+  it('stays empty without showEvent', () => {
+    const { container } = render(<ActivationHero checklist={live} />)
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('keeps the launch stage first while it is outstanding', () => {
+    const checklist = buildActivationChecklist(
+      { ...ACTIVATED, venueName: undefined },
+      CHECKS_OK,
+      { ...SHARED_TENANT, now },
+    )
+    render(<ActivationHero checklist={checklist} showEvent />)
+    expect(
+      screen.getByRole('heading', { name: /get ready to launch/i }),
+    ).toBeTruthy()
+  })
+})
+
 describe('ActivationHero — a fully activated conference', () => {
   it('renders nothing at all', () => {
     const checklist = buildActivationChecklist(

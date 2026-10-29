@@ -190,6 +190,24 @@ export const EventPrep: Story = {
   ],
 }
 
+/** The "Room screens" row lists each room's screen link and its Photo Wall variant. */
+export const RoomScreens: Story = {
+  args: {
+    baseUrl: 'https://cloudnativeday.example',
+    checklist: buildActivationChecklist(
+      {
+        ...ALL_DONE,
+        schedules: [
+          { tracks: [{ trackTitle: 'Main stage' }, { trackTitle: 'Room B' }] },
+        ],
+      },
+      emailAndSlackOk,
+      { now: new Date('2026-04-20T12:00:00Z') },
+    ),
+  },
+  decorators: EventPrep.decorators,
+}
+
 export const FreshDark: Story = {
   args: { checklist: buildActivationChecklist(FRESH, []) },
   decorators: [

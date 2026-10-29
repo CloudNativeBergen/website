@@ -38,17 +38,32 @@ import {
  */
 export function ActivationHero({
   checklist,
+  showEvent = false,
 }: {
   checklist: ActivationChecklistData
+  /**
+   * Inside the event window (`isEventHeroWindow`), show the event stage once
+   * the cfp and launch stages are done. Launch always comes first.
+   */
+  showEvent?: boolean
 }) {
-  const stage = currentActivationStage(checklist)
-  const steps = nextActivationSteps(checklist)
+  const launchStage = currentActivationStage(checklist)
+  const eventStage =
+    !launchStage && showEvent && checklist.event && !checklist.event.allDone
+      ? checklist.event
+      : null
+  const stage = launchStage ?? eventStage
+  const steps = eventStage
+    ? eventStage.rows
+        .filter((r) => !r.optional && !r.unavailable && !r.done)
+        .slice(0, 2)
+    : nextActivationSteps(checklist)
   // Nothing outstanding: the hero has no job. Callers gate on `allDone` too;
   // this is the belt to that pair of braces, so the component can never render
   // an empty exhortation.
   if (!stage || steps.length === 0) return null
 
-  const { done, required } = checklist
+  const { done, required } = eventStage ?? checklist
   const pct = required === 0 ? 100 : Math.round((done / required) * 100)
   const remaining = required - done
 
@@ -87,7 +102,7 @@ export function ActivationHero({
           aria-valuenow={done}
           aria-valuemin={0}
           aria-valuemax={required}
-          aria-label="Launch readiness"
+          aria-label={eventStage ? 'Event readiness' : 'Launch readiness'}
         >
           <div
             className="h-2 rounded-full bg-indigo-600 transition-all duration-300 dark:bg-indigo-500"
@@ -110,8 +125,8 @@ export function ActivationHero({
             <ArrowRightIcon aria-hidden="true" className="h-4 w-4" />
           </Link>
           <span className="text-xs text-gray-500 dark:text-gray-400">
-            {remaining} step{remaining === 1 ? '' : 's'} left before you can go
-            live
+            {remaining} step{remaining === 1 ? '' : 's'} left{' '}
+            {eventStage ? 'before the event' : 'before you can go live'}
           </span>
         </div>
       </div>
