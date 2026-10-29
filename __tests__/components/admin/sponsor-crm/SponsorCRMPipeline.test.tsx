@@ -367,3 +367,68 @@ describe('SponsorCRMPipeline — mobile owner filter', () => {
     expect(ownerGroup().selected).toContain('')
   })
 })
+
+describe('SponsorCRMPipeline — ?action= filter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    listData.mockReturnValue({
+      data: [
+        mockSponsor({ _id: 'sfc-late', invoiceStatus: 'overdue' }),
+        mockSponsor({ _id: 'sfc-fine' }),
+      ],
+      isLoading: false,
+    })
+  })
+  afterEach(cleanup)
+
+  it('shows only sponsors with an open item of that type, as a chip', () => {
+    searchParams = new URLSearchParams('action=overdue')
+    renderPipeline()
+    expect(screen.getByText(/^card sfc-late/)).toBeInTheDocument()
+    expect(screen.queryByText(/^card sfc-fine/)).not.toBeInTheDocument()
+    // Keeps every owner: the default "my sponsors" lens would hide unassigned.
+    expect(replace).not.toHaveBeenCalledWith(
+      expect.stringContaining('assignedTo='),
+      expect.anything(),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /overdue invoices/i }))
+    expect(push.mock.calls.at(-1)?.[0]).not.toContain('action=')
+  })
+
+  it('shows mine plus unassigned for assignedTo=me-unassigned', () => {
+    listData.mockReturnValue({
+      data: [
+        mockSponsor({
+          _id: 'sfc-mine',
+          invoiceStatus: 'overdue',
+          assignedTo: { _id: 'speaker-1', name: 'Me', email: 'me@x.no' },
+        }),
+        mockSponsor({ _id: 'sfc-nobody', invoiceStatus: 'overdue' }),
+        mockSponsor({
+          _id: 'sfc-theirs',
+          invoiceStatus: 'overdue',
+          assignedTo: { _id: 'other', name: 'Other', email: 'o@x.no' },
+        }),
+      ],
+      isLoading: false,
+    })
+    searchParams = new URLSearchParams(
+      'action=overdue&assignedTo=me-unassigned',
+    )
+    renderPipeline()
+    expect(screen.getByText(/^card sfc-mine/)).toBeInTheDocument()
+    expect(screen.getByText(/^card sfc-nobody/)).toBeInTheDocument()
+    expect(screen.queryByText(/^card sfc-theirs/)).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Owner filter: Mine \+ no owner/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows every sponsor with any open item for action=all', () => {
+    searchParams = new URLSearchParams('action=all')
+    renderPipeline()
+    expect(screen.getByText(/^card sfc-late/)).toBeInTheDocument()
+    expect(screen.getByText(/^card sfc-fine/)).toBeInTheDocument()
+  })
+})

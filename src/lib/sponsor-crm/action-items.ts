@@ -390,6 +390,63 @@ export function actionItemsForOrganizer(
 }
 
 /**
+ * The organizer's full worklist: their sponsors' and unassigned sponsors'
+ * items plus renewal reminders under the same rule, most urgent first. The
+ * `/admin` card and the sponsor overview both cut this list.
+ */
+export function organizerWorklist(
+  sponsors: SponsorForConferenceExpanded[],
+  organizerId: string | null,
+  renewals: RenewalItemInput | null = null,
+): ActionItem[] {
+  const myRenewals = renewals && {
+    ...renewals,
+    candidates: renewals.candidates.filter(
+      (c) => !c.assignedTo || c.assignedTo._id === organizerId,
+    ),
+  }
+  return [
+    ...actionItemsForOrganizer(sponsors, organizerId),
+    ...generateRenewalItems(myRenewals),
+  ].sort((a, b) => a.priority - b.priority)
+}
+
+/** Sponsors with an open item at `URGENT_ACTION_PRIORITY` or more urgent. */
+export function countSponsorsWaiting(
+  sponsors: SponsorForConferenceExpanded[],
+): number {
+  return new Set(
+    generateActionItems(sponsors)
+      .filter((a) => a.priority <= URGENT_ACTION_PRIORITY)
+      .map((a) => a.sponsor.id),
+  ).size
+}
+
+/** Board `?action=` value: an item type, or `all` for any open item. */
+export type BoardActionFilter = ActionItemType | 'all'
+
+/** Whether a sponsor has an open action item matching the board filter. */
+export function sponsorHasAction(
+  sponsor: SponsorForConferenceExpanded,
+  filter: BoardActionFilter,
+): boolean {
+  return generateActionItems([sponsor]).some(
+    (a) => filter === 'all' || a.type === filter,
+  )
+}
+
+/** Board `assignedTo` value for the organizer's own plus unassigned sponsors. */
+export const MINE_AND_UNASSIGNED = 'me-unassigned'
+
+/**
+ * The CRM board, filtered to sponsors with an open item of this type and to
+ * the same owners `organizerWorklist` counts, so the board shows the count.
+ */
+export function boardActionHref(filter: BoardActionFilter): string {
+  return `/admin/sponsors/crm?action=${filter}&assignedTo=${MINE_AND_UNASSIGNED}`
+}
+
+/**
  * The lean projection `generateActionItems` reads. Shared by the `/admin`
  * dashboard and the event checklist so both ride reads they already make.
  */
