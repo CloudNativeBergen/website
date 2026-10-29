@@ -30,6 +30,9 @@ import { useSponsorBroadcast } from '@/hooks/useSponsorBroadcast'
 
 interface SponsorTiersPageClientProps {
   conference: Conference
+  domain: string
+  canSendDiscountCodes?: boolean
+  workshopsEnabled?: boolean
   sponsors: ConferenceSponsor[]
   sponsorTiers: SponsorTier[]
   sponsorsByTier: Record<string, ConferenceSponsor[]>
@@ -38,6 +41,9 @@ interface SponsorTiersPageClientProps {
 
 export function SponsorTiersPageClient({
   conference,
+  domain,
+  canSendDiscountCodes,
+  workshopsEnabled,
   sponsors,
   sponsorTiers,
   sponsorsByTier,
@@ -94,7 +100,10 @@ export function SponsorTiersPageClient({
 
         <div className="mt-12">
           <SponsorTierManagement
-            conferenceId={conference._id}
+            conference={conference}
+            domain={domain}
+            canSendDiscountCodes={canSendDiscountCodes}
+            workshopsEnabled={workshopsEnabled}
             sponsors={sponsors}
             sponsorTiers={sponsorTiers}
             sponsorsByTier={sponsorsByTier}

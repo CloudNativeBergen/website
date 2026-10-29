@@ -219,7 +219,6 @@ src/
 │   │   └── SignaturePadCanvas.tsx  # Canvas-based signature capture component
 │   └── admin/
 │       ├── sponsor/                # Sponsor management admin UI
-│       │   ├── SponsorAddModal.tsx          # Create/edit sponsor company
 │       │   ├── SponsorTierEditor.tsx        # Tier CRUD modal
 │       │   ├── SponsorTierManagement.tsx    # Tier list with sponsor assignments
 │       │   ├── SponsorTiersPageClient.tsx   # Top-level tiers page

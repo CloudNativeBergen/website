@@ -39,13 +39,26 @@ vi.mock('@/components/admin/sponsor-crm/SponsorCRMForm', () => ({
     </div>
   ),
 }))
-vi.mock('@/components/admin', () => ({ SponsorSendModal: () => null }))
+vi.mock('@/components/admin', () => ({
+  SponsorSendModal: ({ kind }: { kind: string }) => (
+    <div data-testid="send">{kind}</div>
+  ),
+}))
 vi.mock('@/components/admin/sponsor/SponsorSendModal', () => ({
   sponsorFromAddress: () => '',
 }))
 vi.mock('@/components/admin/sponsor-crm/widgets/SponsorDetailHeader', () => ({
-  SponsorDetailHeader: ({ onOpenRecord }: { onOpenRecord: () => void }) => (
-    <button onClick={onOpenRecord}>Open record</button>
+  SponsorDetailHeader: ({
+    onOpenRecord,
+    onSendEmail,
+  }: {
+    onOpenRecord: () => void
+    onSendEmail?: () => void
+  }) => (
+    <>
+      <button onClick={onOpenRecord}>Open record</button>
+      <button onClick={onSendEmail}>Send Email</button>
+    </>
   ),
 }))
 vi.mock('@/components/admin/sponsor-crm/widgets/SponsorOverviewWidget', () => ({
@@ -132,4 +145,52 @@ it('renders ?edit=<tab> as the side panel, not a centered modal', () => {
   const record = screen.getByTestId('record')
   expect(record).toHaveAttribute('data-presentation', 'panel')
   expect(record).toHaveTextContent('contacts')
+})
+
+it('header "Send Email" opens the panel with its send modal', () => {
+  nav.query = 'view=contract'
+  nav.push.mockClear()
+  const { rerender } = renderPage()
+  expect(screen.queryByTestId('send')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByText('Send Email'))
+  expect(nav.push).toHaveBeenCalledWith('?view=contract&edit=communications', {
+    scroll: false,
+  })
+  // The push lands: the panel mounts with the information send open.
+  nav.query = 'edit=communications'
+  rerender(
+    <SponsorDashboardClient
+      sponsorId="sfc-1"
+      conference={{ _id: 'conf' } as Conference}
+      domain="example.test"
+      initialView="contract"
+    />,
+  )
+  expect(screen.getByTestId('record')).toHaveTextContent('communications')
+  expect(screen.getByTestId('send')).toHaveTextContent('information')
+})
+
+it('Back after "Send Email", then Edit, does not reopen the send modal', () => {
+  nav.query = 'view=contract'
+  const page = () => (
+    <SponsorDashboardClient
+      sponsorId="sfc-1"
+      conference={{ _id: 'conf' } as Conference}
+      domain="example.test"
+      initialView="contract"
+    />
+  )
+  const { rerender } = render(page())
+  fireEvent.click(screen.getByText('Send Email'))
+  nav.query = 'edit=communications'
+  rerender(page())
+  expect(screen.getByTestId('send')).toBeInTheDocument()
+  // Browser Back: the URL drops ?edit= without the panel's onClose.
+  nav.query = 'view=contract'
+  rerender(page())
+  expect(screen.queryByTestId('record')).not.toBeInTheDocument()
+  nav.query = 'edit=contacts'
+  rerender(page())
+  expect(screen.getByTestId('record')).toHaveTextContent('contacts')
+  expect(screen.queryByTestId('send')).not.toBeInTheDocument()
 })

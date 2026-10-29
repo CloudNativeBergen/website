@@ -2,14 +2,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
 import type { Conference } from '@/lib/conference/types'
-import { SponsorSendModal } from '@/components/admin'
-import {
-  sponsorFromAddress,
-  type SendableKind,
-} from '@/components/admin/sponsor/SponsorSendModal'
+import type { SendableKind } from '@/components/admin/sponsor/SponsorSendModal'
 import {
   SponsorRecordPanel,
   useRefreshSponsor,
@@ -59,8 +54,6 @@ export function SponsorDashboardClient({
   initialView,
   backHref,
 }: SponsorDashboardClientProps) {
-  const { data: session } = useSession()
-
   // The page is read-only; editing happens in the board's side panel,
   // opened over the page and kept in `?edit=<tab>`.
   const panel = useSponsorRecordPanel({ viewParam: 'edit', fixedId: sponsorId })
@@ -80,7 +73,15 @@ export function SponsorDashboardClient({
     sponsorForConferenceId: sponsorId,
   })
 
-  const [sendKind, setSendKind] = useState<SendableKind | null>(null)
+  // "Send Email" opens the panel with its send modal: one send path.
+  const [sendOnOpen, setSendOnOpen] = useState<SendableKind>()
+  // Clear it whenever the panel closes, Back and URL changes included, so a
+  // later "Edit" never reopens the send modal.
+  const [prevPanelId, setPrevPanelId] = useState(panel.id)
+  if (prevPanelId !== panel.id) {
+    setPrevPanelId(panel.id)
+    if (!panel.id) setSendOnOpen(undefined)
+  }
   const refreshSponsor = useRefreshSponsor()
   const refresh = () => refreshSponsor(sponsorId)
 
@@ -91,7 +92,14 @@ export function SponsorDashboardClient({
         initialData={initialOverview}
         backHref={backHref}
         onOpenRecord={() => openRecord('pipeline')}
-        onSendEmail={sponsor ? () => setSendKind('information') : undefined}
+        onSendEmail={
+          sponsor
+            ? () => {
+                setSendOnOpen('information')
+                openRecord('communications')
+              }
+            : undefined
+        }
       />
 
       <main className="flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
@@ -161,39 +169,11 @@ export function SponsorDashboardClient({
           onViewChange={panel.setView}
           onClose={panel.close}
           onChanged={refresh}
+          initialSendKind={sendOnOpen}
           conference={conference}
           domain={domain}
           canSendDiscountCodes={canSendDiscountCodes}
           workshopsEnabled={workshopsEnabled}
-        />
-      )}
-
-      {sponsor && sendKind && (
-        <SponsorSendModal
-          key={sendKind}
-          isOpen
-          onClose={() => {
-            setSendKind(null)
-            refresh()
-          }}
-          onSent={refresh}
-          sponsorForConference={sponsor}
-          kind={sendKind}
-          domain={domain}
-          fromEmail={sponsorFromAddress(conference, domain)}
-          senderName={session?.speaker?.name || session?.user?.name || ''}
-          conference={{
-            title: conference.title || '',
-            city: conference.city || '',
-            country: conference.country || '',
-            startDate: conference.startDate || '',
-            organizer: conference.organizer,
-            domains: conference.domains || [domain],
-            socialLinks: conference.socialLinks,
-            prospectusUrl: conference.sponsorshipCustomization?.prospectusUrl,
-            sponsorRegistrationLink: conference.sponsorRegistrationLink,
-            theme: conference.theme,
-          }}
         />
       )}
     </div>
