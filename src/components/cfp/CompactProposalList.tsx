@@ -12,6 +12,8 @@ import {
   CalendarIcon,
   ClockIcon as ClockOutlineIcon,
   MapPinIcon,
+  ArrowUpTrayIcon,
+  UserPlusIcon,
 } from '@heroicons/react/24/outline'
 import {
   CheckBadgeIcon,
@@ -36,6 +38,7 @@ import { CheckIcon } from '@heroicons/react/20/solid'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { SESSION_FEEDBACK_ANCHOR } from '@/lib/feedback'
 import type { FeedbackChip, FeedbackChips } from '@/lib/feedback/server'
+import { SLIDES_ANCHOR } from '@/components/proposal/ProposalAttachmentsPanel'
 
 type BadgeColor =
   'gray' | 'red' | 'yellow' | 'green' | 'blue' | 'purple' | 'orange'
@@ -61,6 +64,8 @@ interface CompactProposalListProps {
    * absent for no link.
    */
   feedbackLinkOrigin?: string | null
+  /** The conference is over: missing slides become a gentle request. */
+  isOver?: boolean
 }
 
 const CHIP =
@@ -154,12 +159,15 @@ export function CompactProposalList({
   unreadByProposalId,
   feedbackChips,
   feedbackLinkOrigin,
+  isOver = false,
 }: CompactProposalListProps) {
   const queryString = useImpersonateQueryString()
   const router = useRouter()
   const { showNotification } = useNotification()
-  const [proposalToConfirm, setProposalToConfirm] =
-    useState<ProposalExisting | null>(null)
+  const [pendingAction, setPendingAction] = useState<{
+    proposal: ProposalExisting
+    action: Action.confirm | Action.withdraw
+  } | null>(null)
 
   const hasApprovedTalk = proposals.some(
     (p) => p.status === 'confirmed' || p.status === 'accepted',
@@ -206,6 +214,10 @@ export function CompactProposalList({
           const showMissingAttachments = isApproved && !hasAttachments
 
           const unreadMessages = unreadByProposalId?.[proposal._id] ?? 0
+          const proposalHref = `/cfp/proposal/${proposal._id}${queryString}`
+          const openInvites = (proposal.coSpeakerInvitations ?? []).filter(
+            (i) => i.status === 'pending' || i.status === 'expired',
+          )
 
           return (
             <div
@@ -262,22 +274,56 @@ export function CompactProposalList({
                         )}
                       </div>
                     )}
+                  {proposal.status === 'accepted' && canEdit && (
+                    <p className="text-xs font-medium text-green-700 dark:text-green-400">
+                      Your talk is accepted. Confirm your participation to get
+                      your speaker ticket.
+                    </p>
+                  )}
+                  {openInvites.map((invite) => (
+                    <span
+                      key={invite._id}
+                      className="flex items-center text-xs text-gray-600 dark:text-gray-400"
+                    >
+                      <UserPlusIcon
+                        className="mr-1 h-3.5 w-3.5 shrink-0"
+                        aria-hidden="true"
+                      />
+                      {invite.status === 'expired'
+                        ? 'Co-speaker invite expired: '
+                        : 'Co-speaker invite pending: '}
+                      {invite.invitedName || invite.invitedEmail}
+                    </span>
+                  ))}
+                  {(proposal.status === 'withdrawn' ||
+                    proposal.status === 'canceled') && (
+                    <Link
+                      href={`${proposalHref}#messages`}
+                      className="text-xs text-brand-cloud-blue hover:underline dark:text-blue-400"
+                    >
+                      See messages about this talk
+                    </Link>
+                  )}
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
                 {unreadMessages > 0 && (
-                  <span
-                    className="inline-flex items-center gap-1 rounded-full bg-brand-cloud-blue/10 px-2.5 py-1 text-xs font-semibold text-brand-cloud-blue dark:bg-blue-900/30 dark:text-blue-400"
+                  <Link
+                    href={`${proposalHref}#messages`}
+                    className="inline-flex items-center gap-1 rounded-full bg-brand-cloud-blue/10 px-2.5 py-1 text-xs font-semibold text-brand-cloud-blue hover:underline dark:bg-blue-900/30 dark:text-blue-400"
                     title={`${unreadMessages} unread message${
                       unreadMessages === 1 ? '' : 's'
                     }`}
                   >
-                    <ChatBubbleLeftRightIcon className="h-3 w-3" />
+                    <ChatBubbleLeftRightIcon
+                      className="h-3 w-3"
+                      aria-hidden="true"
+                    />
                     {unreadMessages}
                     <span className="sr-only">
                       unread message{unreadMessages === 1 ? '' : 's'}
                     </span>
-                  </span>
+                  </Link>
                 )}
                 {feedbackChip && (
                   <FeedbackChipBadge
@@ -300,14 +346,30 @@ export function CompactProposalList({
                     Video
                   </span>
                 )}
-                {showMissingAttachments && (
-                  <span
-                    className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
-                    title="No presentation slides uploaded"
-                  >
-                    <ExclamationTriangleIcon className="h-3 w-3" />
-                  </span>
-                )}
+                {showMissingAttachments &&
+                  (isOver ? (
+                    <Link
+                      href={`${proposalHref}#${SLIDES_ANCHOR}`}
+                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 hover:underline dark:bg-gray-700 dark:text-gray-300"
+                    >
+                      <ArrowUpTrayIcon className="h-3 w-3" aria-hidden="true" />
+                      Upload your slides
+                    </Link>
+                  ) : (
+                    <Link
+                      href={`${proposalHref}#${SLIDES_ANCHOR}`}
+                      className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-medium text-yellow-800 hover:bg-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400"
+                      title="No presentation slides uploaded"
+                    >
+                      <ExclamationTriangleIcon
+                        className="h-3 w-3"
+                        aria-hidden="true"
+                      />
+                      <span className="sr-only">
+                        No slides uploaded yet. Upload your slides.
+                      </span>
+                    </Link>
+                  ))}
                 {(() => {
                   const config = getProposalStatusConfig(
                     proposal.status,
@@ -323,7 +385,7 @@ export function CompactProposalList({
                 })()}
                 {canEdit && (
                   <Link
-                    href={`/cfp/proposal/${proposal._id}${queryString}`}
+                    href={proposalHref}
                     className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
                     title="Edit proposal"
                   >
@@ -333,12 +395,24 @@ export function CompactProposalList({
                 {proposal.status === 'accepted' && (
                   <button
                     type="button"
-                    onClick={() => setProposalToConfirm(proposal)}
-                    className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-green-600 px-2 py-1 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-green-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 dark:bg-green-500 dark:hover:bg-green-400"
-                    title="Confirm your participation"
+                    onClick={() =>
+                      setPendingAction({ proposal, action: Action.confirm })
+                    }
+                    className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-green-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-green-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 dark:bg-green-500 dark:hover:bg-green-400"
                   >
-                    <CheckIcon className="size-3.5" />
-                    Confirm
+                    <CheckIcon className="size-3.5" aria-hidden="true" />
+                    Confirm participation
+                  </button>
+                )}
+                {isApproved && canEdit && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPendingAction({ proposal, action: Action.withdraw })
+                    }
+                    className="inline-flex cursor-pointer items-center rounded-md px-2 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                  >
+                    Can&apos;t make it
                   </button>
                 )}
               </div>
@@ -347,19 +421,28 @@ export function CompactProposalList({
         })}
       </div>
 
-      {proposalToConfirm && (
+      {pendingAction && (
         <ProposalActionModal
           open={true}
-          close={() => setProposalToConfirm(null)}
-          proposal={proposalToConfirm}
-          action={Action.confirm}
+          close={() => setPendingAction(null)}
+          proposal={pendingAction.proposal}
+          action={pendingAction.action}
           onAction={() => {
-            showNotification({
-              type: 'success',
-              title: 'Participation Confirmed',
-              message:
-                "Thank you for confirming your participation! You'll get your speaker ticket by email shortly.",
-            })
+            showNotification(
+              pendingAction.action === Action.confirm
+                ? {
+                    type: 'success',
+                    title: 'Participation Confirmed',
+                    message:
+                      "Thank you for confirming your participation! You'll get your speaker ticket by email shortly.",
+                  }
+                : {
+                    type: 'success',
+                    title: 'Talk withdrawn',
+                    message:
+                      'Thanks for letting us know. The organizers have been told.',
+                  },
+            )
             router.refresh()
           }}
         />
