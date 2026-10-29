@@ -26,7 +26,9 @@ import {
  * the send is refused or the provider rejects it; Assign and a sponsor-row
  * create claim before appending and release if the append fails. After a
  * successful send the claim stays with the sponsor even if the link write
- * failed (the organizer is told; a retry finds the claim already theirs).
+ * failed (the organizer is told; a retry finds the claim already theirs) —
+ * and so it does when the provider's answer was lost (#1281), since the
+ * email may have gone out.
  *
  * A claim is STALE when its holder no longer stores the code (a Studio edit
  * undoing a mistaken Assign, a deleted CRM row, a link write that failed) AND

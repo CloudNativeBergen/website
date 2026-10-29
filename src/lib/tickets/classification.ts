@@ -78,7 +78,10 @@ import { parseTicketAmount } from '@/lib/tickets/amount'
 // TYPE-ONLY on purpose: `./discovery` imports `removesFullPrice` and `typeKey`
 // from here, and a type import is erased, so the cycle never exists at runtime.
 import type { TicketTypeProposal } from '@/lib/tickets/discovery'
-import { SPEAKER_TICKET_CATEGORY } from '@/lib/tickets/speakerTicketCategory'
+import {
+  SPEAKER_TICKET_CATEGORY,
+  VOLUNTEER_TICKET_CATEGORY,
+} from '@/lib/tickets/speakerTicketCategory'
 import type { EventTicket } from '@/lib/tickets/types'
 
 /**
@@ -91,15 +94,13 @@ import type { EventTicket } from '@/lib/tickets/types'
 export type ClassifiableTicket = Pick<
   EventTicket,
   'category' | 'sum' | 'coupon' | 'discount'
-> & {
-  fields?: { key: string; value: string }[]
-  additionals?: { name: string; value: string }[]
-}
+>
 
 /** Who granted a ticket, when it was granted rather than bought. */
 export type TicketGrantedBy =
   | 'sponsor'
   | 'speaker'
+  | 'volunteer'
   /**
    * NOTHING PRODUCES THIS YET, deliberately. An organizer/crew comp is
    * indistinguishable in provider data from any other zero-priced ticket, and
@@ -189,6 +190,11 @@ export interface TicketClassificationContext {
    * only, exactly as `redeemedSpeakerEmails` does.
    */
   speakerTicketTypeName?: string | null
+  /**
+   * The name of the volunteer ticket type, from `findVolunteerTicketType` over
+   * the event's ticket types. Absent falls back to `VOLUNTEER_TICKET_CATEGORY`.
+   */
+  volunteerTicketTypeName?: string | null
   /** `conference.ticketTypeRoles`. Absent/empty ⇒ every type admits. */
   ticketTypeRoles?: readonly TicketTypeRole[]
   /**
@@ -296,6 +302,14 @@ export function classifyTicket(
   speakerTypes.delete('')
   const isSpeakerType = speakerTypes.has(typeKey(ticket.category))
 
+  const volunteerTypes = new Set(
+    [context.volunteerTicketTypeName, VOLUNTEER_TICKET_CATEGORY].map(typeKey),
+  )
+  volunteerTypes.delete('')
+  const isVolunteerType =
+    volunteerTypes.has(typeKey(ticket.category)) ||
+    /volunteer|frivillig/i.test(ticket.category ?? '')
+
   let comp: boolean | 'unknown'
   let grantedBy: TicketGrantedBy | null = null
 
@@ -304,6 +318,9 @@ export function classifyTicket(
     // issued, not sold, whatever it cost.
     comp = true
     grantedBy = 'speaker'
+  } else if (isVolunteerType) {
+    comp = true
+    grantedBy = 'volunteer'
   } else if (discount) {
     // A partial discount is a PURCHASE: the holder paid, at a discount. Naming
     // the sponsor whose code it is as the GRANTOR would count a sale as a
@@ -340,45 +357,12 @@ export function classifyTicket(
           ? 'proposed'
           : 'unknown',
     comp,
-    grantsWorkshop: (() => {
-      let granted =
-        workshopAccessOf(ticket.category, context.ticketTypeRoles) === 'granted'
-      if (isSpeakerType) {
-        const fieldMatch = ticket.fields?.find(
-          (f) =>
-            f.key.toLowerCase().includes('monday') ||
-            f.key.toLowerCase().includes('workshop'),
-        )
-        const additionalMatch = ticket.additionals?.find(
-          (a) =>
-            a.name.toLowerCase().includes('monday') ||
-            a.name.toLowerCase().includes('workshop'),
-        )
-        const matched = fieldMatch?.value || additionalMatch?.value
-
-        if (matched) {
-          const val = matched.toLowerCase().trim()
-          // Additionals store the multiple choice answer *in the name*, and the value is "1".
-          // Example: name: "Will you attend the Monday workshops? - Yes", value: "1"
-          if (
-            additionalMatch &&
-            (additionalMatch.name.toLowerCase().includes('yes') ||
-              additionalMatch.name.toLowerCase().includes('ja')) &&
-            val === '1'
-          ) {
-            granted = true
-          } else {
-            granted =
-              val.includes('yes') ||
-              val.includes('ja') ||
-              ['true', '1', 'on', 'checked', 'ok', 'y'].some((t) => val === t)
-          }
-        } else {
-          granted = false // No explicitly declared intent means best-effort/no guaranteed seat
-        }
-      }
-      return granted
-    })(),
+    // THE GATE'S ANSWER AND NOTHING ELSE (#1333). A speaker's form answer
+    // about the workshops used to override it here, so a speaker the portal
+    // admits could be missing from every count, and one whose type is set to
+    // No could be in it.
+    grantsWorkshop:
+      workshopAccessOf(ticket.category, context.ticketTypeRoles) === 'granted',
     grantedBy,
   }
 }
@@ -417,13 +401,29 @@ const LEGACY_WORKSHOP_CATEGORIES = [
  *
  *  - `granted`      — this type grants it.
  *  - `denied`       — this type does not. The holder needs a different ticket.
- *  - `unclassified` — nobody at this conference has said either way. The
+ *  - `unclassified` — nobody at this conference has said either way: the type
+ *                     has no entry, or an entry with no workshop answer. The
  *                     holder may well be entitled; an ORGANIZER has to answer.
  *                     Only reachable on a conference that HAS declared roles,
  *                     so it can never be handed to an attendee of a conference
  *                     still running on the bridge above.
  */
 export type WorkshopAccess = 'granted' | 'denied' | 'unclassified'
+
+/**
+ * Has this conference marked ANY ticket type as granting workshop access?
+ *
+ * The one switch between the two halves of the rule below: marked, and the
+ * marked set is the whole answer; not marked, and the built-in list decides.
+ * Only an explicit `true` counts, so a lone `false` (or a Studio default) can
+ * never take a conference off the built-in list. Whoever needs to know which
+ * half applies, now or after a save, asks here.
+ */
+export function marksWorkshopAccess(
+  ticketTypeRoles?: readonly Pick<TicketTypeRole, 'grantsWorkshop'>[] | null,
+): boolean {
+  return (ticketTypeRoles ?? []).some((role) => role.grantsWorkshop === true)
+}
 
 /**
  * THE ONE RULE. The `/workshop` gate and the ticket-sold webhook both call
@@ -450,9 +450,8 @@ export function workshopAccessOf(
   if (!key) return 'denied'
 
   const roles = ticketTypeRoles ?? []
-  const declaresWorkshop = roles.some((r) => r.grantsWorkshop === true)
 
-  if (!declaresWorkshop) {
+  if (!marksWorkshopAccess(roles)) {
     // Unconfigured: today's behaviour, exactly. No `unclassified` from here —
     // an attendee of a bridge conference who simply lacks a workshop ticket
     // must not be told about our configuration.
@@ -461,7 +460,11 @@ export function workshopAccessOf(
       : 'denied'
   }
 
-  const role = roles.find((r) => typeKey(r.typeName) === key)
-  if (!role) return 'unclassified'
-  return role.grantsWorkshop === true ? 'granted' : 'denied'
+  // AN ENTRY IS NOT AN ANSWER. An entry may exist only to say whether the type
+  // seats a human (`admits`); it then says nothing about workshops, and its
+  // holder is in the same place as one whose type has no entry at all: nobody
+  // decided. Only an explicit `false` is a no.
+  const answer = roles.find((r) => typeKey(r.typeName) === key)?.grantsWorkshop
+  if (answer === true) return 'granted'
+  return answer === false ? 'denied' : 'unclassified'
 }

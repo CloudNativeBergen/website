@@ -1,4 +1,3 @@
-import type { ConferenceTheme } from '@/lib/branding/theme'
 import { randomUUID } from 'crypto'
 import {
   clientWrite,
@@ -83,17 +82,21 @@ export async function generateRegistrationToken(
       return { token: existing.registrationToken }
     }
 
-    // No token yet — generate a fresh one
+    // No token yet — mint one ATOMICALLY: two concurrent first sends (or an
+    // open of the Send modal racing a "Copy link") both read null here;
+    // `setIfMissing` lets the first writer win and the committed document
+    // tells the loser which token is actually stored, so no email ever
+    // carries a token that was overwritten a moment later.
     const token = randomUUID()
-    await clientWrite
+    const stored = await clientWrite
       .patch(sponsorForConferenceId)
-      .set({
+      .setIfMissing({
         registrationToken: token,
         registrationComplete: false,
       })
-      .commit()
+      .commit<{ registrationToken?: string | null }>()
 
-    return { token }
+    return { token: stored?.registrationToken || token }
   } catch (error) {
     console.error(
       `[registration] Failed to generate token for sfc=${sponsorForConferenceId}:`,
@@ -295,66 +298,6 @@ export async function getSfcForNotification(
       contractValue,
       contractCurrency,
       "conference": conference->{ ... }
-    }`,
-    { id: sfcId },
-  )
-}
-
-export interface SfcPortalInviteData {
-  _id: string
-  status: string | null
-  registrationToken: string | null
-  registrationComplete: boolean
-  contractStatus: string | null
-  sponsor: { name: string } | null
-  contactPersons: Array<{
-    name: string
-    email: string
-    isPrimary?: boolean
-  }> | null
-  tier: { title: string } | null
-  contractValue: number | null
-  contractCurrency: string | null
-  conference: {
-    title: string
-    city: string | null
-    startDate: string | null
-    organizer: string | null
-    sponsorEmail: string | null
-    socialLinks: string[] | null
-    /**
-     * Tenant brand theme. This projection omitted it, so the portal-invite
-     * email had no way to reach the tenant's colour at all — the sender was
-     * not "defaulting", it was blind.
-     */
-    theme: ConferenceTheme | null
-  } | null
-}
-
-export async function getSfcForPortalInvite(
-  sfcId: string,
-): Promise<SfcPortalInviteData | null> {
-  return clientRead.fetch<SfcPortalInviteData | null>(
-    `*[_type == "sponsorForConference" && _id == $id][0]{
-      _id,
-      status,
-      registrationToken,
-      registrationComplete,
-      contractStatus,
-      sponsor->{ name },
-      contactPersons[]{ name, email, isPrimary },
-      tier->{ title },
-      contractValue,
-      contractCurrency,
-      conference->{
-        title,
-        city,
-        startDate,
-        organizer,
-        sponsorEmail,
-        socialLinks,
-        theme
-      }
     }`,
     { id: sfcId },
   )

@@ -5,12 +5,19 @@ import {
   createEmailError,
 } from './config'
 import { VolunteerWithConference } from '@/lib/volunteer/types'
+import { mintVolunteerConfirmToken } from '@/lib/volunteer/token'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
 import { formatConferenceDateLong } from '@/lib/time'
-import { VolunteerApprovalTemplate } from '@/components/email/VolunteerApprovalTemplate'
+import {
+  VolunteerApprovalTemplate,
+  VolunteerMessageTemplate,
+} from '@/components/email/VolunteerApprovalTemplate'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
+import { resolveConferenceFrom } from '@/lib/email/from'
 
 interface ConferenceForEmail {
+  _id?: string
   /**
    * The owning tenant. This local projection used to omit it, which is exactly
    * why the volunteer mail went out on the PLATFORM's Resend account no matter
@@ -35,6 +42,8 @@ interface ConferenceForEmail {
    * the colour had no way to reach the template.
    */
   theme?: ConferenceTheme | null
+  volunteerRegistrationLink?: string
+  volunteerSlackInviteUrl?: string
 }
 
 export async function sendVolunteerApprovalEmail(
@@ -42,6 +51,17 @@ export async function sendVolunteerApprovalEmail(
   conference: ConferenceForEmail,
   subject: string,
   message: string,
+  options?: {
+    registrationUrl?: string | null
+    slackInviteUrl?: string | null
+    confirmUrl?: string | null
+    /**
+     * `message` sends the organizer's text in a neutral template (bulk email,
+     * reminders) instead of the approval copy. `title` is its heading.
+     */
+    template?: 'approval' | 'message'
+    title?: string
+  },
 ): Promise<EmailResult<{ emailId: string }>> {
   try {
     if (!volunteer.email) {
@@ -69,25 +89,89 @@ export async function sendVolunteerApprovalEmail(
       ? formatConferenceDateLong(conference.startDate)
       : 'TBD'
     const eventUrl = conferenceBaseUrl(conference)
-    const socialLinks = conference.socialLinks?.map((link) => link.url) || []
+    const toSafeHttpsUrl = (url?: string | null): string | undefined => {
+      const trimmed = url?.trim()
+      return trimmed && isAbsoluteHttpsUrl(trimmed)
+        ? new URL(trimmed).href
+        : undefined
+    }
+
+    const socialLinks =
+      conference.socialLinks
+        ?.map((link) =>
+          typeof link === 'string' ? link : (link as { url?: string })?.url,
+        )
+        .filter((l): l is string => typeof l === 'string' && Boolean(l)) || []
 
     const { client } = await resolveEmailSender(conference.organization?._ref)
 
+    const registrationUrl =
+      options?.registrationUrl === null
+        ? undefined
+        : toSafeHttpsUrl(
+            options?.registrationUrl !== undefined
+              ? options.registrationUrl
+              : conference.volunteerRegistrationLink,
+          )
+    const slackInviteUrl =
+      options?.slackInviteUrl === null
+        ? undefined
+        : toSafeHttpsUrl(
+            options?.slackInviteUrl !== undefined
+              ? options.slackInviteUrl
+              : conference.volunteerSlackInviteUrl,
+          )
+
+    const conferenceId = conference._id || volunteer.conference?._id
+    let confirmUrl: string | undefined
+    if (options?.confirmUrl !== undefined) {
+      confirmUrl = options.confirmUrl
+        ? toSafeHttpsUrl(options.confirmUrl)
+        : undefined
+    } else if (volunteer._id && conferenceId && volunteer.email) {
+      try {
+        const token = mintVolunteerConfirmToken({
+          volunteerId: volunteer._id,
+          conferenceId,
+          email: volunteer.email,
+        })
+        confirmUrl = `${eventUrl.replace(/\/$/, '')}/volunteer/confirm?token=${encodeURIComponent(token)}`
+      } catch {
+        confirmUrl = undefined
+      }
+    }
+
     const result = await retryWithBackoff(async () => {
       const response = await client.emails.send({
-        from: `${conference.organizer || conference.title} <${fromEmail}>`,
+        from: resolveConferenceFrom(conference),
         to: volunteer.email!,
         subject,
-        react: VolunteerApprovalTemplate({
-          volunteerName: volunteer.name,
-          eventName,
-          eventLocation,
-          eventDate,
-          eventUrl,
-          message,
-          socialLinks,
-          brandColor: emailBrandColor(conference.theme),
-        }) as React.ReactElement,
+        react: (options?.template === 'message'
+          ? VolunteerMessageTemplate({
+              volunteerName: volunteer.name,
+              eventName,
+              eventLocation,
+              eventDate,
+              eventUrl,
+              message,
+              socialLinks,
+              brandColor: emailBrandColor(conference.theme),
+              title: options.title,
+              registrationUrl,
+            })
+          : VolunteerApprovalTemplate({
+              volunteerName: volunteer.name,
+              eventName,
+              eventLocation,
+              eventDate,
+              eventUrl,
+              message,
+              socialLinks,
+              brandColor: emailBrandColor(conference.theme),
+              registrationUrl,
+              slackInviteUrl,
+              confirmUrl,
+            })) as React.ReactElement,
       })
 
       if (response.error) {

@@ -13,6 +13,7 @@
  * comparison and must read nothing.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { stubOwnTicketingSecret } from '../../../__tests__/helpers/ticketingSecrets'
 import type { Organization } from '@/lib/organization/types'
 
 const getOrganizationById = vi.fn()
@@ -46,6 +47,7 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 
 import {
+  canReadTicketsForOrg,
   isTicketingDeniedForOrg,
   isTicketingEnabledForOrg,
   isTicketingEnabledForConference,
@@ -55,14 +57,6 @@ const PLATFORM_ORG_ID = 'org-platform'
 
 function org(overrides: Partial<Organization> = {}): Organization {
   return { _id: 'org-A', name: 'Tenant A', slug: 'tenant-a', ...overrides }
-}
-
-/** A tenant with its OWN Checkin account in the per-org secret store. */
-function stubOwnTicketingSecret(orgId: string) {
-  vi.stubEnv(
-    'TENANT_SECRETS_JSON',
-    JSON.stringify({ [orgId]: { ticketing: { apiKey: 'tenant-key' } } }),
-  )
 }
 
 beforeEach(() => {
@@ -317,6 +311,121 @@ describe('isTicketingEnabledForOrg — grants', () => {
 
     vi.stubEnv('TENANT_CNDN_CHECKIN_WEBHOOK_SECRET', 'cndn-webhook')
     await expect(isTicketingEnabledForOrg(CNDN)).resolves.toBe(true)
+  })
+})
+
+/**
+ * The CAPABILITY question (#1295, consumed by `./workshops.ts`): credentials to
+ * read ticket data with, mirroring `resolveTicketingCredentials` — the platform
+ * org by identity (never by the document's slug), anyone else by its own secret.
+ */
+describe('canReadTicketsForOrg', () => {
+  const ownBag = (bag: Record<string, string>) =>
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ 'org-A': { ticketing: bag } }),
+    )
+
+  it('is FALSE for a nullish org and reads nothing', async () => {
+    await expect(canReadTicketsForOrg(null, 'checkin')).resolves.toBe(false)
+    await expect(canReadTicketsForOrg(undefined, 'tito')).resolves.toBe(false)
+    await expect(canReadTicketsForOrg('', 'checkin')).resolves.toBe(false)
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+
+  it('is FALSE for a non-platform org with no secret, even when the platform env account is set', async () => {
+    vi.stubEnv('CHECKIN_API_KEY', 'platform-key')
+    vi.stubEnv('CHECKIN_API_SECRET', 'platform-secret')
+    vi.stubEnv('TITO_API_KEY', 'platform-tito')
+    await expect(canReadTicketsForOrg('org-A', 'checkin')).resolves.toBe(false)
+    await expect(canReadTicketsForOrg('org-A', 'tito')).resolves.toBe(false)
+    // Identity is the configured id, never the customer-writable slug: the
+    // document (where a slug would live) is not even read.
+    expect(getOrganizationById).not.toHaveBeenCalled()
+  })
+
+  /**
+   * A bag with only a webhook secret can authenticate an inbound delivery but
+   * cannot READ a ticket for either vendor, so it does not count here — while
+   * the ticketing surfaces still show for it (honest "unconfigured").
+   */
+  it('is FALSE for a per-org bag holding only a webhookSecret, for both vendors', async () => {
+    ownBag({ webhookSecret: 'hook' })
+    await expect(canReadTicketsForOrg('org-A', 'checkin')).resolves.toBe(false)
+    await expect(canReadTicketsForOrg('org-A', 'tito')).resolves.toBe(false)
+    getOrganizationById.mockResolvedValue(org({ plan: 'community' }))
+    await expect(isTicketingEnabledForOrg('org-A')).resolves.toBe(true)
+  })
+
+  it('holds a per-org bag to the vendor: Checkin needs key and secret, Tito a key', async () => {
+    ownBag({ apiKey: 'k' })
+    await expect(canReadTicketsForOrg('org-A', 'checkin')).resolves.toBe(false)
+    await expect(canReadTicketsForOrg('org-A', 'tito')).resolves.toBe(true)
+
+    ownBag({ apiKey: 'k', apiSecret: 's' })
+    await expect(canReadTicketsForOrg('org-A', 'checkin')).resolves.toBe(true)
+  })
+
+  it('does not count a whitespace-only or non-string key, which the providers’ truthiness check would pass', async () => {
+    ownBag({ apiKey: '   ', apiSecret: 's' })
+    await expect(canReadTicketsForOrg('org-A', 'checkin')).resolves.toBe(false)
+    await expect(canReadTicketsForOrg('org-A', 'tito')).resolves.toBe(false)
+
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({
+        'org-A': { ticketing: { apiKey: 42, apiSecret: 's' } },
+      }),
+    )
+    await expect(canReadTicketsForOrg('org-A', 'checkin')).resolves.toBe(false)
+    await expect(canReadTicketsForOrg('org-A', 'tito')).resolves.toBe(false)
+  })
+
+  it('hands the platform org the env account of the vendor asked for, and only when it is set', async () => {
+    vi.stubEnv('CHECKIN_API_KEY', '')
+    vi.stubEnv('CHECKIN_API_SECRET', '')
+    vi.stubEnv('TITO_API_KEY', '')
+    await expect(
+      canReadTicketsForOrg(PLATFORM_ORG_ID, 'checkin'),
+    ).resolves.toBe(false)
+
+    vi.stubEnv('CHECKIN_API_KEY', 'platform-key')
+    vi.stubEnv('CHECKIN_API_SECRET', 'platform-secret')
+    await expect(
+      canReadTicketsForOrg(PLATFORM_ORG_ID, 'checkin'),
+    ).resolves.toBe(true)
+    await expect(canReadTicketsForOrg(PLATFORM_ORG_ID, 'tito')).resolves.toBe(
+      false,
+    )
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+
+  it('is FALSE for the platform org when PLATFORM_ORG_ID is unset — nobody is the platform org', async () => {
+    vi.stubEnv('CHECKIN_API_KEY', 'platform-key')
+    vi.stubEnv('CHECKIN_API_SECRET', 'platform-secret')
+    vi.stubEnv('PLATFORM_ORG_ID', '')
+    await expect(
+      canReadTicketsForOrg(PLATFORM_ORG_ID, 'checkin'),
+    ).resolves.toBe(false)
+  })
+
+  /**
+   * "Could not find out" is `null`, apart from `false`: some tenant holds a
+   * complete discrete Checkin set and the slug map that says whose is down.
+   * Tito never consults that store, so its answer stays a real one.
+   */
+  it('is NULL — not false, not thrown — when the credential lookup is refused', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('TENANT_SOMEONE_CHECKIN_API_KEY', 'k')
+    vi.stubEnv('TENANT_SOMEONE_CHECKIN_API_SECRET', 's')
+    vi.stubEnv('TENANT_SOMEONE_CHECKIN_WEBHOOK_SECRET', 'w')
+    secretEnvSlugs.mockRejectedValueOnce(new Error('slug map unavailable'))
+    secretEnvSlugs.mockRejectedValueOnce(new Error('slug map unavailable'))
+
+    await expect(canReadTicketsForOrg('org-A', 'checkin')).resolves.toBeNull()
+    expect(logged).toHaveBeenCalled()
+    await expect(canReadTicketsForOrg('org-A', 'tito')).resolves.toBe(false)
+    logged.mockRestore()
   })
 })
 

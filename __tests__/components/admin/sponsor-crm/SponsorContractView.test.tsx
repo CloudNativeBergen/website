@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 
@@ -21,8 +21,7 @@ vi.mock('next-auth/react', () => ({
 // Mock tRPC hooks
 const mockReadinessData = vi.fn<() => any>()
 const mockBestTemplateData = vi.fn<() => any>()
-const mockGeneratePdf = vi.fn<() => any>()
-const mockSendContract = vi.fn<() => any>()
+const mockGeneratePdf = vi.fn<(opts?: any) => any>()
 const mockCheckStatus = vi.fn<() => any>()
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -36,16 +35,10 @@ vi.mock('@/lib/trpc/client', () => ({
           useQuery: () => mockBestTemplateData(),
         },
         generatePdf: {
-          useMutation: (opts: any) => mockGeneratePdf(),
+          useMutation: (opts: any) => mockGeneratePdf(opts),
         },
       },
       crm: {
-        sendContract: {
-          useMutation: (opts: any) => mockSendContract(),
-        },
-        sendContractInvite: {
-          useMutation: (opts: any) => ({ mutate: vi.fn(), isLoading: false }),
-        },
         checkSignatureStatus: {
           useMutation: (opts: any) => mockCheckStatus(),
         },
@@ -66,6 +59,28 @@ vi.mock('@/components/admin/sponsor-crm/SponsorPortalSection', () => ({
   __esModule: true,
   SponsorPortalSection: () => (
     <div data-testid="portal-section">Portal Section</div>
+  ),
+}))
+
+vi.mock('@/components/admin/sponsor-crm/SponsorEarlyAccessSection', () => ({
+  __esModule: true,
+  SponsorEarlyAccessSection: (props: {
+    hasLink: boolean
+    createRefusal?: string
+    copyRefusal?: string
+    recordUpdatedAt?: string
+    sponsorStartSet?: boolean
+    earlySignupCount?: number
+    earlySignupsHref?: string
+  }) => (
+    <div data-testid="early-access-section">
+      {props.hasLink ? 'has link' : 'no link'}
+      {props.createRefusal ? ` | ${props.createRefusal}` : ' | can create'}
+      {props.copyRefusal ? ` | no copy: ${props.copyRefusal}` : ''}
+      {props.recordUpdatedAt ? ` | record of ${props.recordUpdatedAt}` : ''}
+      {` | sponsor start set: ${String(props.sponsorStartSet)}`}
+      {` | early sign-ups: ${String(props.earlySignupCount)} at ${String(props.earlySignupsHref)}`}
+    </div>
   ),
 }))
 
@@ -111,10 +126,6 @@ describe('SponsorContractView', () => {
       mutate: vi.fn(),
       isPending: false,
     })
-    mockSendContract.mockReturnValue({
-      mutate: vi.fn(),
-      isPending: false,
-    })
     mockCheckStatus.mockReturnValue({
       mutate: vi.fn(),
       isPending: false,
@@ -123,6 +134,181 @@ describe('SponsorContractView', () => {
 
   beforeEach(() => {
     defaultTrpcMocks()
+  })
+
+  describe('the workshop early-access section (#1346)', () => {
+    const view = (
+      sponsor: Parameters<typeof mockSponsor>[0],
+      workshopsEnabled: boolean,
+    ) =>
+      render(
+        <SponsorContractView
+          conferenceId="conf-2026"
+          sponsor={mockSponsor(sponsor)}
+          workshopsEnabled={workshopsEnabled}
+        />,
+      )
+
+    it('is offered for a won deal of a conference with workshops', () => {
+      view({ status: 'closed-won' }, true)
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'no link | can create',
+      )
+    })
+
+    it('shows the link the sponsor has', () => {
+      view({ status: 'closed-won', hasWorkshopEarlyAccessLink: true }, true)
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'has link | can create',
+      )
+    })
+
+    it('offers no create for a deal that is not won', () => {
+      view({ status: 'negotiating' }, true)
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'no link | Move the sponsor to Closed Won before creating an early-access link.',
+      )
+    })
+
+    it('is not shown for a conference without workshops', () => {
+      view({ status: 'closed-won' }, false)
+
+      expect(screen.queryByTestId('early-access-section')).toBeNull()
+    })
+
+    it('stays for a link that exists after workshops were turned off, so it can be revoked, and offers no copy', () => {
+      view({ status: 'closed-won', hasWorkshopEarlyAccessLink: true }, false)
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'has link | Workshops are not enabled for this conference. | no copy: Workshops are not enabled for this conference, so this link opens nothing.',
+      )
+    })
+
+    it('with workshops on, a link can be copied', () => {
+      view({ status: 'closed-won', hasWorkshopEarlyAccessLink: true }, true)
+
+      expect(screen.getByTestId('early-access-section')).not.toHaveTextContent(
+        'no copy',
+      )
+    })
+
+    it.each([true, false])(
+      'tells the section whether the conference has a sponsor start time (%s)',
+      (sponsorStartSet) => {
+        render(
+          <SponsorContractView
+            conferenceId="conf-2026"
+            sponsor={mockSponsor({ status: 'closed-won' })}
+            workshopsEnabled
+            sponsorStartSet={sponsorStartSet}
+          />,
+        )
+
+        expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+          `sponsor start set: ${sponsorStartSet}`,
+        )
+      },
+    )
+
+    it('hands the section the record’s count of early sign-ups, and the list narrowed to this sponsor', () => {
+      view(
+        {
+          _id: 'sfc-acme',
+          status: 'closed-won',
+          hasWorkshopEarlyAccessLink: true,
+          workshopEarlySignupCount: 3,
+        },
+        true,
+      )
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'early sign-ups: 3 at /admin/workshops?earlySponsor=sfc-acme#early-sign-ups',
+      )
+    })
+
+    it('hands it no list to open for a conference that has turned workshops off', () => {
+      view(
+        {
+          _id: 'sfc-acme',
+          status: 'closed-won',
+          hasWorkshopEarlyAccessLink: true,
+          workshopEarlySignupCount: 3,
+        },
+        false,
+      )
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'early sign-ups: 3 at undefined',
+      )
+    })
+
+    it('hands the section the record’s own change time', () => {
+      view(
+        {
+          status: 'closed-won',
+          hasWorkshopEarlyAccessLink: true,
+          _updatedAt: '2026-10-13T10:00:05Z',
+        },
+        true,
+      )
+
+      expect(screen.getByTestId('early-access-section')).toHaveTextContent(
+        'record of 2026-10-13T10:00:05Z',
+      )
+    })
+  })
+
+  it('still offers to resend the registration link once registration is complete (#1263)', () => {
+    const onSendRegistration = vi.fn()
+    render(
+      <SponsorContractView
+        conferenceId="conf-2026"
+        sponsor={mockSponsor({
+          status: 'closed-won',
+          registrationComplete: true,
+          registrationToken: 'tok-1',
+        })}
+        onSendRegistration={onSendRegistration}
+      />,
+    )
+    screen.getByRole('button', { name: 'Resend registration link' }).click()
+    expect(onSendRegistration).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers no resend once the deal is no longer won, even with registration complete', () => {
+    render(
+      <SponsorContractView
+        conferenceId="conf-2026"
+        sponsor={mockSponsor({
+          status: 'closed-lost',
+          registrationComplete: true,
+          registrationToken: 'tok-1',
+        })}
+        onSendRegistration={vi.fn()}
+      />,
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Resend registration link' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('offers no resend when the host cannot open the Send modal', () => {
+    render(
+      <SponsorContractView
+        conferenceId="conf-2026"
+        sponsor={mockSponsor({
+          status: 'closed-won',
+          registrationComplete: true,
+          registrationToken: 'tok-1',
+        })}
+      />,
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Resend registration link' }),
+    ).not.toBeInTheDocument()
   })
 
   const renderView = (
@@ -222,7 +408,88 @@ describe('SponsorContractView', () => {
     })
   })
 
+  describe('confirmation step survives the handoff (#1264)', () => {
+    const toConfirm = () => {
+      mockGeneratePdf.mockImplementation((opts: any) => ({
+        mutate: () => opts.onSuccess({ pdf: 'QUJD', filename: 'c.pdf' }),
+        isPending: false,
+      }))
+      const onSendContract = vi.fn()
+      const view = render(
+        <SponsorContractView
+          conferenceId="conf-2026"
+          sponsor={mockSponsor({ registrationComplete: true })}
+          onSendContract={onSendContract}
+        />,
+      )
+      fireEvent.click(screen.getByText('Generate contract PDF'))
+      fireEvent.click(screen.getByText('Looks good, continue'))
+      return { ...view, onSendContract }
+    }
+
+    it('keeps the reviewed PDF and the confirmation step after handing off to the composer', () => {
+      const { onSendContract } = toConfirm()
+      fireEvent.click(screen.getByText('Continue to send'))
+      expect(onSendContract).toHaveBeenCalledWith(
+        expect.objectContaining({ contractTemplateId: 'tmpl-1' }),
+      )
+      // Still on the confirmation step: a composer closed without sending
+      // comes back here, not to a regenerate.
+      expect(screen.getByText('Continue to send')).toBeInTheDocument()
+    })
+
+    it('returns to the overview once the record carries the sent agreement', () => {
+      const { rerender, onSendContract } = toConfirm()
+      fireEvent.click(screen.getByText('Continue to send'))
+      rerender(
+        <SponsorContractView
+          conferenceId="conf-2026"
+          sponsor={mockSponsor({
+            registrationComplete: true,
+            contractStatus: 'contract-sent',
+            signatureStatus: 'pending',
+            signatureId: 'agr-1',
+          })}
+          onSendContract={onSendContract}
+        />,
+      )
+      expect(screen.queryByText('Continue to send')).not.toBeInTheDocument()
+      expect(screen.getByText(/Contract sent/)).toBeInTheDocument()
+    })
+  })
+
   describe('contract signed state', () => {
+    it('offers "Send signed copy" only for a digitally signed document', () => {
+      const signed = {
+        contractStatus: 'contract-signed' as const,
+        signatureStatus: 'signed' as const,
+        contractDocument: {
+          asset: { url: 'https://cdn.example.com/signed.pdf' },
+        } as any,
+      }
+      const { unmount } = render(
+        <SponsorContractView
+          conferenceId="conf-2026"
+          sponsor={mockSponsor(signed)}
+          onSendContract={vi.fn()}
+        />,
+      )
+      // Signed by hand: the stored document is the unsigned original.
+      expect(screen.queryByText('Send signed copy')).not.toBeInTheDocument()
+      unmount()
+      render(
+        <SponsorContractView
+          conferenceId="conf-2026"
+          sponsor={mockSponsor({
+            ...signed,
+            contractSignedBy: 'Kari Nordmann',
+          })}
+          onSendContract={vi.fn()}
+        />,
+      )
+      expect(screen.getByText('Send signed copy')).toBeInTheDocument()
+    })
+
     it('shows signed confirmation', () => {
       renderView({
         contractStatus: 'contract-signed',

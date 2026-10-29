@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
+import { expect, within } from 'storybook/test'
 import { DomainVerificationCard } from './DomainVerificationCard'
 import { NotificationProvider } from './NotificationProvider'
 import type { DomainVerificationView } from '@/lib/domain-verification'
@@ -33,6 +34,7 @@ function view(
     lastCheckedAt: '2026-07-28T05:00:00.000Z',
     lastSuccessAt: '2026-07-28T05:00:00.000Z',
     lastError: null,
+    workshopSignIn: null,
     ...overrides,
   }
 }
@@ -181,6 +183,61 @@ export const AllStates: Story = {
         lastSuccessAt: null,
       }),
     ],
+  },
+}
+
+/**
+ * A conference WITH workshops (#1298): each host also says whether the
+ * workshop portal can sign in on it, and why not. One host per state the
+ * organizer can land in.
+ */
+const workshopSignInStates: DomainVerificationView[] = [
+  view({
+    hostname: '2026.cloudnativedays.no',
+    workshopSignIn: { state: 'available' },
+  }),
+  view({
+    hostname: 'oslo.cloudnativedays.no',
+    status: 'pending',
+    redirectAllowlisted: false,
+    routable: false,
+    lastCheckedAt: null,
+    lastSuccessAt: null,
+    workshopSignIn: { state: 'unverified' },
+  }),
+  view({
+    hostname: 'bergen.cloudnativedays.no',
+    workshopSignIn: { state: 'blocked', by: 'origin-unusable' },
+  }),
+]
+
+export const WorkshopSignIn: Story = {
+  args: { initialDomains: workshopSignInStates },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getAllByText(/Workshop sign-in:/)).toHaveLength(3)
+    await expect(canvas.getByText('available')).toHaveClass('text-green-700')
+    await expect(canvas.getByText('domain not verified')).toHaveClass(
+      'text-amber-700',
+    )
+    await expect(canvas.getByText('switched off on every host')).toHaveClass(
+      'text-red-700',
+    )
+  },
+}
+
+export const WorkshopSignInDark: Story = {
+  args: { initialDomains: workshopSignInStates },
+  globals: { theme: 'dark' },
+}
+
+export const WorkshopSignInMobile: Story = {
+  args: { initialDomains: workshopSignInStates },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  play: async ({ canvasElement }) => {
+    // Every standing must fit the mobile viewport.
+    const page = canvasElement.ownerDocument.documentElement
+    await expect(page.scrollWidth).toBeLessThanOrEqual(page.clientWidth)
   },
 }
 

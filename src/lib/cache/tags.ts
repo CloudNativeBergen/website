@@ -24,6 +24,27 @@
  *   costs nothing" true for WELL-FORMED codes: an unknown one is ruled out
  *   against this cached set instead of costing a Sanity read of its own.
  *   Every write that CREATES, backfills or deletes a code must expire it.
+ * - `earlyAccessLinksTag(conferenceId)` — the per-CONFERENCE tag on the live
+ *   workshop early-access links of that conference (#1346). Creating and
+ *   revoking a link, and every path that removes a sponsor from a conference,
+ *   must expire it with `{ expire: 0 }`.
+ * - `feedbackCodeIndexTag(conferenceId)` — the per-CONFERENCE tag on the
+ *   Feedback Code index (speaker feedback spec §5.1): code → talk id for the
+ *   conference's confirmed, published talks, with their titles, speakers and
+ *   slots. Expire it with `{ expire: 0 }`: on a mint, a talk status change, a
+ *   proposal delete, `schedule.save` and `schedule.action`, and through a
+ *   `conference` target of the provisioning invalidation endpoint (which
+ *   speaker erasure's printed tags send the operator to). Rotation (F6) and
+ *   the fold (F9) add theirs. Not `conferenceTag` for everything the index
+ *   serves: rotation and status changes leave the programme link alone, and
+ *   schedule edits refresh `conferenceTag` on their own path. A mint, bulk mint and fold ALSO expire `conferenceTag`
+ *   (`expireProgrammeFeedbackLinks`), because the programme's "Give feedback"
+ *   link shows only where the conference read says a code exists (#1472).
+ * - `feedbackResponseTag(responseId)` — the per-RESPONSE tag on a device's own
+ *   Feedback Response as the attendee page reads it (speaker feedback spec
+ *   §7.4). Submit and Delete my answer expire it with `updateTag` (Server
+ *   Actions); Remove (F5) with `revalidateTag(tag, { expire: 0 })`, since it
+ *   runs where `updateTag` throws.
  * - `organizationTag(orgId)` — the per-ORGANIZATION-document tag, for cached
  *   reads keyed on the tenant itself rather than one of its conference
  *   editions (plan/entitlement resolution). Mutations that edit an
@@ -59,4 +80,68 @@ export function shortLinkTag(documentId: string): string {
  */
 export function shortLinkIndexTag(conferenceId: string): string {
   return `sanity:short-link-index-${conferenceId}`
+}
+
+/**
+ * The live workshop early-access links of one conference (#1346). Expire it
+ * with `{ expire: 0 }`, not a profile: a revoked link must not keep being
+ * shown as live while the new answer loads.
+ */
+export function earlyAccessLinksTag(conferenceId: string): string {
+  return `sanity:workshop-early-access-${conferenceId}`
+}
+
+/**
+ * The Feedback Code index of one conference (speaker feedback spec §5.1).
+ * Expire it with `{ expire: 0 }`: a just-minted code must resolve at once.
+ */
+export function feedbackCodeIndexTag(conferenceId: string): string {
+  return `sanity:feedback-code-index-${conferenceId}`
+}
+
+/**
+ * One device's own Feedback Response, as `/f/<code>` reads it for the
+ * Answered state (speaker feedback spec §7.4). Expire it on every write to
+ * the response: the page shows the answer it was told.
+ */
+export function feedbackResponseTag(responseId: string): string {
+  return `sanity:feedback-response-${responseId}`
+}
+
+/**
+ * A conference's Photo Wall as its public pages read it (Photo Wall spec §8):
+ * the settings now, the approved posts from M5a. Expire it with
+ * `{ expire: 0 }` on Set up and on every settings change, so a running
+ * screen and the `/wall` routes see the change on their next request.
+ */
+export function photoWallTag(conferenceId: string): string {
+  return `photo-wall:${conferenceId}`
+}
+
+/**
+ * A conference's moderation queue as `/admin/photo-wall` polls it (Photo
+ * Wall spec §8): every Wall Post with its status and the pending count.
+ * Expire it with `{ expire: 0 }` on Submit, every moderation action, a
+ * contributor's Delete or marketing change, and the retention cron.
+ */
+export function photoWallAdminTag(conferenceId: string): string {
+  return `photo-wall-admin:${conferenceId}`
+}
+
+/**
+ * One device's Wall Posts as its My posts list reads them (Photo Wall spec
+ * §8). Expire it with `{ expire: 0 }` on Submit, every moderation action, a
+ * contributor's Delete or marketing change, and the retention cron.
+ */
+export function photoWallDeviceTag(deviceKey: string): string {
+  return `photo-wall-device:${deviceKey}`
+}
+
+/**
+ * One talk's photos as its public surfaces read them (Talk photos spec §8).
+ * Expire it with `{ expire: 0 }` on every moderation and Delete of a post
+ * tagged with the talk, and on a tag change (the old and the new talk).
+ */
+export function photoWallTalkTag(talkId: string): string {
+  return `photo-wall-talk:${talkId}`
 }

@@ -6,6 +6,8 @@
  * and Storybook stories. The actual checks live in `./checks` (server-only).
  */
 
+import type { WorkshopConference } from '@/lib/features/workshops'
+
 export type CheckStatus = 'ok' | 'warn' | 'error' | 'off'
 
 export type CheckGroup =
@@ -98,6 +100,9 @@ export interface ConferenceForSystemChecks {
   checkinCustomerId?: number
   checkinEventId?: number
   teams?: Array<{ key?: string }>
+  /** What the workshop gate reads: the owner and the selected ticketing vendor. */
+  organization?: WorkshopConference['organization']
+  ticketingProvider?: WorkshopConference['ticketingProvider']
 }
 
 /** Group a flat registry into ordered, labelled cards (drops empty groups). */

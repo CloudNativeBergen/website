@@ -36,7 +36,9 @@ import type { GalleryScope } from '@/lib/gallery/sanity'
  * self-untag requires only the ORG, so it keeps working across editions.
  * Fails closed: a missing image, or one with no conference, is NOT_FOUND.
  */
-async function requireImageInConference(imageId: string): Promise<string> {
+async function requireImageInConference(
+  imageId: string,
+): Promise<{ conferenceId: string; _rev: string }> {
   const conferenceId = await resolveConferenceId()
   const tenant = await getGalleryImageTenant(imageId)
   if (!tenant?.conferenceId || tenant.conferenceId !== conferenceId) {
@@ -45,10 +47,12 @@ async function requireImageInConference(imageId: string): Promise<string> {
       message: 'Gallery image not found for this conference',
     })
   }
-  return conferenceId
+  return { conferenceId, _rev: tenant._rev }
 }
 
-async function requireImageInOrg(imageId: string): Promise<string> {
+async function requireImageInOrg(
+  imageId: string,
+): Promise<{ orgId: string; _rev: string }> {
   const orgId = await requireCurrentOrgId()
   const tenant = await getGalleryImageTenant(imageId)
   if (!tenant?.orgId || tenant.orgId !== orgId) {
@@ -57,7 +61,7 @@ async function requireImageInOrg(imageId: string): Promise<string> {
       message: 'Gallery image not found',
     })
   }
-  return orgId
+  return { orgId, _rev: tenant._rev }
 }
 
 /**
@@ -128,7 +132,7 @@ export const galleryRouter = router({
       .mutation(async ({ input }) => {
         try {
           const { id, ...updateData } = input
-          const conferenceId = await requireImageInConference(id)
+          const { conferenceId, _rev } = await requireImageInConference(id)
           // A patch may not MOVE an image to another tenant's conference.
           if (updateData.conference && updateData.conference !== conferenceId) {
             throw new TRPCError({
@@ -143,7 +147,12 @@ export const galleryRouter = router({
           if (updateData.speakers && updateData.speakers.length > 0) {
             await requireSpeakersInCurrentOrg(updateData.speakers)
           }
-          const res = await updateGalleryImage(id, updateData, conferenceId)
+          const res = await updateGalleryImage(
+            id,
+            updateData,
+            conferenceId,
+            _rev,
+          )
           if (!res.image) {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
@@ -165,7 +174,7 @@ export const galleryRouter = router({
       .input(galleryImageDeleteSchema)
       .mutation(async ({ input }) => {
         try {
-          const conferenceId = await requireImageInConference(input.id)
+          const { conferenceId } = await requireImageInConference(input.id)
           const ok = await deleteGalleryImage(input.id, conferenceId)
           if (!ok) {
             throw new TRPCError({
@@ -188,11 +197,14 @@ export const galleryRouter = router({
       .input(galleryImageToggleFeaturedSchema)
       .mutation(async ({ input }) => {
         try {
-          const conferenceId = await requireImageInConference(input.id)
+          const { conferenceId, _rev } = await requireImageInConference(
+            input.id,
+          )
           const res = await updateGalleryImage(
             input.id,
             { featured: input.featured },
             conferenceId,
+            _rev,
           )
           if (!res.image) {
             throw new TRPCError({
@@ -312,11 +324,12 @@ export const galleryRouter = router({
     .input(galleryImageUntagSelfSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const orgId = await requireImageInOrg(input.imageId)
+        const { orgId, _rev } = await requireImageInOrg(input.imageId)
         const result = await untagSpeakerFromImage(
           input.imageId,
           ctx.speaker._id,
           orgId,
+          _rev,
         )
 
         if (!result.success) {

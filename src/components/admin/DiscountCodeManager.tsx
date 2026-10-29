@@ -22,6 +22,7 @@ import {
   SponsorSendModal,
 } from '@/components/admin'
 import { AssignDiscountCodeDialog } from './AssignDiscountCodeDialog'
+import { BulkDiscountSendModal } from './sponsor/BulkDiscountSendModal'
 import { sponsorFromAddress } from './sponsor/SponsorSendModal'
 import {
   ActionMenu,
@@ -360,10 +361,9 @@ export function DiscountCodeManager({
   // Codes linked in THIS session (a sponsor-row create, #1262), merged over
   // the page's server props until the next render of the page brings them.
   const [sessionLinks, setSessionLinks] = useState<Record<string, string[]>>({})
-  // The `withLinkedCodes` set: sponsor rows, then the other code holders.
-  const claimants = useMemo(
-    () => [
-      ...sponsors.map((s) =>
+  const sponsorsWithSession = useMemo(
+    () =>
+      sponsors.map((s) =>
         sessionLinks[s.id]
           ? {
               ...s,
@@ -371,9 +371,12 @@ export function DiscountCodeManager({
             }
           : s,
       ),
-      ...otherCodeHolders,
-    ],
-    [sponsors, sessionLinks, otherCodeHolders],
+    [sponsors, sessionLinks],
+  )
+  // The `withLinkedCodes` set: sponsor rows, then the other code holders.
+  const claimants = useMemo(
+    () => [...sponsorsWithSession, ...otherCodeHolders],
+    [sponsorsWithSession, otherCodeHolders],
   )
   /** The CRM record outside the sponsor rows that stores this code, if any. */
   const otherHolderOf = useCallback(
@@ -685,6 +688,7 @@ export function DiscountCodeManager({
 
   // Send → Discount codes through the ONE send modal (#1262).
   const [sendFor, setSendFor] = useState<SponsorWithTierInfo | null>(null)
+  const [showBulkSendModal, setShowBulkSendModal] = useState(false)
 
   const openEmailModal = (sponsor: SponsorWithTierInfo) => {
     if (!sponsor.sponsorForConferenceId) {
@@ -1445,15 +1449,28 @@ export function DiscountCodeManager({
         id="sponsor-discount-codes-section"
         className="overflow-hidden rounded-lg bg-white shadow-xs dark:bg-gray-900"
       >
-        <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-            Sponsor Discount Codes
-          </h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            One row per sponsor: what the tier entitles them to, how much of it
-            has been redeemed, and the code that carries it. The codes
-            themselves are also listed above.
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+              Sponsor Discount Codes
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              One row per sponsor: what the tier entitles them to, how much of
+              it has been redeemed, and the code that carries it. The codes
+              themselves are also listed above.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowBulkSendModal(true)}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium whitespace-nowrap text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 sm:w-auto dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            <EnvelopeIcon
+              className="h-5 w-5 text-gray-500 dark:text-gray-400"
+              aria-hidden="true"
+            />
+            Send codes to sponsors
+          </button>
         </div>
 
         <div className="p-4">
@@ -1476,6 +1493,20 @@ export function DiscountCodeManager({
           sponsorForConferenceId={sendFor.sponsorForConferenceId}
           conference={conference}
           onClose={closeEmailModal}
+        />
+      )}
+
+      {showBulkSendModal && (
+        <BulkDiscountSendModal
+          isOpen
+          onClose={() => setShowBulkSendModal(false)}
+          conference={conference}
+          sponsors={sponsorsWithSession}
+          existingDiscounts={existingDiscounts}
+          otherCodeHolders={otherCodeHolders}
+          onSent={() => {
+            utils.tickets.admin.getDiscountCodesWithUsage.invalidate()
+          }}
         />
       )}
 

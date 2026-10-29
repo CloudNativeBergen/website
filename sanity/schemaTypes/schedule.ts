@@ -72,6 +72,15 @@ export default defineType({
               rows: 3,
             },
             {
+              name: 'sponsor',
+              title: 'Track Sponsor',
+              description:
+                'Shown alone on this room\'s stream screen as "Track sponsored by". Leave empty to thank every sponsor.',
+              type: 'reference',
+              to: [{ type: 'sponsor' }],
+              weak: true,
+            },
+            {
               name: 'talks',
               title: 'Talks',
               type: 'array',

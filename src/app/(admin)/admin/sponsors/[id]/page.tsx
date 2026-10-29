@@ -1,39 +1,70 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { resolveConferenceId } from '@/server/trpc'
-import { SponsorDashboardClient } from './SponsorDashboardClient'
+import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
+import { denyNonOrganizer } from '@/lib/authz/page-guard'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getSponsorOverview } from '@/lib/sponsor-crm/sanity'
+import { isTicketingEnabledForConference } from '@/lib/features/ticketing'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
+import { ErrorDisplay } from '@/components/admin'
+import { SponsorDashboardClient } from './SponsorDashboardClient'
 
-interface SponsorDashboardProps {
-  params: { id: string }
-}
+const VIEWS = [
+  'pipeline',
+  'contacts',
+  'logo',
+  'history',
+  'contract',
+  'communications',
+  'messages',
+] as const
+type View = (typeof VIEWS)[number]
 
 export default async function SponsorDashboardPage({
   params,
-}: SponsorDashboardProps) {
-  const sponsorId = params.id
-  const conferenceId = await resolveConferenceId()
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ view?: string }>
+}) {
+  // Same guard as the CRM board: the conference read below carries the
+  // sponsor registration link, which must not reach a non-organizer.
+  const denied = await denyNonOrganizer()
+  if (denied) return denied
 
-  if (!sponsorId) {
-    notFound()
+  const { id } = await params
+  const { view } = await searchParams
+  const domain = (await headers()).get('host') || 'localhost:3000'
+
+  const { conference, error: conferenceError } =
+    await getConferenceForCurrentDomain({
+      includeSponsorRegistrationLink: true,
+    })
+  if (conferenceError || !conference) {
+    return (
+      <ErrorDisplay
+        title="Conference Not Found"
+        message={conferenceError?.message || 'Could not load conference data'}
+      />
+    )
   }
 
-  // RSC Hydration: Fetch the core overview server-side to prevent the initial skeleton flash
-  const { data: initialOverview, error } = await getSponsorOverview(sponsorId)
+  // Scoped to this conference: another tenant's id is simply not found.
+  const { data: initialOverview } = await getSponsorOverview(id, conference._id)
+  if (!initialOverview) notFound()
 
-  if (
-    error ||
-    !initialOverview ||
-    initialOverview.conference?._ref !== conferenceId
-  ) {
-    notFound()
-  }
+  const canSendDiscountCodes =
+    !!conference.checkinEventId &&
+    (await isTicketingEnabledForConference(conference))
 
   return (
     <SponsorDashboardClient
-      sponsorId={sponsorId}
-      conferenceId={conferenceId}
-      initialOverview={initialOverview as any}
+      sponsorId={id}
+      conference={conference}
+      domain={domain}
+      canSendDiscountCodes={canSendDiscountCodes}
+      workshopsEnabled={await isWorkshopsEnabledForConference(conference)}
+      initialOverview={initialOverview}
+      initialView={VIEWS.includes(view as View) ? (view as View) : undefined}
     />
   )
 }

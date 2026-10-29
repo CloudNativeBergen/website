@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   resolveAccess: vi.fn(),
   getSpeakers: vi.fn(),
   getOrganizerCount: vi.fn(),
+  getVolunteersByConference: vi.fn(),
   fetchSpeakerTicketInputs: vi.fn(),
   resolveSpeakerTicketType: vi.fn(),
   fetchEventTickets: vi.fn(),
@@ -36,6 +37,9 @@ vi.mock('@/lib/speaker/sanity', () => ({
   getSpeakers: h.getSpeakers,
   getOrganizerCount: h.getOrganizerCount,
 }))
+vi.mock('@/lib/volunteer/sanity', () => ({
+  getVolunteersByConference: h.getVolunteersByConference,
+}))
 vi.mock('@/lib/speaker/ticketInputs', () => ({
   fetchSpeakerTicketInputs: h.fetchSpeakerTicketInputs,
 }))
@@ -48,7 +52,11 @@ vi.mock('./speakerStatus', async (importOriginal) => ({
   resolveSpeakerTicketType: h.resolveSpeakerTicketType,
 }))
 
-import { buildTicketSummary, type TicketSummaryReady } from './summary'
+import {
+  buildTicketSummary,
+  exportParticipants,
+  type TicketSummaryReady,
+} from './summary'
 import type { Conference } from '@/lib/conference/types'
 import type { EventTicket } from './types'
 
@@ -157,6 +165,10 @@ beforeEach(() => {
     err: null,
   })
   h.getOrganizerCount.mockResolvedValue({ count: 3, err: null })
+  h.getVolunteersByConference.mockResolvedValue({
+    volunteers: [],
+    error: null,
+  })
   h.fetchSpeakerTicketInputs.mockResolvedValue([
     {
       speakerId: 'sp-1',
@@ -364,5 +376,404 @@ describe('stored codes on sponsors outside the public list', () => {
     expect(freeTicketAllocation.sponsors.status).toBe(
       'Redemptions of 100%-off sponsor codes.',
     )
+  })
+})
+
+describe('exportParticipants', () => {
+  it('excludes standalone non-admitting add-ons when workshopOnly is false and aligns isComp with isPaidTicket', async () => {
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 100,
+        category: 'Regular',
+        sum: '2500',
+        crm: crm('paid@example.com'),
+      }),
+      ticket({
+        id: 2,
+        order_id: 101,
+        category: 'Regular',
+        sum: '0',
+        crm: crm('free@example.com'),
+      }),
+      ticket({
+        id: 3,
+        order_id: 102,
+        category: 'Workshop upgrade',
+        sum: '500',
+        crm: crm('addon-only@example.com'),
+      }),
+    ])
+
+    const res = await exportParticipants(conference, false)
+
+    expect(res.map((p) => p.email)).toEqual([
+      'paid@example.com',
+      'free@example.com',
+    ])
+    expect(res.find((p) => p.email === 'paid@example.com')?.isComp).toBe(false)
+    expect(res.find((p) => p.email === 'free@example.com')?.isComp).toBe(true)
+  })
+})
+
+describe('exportParticipants: one definition of a workshop participant (#1333)', () => {
+  it('exports every speaker as a workshop participant, whatever they answered', async () => {
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 100,
+        category: 'Speaker ticket',
+        crm: crm('quiet@example.com'),
+      }),
+      ticket({
+        id: 2,
+        order_id: 101,
+        category: 'Speaker ticket',
+        fields: [{ key: 'Will you attend the Monday workshops?', value: 'No' }],
+        crm: crm('no@example.com'),
+      }),
+      ticket({ id: 3, order_id: 102, sum: '2500', crm: crm('a@example.com') }),
+    ])
+
+    const res = await exportParticipants(conference, true)
+
+    expect(res.map((p) => [p.email, p.grantsWorkshop])).toEqual([
+      ['quiet@example.com', true],
+      ['no@example.com', true],
+    ])
+  })
+
+  it('normalizes addresses that differ only in padding or case when joining add-ons to seats', async () => {
+    const confWithUpgrade = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 100,
+        category: 'Regular',
+        crm: crm('  Ada@Example.com '),
+      }),
+      ticket({
+        id: 2,
+        order_id: 101,
+        category: 'Workshop upgrade',
+        crm: crm('ada@example.com\t'),
+      }),
+    ])
+
+    const res = await exportParticipants(confWithUpgrade, true)
+
+    expect(res).toHaveLength(1)
+    expect(res[0].email).toBe('ada@example.com')
+    expect(res[0].grantsWorkshop).toBe(true)
+    expect(res[0].categories).toBe('Regular, Workshop upgrade')
+  })
+
+  it('does not allow a seat to greedily steal a named workshop add-on for another attendee', async () => {
+    const confWithUpgrade = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        category: 'Regular',
+        crm: {
+          first_name: 'Alice',
+          last_name: 'Smith',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 2,
+        order_id: 200,
+        category: 'Regular',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 3,
+        order_id: 200,
+        category: 'Workshop upgrade',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+    ])
+
+    const res = await exportParticipants(confWithUpgrade, false)
+
+    expect(res).toHaveLength(2)
+    const alice = res.find((p) => p.firstName === 'Alice')
+    const bob = res.find((p) => p.firstName === 'Bob')
+    expect(alice?.grantsWorkshop).toBe(false)
+    expect(alice?.categories).toBe('Regular')
+    expect(bob?.grantsWorkshop).toBe(true)
+    expect(bob?.categories).toBe('Regular, Workshop upgrade')
+  })
+
+  it('does not allow an unnamed TBA seat to steal a named add-on from a later attendee', async () => {
+    const confWithUpgrade = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        category: 'Regular',
+        crm: {
+          first_name: '',
+          last_name: '',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 2,
+        order_id: 200,
+        category: 'Regular',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 3,
+        order_id: 200,
+        category: 'Workshop upgrade',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+    ])
+
+    const res = await exportParticipants(confWithUpgrade, false)
+
+    expect(res).toHaveLength(2)
+    const tba = res.find((p) => p.firstName === '')
+    const bob = res.find((p) => p.firstName === 'Bob')
+    expect(tba?.grantsWorkshop).toBe(false)
+    expect(bob?.grantsWorkshop).toBe(true)
+    expect(bob?.categories).toBe('Regular, Workshop upgrade')
+  })
+
+  it('exports surplus or unattached workshop add-ons when workshopOnly is true', async () => {
+    const confWithUpgrade = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        category: 'Regular',
+        crm: {
+          first_name: 'Alice',
+          last_name: 'Smith',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 2,
+        order_id: 200,
+        category: 'Workshop upgrade',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 3,
+        order_id: 200,
+        category: 'Workshop upgrade',
+        crm: {
+          first_name: 'Charlie',
+          last_name: 'Brown',
+          email: 'buyer@company.com',
+        },
+      }),
+    ])
+
+    const res = await exportParticipants(confWithUpgrade, true)
+
+    expect(res).toHaveLength(2)
+    expect(res.map((p) => p.firstName).sort()).toEqual(['Bob', 'Charlie'])
+    expect(res.every((p) => p.grantsWorkshop)).toBe(true)
+  })
+
+  it('exports one row per admitting seat when a buyer purchases multiple tickets under one email', async () => {
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        category: 'Regular',
+        sum: '2500',
+        crm: {
+          first_name: 'Alice',
+          last_name: 'Smith',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 2,
+        order_id: 200,
+        category: 'Regular',
+        sum: '2500',
+        crm: {
+          first_name: 'Bob',
+          last_name: 'Jones',
+          email: 'buyer@company.com',
+        },
+      }),
+      ticket({
+        id: 3,
+        order_id: 200,
+        category: 'Regular',
+        sum: '2500',
+        crm: {
+          first_name: 'To Be',
+          last_name: 'Announced',
+          email: 'buyer@company.com',
+        },
+      }),
+    ])
+
+    const res = await exportParticipants(conference, false)
+
+    expect(res).toHaveLength(3)
+    expect(res.map((p) => [p.firstName, p.lastName, p.email])).toEqual([
+      ['Alice', 'Smith', 'buyer@company.com'],
+      ['Bob', 'Jones', 'buyer@company.com'],
+      ['To Be', 'Announced', 'buyer@company.com'],
+    ])
+  })
+
+  it('absorbs a same-name workshop add-on into a seat that already grants the workshop', async () => {
+    const conf = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Two-day', admits: true, grantsWorkshop: true },
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
+    const bob = { first_name: 'Bob', last_name: 'Jones', email: 'bob@x.com' }
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({ id: 1, order_id: 200, category: 'Two-day', crm: bob }),
+      ticket({ id: 2, order_id: 200, category: 'Workshop upgrade', crm: bob }),
+    ])
+
+    const res = await exportParticipants(conf, true)
+
+    expect(res).toHaveLength(1)
+    expect(res[0].categories).toBe('Two-day, Workshop upgrade')
+  })
+
+  it('matches exact full names before first-name-only seats', async () => {
+    const conf = {
+      ...conference,
+      ticketTypeRoles: [
+        { typeName: 'Workshop upgrade', admits: false, grantsWorkshop: true },
+      ],
+    }
+    const email = 'buyer@company.com'
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        crm: { first_name: 'Bob', last_name: '', email },
+      }),
+      ticket({
+        id: 2,
+        order_id: 200,
+        crm: { first_name: 'Bob', last_name: 'Jones', email },
+      }),
+      ticket({
+        id: 3,
+        order_id: 200,
+        category: 'Workshop upgrade',
+        crm: { first_name: 'Bob', last_name: 'Jones', email },
+      }),
+    ])
+
+    const res = await exportParticipants(conf, false)
+
+    expect(res.map((p) => [p.lastName, p.grantsWorkshop])).toEqual([
+      ['', false],
+      ['Jones', true],
+    ])
+  })
+
+  it('never puts the buyer name on a blank seat', async () => {
+    const email = 'buyer@company.com'
+    h.fetchEventTickets.mockResolvedValue([
+      ticket({
+        id: 1,
+        order_id: 200,
+        customer_name: 'Buyer Person',
+        crm: { first_name: '', last_name: '', email },
+      }),
+    ])
+
+    const res = await exportParticipants(conference, false)
+
+    expect(res[0].firstName).toBe('')
+  })
+})
+
+describe('volunteer free ticket allocation in buildTicketSummary', () => {
+  it('populates freeTicketAllocation.volunteers when approved/confirmed volunteers exist', async () => {
+    h.getVolunteersByConference.mockResolvedValue({
+      volunteers: [
+        {
+          _id: 'vol-1',
+          name: 'Vol One',
+          email: 'vol1@example.com',
+          status: 'confirmed',
+        },
+        {
+          _id: 'vol-2',
+          name: 'Vol Two',
+          email: 'vol2@example.com',
+          status: 'approved',
+        },
+      ],
+      error: null,
+    })
+    h.fetchEventTickets.mockResolvedValue([
+      ...TICKETS,
+      ticket({
+        id: 6,
+        order_id: 104,
+        category: 'Volunteer ticket',
+        crm: crm('vol1@example.com'),
+      }),
+    ])
+
+    const summary = await ready()
+    expect(summary.freeTicketAllocation.volunteers).toMatchObject({
+      allocated: 2,
+      claimed: 1,
+    })
+    expect(summary.freeTicketAllocation.claimedCovers).toContain('volunteers')
   })
 })

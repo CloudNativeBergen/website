@@ -15,12 +15,14 @@ import { emailBrandColor } from '@/lib/branding/theme'
 import { CoSpeakerInvitationTemplate } from '@/components/email/CoSpeakerInvitationTemplate'
 import { CoSpeakerResponseTemplate } from '@/components/email/CoSpeakerResponseTemplate'
 import { CoSpeakerAddedTemplate } from '@/components/email/CoSpeakerAddedTemplate'
+import { CoSpeakerRemovedTemplate } from '@/components/email/CoSpeakerRemovedTemplate'
 import { AppEnvironment } from '@/lib/environment'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { canonicalEmail } from '@/lib/speaker/email'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { formatDate } from '@/lib/time'
+import { resolveConferenceFrom } from '@/lib/email/from'
 
 const TOKEN_SECRET = process.env.INVITATION_TOKEN_SECRET
 
@@ -465,7 +467,10 @@ export async function sendInvitationEmail(
     const result = await sendEmail({
       to: invitation.invitedEmail,
       subject,
-      from: `${conference.organizer} <${conference.cfpEmail}>`,
+      from: resolveConferenceFrom(conference, {
+        field: 'cfpEmail',
+        localPart: 'cfp',
+      }),
       orgId: conference.organization?._ref,
       component: CoSpeakerInvitationTemplate,
       props: {
@@ -507,6 +512,7 @@ export async function sendCoSpeakerAddedEmail(params: {
   toEmail: string
   toName: string
   organizerName: string
+  proposalId: string
   proposalTitle: string
   /**
    * Which seat they were put in. `proposal.admin.create` uses this for a
@@ -552,7 +558,10 @@ export async function sendCoSpeakerAddedEmail(params: {
     const result = await sendEmail({
       to: canonicalEmail(params.toEmail),
       subject,
-      from: `${conference.organizer} <${conference.cfpEmail}>`,
+      from: resolveConferenceFrom(conference, {
+        field: 'cfpEmail',
+        localPart: 'cfp',
+      }),
       orgId: conference.organization?._ref,
       component: CoSpeakerAddedTemplate,
       props: {
@@ -561,7 +570,7 @@ export async function sendCoSpeakerAddedEmail(params: {
         organizerName: params.organizerName,
         contactEmail,
         proposalTitle: params.proposalTitle,
-        dashboardUrl: `${protocol}${domain}/cfp/list`,
+        dashboardUrl: `${protocol}${domain}/cfp/proposal/${params.proposalId}`,
         eventName,
         eventLocation,
         eventDate,
@@ -574,6 +583,59 @@ export async function sendCoSpeakerAddedEmail(params: {
     return result.success
   } catch (error) {
     console.error(`Error sending ${role} added email:`, error)
+    return false
+  }
+}
+
+/**
+ * Tell a speaker an organizer took them off a talk. Sent every time: the
+ * speaker leaves the talk's message thread, so the thread message cannot
+ * reach them. Never throws; the removal is already committed.
+ */
+export async function sendCoSpeakerRemovedEmail(params: {
+  toEmail: string
+  toName: string
+  proposalTitle: string
+  comment?: string
+  conference: Conference
+  domain: string
+}): Promise<boolean> {
+  const { conference, domain } = params
+  const subject = `You are no longer a speaker on "${params.proposalTitle}"`
+  try {
+    if (AppEnvironment.isTestMode) {
+      console.log('[TEST MODE] Would send co-speaker removed email:')
+      console.log('To:', params.toEmail)
+      console.log('Subject:', subject)
+      return true
+    }
+    const { eventName, eventLocation, eventDate, eventUrl } =
+      buildEmailEventContext(conference, domain)
+    const result = await sendEmail({
+      to: canonicalEmail(params.toEmail),
+      subject,
+      from: resolveConferenceFrom(conference, {
+        field: 'cfpEmail',
+        localPart: 'cfp',
+      }),
+      orgId: conference.organization?._ref,
+      component: CoSpeakerRemovedTemplate,
+      props: {
+        speakerName: params.toName,
+        proposalTitle: params.proposalTitle,
+        comment: params.comment,
+        contactEmail: conference.cfpEmail,
+        eventName,
+        eventLocation,
+        eventDate,
+        eventUrl,
+        socialLinks: conference.socialLinks || [],
+        brandColor: emailBrandColor(conference.theme),
+      },
+    })
+    return result.success
+  } catch (error) {
+    console.error('Error sending co-speaker removed email:', error)
     return false
   }
 }
@@ -658,7 +720,10 @@ export async function sendResponseNotificationEmail(params: {
     const result = await sendEmail({
       to: inviterEmail,
       subject,
-      from: `${conference.organizer} <${conference.cfpEmail}>`,
+      from: resolveConferenceFrom(conference, {
+        field: 'cfpEmail',
+        localPart: 'cfp',
+      }),
       orgId: conference.organization?._ref,
       component: CoSpeakerResponseTemplate,
       props: {

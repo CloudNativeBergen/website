@@ -729,8 +729,9 @@ export const FilterDropsVanishedTag: Story = {
     const dialog = within(await within(document.body).findByRole('dialog'))
     await userEvent.clear(dialog.getByLabelText(/Tags/))
     await userEvent.click(dialog.getByRole('button', { name: 'Save' }))
+    // Three requests in a row (list, filters, unfiltered list) before it shows.
     await expect(
-      await canvas.findByText('Venue from the harbour'),
+      await canvas.findByText('Venue from the harbour', {}, { timeout: 5000 }),
     ).toBeInTheDocument()
     await expect(canvas.getByLabelText('Tag')).toHaveValue('')
   },

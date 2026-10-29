@@ -115,6 +115,16 @@ export const WithImage: Story = {
     onClose: fn(),
     speaker: mockSpeakerWithImage,
     talks: mockTalks,
+    ticketStatus: {
+      speakerId: mockSpeakerWithImage._id,
+      state: 'redeemed',
+      additionals: [{ name: 'Dinner', value: 'Yes' }],
+      fields: [
+        { key: 'Will you attend the Monday workshops?', value: 'Yes, please!' },
+        { key: 'Dietary requirements', value: 'Vegetarian' },
+      ],
+      manageUrl: 'https://checkin.example/order',
+    },
   },
   parameters: {
     docs: {

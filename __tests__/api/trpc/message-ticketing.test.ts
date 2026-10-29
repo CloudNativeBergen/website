@@ -44,7 +44,7 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 
 vi.mock('@/lib/notification/sanity', () => ({
-  getOrganizerSpeakerIds: vi.fn(async () => [] as string[]),
+  getOrganizerSpeakerIdsForOrg: vi.fn(async () => [] as string[]),
   createNotifications: vi.fn(async () => {}),
 }))
 
@@ -76,7 +76,7 @@ import {
   setConversationPreference,
 } from '@/lib/messaging/sanity'
 import {
-  getOrganizerSpeakerIds,
+  getOrganizerSpeakerIdsForOrg,
   createNotifications,
 } from '@/lib/notification/sanity'
 
@@ -88,7 +88,7 @@ const setStatus = setConversationStatus as unknown as LooseMock
 const setAssignee = setConversationAssignee as unknown as LooseMock
 const setArchived = setConversationArchived as unknown as LooseMock
 const setPref = setConversationPreference as unknown as LooseMock
-const orgIds = getOrganizerSpeakerIds as unknown as LooseMock
+const orgIds = getOrganizerSpeakerIdsForOrg as unknown as LooseMock
 const createNotifs = createNotifications as unknown as LooseMock
 
 const speaker1 = speakers[0]._id // not an organizer
@@ -188,6 +188,8 @@ describe('setAssignee — organizer validation + assign notify (S4)', () => {
       assigneeId: 'org-2',
     })
     expect(setAssignee).toHaveBeenCalledWith(proposalConv._id, 'org-2')
+    // Validated against the CONVERSATION's org, not the request host's.
+    expect(orgIds).toHaveBeenCalledWith('org-test')
     // One hub notification to the NEW assignee.
     expect(createNotifs).toHaveBeenCalledTimes(1)
     const [items] = createNotifs.mock.calls[0]

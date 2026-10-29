@@ -216,6 +216,23 @@ export const WithdrawnProposal: Story = {
   },
 }
 
+export const CanceledProposal: Story = {
+  args: {
+    proposal: createMockProposal({
+      _id: 'proposal-canceled',
+      status: Status.canceled,
+    }),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Talks canceled by an organizer get the same warning as withdrawn ones.',
+      },
+    },
+  },
+}
+
 export const RequiresTravelFunding: Story = {
   args: {
     proposal: createMockProposal({
@@ -305,6 +322,7 @@ export const FilteredOut: Story = {
           schedule: null,
           otherScheduledProposalIds: new Set(),
           isReadOnly: false,
+          trackSponsorOptions: [],
           dispatch: () => {},
           isFilteredOut: () => true,
         }}

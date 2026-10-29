@@ -1,6 +1,11 @@
 import 'server-only'
 import { PER_ORG_SECRETS_STORES } from '@/lib/secrets/store'
 import {
+  resolveTicketingCredentials,
+  ticketingCredentialsConfigured,
+  type TicketingProviderType,
+} from '@/lib/tickets/provider'
+import {
   conferenceOrgId,
   isFeatureExplicitlyDeniedForOrg,
   resolveRegistryEntitlement,
@@ -88,14 +93,21 @@ import { isPlatformOrganization } from './platform'
  *
  * WHAT IT STILL DOES NOT REACH, deliberately: the ATTENDEE-facing ticket sale
  * (`src/lib/tickets/public.ts` and the public ticket page — a deny must never
- * break a sale mid-conference), workshop eligibility, and the admin status
- * PROBES. Nor speaker-ticket issuance, which keeps reaching a denied org's
+ * break a sale mid-conference) and the admin status PROBES. Nor
+ * speaker-ticket issuance, which keeps reaching a denied org's
  * vendor account: borderline, low-harm, and left alone knowingly rather than
  * by omission. Note that this exclusion is wider than "a side effect of
  * accepting a proposal" — `speaker.sendTicketInvitations` is a standing
  * organizer mutation that an organizer of a denied org can trigger at will,
  * which is a sharper asymmetry with the now-gated `sendDiscountEmail` than the
  * word "issuance" suggests.
+ *
+ * WHAT IT NEWLY REACHES (#1295): the workshop feature. `./workshops.ts`
+ * requires ticketing to be ENABLED (not merely not-denied) on top of the plan,
+ * so a ticketing deny switches workshops off for an org that holds no
+ * `workshops` override of its own — stricter than `requireFeatureNotDenied`,
+ * deliberately: a portal that decides from ticket data has nothing to decide
+ * from once the integration is off.
  *
  * NOT A SECURITY BOUNDARY, still, however far it reaches. Credential isolation
  * is enforced in `resolveTicketingCredentials` and the tRPC tenancy guards; a
@@ -154,6 +166,73 @@ async function hasOwnTicketingCredentials(orgId: string): Promise<boolean> {
       error,
     )
     return false
+  }
+}
+
+/**
+ * Whether the organization can READ TICKETS for a conference on `providerType`
+ * — the capability question, separate from the entitlement one:
+ * `isTicketingEnabledForOrg` is true for a bare `pro` plan so the pages can
+ * walk the tenant through connecting an account, while this stays false until
+ * it has. `./workshops.ts` needs both: a portal that decides from ticket data
+ * is worthless to an org that cannot read any (#1295).
+ *
+ * ASKED OF THE REAL THING, not re-derived: the credentials come from
+ * `resolveTicketingCredentials` and the verdict from the provider's own
+ * `isConfigured()` rule — the resolver and the class the portal's ticket
+ * lookup runs on (`@/lib/tickets/provider`). So this cannot say yes to
+ * credentials that lookup would report as UNCONFIGURED, and it inherits every
+ * rule they hold:
+ *
+ *  - PER VENDOR. Checkin needs a key and a secret, Tito a key. A bag holding
+ *    only a `webhookSecret` (which can authenticate an inbound ticket-sold
+ *    delivery, so the webhook would mail workshop instructions) reads nothing.
+ *  - PER STORE. The discrete `TENANT_<SLUG>_CHECKIN_*` set is Checkin's; a
+ *    Tito conference in an org that holds only that set has no credentials.
+ *  - THE PLATFORM ORG reads with the env account of the selected vendor, and
+ *    only when its variables are set. With `PLATFORM_ORG_ID` unset nobody is
+ *    the platform org.
+ *
+ * WHAT IT DOES NOT PROVE: that the vendor ACCEPTS the credentials (a Checkin
+ * key pasted into the bag of a Tito conference is "configured" and fails at
+ * Tito), nor that the conference is bound to an event. The portal refuses
+ * attendees with its own message in both cases; neither is knowable here
+ * without calling the vendor.
+ *
+ * NEVER LOOSER THAN A REAL KEY: the providers test truthiness, so a
+ * whitespace-only or non-string `apiKey` would pass them. It reads nothing, so
+ * it does not count here.
+ *
+ * That makes the workshop gate STRICTER than `hasOwnTicketingCredentials`
+ * above, on purpose and only here: the ticketing surfaces still show for a bag
+ * the provider will then report as unconfigured, which is the honest state for
+ * them, while a workshop portal has no such state to fall back on.
+ *
+ * A nullish org is a plain `false`. `null` IS "COULD NOT FIND OUT": the
+ * credential lookup was refused (`TenantEnvSlugUnavailableError`, loud on the
+ * credential path by design). It is falsy, so a gate that tests it fails
+ * closed; it is kept apart from `false` for the one caller that must not read
+ * a refused lookup as a confirmed "no" — the legal disclosure, via
+ * `./workshops.ts`.
+ */
+export async function canReadTicketsForOrg(
+  orgId: string | null | undefined,
+  providerType: TicketingProviderType,
+): Promise<boolean | null> {
+  if (!orgId) return false
+  try {
+    const credentials = await resolveTicketingCredentials(orgId, providerType)
+    if (!credentials) return false
+    const hasKey =
+      typeof credentials.apiKey === 'string' &&
+      credentials.apiKey.trim().length > 0
+    return hasKey && ticketingCredentialsConfigured(providerType, credentials)
+  } catch (error) {
+    console.error(
+      `[features] ticketing credential lookup failed for ${orgId}; treating "workshops" as DISABLED`,
+      error,
+    )
+    return null
   }
 }
 

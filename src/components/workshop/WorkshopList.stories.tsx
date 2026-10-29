@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useEffect } from 'react'
 import { http, HttpResponse, delay } from 'msw'
 import type { Decorator } from '@storybook/nextjs-vite'
-import { userEvent, within } from 'storybook/test'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import WorkshopList from './WorkshopList'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 import { mockDateBeforeEach } from '@/lib/storybook'
@@ -91,8 +91,9 @@ const signup = (
 const signupsResponse = (signups: unknown[]) =>
   trpc({ success: true, data: signups, count: signups.length })
 
-const announcementsHandler = http.get('/api/trpc/workshop.announcements', () =>
-  trpc({ success: true, data: [], count: 0 }),
+const announcementsHandler = http.get(
+  '/api/trpc/workshop.announcementsByWorkshop',
+  () => trpc({ success: true, data: {} }),
 )
 
 /** Base handlers: everything resolves; individual stories override `workshop.list`. */
@@ -243,6 +244,189 @@ export const RegistrationClosed: Story = {
   },
 }
 
+/**
+ * The server after #1331: a cancel REMOVES the sign-up, so the attendee's next
+ * read of their sign-ups comes back without it. (Before, the sign-up came back
+ * as `waitlist`.) Reset per story in `beforeEach`.
+ */
+const cancelled = { done: false }
+const cancelHandlersFor = (workshops: unknown[], before: unknown[]) => [
+  http.get('/api/trpc/workshop.list', () => listResponse(workshops)),
+  http.get('/api/trpc/workshop.getMySignups', () =>
+    signupsResponse(cancelled.done ? [] : before),
+  ),
+  announcementsHandler,
+  http.post('/api/trpc/workshop.cancelSignup', () => {
+    cancelled.done = true
+    return trpc({
+      success: true,
+      message: 'Workshop signup cancelled successfully',
+    })
+  }),
+]
+
+/**
+ * The attendee's cancel asks first. Press the card's button, then answer the
+ * question once it accepts an answer (it ignores its confirm button for a
+ * moment after it opens, against a second tap).
+ */
+const cancelThroughTheQuestion = async (
+  canvasElement: HTMLElement,
+  button: string,
+  question: string,
+) => {
+  await userEvent.click(
+    await within(canvasElement).findByRole('button', { name: button }),
+  )
+  const confirm = within(
+    await within(canvasElement.ownerDocument.body).findByRole('dialog', {
+      name: question,
+    }),
+  ).getByRole('button', { name: button })
+  await waitFor(() => expect(confirm).not.toHaveAttribute('aria-disabled'))
+  await userEvent.click(confirm)
+}
+
+/**
+ * The story ran at PHONE width, and nothing is wider than the page. The test
+ * runner resizes the page from `defaultViewport`; at its default 1280 this
+ * fails.
+ */
+const expectPhone = async (canvasElement: HTMLElement) => {
+  const document = canvasElement.ownerDocument
+  await expect(document.defaultView!.innerWidth).toBeLessThan(640)
+  const root = document.documentElement
+  await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth)
+}
+
+/**
+ * After "Cancel Registration" the workshop is one the attendee has NOT signed
+ * up for: it is back under "Available Workshops" with its register button, and
+ * nothing says waitlist.
+ */
+export const AfterCancel: Story = {
+  args: signedInArgs,
+  beforeEach: () => {
+    cancelled.done = false
+  },
+  parameters: {
+    msw: {
+      handlers: cancelHandlersFor(
+        [wsAvailableA, wsAvailableB],
+        [signup('su-1', 'ws-1', 'confirmed')],
+      ),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByRole('heading', { name: 'Your Workshops' }),
+    ).toBeVisible()
+
+    await cancelThroughTheQuestion(
+      canvasElement,
+      'Cancel Registration',
+      'Cancel your registration?',
+    )
+
+    await canvas.findByText('Successfully cancelled workshop signup')
+    await waitFor(() =>
+      expect(
+        canvas.queryByRole('heading', { name: 'Your Workshops' }),
+      ).not.toBeInTheDocument(),
+    )
+    await expect(
+      canvas.getAllByRole('button', { name: 'Register for Workshop' }),
+    ).toHaveLength(2)
+    await expect(
+      canvas.queryByText(/on the waitlist for this workshop/i),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole('button', { name: 'Leave Waitlist' }),
+    ).not.toBeInTheDocument()
+  },
+}
+
+export const AfterCancelDark: Story = {
+  ...AfterCancel,
+  parameters: { ...AfterCancel.parameters, dark: true },
+}
+
+export const AfterCancelMobile: Story = {
+  ...AfterCancel,
+  parameters: {
+    ...AfterCancel.parameters,
+    viewport: { defaultViewport: 'phone' },
+  },
+  play: async (context) => {
+    await AfterCancel.play!(context)
+    await expectPhone(context.canvasElement)
+  },
+}
+
+/**
+ * "Leave Waitlist" is the same cancel on a waitlisted sign-up, and it removes
+ * the sign-up too. The full workshop is then one the attendee has NOT signed up
+ * for: back under "Full Workshops", offering "Join Waitlist". (Before #1331 the
+ * button set `waitlist` on a waitlisted sign-up, and nothing changed.)
+ */
+export const AfterLeavingWaitlist: Story = {
+  args: signedInArgs,
+  beforeEach: () => {
+    cancelled.done = false
+  },
+  parameters: {
+    msw: {
+      handlers: cancelHandlersFor(
+        [wsAvailableA, wsFull],
+        [signup('su-2', 'ws-3', 'waitlist')],
+      ),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText(/on the waitlist for this workshop/i),
+    ).toBeVisible()
+
+    await cancelThroughTheQuestion(
+      canvasElement,
+      'Leave Waitlist',
+      'Leave the waitlist?',
+    )
+
+    await waitFor(() =>
+      expect(
+        canvas.queryByRole('heading', { name: 'Your Workshops' }),
+      ).not.toBeInTheDocument(),
+    )
+    await expect(
+      canvas.getByRole('heading', { name: 'Full Workshops' }),
+    ).toBeVisible()
+    await expect(
+      canvas.getAllByRole('button', { name: 'Join Waitlist' }),
+    ).toHaveLength(1)
+    await expect(
+      canvas.queryByText(/on the waitlist for this workshop/i),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole('button', { name: 'Leave Waitlist' }),
+    ).not.toBeInTheDocument()
+  },
+}
+
+export const AfterLeavingWaitlistMobile: Story = {
+  ...AfterLeavingWaitlist,
+  parameters: {
+    ...AfterLeavingWaitlist.parameters,
+    viewport: { defaultViewport: 'phone' },
+  },
+  play: async (context) => {
+    await AfterLeavingWaitlist.play!(context)
+    await expectPhone(context.canvasElement)
+  },
+}
+
 /** Completing the signup modal surfaces the green success banner. */
 export const SignupSuccess: Story = {
   args: signedInArgs,
@@ -296,5 +480,169 @@ export const SignupError: Story = {
     // The failure text shows both in the modal and in the page-level banner, so
     // assert on all matches rather than a single one.
     await body.findAllByText(/this workshop is now full/i)
+  },
+}
+
+/** A tRPC error response, as the server sends one. */
+const trpcError = (
+  message: string,
+  code: number,
+  data: { code: string; httpStatus: number },
+) =>
+  HttpResponse.json(
+    { error: { message, code, data } },
+    { status: data.httpStatus },
+  )
+
+const signupsUnavailable = () =>
+  trpcError('fetch failed', -32603, {
+    code: 'INTERNAL_SERVER_ERROR',
+    httpStatus: 500,
+  })
+
+const REFUSAL =
+  'No valid workshop ticket found. Please upgrade your ticket to include workshop access, or contact us at hello@example.com if you believe this is an error.'
+
+const signupsRefused = () =>
+  trpcError(REFUSAL, -32003, { code: 'FORBIDDEN', httpStatus: 403 })
+
+const signupsFailedHandlers = [
+  http.get('/api/trpc/workshop.list', () =>
+    listResponse([wsAvailableA, wsAvailableB, wsFull]),
+  ),
+  http.get('/api/trpc/workshop.getMySignups', signupsUnavailable),
+  announcementsHandler,
+]
+
+/**
+ * The attendee's own signups could not be read. The list still renders, but it
+ * says so: without the notice a registered attendee sees their workshops as
+ * available.
+ */
+export const SignupsUnavailable: Story = {
+  args: signedInArgs,
+  parameters: { msw: { handlers: signupsFailedHandlers } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const notice = await canvas.findByRole(
+      'alert',
+      {},
+      // Generous: the mocked failure and the render both have to land.
+      { timeout: 5000 },
+    )
+    await expect(notice).toHaveTextContent(
+      /could not load your workshop registrations/i,
+    )
+    await expect(
+      within(notice).getByRole('button', { name: /try again/i }),
+    ).toBeEnabled()
+  },
+}
+
+export const SignupsUnavailableDark: Story = {
+  ...SignupsUnavailable,
+  parameters: { ...SignupsUnavailable.parameters, dark: true },
+}
+
+/**
+ * The server REFUSED the read (the access rule behind `getMySignups`: no
+ * ticket, wrong ticket type, ticket check unavailable). The notice carries the
+ * server's reason instead of the generic copy — "try again" alone would never
+ * tell a refunded attendee why nothing loads.
+ */
+export const SignupsRefused: Story = {
+  args: signedInArgs,
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/workshop.list', () =>
+          listResponse([wsAvailableA, wsAvailableB, wsFull]),
+        ),
+        http.get('/api/trpc/workshop.getMySignups', signupsRefused),
+        announcementsHandler,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const notice = await canvas.findByRole('alert', {}, { timeout: 5000 })
+    await expect(notice).toHaveTextContent(REFUSAL)
+    await expect(notice).not.toHaveTextContent(
+      /could not load your workshop registrations/i,
+    )
+    await expect(
+      within(notice).getByRole('button', { name: /try again/i }),
+    ).toBeEnabled()
+  },
+}
+
+export const SignupsRefusedMobile: Story = {
+  ...SignupsRefused,
+  parameters: {
+    ...SignupsRefused.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+
+/** The same notice on a phone: the button drops below the text. */
+export const SignupsUnavailableMobile: Story = {
+  ...SignupsUnavailable,
+  parameters: {
+    ...SignupsUnavailable.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+
+const signupsSessionEnded = () =>
+  trpcError('You must be signed in to manage workshop signups', -32001, {
+    code: 'UNAUTHORIZED',
+    httpStatus: 401,
+  })
+
+/**
+ * The session ended while the page was open (#1303): the read is refused with
+ * UNAUTHORIZED. The notice says so and offers the way back in, the same GET
+ * form to `/workshop/sign-in` as the signed-out view, instead of "try again".
+ */
+export const SessionEnded: Story = {
+  args: signedInArgs,
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/workshop.list', () =>
+          listResponse([wsAvailableA, wsAvailableB, wsFull]),
+        ),
+        http.get('/api/trpc/workshop.getMySignups', signupsSessionEnded),
+        announcementsHandler,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const notice = await canvas.findByRole('alert', {}, { timeout: 5000 })
+    await expect(notice).toHaveTextContent(/your session has ended/i)
+    const signIn = within(notice).getByRole('button', {
+      name: 'Sign in again',
+    })
+    await expect(signIn.closest('form')).toHaveAttribute(
+      'action',
+      '/workshop/sign-in',
+    )
+    await expect(
+      within(notice).queryByRole('button', { name: /try again/i }),
+    ).toBeNull()
+  },
+}
+
+export const SessionEndedDark: Story = {
+  ...SessionEnded,
+  parameters: { ...SessionEnded.parameters, dark: true },
+}
+
+export const SessionEndedMobile: Story = {
+  ...SessionEnded,
+  parameters: {
+    ...SessionEnded.parameters,
+    viewport: { defaultViewport: 'mobile1' },
   },
 }

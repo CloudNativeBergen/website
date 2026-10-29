@@ -39,6 +39,13 @@ export interface SendSponsorCommunicationArgs {
   sponsorForConferenceId: string
   kind: CommunicationKind
   recipientKeys: readonly string[]
+  /**
+   * Recipients the SERVER adds (never client input): the cron's signing
+   * reminder goes to the persisted signer even when that address is no
+   * longer one of the sponsor's contacts (#1264). Keys must not collide with
+   * contact keys.
+   */
+  serverRecipients?: readonly CommunicationRecipient[]
   subject: string
   message: PortableTextBlock[]
   /**
@@ -62,6 +69,33 @@ export interface SendSponsorCommunicationArgs {
    * not of the editable message, so it never reads as a template edit.
    */
   appendHtml?: string
+  /**
+   * A block that can only be built by WRITING something (the workshop
+   * early-access link, created on send when the sponsor has none, #1347).
+   * Called once, after the three refusals this function makes itself (no
+   * such sponsor, a bad recipient, a message that cannot be rendered) and
+   * before the sender is resolved and the provider is asked. A FAILURE CAN
+   * STILL FOLLOW IT: the tenant's sender cannot be resolved, or the provider
+   * refuses or does not answer. What the callback wrote then stays, and the
+   * failed send is recorded with it. What it answers is appended after
+   * `appendHtml` and listed after `attachments`. A throw from the callback
+   * itself is the caller's own refusal: nothing is sent or recorded.
+   */
+  appendLate?: () => Promise<{
+    html: string
+    attachments?: CommunicationAttachment[]
+  }>
+  /**
+   * The sponsor's registration (portal) link (#1263) — merged as
+   * `SPONSOR_PORTAL_URL` when the template is re-merged for `templateEdited`.
+   */
+  portalUrl?: string
+  /** Contract sends (#1264): merged as SIGNER_NAME / SIGNER_EMAIL / CONTRACT_VALUE. */
+  contractVariables?: {
+    signerName?: string
+    signerEmail?: string
+    contractValue?: string
+  }
 }
 
 export type SendSponsorCommunicationResult =
@@ -78,6 +112,14 @@ export type SendSponsorCommunicationResult =
       ok: false
       reason: 'send-failed'
       message: string
+      /**
+       * The provider REFUSED the email (a 4xx came back, or the provider was
+       * never asked). `false` when the outcome is unknown — a network error,
+       * a broken response, a 5xx such as a gateway timeout — and the email
+       * MAY have gone out: a caller that reserved something for this send
+       * must not undo it on that basis.
+       */
+      definitive: boolean
       activityId?: string
       recipients: CommunicationRecipient[]
     }
@@ -105,10 +147,21 @@ function computeTemplateEdited(
   recipients: readonly CommunicationRecipient[],
   senderNames: readonly (string | undefined)[],
   sent: { subject: string; message: PortableTextBlock[] },
+  portalUrl: string | undefined,
+  contractVariables: SendSponsorCommunicationArgs['contractVariables'],
 ): boolean {
   const candidates = senderNames.length > 0 ? senderNames : [undefined]
   return candidates.every((senderName) =>
-    mergedDiffers(template, sfc, conference, recipients, senderName, sent),
+    mergedDiffers(
+      template,
+      sfc,
+      conference,
+      recipients,
+      senderName,
+      sent,
+      portalUrl,
+      contractVariables,
+    ),
   )
 }
 
@@ -119,6 +172,8 @@ function mergedDiffers(
   recipients: readonly CommunicationRecipient[],
   senderName: string | undefined,
   sent: { subject: string; message: PortableTextBlock[] },
+  portalUrl: string | undefined,
+  contractVariables: SendSponsorCommunicationArgs['contractVariables'],
 ): boolean {
   const variables = buildTemplateVariables({
     sponsorName: sfc.sponsor?.name ?? 'Unknown',
@@ -134,6 +189,8 @@ function mergedDiffers(
     },
     senderName,
     tierName: sfc.tier?.title,
+    portalUrl,
+    ...contractVariables,
   })
   const applied = {
     subject: processTemplateVariables(template.subject, variables),
@@ -145,6 +202,29 @@ function mergedDiffers(
       : [],
   }
   return isTemplateEdited(applied, sent)
+}
+
+/**
+ * The sponsor email around an already rendered body: what is sent, and what
+ * a preview of a send shows (`workshop.admin.earlyAccessBulkEmailPreview`).
+ */
+export async function renderSponsorEmailHtml(
+  conference: Conference,
+  subject: string,
+  htmlContent: string,
+): Promise<string> {
+  return render(
+    renderEmailTemplate({
+      conference,
+      subject,
+      htmlContent,
+      // A one-to-one transactional email: NO unsubscribe link. `undefined`
+      // would select the template's default — Resend's `{{{RESEND_UNSUBSCRIBE_URL}}}`
+      // merge tag, which only Broadcasts resolve — and the literal tag would
+      // be sent AND frozen into the audit body.
+      unsubscribeUrl: '',
+    }),
+  )
 }
 
 /**
@@ -173,7 +253,12 @@ export async function sendSponsorCommunication(
 
   let recipients: CommunicationRecipient[]
   try {
-    recipients = resolveRecipients(sfc.contactPersons, args.recipientKeys)
+    recipients = [
+      ...(args.recipientKeys.length > 0 || !args.serverRecipients?.length
+        ? resolveRecipients(sfc.contactPersons, args.recipientKeys)
+        : []),
+      ...(args.serverRecipients ?? []),
+    ]
   } catch (error) {
     if (error instanceof CommunicationRecipientError) {
       return { ok: false, reason: 'bad-recipients', message: error.message }
@@ -185,28 +270,27 @@ export async function sendSponsorCommunication(
     args.message,
     conference,
   )
-  if (htmlError || !htmlContent) {
+  // A body-less template is fine when the send appends its own card (a
+  // reminder's signing button, a signed copy's link): the card IS the email.
+  if (htmlError || (!htmlContent && !args.appendHtml && !args.appendLate)) {
     return {
       ok: false,
       reason: 'render-failed',
       message: 'Failed to convert message to HTML',
     }
   }
+  // The sponsor, the recipients and the message are accepted: only now may
+  // a send write. The sender and the provider can still fail after this.
+  const late = await args.appendLate?.()
+  const attachments = late?.attachments?.length
+    ? [...(args.attachments ?? []), ...late.attachments]
+    : args.attachments
   // Rendered ONCE to a string: the same bytes go to the provider and into the
   // audit record, so "body as sent" is literally true.
-  const html = await render(
-    renderEmailTemplate({
-      conference,
-      subject: args.subject,
-      htmlContent: args.appendHtml
-        ? `${htmlContent}${args.appendHtml}`
-        : htmlContent,
-      // A one-to-one transactional email: NO unsubscribe link. `undefined`
-      // would select the template's default — Resend's `{{{RESEND_UNSUBSCRIBE_URL}}}`
-      // merge tag, which only Broadcasts resolve — and the literal tag would
-      // be sent AND frozen into the audit body.
-      unsubscribeUrl: '',
-    }),
+  const html = await renderSponsorEmailHtml(
+    conference,
+    args.subject,
+    `${htmlContent ?? ''}${args.appendHtml ?? ''}${late?.html ?? ''}`,
   )
 
   const from = resolveConferenceFrom(conference, {
@@ -230,20 +314,27 @@ export async function sendSponsorCommunication(
             recipients,
             args.senderNames ?? [],
             { subject: args.subject, message: args.message },
+            args.portalUrl,
+            args.contractVariables,
           ),
         }
       : undefined,
-    attachments: args.attachments,
+    attachments,
     createdBy: args.actorId,
   }
 
   let providerMessageId: string | undefined
+  // Set the moment the provider is asked: a failure before that (no tenant
+  // credentials, a resolver outage) is DEFINITIVE — nothing could have gone
+  // out — whatever shape the error has.
+  let providerAsked = false
   try {
     const { client } = await resolveEmailSender(args.orgId)
     // Resend reports failures as a RESOLVED `{ error }` (including 429), so the
     // throw has to happen INSIDE the callback or `retryWithBackoff` never sees
     // a retryable failure and every send gets exactly one attempt.
     const result = await retryWithBackoff(async () => {
+      providerAsked = true
       const r = await client.emails.send({
         from,
         to: recipients.map((r) => r.email),
@@ -260,12 +351,23 @@ export async function sendSponsorCommunication(
     providerMessageId = result.data?.id
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    const status = (error as { status?: unknown })?.status
+    const definitive =
+      !providerAsked ||
+      (typeof status === 'number' && status >= 400 && status < 500)
     const { activityId } = await logCommunication({
       ...record,
       deliveryStatus: 'failed',
       error: message,
     })
-    return { ok: false, reason: 'send-failed', message, activityId, recipients }
+    return {
+      ok: false,
+      reason: 'send-failed',
+      message,
+      definitive,
+      activityId,
+      recipients,
+    }
   }
 
   const { activityId } = await logCommunication({

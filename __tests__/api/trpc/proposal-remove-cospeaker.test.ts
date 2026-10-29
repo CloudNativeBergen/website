@@ -4,6 +4,8 @@ import { getProposal } from '@/lib/proposal/data/sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import { Status, Format } from '@/lib/proposal/types'
 import { speakers } from '../../helpers/trpc'
+import { createNotifications } from '@/lib/notification/sanity'
+import { sendCoSpeakerRemovedEmail } from '@/lib/cospeaker/server'
 
 const { mockPatchChain, mockTransaction } = vi.hoisted(() => {
   const mockPatchChain = {
@@ -33,6 +35,13 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 vi.mock('@/lib/proposal/data/sanity')
+vi.mock('@/lib/notification/sanity', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  createNotifications: vi.fn().mockResolvedValue(1),
+}))
+vi.mock('@/server/runAfterResponse', () => ({
+  runAfterResponse: (task: () => Promise<void>) => void task(),
+}))
 vi.mock('@/lib/cospeaker/sanity')
 vi.mock('@/lib/cospeaker/server')
 vi.mock('@/lib/conference/sanity', () => ({
@@ -63,6 +72,7 @@ const coSpeaker = {
 
 const mockProposal = {
   _id: 'proposal-1',
+  _rev: 'rev-1',
   title: 'Test Proposal',
   status: Status.submitted,
   format: Format.presentation_45,
@@ -88,6 +98,7 @@ function replayPatch(documentId: string) {
   const call = mockTransaction.patch.mock.calls.find((c) => c[0] === documentId)
   expect(call).toBeDefined()
   const builder = {
+    ifRevisionId: vi.fn().mockReturnThis(),
     set: vi.fn().mockReturnThis(),
     setIfMissing: vi.fn().mockReturnThis(),
     unset: vi.fn().mockReturnThis(),
@@ -149,6 +160,17 @@ describe('proposal.removeCoSpeaker', () => {
     // The accepted invitation is set to canceled in the same transaction
     const invitationPatch = replayPatch('inv-1')
     expect(invitationPatch.set).toHaveBeenCalledWith({ status: 'canceled' })
+
+    // The removed co-speaker is told: hub row and email.
+    expect(createNotifications).toHaveBeenCalledWith([
+      expect.objectContaining({
+        recipientId: coSpeaker._id,
+        title: 'You are no longer a speaker on "Test Proposal"',
+      }),
+    ])
+    expect(sendCoSpeakerRemovedEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ toEmail: coSpeaker.email }),
+    )
   })
 
   it('removes the speaker without invitation patches when no accepted invitation exists', async () => {
@@ -171,6 +193,25 @@ describe('proposal.removeCoSpeaker', () => {
       expect.any(Function),
     )
     expect(mockTransaction.commit).toHaveBeenCalled()
+  })
+
+  it('gates the removal on the revision it checked', async () => {
+    vi.mocked(getProposal).mockResolvedValue({
+      proposal: mockProposal as any,
+      proposalError: null,
+    })
+    mockTransaction.commit.mockRejectedValueOnce(
+      Object.assign(new Error('revision mismatch'), { statusCode: 409 }),
+    )
+
+    const caller = createCaller(regularSpeaker)
+    await expect(
+      caller.proposal.removeCoSpeaker({
+        proposalId: 'proposal-1',
+        speakerId: coSpeaker._id,
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(replayPatch('proposal-1').ifRevisionId).toHaveBeenCalledWith('rev-1')
   })
 
   it('allows an organizer to remove a speaker from any proposal', async () => {

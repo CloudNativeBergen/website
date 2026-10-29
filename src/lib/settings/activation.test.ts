@@ -8,6 +8,7 @@ import {
   isUntouchedStarterFormatSet,
   nextActivationSteps,
   type ConferenceForActivation,
+  type EventPrepFacts,
 } from './activation'
 import { STARTER_SESSION_FORMATS } from '@/lib/onboarding/create'
 import { buildProvisionedConference } from '../../../__tests__/testdata/onboarding'
@@ -748,5 +749,150 @@ describe('hasCustomDomain', () => {
     expect(
       hasCustomDomain(['foo.cloudnativebergen.dev', 'myconf.com'], suffix),
     ).toBe(true)
+  })
+})
+
+describe('event stage', () => {
+  const BEFORE = new Date('2026-04-20T12:00:00Z')
+  const EVENT_READY: ConferenceForActivation = {
+    ...FULLY_LIVE,
+    programDate: '2026-04-01',
+    schedules: [{ tracks: [{ sponsor: { _ref: 's1' } }] }],
+    socialHashtag: '#cnd26',
+    socialLinks: ['https://bsky.app/profile/cnd.example'],
+    venueTravelInfo: 'Take the light rail to Byparken.',
+  }
+  const event = (c: ConferenceForActivation, now = BEFORE) =>
+    buildActivationChecklist(c, CHECKS_OK, { now }).event
+
+  it('marks every row done for a fully prepared event', () => {
+    const group = event(EVENT_READY)!
+    expect(group.rows.map((r) => [r.id, r.done])).toEqual([
+      ['program', true],
+      ['hashtag', true],
+      ['bluesky', true],
+      ['venue-travel', true],
+      ['track-sponsors', true],
+    ])
+    expect(group).toMatchObject({ done: 4, required: 4, allDone: true })
+  })
+
+  it('marks every row outstanding when nothing is set', () => {
+    const group = event({ ...FULLY_LIVE, socialHashtag: '  ' })!
+    expect(group.rows.every((r) => !r.done)).toBe(true)
+    expect(group).toMatchObject({ done: 0, required: 4, allDone: false })
+    expect(group.rows.find((r) => r.id === 'track-sponsors')?.optional).toBe(
+      true,
+    )
+  })
+
+  it('needs both a past programme date and a schedule for the programme row', () => {
+    const program = (c: ConferenceForActivation) =>
+      event(c)!.rows.find((r) => r.id === 'program')!.done
+    expect(program({ ...EVENT_READY, programDate: '2026-04-25' })).toBe(false)
+    expect(program({ ...EVENT_READY, schedules: [] })).toBe(false)
+  })
+
+  it('does not count a non-Bluesky social link', () => {
+    const c = { ...EVENT_READY, socialLinks: ['https://x.com/cnd'] }
+    expect(event(c)!.rows.find((r) => r.id === 'bluesky')!.done).toBe(false)
+  })
+
+  it('is excluded from rows, stages and the top-level rollup', () => {
+    const ready = buildActivationChecklist(FULLY_LIVE, CHECKS_OK, {
+      now: BEFORE,
+    })
+    expect(ready.event?.allDone).toBe(false)
+    expect(ready.allDone).toBe(true)
+    expect(ready.readyToGoLive).toBe(true)
+    expect(ready.rows.some((r) => r.stage === 'event')).toBe(false)
+    expect(ready.stages.map((s) => s.id)).toEqual(['cfp', 'launch'])
+    expect(nextActivationSteps(ready)).toEqual([])
+    expect(currentActivationStage(ready)).toBeNull()
+  })
+
+  it('is hidden while unlisted', () => {
+    expect(event({ ...EVENT_READY, visibility: 'unlisted' })).toBeNull()
+  })
+
+  it('shows through the last day and hides after it', () => {
+    expect(event(EVENT_READY, new Date('2026-05-02T20:00:00Z'))).not.toBeNull()
+    expect(event(EVENT_READY, new Date('2026-05-03T08:00:00Z'))).toBeNull()
+  })
+
+  describe('server-resolved facts', () => {
+    const FACTS: EventPrepFacts = {
+      unscheduledTalks: 0,
+      hasSpeakerInfo: true,
+      speakerInfoGaps: 0,
+      briefingSent: true,
+      speakersWithTodos: 0,
+      hasPhotoWall: true,
+      sponsors: 2,
+      sponsorsWithoutLogo: 0,
+    }
+    const withFacts = (f: Partial<EventPrepFacts>) =>
+      buildActivationChecklist(EVENT_READY, CHECKS_OK, {
+        now: BEFORE,
+        eventFacts: { ...FACTS, ...f },
+      })
+    const rowOf = (f: Partial<EventPrepFacts>, id: string) =>
+      withFacts(f).event!.rows.find((r) => r.id === id)
+
+    it('are left out until resolved', () => {
+      expect(event(EVENT_READY)!.rows.map((r) => r.id)).not.toContain(
+        'speaker-todos',
+      )
+    })
+
+    it('adds every row, done, for a ready event', () => {
+      const group = withFacts({}).event!
+      expect(group.rows.slice(5).map((r) => [r.id, r.done])).toEqual([
+        ['program-unscheduled', true],
+        ['speaker-info', true],
+        ['speaker-info-email', true],
+        ['speaker-todos', true],
+        ['photo-wall', true],
+        ['sponsor-logos', true],
+      ])
+      expect(group).toMatchObject({ done: 9, required: 9, allDone: true })
+    })
+
+    it('marks each fact outstanding and shows counts', () => {
+      expect(
+        rowOf({ unscheduledTalks: 2 }, 'program-unscheduled'),
+      ).toMatchObject({
+        done: false,
+        label: 'Confirmed talks not scheduled (2)',
+      })
+      expect(rowOf({ speakerInfoGaps: 1 }, 'speaker-info')!.done).toBe(false)
+      expect(rowOf({ hasSpeakerInfo: false }, 'speaker-info')!.done).toBe(false)
+      expect(rowOf({ briefingSent: false }, 'speaker-info-email')!.done).toBe(
+        false,
+      )
+      expect(rowOf({ speakersWithTodos: 3 }, 'speaker-todos')).toMatchObject({
+        done: false,
+        label: 'Speakers with open to-dos (3)',
+      })
+      expect(rowOf({ sponsorsWithoutLogo: 1 }, 'sponsor-logos')!.done).toBe(
+        false,
+      )
+    })
+
+    it('keeps the photo wall optional', () => {
+      const c = withFacts({ hasPhotoWall: false })
+      expect(rowOf({ hasPhotoWall: false }, 'photo-wall')!.optional).toBe(true)
+      expect(c.event!.allDone).toBe(true)
+    })
+
+    it('omits the sponsor-logo row without sponsors', () => {
+      expect(rowOf({ sponsors: 0 }, 'sponsor-logos')).toBeUndefined()
+    })
+
+    it('never touches the top-level rollup', () => {
+      const c = withFacts({ speakersWithTodos: 5, unscheduledTalks: 1 })
+      expect(c.allDone).toBe(true)
+      expect(c.readyToGoLive).toBe(true)
+    })
   })
 })

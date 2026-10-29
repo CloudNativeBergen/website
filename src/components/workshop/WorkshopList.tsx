@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import WorkshopCard from './WorkshopCard'
 import WorkshopAnnouncementsSection from './WorkshopAnnouncementsSection'
 import type {
@@ -13,26 +13,74 @@ import {
   getWorkshopIdFromSignup,
 } from '@/lib/workshop/utils'
 import { hasConfirmedSignup } from '@/lib/workshop/status'
+import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
+import { Button } from '@/components/Button'
+import { WORKSHOP_SIGN_IN_PATH } from '@/lib/workshop/sign-in-paths'
 
 interface WorkshopListProps {
   userWorkOSId?: string
   userEmail?: string
   userName?: string
+  /** The conference's three registration times; see `workshopRegistrationWindow`. */
+  workshopRegistrationSponsorStart?: string
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
+  /**
+   * The server has resolved that this person has early access (#1346): their
+   * browser opened a sponsor's live link. Only then is the sponsor start time
+   * handed over too.
+   */
+  earlyAccess?: boolean
+  /**
+   * Called when a sign-up is refused for the window although this list was
+   * told the person has early access: the link was revoked while the page was
+   * open. The page passes the action that renders it again.
+   */
+  onEarlyAccessRefused?: () => void | Promise<void>
 }
 
 export default function WorkshopList({
   userWorkOSId,
   userEmail,
   userName,
+  workshopRegistrationSponsorStart,
   workshopRegistrationStart,
   workshopRegistrationEnd,
+  earlyAccess = false,
+  onEarlyAccessRefused,
 }: WorkshopListProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  // The server's refusal, for the window, of a sign-up this list offered
+  // because of early access. Usually the link was revoked while the page was
+  // open; it can also be the browser's clock running ahead of the server's.
+  const [refusedEarly, setRefusedEarly] = useState<string | null>(null)
+  // THE KEYBOARD AFTER THAT REFUSAL. When the page renders again without
+  // early access, the workshops go, and with them the dialog the person was
+  // in: focus would fall back to the page. It goes to the notice instead,
+  // once, and only when it is in fact nowhere. NEVER WHILE THE PAGE STILL
+  // RESOLVES EARLY ACCESS: until then the dialog can be open, the notice lies
+  // behind it, and a browser may report the keyboard as nowhere while the
+  // pressed button is disabled.
+  const refusalNotice = useRef<HTMLDivElement>(null)
+  const refusalWantsFocus = useRef(false)
+  useEffect(() => {
+    if (!refusalWantsFocus.current || !refusalNotice.current) return
+    if (earlyAccess) return
+    const lost =
+      !document.activeElement || document.activeElement === document.body
+    if (!lost) return
+    refusalWantsFocus.current = false
+    refusalNotice.current.focus()
+  })
+  // Sign-ups whose cancel the server has answered. The cancel DELETED the
+  // sign-up, so a second one is refused with "Signup not found"; while such a
+  // sign-up is still on the page (the list has not been read again yet, or the
+  // read failed) its card offers no cancel. Keyed on what is shown, not on a
+  // pending flag: a flag clears a moment before the new list is drawn.
+  const [cancelledSignupIds, setCancelledSignupIds] = useState<string[]>([])
 
   const {
     data: workshopsData,
@@ -42,13 +90,45 @@ export default function WorkshopList({
     includeCapacity: true,
   })
 
-  const { data: signupsData, refetch: refetchSignups } =
-    api.workshop.getMySignups.useQuery(undefined, {
-      // Identity is resolved server-side from the WorkOS session; this gate is
-      // purely a client-side UX guard so the query doesn't fire before the page
-      // has established the signed-in user.
-      enabled: !!userWorkOSId,
-    })
+  const {
+    data: signupsData,
+    refetch: refetchSignups,
+    isError: signupsFailed,
+    error: signupsError,
+    isFetching: signupsFetching,
+  } = api.workshop.getMySignups.useQuery(undefined, {
+    // Identity is resolved server-side from the WorkOS session; this gate is
+    // purely a client-side UX guard so the query doesn't fire before the page
+    // has established the signed-in user.
+    enabled: !!userWorkOSId,
+    // The app's provider turns this off. Back on the tab, a read that has gone
+    // stale is the only way to see a sign-out made in another tab (#1303).
+    refetchOnWindowFocus: true,
+  })
+
+  // THE SESSION HAS ENDED (#1303): it lasts 7 days with no renewal, and the
+  // attendee can sign out in another tab. Either the read or a write says so,
+  // each on its own: a write's refusal does not wait on another read, which
+  // can fail for an unrelated reason. Latched once seen so a later focus
+  // refetch that fails with a network/server error does not clear it and
+  // re-expose stale registrations.
+  const [writeRefusedForSession, setWriteRefusedForSession] = useState(false)
+  const [readRefusedForSession, setReadRefusedForSession] = useState(false)
+  const isReadUnauthorized = signupsError?.data?.code === 'UNAUTHORIZED'
+  if (isReadUnauthorized && !readRefusedForSession) {
+    setReadRefusedForSession(true)
+  }
+  const sessionEnded =
+    writeRefusedForSession || readRefusedForSession || isReadUnauthorized
+  const sessionNotice = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!sessionEnded || !sessionNotice.current) return
+    const lostFocus =
+      !document.activeElement || document.activeElement === document.body
+    if (writeRefusedForSession || lostFocus) {
+      sessionNotice.current.focus()
+    }
+  }, [sessionEnded, writeRefusedForSession])
 
   const signupMutation = api.workshop.signup.useMutation({
     onSuccess: (data) => {
@@ -56,19 +136,55 @@ export default function WorkshopList({
         data.message || 'Successfully signed up for the workshop!',
       )
       setErrorMessage(null)
+      setRefusedEarly(null)
+      refusalWantsFocus.current = false
       setTimeout(() => setSuccessMessage(null), 5000)
       refetchWorkshops()
       refetchSignups()
     },
     onError: (error) => {
-      setErrorMessage(error.message)
       setSuccessMessage(null)
+      if (error.data?.code === 'UNAUTHORIZED') {
+        setWriteRefusedForSession(true)
+        return
+      }
+      // The server refused for the window while this list was offering
+      // sign-up BECAUSE OF early access: the one case where a refusal
+      // contradicts what is on screen. (Once sign-up is open for everyone a
+      // refusal for the window is the end having passed, which a refresh of
+      // early access has nothing to say about.)
+      const shown = workshopRegistrationWindow(
+        {
+          workshopRegistrationSponsorStart,
+          workshopRegistrationStart,
+          workshopRegistrationEnd,
+        },
+        { now: new Date(), earlyAccess },
+      )
+      if (
+        shown.status === 'open' &&
+        shown.early &&
+        error.data?.code === 'PRECONDITION_FAILED'
+      ) {
+        // The page may be about to change under the person: if the link was
+        // revoked the banner goes, and so do the workshops they were choosing
+        // from. Say what the server said, and leave it standing: no timer
+        // takes it away. Whether the early access is gone is for the page to
+        // say, once it has rendered again (see the notice below).
+        setErrorMessage(null)
+        setRefusedEarly(error.message)
+        refusalWantsFocus.current = true
+        void onEarlyAccessRefused?.()
+        return
+      }
+      setErrorMessage(error.message)
       setTimeout(() => setErrorMessage(null), 5000)
     },
   })
 
   const cancelMutation = api.workshop.cancelSignup.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, { signupId }) => {
+      setCancelledSignupIds((ids) => [...ids, signupId])
       setSuccessMessage('Successfully cancelled workshop signup')
       setErrorMessage(null)
       setTimeout(() => setSuccessMessage(null), 5000)
@@ -76,8 +192,12 @@ export default function WorkshopList({
       refetchSignups()
     },
     onError: (error) => {
-      setErrorMessage(error.message)
       setSuccessMessage(null)
+      if (error.data?.code === 'UNAUTHORIZED') {
+        setWriteRefusedForSession(true)
+        return
+      }
+      setErrorMessage(error.message)
       setTimeout(() => setErrorMessage(null), 5000)
     },
   })
@@ -157,15 +277,47 @@ export default function WorkshopList({
     )
   }
 
+  // NOTHING BUT THE WAY BACK IN, as on the signed-out view. Whatever the
+  // query client still holds is from before the session ended, and an open
+  // dialog (the sign-up form, the cancel's question) goes with its card.
+  if (sessionEnded) {
+    return (
+      <div
+        ref={sessionNotice}
+        role="alert"
+        tabIndex={-1}
+        className="flex flex-col gap-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800 focus:outline-2 focus:outline-offset-2 focus:outline-yellow-600 sm:flex-row sm:items-center sm:justify-between dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200 dark:focus:outline-yellow-400"
+      >
+        <p>
+          Your session has ended. Sign in again to see your workshop
+          registrations and sign up for workshops.
+        </p>
+        {/* A FORM, NOT A LINK, as on the signed-out view: the route sets a
+            cookie and redirects to another origin. */}
+        <form action={WORKSHOP_SIGN_IN_PATH} method="get" className="shrink-0">
+          <Button type="submit" size="sm" className="min-h-11">
+            Sign in again
+          </Button>
+        </form>
+      </div>
+    )
+  }
+
   const workshops = (workshopsData?.data || []) as ProposalWithWorkshopData[]
   const userSignups = signupsData?.data || []
 
-  const now = new Date()
-  const registrationNotYetOpen =
-    workshopRegistrationStart && new Date(workshopRegistrationStart) > now
-  const registrationClosed =
-    workshopRegistrationEnd && new Date(workshopRegistrationEnd) < now
-  const registrationOpen = !registrationNotYetOpen && !registrationClosed
+  // THE ONE WINDOW RULE (#1345), the same one `workshop.signup` and the
+  // portal page ask, with the early access the page resolved (#1346).
+  const registration = workshopRegistrationWindow(
+    {
+      workshopRegistrationSponsorStart,
+      workshopRegistrationStart,
+      workshopRegistrationEnd,
+    },
+    { now: new Date(), earlyAccess },
+  )
+  const registrationOpen = registration.status === 'open'
+  const registrationClosed = registration.status === 'closed'
 
   const userWorkshopIds = userSignups
     .filter((s) => s.status === 'confirmed' || s.status === 'waitlist')
@@ -207,6 +359,53 @@ export default function WorkshopList({
       {errorMessage && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
           {errorMessage}
+        </div>
+      )}
+
+      {refusedEarly && (
+        <div
+          ref={refusalNotice}
+          role="alert"
+          tabIndex={-1}
+          className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800 focus:outline-2 focus:outline-offset-2 focus:outline-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200 dark:focus:outline-red-400"
+        >
+          {/* "No longer valid" only once the page has rendered again WITHOUT
+              early access. While it still resolves it (the refresh has not
+              landed, or the link is live and the browser's clock is ahead
+              of the server's at the sponsor start time), the server's
+              refusal stands alone: the line above the list still says
+              "You have early access". */}
+          {earlyAccess ? '' : 'Your early access is no longer valid. '}
+          {refusedEarly}
+        </div>
+      )}
+
+      {/* Without this a failed read is indistinguishable from "no signups":
+          a registered attendee would see their own workshops offered as
+          available, with nothing to say why. */}
+      {signupsFailed && (
+        <div
+          role="alert"
+          className="flex flex-col gap-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800 sm:flex-row sm:items-center sm:justify-between dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
+        >
+          {/* A refusal carries the server's own reason (no ticket, wrong
+              ticket type, ticket check unavailable); anything else is a
+              failed read, and "try again" is all there is to say. */}
+          <p>
+            {signupsError?.data?.code === 'FORBIDDEN'
+              ? signupsError.message
+              : 'We could not load your workshop registrations. Workshops you are already registered for may be listed as available below.'}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-11 shrink-0"
+            onClick={() => refetchSignups()}
+            disabled={signupsFetching}
+          >
+            Try again
+          </Button>
         </div>
       )}
 
@@ -281,6 +480,10 @@ export default function WorkshopList({
                     userSignup ? () => handleCancel(userSignup._id) : undefined
                   }
                   isSignedUp={true}
+                  isLoading={
+                    !!userSignup && cancelledSignupIds.includes(userSignup._id)
+                  }
+                  registrationClosed={registrationClosed}
                   announcements={
                     <WorkshopAnnouncementsSection workshopId={workshop._id} />
                   }

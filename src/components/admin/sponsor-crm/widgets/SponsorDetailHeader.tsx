@@ -1,25 +1,26 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import { api } from '@/lib/trpc/client'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { STATUSES } from '@/components/admin/sponsor-crm/form/constants'
 
 interface SponsorDetailHeaderProps {
-  onMessage?: () => void
   initialData?: any
   sponsorId: string
-  conferenceId: string
+  /** Opens the full sponsor record (every tab of the former modal). */
+  onOpenRecord: () => void
+  /** Opens the Send modal. Omitted when there is no sender identity. */
+  onSendEmail?: () => void
 }
 
 export function SponsorDetailHeader({
   sponsorId,
-  conferenceId,
-  onMessage,
   initialData,
+  onOpenRecord,
+  onSendEmail,
 }: SponsorDetailHeaderProps) {
-  const router = useRouter()
   const trpcUtils = api.useUtils()
 
   const { data, isLoading } = api.sponsor.crm.getOverview.useQuery(
@@ -50,12 +51,13 @@ export function SponsorDetailHeader({
   return (
     <div className="flex flex-col border-b border-gray-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8 dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center gap-4">
-        <button
-          onClick={() => router.back()}
+        <Link
+          href="/admin/sponsors/crm"
+          aria-label="Back to the sponsor pipeline"
           className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
         >
           <ArrowLeftIcon className="h-5 w-5" />
-        </button>
+        </Link>
         {data.sponsor?.logo ? (
           <img
             src={data.sponsor.logo}
@@ -106,9 +108,20 @@ export function SponsorDetailHeader({
             Mark as Won
           </button>
         )}
-        <button className="inline-flex items-center justify-center rounded-md border border-transparent bg-brand-cloud-blue px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none">
-          Send Email
+        <button
+          onClick={onOpenRecord}
+          className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+        >
+          Open record
         </button>
+        {onSendEmail && (
+          <button
+            onClick={onSendEmail}
+            className="inline-flex items-center justify-center rounded-md border border-transparent bg-brand-cloud-blue px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+          >
+            Send Email
+          </button>
+        )}
       </div>
     </div>
   )

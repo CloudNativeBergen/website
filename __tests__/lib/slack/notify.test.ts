@@ -130,6 +130,66 @@ describe('Slack notifications', () => {
       expect(fields[1].text).toContain('Test Speaker')
     })
 
+    it('should send cancel notification', async () => {
+      const { notifyProposalStatusChange } = await import('@/lib/slack/notify')
+
+      await notifyProposalStatusChange(
+        createMockProposal(),
+        Action.cancel,
+        createMockConference(),
+        'Speaker',
+      )
+
+      const [message] = mockPostSlackMessage.mock.calls[0]
+      expect(message.blocks[0].text?.text).toContain('Canceled')
+    })
+
+    it('adds a by-hand ticket section listing every speaker', async () => {
+      const { notifyProposalStatusChange } = await import('@/lib/slack/notify')
+
+      await notifyProposalStatusChange(
+        createMockProposal(),
+        Action.cancel,
+        createMockConference(),
+        'Speaker',
+        undefined,
+        {
+          speakers: [
+            { name: 'Ada', email: 'ada@example.com' },
+            { name: 'Co Speaker' },
+          ],
+          unfiltered: false,
+        },
+      )
+
+      const [message] = mockPostSlackMessage.mock.calls[0]
+      const text = JSON.stringify(message.blocks)
+      expect(text).toContain(
+        "Cancel ticket by hand in the ticket provider's dashboard",
+      )
+      expect(text).toContain('Ada (ada@example.com)')
+      expect(text).toContain('Co Speaker')
+      expect(text).not.toContain('unfiltered')
+    })
+
+    it('flags an unfiltered ticket list', async () => {
+      const { notifyProposalStatusChange } = await import('@/lib/slack/notify')
+
+      await notifyProposalStatusChange(
+        createMockProposal(),
+        Action.withdraw,
+        createMockConference(),
+        'Speaker',
+        undefined,
+        { speakers: [{ name: 'Ada' }], unfiltered: true },
+      )
+
+      const [message] = mockPostSlackMessage.mock.calls[0]
+      expect(JSON.stringify(message.blocks)).toContain(
+        'this list is unfiltered',
+      )
+    })
+
     it('should include admin link with correct domain', async () => {
       const { notifyNewProposal } = await import('@/lib/slack/notify')
       const proposal = createMockProposal()

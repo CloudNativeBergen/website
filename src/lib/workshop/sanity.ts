@@ -1,16 +1,15 @@
 import { groq } from 'next-sanity'
-import { clientWrite } from '@/lib/sanity/client'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import type {
   ProposalWithWorkshopData,
-  WorkshopSignupInput,
   WorkshopSignupExisting,
   WorkshopStatistics,
 } from './types'
-import { WorkshopSignupStatus } from './types'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
-import { Status } from '@/lib/proposal/types'
-
-const workshopSignupLocks = new Map<string, Promise<WorkshopSignupExisting>>()
+import { EARLY_ACCESS_OF_SIGNUP } from './early-access/signups'
+import { freeSeat } from './seats'
+import { isCanceledWorkshop, isListedWorkshop } from './listed'
+import type { HolderSignup } from './holders'
 
 export async function getWorkshopSignups(
   userWorkOSId: string,
@@ -95,119 +94,66 @@ export async function checkWorkshopCapacity(workshopId: string): Promise<{
   }
 }
 
-export async function createWorkshopSignup(
-  signupData: WorkshopSignupInput,
-): Promise<WorkshopSignupExisting> {
-  const workshopId = signupData.workshop._ref
-
-  const existingLock = workshopSignupLocks.get(workshopId)
-
-  if (existingLock) {
-    await existingLock
-  }
-
-  const lockPromise = (async () => {
-    try {
-      const existingSignup = await clientWrite.fetch(
-        groq`*[_type == "workshopSignup" && userWorkOSId == $userWorkOSId && workshop._ref == $workshopId && (status == "confirmed" || status == "waitlist")][0]`,
-        { userWorkOSId: signupData.userWorkOSId, workshopId },
-      )
-
-      if (existingSignup) {
-        throw new Error('User is already signed up for this workshop')
-      }
-
-      let signupStatus: 'confirmed' | 'waitlist' = 'confirmed'
-      if (
-        'status' in signupData &&
-        typeof signupData.status === 'string' &&
-        (signupData.status === 'confirmed' || signupData.status === 'waitlist')
-      ) {
-        signupStatus = signupData.status
-      } else {
-        const capacityInfo = await checkWorkshopCapacity(workshopId)
-        if (capacityInfo.available <= 0) {
-          signupStatus = 'waitlist'
-        }
-      }
-
-      const tx = clientWrite.transaction()
-
-      const document = {
-        _type: 'workshopSignup' as const,
-        userWorkOSId: signupData.userWorkOSId,
-        userEmail: signupData.userEmail,
-        userName: signupData.userName,
-        workshop: signupData.workshop,
-        conference: signupData.conference,
-        status: signupStatus,
-        confirmationEmailSent: false,
-        experienceLevel: signupData.experienceLevel,
-        operatingSystem: signupData.operatingSystem,
-      }
-
-      tx.create(document)
-      const result = await tx.commit()
-
-      const createdId = result.documentIds[0]
-
-      const fullSignup = await clientWrite.fetch<WorkshopSignupExisting>(
-        groq`*[_type == "workshopSignup" && _id == $id][0]{
-          _id,
-          _type,
-          userEmail,
-          userName,
-          userWorkOSId,
-          workshop->{_id, _ref, title, date, startTime, endTime, capacity},
-          conference->{_id, _ref, name},
-          status,
-          signedUpAt,
-          _createdAt,
-          _updatedAt
-        }`,
-        { id: createdId },
-      )
-
-      return fullSignup
-    } finally {
-      setTimeout(() => {
-        if (workshopSignupLocks.get(workshopId) === lockPromise) {
-          workshopSignupLocks.delete(workshopId)
-        }
-      }, 100)
-    }
-  })()
-
-  workshopSignupLocks.set(workshopId, lockPromise)
-
-  return lockPromise
-}
-
-export async function verifyWorkshopBelongsToConference(
+/**
+ * Whether an attendee may sign up for this id (#1301): only a workshop the
+ * portal lists, of this conference. Read from the document store, where the
+ * seat decision reads the talk too. The id goes into the endpoint's path
+ * unescaped, which reads `a,b` as two ids and the client keeps the first
+ * answer: only the document stored under exactly this id counts.
+ */
+export async function isListedWorkshopOf(
   workshopId: string,
   conferenceId: string,
 ): Promise<boolean> {
-  const query = groq`
-    *[_type == "talk" && _id == $workshopId && conference._ref == $conferenceId][0]
-  `
-
-  const result = await clientWrite.fetch(query, { workshopId, conferenceId })
-  return !!result
+  const talk = await storedTalkOf(workshopId, conferenceId)
+  return !!talk && isListedWorkshop(talk)
 }
 
-export async function cancelWorkshopSignup(
+/** The canceled or withdrawn workshop of the conference, read as above. */
+export async function getCanceledWorkshopOf(
+  workshopId: string,
+  conferenceId: string,
+) {
+  const talk = await storedTalkOf(workshopId, conferenceId)
+  return talk && isCanceledWorkshop(talk) ? talk : null
+}
+
+async function storedTalkOf(workshopId: string, conferenceId: string) {
+  const talk = await clientWrite.getDocument<{
+    _id: string
+    _type: string
+    title?: string
+    status?: string
+    format?: string
+    conference?: { _ref?: string }
+    workshopCancelNoticeSentAt?: string
+  }>(workshopId)
+  return talk?._id === workshopId &&
+    talk._type === 'talk' &&
+    talk.conference?._ref === conferenceId
+    ? talk
+    : null
+}
+
+/**
+ * An organizer's "Move to waitlist" (#1331): the sign-up stays, and the seat it
+ * held is free (#1344: see `freeSeat`). An attendee's own cancel does not come
+ * here; it deletes the sign-up (`deleteWorkshopSignup`), so a waitlist holds
+ * only people waiting.
+ */
+export async function moveWorkshopSignupToWaitlist(
   signupId: string,
-): Promise<WorkshopSignupExisting> {
-  return clientWrite
-    .patch(signupId)
-    .set({
-      status: 'waitlist',
-    })
-    .commit()
+): Promise<void> {
+  await freeSeat(signupId, 'waitlist')
 }
 
+/**
+ * Removes a sign-up: an attendee's cancel, and an organizer's delete. The
+ * caller has already established that the sign-up is the request's to remove.
+ * Frees the seat (#1344): see `freeSeat`.
+ */
 export async function deleteWorkshopSignup(signupId: string): Promise<void> {
-  await clientWrite.delete(signupId)
+  await freeSeat(signupId, 'delete')
 }
 
 export async function getWorkshopById(
@@ -239,68 +185,6 @@ export async function getWorkshopById(
   return clientWrite.fetch<ProposalWithWorkshopData | null>(query, {
     workshopId,
   })
-}
-
-export async function confirmWorkshopSignup(
-  signupId: string,
-): Promise<WorkshopSignupExisting> {
-  const signup = await clientWrite.fetch<WorkshopSignupExisting>(
-    groq`*[_type == "workshopSignup" && _id == $signupId][0]{
-      _id,
-      _type,
-      userEmail,
-      userName,
-      userWorkOSId,
-      workshop->{
-        _id,
-        title,
-        date,
-        startTime,
-        endTime,
-        capacity
-      },
-      conference->{
-        _id,
-        name
-      },
-      status,
-      signedUpAt,
-      _createdAt,
-      _updatedAt
-    }`,
-    { signupId },
-  )
-
-  if (!signup) {
-    throw new Error('Signup not found')
-  }
-
-  await clientWrite
-    .patch(signupId)
-    .set({
-      status: 'confirmed',
-      confirmedAt: new Date().toISOString(),
-    })
-    .commit()
-
-  return {
-    ...signup,
-    status: 'confirmed' as WorkshopSignupStatus,
-  }
-}
-
-export async function updateWorkshopCapacity(
-  workshopId: string,
-  capacity: number,
-): Promise<ProposalWithWorkshopData> {
-  await clientWrite.patch(workshopId).set({ capacity: capacity }).commit()
-
-  const updatedWorkshop = await getWorkshopById(workshopId)
-  if (!updatedWorkshop) {
-    throw new Error('Workshop not found after update')
-  }
-
-  return updatedWorkshop
 }
 
 export async function getWorkshopSignupsByWorkshop(
@@ -338,7 +222,8 @@ export async function getWorkshopSignupsByWorkshop(
     signedUpAt,
     notes,
     _createdAt,
-    _updatedAt
+    _updatedAt,
+    "earlyAccess": ${EARLY_ACCESS_OF_SIGNUP}
   }`
 
   return await clientWrite.fetch(query, {
@@ -513,10 +398,41 @@ export async function getAllWorkshopSignups(filters: {
     signedUpAt,
     notes,
     _createdAt,
-    _updatedAt
+    _updatedAt,
+    "earlyAccess": ${EARLY_ACCESS_OF_SIGNUP}
   }`
 
   return await clientWrite.fetch(query, params)
+}
+
+/**
+ * Every sign-up of one conference, for the ticket-holder join (#1333): what
+ * the join reads and nothing else, in one read, unpaged.
+ *
+ * LIVE: the statistics are read again after every organizer action, and a
+ * cached answer would show the sign-up just deleted. A draft or a release
+ * copy is not a sign-up. An unresolvable tenant reads nothing.
+ *
+ * THE WORKSHOP IS READ ONLY IF IT IS THE CONFERENCE'S (as in
+ * `./early-access/signups`): a sign-up that points at another conference's
+ * workshop, a bad write, still counts and never carries that title.
+ */
+export async function getSignupsForHolderJoin(
+  conferenceId: string,
+): Promise<HolderSignup[]> {
+  if (!conferenceId) return []
+  return clientReadUncached.fetch<HolderSignup[]>(
+    groq`*[_type == "workshopSignup" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
+      _id,
+      userEmail,
+      userName,
+      userWorkOSId,
+      status,
+      "workshop": select(workshop->conference._ref == $conferenceId => workshop->{ _id, title })
+    }`,
+    { conferenceId },
+    { cache: 'no-store' },
+  )
 }
 
 export async function getWorkshopsByConference(
@@ -524,22 +440,25 @@ export async function getWorkshopsByConference(
 ): Promise<ProposalWithWorkshopData[]> {
   const { workshops } = await getWorkshops({
     conferenceId,
-    statuses: [Status.confirmed],
     includeScheduleInfo: true,
+    includeCanceled: true,
   })
   return workshops as ProposalWithWorkshopData[]
 }
 
 export async function getWorkshopStatistics(
   conferenceId: string,
+  { includeCanceled = false }: { includeCanceled?: boolean } = {},
 ): Promise<WorkshopStatistics> {
   const { workshops } = await getWorkshops({
     conferenceId,
-    statuses: [Status.confirmed],
     includeScheduleInfo: true,
+    includeCanceled,
   })
 
-  const workshopsWithData = workshops as ProposalWithWorkshopData[]
+  const allWorkshops = workshops as ProposalWithWorkshopData[]
+  // The totals are of what is on; a canceled workshop has its own row only.
+  const workshopsWithData = allWorkshops.filter(isListedWorkshop)
 
   // Fetch all signups across multiple pages to get unique participants count
   let allSignups: WorkshopSignupExisting[] = []
@@ -557,25 +476,25 @@ export async function getWorkshopStatistics(
     currentPage++
   }
 
-  const workshopStats = workshopsWithData.map((workshop) => {
+  const toStats = (workshop: ProposalWithWorkshopData) => {
     const confirmedSignups = workshop.signups || 0
     const waitlistSignups = workshop.waitlistCount || 0
 
     return {
       workshopId: workshop._id,
       workshopTitle: workshop.title,
+      status: workshop.status,
       capacity: workshop.capacity,
       totalSignups: confirmedSignups + waitlistSignups,
       confirmedSignups,
-      pendingSignups: 0,
       waitlistSignups,
-      cancelledSignups: 0,
       utilization:
         workshop.capacity > 0
           ? (confirmedSignups / workshop.capacity) * 100
           : 0,
     }
-  })
+  }
+  const workshopStats = workshopsWithData.map(toStats)
 
   const uniqueParticipants = new Set(
     allSignups
@@ -598,12 +517,10 @@ export async function getWorkshopStatistics(
       (sum: number, s) => sum + s.confirmedSignups,
       0,
     ),
-    totalPending: 0,
     totalWaitlist: workshopStats.reduce(
       (sum: number, s) => sum + s.waitlistSignups,
       0,
     ),
-    totalCancelled: 0,
     averageUtilization:
       workshopStats.length > 0
         ? workshopStats.reduce((sum: number, s) => sum + s.utilization, 0) /
@@ -612,7 +529,7 @@ export async function getWorkshopStatistics(
   }
 
   return {
-    workshops: workshopStats,
+    workshops: allWorkshops.map(toStats),
     totals,
   }
 }

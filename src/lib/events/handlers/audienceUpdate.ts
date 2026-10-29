@@ -62,6 +62,7 @@ export async function handleAudienceUpdate(
   const relevantActions = [
     Action.confirm,
     Action.withdraw,
+    Action.cancel,
     Action.reject,
     Action.accept,
     Action.delete,

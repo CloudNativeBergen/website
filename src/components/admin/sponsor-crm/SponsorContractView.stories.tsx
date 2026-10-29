@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
+import { expect, fn, userEvent, within } from 'storybook/test'
 import { SponsorContractView } from './SponsorContractView'
 import {
   mockSponsor,
@@ -57,21 +58,32 @@ export const Default: Story = {
   },
 }
 
+/** A completed registration can still be re-sent to a new contact (#1263) — while the deal is won. */
 export const PortalComplete: Story = {
   args: {
     conferenceId: 'conf-2026',
     sponsor: mockSponsor({
+      status: 'closed-won',
       contractStatus: 'contract-sent',
       signatureStatus: 'pending',
       registrationComplete: true,
       registrationToken: 'abc-123',
     }),
+    onSendRegistration: fn(),
   },
   parameters: {
     msw: { handlers: defaultHandlers },
   },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Resend registration link' }),
+    )
+    await expect(args.onSendRegistration).toHaveBeenCalledTimes(1)
+  },
 }
 
+/** A signature is pending: "Send reminder" hands off to the host's Send modal (#1264). */
 export const ContractSent: Story = {
   args: {
     conferenceId: 'conf-2026',
@@ -79,14 +91,25 @@ export const ContractSent: Story = {
       contractStatus: 'contract-sent',
       signatureStatus: 'pending',
       signatureId: 'agreement-123',
+      signingUrl: 'https://example.com/sponsor/contract/sign/agreement-123',
+      signerName: 'Jane Doe',
       contractSentAt: '2026-02-01T12:00:00Z',
     }),
+    onSendContract: fn(),
   },
   parameters: {
     msw: { handlers: defaultHandlers },
   },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Send reminder' }),
+    )
+    await expect(args.onSendContract).toHaveBeenCalledWith({})
+  },
 }
 
+/** Signed: "Send signed copy" hands off to the host's Send modal (#1264). */
 export const ContractSigned: Story = {
   args: {
     conferenceId: 'conf-2026',
@@ -94,10 +117,27 @@ export const ContractSigned: Story = {
       contractStatus: 'contract-signed',
       signatureStatus: 'signed',
       contractSignedAt: '2026-02-05T15:30:00Z',
+      // Signed through the digital flow: only then is the stored document
+      // the signed one, and the copy offered.
+      contractSignedBy: 'Kari Nordmann',
+      contractDocument: {
+        asset: {
+          _ref: 'file-1',
+          url: 'https://cdn.sanity.io/files/x/signed.pdf',
+        },
+      },
     }),
+    onSendContract: fn(),
   },
   parameters: {
     msw: { handlers: defaultHandlers },
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Send signed copy' }),
+    )
+    await expect(args.onSendContract).toHaveBeenCalledWith({})
   },
 }
 

@@ -1,5 +1,9 @@
-import { formatDate } from '@/lib/time'
+import { toHTML } from '@portabletext/to-html'
+import type { TypedObject } from 'sanity'
+import { formatConferenceDayTime, formatDate } from '@/lib/time'
 import { escapeHtml } from '@/lib/html/escape'
+import { isSafeLinkHref, toSafeRichTextHref } from '@/lib/portabletext/safeHref'
+import { getSpeakerBriefing } from '@/lib/speaker/briefing'
 import type { Conference, ConferenceSchedule } from '@/lib/conference/types'
 
 /**
@@ -140,10 +144,114 @@ function time(value: string | undefined, fallback: string): string {
   return escapeHtml(value || fallback)
 }
 
+/**
+ * Speaker-info rich text as answer lines: one line per block, because
+ * `InfoContent` already wraps each line in a `<p>`. `toHTML` escapes span text;
+ * links go through the shared scheme gate and are attribute-escaped.
+ */
+function richText(blocks: TypedObject[]): string {
+  // Headings and list items flatten to plain lines: a `<h2>` or `<ul>` inside
+  // the `<p>` would be invalid markup. Non-text blocks (images) are skipped.
+  const plain = ({ children }: { children?: string }) => children ?? ''
+  return blocks
+    .filter((block) => block._type === 'block')
+    .map((block) =>
+      toHTML(block, {
+        onMissingComponent: false,
+        components: {
+          block: plain,
+          list: plain,
+          listItem: plain,
+          marks: {
+            link: ({ children, value }) =>
+              `<u><a href="${escapeHtml(toSafeRichTextHref(value?.href))}">${children}</a></u>`,
+          },
+        },
+      }),
+    )
+    .join('\n')
+}
+
+/** An instant in conference time, or nothing for an unparseable value. */
+function instant(value?: string): string | undefined {
+  if (!value || Number.isNaN(Date.parse(value))) return undefined
+  return `${escapeHtml(formatConferenceDayTime(value))} (local time)`
+}
+
+/**
+ * The on-site contact, name and email only: the phone number stays on the
+ * speaker dashboard and in the email, off this public page.
+ */
+function onsiteContactAnswer(contact: {
+  name?: string
+  email?: string
+}): string {
+  return [
+    contact.name && escapeHtml(contact.name),
+    contact.email &&
+      `<u><a href="mailto:${escapeHtml(contact.email)}">${escapeHtml(contact.email)}</a></u>`,
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+/** A map link, absolute http(s) only: a site path makes no sense for a map. */
+function mapLink(url: string | undefined, label: string): string | undefined {
+  if (!url || !/^https?:\/\//i.test(url) || !isSafeLinkHref(url)) return
+  return `<u><a href="${escapeHtml(url)}">${label}</a></u>`
+}
+
+/** The dinner answer: structured fields when set, else the plain fallback. */
+function speakerDinnerAnswer(
+  dinner: NonNullable<ReturnType<typeof getSpeakerBriefing>['dinner']>,
+): string {
+  if (dinner.text) return escapeHtml(dinner.text)
+  // `rsvpNote` is for speakers only (dashboard and email), not this page.
+  const lines: string[] = []
+  const when = instant(dinner.startsAt)
+  if (when) lines.push(`<strong>When:</strong> ${when}`)
+  if (dinner.venueName) {
+    lines.push(`<strong>Where:</strong> ${escapeHtml(dinner.venueName)}`)
+  }
+  if (dinner.address) {
+    lines.push(`<strong>Address:</strong> ${escapeHtml(dinner.address)}`)
+  }
+  const map = mapLink(dinner.mapUrl, 'Open map')
+  if (map) lines.push(map)
+  if (dinner.description) lines.push(richText(dinner.description))
+  for (const route of dinner.routes ?? []) {
+    const time = instant(route.departsAt)
+    const note = route.departsNote && escapeHtml(route.departsNote)
+    const departs = time && note ? `${time}, ${note}` : time || note
+    const map = mapLink(route.meetingPointMapUrl, 'Open map')
+    const rest = [
+      route.meetingPoint &&
+        `meet at ${escapeHtml(route.meetingPoint)}${map ? ` (${map})` : ''}`,
+      !route.meetingPoint && map,
+      departs && `departs ${departs}`,
+    ]
+      .filter(Boolean)
+      .join(', ')
+    if (route.label) {
+      lines.push(`<strong>${escapeHtml(route.label)}:</strong> ${rest}`.trim())
+    } else if (rest) {
+      lines.push(rest.charAt(0).toUpperCase() + rest.slice(1))
+    }
+    if (route.details) lines.push(richText(route.details))
+  }
+  return lines.join('\n')
+}
+
 export function buildInfoFaqs(
   conference: Conference,
   scheduleInfo: ScheduleInfo,
 ): InfoFaqSection[] {
+  const briefing = getSpeakerBriefing(conference)
+  // Phone-only is no public contact: the phone is not shown here.
+  const contact =
+    briefing.onsiteContact?.name || briefing.onsiteContact?.email
+      ? briefing.onsiteContact
+      : undefined
   // `formatDate` output is Intl-generated (or the literal "TBD"/"Invalid Date")
   // and cannot carry markup, but it is escaped anyway so that no reader has to
   // re-derive that argument to know the interpolation is safe.
@@ -377,34 +485,63 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
       anchor: 'speakers',
       heading: 'For Speakers',
       description:
-        'Information for our awesome speakers to make their experience as smooth as possible. If you have any other questions do not hesitate to contact us.',
+        'Practical information for speakers. If your question is not answered here, contact us.',
       questions: [
         {
           question: 'What do I need to do before the conference?',
           answer:
-            'You need to confirm your talk and register your ticket before the conference. You can do this by going to the <u><a href="/cfp/list">speaker dashboard</a></u> to confirm your talk, and clicking the link in the email you received to register your complimentary speaker ticket.',
+            'Confirm your talk on the <u><a href="/cfp/list">speaker dashboard</a></u> and claim your free speaker ticket with the link in the email we sent you.',
         },
         // Also place-specific (the old copy named a Bergen mountain and linked a
         // Bergen cable car), and not every conference holds one at all — so the
         // question exists only when the tenant has written the answer.
-        ...(conference.speakerDinnerInfo
+        ...(briefing.dinner
           ? [
               {
                 question: 'Will there be a speaker dinner?',
-                answer: escapeHtml(conference.speakerDinnerInfo),
+                answer: speakerDinnerAnswer(briefing.dinner),
+              },
+            ]
+          : []),
+        ...(briefing.checkIn
+          ? [
+              {
+                question: 'Where do I check in as a speaker?',
+                answer: richText(briefing.checkIn),
               },
             ]
           : []),
         {
           question: 'Can I make changes to my talk?',
           answer:
-            'Yes, you can make changes to your talk up until the day before the conference. You can edit your talk directly from our website by going to the <u><a href="/cfp/list">speaker dashboard</a></u>.',
+            'Yes. You can edit your talk on the <u><a href="/cfp/list">speaker dashboard</a></u> until the day before the conference.',
         },
-        {
-          question: 'Do I need to bring my own laptop?',
-          answer:
-            'Yes, we recommend you to bring your own laptop. We will provide a projector and a screen for your presentation. If you have any special needs, please let us know in advance.',
-        },
+        briefing.equipment
+          ? {
+              question: 'What equipment is provided?',
+              answer: richText(briefing.equipment),
+            }
+          : {
+              question: 'Do I need to bring my own laptop?',
+              answer:
+                'Yes, please bring your own laptop. We provide a projector and a screen. If you need anything else, such as an adapter or accessibility support, tell us before the conference.',
+            },
+        ...(contact
+          ? [
+              {
+                question: 'Who do I contact on site?',
+                answer: onsiteContactAnswer(contact),
+              },
+            ]
+          : []),
+        ...(briefing.accommodation
+          ? [
+              {
+                question: 'Where should I stay?',
+                answer: richText(briefing.accommodation),
+              },
+            ]
+          : []),
         // Local sightseeing advice cannot be generated — the old copy asserted
         // fjords, mountains and Bryggen for whatever city was configured, and
         // linked Bergen's tourist board. Tenant-authored or absent.
@@ -416,9 +553,17 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
                 // React escapes it there; escaping here too would surface
                 // literal entities like `&amp;` to readers.
                 question: conference.city
-                  ? `What do you recommend me to do during my stay in ${conference.city}?`
-                  : 'What do you recommend me to do during my stay?',
+                  ? `What do you recommend doing in ${conference.city}?`
+                  : 'What do you recommend doing during my stay?',
                 answer: escapeHtml(conference.localRecommendations),
+              },
+            ]
+          : []),
+        ...(briefing.extra
+          ? [
+              {
+                question: 'Anything else I should know?',
+                answer: richText(briefing.extra),
               },
             ]
           : []),

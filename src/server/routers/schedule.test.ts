@@ -25,14 +25,27 @@ vi.mock('@/lib/schedule/sanity', () => ({
     getScheduleStatusByIdMock(...args),
 }))
 
+const writeFetchMock = vi.fn()
+const writeDeleteMock = vi.fn()
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadCached: { fetch: vi.fn() },
+  clientWrite: {
+    fetch: (...args: unknown[]) => writeFetchMock(...args),
+    delete: (...args: unknown[]) => writeDeleteMock(...args),
+  },
+}))
+
 const validateMock = vi.fn()
 vi.mock('@/lib/schedule/validation', () => ({
   validateSchedulePayload: (...args: unknown[]) => validateMock(...args),
 }))
 
+const clientWriteFetchMock = writeFetchMock
+
 import { revalidateTag } from 'next/cache'
 import { scheduleRouter } from './schedule'
 import { ScheduleStatus } from '@/lib/schedule/types'
+import { feedbackCodeIndexTag } from '@/lib/cache/tags'
 
 const revalidateTagMock = revalidateTag as unknown as Mock
 
@@ -108,9 +121,19 @@ describe('schedule router — tenant-scoped cache invalidation (#618)', () => {
     )
   })
 
-  it('revalidates exactly once — the scoped tag only', async () => {
+  it('revalidates the scoped tag and the Feedback Code index only', async () => {
     await makeCaller().save(validPayload)
-    expect(revalidateTagMock).toHaveBeenCalledTimes(1)
+    expect(revalidateTagMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('expires the conference’s Feedback Code index at once (speaker feedback §5.1)', async () => {
+    await makeCaller().save(validPayload)
+    // `{ expire: 0 }`, not a profile: a moved slot must not keep opening or
+    // closing the old window while the index refreshes in the background.
+    expect(revalidateTagMock).toHaveBeenCalledWith(
+      feedbackCodeIndexTag(CONFERENCE_ID),
+      { expire: 0 },
+    )
   })
 
   it('does not revalidate anything when the save fails', async () => {
@@ -163,5 +186,518 @@ describe('schedule router — draft and publish guards', () => {
       /Strict Block: Cannot publish schedule/,
     )
     expect(saveScheduleMock).not.toHaveBeenCalled()
+  })
+
+  it.each(['canceled', 'withdrawn', 'accepted', 'confirmed'])(
+    'publishes an official schedule holding a %s talk',
+    async (status) => {
+      getTalkStatusesMock.mockResolvedValueOnce({ 'talk-1': status })
+      getValidTalkIdsMock.mockResolvedValueOnce(new Set(['talk-1']))
+
+      await makeCaller().save({
+        ...validPayload,
+        status: ScheduleStatus.Official,
+        tracks: [
+          {
+            trackTitle: 'T1',
+            talks: [
+              {
+                startTime: '10:00',
+                endTime: '10:30',
+                talk: { _ref: 'talk-1' },
+              },
+            ],
+          },
+        ],
+      })
+
+      expect(saveScheduleMock).toHaveBeenCalled()
+    },
+  )
+})
+
+describe('schedule router — the Feedback Code index (speaker feedback §5.1)', () => {
+  const feedbackExpiries = () =>
+    revalidateTagMock.mock.calls.filter(
+      ([tag]) => tag === feedbackCodeIndexTag(CONFERENCE_ID),
+    )
+
+  it('expires it when an official day is saved', async () => {
+    await makeCaller().save({
+      ...validPayload,
+      status: ScheduleStatus.Official,
+    })
+    expect(feedbackExpiries()).toEqual([
+      [feedbackCodeIndexTag(CONFERENCE_ID), { expire: 0 }],
+    ])
+  })
+
+  it('leaves it alone on a draft save: drafts never open a window, and they autosave every few seconds', async () => {
+    await makeCaller().save({ ...validPayload, status: ScheduleStatus.Draft })
+    expect(saveScheduleMock).toHaveBeenCalled()
+    expect(feedbackExpiries()).toEqual([])
+  })
+
+  it('expires it when a legacy day with no status (read as official) is deleted', async () => {
+    writeFetchMock.mockResolvedValueOnce({ _id: 'day-legacy' })
+    await makeCaller().admin.delete({ id: 'day-legacy' })
+    expect(writeDeleteMock).toHaveBeenCalledWith('day-legacy')
+    expect(feedbackExpiries()).toEqual([
+      [feedbackCodeIndexTag(CONFERENCE_ID), { expire: 0 }],
+    ])
+  })
+
+  it('leaves it alone when an archived day is deleted: it never held a window', async () => {
+    writeFetchMock.mockResolvedValueOnce({
+      _id: 'day-archived',
+      status: ScheduleStatus.Archived,
+    })
+    await makeCaller().admin.delete({ id: 'day-archived' })
+    expect(writeDeleteMock).toHaveBeenCalledWith('day-archived')
+    expect(feedbackExpiries()).toEqual([])
+  })
+
+  it('leaves it alone when a draft day is deleted', async () => {
+    writeFetchMock.mockResolvedValueOnce({
+      _id: 'day-draft',
+      status: ScheduleStatus.Draft,
+    })
+    await makeCaller().admin.delete({ id: 'day-draft' })
+    expect(writeDeleteMock).toHaveBeenCalledWith('day-draft')
+    expect(feedbackExpiries()).toEqual([])
+  })
+})
+describe('schedule.admin.addTalk', () => {
+  const dummySchedule = {
+    _id: 'sched-1',
+    _rev: 'rev-1',
+    date: '2026-10-26',
+    status: ScheduleStatus.Draft,
+    tracks: [
+      {
+        _key: 'track-0',
+        trackTitle: 'Track 1',
+        talks: [
+          {
+            _key: 'talk-1',
+            startTime: '10:00',
+            endTime: '11:00',
+            talk: { _ref: 'talk-1', _type: 'reference' },
+          },
+        ],
+      },
+    ],
+  }
+
+  it('adds a talk and maintains chronological sorting by startTime', async () => {
+    clientWriteFetchMock
+      .mockResolvedValueOnce(structuredClone(dummySchedule))
+      .mockResolvedValueOnce({
+        _id: 'talk-2',
+        conferenceRef: CONFERENCE_ID,
+        status: 'confirmed',
+      })
+
+    const res = await makeCaller().admin.addTalk({
+      scheduleId: 'sched-1',
+      trackIndex: 0,
+      startTime: '09:00',
+      endTime: '10:00',
+      proposalId: 'talk-2',
+    })
+
+    expect(res.success).toBe(true)
+    expect(saveScheduleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tracks: [
+          expect.objectContaining({
+            talks: [
+              expect.objectContaining({
+                startTime: '09:00',
+                endTime: '10:00',
+                _key: expect.any(String),
+              }),
+              expect.objectContaining({ startTime: '10:00', endTime: '11:00' }),
+            ],
+          }),
+        ],
+      }),
+      expect.anything(),
+      expect.anything(),
+    )
+    expect(revalidateTagMock).toHaveBeenCalledWith(
+      `sanity:conference-${CONFERENCE_ID}`,
+      'default',
+    )
+    expect(revalidateTagMock).not.toHaveBeenCalledWith(
+      feedbackCodeIndexTag(CONFERENCE_ID),
+      expect.anything(),
+    )
+  })
+
+  it('adds a placeholder to an empty track with generated _key', async () => {
+    const emptyTrackSchedule = {
+      ...dummySchedule,
+      tracks: [{ _key: 'track-0', trackTitle: 'Track 1', talks: [] }],
+    }
+    clientWriteFetchMock.mockResolvedValueOnce(
+      structuredClone(emptyTrackSchedule),
+    )
+
+    const res = await makeCaller().admin.addTalk({
+      scheduleId: 'sched-1',
+      trackIndex: 0,
+      startTime: '12:00',
+      endTime: '13:00',
+      placeholder: 'Lunch Break',
+    })
+
+    expect(res.success).toBe(true)
+    expect(saveScheduleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tracks: [
+          expect.objectContaining({
+            talks: [
+              expect.objectContaining({
+                startTime: '12:00',
+                endTime: '13:00',
+                placeholder: 'Lunch Break',
+                _key: expect.any(String),
+              }),
+            ],
+          }),
+        ],
+      }),
+      expect.anything(),
+      expect.anything(),
+    )
+  })
+
+  it('refuses when schedule is not found', async () => {
+    clientWriteFetchMock.mockResolvedValueOnce(null)
+
+    await expect(
+      makeCaller().admin.addTalk({
+        scheduleId: 'sched-nonexistent',
+        trackIndex: 0,
+        startTime: '09:00',
+        endTime: '10:00',
+        placeholder: 'Break',
+      }),
+    ).rejects.toThrowError(/Schedule not found/)
+  })
+
+  it('refuses when track index is out of bounds', async () => {
+    clientWriteFetchMock.mockResolvedValueOnce(structuredClone(dummySchedule))
+
+    await expect(
+      makeCaller().admin.addTalk({
+        scheduleId: 'sched-1',
+        trackIndex: 99,
+        startTime: '09:00',
+        endTime: '10:00',
+        placeholder: 'Break',
+      }),
+    ).rejects.toThrowError(/Track index out of bounds/)
+  })
+
+  it('refuses cross-tenant proposal addition', async () => {
+    clientWriteFetchMock
+      .mockResolvedValueOnce(structuredClone(dummySchedule))
+      .mockResolvedValueOnce(null) // scoped query returns null for a foreign conference proposal
+
+    await expect(
+      makeCaller().admin.addTalk({
+        scheduleId: 'sched-1',
+        trackIndex: 0,
+        startTime: '09:00',
+        endTime: '10:00',
+        proposalId: 'foreign-talk',
+      }),
+    ).rejects.toThrowError(
+      /Proposal not found or belongs to another conference/,
+    )
+
+    expect(clientWriteFetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('conference._ref == $conferenceId'),
+      expect.objectContaining({
+        id: 'foreign-talk',
+        conferenceId: CONFERENCE_ID,
+      }),
+    )
+    expect(saveScheduleMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses unconfirmed talk on an official schedule', async () => {
+    const officialSchedule = {
+      ...dummySchedule,
+      status: ScheduleStatus.Official,
+    }
+    clientWriteFetchMock
+      .mockResolvedValueOnce(structuredClone(officialSchedule))
+      .mockResolvedValueOnce({
+        _id: 'talk-unconfirmed',
+        conferenceRef: CONFERENCE_ID,
+        status: 'submitted',
+      })
+
+    await expect(
+      makeCaller().admin.addTalk({
+        scheduleId: 'sched-1',
+        trackIndex: 0,
+        startTime: '09:00',
+        endTime: '10:00',
+        proposalId: 'talk-unconfirmed',
+      }),
+    ).rejects.toThrowError(/Cannot add talk to official schedule/)
+  })
+
+  it('refuses unconfirmed talk on an official schedule with missing status (legacy)', async () => {
+    const legacyOfficialSchedule = {
+      ...dummySchedule,
+      status: undefined,
+    }
+    clientWriteFetchMock
+      .mockResolvedValueOnce(structuredClone(legacyOfficialSchedule))
+      .mockResolvedValueOnce({
+        _id: 'talk-unconfirmed',
+        conferenceRef: CONFERENCE_ID,
+        status: 'submitted',
+      })
+
+    await expect(
+      makeCaller().admin.addTalk({
+        scheduleId: 'sched-1',
+        trackIndex: 0,
+        startTime: '09:00',
+        endTime: '10:00',
+        proposalId: 'talk-unconfirmed',
+      }),
+    ).rejects.toThrowError(/Cannot add talk to official schedule/)
+  })
+
+  it('refuses addTalk when expectedRevision does not match current schedule revision', async () => {
+    clientWriteFetchMock.mockResolvedValueOnce(structuredClone(dummySchedule))
+
+    await expect(
+      makeCaller().admin.addTalk({
+        scheduleId: 'sched-1',
+        trackIndex: 0,
+        startTime: '09:00',
+        endTime: '10:00',
+        placeholder: 'Break',
+        expectedRevision: 'stale-rev',
+      }),
+    ).rejects.toThrowError(/Schedule was modified by another user/)
+  })
+
+  it('rejects when both proposalId and placeholder are specified', async () => {
+    await expect(
+      makeCaller().admin.addTalk({
+        scheduleId: 'sched-1',
+        trackIndex: 0,
+        startTime: '09:00',
+        endTime: '10:00',
+        proposalId: 'talk-1',
+        placeholder: 'Break',
+      }),
+    ).rejects.toThrowError(
+      /Must specify either proposalId or placeholder, but not both/,
+    )
+  })
+
+  it('allows confirmed talk on an official schedule and expires feedback index', async () => {
+    const officialSchedule = {
+      ...dummySchedule,
+      status: ScheduleStatus.Official,
+    }
+    clientWriteFetchMock
+      .mockResolvedValueOnce(structuredClone(officialSchedule))
+      .mockResolvedValueOnce({
+        _id: 'talk-confirmed',
+        conferenceRef: CONFERENCE_ID,
+        status: 'confirmed',
+      })
+
+    const res = await makeCaller().admin.addTalk({
+      scheduleId: 'sched-1',
+      trackIndex: 0,
+      startTime: '09:00',
+      endTime: '10:00',
+      proposalId: 'talk-confirmed',
+    })
+
+    expect(res.success).toBe(true)
+    expect(clientWriteFetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('conference._ref == $conferenceId'),
+      expect.objectContaining({ id: 'sched-1', conferenceId: CONFERENCE_ID }),
+    )
+    expect(revalidateTagMock).toHaveBeenCalledWith(
+      feedbackCodeIndexTag(CONFERENCE_ID),
+      { expire: 0 },
+    )
+  })
+})
+
+describe('schedule.admin.removeTalk', () => {
+  const dummyScheduleWithTalks = {
+    _id: 'sched-1',
+    _rev: 'rev-1',
+    date: '2026-10-26',
+    status: ScheduleStatus.Draft,
+    tracks: [
+      {
+        _key: 'track-0',
+        trackTitle: 'Track 1',
+        talks: [
+          {
+            _key: 'talk-0',
+            startTime: '09:00',
+            endTime: '10:00',
+            talk: { _ref: 'talk-0', _type: 'reference' },
+          },
+          {
+            _key: 'talk-1',
+            startTime: '10:00',
+            endTime: '11:00',
+            talk: { _ref: 'talk-1', _type: 'reference' },
+          },
+        ],
+      },
+    ],
+  }
+
+  it('removes a talk by track and talk index', async () => {
+    clientWriteFetchMock.mockResolvedValueOnce(
+      structuredClone(dummyScheduleWithTalks),
+    )
+
+    const res = await makeCaller().admin.removeTalk({
+      scheduleId: 'sched-1',
+      trackIndex: 0,
+      talkIndex: 0,
+    })
+
+    expect(res.success).toBe(true)
+    expect(saveScheduleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tracks: [
+          expect.objectContaining({
+            talks: [expect.objectContaining({ startTime: '10:00' })],
+          }),
+        ],
+      }),
+      expect.anything(),
+      expect.anything(),
+    )
+    expect(clientWriteFetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('conference._ref == $conferenceId'),
+      expect.objectContaining({ id: 'sched-1', conferenceId: CONFERENCE_ID }),
+    )
+    expect(revalidateTagMock).toHaveBeenCalledWith(
+      `sanity:conference-${CONFERENCE_ID}`,
+      'default',
+    )
+    expect(revalidateTagMock).not.toHaveBeenCalledWith(
+      feedbackCodeIndexTag(CONFERENCE_ID),
+      expect.anything(),
+    )
+  })
+
+  it('removes a talk by talkKey', async () => {
+    clientWriteFetchMock.mockResolvedValueOnce(
+      structuredClone(dummyScheduleWithTalks),
+    )
+
+    const res = await makeCaller().admin.removeTalk({
+      scheduleId: 'sched-1',
+      trackIndex: 0,
+      talkKey: 'talk-1',
+    })
+
+    expect(res.success).toBe(true)
+    expect(saveScheduleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tracks: [
+          expect.objectContaining({
+            talks: [
+              expect.objectContaining({
+                startTime: '09:00',
+              }),
+            ],
+          }),
+        ],
+      }),
+      expect.anything(),
+      expect.anything(),
+    )
+  })
+
+  it('refuses removeTalk when expectedRevision does not match current schedule revision', async () => {
+    clientWriteFetchMock.mockResolvedValueOnce(
+      structuredClone(dummyScheduleWithTalks),
+    )
+
+    await expect(
+      makeCaller().admin.removeTalk({
+        scheduleId: 'sched-1',
+        trackIndex: 0,
+        talkIndex: 0,
+        expectedRevision: 'stale-rev',
+      }),
+    ).rejects.toThrowError(/Schedule was modified by another user/)
+  })
+
+  it('refuses when talk index is out of bounds', async () => {
+    clientWriteFetchMock.mockResolvedValueOnce(
+      structuredClone(dummyScheduleWithTalks),
+    )
+
+    await expect(
+      makeCaller().admin.removeTalk({
+        scheduleId: 'sched-1',
+        trackIndex: 0,
+        talkIndex: 5,
+      }),
+    ).rejects.toThrowError(/Track or talk index out of bounds/)
+  })
+
+  it('refuses when talkKey is not found', async () => {
+    clientWriteFetchMock.mockResolvedValueOnce(
+      structuredClone(dummyScheduleWithTalks),
+    )
+
+    await expect(
+      makeCaller().admin.removeTalk({
+        scheduleId: 'sched-1',
+        trackIndex: 0,
+        talkKey: 'nonexistent-key',
+      }),
+    ).rejects.toThrowError(/Track or talk index out of bounds/)
+  })
+
+  it('expires feedback code index when removing a talk from an official schedule', async () => {
+    const officialScheduleWithTalks = {
+      ...dummyScheduleWithTalks,
+      status: ScheduleStatus.Official,
+    }
+    clientWriteFetchMock.mockResolvedValueOnce(
+      structuredClone(officialScheduleWithTalks),
+    )
+
+    const res = await makeCaller().admin.removeTalk({
+      scheduleId: 'sched-1',
+      trackIndex: 0,
+      talkIndex: 0,
+    })
+
+    expect(res.success).toBe(true)
+    expect(revalidateTagMock).toHaveBeenCalledWith(
+      feedbackCodeIndexTag(CONFERENCE_ID),
+      { expire: 0 },
+    )
   })
 })

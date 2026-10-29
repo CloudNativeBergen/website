@@ -801,7 +801,7 @@ export async function getSessionFromBearerToken(
 
     const speaker = decoded.speaker as Session['speaker']
     const account = decoded.account as Session['account']
-    if (!decoded.sub || !speaker?._id || !account) return null
+    if (!decoded.sub || !speaker?._id) return null
 
     return {
       expires: new Date((decoded.exp ?? 0) * 1000).toISOString(),

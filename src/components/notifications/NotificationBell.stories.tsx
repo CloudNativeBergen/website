@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
+import { expect, userEvent, within } from 'storybook/test'
 import { SessionProvider } from 'next-auth/react'
 import type { Session } from 'next-auth'
 import { mockDateBeforeEach } from '@/lib/storybook'
@@ -36,9 +37,45 @@ const notificationItems = () => [
   },
 ]
 
+// The not-set notice (#1335): what an organizer finds in the bell when a
+// ticket type has no workshop decision. One unread, one already read, and one
+// whose type name is longer than the row.
+const minutesAgo = (minutes: number) =>
+  new Date(Date.now() - minutes * 60_000).toISOString()
+
+const ticketTypeNotSet = (
+  id: string,
+  typeName: string,
+  createdAt: string,
+  readAt: string | null = null,
+) => ({
+  id,
+  type: 'workshop_ticket_type_not_set',
+  title: `“${typeName}” needs a workshop decision`,
+  message:
+    'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
+  link: '/admin/workshops#workshop-tickets',
+  readAt,
+  createdAt,
+  actor: null,
+})
+
+const ticketTypeNotSetItems = () => [
+  ticketTypeNotSet('n-early', 'Early Bird', minutesAgo(3)),
+  ticketTypeNotSet(
+    'n-long',
+    'Workshop + Conference (2 days), student and group discount',
+    minutesAgo(50),
+  ),
+  ticketTypeNotSet('n-crew', 'Crew', minutesAgo(60 * 26), minutesAgo(60 * 25)),
+]
+
 /** msw handlers answering the bell's `unreadCount` (and the panel's `list`)
  * for a given unread total — the badge reads only `unreadCount`. */
-const makeHandlers = (unread: number) => [
+const makeHandlers = (
+  unread: number,
+  items: () => unknown[] = notificationItems,
+) => [
   http.get('/api/trpc/:procs', ({ params }) =>
     HttpResponse.json(
       String(params.procs)
@@ -47,7 +84,7 @@ const makeHandlers = (unread: number) => [
           proc === 'notification.unreadCount'
             ? { result: { data: unread } }
             : proc === 'notification.list'
-              ? { result: { data: notificationItems() } }
+              ? { result: { data: items() } }
               : { result: { data: null } },
         ),
     ),
@@ -133,4 +170,50 @@ export const Unread3Dark: Story = {
 
 export const Unread12Dark: Story = {
   parameters: { dark: true, msw: { handlers: makeHandlers(12) } },
+}
+
+/**
+ * The bell opened on the not-set notice (#1335): the row names the ticket type
+ * and leads to the workshop-tickets section of `/admin/workshops`. The `play` opens the panel, so the story
+ * shows what the organizer sees after pressing the bell.
+ */
+export const TicketTypeNotSet: Story = {
+  parameters: {
+    msw: { handlers: makeHandlers(2, ticketTypeNotSetItems) },
+  },
+  // Room for the open panel, which hangs below and to the left of the bell.
+  decorators: [
+    (Story) => (
+      <div className="flex min-h-[30rem] w-[26rem] max-w-full items-start justify-end">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Notifications (2 unread)' }),
+    )
+
+    const row = await canvas.findByRole('link', {
+      name: /“Early Bird” needs a workshop decision/,
+    })
+    await expect(row).toHaveAttribute(
+      'href',
+      '/admin/workshops#workshop-tickets',
+    )
+    await expect(row).toHaveTextContent(
+      'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
+    )
+  },
+}
+
+export const TicketTypeNotSetDark: Story = {
+  ...TicketTypeNotSet,
+  // Named again so the test runner sees it: it reads `play` off the source.
+  play: TicketTypeNotSet.play,
+  parameters: {
+    dark: true,
+    msw: { handlers: makeHandlers(2, ticketTypeNotSetItems) },
+  },
 }

@@ -1,4 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { http, HttpResponse } from 'msw'
+import { SponsorDashboardMetrics } from './SponsorDashboardMetrics'
+import { mockSponsor } from '@/__mocks__/sponsor-data'
+import { mockExchangeRatesBeforeEach } from '@/lib/storybook/mockExchangeRates'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Dashboard/Metrics',
@@ -82,7 +86,7 @@ export const Metrics: Story = {
         <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
           Live Example
         </h2>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <MetricCard
             title="Total Revenue"
             value="80 000 kr"
@@ -223,4 +227,40 @@ function DashboardPage() {
       </div>
     </div>
   ),
+}
+
+/** The real component against an msw-backed `sponsor.crm.list`, at phone width. */
+export const Phone: Story = {
+  beforeEach: mockExchangeRatesBeforeEach(),
+  parameters: {
+    layout: 'padded',
+    viewport: { defaultViewport: 'phone' },
+    msw: {
+      handlers: [
+        http.get('/api/trpc/sponsor.crm.list', () =>
+          HttpResponse.json({
+            result: {
+              data: [
+                mockSponsor({
+                  _id: 'a',
+                  status: 'closed-won',
+                  contractValue: 1250000,
+                  invoiceStatus: 'paid',
+                }),
+                mockSponsor({
+                  _id: 'b',
+                  status: 'closed-won',
+                  contractValue: 60000,
+                  contractCurrency: 'EUR',
+                  invoiceStatus: 'overdue',
+                }),
+                mockSponsor({ _id: 'c', status: 'negotiating' }),
+              ],
+            },
+          }),
+        ),
+      ],
+    },
+  },
+  render: () => <SponsorDashboardMetrics />,
 }

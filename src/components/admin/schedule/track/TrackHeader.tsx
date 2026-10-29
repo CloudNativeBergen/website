@@ -2,15 +2,20 @@
 
 import { useState } from 'react'
 import { ScheduleTrack } from '@/lib/conference/types'
+import type { TrackSponsorOption } from '@/lib/schedule/types'
 import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { calculateTalkContentMinutes } from '@/lib/schedule/geometry'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { TrackSponsorSelect } from './TrackSponsorSelect'
 
 export const TrackHeader = ({
   track,
   isEditing,
   editTitle,
   editDescription,
+  editSponsor,
+  sponsorOptions,
+  onEditSponsor,
   onEditTitle,
   onEditDescription,
   onSave,
@@ -18,11 +23,16 @@ export const TrackHeader = ({
   onStartEdit,
   onRemoveTrack,
   isReadOnly = false,
+  reserveSponsorRow = false,
 }: {
   track: ScheduleTrack
   isEditing: boolean
   editTitle: string
   editDescription: string
+  /** The chosen sponsor's id; '' for none. */
+  editSponsor: string
+  sponsorOptions: TrackSponsorOption[]
+  onEditSponsor: (sponsorId: string) => void
   onEditTitle: (value: string) => void
   onEditDescription: (value: string) => void
   onSave: () => void
@@ -31,10 +41,20 @@ export const TrackHeader = ({
   onRemoveTrack: () => void
   /** Live (official) view — hide the edit/remove affordances (no save path). */
   isReadOnly?: boolean
+  /**
+   * Another track of the day has a sponsor: keep the row, empty, so every
+   * header is as tall and the timelines below stay level.
+   */
+  reserveSponsorRow?: boolean
 }) => {
   const talkContentMinutes = calculateTalkContentMinutes(track)
   const realTalks = track.talks.filter((talk) => talk.talk).length
   const [confirmingRemove, setConfirmingRemove] = useState(false)
+  const sponsorRef = track.sponsor?._ref
+  const sponsorName = sponsorRef
+    ? (sponsorOptions.find((option) => option._id === sponsorRef)?.name ??
+      'a sponsor no longer shown publicly')
+    : null
 
   // Removing a track un-schedules its real talks (they return to the unassigned
   // list) but permanently DELETES its service sessions — mirror the mobile
@@ -69,6 +89,15 @@ export const TrackHeader = ({
             rows={2}
             placeholder="Track description"
           />
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+            Track sponsor
+            <TrackSponsorSelect
+              value={editSponsor}
+              options={sponsorOptions}
+              onChange={onEditSponsor}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-normal focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            />
+          </label>
           <div className="flex gap-2">
             <button
               onClick={onSave}
@@ -106,6 +135,15 @@ export const TrackHeader = ({
                 </span>
               )}
             </div>
+            {(sponsorName || reserveSponsorRow) && (
+              <p
+                data-sponsor-row
+                aria-hidden={sponsorName ? undefined : true}
+                className="mt-2 truncate text-xs font-medium text-amber-800 dark:text-amber-300"
+              >
+                {sponsorName ? `Sponsored by ${sponsorName}` : '\u00a0'}
+              </p>
+            )}
           </div>
           {!isReadOnly && (
             <div className="ml-3 flex shrink-0 gap-1">

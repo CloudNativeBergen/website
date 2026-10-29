@@ -1,8 +1,5 @@
-import { emailBrandColor } from '@/lib/branding/theme'
 import { TRPCError } from '@trpc/server'
-import { z } from 'zod'
 import { router, publicProcedure, adminProcedure } from '../trpc'
-import { isLocalhostDomain } from '@/lib/environment/localhost'
 import {
   RegistrationTokenSchema,
   RegistrationSubmissionSchema,
@@ -14,20 +11,13 @@ import {
   generateRegistrationToken,
   buildPortalUrl,
   getSfcForNotification,
-  getSfcForPortalInvite,
 } from '@/lib/sponsor-crm/registration'
 import type { RegistrationSubmission } from '@/lib/sponsor-crm/registration'
-import {
-  logRegistrationComplete,
-  logEmailSent,
-  logContractStatusChange,
-} from '@/lib/sponsor-crm/activity'
-import { clientWrite } from '@/lib/sanity/client'
+import { logRegistrationComplete } from '@/lib/sponsor-crm/activity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { requireDocumentInCurrentConference } from '../tenancy'
 import { notifySponsorRegistrationComplete } from '@/lib/slack/notify'
 import { sanitizeSvgFieldOrThrow, SvgSanitizeError } from '@/lib/svg/upload'
-import { resolveConferenceFrom } from '@/lib/email/from'
 
 export const registrationRouter = router({
   validate: publicProcedure
@@ -159,202 +149,5 @@ export const registrationRouter = router({
       const url = buildPortalUrl(baseUrl, token)
 
       return { token, url }
-    }),
-
-  sendPortalInvite: adminProcedure
-    .input(
-      z.object({
-        sponsorForConferenceId: z.string().min(1),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      // OWNERSHIP (#730): `getSfcForPortalInvite` looks the id up with no
-      // conference predicate, so without this an organizer of tenant A could
-      // patch tenant B's sponsor record and email B's contacts.
-      await requireDocumentInCurrentConference(
-        input.sponsorForConferenceId,
-        'sponsorForConference',
-      )
-      // Fetch full sponsor + conference data for the email
-      const sfc = await getSfcForPortalInvite(input.sponsorForConferenceId)
-
-      if (!sfc) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Sponsor relationship not found',
-        })
-      }
-
-      if (!sfc.conference) {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: 'Conference not found',
-        })
-      }
-
-      if (!sfc.sponsor?.name) {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message:
-            'Sponsor information is missing. Link a sponsor to this relationship before sending a portal invite.',
-        })
-      }
-
-      if (sfc.status !== 'closed-won') {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message:
-            'Registration emails can only be sent to sponsors with a won deal. Move the sponsor to Closed Won first.',
-        })
-      }
-
-      const contacts = sfc.contactPersons || []
-      const recipients = Array.from(
-        new Set(
-          contacts
-            .map((c) => c.email?.trim())
-            .filter((email): email is string => Boolean(email)),
-        ),
-      )
-
-      if (recipients.length === 0) {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message:
-            'No contact persons with email addresses. Add contacts first.',
-        })
-      }
-
-      const { domain: currentDomain } = await getConferenceForCurrentDomain()
-      if (!currentDomain) {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: 'Conference has no domain configured.',
-        })
-      }
-
-      if (isLocalhostDomain(currentDomain)) {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message:
-            'Registration emails cannot be sent from localhost. Deploy to a production domain first.',
-        })
-      }
-
-      // Generate token if not already present
-      let token = sfc.registrationToken
-      if (!token) {
-        const result = await generateRegistrationToken(
-          input.sponsorForConferenceId,
-        )
-        if (result.error || !result.token) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to generate registration token',
-          })
-        }
-        token = result.token
-      }
-
-      const baseUrl = `https://${currentDomain}`
-      const portalUrl = buildPortalUrl(baseUrl, token)
-
-      // Send email
-      const { SponsorPortalInviteTemplate } =
-        await import('@/components/email/SponsorPortalInviteTemplate')
-      const { resolveEmailSender, retryWithBackoff } =
-        await import('@/lib/email/config')
-      const { formatConferenceDateLong } = await import('@/lib/time')
-      const React = await import('react')
-
-      const { formatNumber } = await import('@/lib/format')
-      const contractValueStr = sfc.contractValue
-        ? `${formatNumber(sfc.contractValue)} ${sfc.contractCurrency || 'NOK'}`
-        : undefined
-
-      const emailElement = React.createElement(SponsorPortalInviteTemplate, {
-        sponsorName: sfc.sponsor.name,
-        portalUrl,
-        tierName: sfc.tier?.title,
-        contractValue: contractValueStr,
-        eventName: sfc.conference.title,
-        // No silent country default — an unset city omits the location
-        // rather than telling a sponsor the event is in Norway.
-        eventLocation: sfc.conference.city || '',
-        eventDate: sfc.conference.startDate
-          ? formatConferenceDateLong(sfc.conference.startDate)
-          : '',
-        eventUrl: `https://${currentDomain}`,
-        socialLinks: sfc.conference.socialLinks || [],
-        brandColor: emailBrandColor(sfc.conference.theme),
-      })
-
-      const from = resolveConferenceFrom(sfc.conference, {
-        field: 'sponsorEmail',
-        localPart: 'sponsors',
-      })
-
-      const { client } = await resolveEmailSender(ctx.orgId)
-
-      const result = await retryWithBackoff(async () => {
-        return client.emails.send({
-          from,
-          to: recipients,
-          subject: `Sponsor Registration — ${sfc.conference!.title}`,
-          react: emailElement,
-        })
-      })
-
-      if (result.error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: `Failed to send email: ${result.error.message}`,
-        })
-      }
-
-      // Update contract status to 'registration-sent' if not already further along
-      const oldContractStatus = sfc.contractStatus || 'none'
-      const advancedStatuses = [
-        'registration-sent',
-        'contract-sent',
-        'contract-signed',
-      ]
-      if (!advancedStatuses.includes(oldContractStatus)) {
-        try {
-          await clientWrite
-            .patch(input.sponsorForConferenceId)
-            .set({ contractStatus: 'registration-sent' })
-            .commit()
-
-          await logContractStatusChange(
-            input.sponsorForConferenceId,
-            oldContractStatus,
-            'registration-sent',
-            ctx.speaker._id,
-          )
-        } catch (statusError) {
-          console.error(
-            'Failed to update contract status to registration-sent:',
-            statusError,
-          )
-        }
-      }
-
-      // Log email activity
-      try {
-        await logEmailSent(
-          input.sponsorForConferenceId,
-          `Sponsor Registration — ${sfc.conference!.title}`,
-          ctx.speaker._id,
-        )
-      } catch (logError) {
-        console.error('Failed to log portal invite activity:', logError)
-      }
-
-      return {
-        success: true,
-        url: portalUrl,
-        recipientCount: recipients.length,
-      }
     }),
 })

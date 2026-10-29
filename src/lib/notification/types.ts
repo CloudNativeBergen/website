@@ -8,11 +8,6 @@
 export type NotificationType =
   | 'proposal_submitted'
   | 'proposal_status_changed'
-  // Reserved, currently UNUSED: superseded by `message_received` — proposal
-  // decision comments now relay through the speaker↔organizer message thread
-  // rather than a dedicated notification. Kept for back-compat with any legacy
-  // stored documents; no emitter creates it.
-  | 'proposal_comment'
   // Speaker↔organizer conversation message (messaging M1).
   | 'message_received'
   // A stale, unanswered speaker↔organizer thread (ticketing stale-nudge cron).
@@ -46,6 +41,30 @@ export type NotificationType =
   // name (tagging spec §4.4, Publish). Emitted by the social publish cron to
   // every organizer; links to the Task. Rendered generically by the hub.
   | 'marketing_task_tag_withheld'
+  // A ticket type has no workshop decision (workshop tickets spec §8): one was
+  // sold, or its holder was refused at the portal. Emitted once per type per
+  // conference by the `workshop.ticket-type.not-set` bus handler to the
+  // conference's organizers; links to the workshop-tickets section of
+  // `/admin/workshops`. Bell only: no web push. Rendered generically by the
+  // hub.
+  | 'workshop_ticket_type_not_set'
+  // A workshop is 80% full, or its waitlist started. Emitted once per
+  // workshop per threshold by the `workshop.capacity.threshold` bus handler to
+  // the conference's organizers; links to `/admin/workshops`. Bell only.
+  // Rendered generically by the hub.
+  | 'workshop_capacity'
+  // A session's Feedback Window closed (speaker feedback spec §11.1): its
+  // totals, to each of its speakers who is not erased. Emitted once per talk
+  // and speaker by the daily summary cron (`src/lib/feedback/summary.ts`);
+  // links to the Session Feedback section of `/cfp/proposal/<id>`. Counts
+  // only, never comment text. Bell only. Rendered generically by the hub.
+  | 'session_feedback_summary'
+  // A speaker flagged a comment on their talk for organizers (speaker
+  // feedback spec §11.2): to the conference's organizers but the flagger,
+  // emitted inline by `sessionFeedback.flag` (`src/lib/feedback/flag.ts`)
+  // only when `flaggedAt` goes from unset to set. Links to `/admin/feedback`.
+  // The talk's title, never the comment text. Rendered generically by the hub.
+  | 'session_feedback_flagged'
   | 'system'
 
 /**
@@ -74,6 +93,16 @@ export interface NotificationInput {
    * (they intentionally stack).
    */
   tag?: string
+}
+
+/**
+ * A notification that may be written AT MOST ONCE: `id` is the document id, and
+ * `createNotificationsOnce` writes it with `createIfNotExists`, so a second
+ * write of the same id changes nothing. The id must be derived from what makes
+ * the notification the same one (never from a timestamp).
+ */
+export interface OnceNotificationInput extends NotificationInput {
+  id: string
 }
 
 /**

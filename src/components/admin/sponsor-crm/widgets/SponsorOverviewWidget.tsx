@@ -69,7 +69,7 @@ export function SponsorOverviewWidget({
               Deal Status
             </dt>
             <dd className="mt-1 text-sm text-gray-900 capitalize dark:text-white">
-              {data.status.replace('-', ' ')}
+              {(data.status || 'prospect').replace(/-/g, ' ')}
             </dd>
           </div>
           <div className="sm:col-span-1">

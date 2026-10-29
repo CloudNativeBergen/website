@@ -70,6 +70,8 @@ speaker, and `notification` is the shared hub document.
 | `createdBy`                   | **Weak** ref to the starter. Required for proposal/general; **optional** for sponsor threads (a portal-initiated sponsor thread has no speaker creator; an organizer-initiated one records the acting organizer).                                                                                                                                                 |
 | `subjectSpeaker`              | **Weak** ref. Set only when an **organizer** starts a general thread targeting a speaker; unset on speaker-created threads (creator IS the subject).                                                                                                                                                                                                              |
 | `subject`                     | Stored **explicitly** (proposal threads default it to the talk title at creation) so a thread renders without dereferencing the proposal, and a later title edit never rewrites history. Max 200.                                                                                                                                                                 |
+| `messageCategory`             | Opening topic: `value`, `source` (`jev`, `system`, or `organizer`), `setAt`, optional Jev `confidence` or organizer `setBy`. Written once; existing categories win. Absent means unjudged; sponsor threads are excluded.                                                                                                                                          |
+| `openedAt`                    | Read-only opening marker, set if missing in the message transaction. Opening claims use the document endpoint and parent revision; unmarked legacy threads also check stored messages. Plain delivery after retry exhaustion still marks the thread to prevent later replies being judged.                                                                        |
 | `createdAt` / `lastMessageAt` | `lastMessageAt` is bumped in the **same transaction** that adds a message and drives inbox ordering.                                                                                                                                                                                                                                                              |
 | `status`                      | `'open'` \| `'resolved'`. **Absent means open** — every read `coalesce(status, 'open')`, so pre-ticketing threads need no migration.                                                                                                                                                                                                                              |
 | `assignedTo`                  | **Weak** ref to the responsible organizer. `null`/absent = unassigned.                                                                                                                                                                                                                                                                                            |
@@ -81,7 +83,9 @@ speaker, and `notification` is the shared hub document.
 ### `message` (created in `src/lib/messaging/sanity.ts`)
 
 `_id` `message.<nanoid>`, with `conversation` (strong ref), `author` (ref), `body`
-(≤5000, trimmed), `createdAt`. `addMessage` creates the message **and** patches
+(≤5000, trimmed), `createdAt`, optional `origin` (`person` or `system`; absent means
+person). Proposal-action relays use `system` and supply their event category;
+person openings are judged after delivery. `addMessage` creates the message **and** patches
 the parent `lastMessageAt` in one transaction so the two can never drift. Messages
 carry **no per-document retention** — they are immortal until the whole conference
 ages out (see Lifecycle).
@@ -111,6 +115,67 @@ per-user. Messaging uses two of its types:
 - **`message_stale`** — emitted by the stale-nudge cron: at most twice per
   trailing message (the first nudge, then one ESCALATION for an assigned thread).
 
+The hub's types are the `NotificationType` union in
+`src/lib/notification/types.ts`. One of them outside messaging is written
+differently from the rest and is described here because it shares the
+deterministic-id technique:
+
+- **`workshop_ticket_type_not_set`** — tells a conference's organizers that a
+  ticket type has no workshop decision (`docs/WORKSHOP_TICKETS_SPEC.md` §8),
+  linking to `/admin/workshops#workshop-tickets`. Raised by the Checkin
+  ticket-sold webhook and by the portal refusal through
+  `reportNotSetTicketTypes` (`src/lib/workshop/not-set-notice.ts`), and written
+  by the `workshop.ticket-type.not-set` bus handler. It is **once-only**: one
+  document per `(conference, ticket type, organizer)` with a deterministic id,
+  written with `createIfNotExists` through `createNotificationsOnce` and
+  **never patched**, so a repeat write changes nothing, read state included. A
+  memo in front of it, one per process, keeps a type the process has raised in
+  the last day from costing a read or a write; after a day the process raises
+  it again, which is what lets a type still not set be notified again once the
+  purge has removed its notification. One call raises one event however many
+  types it names (one organizers read, one transaction), at most 10 types per
+  call and 100 live claims per conference per process. Recipients are the
+  conference's own `organizers[]`. It is **bell only**: no web push is sent. It
+  stores the ticket type's name, cleaned for display, and no personal data. The
+  90-day purge removes it like any other type, after which a type that is
+  still not set is notified again, within a day of the next time it is met.
+  The organizer is the id's last segment so that a speaker merge carries the
+  document to the surviving account (`DETERMINISTIC_ID_PREFIXES` in
+  `src/lib/speaker/merge.ts`); a survivor whose id is too long for a notice of
+  their own gets none, and the merged account's is dropped.
+- **`workshop_capacity`** — tells a conference's organizers that a workshop
+  is 80% full (confirmed seats against capacity) or that its waitlist has
+  started, with the seat counts, linking to `/admin/workshops`. Raised by
+  `reportCapacityThresholds` (`src/lib/workshop/capacity-notice.ts`) after a
+  seats write in `src/lib/workshop/seats.ts` commits and crosses a threshold,
+  and written by the `workshop.capacity.threshold` bus handler. Once-only like
+  the not-set notice: one document per `(conference, workshop, threshold,
+organizer)` under `notification.workshop-capacity.<hash>.<organizerId>`, so
+  a workshop that drops below and crosses again notifies no one twice. Bell
+  only; the workshop's title and counts, no attendee data.
+- **`session_feedback_summary`** — tells each speaker of a talk who is not
+  erased that its Session Feedback Window has closed, with the totals per
+  colour and the response and comment counts (never comment text), linking to
+  `/cfp/proposal/<id>#session-feedback` (`docs/SPEAKER_FEEDBACK_SPEC.md`
+  §11.1). Written by the daily `/api/cron/feedback-summary` run
+  (`src/lib/feedback/summary.ts`) after it has claimed the talk
+  (`feedbackSummarySentAt`), alongside one email. Once-only like the notices
+  above, under `notification.feedback-summary.<talkId>.<speakerId>`, and bell
+  only.
+- **`session_feedback_flagged`** — tells a conference's organizers, except
+  the speaker who flagged, that a speaker flagged a comment on their talk
+  (`docs/SPEAKER_FEEDBACK_SPEC.md` §11.2), linking to `/admin/feedback`.
+  Written inline by `sessionFeedback.flag` (`src/lib/feedback/flag.ts`)
+  through `createNotifications`, only when `flaggedAt` goes from unset to set
+  under a revision guard, so a Keep followed by a new flag notifies again and
+  a second click does not. Recipients are the conference's `organizers[]`.
+  It carries the talk's title and **never the comment text** (it would
+  outlive Remove, the fold and erasure). Random ids. It goes through
+  `createNotifications`, so today web push follows the recipient's
+  `otherUpdates` preference; whether it should be bell only, as the spec's
+  wording suggests, is an open question on PR #1469. A failed write is logged
+  and never fails the flag.
+
 ### Deterministic-id schemes
 
 | Id                                                    | Purpose                         | Race safety                                        |
@@ -119,6 +184,7 @@ per-user. Messaging uses two of its types:
 | `conversation.sponsor.<sfcId>`                        | The single sponsor thread (G2b) | `createIfNotExists` — portal + organizer converge  |
 | `convpref.<conversationId>.<speakerId>`               | One preference per participant  | doc-per-pair, no array RMW                         |
 | `notification.message.<conversationId>.<recipientId>` | The one collapsed hub item      | `createIfNotExists` + patch                        |
+| `notification.workshop-not-set.<hash>.<recipientId>`  | Not-set notice, per organizer   | `createIfNotExists`, no patch — repeats are no-ops |
 
 `conversation.<nanoid>` (ordinary general threads) and `message.<nanoid>` are
 random. Marketing outreach uses `conversation.marketing.<hash>` instead: the

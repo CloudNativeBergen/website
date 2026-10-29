@@ -86,7 +86,10 @@ export const platformRouter = router({
         })
       }
 
-      revalidateTag(organizationTag(input.organizationId), 'default')
+      // EXPIRE NOW, not a cache-life profile. A profile only marks the entry
+      // stale, and the next read is still served the old organization while it
+      // revalidates. Entitlements must take effect on the next read.
+      revalidateTag(organizationTag(input.organizationId), { expire: 0 })
       return { success: true }
     }),
 })

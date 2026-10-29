@@ -143,6 +143,7 @@ export function DraggableProposal({
     const isAcceptedButNotConfirmed = proposal.status === Status.accepted
     const isNotReady =
       proposal.status === Status.withdrawn ||
+      proposal.status === Status.canceled ||
       proposal.status === Status.rejected ||
       proposal.status === Status.submitted
 
@@ -202,6 +203,7 @@ export function DraggableProposal({
     const isAcceptedButNotConfirmed = proposal.status === Status.accepted
     const isNotReady =
       proposal.status === Status.withdrawn ||
+      proposal.status === Status.canceled ||
       proposal.status === Status.rejected ||
       proposal.status === Status.submitted
 
@@ -241,6 +243,7 @@ export function DraggableProposal({
     const titleClasses = 'pr-1 text-gray-900 truncate dark:text-gray-100'
     const isWithdrawnOrRejected =
       proposal.status === Status.withdrawn ||
+      proposal.status === Status.canceled ||
       proposal.status === Status.rejected
     const isAcceptedButNotConfirmed = proposal.status === Status.accepted
 
@@ -360,6 +363,7 @@ export function DraggableProposal({
 
     const statusEmoji =
       proposal.status === Status.withdrawn ||
+      proposal.status === Status.canceled ||
       proposal.status === Status.rejected
         ? '🚫'
         : proposal.status === Status.accepted
@@ -370,13 +374,15 @@ export function DraggableProposal({
     const statusText =
       proposal.status === Status.withdrawn
         ? 'Withdrawn by speaker'
-        : proposal.status === Status.rejected
-          ? 'Rejected by organizers'
-          : proposal.status === Status.accepted
-            ? 'Accepted (not yet confirmed by speaker)'
-            : proposal.status === Status.confirmed
-              ? 'Confirmed'
-              : 'Submitted (pending review)'
+        : proposal.status === Status.canceled
+          ? 'Canceled by organizers'
+          : proposal.status === Status.rejected
+            ? 'Rejected by organizers'
+            : proposal.status === Status.accepted
+              ? 'Accepted (not yet confirmed by speaker)'
+              : proposal.status === Status.confirmed
+                ? 'Confirmed'
+                : 'Submitted (pending review)'
     parts.push(`${statusEmoji} Status: ${statusText}`)
 
     const levelEmoji =

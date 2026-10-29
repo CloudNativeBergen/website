@@ -148,33 +148,60 @@ describe('classifyTicket', () => {
       admitsSource: 'unknown',
       comp: true,
       grantedBy: 'speaker',
-      grantsWorkshop: false,
-    })
-  })
-
-  it('grants workshop to a speaker ticket if they RSVP yes in fields', () => {
-    expect(
-      classifyTicket(
-        ticket({
-          category: 'Speaker ticket',
-          sum: '0.00',
-          fields: [
-            {
-              key: 'Will you attend the Monday workshops?',
-              value: 'Yes, please!',
-            },
-          ],
-        }) as EventTicket,
-        { speakerTicketTypeName: 'Speaker ticket' },
-      ),
-    ).toEqual({
-      admits: true,
-      admitsSource: 'unknown',
-      comp: true,
-      grantedBy: 'speaker',
+      // The built-in list grants the speaker type, and nothing overrides it.
       grantsWorkshop: true,
     })
   })
+
+  // ONE DEFINITION (#1333): a speaker's form answer about the workshops no
+  // longer moves `grantsWorkshop`. The gate's rule is the whole answer.
+  it.each([
+    ['no answer', {}],
+    [
+      'a "no" in fields',
+      {
+        fields: [{ key: 'Will you attend the Monday workshops?', value: 'No' }],
+      },
+    ],
+    [
+      'a selected "- No" additional',
+      {
+        additionals: [
+          { name: 'Will you attend the Monday workshops? - No', value: '1' },
+          { name: 'Will you attend the Monday workshops? - Yes', value: '0' },
+        ],
+      },
+    ],
+  ])(
+    'a speaker ticket with %s grants workshops exactly when its type does',
+    (_, answer) => {
+      const speaker = ticket({
+        category: 'Speaker ticket',
+        sum: '0.00',
+        ...answer,
+      })
+      const context = { speakerTicketTypeName: 'Speaker ticket' }
+      // The built-in list grants the speaker type.
+      expect(classifyTicket(speaker, context).grantsWorkshop).toBe(true)
+      expect(
+        classifyTicket(speaker, {
+          ...context,
+          ticketTypeRoles: [
+            { typeName: 'Speaker ticket', grantsWorkshop: true },
+          ],
+        }).grantsWorkshop,
+      ).toBe(true)
+      expect(
+        classifyTicket(speaker, {
+          ...context,
+          ticketTypeRoles: [
+            { typeName: 'Speaker ticket', grantsWorkshop: false },
+            { typeName: 'Workshop pass', grantsWorkshop: true },
+          ],
+        }).grantsWorkshop,
+      ).toBe(false)
+    },
+  )
 
   it('uses the DERIVED speaker type name, not only the historical literal', () => {
     // `findSpeakerTicketType` resolves whatever the tenant called its
@@ -184,6 +211,24 @@ describe('classifyTicket', () => {
         speakerTicketTypeName: 'Foredragsholder',
       }).grantedBy,
     ).toBe('speaker')
+  })
+
+  it('reads a volunteer ticket as a volunteer comp, by literal or derived type name', () => {
+    expect(
+      classifyTicket(ticket({ category: 'Volunteer ticket', sum: '0.00' })),
+    ).toEqual({
+      admits: true,
+      admitsSource: 'unknown',
+      comp: true,
+      grantedBy: 'volunteer',
+      grantsWorkshop: false,
+    })
+
+    expect(
+      classifyTicket(ticket({ category: 'Free ticket - Crew', sum: '0.00' }), {
+        volunteerTicketTypeName: 'Free ticket - Crew',
+      }).grantedBy,
+    ).toBe('volunteer')
   })
 
   it('leaves a comp unattributed when its code matches no known sponsor', () => {

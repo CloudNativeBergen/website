@@ -1,5 +1,6 @@
 import { ReactNode } from 'react'
 import clsx from 'clsx'
+import { cn } from '@/lib/utils'
 
 export type StatColor =
   'blue' | 'green' | 'purple' | 'slate' | 'indigo' | 'yellow' | 'red'
@@ -54,7 +55,7 @@ export function StatCard({
       </span>
       <span
         className={clsx(
-          'mt-1 block text-xl font-semibold',
+          'mt-1 block text-lg font-semibold sm:text-xl',
           valueColorClasses[color],
         )}
       >
@@ -67,7 +68,8 @@ export function StatCard({
       )}
     </>
   )
-  const shell = clsx(
+  // cn (tailwind-merge) so a caller's padding overrides the default.
+  const shell = cn(
     'rounded-lg border px-4 py-3 shadow-sm',
     // A pressed card must LOOK pressed. `aria-pressed` alone told assistive
     // tech the filter was on and left sighted users clicking a card twice with
@@ -83,10 +85,12 @@ export function StatCard({
       type="button"
       onClick={onClick}
       aria-pressed={pressed}
-      aria-label={`${label}, ${value}`}
-      className={clsx(
+      aria-label={[label, value, typeof subtitle === 'string' ? subtitle : null]
+        .filter((part) => part !== null && part !== undefined && part !== '')
+        .join(', ')}
+      className={cn(
+        'flex w-full cursor-pointer flex-col text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue',
         shell,
-        'w-full cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue',
       )}
     >
       {body}

@@ -8,6 +8,8 @@ import {
   extractVariablesFromText,
   extractVariablesFromPortableText,
   findUnsupportedVariables,
+  formatUnmergedVariablesMessage,
+  RESEND_BROADCAST_VARIABLES,
 } from '@/lib/sponsor/templates'
 import type { SponsorEmailTemplate } from '@/lib/sponsor/types'
 
@@ -53,6 +55,37 @@ describe('processTemplateVariables', () => {
 
   it('handles empty string', () => {
     expect(processTemplateVariables('', { A: 'B' })).toBe('')
+  })
+
+  it("preserves special regex replacement tokens ($&, $`, $', $$, $1)", () => {
+    expect(
+      processTemplateVariables('Price is {{{AMOUNT}}}', { AMOUNT: '$100' }),
+    ).toBe('Price is $100')
+    expect(
+      processTemplateVariables('Value: {{{TOKEN}}}', { TOKEN: '$&' }),
+    ).toBe('Value: $&')
+    expect(
+      processTemplateVariables('Value: {{{TOKEN}}}', { TOKEN: "$'" }),
+    ).toBe("Value: $'")
+    expect(
+      processTemplateVariables('Value: {{{TOKEN}}}', { TOKEN: '$`' }),
+    ).toBe('Value: $`')
+    expect(
+      processTemplateVariables('Value: {{{TOKEN}}}', { TOKEN: '$$' }),
+    ).toBe('Value: $$')
+  })
+
+  it('replaces {{{VAR|fallback}}} with the mapped value when non-empty and falls back when empty', () => {
+    expect(
+      processTemplateVariables('Location: {{{EVENT_LOCATION|Online}}}', {
+        EVENT_LOCATION: 'Bergen',
+      }),
+    ).toBe('Location: Bergen')
+    expect(
+      processTemplateVariables('Location: {{{EVENT_LOCATION|Online}}}', {
+        EVENT_LOCATION: '',
+      }),
+    ).toBe('Location: Online')
   })
 })
 
@@ -200,6 +233,47 @@ describe('processPortableTextVariables', () => {
     expect(result[0].children![0].text).toBe('https://example.com')
     expect(result[0].children![0].marks).toEqual(['link1'])
     expect(result[0].markDefs).toHaveLength(1)
+  })
+})
+
+describe('processPortableTextVariables, merged twice', () => {
+  it('never re-issues a link key a previous pass created — the second URL keeps its own href (#1263)', () => {
+    const once = processPortableTextVariables(
+      [
+        {
+          _type: 'block',
+          _key: 'b1',
+          style: 'normal',
+          markDefs: [],
+          children: [
+            {
+              _type: 'span',
+              _key: 's1',
+              text: 'Site {{{CONFERENCE_URL}}} and portal {{{SPONSOR_PORTAL_URL}}}',
+              marks: [],
+            },
+          ],
+        },
+      ] as never,
+      { CONFERENCE_URL: 'https://conf.example' },
+    )
+    const twice = processPortableTextVariables(once, {
+      SPONSOR_PORTAL_URL: 'https://conf.example/sponsor/portal/tok',
+    })
+    const block = twice[0] as unknown as {
+      markDefs: Array<{ _key: string; href: string }>
+      children: Array<{ text: string; marks: string[] }>
+    }
+    const keys = block.markDefs.map((m) => m._key)
+    expect(new Set(keys).size).toBe(keys.length)
+    const hrefOf = (text: string) => {
+      const span = block.children.find((c) => c.text === text)!
+      return block.markDefs.find((m) => span.marks.includes(m._key))!.href
+    }
+    expect(hrefOf('https://conf.example')).toBe('https://conf.example')
+    expect(hrefOf('https://conf.example/sponsor/portal/tok')).toBe(
+      'https://conf.example/sponsor/portal/tok',
+    )
   })
 })
 
@@ -546,5 +620,131 @@ describe('findUnsupportedVariables', () => {
 
   it('returns empty for empty sources', () => {
     expect(findUnsupportedVariables(supported)).toEqual([])
+  })
+
+  it('detects unsupported variables in link markDefs[].href', () => {
+    const blocks = [
+      {
+        _type: 'block' as const,
+        _key: 'k1',
+        children: [
+          {
+            _type: 'span' as const,
+            _key: 'k1-s',
+            text: 'View prospectus',
+            marks: ['link-1'],
+          },
+        ],
+        markDefs: [
+          {
+            _type: 'link' as const,
+            _key: 'link-1',
+            href: '{{{PROSPECTUS_URL}}}',
+          },
+        ],
+        style: 'normal' as const,
+      },
+    ]
+    expect(extractVariablesFromPortableText(blocks)).toEqual(['PROSPECTUS_URL'])
+    expect(findUnsupportedVariables(supported, blocks)).toEqual([
+      'PROSPECTUS_URL',
+    ])
+  })
+
+  it('detects lowercase, numeric, and whitespace-padded {{{...}}} tokens (including padded supported names)', () => {
+    expect(
+      findUnsupportedVariables(
+        supported,
+        'Hello {{{sponsor_name}}}, {{{VAR_1}}}, {{{ NAME }}}, and {{{ TIER_NAME }}}',
+      ),
+    ).toEqual(['sponsor_name', 'VAR_1', ' NAME ', ' TIER_NAME '])
+  })
+
+  it('detects placeholders split across adjacent rich-text spans in the same block (even when variable name is supported)', () => {
+    const blocks = [
+      {
+        _type: 'block' as const,
+        _key: 'k1',
+        children: [
+          { _type: 'span' as const, _key: 's1', text: 'Hi {{{NA' },
+          {
+            _type: 'span' as const,
+            _key: 's2',
+            text: 'ME}}} and {{{TIER_NAME}}}',
+            marks: ['strong'],
+          },
+        ],
+        style: 'normal' as const,
+      },
+    ]
+    expect(extractVariablesFromPortableText(blocks)).toEqual([
+      'NAME',
+      'TIER_NAME',
+    ])
+    expect(findUnsupportedVariables(supported, blocks)).toEqual([
+      'NAME',
+      'TIER_NAME',
+    ])
+  })
+
+  it('allows Resend broadcast merge variables including pipe fallback syntax while rejecting CRM variables and split-span placeholders', () => {
+    const validBlocks = [
+      {
+        _type: 'block' as const,
+        _key: 'k1',
+        children: [
+          {
+            _type: 'span' as const,
+            _key: 's1',
+            text: 'Hi {{{FIRST_NAME|there}}}, {{{LAST_NAME}}} ({{{EMAIL}}}) — {{{RESEND_UNSUBSCRIBE_URL}}}',
+          },
+        ],
+        style: 'normal' as const,
+      },
+    ]
+    expect(
+      findUnsupportedVariables(
+        RESEND_BROADCAST_VARIABLES,
+        'Update for {{{FIRST_NAME|friend}}}',
+        validBlocks,
+      ),
+    ).toEqual([])
+
+    expect(
+      findUnsupportedVariables(
+        RESEND_BROADCAST_VARIABLES,
+        'Hi {{{FIRST_NAME|there}}} from {{{SPONSOR_NAME}}}',
+      ),
+    ).toEqual(['SPONSOR_NAME'])
+
+    const splitBlocks = [
+      {
+        _type: 'block' as const,
+        _key: 'k1',
+        children: [
+          { _type: 'span' as const, _key: 's1', text: 'Hi {{{FIRST_' },
+          {
+            _type: 'span' as const,
+            _key: 's2',
+            text: 'NAME|there}}}',
+            marks: ['strong'],
+          },
+        ],
+        style: 'normal' as const,
+      },
+    ]
+    expect(
+      findUnsupportedVariables(RESEND_BROADCAST_VARIABLES, splitBlocks),
+    ).toEqual(['FIRST_NAME|there'])
+  })
+})
+
+describe('formatUnmergedVariablesMessage', () => {
+  it('formats variable names with triple braces', () => {
+    expect(
+      formatUnmergedVariablesMessage(['PROSPECTUS_URL', 'TIER_NAME']),
+    ).toBe(
+      'Email contains unmerged template variables ({{{PROSPECTUS_URL}}}, {{{TIER_NAME}}}). Fill in the missing values or remove the placeholders before sending.',
+    )
   })
 })

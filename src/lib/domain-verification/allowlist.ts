@@ -1,6 +1,9 @@
 /**
- * The OAuth REDIRECT ALLOWLIST derived from ownership-verified domains (#683,
- * consumed by #688).
+ * The OAuth REDIRECT ALLOWLIST derived from ownership-verified domains (#683),
+ * as a list of hosts. Nothing in production calls this module yet: it waits
+ * for the central auth origin (#688). The RULE it applies, `isAllowlistEligible`,
+ * is already in use — the workshop portal's sign-in requires it of a host, per
+ * host, as half of its proof (`./destination`, `./sign-in-standing`).
  *
  * ⚠️ This deliberately does NOT reuse `domainServesHost` / `domainEntriesOverlap`
  * from `@/lib/conference/domains`. Those implement the ROUTING matcher, which

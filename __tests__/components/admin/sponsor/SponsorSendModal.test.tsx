@@ -23,7 +23,14 @@ const h = vi.hoisted(() => ({
   invalidateList: vi.fn(),
   invalidateComms: vi.fn(),
   invalidateCodes: vi.fn(),
+  invalidateCrmList: vi.fn(),
+  invalidateCrmGetById: vi.fn(),
   saveLink: vi.fn(),
+  /** `registration.generateToken` — the registration kind's link on open (#1263). */
+  generateToken: vi.fn(),
+  /** `contractTemplates.contractReadiness` for the contract kind (#1264). */
+  readiness: undefined as unknown,
+  readinessError: false,
   showNotification: vi.fn(),
   templates: [] as unknown[],
   codeOptions: undefined as unknown,
@@ -42,6 +49,8 @@ vi.mock('@/lib/trpc/client', () => ({
     useUtils: () => ({
       sponsor: {
         crm: {
+          list: { invalidate: h.invalidateCrmList },
+          getById: { invalidate: h.invalidateCrmGetById },
           activities: {
             list: { invalidate: h.invalidateList },
             listCommunications: { invalidate: h.invalidateComms },
@@ -69,10 +78,20 @@ vi.mock('@/lib/trpc/client', () => ({
       emailTemplates: {
         list: { useQuery: () => ({ data: h.templates, isLoading: false }) },
       },
+      contractTemplates: {
+        contractReadiness: {
+          useQuery: () => ({ data: h.readiness, isError: h.readinessError }),
+        },
+      },
     },
     conference: {
       updateSponsorRegistrationLink: {
         useMutation: () => ({ mutateAsync: h.saveLink, isPending: false }),
+      },
+    },
+    registration: {
+      generateToken: {
+        useMutation: () => ({ mutateAsync: h.generateToken }),
       },
     },
   },
@@ -136,7 +155,9 @@ vi.mock('@/components/admin/EmailModal', () => ({
     onAdditionalFieldsChange,
     storageKey,
     extraField,
+    allowEmptyBody,
   }: {
+    allowEmptyBody?: boolean
     extraField?: { label: string; content: React.ReactNode }
     additionalFields?: Record<string, string | number | boolean>
     onAdditionalFieldsChange?: (
@@ -187,6 +208,7 @@ vi.mock('@/components/admin/EmailModal', () => ({
       <div>
         <p data-testid="subject">{draft.subject}</p>
         <span hidden>{tick}</span>
+        {allowEmptyBody && <span data-testid="allow-empty-body" />}
         <button
           type="button"
           onClick={() => {
@@ -265,12 +287,15 @@ const contacts = [
 
 function renderModal(
   overrides: Partial<Parameters<typeof mockSponsor>[0]> = {},
-  kind: 'information' | 'discount' = 'information',
+  kind:
+    'information' | 'discount' | 'registration' | 'contract' = 'information',
+  extra: { contractSend?: { contractTemplateId?: string } } = {},
 ) {
   return render(
     <SponsorSendModal
       isOpen
       kind={kind}
+      contractSend={extra.contractSend}
       onClose={vi.fn()}
       sponsorForConference={mockSponsor({
         contactPersons: contacts,
@@ -297,10 +322,16 @@ beforeEach(() => {
   h.codeOptions = undefined
   h.codesFetching = false
   h.codesError = false
+  h.readiness = { ready: true, canSend: true, missing: [] }
+  h.readinessError = false
   draftSeeded = false
   lastAdditionalFields = {}
   draft = { subject: 'Hand-written subject', message: [] }
   h.mutateAsync.mockResolvedValue({ success: true, recipientCount: 1 })
+  h.generateToken.mockResolvedValue({
+    token: 'tok-existing',
+    url: 'https://example.test/sponsor/portal/tok-existing',
+  })
 })
 afterEach(cleanup)
 
@@ -325,7 +356,9 @@ describe('recipients', () => {
   it('posts contact KEYS only — never an address — for every ticked contact', async () => {
     renderModal()
     fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Send to 2 contacts' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send to 2 recipients' }),
+    )
     await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
     const posted = h.mutateAsync.mock.calls[0][0]
     expect(posted).toMatchObject({
@@ -540,7 +573,9 @@ describe('recipients changed after a template was applied', () => {
     expect(
       screen.queryByText(/recipients changed after the template was applied/i),
     ).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Send to 2 contacts' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send to 2 recipients' }),
+    )
     await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
     // Contact order (Ola is listed first on this sponsor), matching the server.
     expect(h.mutateAsync.mock.calls[0][0].subject).toBe(
@@ -618,12 +653,21 @@ describe('discount kind', () => {
     )
   })
 
-  it('shows a code stored on another sponsor as unpickable, with whose it is', () => {
+  it('does not show codes stored on or attributed to another sponsor', async () => {
     h.codeOptions = options
     renderModal({}, 'discount')
+    // Positive presence assertion: ACME_LINKED exists and is rendered
     expect(
-      screen.getByRole('checkbox', { name: 'GLOBEX-VIP (linked to Globex)' }),
-    ).toBeDisabled()
+      screen.getByRole('checkbox', { name: ACME_LINKED }),
+    ).toBeInTheDocument()
+    // Negative assertion: foreign code is excluded
+    expect(
+      screen.queryByRole('checkbox', { name: /GLOBEX-VIP/ }),
+    ).not.toBeInTheDocument()
+    // Action value proof: submitting dispatches with only the sponsor's valid codes
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0].discountCodes).toEqual(['ACME-2026'])
   })
 
   it('refuses to post with no code ticked', async () => {
@@ -844,7 +888,7 @@ describe('discount kind', () => {
     ).toBeChecked()
   })
 
-  it('never preselects a code stored on another sponsor, whatever the server says', () => {
+  it('never shows a code stored on another sponsor', () => {
     h.codeOptions = {
       ...options,
       codes: [
@@ -858,11 +902,11 @@ describe('discount kind', () => {
     }
     renderModal({}, 'discount')
     expect(
-      screen.getByRole('checkbox', { name: 'GLOBEX-VIP (linked to Globex)' }),
-    ).not.toBeChecked()
+      screen.queryByRole('checkbox', { name: /GLOBEX-VIP/ }),
+    ).not.toBeInTheDocument()
   })
 
-  it('says in the accessible name when sending would move a code from another sponsor', () => {
+  it('does not show codes attributed to another sponsor', () => {
     h.codeOptions = {
       ...options,
       codes: [
@@ -876,10 +920,10 @@ describe('discount kind', () => {
     }
     renderModal({}, 'discount')
     expect(
-      screen.getByRole('checkbox', {
-        name: 'ACME-WORKSHOP, now counted for Workshop AS; sending moves it to this sponsor',
+      screen.queryByRole('checkbox', {
+        name: /ACME-WORKSHOP/,
       }),
-    ).toBeInTheDocument()
+    ).not.toBeInTheDocument()
   })
 
   it('an information send carries no codes', async () => {
@@ -889,6 +933,570 @@ describe('discount kind', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
     expect(h.mutateAsync.mock.calls[0][0].discountCodes).toBeUndefined()
+  })
+})
+
+describe('registration kind (#1263)', () => {
+  it('prepares the link on open from the EXISTING token and posts the registration kind', async () => {
+    renderModal({}, 'registration')
+    expect(screen.getByText('Preparing the registration link…')).toBeVisible()
+    await waitFor(() =>
+      expect(
+        screen.queryByText('Preparing the registration link…'),
+      ).not.toBeInTheDocument(),
+    )
+    expect(h.generateToken).toHaveBeenCalledTimes(1)
+    expect(h.generateToken).toHaveBeenCalledWith({
+      sponsorForConferenceId: expect.any(String),
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    const posted = h.mutateAsync.mock.calls[0][0]
+    expect(posted).toMatchObject({
+      kind: 'registration',
+      recipientKeys: ['c-primary'],
+      subject: 'Registration: Conf',
+    })
+    expect(posted).not.toHaveProperty('discountCodes')
+    // The built-in welcome is the starting body.
+    expect(JSON.parse(posted.message)[0].children[0].text).toMatch(
+      /^Welcome aboard, /,
+    )
+  })
+
+  it('refuses an information send that still carries the portal merge field', async () => {
+    renderModal({}, 'information')
+    // Typed after open (the stub seeds the draft from initialValues on mount).
+    draft = {
+      subject: 'Register at {{{SPONSOR_PORTAL_URL}}}',
+      message: [],
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringMatching(/only a registration send can fill in/),
+        }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('never asks the information kind for a link', () => {
+    renderModal({}, 'information')
+    expect(h.generateToken).not.toHaveBeenCalled()
+    expect(
+      screen.queryByText('Preparing the registration link…'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the completed-registration notice, and still sends', async () => {
+    renderModal({ registrationComplete: true }, 'registration')
+    expect(
+      screen.getByText(/has already completed registration/),
+    ).toHaveAttribute('role', 'status')
+    await waitFor(() => expect(h.generateToken).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(
+        screen.queryByText('Preparing the registration link…'),
+      ).not.toBeInTheDocument(),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
+      kind: 'registration',
+    })
+  })
+
+  it('shows no notice while registration is open', async () => {
+    renderModal({ registrationComplete: false }, 'registration')
+    expect(
+      screen.queryByText(/has already completed registration/),
+    ).not.toBeInTheDocument()
+    await waitFor(() => expect(h.generateToken).toHaveBeenCalled())
+  })
+
+  it('refuses to send until the link is ready — the preview showed none', async () => {
+    h.generateToken.mockReturnValue(new Promise(() => {}))
+    renderModal({}, 'registration')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringMatching(/still being prepared/),
+        }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('says why when the link could not be prepared, and refuses to send', async () => {
+    h.generateToken.mockRejectedValue(
+      new Error('Conference has no domain configured.'),
+    )
+    renderModal({}, 'registration')
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'The registration link could not be prepared: Conference has no domain configured.',
+      ),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringMatching(/no domain configured/),
+        }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('asks for the link ONCE per open — a re-render does not mint again', async () => {
+    renderModal({}, 'registration')
+    await waitFor(() => expect(h.generateToken).toHaveBeenCalledTimes(1))
+    // A recipient toggle re-renders the modal.
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    await waitFor(() =>
+      expect(
+        screen.getByRole('checkbox', { name: 'Ola Nordmann' }),
+      ).toBeChecked(),
+    )
+    expect(h.generateToken).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('contract kind (#1264)', () => {
+  const SIGNING_URL = 'https://example.test/sponsor/contract/sign/agr-1'
+
+  it('first send: the button says "Send contract", the primary recipient signs by default, and the previewed template rides along', async () => {
+    renderModal({}, 'contract', {
+      contractSend: { contractTemplateId: 'tpl-A' },
+    })
+    expect(
+      screen.getByRole('radio', { name: 'Kari Nordmann signs' }),
+    ).toBeChecked()
+    fireEvent.click(screen.getByRole('button', { name: 'Send contract' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
+      kind: 'contract',
+      contractAction: 'send',
+      recipientKeys: ['c-primary'],
+      signerKey: 'c-primary',
+      contractTemplateId: 'tpl-A',
+      subject: 'Sponsorship Agreement — Conf',
+    })
+  })
+
+  it('first send: the signer must be a chosen recipient, and a second recipient can be made the signer', async () => {
+    renderModal({}, 'contract')
+    // Only selected recipients are offered as signer.
+    expect(
+      screen.queryByRole('radio', { name: 'Ola Nordmann signs' }),
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Ola Nordmann signs' }))
+    expect(
+      screen.getByRole('radio', { name: 'Ola Nordmann signs' }),
+    ).toBeChecked()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send contract to 2 recipients' }),
+    )
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
+      signerKey: 'c-billing',
+    })
+  })
+
+  it('first send: changing the signer after a template was applied warns, and Re-apply records the new signer in the provenance', async () => {
+    // The hint needs the applied template to exist in the list (it offers Re-apply).
+    h.templates = [tpl({ _id: 'tpl-1', category: 'contract' })]
+    renderModal({}, 'contract')
+    fireEvent.click(screen.getByRole('button', { name: 'apply template' }))
+    expect(
+      screen.queryByText(/changed after the template was applied/),
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Ola Nordmann signs' }))
+    expect(
+      screen.getByText(/or the signer changed after the template was applied/),
+    ).toBeInTheDocument()
+    expect(lastAdditionalFields).toMatchObject({
+      templateSignerKey: 'c-primary',
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Re-apply template' }))
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/changed after the template was applied/),
+      ).not.toBeInTheDocument(),
+    )
+    // The provenance now names the signer the greeting was merged for (the
+    // merged text itself is pinned in the Contract story).
+    expect(lastAdditionalFields).toMatchObject({
+      templateSignerKey: 'c-billing',
+    })
+  })
+
+  it('first send: the stored signer is preselected when they are among the recipients', () => {
+    renderModal({ signerEmail: 'ola@acme.example' }, 'contract')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    expect(
+      screen.getByRole('radio', { name: 'Ola Nordmann signs' }),
+    ).toBeChecked()
+  })
+
+  it('first send: refuses, naming the missing fields, when readiness fails', async () => {
+    h.readiness = {
+      ready: false,
+      canSend: false,
+      missing: [
+        {
+          field: 'tier',
+          label: 'Sponsor tier',
+          source: 'pipeline',
+          severity: 'required',
+        },
+        {
+          field: 'conference.venueName',
+          label: 'Venue',
+          source: 'organizer',
+          severity: 'recommended',
+        },
+      ],
+    }
+    renderModal({}, 'contract')
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('Sponsor tier')
+    expect(alert).not.toHaveTextContent('Venue')
+    fireEvent.click(screen.getByRole('button', { name: 'Send contract' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringMatching(/Sponsor tier/),
+        }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('reminder: the button says "Send reminder", no signer is asked, nothing contract-specific is posted', async () => {
+    renderModal(
+      {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerEmail: 'kari@acme.example',
+      },
+      'contract',
+    )
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Send reminder' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    const posted = h.mutateAsync.mock.calls[0][0]
+    expect(posted).toMatchObject({ kind: 'contract', contractAction: 'remind' })
+    expect(posted).not.toHaveProperty('signerKey')
+    expect(posted).not.toHaveProperty('contractTemplateId')
+  })
+
+  it('reminder: starts with the signer on record ticked, not the primary contact', () => {
+    renderModal(
+      {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerEmail: 'Ola@Acme.example',
+      },
+      'contract',
+    )
+    expect(screen.getByRole('checkbox', { name: 'Ola Nordmann' })).toBeChecked()
+    expect(
+      screen.getByRole('checkbox', { name: 'Kari Nordmann' }),
+    ).not.toBeChecked()
+    expect(
+      screen.queryByText(/also goes to the signer on record/),
+    ).not.toBeInTheDocument()
+  })
+
+  it('reminder: says the signer on record is mailed too when they are not a contact', () => {
+    renderModal(
+      {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerName: 'Eva Ekstern',
+        signerEmail: 'eva@other.example',
+      },
+      'contract',
+    )
+    expect(
+      screen.getByText(/also goes to the signer on record/),
+    ).toHaveTextContent(
+      'The reminder also goes to the signer on record, Eva Ekstern (eva@other.example), who is not among the contacts.',
+    )
+    // Nobody else is ticked for them: the primary contact is the start.
+    expect(
+      screen.getByRole('checkbox', { name: 'Kari Nordmann' }),
+    ).toBeChecked()
+  })
+
+  it('reminder: unticking the signer on record keeps them mailed, says so, and counts them', async () => {
+    renderModal(
+      {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerName: 'Ola Nordmann',
+        signerEmail: 'ola@acme.example',
+      },
+      'contract',
+    )
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Kari Nordmann' }))
+    expect(
+      screen.getByText(/also goes to the signer on record/),
+    ).toHaveTextContent(
+      'The reminder also goes to the signer on record, Ola Nordmann (ola@acme.example), who is not ticked above.',
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send reminder to 2 recipients' }),
+    )
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
+      recipientKeys: ['c-primary'],
+    })
+  })
+
+  it('reminder: with no contacts at all, sends to the signer on record alone', async () => {
+    renderModal(
+      {
+        contactPersons: [],
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerName: 'Eva Ekstern',
+        signerEmail: 'eva@other.example',
+      },
+      'contract',
+    )
+    expect(
+      screen.getByText('No contact persons on this sponsor.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Choose at least one recipient before sending.'),
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Send reminder' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
+      kind: 'contract',
+      contractAction: 'remind',
+      recipientKeys: [],
+    })
+  })
+
+  it('reminder: lets a subject-only template send — the card is the body; a first send never does', () => {
+    renderModal(
+      {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerEmail: 'kari@acme.example',
+      },
+      'contract',
+    )
+    expect(screen.getByTestId('allow-empty-body')).toBeInTheDocument()
+    cleanup()
+    renderModal({}, 'contract')
+    expect(screen.queryByTestId('allow-empty-body')).not.toBeInTheDocument()
+  })
+
+  it('reminder: merges the signer on record into CONTACT_NAMES when the server will mail them', () => {
+    h.templates = [
+      tpl({
+        _id: 'tpl-reminder',
+        category: 'contract',
+        slug: { current: 'contract-reminder' },
+        subject: 'For {{{CONTACT_NAMES}}}',
+      }),
+    ]
+    renderModal(
+      {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerName: 'Eva Ekstern',
+        signerEmail: 'eva@other.example',
+      },
+      'contract',
+    )
+    expect(screen.getByTestId('subject')).toHaveTextContent(
+      'For Kari Nordmann and Eva Ekstern',
+    )
+  })
+
+  it('reminder: a signer on record without a name is merged by the sponsor name, like the server does', () => {
+    h.templates = [
+      tpl({
+        _id: 'tpl-reminder',
+        category: 'contract',
+        slug: { current: 'contract-reminder' },
+        subject: 'For {{{CONTACT_NAMES}}}',
+      }),
+    ]
+    renderModal(
+      {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerName: undefined,
+        signerEmail: 'eva@other.example',
+      },
+      'contract',
+    )
+    expect(screen.getByTestId('subject')).toHaveTextContent(
+      `For Kari Nordmann and ${mockSponsor({}).sponsor.name}`,
+    )
+  })
+
+  it('signed: the button says "Send signed copy"', async () => {
+    renderModal(
+      {
+        contractStatus: 'contract-signed',
+        signatureStatus: 'signed',
+        contractSignedBy: 'Kari Nordmann',
+        contractDocument: {
+          asset: { _ref: 'f1', url: 'https://cdn/signed.pdf' },
+        },
+      },
+      'contract',
+    )
+    expect(
+      screen.getByRole('button', { name: 'Send signed copy' }),
+    ).toBeInTheDocument()
+  })
+
+  it('signed by hand (no digital signature): says there is no signed copy', () => {
+    renderModal(
+      {
+        contractStatus: 'contract-signed',
+        signatureStatus: 'signed',
+        contractDocument: {
+          asset: { _ref: 'f1', url: 'https://cdn/unsigned.pdf' },
+        },
+      },
+      'contract',
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(/set manually/)
+  })
+
+  it('signed with no stored document: says so', () => {
+    renderModal(
+      {
+        contractStatus: 'contract-signed',
+        signatureStatus: 'signed',
+        contractSignedBy: 'Kari Nordmann',
+      },
+      'contract',
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(/No signed agreement/)
+  })
+
+  it('says only the signer gets the link once a second recipient is ticked', () => {
+    renderModal({}, 'contract')
+    expect(
+      screen.queryByText(/receives the signing link/),
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    expect(screen.getByText(/receives the signing link/)).toHaveTextContent(
+      'Only Kari Nordmann receives the signing link; the other recipients get a copy without it.',
+    )
+  })
+
+  it('warns when the signer got the link but the copy to the others could not be sent', async () => {
+    h.mutateAsync.mockResolvedValue({
+      success: true,
+      recipientCount: 1,
+      contractAction: 'send',
+      contractCopyFailed: true,
+    })
+    renderModal({}, 'contract')
+    fireEvent.click(screen.getByRole('button', { name: 'Send contract' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'warning', title: 'Copy not sent' }),
+      ),
+    )
+  })
+
+  it('warns when the email went out but the deal could not be updated', async () => {
+    h.mutateAsync.mockResolvedValue({
+      success: true,
+      recipientCount: 1,
+      contractAction: 'send',
+      contractStateFailed: true,
+    })
+    renderModal({}, 'contract')
+    fireEvent.click(screen.getByRole('button', { name: 'Send contract' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'warning', title: 'Deal not updated' }),
+      ),
+    )
+  })
+
+  it('refuses to send when an unmerged {{{VARIABLE}}} placeholder remains in link markDefs or body', async () => {
+    renderModal({}, 'information')
+    draft = {
+      subject: 'Hello {{{TIER_NAME}}}',
+      message: [
+        {
+          _type: 'block',
+          _key: 'b1',
+          style: 'normal',
+          markDefs: [
+            {
+              _key: 'm1',
+              _type: 'link',
+              href: '{{{PROSPECTUS_URL}}}',
+            },
+          ],
+          children: [
+            {
+              _type: 'span',
+              _key: 's1',
+              text: 'View prospectus',
+              marks: ['m1'],
+            },
+          ],
+        },
+      ] as unknown as PortableTextBlock[],
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          title: expect.stringMatching(
+            /Email contains unmerged template variables.*TIER_NAME.*PROSPECTUS_URL/,
+          ),
+        }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('invalidates crm.list and crm.getById after a successful send', async () => {
+    renderModal({}, 'information')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.invalidateCrmList).toHaveBeenCalledTimes(1)
+    expect(h.invalidateCrmGetById).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -914,6 +1522,44 @@ describe('pickDefaultTemplate', () => {
     )
     expect(picked?._id).toBe('no')
   })
+  it('contract: a contract template with the action slug wins over the default contract template', () => {
+    const def = tpl({
+      _id: 'def',
+      isDefault: true,
+      category: 'contract',
+      slug: { current: 'contract-sent' },
+    })
+    const reminder = tpl({
+      _id: 'rem',
+      isDefault: false,
+      category: 'contract',
+      slug: { current: 'contract-reminder' },
+    })
+    const other = tpl({
+      _id: 'oth',
+      isDefault: true,
+      category: 'follow-up',
+      slug: { current: 'contract-reminder' },
+    })
+    expect(
+      pickDefaultTemplate(
+        [def, reminder, other],
+        'contract',
+        {},
+        'contract-reminder',
+      )?._id,
+    ).toBe('rem')
+    expect(
+      pickDefaultTemplate([def, other], 'contract', {}, 'contract-reminder')
+        ?._id,
+    ).toBe('def')
+  })
+
+  it('never preselects a template for a registration send — the built-in welcome is the start', () => {
+    const t = tpl({ _id: 'a', isDefault: true, category: 'follow-up' })
+    expect(pickDefaultTemplate([t], 'registration', {})).toBeUndefined()
+  })
+
   it('never preselects a template for a discount send — none is for codes', () => {
     const info = tpl({ _id: 'info', category: 'follow-up', isDefault: true })
     expect(pickDefaultTemplate([info], 'discount', {})).toBeUndefined()

@@ -50,6 +50,7 @@ export enum Status {
   confirmed = 'confirmed',
   rejected = 'rejected',
   withdrawn = 'withdrawn',
+  canceled = 'canceled',
   deleted = 'deleted',
 }
 
@@ -60,6 +61,7 @@ export enum Status {
 export const INACTIVE_PROPOSAL_STATUSES = [
   Status.rejected,
   Status.withdrawn,
+  Status.canceled,
   Status.deleted,
 ] as const
 
@@ -84,6 +86,7 @@ export enum Action {
   confirm = 'confirm',
   reject = 'reject',
   withdraw = 'withdraw',
+  cancel = 'cancel',
   delete = 'delete',
 }
 
@@ -181,6 +184,11 @@ export interface ProposalExisting extends Proposal {
   _organizationId?: string | null
   reviews?: Review[]
   coSpeakerInvitations?: CoSpeakerInvitationMinimal[]
+  /**
+   * Whether the talk holds a Feedback Code, projected by the programme read
+   * (`EXPANDED_SCHEDULES`) in place of the code itself (#1472).
+   */
+  hasFeedbackCode?: boolean
 }
 
 export interface FormError {
@@ -203,6 +211,7 @@ export const statuses = new Map([
   [Status.confirmed, 'Confirmed'],
   [Status.rejected, 'Rejected'],
   [Status.withdrawn, 'Withdrawn'],
+  [Status.canceled, 'Canceled'],
   [Status.deleted, 'Deleted'],
 ])
 

@@ -30,9 +30,16 @@ interface SponsorTemplatePickerProps {
     organizer?: string
     domains: string[]
     prospectusUrl?: string
+    sponsorRegistrationLink?: string
   }
   senderName?: string
   tierName?: string
+  /** The sponsor's registration (portal) link — a registration send only (#1263). */
+  portalUrl?: string
+  /** Contract sends (#1264): the signer and the formatted contract total. */
+  signerName?: string
+  signerEmail?: string
+  contractValue?: string
   /**
    * The chosen template, variables already merged. The third argument names
    * the template so a caller can record which one a send started from (#1261).
@@ -61,6 +68,10 @@ export function SponsorTemplatePicker({
   conference,
   senderName,
   tierName,
+  portalUrl,
+  signerName,
+  signerEmail,
+  contractValue,
   onApply,
   crmContext,
   excludeCategories,
@@ -84,8 +95,22 @@ export function SponsorTemplatePicker({
         conference,
         senderName,
         tierName,
+        portalUrl,
+        signerName,
+        signerEmail,
+        contractValue,
       }),
-    [sponsorName, contactNames, conference, senderName, tierName],
+    [
+      sponsorName,
+      contactNames,
+      conference,
+      senderName,
+      tierName,
+      portalUrl,
+      signerName,
+      signerEmail,
+      contractValue,
+    ],
   )
 
   const suggestedCategory = useMemo<TemplateCategory | undefined>(

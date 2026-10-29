@@ -5,6 +5,7 @@ import { isUnknownHost } from '@/lib/conference/guard'
 import { isProgramPublished } from '@/lib/conference/state'
 import { ProgramClient } from './ProgramClient'
 import { Sponsors } from '@/components/Sponsors'
+import { HeroAnnouncement } from '@/components/Hero'
 import { DevTimeProvider } from '@/components/program/DevTimeProvider'
 import { DevTimeControl } from '@/components/program/DevTimeControl'
 import { cacheLife, cacheTag } from 'next/cache'
@@ -115,6 +116,10 @@ async function CachedProgramContent({ domain }: { domain: string }) {
             Filter by topic, speaker expertise, or format to build your perfect
             conference experience.
           </p>
+        </div>
+
+        <div className="print:hidden">
+          <HeroAnnouncement conference={conference} />
         </div>
 
         <ProgramClient

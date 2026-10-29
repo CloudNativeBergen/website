@@ -169,11 +169,7 @@ export async function sendPush(
  *   - everything else            → `otherUpdates`
  *       (`proposal_submitted`, `travel_support_update`, `sponsor_activity`,
  *        `gallery_tagged`, `schedule_update`, `social_manual_due`,
- *        `proposal_comment`, `system`)
- *
- * Note: `talkConfirmed` has no hub type mapped to it today — no hub notification
- * is emitted for a talk confirmation — so the category is preserved for future
- * use but never currently fires.
+ *        `system`)
  */
 export function pushCategoryForNotificationType(
   type: NotificationType,

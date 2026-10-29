@@ -7,7 +7,7 @@ import {
 import type { Conference } from '@/lib/conference/types'
 import { formatDate } from '@/lib/time'
 import { emailBrandColor } from '@/lib/branding/theme'
-import { PLATFORM_NAME } from '@/lib/branding/platform'
+import { resolveConferenceFrom } from '@/lib/email/from'
 
 export interface SendSpeakerTicketEmailParams {
   speaker: { name: string; email: string }
@@ -57,7 +57,10 @@ export async function sendSpeakerTicketEmail({
     )
   }
 
-  const from = `${conference.organizer || PLATFORM_NAME} <${fromAddress}>`
+  const from = resolveConferenceFrom(conference, {
+    field: 'cfpEmail',
+    localPart: 'cfp',
+  })
   const subject = `🎟️ Your speaker ticket for ${conference.title}`
 
   const template = SpeakerTicketEmailTemplate({

@@ -357,7 +357,9 @@ export function PlatformOrgManager({
             <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
               Overrides win over the plan in both directions. Beta and internal
               features are only ever enabled through an override; expired
-              overrides are ignored.
+              overrides are ignored. Granting workshops skips its ticketing
+              requirement — the portal still needs the organization&apos;s
+              ticketing connected to admit anyone.
             </p>
             {drafts.length === 0 ? (
               <p className="rounded-lg border border-dashed border-gray-300 px-3 py-3 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">

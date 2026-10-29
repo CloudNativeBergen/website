@@ -78,4 +78,138 @@ describe('a refused audience explains itself to the operator (#893)', () => {
     expect(response.status).toBe(500)
     expect(body.error).toBe('Failed to prepare email audience')
   })
+
+  it('surfaces the Resend error message when broadcast creation fails (e.g. HTTP 422)', async () => {
+    h.getOrCreateConferenceAudience.mockResolvedValue({
+      audienceId: 'aud-123',
+      client: {
+        broadcasts: {
+          create: vi.fn().mockResolvedValue({
+            data: null,
+            error: { message: 'Invalid `from` field: domain not verified' },
+          }),
+        },
+      },
+    })
+
+    const response = await sendBroadcastEmail({
+      conference: { ...conference, contactEmail: 'info@example.test' },
+      subject: 'Hello',
+      messagePortableText: [],
+    })
+    const body = (await response.json()) as { error: string }
+
+    expect(response.status).toBe(500)
+    expect(body.error).toBe(
+      'Failed to create broadcast email: Invalid `from` field: domain not verified',
+    )
+  })
+
+  it('surfaces the Resend error message when broadcast send fails', async () => {
+    h.getOrCreateConferenceAudience.mockResolvedValue({
+      audienceId: 'aud-123',
+      client: {
+        broadcasts: {
+          create: vi.fn().mockResolvedValue({
+            data: { id: 'bc-123' },
+            error: null,
+          }),
+          send: vi.fn().mockResolvedValue({
+            data: null,
+            error: { message: 'Segment has no subscribed contacts' },
+          }),
+        },
+      },
+    })
+
+    const response = await sendBroadcastEmail({
+      conference: { ...conference, contactEmail: 'info@example.test' },
+      subject: 'Hello',
+      messagePortableText: [],
+    })
+    const body = (await response.json()) as { error: string }
+
+    expect(response.status).toBe(500)
+    expect(body.error).toBe(
+      'Failed to send broadcast email: Segment has no subscribed contacts',
+    )
+  })
+
+  it('truncates broadcast internal name to 50 characters while preserving the full subject line', async () => {
+    const createMock = vi.fn().mockResolvedValue({
+      data: { id: 'bc-long' },
+      error: null,
+    })
+    const sendMock = vi.fn().mockResolvedValue({
+      data: { id: 'bc-long' },
+      error: null,
+    })
+    h.getOrCreateConferenceAudience.mockResolvedValue({
+      audienceId: 'aud-123',
+      client: {
+        broadcasts: {
+          create: createMock,
+          send: sendMock,
+        },
+      },
+    })
+
+    const longSubject =
+      'Cloud Native Days Norway 2026 — Thank you for sponsoring and important practical info'
+    const response = await sendBroadcastEmail({
+      conference: { ...conference, contactEmail: 'info@example.test' },
+      subject: longSubject,
+      messagePortableText: [],
+    })
+
+    expect(response.status).toBe(200)
+    expect(createMock).toHaveBeenCalledTimes(1)
+    const callArg = createMock.mock.calls[0][0] as {
+      name: string
+      subject: string
+    }
+    expect(callArg.name.length).toBeLessThanOrEqual(50)
+    expect(callArg.name).toBe(
+      'Cloud Native Days Norway 2026 — Thank you for s...',
+    )
+    expect(callArg.subject).toBe(longSubject)
+  })
+
+  it('truncates without splitting emoji surrogate pairs at the 47-unit cutoff while staying within 50 UTF-16 code units', async () => {
+    const createMock = vi.fn().mockResolvedValue({
+      data: { id: 'bc-emoji' },
+      error: null,
+    })
+    const sendMock = vi.fn().mockResolvedValue({
+      data: { id: 'bc-emoji' },
+      error: null,
+    })
+    h.getOrCreateConferenceAudience.mockResolvedValue({
+      audienceId: 'aud-123',
+      client: {
+        broadcasts: {
+          create: createMock,
+          send: sendMock,
+        },
+      },
+    })
+
+    // 46 ASCII chars + 2-UTF16-unit emoji ('🎉' at indices 46..47) + 10 more ASCII chars
+    const emojiSubject = `${'A'.repeat(46)}🎉${'B'.repeat(10)}`
+    const response = await sendBroadcastEmail({
+      conference: { ...conference, contactEmail: 'info@example.test' },
+      subject: emojiSubject,
+      messagePortableText: [],
+    })
+
+    expect(response.status).toBe(200)
+    const callArg = createMock.mock.calls[0][0] as {
+      name: string
+      subject: string
+    }
+    expect(callArg.name).toBe(`${'A'.repeat(46)}...`)
+    expect(callArg.name.length).toBeLessThanOrEqual(50)
+    expect(callArg.name.isWellFormed()).toBe(true)
+    expect(callArg.subject).toBe(emojiSubject)
+  })
 })

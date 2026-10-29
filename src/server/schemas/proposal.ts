@@ -93,7 +93,14 @@ const ProposalInputBaseSchema = z.object({
     message: 'Terms of Service must be accepted',
   }),
   video: z.string().nullable().optional().transform(nullToUndefined),
-  capacity: z.number().nullable().optional().transform(nullToUndefined),
+  // A seat count (#1344): a fraction would let one more sign-up in unnamed.
+  capacity: z
+    .number()
+    .int('Capacity must be a whole number')
+    .positive('Capacity must be at least 1')
+    .nullable()
+    .optional()
+    .transform(nullToUndefined),
   prerequisites: z
     .string()
     .nullable()
@@ -279,9 +286,22 @@ export const ProposalAdminUpdateSchema = ProposalInputBaseSchema.partial()
   .extend({
     speakers: z
       .array(z.string())
+      .min(1, 'At least one speaker is required')
       .max(MAX_SPEAKERS_PER_PROPOSAL, TOO_MANY_SPEAKERS_MESSAGE)
       .optional(),
   })
+  .refine(
+    (data) => {
+      if (data.format && isWorkshopFormat(data.format) && !data.capacity) {
+        return false
+      }
+      return true
+    },
+    {
+      message: 'Workshop capacity is required for workshop formats',
+      path: ['capacity'],
+    },
+  )
 
 // Proposal action schema
 // Used for validating proposal status change actions (submit, accept, reject, etc.)
@@ -290,6 +310,12 @@ export const ProposalAdminUpdateSchema = ProposalInputBaseSchema.partial()
 export const ProposalActionSchema = z.object({
   action: z.nativeEnum(Action),
   notify: z.boolean().optional().default(true),
+  // Organizer cancel/withdraw only: also send the formal email, even to a
+  // speaker who turned message emails off. Those actions ignore `notify`.
+  forceEmail: z.boolean().optional().default(false),
+  // Organizer cancel/withdraw only: ask organizers (Slack) to cancel the
+  // speaker's ticket by hand. Ignored everywhere else.
+  revokeTicket: z.boolean().optional().default(false),
   comment: z.string().nullable().optional().transform(nullToUndefined),
   reason: z.string().nullable().optional().transform(nullToUndefined),
 })
@@ -393,6 +419,12 @@ export const RemoveCoSpeakerSchema = z.object({
     .string()
     .min(1, 'Speaker ID is required')
     .regex(SANITY_ID_PATTERN, 'Invalid speaker ID'),
+})
+
+// Organizer: take one speaker off a multi-speaker talk.
+export const AdminRemoveSpeakerSchema = RemoveCoSpeakerSchema.extend({
+  comment: z.string().max(5000).optional(),
+  revokeTicket: z.boolean().optional().default(false),
 })
 
 export const AudienceFeedbackSchema = z.object({

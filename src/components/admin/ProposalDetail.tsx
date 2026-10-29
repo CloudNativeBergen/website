@@ -470,6 +470,8 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
               proposalId={proposal._id}
               initialAttachments={proposal.attachments || []}
               readonly={true}
+              allowDelete={true}
+              isAdmin={true}
             />
 
             {/* Proposal Details */}

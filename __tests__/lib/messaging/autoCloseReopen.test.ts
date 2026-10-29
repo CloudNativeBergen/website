@@ -124,14 +124,18 @@ vi.mock('@/lib/sanity/client', () => ({
           id: string,
           fn: (p: {
             set: (payload: Record<string, unknown>) => unknown
+            setIfMissing: (payload: Record<string, unknown>) => unknown
           }) => unknown,
         ) => {
-          fn({
+          const builder = {
             set: (payload: Record<string, unknown>) => {
               patches.push({ id, payload })
               return {}
             },
-          })
+            // addMessage's openedAt marker; the round trip asserts status only.
+            setIfMissing: () => builder,
+          }
+          fn(builder)
           return tx
         },
         commit: async () => {

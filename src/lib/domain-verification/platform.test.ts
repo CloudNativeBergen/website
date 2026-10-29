@@ -2,9 +2,30 @@ import { describe, it, expect, afterEach, vi } from 'vitest'
 import {
   derivePlatformHosts,
   isPlatformZoneHost,
+  platformAliasTarget,
   platformDomainSuffix,
   shouldTakeLatestHost,
 } from './platform'
+
+describe('platformAliasTarget', () => {
+  it('maps www. and m. of the platform zone to the apex', () => {
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    expect(platformAliasTarget('www.konf.run')).toBe('konf.run')
+    expect(platformAliasTarget('M.konf.run')).toBe('konf.run')
+  })
+
+  it('leaves every other host alone', () => {
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    expect(platformAliasTarget('konf.run')).toBeNull()
+    expect(platformAliasTarget('acme.konf.run')).toBeNull()
+    expect(platformAliasTarget('www.example.com')).toBeNull()
+  })
+
+  it('is off when the zone is not configured', () => {
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', undefined)
+    expect(platformAliasTarget('www.konf.run')).toBeNull()
+  })
+})
 
 /**
  * The suffix matcher is the whole security surface of platform-owned

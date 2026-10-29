@@ -32,7 +32,8 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-const { ensureDomainVerification } = await import('./sanity')
+const { ensureDomainVerification, revokeDomainVerification } =
+  await import('./sanity')
 
 const CONFERENCE = 'conference-1'
 
@@ -222,6 +223,82 @@ describe('ensureDomainVerification', () => {
     )
     await ensureDomainVerification('cloudnativedays.no', CONFERENCE)
     expect(createIfNotExists).not.toHaveBeenCalled()
+    expect(commit).not.toHaveBeenCalled()
+  })
+})
+
+describe('which calls write', () => {
+  it('a new claim', async () => {
+    await ensureDomainVerification('cloudnativedays.no', CONFERENCE)
+    expect(createIfNotExists).toHaveBeenCalledTimes(1)
+  })
+
+  it('an allocation of a host this conference already claims', async () => {
+    fetchMock.mockResolvedValue(
+      existing({
+        method: 'dns-txt',
+        status: 'pending',
+        conferenceId: CONFERENCE,
+      }),
+    )
+
+    await ensureDomainVerification('kubeday.konf.run', CONFERENCE, {
+      allocatePlatformHost: true,
+    })
+    expect(commit).toHaveBeenCalledTimes(1)
+  })
+
+  it('a host taken over from another conference', async () => {
+    fetchMock.mockResolvedValue(
+      existing({
+        hostname: 'cloudnativedays.no',
+        method: 'dns-txt',
+        conferenceId: 'conference-other',
+      }),
+    )
+
+    await ensureDomainVerification('cloudnativedays.no', CONFERENCE)
+    expect(commit).toHaveBeenCalledTimes(1)
+  })
+
+  it('not a claim that already has its record', async () => {
+    fetchMock.mockResolvedValue(
+      existing({
+        hostname: 'cloudnativedays.no',
+        method: 'dns-txt',
+        conferenceId: CONFERENCE,
+      }),
+    )
+
+    await ensureDomainVerification('cloudnativedays.no', CONFERENCE)
+    expect(commit).not.toHaveBeenCalled()
+  })
+
+  it('not an in-zone host the caller may not allocate', async () => {
+    await ensureDomainVerification('some-other-tenant.konf.run', CONFERENCE)
+    expect(createIfNotExists).not.toHaveBeenCalled()
+  })
+
+  it('a release by the holder', async () => {
+    fetchMock.mockResolvedValue(existing({ conferenceId: CONFERENCE }))
+
+    await revokeDomainVerification('kubeday.konf.run', CONFERENCE)
+    expect(set).toHaveBeenCalledWith({ status: 'revoked' })
+  })
+
+  it('not a release of a host that has no record', async () => {
+    fetchMock.mockResolvedValue(null)
+
+    await expect(
+      revokeDomainVerification('kubeday.konf.run', CONFERENCE),
+    ).resolves.toBeUndefined()
+    expect(commit).not.toHaveBeenCalled()
+  })
+
+  it('not a release of a host another conference now holds', async () => {
+    fetchMock.mockResolvedValue(existing({ conferenceId: 'conference-other' }))
+
+    await revokeDomainVerification('kubeday.konf.run', CONFERENCE)
     expect(commit).not.toHaveBeenCalled()
   })
 })

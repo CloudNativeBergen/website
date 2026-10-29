@@ -163,6 +163,8 @@ vi.mock('@/lib/trpc/client', () => {
             },
           }),
         },
+        // The talk photos switch on the profile (talk photos spec §7.4).
+        setTalkPhotosOptOut: { useMutation: noopMutation },
         setSocialTagOptOut: {
           useMutation: () => ({
             isPending: false,

@@ -77,7 +77,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     navLabel: 'Team & Content',
     title: 'Team & Content',
     description:
-      'Organizers, teams, contact channels, domains and topics/formats.',
+      'Organizers, teams, contact channels, domains, topics/formats and content judgement.',
   },
 ]
 
@@ -90,3 +90,35 @@ export const SETTINGS_GROUP_ANCHORS: readonly {
 /** Jump-nav anchors for the three tiers. */
 export const SETTINGS_TIER_ANCHORS: readonly { href: string; label: string }[] =
   SETTINGS_TIERS.map((t) => ({ href: `#${t.id}`, label: t.navLabel }))
+
+/**
+ * The Settings page filter: does a card whose searchable text is `haystack`
+ * (card title, group title, field labels) match `query`? Case-insensitive,
+ * every whitespace-separated term must appear somewhere. An empty query
+ * matches everything.
+ */
+export function matchesSettingsQuery(
+  query: string,
+  haystack: readonly string[],
+): boolean {
+  const terms = query.toLocaleLowerCase('nb').split(/\s+/).filter(Boolean)
+  if (terms.length === 0) return true
+  const text = haystack.join(' ').toLocaleLowerCase('nb')
+  return terms.every((term) => text.includes(term))
+}
+
+/**
+ * Whether a URL hash (`#visibility`, `#identity-brand`) points at `root` or at
+ * an element inside it. Collapsible groups use it to open themselves when a
+ * deep link lands on one of their cards.
+ */
+export function hashTargetsWithin(root: Element, hash: string): boolean {
+  if (!hash || hash === '#') return false
+  let id: string
+  try {
+    id = decodeURIComponent(hash.slice(1))
+  } catch {
+    return false
+  }
+  return root.id === id || root.querySelector(`#${CSS.escape(id)}`) !== null
+}

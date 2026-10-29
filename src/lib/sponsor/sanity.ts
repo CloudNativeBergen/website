@@ -303,7 +303,14 @@ export async function updateSponsor(
 export async function deleteSponsor(
   id: string,
   orgId: string | null,
-): Promise<{ error?: Error }> {
+): Promise<{
+  error?: Error
+  /**
+   * The conferences the sponsor was removed from, or, with `error`, the ones
+   * a removal was attempted for and may have landed in.
+   */
+  conferenceIds?: string[]
+}> {
   // FAIL CLOSED: no tenant, no query, no delete.
   if (!orgId) {
     return {
@@ -313,6 +320,10 @@ export async function deleteSponsor(
     }
   }
 
+  // The conferences a delete was ATTEMPTED for: known once the sponsor's
+  // records are read, and answered also when the delete then fails, since a
+  // commit can land and its acknowledgement be lost.
+  let conferenceIds: string[] | undefined
   try {
     const claim = await clientWrite.fetch<{
       sponsorOrg: string | null
@@ -338,17 +349,24 @@ export async function deleteSponsor(
     const sfcDocs = await clientWrite.fetch<
       Array<{
         _id: string
+        conferenceId?: string | null
         contractAssetRef?: string
       }>
     >(
       `*[_type == "sponsorForConference" && sponsor._ref == $id]{
         _id,
+        "conferenceId": conference._ref,
         "contractAssetRef": contractDocument.asset._ref
       }`,
       { id },
     )
 
     const sfcIds = sfcDocs.map((d) => d._id)
+    conferenceIds = [
+      ...new Set(
+        sfcDocs.flatMap((d) => (d.conferenceId ? [d.conferenceId] : [])),
+      ),
+    ]
 
     // Find related activity documents for all sponsorForConference records
     let relatedActivityIds: string[] = []
@@ -394,9 +412,9 @@ export async function deleteSponsor(
     }
     await transaction.commit()
 
-    return {}
+    return { conferenceIds }
   } catch (error) {
-    return { error: error as Error }
+    return { error: error as Error, conferenceIds }
   }
 }
 
@@ -613,6 +631,28 @@ export async function getSponsorEmailTemplateBySlug(
     const orgId = await getOrganizationRefForCurrentConference()
     // FAIL CLOSED (#616/#19): no tenant → not found, never a global read.
     if (!orgId) return { template: undefined }
+    const template = await scopedFetch<SponsorEmailTemplate | null>(
+      clientWrite,
+      { orgId },
+      `*[_type == "sponsorEmailTemplate" && slug.current == $slug][0] ${EMAIL_TEMPLATE_PROJECTION}`,
+      { slug },
+    )
+    return { template: template ?? undefined }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+/**
+ * The same read for a KNOWN org — for a system job that sweeps every tenant
+ * and has no request domain to resolve one from (#1264, the contract reminder
+ * cron). The org comes off the sponsor's own conference, never from input.
+ */
+export async function getSponsorEmailTemplateBySlugForOrg(
+  orgId: string,
+  slug: string,
+): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
+  try {
     const template = await scopedFetch<SponsorEmailTemplate | null>(
       clientWrite,
       { orgId },

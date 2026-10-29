@@ -50,13 +50,27 @@ function err(status: number, body = ''): JsonResponse {
 function stubTitoFetch(handlers: {
   event?: unknown
   releases?: unknown[]
+  /** Releases as Tito pages them: each request answers the next entry. */
+  releasePages?: Array<{ releases: unknown[]; nextPage: number | null }>
   ticketPages?: Array<{ tickets: unknown[]; nextPage: number | null }>
   authStatus?: number
 }) {
   let ticketCall = 0
+  let releaseCall = 0
   return vi.fn(async (url: string) => {
     if (handlers.authStatus) return err(handlers.authStatus, 'denied')
     if (url.includes('/releases')) {
+      if (handlers.releasePages) {
+        const page = handlers.releasePages[releaseCall] ?? {
+          releases: [],
+          nextPage: null,
+        }
+        releaseCall++
+        return ok({
+          releases: page.releases,
+          meta: { next_page: page.nextPage },
+        })
+      }
       return ok({ releases: handlers.releases ?? [] })
     }
     if (url.includes('/tickets')) {
@@ -203,6 +217,121 @@ describe('TitoProvider — fetchPublicTicketTypes', () => {
   })
 })
 
+/**
+ * RELEASES ARE PAGED TOO. Tito's Admin API 3.0: "Endpoints which enumerate
+ * objects are paginated", 100 to a page by default, with the next page number
+ * in `meta.next_page`. The ticket types of an event are its releases, and the
+ * workshop-ticket list calls a stored answer ORPHANED when no listed type
+ * carries its name, and offers to remove it. Reading only the first page made
+ * every valid answer for a type on a later page look orphaned. So the list is
+ * read whole, or not at all.
+ */
+describe('TitoProvider — fetchPublicTicketTypes, every page of releases', () => {
+  const releaseRequests = (fetchSpy: ReturnType<typeof stubTitoFetch>) =>
+    fetchSpy.mock.calls
+      .map(([url]) => url)
+      .filter((url) => url.includes('/releases'))
+
+  it('returns two pages as one list, in order', async () => {
+    const fetchSpy = stubTitoFetch({
+      releasePages: [
+        {
+          releases: [
+            { id: 1, title: 'Early Bird' },
+            { id: 2, title: 'Conference' },
+          ],
+          nextPage: 2,
+        },
+        { releases: [{ id: 3, title: 'Workshop day' }], nextPage: null },
+      ],
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { tickets } = await getTicketingProvider(
+      'tito',
+      CREDS,
+    ).fetchPublicTicketTypes(TITO_REF)
+
+    expect(tickets.map((t) => t.name)).toEqual([
+      'Early Bird',
+      'Conference',
+      'Workshop day',
+    ])
+    // A release with no position of its own takes its place in the WHOLE
+    // list: the count does not start again on the second page.
+    expect(tickets.map((t) => t.position)).toEqual([0, 1, 2])
+    expect(releaseRequests(fetchSpy)).toEqual([
+      `${TITO_API_URL}/acme/2026/releases?page[number]=1`,
+      `${TITO_API_URL}/acme/2026/releases?page[number]=2`,
+    ])
+  })
+
+  it('makes one releases request when there is no next page', async () => {
+    const fetchSpy = stubTitoFetch({
+      releasePages: [{ releases: [{ id: 1, title: 'Only' }], nextPage: null }],
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { tickets } = await getTicketingProvider(
+      'tito',
+      CREDS,
+    ).fetchPublicTicketTypes(TITO_REF)
+
+    expect(tickets.map((t) => t.name)).toEqual(['Only'])
+    expect(releaseRequests(fetchSpy)).toHaveLength(1)
+  })
+
+  it('makes one releases request when the answer carries no `meta` at all', async () => {
+    const fetchSpy = stubTitoFetch({ releases: [{ id: 1, title: 'Only' }] })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await getTicketingProvider('tito', CREDS).fetchPublicTicketTypes(TITO_REF)
+
+    expect(releaseRequests(fetchSpy)).toHaveLength(1)
+  })
+
+  it('throws instead of returning a partial list when the pages never end', async () => {
+    // Every page names another: a looping cursor. A partial list would make
+    // the types that were not read look like they do not exist.
+    const fetchSpy = vi.fn(async (url: string) =>
+      ok(
+        url.includes('/releases')
+          ? { releases: [{ id: 1, title: 'Again' }], meta: { next_page: 2 } }
+          : { event: {} },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await expect(
+      getTicketingProvider('tito', CREDS).fetchPublicTicketTypes(TITO_REF),
+    ).rejects.toThrow(
+      /Tito release pagination exceeded 100 pages for acme\/2026 — refusing to return partial data/,
+    )
+    // Bounded: it stopped at the cap.
+    expect(
+      fetchSpy.mock.calls.filter(([url]) => url.includes('/releases')),
+    ).toHaveLength(100)
+  })
+
+  it('throws when a later page cannot be read, rather than returning the first', async () => {
+    const fetchSpy = vi.fn(async (url: string) =>
+      !url.includes('/releases')
+        ? ok({ event: {} })
+        : url.endsWith('page[number]=1')
+          ? ok({
+              releases: [{ id: 1, title: 'Early Bird' }],
+              meta: { next_page: 2 },
+            })
+          : err(500, 'boom'),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await expect(
+      getTicketingProvider('tito', CREDS).fetchPublicTicketTypes(TITO_REF),
+    ).rejects.toThrow(/Tito API request failed: 500/)
+  })
+})
+
 describe('TitoProvider — fetchEventTickets', () => {
   it('maps email/name/release/state and follows pagination', async () => {
     const fetchSpy = stubTitoFetch({
@@ -256,6 +385,117 @@ describe('TitoProvider — fetchEventTickets', () => {
     expect(tickets[1].order_id).toBe(-2)
     // Page 1 then page 2 were both fetched.
     expect(fetchSpy).toHaveBeenCalledTimes(2)
+  })
+
+  // Tito's list excludes void tickets unless asked for them; this must not
+  // depend on that default, because a void ticket would otherwise count as a
+  // holder for the workshop gate and the instructions resend.
+  it('never returns a void ticket, whatever the API hands back', async () => {
+    vi.stubGlobal(
+      'fetch',
+      stubTitoFetch({
+        ticketPages: [
+          {
+            tickets: [
+              { id: 1, email: 'held@example.com', state: 'complete' },
+              { id: 2, email: 'voided@example.com', state: 'void' },
+              // Details not finished, but a valid ticket: kept.
+              { id: 3, email: 'partial@example.com', state: 'incomplete' },
+            ],
+            nextPage: null,
+          },
+        ],
+      }),
+    )
+
+    const tickets = await getTicketingProvider('tito', CREDS).fetchEventTickets(
+      TITO_REF,
+    )
+
+    expect(tickets.map((t) => t.crm.email)).toEqual([
+      'held@example.com',
+      'partial@example.com',
+    ])
+  })
+
+  it('excludes void tickets and cancelled or refunded registrations', async () => {
+    let requestedUrl = ''
+    vi.stubGlobal('fetch', async (url: string) => {
+      requestedUrl = url
+      return ok({
+        tickets: [
+          { id: 1, email: 'active@example.com', state: 'complete' },
+          { id: 2, email: 'ticket-void@example.com', state: 'void' },
+          ...[
+            'cancelled',
+            'customer_cancelled',
+            'payment_declined',
+            'errored',
+          ].map((state, i) => ({
+            id: 10 + i,
+            email: `reg-${state}@example.com`,
+            state: 'complete',
+            registration: { state },
+          })),
+          {
+            id: 20,
+            email: 'reg-refunded@example.com',
+            state: 'complete',
+            registration: { state: 'complete', refunded: true },
+          },
+        ],
+        meta: { next_page: null },
+      })
+    })
+
+    const tickets = await getTicketingProvider('tito', CREDS).fetchEventTickets(
+      TITO_REF,
+    )
+
+    expect(requestedUrl).toContain('view=extended')
+    expect(tickets.map((t) => t.crm.email)).toEqual(['active@example.com'])
+  })
+
+  it('treats incomplete attendee questionnaire as paid when registration is complete', async () => {
+    vi.stubGlobal(
+      'fetch',
+      stubTitoFetch({
+        ticketPages: [
+          {
+            tickets: [
+              {
+                id: 10,
+                email: 'attendee@example.com',
+                release_title: 'Conference Pass',
+                price: '2500.0',
+                state: 'incomplete', // Questionnaire not filled
+                registration: { state: 'complete', paid: true },
+              },
+              {
+                // `paid: false` = free registration type, not unpaid.
+                id: 11,
+                email: 'free@example.com',
+                release_title: 'Free Pass',
+                price: '0.0',
+                state: 'incomplete',
+                registration: { state: 'complete', paid: false },
+              },
+            ],
+            nextPage: null,
+          },
+        ],
+      }),
+    )
+
+    const tickets = await getTicketingProvider('tito', CREDS).fetchEventTickets(
+      TITO_REF,
+    )
+
+    expect(tickets).toHaveLength(2)
+    expect(tickets[0].order?.paid).toBe(true)
+    expect(tickets[1].order?.paid).toBe(true)
+    expect(tickets[0].sum).toBe('2500.0')
+    expect(tickets[0].sum_left).toBe('0')
   })
 
   it('throws instead of returning partial data when pagination never ends', async () => {

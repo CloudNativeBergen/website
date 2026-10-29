@@ -18,6 +18,11 @@ const h = vi.hoisted(() => ({
   getConference: vi.fn(),
 }))
 
+vi.mock('next/navigation', () => ({
+  permanentRedirect: (url: string) => {
+    throw new Error(`REDIRECT ${url}`)
+  },
+}))
 vi.mock('next/headers', () => ({
   headers: async () => new Headers({ host: 'cloudnativebergen.dev' }),
 }))
@@ -33,6 +38,8 @@ vi.mock('@/components/admin/sponsor-crm', () => ({
 }))
 
 import AdminSponsorsCRM from '@/app/(admin)/admin/sponsors/crm/page'
+
+const noParams = () => ({ searchParams: Promise.resolve({}) })
 
 afterEach(cleanup)
 beforeEach(() => {
@@ -50,7 +57,7 @@ beforeEach(() => {
 describe('/admin/sponsors/crm', () => {
   it('renders the denial and never performs the privileged read for a non-organizer', async () => {
     h.deny.mockResolvedValue(<div>Access Denied</div>)
-    render(await AdminSponsorsCRM())
+    render(await AdminSponsorsCRM(noParams()))
     expect(screen.getByText('Access Denied')).toBeInTheDocument()
     expect(h.getConference).not.toHaveBeenCalled()
     expect(screen.queryByTestId('crm-client')).not.toBeInTheDocument()
@@ -58,10 +65,18 @@ describe('/admin/sponsors/crm', () => {
 
   it('reads WITH the sponsor registration link for an organizer', async () => {
     h.deny.mockResolvedValue(null)
-    render(await AdminSponsorsCRM())
+    render(await AdminSponsorsCRM(noParams()))
     expect(h.getConference).toHaveBeenCalledWith(
       expect.objectContaining({ includeSponsorRegistrationLink: true }),
     )
     expect(screen.getByTestId('crm-client')).toBeInTheDocument()
+  })
+
+  it('redirects an old modal link to the sponsor page', async () => {
+    await expect(
+      AdminSponsorsCRM({
+        searchParams: Promise.resolve({ sponsor: 'sfc-1', view: 'history' }),
+      }),
+    ).rejects.toThrow('REDIRECT /admin/sponsors/sfc-1?view=history')
   })
 })

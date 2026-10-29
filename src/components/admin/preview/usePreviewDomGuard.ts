@@ -20,7 +20,6 @@ import { CAPTURE_ATTR_PREFIX, CTA_CAPTURE_ATTR } from '@/lib/analytics'
  * attribute. Without this guard, an organizer nudging their hero copy for ten
  * minutes would post a dozen `cta-tickets-hero` conversions into their own
  * statistics, and nothing downstream could tell those from real visitors.
- * (The same held for Pirsch's `pa.js` before the cutover.)
  *
  * `preventDefault` does NOT help: it stops the navigation, not the analytics
  * listener. The only reliable defence is to make the attribute absent when the

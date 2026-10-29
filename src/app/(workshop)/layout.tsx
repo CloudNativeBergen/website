@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components'
 import { Layout } from '@/components/Layout'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
@@ -27,9 +26,9 @@ export default async function WorkshopLayout({
     notFound()
   }
 
-  return (
-    <Layout conference={conference}>
-      <AuthKitProvider>{children}</AuthKitProvider>
-    </Layout>
-  )
+  // NO SESSION PROVIDER (#1296, #1311). The portal's session is its own sealed
+  // cookie, read on the server by the page and by tRPC; nothing here needs a
+  // client context, and no WorkOS SDK is imported by the application at all.
+  // Guarded by `no-authkit-sdk.test.ts`.
+  return <Layout conference={conference}>{children}</Layout>
 }

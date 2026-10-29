@@ -4,6 +4,7 @@ import { Speaker, Flags } from '@/lib/speaker/types'
 import {
   ProposalExisting,
   Status,
+  Action,
   Format,
   languages,
   formats,
@@ -17,6 +18,8 @@ import {
   ArrowRightCircleIcon,
   StarIcon,
   DocumentTextIcon,
+  NoSymbolIcon,
+  UserMinusIcon,
   TicketIcon,
 } from '@heroicons/react/24/outline'
 import { AppEnvironment } from '@/lib/environment/config'
@@ -25,15 +28,24 @@ import { SpeakerIndicators } from '@/lib/proposal'
 import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
 import { FilterDropdown, FilterOption } from '@/components/admin'
 import {
+  AdminFilterBar,
+  type FilterGroup,
+} from '@/components/admin/AdminFilterBar'
+import {
   ActionMenu,
   ActionMenuItem,
   ActionMenuDivider,
 } from '@/components/ActionMenu'
-import { useState, useMemo } from 'react'
+import { Fragment, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
 import { invitationLetterHref } from '@/lib/invitation-letter/prefill'
-import { hasConfirmedTalkAtConference } from '@/lib/invitation-letter/sessions'
+import {
+  hasConfirmedTalkAtConference,
+  proposalConferenceId,
+} from '@/lib/invitation-letter/sessions'
+import { ProposalActionModal } from '@/components/admin/ProposalActionModal'
+import { RemoveSpeakerModal } from '@/components/admin/RemoveSpeakerModal'
 import { hasBlueskySocial, extractHandleFromUrl } from '@/lib/bluesky/utils'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { api } from '@/lib/trpc/client'
@@ -44,13 +56,18 @@ import {
   TableBody,
   Tr,
   Td,
-  TableToolbar,
   TableEmptyState,
 } from '@/components/DataTable'
 import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { SpeakerTicketBadge } from '@/components/admin/SpeakerTicketBadge'
 import type { SpeakerTicketStatus } from '@/lib/tickets/speakerStatus'
+import {
+  discoverTicketQuestions,
+  resolveSpeakerAnswer,
+  resolveSpeakerAnswers,
+  type DiscoveredTicketQuestion,
+} from '@/lib/tickets/questions'
 
 const extractLinkedInLink = (links: string[] | undefined): string | null => {
   if (!links) return null
@@ -81,6 +98,8 @@ interface SpeakerTableProps {
   ticketStatuses?: Record<string, SpeakerTicketStatus>
   /** The status query is still in flight — the map is not yet an answer. */
   ticketStatusesLoading?: boolean
+  /** Discovered ticket questions from the provider event tickets. */
+  ticketQuestions?: DiscoveredTicketQuestion[]
   /**
    * Issue (or re-issue) one speaker's ticket invitation. Omitted by callers
    * that cannot send; `SpeakerTicketBadge` decides which states offer it.
@@ -111,6 +130,19 @@ interface ColumnVisibility {
   linkedin: boolean
   indicators: boolean
   ticket: boolean
+  talks: boolean
+  questions: boolean
+  [key: string]: boolean
+}
+
+const COLUMN_LABELS: Record<string, string> = {
+  email: 'Email',
+  bluesky: 'Bluesky',
+  linkedin: 'LinkedIn',
+  indicators: 'Indicators',
+  ticket: 'Ticket',
+  talks: 'Talks',
+  questions: 'All Ticket Questions',
 }
 
 interface FilterOptions {
@@ -121,7 +153,26 @@ interface FilterOptions {
   travelSupportSpeakers: boolean
   /** Speakers whose complimentary ticket is demonstrably unclaimed. */
   ticketNotRedeemed: boolean
+  /** Registration claim state filter: 'all' | 'redeemed' | 'invited' | 'not-invited' */
+  ticketClaimState: string
+  /** Dynamic question filters keyed by question id -> selected answer */
+  questionAnswers: Record<string, string>
 }
+
+type SpeakerTypeFlag =
+  | 'newSpeakers'
+  | 'localSpeakers'
+  | 'underrepresentedSpeakers'
+  | 'travelSupportSpeakers'
+  | 'ticketNotRedeemed'
+
+const SPEAKER_TYPE_OPTIONS: { value: SpeakerTypeFlag; label: string }[] = [
+  { value: 'newSpeakers', label: 'New speakers only' },
+  { value: 'localSpeakers', label: 'Local speakers only' },
+  { value: 'underrepresentedSpeakers', label: 'Underrepresented speakers' },
+  { value: 'travelSupportSpeakers', label: 'Travel support needed' },
+  { value: 'ticketNotRedeemed', label: 'Ticket not claimed (chase list)' },
+]
 
 const getCompactFormat = (format: Format): string => {
   const fullFormat = formats.get(format)
@@ -168,6 +219,7 @@ function getProposalBadgeColor(status: Status): BadgeColor {
     case Status.rejected:
       return 'red'
     case Status.withdrawn:
+    case Status.canceled:
     default:
       return 'gray'
   }
@@ -224,6 +276,7 @@ export function SpeakerTable({
   featuredSpeakerIds = [],
   ticketStatuses,
   ticketStatusesLoading = false,
+  ticketQuestions,
   onFindTicket,
   onSendTicketInvitation,
   sendingTicketSpeakerIds,
@@ -240,6 +293,8 @@ export function SpeakerTable({
     underrepresentedSpeakers: false,
     travelSupportSpeakers: false,
     ticketNotRedeemed: false,
+    ticketClaimState: 'all',
+    questionAnswers: {},
   })
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibility>({
     email: true,
@@ -247,9 +302,26 @@ export function SpeakerTable({
     linkedin: false,
     indicators: true,
     ticket: true,
+    talks: true,
+    questions: false,
   })
 
+  // Discovered questions: prefer server-provided ticketQuestions, or fallback to inspecting ticketStatuses locally
+  const discoveredQuestions = useMemo<DiscoveredTicketQuestion[]>(() => {
+    if (ticketQuestions && ticketQuestions.length > 0) {
+      return ticketQuestions
+    }
+    if (!ticketStatuses) return []
+    return discoverTicketQuestions(Object.values(ticketStatuses))
+  }, [ticketQuestions, ticketStatuses])
+
   const router = useRouter()
+  const [proposalToCancel, setProposalToCancel] =
+    useState<ProposalExisting | null>(null)
+  const [speakerToRemove, setSpeakerToRemove] = useState<{
+    proposal: ProposalExisting
+    speaker: SpeakerWithProposals
+  } | null>(null)
   const addFeaturedSpeaker = api.featured.admin.addSpeaker.useMutation()
   const removeFeaturedSpeaker = api.featured.admin.removeSpeaker.useMutation()
 
@@ -306,21 +378,40 @@ export function SpeakerTable({
         !filters.travelSupportSpeakers ||
         (speaker.flags && speaker.flags.includes(Flags.requiresTravelFunding))
 
-      // Only states we can PROVE are unclaimed. `unknown` (provider down) and a
-      // missing status are excluded — a chase list must not be padded with
-      // people we simply could not read.
-      //
-      // WHILE THE READ IS IN FLIGHT THE FILTER CANNOT ANSWER, so it excludes
-      // nobody and the toolbar says it is still loading. Filtering on an empty
-      // map would render "no speakers to chase" during the 10-30s a large
-      // event's provider fetch takes — absence of data shown as an answer,
-      // the same mistake as treating a failed query as "nobody matches".
-      const ticketState = ticketStatuses?.[speaker._id]?.state
+      const ticketStatus = ticketStatuses?.[speaker._id]
+      const ticketState = ticketStatus?.state
+
       const matchesTicketNotRedeemed =
         !filters.ticketNotRedeemed ||
         ticketStatusesLoading ||
         ticketState === 'invited' ||
         ticketState === 'not-invited'
+
+      const matchesTicketClaimState =
+        filters.ticketClaimState === 'all' ||
+        ticketStatusesLoading ||
+        ticketState === filters.ticketClaimState
+
+      // Check dynamic question answers
+      const matchesQuestionAnswers = Object.entries(
+        filters.questionAnswers,
+      ).every(([qId, expectedVal]) => {
+        if (!expectedVal || expectedVal === 'all') return true
+        const q = discoveredQuestions.find((dq) => dq.id === qId)
+        if (!q) return true
+        const answers = resolveSpeakerAnswers(ticketStatus, q)
+        if (expectedVal === '__unanswered__') {
+          // A known ticket state is required: during provider outage (unknown) or while loading,
+          // tickets cannot be verified as unanswered.
+          if (!ticketStatus || ticketStatus.state === 'unknown') {
+            return false
+          }
+          return answers.length === 0
+        }
+        return answers.some(
+          (ans) => ans.toLowerCase() === expectedVal.toLowerCase(),
+        )
+      })
 
       return (
         matchesSearch &&
@@ -329,7 +420,9 @@ export function SpeakerTable({
         matchesLocalSpeaker &&
         matchesUnderrepresentedSpeaker &&
         matchesTravelSupportSpeaker &&
-        matchesTicketNotRedeemed
+        matchesTicketNotRedeemed &&
+        matchesTicketClaimState &&
+        matchesQuestionAnswers
       )
     })
   }, [
@@ -339,9 +432,29 @@ export function SpeakerTable({
     currentConferenceId,
     ticketStatuses,
     ticketStatusesLoading,
+    discoveredQuestions,
   ])
 
-  const toggleColumnVisibility = (column: keyof ColumnVisibility) => {
+  const { copied: copiedAllEmails, copyToClipboard: copyAllEmails } =
+    useCopyToClipboard()
+
+  const filteredEmails = useMemo(() => {
+    const seen = new Set<string>()
+    const emails: string[] = []
+    for (const speaker of filteredSpeakers) {
+      const email = speaker.email?.trim()
+      if (!email) continue
+      const key = email.toLowerCase()
+      if (!seen.has(key)) {
+        seen.add(key)
+        emails.push(email)
+      }
+    }
+    return emails
+  }, [filteredSpeakers])
+  const emailCountLabel = `${filteredEmails.length} ${filteredEmails.length === 1 ? 'email' : 'emails'}`
+
+  const toggleColumnVisibility = (column: string) => {
     setColumnVisibility((prev) => ({
       ...prev,
       [column]: !prev[column],
@@ -357,21 +470,164 @@ export function SpeakerTable({
       underrepresentedSpeakers: false,
       travelSupportSpeakers: false,
       ticketNotRedeemed: false,
+      ticketClaimState: 'all',
+      questionAnswers: {},
     })
   }
 
-  const hasActiveFilters =
-    searchTerm !== '' ||
-    filters.status !== 'all' ||
-    filters.newSpeakers ||
-    filters.localSpeakers ||
-    filters.underrepresentedSpeakers ||
-    filters.travelSupportSpeakers ||
-    filters.ticketNotRedeemed
+  const activeQuestionFilterCount = Object.values(
+    filters.questionAnswers,
+  ).filter((v) => v && v !== 'all').length
 
-  const activeFilterCount = Object.values(filters).filter((value) =>
-    typeof value === 'boolean' ? value : value !== 'all',
-  ).length
+  const activeFilterCount =
+    (filters.status !== 'all' ? 1 : 0) +
+    (filters.newSpeakers ? 1 : 0) +
+    (filters.localSpeakers ? 1 : 0) +
+    (filters.underrepresentedSpeakers ? 1 : 0) +
+    (filters.travelSupportSpeakers ? 1 : 0) +
+    (filters.ticketNotRedeemed ? 1 : 0) +
+    (filters.ticketClaimState !== 'all' ? 1 : 0) +
+    activeQuestionFilterCount
+
+  const setFlag = (key: SpeakerTypeFlag) =>
+    setFilters((prev) => ({ ...prev, [key]: !prev[key] }))
+
+  const choiceQuestions = discoveredQuestions.filter((q) => q.type === 'choice')
+
+  const filterGroups: FilterGroup[] = (
+    [
+      {
+        key: 'status',
+        label: 'Status',
+        multi: false,
+        defaultValue: 'all',
+        selected: [filters.status],
+        options: [
+          { value: 'all', label: 'All' },
+          { value: 'confirmed', label: 'Confirmed' },
+          { value: 'accepted', label: 'Accepted' },
+        ],
+        onChange: (value) => setFilters((prev) => ({ ...prev, status: value })),
+      },
+      {
+        key: 'speakerType',
+        label: 'Speaker Type',
+        width: 'wide',
+        selected: SPEAKER_TYPE_OPTIONS.filter((o) => filters[o.value]).map(
+          (o) => o.value,
+        ),
+        options: SPEAKER_TYPE_OPTIONS,
+        onChange: (value) => setFlag(value as SpeakerTypeFlag),
+      },
+      {
+        key: 'ticket',
+        label: 'Ticket',
+        multi: false,
+        defaultValue: 'all',
+        width: 'wide',
+        selected: [filters.ticketClaimState],
+        options: [
+          { value: 'all', label: 'All states' },
+          { value: 'redeemed', label: 'Ticket Claimed' },
+          { value: 'invited', label: 'Ticket Invited (Pending)' },
+          { value: 'not-invited', label: 'Ticket Not Invited' },
+        ],
+        onChange: (value) =>
+          setFilters((prev) => ({ ...prev, ticketClaimState: value })),
+      },
+      {
+        key: 'ticketAnswers',
+        label: 'Ticket answers',
+        width: 'wider',
+        // One answer per question; the value is `${questionId}\n${answer}`.
+        selected: Object.entries(filters.questionAnswers)
+          .filter(([, answer]) => answer && answer !== 'all')
+          .map(([id, answer]) => `${id}\n${answer}`),
+        options: choiceQuestions.flatMap((q) =>
+          [...(q.options ?? []), '__unanswered__'].map((opt, i) => ({
+            value: `${q.id}\n${opt}`,
+            label: opt === '__unanswered__' ? 'Unanswered / Unclaimed' : opt,
+            heading: i === 0 ? q.label : undefined,
+          })),
+        ),
+        onChange: (value) => {
+          const cut = value.indexOf('\n')
+          const id = value.slice(0, cut)
+          const answer = value.slice(cut + 1)
+          setFilters((prev) => ({
+            ...prev,
+            questionAnswers: {
+              ...prev.questionAnswers,
+              [id]: prev.questionAnswers[id] === answer ? 'all' : answer,
+            },
+          }))
+        },
+      },
+    ] satisfies FilterGroup[]
+  ).filter((g) => g.key !== 'ticketAnswers' || choiceQuestions.length > 0)
+
+  const columnsDropdown = (
+    <FilterDropdown
+      label="Columns"
+      activeCount={Object.values(columnVisibility).filter(Boolean).length}
+      position="right"
+      width="wider"
+      size="sm"
+    >
+      <div className="p-1.5">
+        <div className="mb-2">
+          <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
+            General Columns
+          </label>
+          <div className="space-y-0.5">
+            {(
+              [
+                'ticket',
+                'email',
+                'talks',
+                'indicators',
+                'linkedin',
+                'bluesky',
+                'questions',
+              ] as const
+            ).map((col) => (
+              <FilterOption
+                key={col}
+                checked={columnVisibility[col]}
+                onClick={() => toggleColumnVisibility(col)}
+                keepOpen
+              >
+                {COLUMN_LABELS[col]}
+              </FilterOption>
+            ))}
+          </div>
+        </div>
+
+        {discoveredQuestions.length > 0 && (
+          <div className="border-t border-gray-200 pt-2 dark:border-gray-600">
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
+              Question Columns
+            </label>
+            <div className="space-y-0.5">
+              {discoveredQuestions.map((q) => {
+                const colKey = `q_${q.id}` as `q_${string}`
+                return (
+                  <FilterOption
+                    key={q.id}
+                    checked={Boolean(columnVisibility[colKey])}
+                    onClick={() => toggleColumnVisibility(colKey)}
+                    keepOpen
+                  >
+                    {q.label}
+                  </FilterOption>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </FilterDropdown>
+  )
 
   const renderSpeakerTalks = (speaker: SpeakerWithProposals) => (
     <div className="space-y-1">
@@ -414,6 +670,86 @@ export function SpeakerTable({
         ))}
     </div>
   )
+
+  const renderTicketQuestions = (speaker: SpeakerWithProposals) => {
+    const status = ticketStatuses?.[speaker._id]
+    if (!status)
+      return <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+
+    const hasQuestions =
+      (status.fields?.length ?? 0) > 0 || (status.additionals?.length ?? 0) > 0
+    if (!hasQuestions)
+      return <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+
+    return (
+      <div className="space-y-1">
+        {status.fields?.map((f, i) => (
+          <div key={`f-${i}`} className="text-xs">
+            <span className="font-medium text-gray-900 dark:text-white">
+              {f.key}:
+            </span>{' '}
+            <span className="text-gray-700 dark:text-gray-300">{f.value}</span>
+          </div>
+        ))}
+        {status.additionals?.map((a, i) => (
+          <div key={`a-${i}`} className="text-xs">
+            <span className="font-medium text-gray-900 dark:text-white">
+              {a.name}:
+            </span>{' '}
+            <span className="text-gray-700 dark:text-gray-300">{a.value}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  const renderQuestionCell = (
+    speaker: SpeakerWithProposals,
+    question: DiscoveredTicketQuestion,
+  ) => {
+    const status = ticketStatuses?.[speaker._id]
+    const answer = resolveSpeakerAnswer(status, question)
+
+    if (!answer) {
+      return <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+    }
+
+    if (question.type === 'choice') {
+      const isYes = answer.toLowerCase() === 'yes'
+      const isNo = answer.toLowerCase() === 'no'
+      return (
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+            isYes
+              ? 'bg-green-50 text-green-700 ring-1 ring-green-600/20 dark:bg-green-950/40 dark:text-green-300 dark:ring-green-500/30'
+              : isNo
+                ? 'bg-gray-100 text-gray-600 ring-1 ring-gray-500/20 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700'
+                : 'bg-blue-50 text-blue-700 ring-1 ring-blue-600/20 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-500/30'
+          }`}
+        >
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              isYes
+                ? 'bg-green-600 dark:bg-green-400'
+                : isNo
+                  ? 'bg-gray-400'
+                  : 'bg-blue-600 dark:bg-blue-400'
+            }`}
+          />
+          {answer}
+        </span>
+      )
+    }
+
+    return (
+      <span
+        className="block truncate text-xs text-gray-900 dark:text-white"
+        title={answer}
+      >
+        {answer}
+      </span>
+    )
+  }
 
   const renderSpeakerActions = (speaker: SpeakerWithProposals) => (
     <ActionMenu ariaLabel={`Actions for ${speaker.name}`}>
@@ -471,7 +807,6 @@ export function SpeakerTable({
           organizer may legitimately issue a speaker letter by hand. */}
       {hasConfirmedTalkAtConference(speaker.proposals, currentConferenceId) && (
         <ActionMenuItem
-          onClick={() => {}}
           href={invitationLetterHref({
             fullName: speaker.name,
             email: speaker.email,
@@ -484,6 +819,39 @@ export function SpeakerTable({
           Issue Invitation Letter
         </ActionMenuItem>
       )}
+      {speaker.proposals
+        .filter(
+          (proposal) =>
+            (proposal.status === Status.accepted ||
+              proposal.status === Status.confirmed) &&
+            proposalConferenceId(proposal) === currentConferenceId,
+        )
+        .map((proposal) => (
+          <Fragment key={proposal._id}>
+            <ActionMenuItem
+              // The table's proposals carry speaker refs, not names; name the
+              // row's speaker.
+              onClick={() =>
+                setProposalToCancel({ ...proposal, speakers: [speaker] })
+              }
+              icon={NoSymbolIcon}
+              variant="danger"
+              title={`Cancel talk: ${proposal.title}`}
+            >
+              Cancel talk: {proposal.title}
+            </ActionMenuItem>
+            {(proposal.speakers?.length ?? 0) > 1 && (
+              <ActionMenuItem
+                variant="danger"
+                title={`Remove from talk: ${proposal.title}`}
+                onClick={() => setSpeakerToRemove({ proposal, speaker })}
+                icon={UserMinusIcon}
+              >
+                Remove from talk: {proposal.title}
+              </ActionMenuItem>
+            )}
+          </Fragment>
+        ))}
       {AppEnvironment.isDevelopment && (
         <>
           <ActionMenuDivider />
@@ -527,161 +895,58 @@ export function SpeakerTable({
 
   return (
     <div className="space-y-4">
-      <TableToolbar
-        searchValue={searchTerm}
-        onSearchChange={setSearchTerm}
-        searchPlaceholder="Search speakers..."
-        showClearButton={hasActiveFilters}
-        onClear={resetFilters}
+      <AdminFilterBar
+        filters={filterGroups}
+        search={{
+          value: searchTerm,
+          onChange: setSearchTerm,
+          placeholder: 'Search speakers...',
+        }}
+        onClearAll={resetFilters}
+        activeFilterCount={activeFilterCount}
         resultCount={filteredSpeakers.length}
         totalCount={speakers.length}
         resultLabel="speakers"
-      >
-        <FilterDropdown
-          label="Filters"
-          activeCount={activeFilterCount}
-          width="wider"
-          position="right"
-        >
-          <div className="p-1.5">
-            <div className="mb-2">
-              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
-                Status
-              </label>
-              <div className="space-y-0.5">
-                <FilterOption
-                  type="radio"
-                  checked={filters.status === 'all'}
-                  onClick={() =>
-                    setFilters((prev) => ({ ...prev, status: 'all' }))
-                  }
-                  keepOpen
-                >
-                  All
-                </FilterOption>
-                <FilterOption
-                  type="radio"
-                  checked={filters.status === 'confirmed'}
-                  onClick={() =>
-                    setFilters((prev) => ({ ...prev, status: 'confirmed' }))
-                  }
-                  keepOpen
-                >
-                  Confirmed
-                </FilterOption>
-                <FilterOption
-                  type="radio"
-                  checked={filters.status === 'accepted'}
-                  onClick={() =>
-                    setFilters((prev) => ({ ...prev, status: 'accepted' }))
-                  }
-                  keepOpen
-                >
-                  Accepted
-                </FilterOption>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200 pt-2 dark:border-gray-600">
-              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
-                Speaker Type
-              </label>
-              <div className="space-y-0.5">
-                <FilterOption
-                  checked={filters.newSpeakers}
-                  onClick={() =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      newSpeakers: !prev.newSpeakers,
-                    }))
-                  }
-                  keepOpen
-                >
-                  New speakers only
-                </FilterOption>
-                <FilterOption
-                  checked={filters.localSpeakers}
-                  onClick={() =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      localSpeakers: !prev.localSpeakers,
-                    }))
-                  }
-                  keepOpen
-                >
-                  Local speakers only
-                </FilterOption>
-                <FilterOption
-                  checked={filters.underrepresentedSpeakers}
-                  onClick={() =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      underrepresentedSpeakers: !prev.underrepresentedSpeakers,
-                    }))
-                  }
-                  keepOpen
-                >
-                  Underrepresented speakers
-                </FilterOption>
-                <FilterOption
-                  checked={filters.travelSupportSpeakers}
-                  onClick={() =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      travelSupportSpeakers: !prev.travelSupportSpeakers,
-                    }))
-                  }
-                  keepOpen
-                >
-                  Travel support needed
-                </FilterOption>
-                <FilterOption
-                  checked={filters.ticketNotRedeemed}
-                  onClick={() =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      ticketNotRedeemed: !prev.ticketNotRedeemed,
-                    }))
-                  }
-                  keepOpen
-                >
-                  Ticket not claimed
-                </FilterOption>
-              </div>
-            </div>
-          </div>
-        </FilterDropdown>
-
-        <FilterDropdown
-          label="Columns"
-          activeCount={Object.values(columnVisibility).filter(Boolean).length}
-          position="right"
-        >
-          {Object.entries(columnVisibility).map(([column, isVisible]) => (
-            <FilterOption
-              key={column}
-              checked={isVisible}
-              onClick={() =>
-                toggleColumnVisibility(column as keyof ColumnVisibility)
-              }
-              keepOpen
-            >
-              {column.charAt(0).toUpperCase() + column.slice(1)}
-            </FilterOption>
-          ))}
-        </FilterDropdown>
-      </TableToolbar>
+        actions={
+          <>
+            {/* Shown wherever the table renders (md+); cards ignore columns. */}
+            <div className="hidden md:block">{columnsDropdown}</div>
+            {filteredEmails.length > 0 && (
+              <button
+                type="button"
+                onClick={() => copyAllEmails(filteredEmails.join(', '))}
+                title={
+                  copiedAllEmails
+                    ? `Copied ${emailCountLabel}!`
+                    : `Copy all ${emailCountLabel}`
+                }
+                aria-label={`Copy all ${emailCountLabel}`}
+                className="inline-flex h-9 cursor-pointer items-center gap-x-1.5 rounded-lg bg-white px-2.5 text-xs text-gray-900 ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-white/5 dark:text-white dark:ring-white/10 dark:hover:bg-gray-600"
+              >
+                {copiedAllEmails ? (
+                  <CheckIcon className="h-4 w-4 text-green-600 dark:text-green-400" />
+                ) : (
+                  <ClipboardIcon className="h-4 w-4" />
+                )}
+                {filteredEmails.length}
+              </button>
+            )}
+          </>
+        }
+      />
 
       {/* The filter is on but the read has not landed: say so, so the rows
           below are not mistaken for the answer. */}
-      {filters.ticketNotRedeemed && ticketStatusesLoading && (
-        <div className="flex items-center gap-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
-          <TicketIcon className="h-4 w-4 shrink-0 animate-pulse" />
-          <span>
-            Checking ticket status&hellip; showing all speakers until it lands.
-          </span>
-        </div>
-      )}
+      {(filters.ticketNotRedeemed || filters.ticketClaimState !== 'all') &&
+        ticketStatusesLoading && (
+          <div className="flex items-center gap-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
+            <TicketIcon className="h-4 w-4 shrink-0 animate-pulse" />
+            <span>
+              Checking ticket status&hellip; showing all speakers until it
+              lands.
+            </span>
+          </div>
+        )}
 
       <div className="space-y-3 md:hidden">
         {filteredSpeakers.map((speaker) => {
@@ -797,7 +1062,27 @@ export function SpeakerTable({
                 </div>
               )}
 
-              <div className="mt-3">{renderSpeakerTalks(speaker)}</div>
+              {columnVisibility.talks && (
+                <div className="mt-3">{renderSpeakerTalks(speaker)}</div>
+              )}
+              {discoveredQuestions.map((q) => {
+                const colKey = `q_${q.id}` as `q_${string}`
+                if (!columnVisibility[colKey]) return null
+                return (
+                  <div
+                    key={q.id}
+                    className="mt-3 flex items-center justify-between text-xs"
+                  >
+                    <span className="font-medium text-gray-500 dark:text-gray-400">
+                      {q.label}:
+                    </span>
+                    <div>{renderQuestionCell(speaker, q)}</div>
+                  </div>
+                )
+              })}
+              {columnVisibility.questions && (
+                <div className="mt-3">{renderTicketQuestions(speaker)}</div>
+              )}
             </div>
           )
         })}
@@ -817,7 +1102,19 @@ export function SpeakerTable({
               {columnVisibility.email && <Th width="12rem">Email</Th>}
               {columnVisibility.linkedin && <Th width="8rem">LinkedIn</Th>}
               {columnVisibility.bluesky && <Th width="8rem">Bluesky</Th>}
-              <Th>Talks</Th>
+              {columnVisibility.talks && <Th>Talks</Th>}
+              {discoveredQuestions.map((q) => {
+                const colKey = `q_${q.id}` as `q_${string}`
+                if (!columnVisibility[colKey]) return null
+                return (
+                  <Th key={q.id} width={q.type === 'choice' ? '9rem' : '11rem'}>
+                    {q.label}
+                  </Th>
+                )
+              })}
+              {columnVisibility.questions && (
+                <Th width="12rem">All Ticket Questions</Th>
+              )}
               <Th width="7rem" align="right">
                 Actions
               </Th>
@@ -946,7 +1243,17 @@ export function SpeakerTable({
                       )}
                     </Td>
                   )}
-                  <Td>{renderSpeakerTalks(speaker)}</Td>
+                  {columnVisibility.talks && (
+                    <Td>{renderSpeakerTalks(speaker)}</Td>
+                  )}
+                  {discoveredQuestions.map((q) => {
+                    const colKey = `q_${q.id}` as `q_${string}`
+                    if (!columnVisibility[colKey]) return null
+                    return <Td key={q.id}>{renderQuestionCell(speaker, q)}</Td>
+                  })}
+                  {columnVisibility.questions && (
+                    <Td>{renderTicketQuestions(speaker)}</Td>
+                  )}
                   <Td align="right" className="whitespace-nowrap">
                     <div className="flex items-center justify-end">
                       {renderSpeakerActions(speaker)}
@@ -958,6 +1265,29 @@ export function SpeakerTable({
           </TableBody>
         </table>
       </TableContainer>
+
+      {proposalToCancel && (
+        <ProposalActionModal
+          open={!!proposalToCancel}
+          close={() => setProposalToCancel(null)}
+          proposal={proposalToCancel}
+          action={Action.cancel}
+          adminUI={true}
+          onAction={() => {
+            setProposalToCancel(null)
+            router.refresh()
+          }}
+        />
+      )}
+      {speakerToRemove && (
+        <RemoveSpeakerModal
+          open
+          close={() => setSpeakerToRemove(null)}
+          proposal={speakerToRemove.proposal}
+          speaker={speakerToRemove.speaker}
+          onRemoved={() => router.refresh()}
+        />
+      )}
     </div>
   )
 }

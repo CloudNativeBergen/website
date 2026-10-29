@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import { MissingAvatar } from './MissingAvatar'
+import { speakerImageUrl } from '@/lib/sanity/client'
 
 interface SpeakerAvatarImageProps {
   src: string
@@ -42,10 +43,21 @@ export function SpeakerAvatarImage({
   return (
     <img
       ref={imgRef}
-      src={src}
+      src={avatarSrc(src, size)}
       alt={name}
       className={`${className} h-full w-full object-cover object-center`}
       onError={() => setFailed(true)}
     />
   )
+}
+
+/**
+ * Raw Sanity asset URLs are full-size originals (often 1-4 MB). Ask the image
+ * CDN for a 2x crop instead. URLs that already carry params or point elsewhere
+ * are left alone.
+ */
+function avatarSrc(src: string, size: number): string {
+  if (src.includes('?')) return src
+  const px = Math.max(64, Math.ceil((size * 2) / 32) * 32)
+  return speakerImageUrl(src, { width: px, height: px, fit: 'crop' })
 }

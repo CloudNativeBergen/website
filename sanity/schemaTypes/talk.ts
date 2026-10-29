@@ -164,8 +164,11 @@ export default defineType({
       title: 'Workshop Capacity',
       type: 'number',
       description:
-        'Maximum number of participants for workshop sessions (default: 30)',
+        'Maximum number of participants for workshop sessions (default: 30). Once the talk is confirmed, change it on the Workshops admin page instead: it confirms waiting sign-ups into new seats, and no sign-up at the same moment can take a seat on the old count.',
       initialValue: 30,
+      // Sign-ups are taken for confirmed workshops, and every change of their
+      // seats goes through the seats guard (#1344), which a Studio edit cannot.
+      readOnly: ({ document }) => document?.status === Status.confirmed,
       hidden: ({ document }) => {
         const format = document?.format as string | undefined
         const capacity = document?.capacity as number | undefined
@@ -198,6 +201,17 @@ export default defineType({
             }
             return true
           }),
+    }),
+    // Written by "Notify participants" on /admin/workshops when a canceled
+    // workshop's sign-ups were told. Never edited by hand.
+    defineField({
+      name: 'workshopCancelNoticeSentAt',
+      title: 'Cancellation Notice Sent',
+      type: 'datetime',
+      readOnly: true,
+      hidden: ({ document }) => !document?.workshopCancelNoticeSentAt,
+      description:
+        'When the participants of this canceled workshop were last emailed about it. Set from the workshops admin page.',
     }),
     defineField({
       name: 'prerequisites',
@@ -235,6 +249,40 @@ export default defineType({
             select: { title: 'email', subtitle: 'speakerId' },
           },
         },
+      ],
+    }),
+    defineField({
+      name: 'feedbackCode',
+      title: 'Feedback Code',
+      type: 'string',
+      description:
+        'The /f/<code> short code attendees scan to give Session Feedback. Minted by the app the first time a speaker of a confirmed talk opens it; never edit it here.',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'feedbackSummarySentAt',
+      title: 'Feedback Summary Sent At',
+      type: 'datetime',
+      description:
+        'When the app claimed sending this talk’s Session Feedback summary to its speakers. Set once, before the summary goes out; never edit it here.',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'feedbackFolded',
+      title: 'Feedback Folded',
+      type: 'object',
+      description:
+        'Session Feedback totals kept after the responses were deleted: 24 months after the conference, or when the talk’s last speaker was erased. Written by the app; never edit it here.',
+      readOnly: true,
+      fields: [
+        defineField({ name: 'greenCount', title: 'Loved it', type: 'number' }),
+        defineField({
+          name: 'yellowCount',
+          title: 'It was OK',
+          type: 'number',
+        }),
+        defineField({ name: 'redCount', title: 'Not for me', type: 'number' }),
+        defineField({ name: 'foldedAt', title: 'Folded At', type: 'datetime' }),
       ],
     }),
     defineField({

@@ -30,3 +30,29 @@ export function convertStringToPortableTextBlocks(
       }) as PortableTextBlock,
   )
 }
+
+export function convertPortableTextToString(
+  input: PortableTextBlock[] | string | undefined,
+): string {
+  if (!input) {
+    return ''
+  }
+  if (typeof input === 'string') {
+    return input
+  }
+  return input
+    .map((block) => {
+      if (block._type === 'block' && Array.isArray(block.children)) {
+        return block.children
+          .map((child) =>
+            typeof child === 'object' && child && 'text' in child
+              ? String(child.text ?? '')
+              : '',
+          )
+          .join('')
+      }
+      return ''
+    })
+    .filter(Boolean)
+    .join('\n\n')
+}

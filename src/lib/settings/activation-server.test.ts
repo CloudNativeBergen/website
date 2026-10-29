@@ -26,6 +26,29 @@ vi.mock('@/lib/organizer-invite/sanity', () => ({
     hasAnyOrganizerInvitation(...(args as [])),
 }))
 
+const loadBriefingSpeakers = vi.fn(async () => [])
+
+vi.mock('@/lib/email/speaker-briefing', () => ({
+  loadBriefingSpeakers: (...args: unknown[]) =>
+    loadBriefingSpeakers(...(args as [])),
+  briefingVersion: () => 'v1',
+  getBriefingSendHistory: async () => ({ entries: [], currentCount: 0 }),
+}))
+
+vi.mock('@/lib/photo-wall/sanity', () => ({
+  readPhotoWall: async () => null,
+}))
+
+vi.mock('@/lib/sanity/scoped', () => ({
+  scopedFetch: async () => ({
+    schedules: [],
+    sponsors: 1,
+    sponsorsWithoutLogo: 1,
+  }),
+}))
+
+vi.mock('@/lib/sanity/client', () => ({ clientReadUncached: {} }))
+
 import { resolveActivationChecklist } from './activation-server'
 import type { ConferenceForActivationResolution } from './activation-server'
 
@@ -176,5 +199,54 @@ describe('resolveActivationChecklist — the co-organizers row', () => {
       organizers: [{ _ref: 'founder' }],
     })
     expect(row(checklist, 'co-organizers').done).toBe(false)
+  })
+})
+
+describe('resolveActivationChecklist — event-stage facts', () => {
+  const live = { ...conference(), _id: 'conf-1', endDate: '2999-01-01' }
+
+  const opt = { eventFacts: true }
+
+  it('does not fetch them without the opt-in (dashboard, layout)', async () => {
+    const checklist = await resolveActivationChecklist(live)
+    expect(loadBriefingSpeakers).not.toHaveBeenCalled()
+    expect(checklist.event!.rows.map((r) => r.id)).not.toContain(
+      'speaker-todos',
+    )
+  })
+
+  it('resolves them for a live conference before it ends', async () => {
+    const checklist = await resolveActivationChecklist(live, undefined, opt)
+    expect(loadBriefingSpeakers).toHaveBeenCalledOnce()
+    const ids = checklist.event!.rows.map((r) => r.id)
+    expect(ids).toContain('speaker-info-email')
+    expect(ids).toContain('sponsor-logos')
+    // No confirmed speakers yet: nothing has been sent.
+    expect(
+      checklist.event!.rows.find((r) => r.id === 'speaker-info-email')!.done,
+    ).toBe(false)
+  })
+
+  it('skips them for an unlisted or ended conference', async () => {
+    await resolveActivationChecklist(
+      { ...live, visibility: 'unlisted' },
+      undefined,
+      opt,
+    )
+    await resolveActivationChecklist(
+      { ...live, endDate: '2000-01-01' },
+      undefined,
+      opt,
+    )
+    expect(loadBriefingSpeakers).not.toHaveBeenCalled()
+  })
+
+  it('leaves the rows out when a read fails', async () => {
+    loadBriefingSpeakers.mockRejectedValueOnce(new Error('down'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const checklist = await resolveActivationChecklist(live, undefined, opt)
+    expect(checklist.event!.rows.map((r) => r.id)).not.toContain(
+      'speaker-todos',
+    )
   })
 })

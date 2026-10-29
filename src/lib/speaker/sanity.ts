@@ -28,6 +28,7 @@ import { EMAIL_LINK_PROVIDER_ID } from '@/lib/auth/email-link/constants'
 import {
   resolveSocialTagOptOut,
   type SocialTagOptOutPatch,
+  type SpeakerOptOutField,
   type SpeakerUpdateActor,
 } from './socialTag'
 
@@ -58,7 +59,8 @@ const ORGANIZER_ORG_IDS_FIELD =
  * so a missing status counts as official — the same fallback `getScheduleData`
  * applies in `src/lib/schedule/server.ts`.
  */
-const OFFICIAL_SCHEDULE_FILTER = '(status == "official" || !defined(status))'
+export const OFFICIAL_SCHEDULE_FILTER =
+  '(status == "official" || !defined(status))'
 
 /**
  * MINIMAL projection for the two hot login queries (`findSpeakerByProvider`,
@@ -1107,6 +1109,7 @@ export async function getSpeakerAdminDetail(
       country,
       consent,
       socialTagOptOut,
+      talkPhotosOptOut,
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL)
     }`,
@@ -1178,16 +1181,10 @@ export async function getPublicSpeaker(
     err = error as Error
   }
 
+  // An unknown slug (or one with no confirmed talk here) is not an error: it
+  // is a 404, and crawlers request plenty of them. `err` is a failed read only.
   if (!data || Object.keys(data).length === 0) {
-    return {
-      speaker: null,
-      talks: [],
-      err:
-        err ||
-        new Error(
-          'Speaker not found or has no confirmed talks for this conference',
-        ),
-    }
+    return { speaker: null, talks: [], err }
   }
 
   const talks =
@@ -1215,24 +1212,32 @@ async function resolveSocialTagOptOutFor(
   speaker: Partial<SpeakerInput>,
   options: { actor: SpeakerUpdateActor },
 ): Promise<SocialTagOptOutPatch> {
-  const requested = speaker.socialTagOptOut
-  if (typeof requested !== 'boolean') {
-    return { set: {}, setIfMissing: {}, unset: [] }
-  }
+  const patch: SocialTagOptOutPatch = { set: {}, setIfMissing: {}, unset: [] }
+  // Talk photos (talk photos spec §4.2) follow the same rule as social tags.
+  const fields: SpeakerOptOutField[] = ['socialTagOptOut', 'talkPhotosOptOut']
+  for (const field of fields) {
+    const requested = speaker[field]
+    if (typeof requested !== 'boolean') continue
 
-  let stored = false
-  if (options.actor === 'organizer' && requested === false) {
-    const { speaker: current, err } = await getSpeaker(speakerId)
-    if (err) throw err
-    stored = current?.socialTagOptOut === true
-  }
+    let stored = false
+    if (options.actor === 'organizer' && requested === false) {
+      const { speaker: current, err } = await getSpeaker(speakerId)
+      if (err) throw err
+      stored = current?.[field] === true
+    }
 
-  return resolveSocialTagOptOut({
-    actor: options.actor,
-    requested,
-    stored,
-    now: new Date().toISOString(),
-  })
+    const one = resolveSocialTagOptOut({
+      actor: options.actor,
+      requested,
+      stored,
+      now: new Date().toISOString(),
+      field,
+    })
+    Object.assign(patch.set, one.set)
+    Object.assign(patch.setIfMissing, one.setIfMissing)
+    patch.unset.push(...one.unset)
+  }
+  return patch
 }
 
 /**
@@ -1268,9 +1273,11 @@ export async function updateSpeaker(
       slug,
       // Handled by `optOut` above; never patched through the generic spread.
       socialTagOptOut: _socialTagOptOut,
+      talkPhotosOptOut: _talkPhotosOptOut,
       ...speakerWithoutImage
     } = speaker
     void _socialTagOptOut
+    void _talkPhotosOptOut
 
     const patchData: Record<string, unknown> = { ...speakerWithoutImage }
     // A client may not choose the time at which it claims to have opted out.
@@ -1278,6 +1285,7 @@ export async function updateSpeaker(
     // but this writer is the boundary that has to be true regardless of who
     // calls it — including a future caller that does not go through Zod.
     delete patchData.socialTagOptOutAt
+    delete patchData.talkPhotosOptOutAt
     Object.assign(patchData, optOut.set)
 
     if (slug) {
@@ -1332,22 +1340,16 @@ export async function updateSpeaker(
   return { speaker: updatedSpeaker, err, committed }
 }
 
-export async function getSpeakers(
-  conferenceId?: string,
-  statuses: Status[] = [Status.confirmed],
-  includeProposalsFromOtherConferences: boolean = false,
-  orgId?: string | null,
+async function querySpeakers(
+  conferenceId: string | undefined,
+  statuses: Status[],
+  includeProposalsFromOtherConferences: boolean,
+  orgId: string | null | undefined,
+  options?: { uncached?: boolean },
 ): Promise<{
   speakers: (Speaker & { proposals: ProposalExisting[] })[]
   err: Error | null
 }> {
-  'use cache'
-  cacheLife('hours')
-  cacheTag('content:speakers')
-  if (conferenceId) {
-    cacheTag(conferenceTag(conferenceId))
-  }
-
   let speakers: (Speaker & { proposals: ProposalExisting[] })[] = []
   let err = null
 
@@ -1405,6 +1407,7 @@ export async function getSpeakers(
         language,
         level,
         audiences,
+        speakers[]{ _type, _ref },
         conference-> {
           _id,
           title,
@@ -1423,22 +1426,55 @@ export async function getSpeakers(
     if (conferenceId) params.conferenceId = conferenceId
     if (orgId) params.orgId = orgId
 
-    // API-CDN (#918). `cache: 'no-store'` here was DEAD ON ARRIVAL: this
-    // function declares `'use cache'`, so Next's data cache is governed by
-    // `cacheLife('hours')` above and the fetch option changes nothing about it.
-    // What it DID do was force every one of those hourly cache misses onto the
-    // metered live API. `clientReadCached` is the SAME authenticated client on a
-    // different host — same token, same access rights — so nothing about what
-    // this may read changes; only the quota line, which is 10x cheaper. The
-    // staleness argument is settled by the wrapper: a caller here already
-    // accepts an answer up to an HOUR old, which is orders of magnitude more
-    // stale than anything apicdn can serve.
-    speakers = await clientReadCached.fetch(query, params)
+    const client = options?.uncached ? clientReadUncached : clientReadCached
+    speakers = await client.fetch(query, params)
   } catch (error) {
     err = error as Error
   }
 
   return { speakers, err }
+}
+
+export async function getSpeakers(
+  conferenceId?: string,
+  statuses: Status[] = [Status.confirmed],
+  includeProposalsFromOtherConferences: boolean = false,
+  orgId?: string | null,
+): Promise<{
+  speakers: (Speaker & { proposals: ProposalExisting[] })[]
+  err: Error | null
+}> {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:speakers')
+  if (conferenceId) {
+    cacheTag(conferenceTag(conferenceId))
+  }
+
+  return querySpeakers(
+    conferenceId,
+    statuses,
+    includeProposalsFromOtherConferences,
+    orgId,
+  )
+}
+
+export async function getSpeakersUncached(
+  conferenceId?: string,
+  statuses: Status[] = [Status.confirmed],
+  includeProposalsFromOtherConferences: boolean = false,
+  orgId?: string | null,
+): Promise<{
+  speakers: (Speaker & { proposals: ProposalExisting[] })[]
+  err: Error | null
+}> {
+  return querySpeakers(
+    conferenceId,
+    statuses,
+    includeProposalsFromOtherConferences,
+    orgId,
+    { uncached: true },
+  )
 }
 
 /** One row of {@link getOrgSpeakerDirectory} — the shape `speaker.admin.list` returns. */

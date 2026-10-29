@@ -27,6 +27,12 @@
  *   `launch` — everything the public site wants before it is published,
  *              terminating in `visibility` ("Go live"), the switch itself.
  *
+ * A third stage, `event`, covers what the event itself needs once the site is
+ * live (programme, hashtag, Bluesky, travel info). It is NOT part of `rows`,
+ * `stages` or any top-level count: it lives on {@link ActivationChecklist.event},
+ * only while the site is live and the event has not ended, so `allDone`,
+ * `readyToGoLive` and the hero's next step mean exactly what they did before.
+ *
  * The split exists because the hero on `/admin` names the organizer's NEXT
  * step, and "next" is only meaningful against a critical path. A flat list in
  * settings-card order would have opened a fresh tenant's onboarding with
@@ -59,13 +65,15 @@ import type { SystemCheck } from '@/lib/system-status/types'
 import { APPEARANCE_SECTION } from '@/lib/settings/appearance'
 import { STARTER_SESSION_FORMATS } from '@/lib/onboarding/create'
 import { formats as FORMAT_TITLES } from '@/lib/proposal/types'
+import { deriveBlueskyHandle } from '@/lib/stream/config'
+import { osloTodayDateString } from '@/lib/time'
 
 /**
  * Which half of activation a row belongs to. `cfp` is the critical path to a
  * CFP that can actually receive a proposal; `launch` is everything the public
  * site wants before it goes live. See the module header.
  */
-export type ActivationStage = 'cfp' | 'launch'
+export type ActivationStage = 'cfp' | 'launch' | 'event'
 
 /** Display metadata for one stage — the heading the card and the hero share. */
 export interface ActivationStageMeta {
@@ -91,6 +99,14 @@ export const ACTIVATION_STAGES: readonly ActivationStageMeta[] = [
       'The rest of the setup, ending with the switch that publishes your site.',
   },
 ]
+
+/** The post-launch stage. Kept out of {@link ACTIVATION_STAGES} on purpose. */
+export const ACTIVATION_EVENT_STAGE: ActivationStageMeta = {
+  id: 'event',
+  title: 'Get ready for the event',
+  description:
+    'What attendees, speakers and the screens in the rooms need before the doors open.',
+}
 
 /**
  * The id of the terminal row — the launch switch. Excluded from
@@ -188,6 +204,12 @@ export interface ActivationChecklist {
    * the banner could never graduate from "Finish setup" to "Go live".
    */
   readyToGoLive: boolean
+  /**
+   * The `event` stage, or `null` while it is not relevant (site unlisted, or
+   * the event is over). Never counted in `done`, `required`, `allDone` or
+   * `readyToGoLive`, and never in `rows` or `stages`.
+   */
+  event: ActivationStageGroup | null
 }
 
 /**
@@ -227,6 +249,13 @@ export interface ConferenceForActivation {
   checkinEventId?: number | null
   titoAccountSlug?: string | null
   titoEventSlug?: string | null
+  // Event stage.
+  programDate?: string | null
+  /** Only the count and each track's `sponsor` are read. */
+  schedules?: { tracks?: { sponsor?: unknown }[] }[]
+  socialHashtag?: string
+  socialLinks?: string[]
+  venueTravelInfo?: string
 }
 
 export interface ActivationOptions {
@@ -269,6 +298,110 @@ export interface ActivationOptions {
    * costs one already-optional unticked row, not a wrong instruction.
    */
   hasOrganizerInvitations?: boolean
+  /** Clock for the event stage (programme date, end date). Defaults to now. */
+  now?: Date
+  /**
+   * Server-resolved facts for the event stage (programme, speakers, photo
+   * wall, sponsor logos). Absent, those rows are left out. Resolved only while
+   * the event stage is shown (`@/lib/settings/activation-server`).
+   */
+  eventFacts?: EventPrepFacts
+}
+
+/** The event-stage facts this module cannot read without a server import. */
+export interface EventPrepFacts {
+  /** Confirmed talks not (fully) placed in an official schedule. */
+  unscheduledTalks: number
+  /** Whether speaker info is saved at all. */
+  hasSpeakerInfo: boolean
+  /** `getSpeakerInfoGaps` count for the saved speaker info. */
+  speakerInfoGaps: number
+  /** Every current briefing recipient has the current briefing version. */
+  briefingSent: boolean
+  /** Confirmed speakers with an open briefing to-do. */
+  speakersWithTodos: number
+  hasPhotoWall: boolean
+  /** Public sponsors, and how many of them have no logo. */
+  sponsors: number
+  sponsorsWithoutLogo: number
+}
+
+function eventFactRows(f: EventPrepFacts): ActivationRow[] {
+  const rows: ActivationRow[] = [
+    {
+      id: 'program-unscheduled',
+      stage: 'event',
+      label: f.unscheduledTalks
+        ? `Confirmed talks not scheduled (${f.unscheduledTalks})`
+        : 'All confirmed talks scheduled',
+      done: f.unscheduledTalks === 0,
+      anchor: '/admin/schedule',
+      hint: 'Place every confirmed talk in the schedule.',
+    },
+    {
+      id: 'speaker-info',
+      stage: 'event',
+      label: 'Speaker info',
+      done: f.hasSpeakerInfo && f.speakerInfoGaps === 0,
+      anchor: '/admin/speakers/info',
+      hint: 'Fill in the dinner, routes and on-site contact for speakers.',
+    },
+    {
+      id: 'speaker-info-email',
+      stage: 'event',
+      label: 'Speaker info email sent',
+      done: f.briefingSent,
+      anchor: '/admin/speakers/info',
+      hint: 'Send the latest speaker info to every confirmed speaker.',
+    },
+    {
+      id: 'speaker-todos',
+      stage: 'event',
+      label: f.speakersWithTodos
+        ? `Speakers with open to-dos (${f.speakersWithTodos})`
+        : 'No speakers with open to-dos',
+      done: f.speakersWithTodos === 0,
+      anchor: '/admin/speakers',
+      hint: 'Follow up on unconfirmed talks, slides, tickets and co-speaker invites.',
+    },
+    {
+      id: 'photo-wall',
+      stage: 'event',
+      label: 'Photo wall',
+      done: f.hasPhotoWall,
+      anchor: '/admin/photo-wall',
+      hint: 'Optional: set up a photo wall for attendees to post to.',
+      optional: true,
+    },
+  ]
+  if (f.sponsors > 0) {
+    rows.push({
+      id: 'sponsor-logos',
+      stage: 'event',
+      label: f.sponsorsWithoutLogo
+        ? `Sponsors without a logo (${f.sponsorsWithoutLogo})`
+        : 'Sponsor logos',
+      done: f.sponsorsWithoutLogo === 0,
+      anchor: '/admin/sponsors',
+      hint: 'Upload a logo for every sponsor.',
+    })
+  }
+  return rows
+}
+
+/**
+ * Whether the event stage is shown: the site is live and the event's last day
+ * (Oslo) is not over. The server seam asks this before resolving event facts.
+ */
+export function isEventStageRelevant(
+  conference: ConferenceForActivation,
+  now: Date = new Date(),
+): boolean {
+  if (conference.visibility === 'unlisted') return false
+  return !(
+    present(conference.endDate) &&
+    osloTodayDateString(now) > conference.endDate!
+  )
 }
 
 /** Non-empty string / present number. Trims strings; a 0 id counts as absent. */
@@ -578,18 +711,66 @@ export function buildActivationChecklist(
   const requiredRows = rows.filter(isRequired)
   const done = requiredRows.filter((r) => r.done).length
 
-  const stages: ActivationStageGroup[] = ACTIVATION_STAGES.map((meta) => {
-    const stageRows = rows.filter((r) => r.stage === meta.id)
-    const stageRequired = stageRows.filter(isRequired)
-    const stageDone = stageRequired.filter((r) => r.done).length
-    return {
-      ...meta,
-      rows: stageRows,
-      done: stageDone,
-      required: stageRequired.length,
-      allDone: stageDone === stageRequired.length,
-    }
-  })
+  const stages = ACTIVATION_STAGES.map((meta) =>
+    stageGroup(
+      meta,
+      rows.filter((r) => r.stage === meta.id),
+    ),
+  )
+
+  // STAGE 3 — the event itself. Only once the site is live and until the last
+  // day is over in Oslo; `endDate` is a calendar date, so it compares as a string.
+  const now = options.now ?? new Date()
+  const schedules = conference.schedules ?? []
+  const eventRows: ActivationRow[] = [
+    {
+      // Mirrors `isProgramPublished` (@/lib/conference/state), restated so
+      // this module stays free of that file's imports.
+      id: 'program',
+      stage: 'event',
+      label: 'Programme published',
+      done:
+        present(conference.programDate) &&
+        now >= new Date(conference.programDate!) &&
+        schedules.length > 0,
+      anchor: '/admin/schedule',
+      hint: 'Build the schedule and set the date the programme goes public.',
+    },
+    {
+      id: 'hashtag',
+      stage: 'event',
+      label: 'Event hashtag',
+      done: present(conference.socialHashtag),
+      anchor: '#local-information',
+      hint: 'Set the hashtag attendees and speakers should post with.',
+    },
+    {
+      id: 'bluesky',
+      stage: 'event',
+      label: 'Bluesky account',
+      done: deriveBlueskyHandle(conference.socialLinks) !== null,
+      anchor: '#domains-social-links',
+      hint: 'Add your Bluesky profile link so the room screens can show the feed.',
+    },
+    {
+      id: 'venue-travel',
+      stage: 'event',
+      label: 'Travel info',
+      done: present(conference.venueTravelInfo),
+      anchor: '#local-information',
+      hint: 'Tell attendees how to get to the venue.',
+    },
+    {
+      id: 'track-sponsors',
+      stage: 'event',
+      label: 'Track sponsors',
+      done: schedules.some((s) => (s.tracks ?? []).some((t) => t.sponsor)),
+      anchor: '/admin/schedule',
+      hint: 'Optional: give a sponsor a room, thanked on its screen.',
+      optional: true,
+    },
+    ...(options.eventFacts ? eventFactRows(options.eventFacts) : []),
+  ]
 
   return {
     rows,
@@ -600,6 +781,25 @@ export function buildActivationChecklist(
     readyToGoLive: requiredRows
       .filter((r) => r.id !== ACTIVATION_LAUNCH_ROW_ID)
       .every((r) => r.done),
+    event: isEventStageRelevant(conference, now)
+      ? stageGroup(ACTIVATION_EVENT_STAGE, eventRows)
+      : null,
+  }
+}
+
+/** A stage's rows plus its own required/done rollup. */
+function stageGroup(
+  meta: ActivationStageMeta,
+  rows: ActivationRow[],
+): ActivationStageGroup {
+  const required = rows.filter(isRequired)
+  const done = required.filter((r) => r.done).length
+  return {
+    ...meta,
+    rows,
+    done,
+    required: required.length,
+    allDone: done === required.length,
   }
 }
 

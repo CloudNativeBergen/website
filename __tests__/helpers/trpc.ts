@@ -14,6 +14,8 @@ const createCaller = t.createCallerFactory(appRouter)
 function mockReq(): Context['req'] {
   return {
     headers: new Headers(),
+    // A request that carries no cookie.
+    cookies: { get: () => undefined },
     url: 'http://localhost:3000',
   } as unknown as Context['req']
 }
@@ -30,23 +32,26 @@ export function createAnonymousCaller() {
 }
 
 /**
- * A caller authenticated as a WorkOS AuthKit workshop attendee (NOT a NextAuth
- * speaker). Mirrors what `createTRPCContext` derives from the sealed
- * `wos-session` cookie, so workshop-router authz can be exercised directly.
+ * A caller signed in as a workshop attendee (NOT a NextAuth speaker). Mirrors
+ * what `createTRPCContext` derives from the portal's sealed session cookie, so
+ * workshop-router authz can be exercised directly.
  */
 export function createWorkshopCaller(
   workosUser?: Partial<import('@/server/trpc').WorkshopUserIdentity>,
+  /** The request itself, for a procedure that reads a cookie from it. */
+  req: Context['req'] = mockReq(),
 ) {
   return createCaller({
-    req: mockReq(),
+    req,
     session: null,
     speaker: undefined,
     user: undefined,
     workosUser: {
       id: workosUser?.id ?? 'workos-user-1',
       email: workosUser?.email ?? 'attendee@example.com',
-      firstName: workosUser?.firstName ?? 'Test',
-      lastName: workosUser?.lastName ?? 'Attendee',
+      emailVerified: workosUser?.emailVerified ?? true,
+      name: workosUser?.name ?? 'Test Attendee',
+      conferenceId: workosUser?.conferenceId ?? 'conf-1',
     },
     ipAddress: '127.0.0.1',
   })

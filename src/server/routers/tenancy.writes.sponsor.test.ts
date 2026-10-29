@@ -45,6 +45,24 @@ vi.mock('@/lib/conference/sanity', () => ({
 
 vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string, params?: Record<string, unknown>) => {
+    // The contract send's fresh state read before any costly work (#1264):
+    // nothing out, nothing reserved.
+    if (query.includes('"addonIds": addons[]._ref }')) {
+      return {
+        _rev: 'rev-1',
+        contractStatus: 'verbal-agreement',
+        signatureStatus: 'not-started',
+        signatureId: null,
+        signingUrl: null,
+        contractReservedAt: null,
+        // The same terms the request's own read saw (CONTRACT_READY_SFC).
+        contractValue: 50000,
+        contractCurrency: 'NOK',
+        status: 'negotiating',
+        tierId: 'tier-A',
+        addonIds: [],
+      }
+    }
     if (query.includes('"memberOrgIds"')) {
       const id = params?.id as string | undefined
       if (id && id in h.tenantById) return h.tenantById[id]
@@ -91,14 +109,18 @@ const lib = vi.hoisted(() => ({
   bulkDeleteSponsors: vi.fn(),
   deleteSponsorForConference: vi.fn(),
   createSponsorActivity: vi.fn(),
+  updateSponsorActivity: vi.fn(),
+  deleteSponsorActivity: vi.fn(),
   listActivitiesForSponsor: vi.fn(),
   listActivitiesForConference: vi.fn(),
   getSponsorForConference: vi.fn(),
   createSponsorForConference: vi.fn(),
   updateSponsorForConference: vi.fn(),
+  createContractTemplate: vi.fn(),
   getContractTemplate: vi.fn(),
   updateContractTemplate: vi.fn(),
   deleteContractTemplate: vi.fn(),
+  findBestContractTemplate: vi.fn(),
   generateContractPdf: vi.fn(),
 }))
 
@@ -130,15 +152,19 @@ vi.mock('@/lib/sponsor-crm/activities', async (importOriginal) => ({
 vi.mock('@/lib/sponsor-crm/activity', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   createSponsorActivity: lib.createSponsorActivity,
+  updateSponsorActivity: lib.updateSponsorActivity,
+  deleteSponsorActivity: lib.deleteSponsorActivity,
 }))
 vi.mock('@/lib/sponsor-crm/contract-pdf', () => ({
   generateContractPdf: lib.generateContractPdf,
 }))
 vi.mock('@/lib/sponsor-crm/contract-templates', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
+  createContractTemplate: lib.createContractTemplate,
   getContractTemplate: lib.getContractTemplate,
   updateContractTemplate: lib.updateContractTemplate,
   deleteContractTemplate: lib.deleteContractTemplate,
+  findBestContractTemplate: lib.findBestContractTemplate,
 }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -291,6 +317,22 @@ beforeEach(() => {
   lib.deleteSponsorForConference.mockResolvedValue({ error: null })
   lib.createSponsorActivity.mockResolvedValue({
     activityId: 'act-1',
+    error: null,
+  })
+  lib.updateSponsorActivity.mockResolvedValue({
+    success: true,
+    error: null,
+  })
+  lib.deleteSponsorActivity.mockResolvedValue({
+    success: true,
+    error: null,
+  })
+  lib.createContractTemplate.mockResolvedValue({
+    template: { _id: 'tpl-new' },
+    error: null,
+  })
+  lib.findBestContractTemplate.mockResolvedValue({
+    template: { _id: 'tpl-A' },
     error: null,
   })
   lib.getContractTemplate.mockImplementation(async (id: string) => ({
@@ -522,6 +564,45 @@ describe('sponsor CRM bulk and single mutations are conference-scoped (#730)', (
     ).resolves.toBeTruthy()
     expect(lib.createSponsorActivity).toHaveBeenCalled()
   })
+
+  it('crm.activities.update refuses another conference’s activity', async () => {
+    foreign('sponsorActivity')
+    await expect(
+      sponsor().crm.activities.update({
+        id: 'act-B',
+        description: 'pwned',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(lib.updateSponsorActivity).not.toHaveBeenCalled()
+  })
+
+  it('crm.activities.delete refuses another conference’s activity', async () => {
+    foreign('sponsorActivity')
+    await expect(
+      sponsor().crm.activities.delete({ id: 'act-B' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(lib.deleteSponsorActivity).not.toHaveBeenCalled()
+  })
+
+  it('crm.activities.update and delete work for our own activity', async () => {
+    owned('sponsorActivity')
+    await expect(
+      sponsor().crm.activities.update({
+        id: 'act-A',
+        description: 'updated',
+      }),
+    ).resolves.toEqual({ success: true })
+    expect(lib.updateSponsorActivity).toHaveBeenCalledWith(
+      'act-A',
+      'sp-admin',
+      'updated',
+      undefined,
+    )
+    await expect(
+      sponsor().crm.activities.delete({ id: 'act-A' }),
+    ).resolves.toEqual({ success: true })
+    expect(lib.deleteSponsorActivity).toHaveBeenCalledWith('act-A', 'sp-admin')
+  })
 })
 
 describe('contract templates are conference-scoped (#730)', () => {
@@ -547,6 +628,55 @@ describe('contract templates are conference-scoped (#730)', () => {
       sponsor().contractTemplates.delete({ id: 'tpl-B' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(lib.deleteContractTemplate).not.toHaveBeenCalled()
+  })
+
+  it('create refuses a foreign sponsorTier reference', async () => {
+    h.tenantById = { 'tier-B': tenantOf('theirs', 'sponsorTier') }
+    await expect(
+      sponsor().contractTemplates.create({
+        title: 'Terms',
+        conference: CONF_A,
+        tier: 'tier-B',
+        language: 'en',
+        sections: [{ heading: 'Scope' }],
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(lib.createContractTemplate).not.toHaveBeenCalled()
+  })
+
+  it('update refuses a foreign sponsorTier reference', async () => {
+    h.tenantById = {
+      'tpl-A': tenantOf('ours', 'contractTemplate'),
+      'tier-B': tenantOf('theirs', 'sponsorTier'),
+    }
+    await expect(
+      sponsor().contractTemplates.update({
+        id: 'tpl-A',
+        tier: 'tier-B',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(lib.updateContractTemplate).not.toHaveBeenCalled()
+  })
+
+  it('findBest refuses a foreign sponsorTier reference', async () => {
+    h.tenantById = { 'tier-B': tenantOf('theirs', 'sponsorTier') }
+    await expect(
+      sponsor().contractTemplates.findBest({ tierId: 'tier-B' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(lib.findBestContractTemplate).not.toHaveBeenCalled()
+  })
+
+  it('previewPdf refuses a foreign sponsorTier reference', async () => {
+    h.tenantById = { 'tier-B': tenantOf('theirs', 'sponsorTier') }
+    await expect(
+      sponsor().contractTemplates.previewPdf({
+        title: 'Preview',
+        language: 'en',
+        sections: [{ heading: 'Scope' }],
+        tierId: 'tier-B',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(lib.getSponsorTier).not.toHaveBeenCalled()
   })
 
   it('our OWN template still reads, updates and deletes', async () => {
@@ -622,12 +752,28 @@ describe('crm.activities.list is conference-scoped (#863 row 4)', () => {
 })
 
 /**
- * #863 rows 5-6. Both procedures take a `templateId` straight from the client
- * and read it with the GLOBAL `getContractTemplate`. `sendContract` renders the
- * result into the PDF this conference signs and mails; `generatePdf` hands it
- * back to the caller as base64, so a foreign template's full terms were readable
- * without sending anything.
+ * #863 rows 5-6. Both procedures take a template id straight from the client
+ * and read it with the GLOBAL `getContractTemplate`. The contract send
+ * (`crm.sendCommunication`, kind `contract`, #1264) renders the result into the
+ * PDF this conference signs and mails; `generatePdf` hands it back to the
+ * caller as base64, so a foreign template's full terms were readable without
+ * sending anything.
  */
+const CONTRACT_SEND = {
+  sponsorForConferenceId: 'sfc-A',
+  kind: 'contract' as const,
+  contractAction: 'send' as const,
+  recipientKeys: ['c1'],
+  subject: 'Sponsorship Agreement',
+  message: JSON.stringify([
+    {
+      _type: 'block',
+      _key: 'b1',
+      style: 'normal',
+      children: [{ _type: 'span', _key: 's1', text: 'Please sign.' }],
+    },
+  ]),
+}
 describe('contract rendering refuses a foreign template (#863 rows 5-6)', () => {
   async function settle<T>(p: Promise<T>) {
     try {
@@ -637,16 +783,21 @@ describe('contract rendering refuses a foreign template (#863 rows 5-6)', () => 
     }
   }
 
-  it('sendContract does not render another tenant’s terms', async () => {
+  it('a contract send does not render another tenant’s terms', async () => {
     // The sponsor half is OURS and contract-ready, so nothing but the template
     // guard can stop this. Unguarded, `rendered()` holds the other tenant's
     // template — which is what would have been signed and mailed.
-    h.tenantById = { 'tpl-B': tenantOf('theirs', 'contractTemplate') }
+    // The sponsor half is OURS (the send guards it first, #1261), so only the
+    // template guard can refuse.
+    h.tenantById = {
+      'sfc-A': tenantOf('ours', 'sponsorForConference'),
+      'tpl-B': tenantOf('theirs', 'contractTemplate'),
+    }
 
     const outcome = await settle(
-      sponsor().crm.sendContract({
-        sponsorForConferenceId: 'sfc-A',
-        templateId: 'tpl-B',
+      sponsor().crm.sendCommunication({
+        ...CONTRACT_SEND,
+        contractTemplateId: 'tpl-B',
       }),
     )
 
@@ -675,7 +826,10 @@ describe('contract rendering refuses a foreign template (#863 rows 5-6)', () => 
   })
 
   it('generatePdf still renders OUR OWN template', async () => {
-    h.tenantById = { 'tpl-A': tenantOf('ours', 'contractTemplate') }
+    h.tenantById = {
+      'sfc-A': tenantOf('ours', 'sponsorForConference'),
+      'tpl-A': tenantOf('ours', 'contractTemplate'),
+    }
 
     await expect(
       sponsor().contractTemplates.generatePdf({
@@ -686,15 +840,24 @@ describe('contract rendering refuses a foreign template (#863 rows 5-6)', () => 
     expect(rendered()).toEqual(['Our terms'])
   })
 
-  it('sendContract still reaches OUR OWN template', async () => {
+  it('a contract send still reaches OUR OWN template', async () => {
     // Delivery itself (asset upload, mail) is out of scope here; getting past
     // the guard to the template read is the positive result.
-    h.tenantById = { 'tpl-A': tenantOf('ours', 'contractTemplate') }
+    h.tenantById = {
+      'sfc-A': tenantOf('ours', 'sponsorForConference'),
+      'tpl-A': tenantOf('ours', 'contractTemplate'),
+    }
+    // Past the guards, the contract kind also refuses a localhost domain
+    // before reading the template; this row is about reaching the template.
+    h.getConference.mockResolvedValue({
+      ...(await h.getConference()),
+      domain: 'ours.example',
+    })
 
     await settle(
-      sponsor().crm.sendContract({
-        sponsorForConferenceId: 'sfc-A',
-        templateId: 'tpl-A',
+      sponsor().crm.sendCommunication({
+        ...CONTRACT_SEND,
+        contractTemplateId: 'tpl-A',
       }),
     )
 
@@ -842,7 +1005,10 @@ describe('CRM references must belong to this tenant (#863 row 7)', () => {
   })
 
   it('update still applies our OWN tier', async () => {
-    h.tenantById = { 'tier-A': tenantOf('ours', 'sponsorTier') }
+    h.tenantById = {
+      'sfc-A': tenantOf('ours', 'sponsorForConference'),
+      'tier-A': tenantOf('ours', 'sponsorTier'),
+    }
     lib.getSponsorForConference.mockResolvedValue({
       sponsorForConference: {
         _id: 'sfc-A',

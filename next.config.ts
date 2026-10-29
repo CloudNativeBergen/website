@@ -68,13 +68,34 @@ const config: NextConfig = {
           },
         ],
       },
+      {
+        // The attendee feedback page's path IS the Feedback Code (speaker
+        // feedback spec §7.1). A response header governs the document from
+        // its first byte; the page's `<meta name="referrer">` arrives only
+        // with the streamed metadata, after the CSS, script and font requests
+        // have gone out carrying the full URL.
+        source: '/f/:path*',
+        headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
+      },
     ]
   },
   // PostHog ingestion proxy (issue #1008): the browser posts to a first-party,
   // non-obvious path and the edge forwards it to the EU hosts. The path and
   // the hosts are defined once in `src/lib/posthog/ingest.ts`.
   async rewrites() {
-    return posthogRewrites()
+    return [
+      ...posthogRewrites(),
+      // A Feedback Code typed with caps lock (`/F/K7M2QX`) would otherwise hit
+      // the not-found page, whose client links could expose the code to a
+      // future history-tracking script on Back (speaker feedback spec §7.1).
+      // Next matches case-insensitively, so this also matches `/f/<code>` and
+      // rewrites it to itself. A REWRITE, never a redirect: a redirect
+      // matching its own destination would loop.
+      { source: '/F/:code', destination: '/f/:code' },
+      // Extra segments after a code (`/f/k7m2qx/oops`) would also reach the
+      // not-found page; they get the session's page instead.
+      { source: '/f/:code/:rest+', destination: '/f/:code' },
+    ]
   },
   // PostHog's API paths carry trailing slashes (`/e/`, `/flags/`); the
   // automatic trailing-slash redirect would 308 every capture POST. It is

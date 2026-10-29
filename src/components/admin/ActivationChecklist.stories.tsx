@@ -150,6 +150,46 @@ export const AllDone: Story = {
   ],
 }
 
+/**
+ * Live, before the event: launch is done, and the "Get ready for the event"
+ * stage shows what is still missing. A fixed clock keeps the stage visible.
+ */
+export const EventPrep: Story = {
+  args: {
+    checklist: buildActivationChecklist(
+      {
+        ...ALL_DONE,
+        programDate: '2026-04-01',
+        schedules: [{ tracks: [{}] }],
+        socialHashtag: '#cnd26',
+      },
+      emailAndSlackOk,
+      {
+        now: new Date('2026-04-20T12:00:00Z'),
+        eventFacts: {
+          unscheduledTalks: 2,
+          hasSpeakerInfo: true,
+          speakerInfoGaps: 0,
+          briefingSent: false,
+          speakersWithTodos: 3,
+          hasPhotoWall: false,
+          sponsors: 4,
+          sponsorsWithoutLogo: 1,
+        },
+      },
+    ),
+  },
+  decorators: [
+    (Story) => (
+      <div className="min-h-screen bg-gray-50">
+        <Frame>
+          <Story />
+        </Frame>
+      </div>
+    ),
+  ],
+}
+
 export const FreshDark: Story = {
   args: { checklist: buildActivationChecklist(FRESH, []) },
   decorators: [

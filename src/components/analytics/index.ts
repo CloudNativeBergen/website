@@ -1,3 +1,5 @@
 export { AnalyticsConsentBar } from './AnalyticsConsentBar'
 export { AnalyticsChoice } from './AnalyticsChoice'
 export { AnalyticsRouteGate } from './AnalyticsRouteGate'
+export { HiddenOnFeedbackPage } from './HiddenOnFeedbackPage'
+export { VercelInsights } from './VercelInsights'

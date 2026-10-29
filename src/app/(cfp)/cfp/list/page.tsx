@@ -4,13 +4,18 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { getProposals } from '@/lib/proposal/data/sanity'
 import { getGalleryImages } from '@/lib/gallery/sanity'
+import { readSpeakerTalkPhotos } from '@/lib/photo-wall/wall-page'
 import { getWorkshopSignupStatisticsBySpeaker } from '@/lib/workshop/sanity'
 import { getTravelSupport } from '@/lib/travel-support/sanity'
-import { clientReadCached } from '@/lib/sanity/client'
+import { clientReadCached, clientReadUncached } from '@/lib/sanity/client'
 import { resolveSnapshotField } from '@/lib/speaker/utils'
 import { groq } from 'next-sanity'
 import { isConferenceOver } from '@/lib/conference/state'
+import { ATTENDEE_PAGE_LIVE } from '@/lib/feedback'
+import { getSpeakerFeedbackChips } from '@/lib/feedback/server'
+import { findOutboundOrigin } from '@/lib/conference/baseUrl'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { shareTags } from '@/lib/share/social'
 import { CompactConferenceCard } from '@/components/cfp/CompactConferenceCard'
 import { SpeakerShareSidebar } from '@/components/cfp/SpeakerShareSidebar'
 import { BadgeShare } from '@/components/cfp/BadgeShare'
@@ -19,6 +24,11 @@ import { ProposalConfirmationHandler } from '@/components/cfp/ProposalConfirmati
 import { NotSeeingTalksPrompt } from '@/components/cfp/NotSeeingTalksPrompt'
 import { MessagesIntroCard } from '@/components/cfp/MessagesIntroCard'
 import { startProviderLink } from '@/app/(cfp)/cfp/profile/link-actions'
+import {
+  loadDashboardBriefing,
+  type BriefingFields,
+} from '@/lib/speaker/dashboardBriefing'
+import { getDinnerChoice } from '@/lib/speaker/dinnerChoice-sanity'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import type { Conference } from '@/lib/conference/types'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
@@ -62,6 +72,7 @@ export default async function SpeakerDashboard() {
     providers?: string[] | null
     image?: string | null
     title?: string | null
+    talkPhotosOptOut?: boolean | null
   } | null>(
     // groq-global-scoped: session-derived self-read — `$id` is the signed-in
     // speaker's OWN id from the session token, never client input; speakers are
@@ -69,6 +80,7 @@ export default async function SpeakerDashboard() {
     `*[_type == "speaker" && _id == $id][0]{
       providers,
       title,
+      talkPhotosOptOut,
       "image": coalesce(image.asset->url, imageURL)
     }`,
     { id: speakerId },
@@ -96,6 +108,7 @@ export default async function SpeakerDashboard() {
     *[_type == "conference" && organization._ref == $orgId] | order(startDate desc) {
       _id,
       title,
+      organization,
       organizer,
       city,
       country,
@@ -117,7 +130,9 @@ export default async function SpeakerDashboard() {
       contactEmail,
       domains,
       formats,
-      features
+      features,
+      socialHashtag,
+      socialLinks
     }
   `
 
@@ -138,6 +153,7 @@ export default async function SpeakerDashboard() {
         workshopStats,
         { travelSupport },
         badges,
+        talkPhotos,
       ] = await Promise.all([
         getProposals({
           speakerId,
@@ -174,20 +190,81 @@ export default async function SpeakerDashboard() {
           { speakerId, conferenceId: conference._id },
           { next: { revalidate: 300 } },
         ),
+        // The session's own speaker id: the read answers only their talks.
+        readSpeakerTalkPhotos(conference._id, speakerId).catch((error) => {
+          console.error(
+            `Could not read talk photos for ${conference._id}`,
+            error,
+          )
+          return []
+        }),
       ])
 
       const isOver = isConferenceOver(conference)
       const canEditProposals = !isOver
 
+      // Session Feedback chips (speaker feedback spec §9.4), read only for an
+      // edition where the speaker has a confirmed talk. A failed read hides
+      // the chips, never the dashboard.
+      const feedbackChips =
+        ATTENDEE_PAGE_LIVE &&
+        (proposals ?? []).some((p) => p.status === 'confirmed')
+          ? await getSpeakerFeedbackChips({
+              conference,
+              speakerId,
+              now: new Date(),
+            }).catch((error) => {
+              console.error(
+                `Could not read Session Feedback chips for ${conference._id}`,
+                error,
+              )
+              return {}
+            })
+          : {}
+
+      const briefing = await loadDashboardBriefing({
+        conference,
+        currentConferenceId: currentConference?._id,
+        isOver,
+        proposals: proposals ?? [],
+        speakerId,
+        organizer: speaker,
+        travelSupport,
+        // Live, not through the 300 s cache: a last-minute change (a hike
+        // called off for weather) must show at once.
+        fetchFields: (id) =>
+          clientReadUncached.fetch<BriefingFields | null>(
+            // groq-global-scoped: `$id` is the current domain's conference.
+            groq`*[_type == "conference" && _id == $id][0]{
+              speakerInfo,
+              speakerDinnerInfo,
+              venueName,
+              venueAddress,
+              venueTravelInfo
+            }`,
+            { id },
+          ),
+        fetchDinnerChoice: (id) => getDinnerChoice(id, speakerId),
+      })
+
       return {
         conference,
         proposals: proposals || [],
+        feedbackChips,
+        // The section a chip links to opens only on the talk's own host (spec
+        // §5): this host for this edition, the edition's own domain otherwise.
+        feedbackLinkOrigin:
+          conference._id === currentConference?._id
+            ? ''
+            : findOutboundOrigin(conference),
         galleryImages,
         workshopStats,
         travelSupport,
         badges: badges || [],
+        talkPhotos,
         isOver,
         canEditProposals,
+        ...briefing,
       } as ConferenceWithSpeakerData
     } catch (error) {
       console.error(
@@ -216,7 +293,8 @@ export default async function SpeakerDashboard() {
       c.galleryImages.length > 0 ||
       c.workshopStats.length > 0 ||
       c.travelSupport !== null ||
-      c.badges.length > 0,
+      c.badges.length > 0 ||
+      !!c.briefing,
   )
 
   // Prioritize the current conference by moving it to the top of the list
@@ -233,11 +311,7 @@ export default async function SpeakerDashboard() {
 
   // Get confirmed talks for speaker share
   const confirmedTalks = activeConferences
-    .flatMap((c) =>
-      c.proposals.filter(
-        (p) => p.status === 'confirmed' || p.status === 'accepted',
-      ),
-    )
+    .flatMap((c) => c.proposals.filter((p) => p.status === 'confirmed'))
     .slice(0, 1) // Show only the first confirmed talk
 
   // Get all badges sorted by issue date (newest first), prioritizing the current conference
@@ -279,19 +353,21 @@ export default async function SpeakerDashboard() {
   // A talk title must never fall back to a brand name — the share card is only
   // rendered when a confirmed talk exists, so this is a defensive placeholder.
   const talkTitle = primaryTalk?.title || 'Untitled Talk'
-  const eventName = primaryTalk
+  const talkConference = primaryTalk
     ? activeConferences.find((c) =>
         c.proposals.some((p) => p._id === primaryTalk._id),
-      )?.conference.title || PLATFORM_NAME
-    : PLATFORM_NAME
+      )?.conference
+    : undefined
+  const eventName = talkConference?.title || PLATFORM_NAME
 
   // Conference name for the latest badge's sidebar card, degrading to the
   // platform label when the badge's conference can't be resolved.
-  const badgeEventName = latestBadge
+  const badgeConference = latestBadge
     ? activeConferences.find((c) =>
         c.badges.some((b) => b._id === latestBadge._id),
-      )?.conference.title || PLATFORM_NAME
-    : PLATFORM_NAME
+      )?.conference
+    : undefined
+  const badgeEventName = badgeConference?.title || PLATFORM_NAME
 
   if (activeConferences.length === 0) {
     return (
@@ -355,7 +431,10 @@ export default async function SpeakerDashboard() {
             <CompactConferenceCard
               key={conferenceData.conference._id}
               data={conferenceData}
-              speaker={speaker}
+              speaker={{
+                ...speaker,
+                talkPhotosOptOut: currentSpeaker?.talkPhotosOptOut === true,
+              }}
               defaultExpanded={true}
             />
           ))}
@@ -376,6 +455,7 @@ export default async function SpeakerDashboard() {
               <BadgeShare
                 badge={latestBadge}
                 eventName={badgeEventName}
+                tags={shareTags(badgeConference)}
                 domain={domain}
                 className="w-full"
               />
@@ -386,6 +466,7 @@ export default async function SpeakerDashboard() {
                 speaker={speakerWithTalks}
                 talkTitle={talkTitle}
                 eventName={eventName}
+                tags={shareTags(talkConference)}
                 baseDomain={domain}
               />
             )}

@@ -25,11 +25,18 @@ import {
 } from '@/lib/notification/sanity'
 import { TravelSupportStatus, ExpenseStatus } from '@/lib/travel-support/types'
 import type { NotificationInput } from '@/lib/notification/types'
+import { sendTravelSupportDecisionEmail } from '@/lib/email/travel-support'
 
 vi.mock('@/lib/travel-support/sanity')
 vi.mock('@/lib/travel-support/auth')
 vi.mock('@/lib/notification/sanity')
 vi.mock('@/lib/auth', () => ({ getAuthSession: vi.fn() }))
+vi.mock('@/lib/email/travel-support', () => ({
+  sendTravelSupportDecisionEmail: vi.fn(async () => true),
+}))
+vi.mock('@/server/runAfterResponse', () => ({
+  runAfterResponse: (task: () => Promise<void>) => void task(),
+}))
 // The admin procedures resolve the request's org from the domain conference and
 // only grant organizer when the session speaker organizes THAT org.
 vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
@@ -172,6 +179,15 @@ describe('travelSupport.admin.updateStatus — affected-speaker notifications', 
     expect(item.message).toBe('Looks good')
     expect(item.link).toBe('/cfp/expense')
     expect(item.actorId).toBe('actor-1')
+    // Money decisions also go out by email.
+    expect(sendTravelSupportDecisionEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        speaker: expect.objectContaining({ email: 'j@test.com' }),
+        decision: 'Travel support approved',
+        notes: 'Looks good',
+        conference: expect.objectContaining({ _id: 'conf-1' }),
+      }),
+    )
   })
 
   it.each([
@@ -195,6 +211,7 @@ describe('travelSupport.admin.updateStatus — affected-speaker notifications', 
         status,
       })
       expect(createMock).not.toHaveBeenCalled()
+      expect(sendTravelSupportDecisionEmail).not.toHaveBeenCalled()
     },
   )
 
@@ -256,6 +273,12 @@ describe('travelSupport.admin.updateExpenseStatus — affected-speaker notificat
     expect(item.link).toBe('/cfp/expense')
     expect(item.actorId).toBe('actor-1')
     expect(item.conferenceId).toBe('conf-1')
+    expect(sendTravelSupportDecisionEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        decision: 'Expense approved',
+        notes: 'Within policy',
+      }),
+    )
   })
 
   it('titles a rejected expense', async () => {
@@ -274,6 +297,7 @@ describe('travelSupport.admin.updateExpenseStatus — affected-speaker notificat
       status: ExpenseStatus.PENDING,
     })
     expect(createMock).not.toHaveBeenCalled()
+    expect(sendTravelSupportDecisionEmail).not.toHaveBeenCalled()
   })
 
   it('does NOT notify when the affected speaker is the actor', async () => {

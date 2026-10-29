@@ -28,6 +28,7 @@ import {
   resolveTicketingCredentials,
   resolveTicketingProvider,
   hasTicketingBinding,
+  ticketingCredentialsConfigured,
 } from './index'
 import { CheckinProvider, CHECKIN_API_URL } from './checkin'
 import { TitoProvider } from './tito'
@@ -151,6 +152,42 @@ describe('getTicketingProvider factory', () => {
     await getTicketingProvider('checkin', CREDS).fetchOrderPaymentDetails(1)
     expect(fetchSpy).toHaveBeenCalledWith(CHECKIN_API_URL, expect.anything())
   })
+})
+
+/**
+ * The gate-side question (`canReadTicketsForOrg`) must give the provider's OWN
+ * answer, so it can never bless credentials the provider reports unconfigured.
+ * Pinned against the instances, across the shapes a bag can take.
+ */
+describe('ticketingCredentialsConfigured', () => {
+  const BAGS = [
+    {},
+    { webhookSecret: 'w' },
+    { apiKey: 'k' },
+    { apiSecret: 's' },
+    { apiKey: 'k', apiSecret: 's' },
+    { apiKey: 'k', apiSecret: 's', webhookSecret: 'w' },
+    { apiKey: '', apiSecret: 's' },
+  ]
+
+  it.each(['checkin', 'tito'] as const)(
+    'agrees with %s.isConfigured() for every bag',
+    (providerType) => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const viaInstance = BAGS.map((bag) =>
+        getTicketingProvider(providerType, bag).isConfigured(),
+      )
+      expect(
+        BAGS.map((bag) => ticketingCredentialsConfigured(providerType, bag)),
+      ).toEqual(viaInstance)
+      // And the instances answer per vendor: Checkin needs both, Tito a key.
+      expect(viaInstance).toEqual(
+        providerType === 'checkin'
+          ? [false, false, false, false, true, true, false]
+          : [false, false, true, false, true, true, false],
+      )
+    },
+  )
 })
 
 describe('platformCheckinCredentials', () => {

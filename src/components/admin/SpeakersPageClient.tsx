@@ -16,6 +16,7 @@ import {
   CreditCardIcon,
   ArrowsPointingInIcon,
   TicketIcon,
+  InformationCircleIcon,
 } from '@heroicons/react/24/outline'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
@@ -23,8 +24,62 @@ import { TicketAddressModal } from '@/components/admin/TicketAddressModal'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
-import Link from 'next/link'
 import type { SpeakerTicketStatus } from '@/lib/tickets/speakerStatus'
+import { ModalShell } from '@/components/ModalShell'
+
+export function SpeakerInviteLinkPrompt({ onSaved }: { onSaved: () => void }) {
+  const { showNotification } = useNotification()
+  const save = api.conference.updateSpeakerRegistrationLink.useMutation()
+  const [link, setLink] = useState('')
+  const valid = /^https:\/\/\S+$/i.test(link)
+  const handleSave = async () => {
+    try {
+      await save.mutateAsync({ speakerRegistrationLink: link })
+      showNotification({
+        type: 'success',
+        title: 'Speaker invite link saved',
+        message: 'This send and every later one now point speakers to it.',
+      })
+      onSaved()
+    } catch (error) {
+      showNotification({
+        type: 'error',
+        title: 'Could not save the link',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  return (
+    <div
+      role="alert"
+      className="mt-4 space-y-3 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-900/50 dark:bg-yellow-900/20"
+    >
+      <p className="font-inter text-sm text-yellow-800 dark:text-yellow-200">
+        This conference has no speaker ticket invite link. Without it the email
+        carries no claim link and can only point at the ticket provider&apos;s
+        own invitation, which may never arrive. Paste Checkin&apos;s invite link
+        for the speaker ticket category to save it on the conference.
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="url"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          placeholder="https://app.checkin.no/..."
+          className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-blue-600 focus:ring-inset sm:text-sm sm:leading-6 dark:bg-gray-800 dark:text-white dark:ring-gray-700"
+        />
+        <button
+          type="button"
+          disabled={!valid || save.isPending}
+          onClick={handleSave}
+          className="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50"
+        >
+          {save.isPending ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 interface SpeakersPageClientProps {
   speakers: (Speaker & { proposals: ProposalExisting[] })[]
@@ -76,6 +131,7 @@ export default function SpeakersPageClient({
   const [ticketAddressSpeakerId, setTicketAddressSpeakerId] = useState<
     string | null
   >(null)
+  const [isMissingLinkModalOpen, setIsMissingLinkModalOpen] = useState(false)
   // A SET, not one id: two rows can be in flight at once, and a single id let
   // the first one to finish clear the other row's pending state — which made a
   // marker-bypassing re-send clickable again mid-flight.
@@ -177,6 +233,10 @@ export default function SpeakersPageClient({
   }
 
   const handleSendTicketInvitation = async (speakerId: string) => {
+    if (noRegistrationLink) {
+      setIsMissingLinkModalOpen(true)
+      return
+    }
     if (sendingTicketSpeakerIds.has(speakerId)) return
     setSendingTicketSpeakerIds((prev) => new Set(prev).add(speakerId))
     try {
@@ -293,11 +353,6 @@ export default function SpeakersPageClient({
           }
           stats={[
             {
-              value: stats.totalSpeakers,
-              label: 'Total speakers',
-              color: 'slate' as const,
-            },
-            {
               value: `${stats.confirmedSpeakers} (${
                 stats.totalSpeakers > 0
                   ? Math.round(
@@ -307,6 +362,7 @@ export default function SpeakersPageClient({
               }%)`,
               label: 'Confirmed',
               color: 'green' as const,
+              subtitle: `of ${stats.totalSpeakers} speakers`,
             },
             {
               value: `${stats.newSpeakers} (${
@@ -369,6 +425,12 @@ export default function SpeakersPageClient({
               variant: 'secondary',
             },
             {
+              label: 'Speaker Info',
+              href: '/admin/speakers/info',
+              icon: <InformationCircleIcon className="h-4 w-4" />,
+              variant: 'secondary',
+            },
+            {
               label: 'Duplicates',
               onClick: () => router.push('/admin/speakers/duplicates'),
               icon: <ArrowsPointingInIcon className="h-4 w-4" />,
@@ -401,6 +463,7 @@ export default function SpeakersPageClient({
             }
             ticketStatuses={ticketStatuses}
             ticketStatusesLoading={ticketStatusQuery.isPending}
+            ticketQuestions={ticketStatusQuery.data?.questions}
             onSendTicketInvitation={handleSendTicketInvitation}
             onFindTicket={setTicketAddressSpeakerId}
             sendingTicketSpeakerIds={sendingTicketSpeakerIds}
@@ -422,11 +485,7 @@ export default function SpeakersPageClient({
             }
             // Not a disabled button: the row says why, because the fix is a
             // setting the organizer owns and a dead control does not name it.
-            ticketActionsUnavailableReason={
-              noRegistrationLink
-                ? 'No speaker registration link — add one in Settings → Registration'
-                : undefined
-            }
+            ticketActionsUnavailableReason={undefined}
             onEditSpeaker={handleEditSpeaker}
             onPreviewSpeaker={handlePreviewSpeaker}
           />
@@ -444,21 +503,32 @@ export default function SpeakersPageClient({
           confirmDisabled={!preview || preview.blocked || preview.toSend === 0}
         >
           {preview && !preview.hasRegistrationLink && (
-            <p className="font-inter rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
-              This conference has no speaker registration link. Without it the
-              email carries no claim link and can only point at the ticket
-              provider&apos;s own invitation, which may never arrive. Add it
-              under{' '}
-              <Link
-                href="/admin/settings"
-                className="font-semibold underline underline-offset-2"
-              >
-                Settings → Registration
-              </Link>{' '}
-              and open this again.
-            </p>
+            <SpeakerInviteLinkPrompt
+              onSaved={() => {
+                utils.speaker.admin.ticketInvitationConfig.invalidate()
+                utils.speaker.admin.ticketInvitationPreview.invalidate()
+              }}
+            />
           )}
         </ConfirmationModal>
+
+        <ModalShell
+          isOpen={isMissingLinkModalOpen}
+          onClose={() => setIsMissingLinkModalOpen(false)}
+        >
+          <div className="p-6">
+            <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+              Missing Registration Link
+            </h2>
+            <SpeakerInviteLinkPrompt
+              onSaved={() => {
+                utils.speaker.admin.ticketInvitationConfig.invalidate()
+                utils.speaker.admin.ticketInvitationPreview.invalidate()
+                setIsMissingLinkModalOpen(false)
+              }}
+            />
+          </div>
+        </ModalShell>
 
         <TicketAddressModal
           isOpen={ticketAddressSpeakerId !== null}
@@ -495,6 +565,7 @@ export default function SpeakersPageClient({
             onClose={handleCloseModals}
             speaker={selectedSpeaker}
             talks={previewTalks}
+            ticketStatus={ticketStatuses?.[selectedSpeaker._id]}
           />
         )}
 

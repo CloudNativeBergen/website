@@ -1,5 +1,7 @@
 'use client'
 
+import React from 'react'
+import { api } from '@/lib/trpc/client'
 import { emailBrandColor } from '@/lib/branding/theme'
 import { AdminPageHeader } from '@/components/admin'
 import { GeneralBroadcastModal } from '@/components/admin'
@@ -14,6 +16,7 @@ import {
   ChartBarIcon,
   CurrencyDollarIcon,
   DocumentTextIcon,
+  EnvelopeIcon,
 } from '@heroicons/react/24/outline'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
@@ -47,7 +50,21 @@ export function SponsorTiersPageClient({
     handleSyncContacts,
   } = useSponsorBroadcast()
 
-  const recipientCount = sponsors.length
+  const sponsorsQuery = api.sponsor.crm.list.useQuery(
+    { status: ['closed-won'] },
+    { staleTime: 30000 },
+  )
+
+  const recipientCount = React.useMemo(() => {
+    if (!sponsorsQuery.data) return 0
+    const emails = new Set<string>()
+    for (const s of sponsorsQuery.data) {
+      for (const c of s.contactPersons ?? []) {
+        if (c.email) emails.add(c.email.trim().toLowerCase())
+      }
+    }
+    return emails.size
+  }, [sponsorsQuery.data])
 
   return (
     <>
@@ -58,6 +75,14 @@ export function SponsorTiersPageClient({
           description="Configure sponsorship tiers and manage sponsor assignments for"
           contextHighlight={conference.title}
           backLink={{ href: '/admin/sponsors', label: 'Back to Dashboard' }}
+          actionItems={[
+            {
+              label: `Send Broadcast (${recipientCount})`,
+              icon: <EnvelopeIcon className="h-4 w-4" />,
+              onClick: () => setIsBroadcastModalOpen(true),
+              disabled: recipientCount === 0,
+            },
+          ]}
         />
 
         <div className="mt-8">
@@ -207,7 +232,7 @@ export function SponsorTiersPageClient({
         onSyncContacts={handleSyncContacts}
         recipientCount={recipientCount}
         recipientType="sponsors"
-        fromEmail={`${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail}>`}
+        fromEmail={`${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail || conference.contactEmail || ''}>`}
         eventName={conference.title}
         eventLocation={`${conference.city}, ${conference.country}`}
         eventDate={formatConferenceDateLong(conference.startDate)}

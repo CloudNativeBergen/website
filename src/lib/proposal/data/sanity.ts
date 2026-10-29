@@ -1,9 +1,17 @@
 import { ProposalExisting, ProposalInput, Status } from '@/lib/proposal/types'
 import {
+  clientReadCached,
   clientReadUncached as clientRead,
   clientWrite,
 } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
+import {
+  LISTED_WORKSHOP_FORMATS,
+  LISTED_WORKSHOP_STATUSES,
+  CANCELED_WORKSHOP_STATUSES,
+  isCanceledWorkshop,
+  isListedWorkshop,
+} from '@/lib/workshop/listed'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { Reference } from 'sanity'
 import { v4 as randomUUID } from 'uuid'
@@ -289,7 +297,7 @@ export async function getProposal({
         _id
       },
       conference-> {
-        _id, title, startDate, endDate
+        _id, title, startDate, endDate, domains
       },
       topics[]-> {
         _id, title, color, slug, description
@@ -383,6 +391,9 @@ export async function getProposals({
     && (!defined($statuses) || status in $statuses)
   ]{
     ...,
+    // The Feedback Code is for the talk's speakers only (speaker feedback
+    // spec §9.2), and this list feeds the PUBLIC workshop list whole.
+    "feedbackCode": null,
     speakers[]-> {
       _id, name, email, providers, "image": coalesce(image.asset->url, imageURL), flags, "slug": slug.current,
       ${includePreviousAcceptedTalks ? `${PREVIOUS_ACCEPTED_TALKS_PROJECTION},` : ''}
@@ -470,9 +481,10 @@ export async function updateProposal(
 
 /**
  * Document types that only exist in service of a proposal and are safe to
- * cascade-delete together with it.
+ * cascade-delete together with it. `workshopSeats` is a workshop's seats guard
+ * (#1344); its sign-ups, which do block, hold the seats themselves.
  */
-const CASCADE_DELETE_TYPES = ['coSpeakerInvitation', 'review']
+const CASCADE_DELETE_TYPES = ['coSpeakerInvitation', 'review', 'workshopSeats']
 
 /**
  * Types that reference a proposal only WEAKLY and must neither block deletion
@@ -487,6 +499,13 @@ const CASCADE_DELETE_TYPES = ['coSpeakerInvitation', 'review']
  * thread and notifications stays deletable.
  */
 const NON_BLOCKING_TYPES = ['notification', 'conversation']
+
+/**
+ * Feedback Responses (speaker feedback spec §4.1) STRONGLY reference their
+ * talk, and a talk can have hundreds: they are deleted in their own chunked
+ * step, before the final transaction, rather than in it (which is unchunked).
+ */
+const CHUNKED_CASCADE_TYPES = ['feedbackResponse']
 
 /** Deletes per transaction when cascading a proposal's thread — keeps each
  * commit well under Sanity's mutation-per-transaction ceiling. */
@@ -567,11 +586,22 @@ async function describeBlockingProjects(
     : (BLOCKING_TYPE_DESCRIPTIONS.videoProject ?? 'a saved studio video')
 }
 
+/**
+ * Delete a proposal and its cascade. `conferenceId` is the deleted talk's
+ * conference, read before the delete, so the caller can expire caches keyed on
+ * it (the Feedback Code index, speaker feedback spec §5.1). This module is
+ * also bundled into client components, so it cannot expire them itself.
+ * `null` when nothing was deleted.
+ */
 export async function deleteProposal(
   proposalId: string,
-): Promise<{ err: Error | null }> {
+): Promise<{ err: Error | null; conferenceId?: string | null }> {
   let err = null
+  let deletedFrom: string | null = null
   try {
+    // FIRST, before any cascade commits: a failed lookup must leave nothing
+    // half-deleted.
+    const conferenceId = await talkConferenceId(proposalId)
     // Find every document that references this proposal. Sanity refuses to
     // delete a document with inbound strong references, so we must handle
     // them up front instead of surfacing a raw 409 to the user.
@@ -601,7 +631,8 @@ export async function deleteProposal(
     const blocking = docs.filter(
       (doc) =>
         !CASCADE_DELETE_TYPES.includes(doc._type) &&
-        !NON_BLOCKING_TYPES.includes(doc._type),
+        !NON_BLOCKING_TYPES.includes(doc._type) &&
+        !CHUNKED_CASCADE_TYPES.includes(doc._type),
     )
 
     if (blocking.length > 0) {
@@ -627,6 +658,9 @@ export async function deleteProposal(
     // ref dangles harmlessly); the message thread is handled just below.
     const cascadeIds = docs
       .filter((doc) => CASCADE_DELETE_TYPES.includes(doc._type))
+      .map((doc) => doc._id)
+    const feedbackResponseIds = docs
+      .filter((doc) => CHUNKED_CASCADE_TYPES.includes(doc._type))
       .map((doc) => doc._id)
 
     // Cascade the proposal's message thread: the conversation(s), their
@@ -723,14 +757,36 @@ export async function deleteProposal(
     )) {
       await commitDeletes(chunk)
     }
+    for (const chunk of chunkArray(
+      feedbackResponseIds,
+      PROPOSAL_DELETE_CHUNK_SIZE,
+    )) {
+      await commitDeletes(chunk)
+    }
     // Final transaction: the cascade dependents (strong refs to the proposal)
     // and the proposal itself, atomically.
     await commitDeletes([...cascadeIds, proposalId])
+    deletedFrom = conferenceId
   } catch (error) {
     console.error('Error deleting proposal:', error)
     err = error as Error
   }
-  return { err }
+  return { err, conferenceId: deletedFrom }
+}
+
+/**
+ * The conference of a talk about to be deleted, for the caller's cache
+ * expiry after the delete. A failed lookup fails the delete before anything
+ * is written: deleting without knowing what to expire would leave the talk's
+ * Feedback Code resolving.
+ */
+async function talkConferenceId(proposalId: string): Promise<string | null> {
+  return clientWrite.fetch<string | null>(
+    // groq-global-scoped: by-id read of the proposal both callers have already proven ownership of.
+    groq`*[_id == $proposalId][0].conference._ref`,
+    { proposalId },
+    { cache: 'no-store' },
+  )
 }
 
 export async function updateProposalStatus(
@@ -1060,25 +1116,33 @@ export async function searchProposals({
  */
 export async function getWorkshops({
   conferenceId,
-  statuses = [Status.confirmed],
   includeScheduleInfo = false,
+  includeCanceled = false,
 }: {
   conferenceId: string
-  statuses?: Status[]
   includeScheduleInfo?: boolean
+  /** The admin's view: canceled and withdrawn workshops too (never listed). */
+  includeCanceled?: boolean
 }): Promise<{
   workshops: ProposalExisting[] // ProposalWithWorkshopData types will be added at runtime
   workshopsError: Error | null
 }> {
   const { proposals, proposalsError } = await getProposals({
     conferenceId,
-    formats: ['workshop_120', 'workshop_240'],
-    statuses,
+    // What the portal lists (#1301): the rule the sign-up refuses by.
+    formats: LISTED_WORKSHOP_FORMATS,
+    statuses: includeCanceled
+      ? [...LISTED_WORKSHOP_STATUSES, ...CANCELED_WORKSHOP_STATUSES]
+      : LISTED_WORKSHOP_STATUSES,
     includeCapacity: true,
     returnAll: true,
   })
 
-  let workshops = proposals
+  // The query reads drafts too (the clients' API version): the one rule
+  // decides, so the portal lists exactly what the sign-up takes.
+  let workshops = proposals.filter(
+    (p) => isListedWorkshop(p) || (includeCanceled && isCanceledWorkshop(p)),
+  )
 
   // If schedule info is requested, fetch and attach schedule data
   if (includeScheduleInfo && !proposalsError) {
@@ -1100,13 +1164,16 @@ export async function getWorkshops({
     } | order(date asc)`
 
     try {
-      const schedules = await clientRead.fetch(
+      // Through the CDN host: when and where a workshop takes place changes
+      // rarely, and a view may be some seconds behind an edit. Capacity and
+      // signups, read above, stay live.
+      const schedules = await clientReadCached.fetch(
         scheduleQuery,
         { conferenceId },
         { cache: 'no-store' },
       )
 
-      workshops = proposals.map((workshop) => {
+      workshops = workshops.map((workshop) => {
         let date, startTime, endTime, room
 
         for (const schedule of schedules || []) {

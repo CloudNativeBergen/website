@@ -26,6 +26,7 @@ export const Waitlisted: Story = { args: { status: Status.waitlisted } }
 export const Confirmed: Story = { args: { status: Status.confirmed } }
 export const Rejected: Story = { args: { status: Status.rejected } }
 export const Withdrawn: Story = { args: { status: Status.withdrawn } }
+export const Canceled: Story = { args: { status: Status.canceled } }
 export const Deleted: Story = { args: { status: Status.deleted } }
 
 export const AllStatuses: Story = {

@@ -33,6 +33,44 @@ describe('withoutKeys / isTemplateEdited', () => {
     )
   })
 
+  it('ignores the ORDER of link annotations — a two-pass merge appends them differently (#1263)', () => {
+    const span = (key: string, text: string, mark: string) => ({
+      _type: 'span',
+      _key: key,
+      text,
+      marks: [mark],
+    })
+    const onePass = {
+      _type: 'block',
+      _key: 'b',
+      markDefs: [
+        { _key: 'a', _type: 'link', href: 'https://conf.example' },
+        { _key: 'b', _type: 'link', href: 'https://conf.example/portal/tok' },
+      ],
+      children: [
+        span('s1', 'https://conf.example', 'a'),
+        span('s2', 'https://conf.example/portal/tok', 'b'),
+      ],
+    }
+    const twoPass = {
+      ...onePass,
+      markDefs: [
+        { _key: 'x', _type: 'link', href: 'https://conf.example/portal/tok' },
+        { _key: 'y', _type: 'link', href: 'https://conf.example' },
+      ],
+      children: [
+        span('s1', 'https://conf.example', 'y'),
+        span('s2', 'https://conf.example/portal/tok', 'x'),
+      ],
+    }
+    expect(
+      isTemplateEdited(
+        { subject: 'S', body: [onePass] },
+        { subject: 'S', message: [twoPass] },
+      ),
+    ).toBe(false)
+  })
+
   it('still sees the links trading places as an edit', () => {
     const swapped = [
       {

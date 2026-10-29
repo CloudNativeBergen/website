@@ -544,11 +544,13 @@ export default defineType({
           type: 'boolean',
           initialValue: true,
         }),
+        // Retired toggle (nothing ever sent under it). Kept hidden so stored
+        // values do not show as unknown fields; the next save drops it.
         defineField({
           name: 'talkConfirmed',
           title: 'Talk Confirmed',
           type: 'boolean',
-          initialValue: true,
+          hidden: true,
         }),
         defineField({
           name: 'coSpeakerInvites',
@@ -618,6 +620,26 @@ export default defineType({
     defineField({
       name: 'socialTagOptOutAt',
       title: 'Opted out of social-post tags at',
+      type: 'datetime',
+      readOnly: true,
+      description:
+        'When the opt-out above was set, stamped by the server. Cleared together with the opt-out.',
+    }),
+    // Talk photos opt-out (talk photos spec §4.2): the same rules as the
+    // social-tag pair above. While any speaker of a talk has it, the talk's
+    // tagged Photo Wall posts are not shown on the program or speaker pages.
+    defineField({
+      name: 'talkPhotosOptOut',
+      title: 'Opted out of talk photos',
+      type: 'boolean',
+      readOnly: true,
+      // NO `initialValue`, for the reason given on `socialTagOptOut`.
+      description:
+        'The speaker asked that attendee photos of their talks are not shown on the program or speaker pages. Absent means not opted out. Managed by the app; only the speaker can clear it.',
+    }),
+    defineField({
+      name: 'talkPhotosOptOutAt',
+      title: 'Opted out of talk photos at',
       type: 'datetime',
       readOnly: true,
       description:

@@ -59,6 +59,8 @@ const createTalk = (
   level: Level.intermediate,
   audiences: [Audience.developer] as Audience[],
   status: Status.confirmed,
+  // Every talk holds a Feedback Code, as on the day (#1472).
+  hasFeedbackCode: true,
   outline: '',
   topics: mockTopics,
   tos: true,
@@ -335,6 +337,43 @@ export const Default: Story = {
   },
 }
 
+/** Day 1 with one talk canceled and one withdrawn after the day was published. */
+const canceledSlotData: FilteredProgramData = {
+  ...twoTrackData,
+  schedules: twoTrackData.schedules.map((day) => ({
+    ...day,
+    tracks: day.tracks.map((track) => ({
+      ...track,
+      talks: track.talks.map((slot) =>
+        slot.talk?._id === 't2' || slot.talk?._id === 't4'
+          ? {
+              ...slot,
+              talk: {
+                ...slot.talk,
+                status:
+                  slot.talk._id === 't2' ? Status.canceled : Status.withdrawn,
+              },
+            }
+          : slot,
+      ),
+    })),
+  })),
+}
+
+export const CanceledSlot: Story = {
+  args: {
+    data: canceledSlotData,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A published day with a canceled and a withdrawn talk. Both keep their slot and read "Cancelled", without title, speakers or links.',
+      },
+    },
+  },
+}
+
 export const MultiDay: Story = {
   args: {
     data: multiDayData,
@@ -396,6 +435,82 @@ export const PastDayCollapsed: Story = {
       description: {
         story:
           'Multi-day schedule showing the collapsible feature for past days. The first day (in the past) is automatically collapsed, while the future day remains expanded. Click the past day header to expand/collapse it.',
+      },
+    },
+  },
+}
+
+const slot = (
+  id: string,
+  title: string,
+  startTime: string,
+  endTime: string,
+) => ({ talk: createTalk(id, title, Format.lightning_10), startTime, endTime })
+
+/** Day 1 afternoon of Cloud Native Days Norway 2026, the organizer's case. */
+const durationSpanData: FilteredProgramData = {
+  ...twoTrackData,
+  schedules: [
+    {
+      _id: 'schedule-duration-span',
+      date: '2026-11-20',
+      tracks: [
+        {
+          trackTitle: 'Track 1',
+          trackDescription: 'Main hall',
+          talks: [
+            slot('d1', 'Platform Teams at Scale', '15:30', '15:50'),
+            { placeholder: 'Party Prep', startTime: '15:50', endTime: '17:00' },
+            { placeholder: 'Party', startTime: '17:00', endTime: '20:00' },
+          ],
+        },
+        {
+          trackTitle: 'Track 2',
+          trackDescription: 'Room 2',
+          talks: [
+            slot('d2', 'eBPF for Everyone', '15:50', '16:10'),
+            {
+              placeholder: 'Short Break',
+              startTime: '16:10',
+              endTime: '16:20',
+            },
+            slot(
+              'd3',
+              'From Pipelines to Control Planes: Rethinking Delivery',
+              '16:20',
+              '16:40',
+            ),
+            slot('d4', 'Cost-Aware Autoscaling', '16:40', '17:00'),
+            { placeholder: 'Party', startTime: '17:00', endTime: '20:00' },
+          ],
+        },
+        {
+          trackTitle: 'Track 3',
+          trackDescription: 'Room 3',
+          talks: [
+            slot('d5', 'OpenTelemetry in Practice', '15:50', '16:10'),
+            {
+              placeholder: 'Short Break',
+              startTime: '16:10',
+              endTime: '16:20',
+            },
+            slot('d6', 'Lightning: Kyverno Tips', '16:20', '16:30'),
+            slot('d7', 'Secrets Without Tears', '16:30', '16:50'),
+            { placeholder: 'Party', startTime: '17:00', endTime: '20:00' },
+          ],
+        },
+      ],
+    },
+  ],
+}
+
+export const DurationSpan: Story = {
+  args: { data: durationSpanData },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Long slots (Party Prep 15:50–17:00) and slots that run into a row another track starts in (16:20–16:40) span the rows until they end. The last row of the day is taller, but capped.',
       },
     },
   },

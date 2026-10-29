@@ -265,7 +265,7 @@ export const Overview: Story = {
             <ComponentCard
               name="SponsorContactActions"
               path="@/components/admin/sponsor/SponsorContactActions"
-              description="Action bar with export and broadcast buttons."
+              description="Action bar with export, copy emails and broadcast buttons."
               hasStory
             />
             <ComponentCard

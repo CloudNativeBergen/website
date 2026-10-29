@@ -7,18 +7,45 @@ export enum WorkshopSignupStatus {
 }
 
 export type ExperienceLevel = Level
+
+/** A sponsor of the conference (`sponsorForConference`), as a sign-up names it. */
+export interface EarlyAccessSponsor {
+  _id: string
+  name: string | null
+}
+
+/**
+ * Whose early-access link admitted a sign-up (#1348), as the organizer reads
+ * answer it (`EARLY_ACCESS_OF_SIGNUP`). `null`: the sign-up is not early.
+ */
+export type SignupEarlyAccess = {
+  /** `null`: the sponsor is no longer in the conference. */
+  sponsor: EarlyAccessSponsor | null
+  /** Admitted by its ticket type, with no link: the type. */
+  ticketType?: string
+} | null
 export type OperatingSystem = 'windows' | 'macos' | 'linux'
+
+/**
+ * The count a confirm into a full workshop was refused on (#1358): the seats
+ * taken now, the capacity, and what the confirm would make it.
+ */
+export interface FullSeats {
+  seatsTaken: number
+  capacity: number
+  after: number
+}
 
 /** Individual workshop statistics returned by getWorkshopStatistics() */
 export interface WorkshopStats {
   workshopId: string
   workshopTitle: string
+  /** The talk's status: a canceled or withdrawn one is shown to the admin only. */
+  status?: string
   capacity: number
   totalSignups: number
   confirmedSignups: number
-  pendingSignups: number
   waitlistSignups: number
-  cancelledSignups: number
   utilization: number
 }
 
@@ -29,9 +56,7 @@ export interface WorkshopStatsTotals {
   totalSignups: number
   uniqueParticipants: number
   totalConfirmed: number
-  totalPending: number
   totalWaitlist: number
-  totalCancelled: number
   averageUtilization: number
 }
 
@@ -74,7 +99,15 @@ export interface WorkshopSignup {
   signedUpAt: string
   confirmedAt?: string
   confirmationEmailSent?: boolean
+  /** #1357: a promotion email owed, and the token of the run that paid it. */
+  promotionEmailDue?: boolean
+  promotionEmailClaim?: string
   notes?: string
+  /**
+   * The sponsor whose early-access link admitted this sign-up (#1348). Set by
+   * the organizer reads that show it; `null` on a sign-up that is not early.
+   */
+  earlyAccess?: SignupEarlyAccess
 }
 
 export type { WorkshopSignupInput } from '@/server/schemas/workshop'
@@ -98,6 +131,8 @@ export interface ProposalWithWorkshopData extends Omit<
   signups: number
   available: number
   waitlistCount?: number
+  /** When the sign-ups of a canceled workshop were last emailed about it. */
+  workshopCancelNoticeSentAt?: string
   date?: string
   startTime?: string
   endTime?: string

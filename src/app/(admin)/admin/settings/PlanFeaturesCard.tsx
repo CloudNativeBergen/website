@@ -21,6 +21,12 @@ export interface PlanFeatureRow {
   readiness: FeatureReadiness
   /** Entitled through an explicit override rather than the plan. */
   viaOverride: boolean
+  /**
+   * Set when the plan lists the feature but its own resolver says OFF (today
+   * only `workshops`, which needs working ticketing — see `./planFeatureRows`).
+   * The row stays visible, muted, with this reason under the description.
+   */
+  inactiveReason?: string
 }
 
 export interface PlanFeaturesCardProps {
@@ -52,14 +58,17 @@ export function PlanFeaturesCard({ plan, features }: PlanFeaturesCardProps) {
     <InfoCard title="Plan & Features" icon={SparklesIcon}>
       <div
         id="plan-features"
-        className="flex scroll-mt-24 items-center justify-between gap-3 border-b border-gray-200 py-2 dark:border-gray-700"
+        className="flex scroll-mt-44 items-center justify-between gap-3 border-b border-gray-200 py-2 dark:border-gray-700"
       >
         {/* Plain span/div, not dt/dd (same fix as the shared FieldRow): dt/dd
             without an enclosing dl is invalid HTML. FieldRow itself is not
             reusable here — its value prop takes primitives/arrays, not a
             ReactNode badge, and this row also carries the #plan-features
             anchor. */}
-        <span className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
+        <span
+          data-field-label=""
+          className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400"
+        >
           Plan
         </span>
         <div className="min-w-0 text-right text-sm">
@@ -81,10 +90,20 @@ export function PlanFeaturesCard({ plan, features }: PlanFeaturesCardProps) {
                     full card width below so a wide badge stack cannot squeeze
                     it into a one-word-per-line column. */}
                 <div className="flex items-center justify-between gap-3">
-                  <p className="min-w-0 text-sm font-medium text-gray-900 dark:text-white">
+                  <p
+                    data-field-label=""
+                    className={
+                      feature.inactiveReason
+                        ? 'min-w-0 text-sm font-medium text-gray-500 dark:text-gray-400'
+                        : 'min-w-0 text-sm font-medium text-gray-900 dark:text-white'
+                    }
+                  >
                     {feature.title}
                   </p>
                   <div className="flex shrink-0 items-center gap-1.5">
+                    {feature.inactiveReason ? (
+                      <StatusBadge label="Inactive" color="gray" />
+                    ) : null}
                     {feature.viaOverride ? (
                       <StatusBadge label="Override" color="orange" />
                     ) : null}
@@ -97,6 +116,11 @@ export function PlanFeaturesCard({ plan, features }: PlanFeaturesCardProps) {
                 <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
                   {feature.description}
                 </p>
+                {feature.inactiveReason ? (
+                  <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+                    {feature.inactiveReason}
+                  </p>
+                ) : null}
               </li>
             )
           })}

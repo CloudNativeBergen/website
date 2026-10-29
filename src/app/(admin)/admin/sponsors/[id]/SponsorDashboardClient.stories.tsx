@@ -1,4 +1,6 @@
-import type { Meta, StoryObj } from '@storybook/react'
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import type { Conference } from '@/lib/conference/types'
 import { SponsorDashboardClient } from './SponsorDashboardClient'
 import { http, HttpResponse } from 'msw'
 
@@ -29,7 +31,8 @@ const trpcResult = (data: any) => HttpResponse.json({ result: { data } })
 export const Default: Story = {
   args: {
     sponsorId: 'sponsor-1',
-    conferenceId: 'conf-1',
+    conference: { _id: 'conf-1', title: 'Cloud Native Days' } as Conference,
+    domain: 'cloudnativedays.no',
     initialOverview: mockOverview,
   },
   parameters: {
@@ -57,6 +60,7 @@ export const Default: Story = {
             sponsor: { _id: 'sponsor-1' },
             contractValue: 10000,
             contractCurrency: 'NOK',
+            contractStatus: 'verbal-agreement',
             invoiceStatus: 'not-sent',
             tags: [{ value: 'warm-lead', label: 'Warm Lead' }],
           }),
@@ -68,7 +72,7 @@ export const Default: Story = {
               activityType: 'note',
               description: 'Called Jane, she wants Gold tier.',
               createdBy: { name: 'Admin' },
-              _createdAt: new Date().toISOString(),
+              _createdAt: '2026-10-01T09:00:00.000Z',
             },
           ]),
         ),

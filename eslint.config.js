@@ -195,6 +195,32 @@ const eslintConfig = [
     },
   },
 
+  // A Wall Post photo is a plain `<img>` of its Sanity URL (Photo Wall spec
+  // §5.1, §14): `next/image` would keep serving a removed or deleted photo
+  // from `/_next/image` for hours. `src/components/photo-wall/no-next-image.test.ts`
+  // proves the rule against this config.
+  {
+    files: ['src/components/photo-wall/**', 'src/app/(public)/wall/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              // Every spelling that reaches the component: `next/image`,
+              // `next/legacy/image`, with or without `.js`, and the
+              // `next/dist` modules they re-export (also under `esm/`).
+              regex:
+                '^next/(?:(?:legacy/)?image|dist/(?:esm/)?(?:shared/lib/image-external|client/image-component|client/legacy/image))(?:\\.js)?$',
+              message:
+                'Photo Wall photos are plain <img> elements of their Sanity URLs, never next/image (Photo Wall spec §5.1).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Special rules for Sanity schema files
   {
     files: ['sanity/schemaTypes/**/*.ts'],

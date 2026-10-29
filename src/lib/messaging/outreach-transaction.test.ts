@@ -12,7 +12,7 @@ vi.mock('@/lib/sanity/client', () => ({
     create: h.create,
     createIfNotExists: h.createIfNotExists,
   },
-  clientReadUncached: { fetch: vi.fn() },
+  clientReadUncached: { fetch: vi.fn(), getDocument: vi.fn() },
   clientReadCached: { fetch: vi.fn() },
 }))
 vi.mock('@/lib/organization/sanity', () => ({
@@ -31,11 +31,17 @@ type Document = { _id: string; _rev?: string; [key: string]: unknown }
 interface TestPatch {
   ifRevisionId(revision: string): TestPatch
   set(fields: Record<string, unknown>): TestPatch
+  setIfMissing(fields: Record<string, unknown>): TestPatch
 }
 
 type Mutation =
   | { create: Document }
-  | { id: string; revision?: string; fields: Record<string, unknown> }
+  | {
+      id: string
+      revision?: string
+      fields: Record<string, unknown>
+      missing?: Record<string, unknown>
+    }
 
 let documents: Map<string, Document>
 let failAfterCreate: boolean
@@ -64,6 +70,10 @@ function transaction() {
           mutation.fields = fields
           return patch
         },
+        setIfMissing(fields: Record<string, unknown>) {
+          mutation.missing = fields
+          return patch
+        },
       }
       build(patch)
       mutations.push(mutation)
@@ -88,6 +98,9 @@ function transaction() {
             throw Object.assign(new Error('Revision conflict'), {
               statusCode: 409,
             })
+          }
+          for (const [key, value] of Object.entries(mutation.missing ?? {})) {
+            if (document[key] === undefined) document[key] = value
           }
           pending.set(mutation.id, {
             ...document,
@@ -173,6 +186,7 @@ describe('outreach addMessage atomic transaction contract', () => {
               patch: {
                 id: input.conversationId,
                 set: { lastMessageAt: expect.any(String) },
+                setIfMissing: { openedAt: expect.any(String) },
               },
             },
             {

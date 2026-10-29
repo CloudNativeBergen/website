@@ -1,0 +1,199 @@
+import { describe, it, expect } from 'vitest'
+import {
+  SendVolunteerEmailSchema,
+  UpdateVolunteerDetailsSchema,
+} from './volunteer'
+import { Occupation } from '@/lib/volunteer/types'
+import {
+  UpdateRegistrationSchema,
+  UpdateCommunicationSchema,
+} from './conference'
+
+describe('SendVolunteerEmailSchema', () => {
+  it('accepts valid input without optional URLs', () => {
+    const parsed = SendVolunteerEmailSchema.safeParse({
+      volunteerId: 'vol-123',
+      subject: 'Welcome!',
+      message: 'You have been approved.',
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('accepts valid https ticket and slack URLs', () => {
+    const parsed = SendVolunteerEmailSchema.safeParse({
+      volunteerId: 'vol-123',
+      subject: 'Welcome!',
+      message: 'You have been approved.',
+      ticketUrl: 'https://tickets.example.com/volunteer',
+      slackInviteUrl: 'https://slack.example.com/invite',
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects non-https URLs for ticketUrl', () => {
+    const parsed = SendVolunteerEmailSchema.safeParse({
+      volunteerId: 'vol-123',
+      subject: 'Welcome!',
+      message: 'You have been approved.',
+      ticketUrl: 'http://insecure.example.com/volunteer',
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('rejects javascript: pseudoprotocol URLs', () => {
+    const parsed = SendVolunteerEmailSchema.safeParse({
+      volunteerId: 'vol-123',
+      subject: 'Welcome!',
+      message: 'You have been approved.',
+      slackInviteUrl: 'javascript:alert(1)',
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('accepts empty string and nullish inputs, converting empty/null to null and omitted to undefined', () => {
+    const parsed = SendVolunteerEmailSchema.safeParse({
+      volunteerId: 'vol-123',
+      subject: 'Welcome!',
+      message: 'You have been approved.',
+      ticketUrl: '',
+      slackInviteUrl: null,
+    })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.ticketUrl).toBeNull()
+      expect(parsed.data.slackInviteUrl).toBeNull()
+    }
+
+    const omitted = SendVolunteerEmailSchema.safeParse({
+      volunteerId: 'vol-123',
+      subject: 'Welcome!',
+      message: 'You have been approved.',
+    })
+    expect(omitted.success).toBe(true)
+    if (omitted.success) {
+      expect(omitted.data.ticketUrl).toBeUndefined()
+      expect(omitted.data.slackInviteUrl).toBeUndefined()
+    }
+  })
+
+  it('rejects subjects with CRLF or newlines (header injection protection)', () => {
+    const parsed = SendVolunteerEmailSchema.safeParse({
+      volunteerId: 'vol-123',
+      subject: 'Welcome!\r\nBcc: spy@attacker.com',
+      message: 'You have been approved.',
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('applies the 20,000-character limit to decoded text when message is PortableText JSON', () => {
+    const blocks = Array.from({ length: 180 }, (_, idx) => ({
+      _type: 'block',
+      _key: `block-${idx}`,
+      style: 'normal',
+      markDefs: [],
+      children: [
+        {
+          _type: 'span',
+          _key: `span-${idx}`,
+          text: 'A'.repeat(100),
+          marks: ['strong'],
+        },
+      ],
+    }))
+    const serialized = JSON.stringify(blocks)
+    expect(serialized.length).toBeGreaterThan(20000)
+
+    const validRich = SendVolunteerEmailSchema.safeParse({
+      volunteerId: 'vol-123',
+      subject: 'Welcome!',
+      message: serialized,
+    })
+    expect(validRich.success).toBe(true)
+
+    const tooLongPlain = SendVolunteerEmailSchema.safeParse({
+      volunteerId: 'vol-123',
+      subject: 'Welcome!',
+      message: 'A'.repeat(20001),
+    })
+    expect(tooLongPlain.success).toBe(false)
+  })
+})
+
+describe('Conference Volunteer Links Validation', () => {
+  it('UpdateRegistrationSchema accepts valid volunteerRegistrationLink', () => {
+    const parsed = UpdateRegistrationSchema.safeParse({
+      registrationEnabled: true,
+      volunteerRegistrationLink: 'https://tickets.example.com/volunteers',
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('UpdateRegistrationSchema rejects non-https volunteerRegistrationLink', () => {
+    const parsed = UpdateRegistrationSchema.safeParse({
+      registrationEnabled: true,
+      volunteerRegistrationLink: 'http://tickets.example.com/volunteers',
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('UpdateCommunicationSchema accepts valid volunteerSlackInviteUrl', () => {
+    const parsed = UpdateCommunicationSchema.safeParse({
+      contactEmail: 'contact@example.com',
+      cfpEmail: 'cfp@example.com',
+      sponsorEmail: 'sponsor@example.com',
+      volunteerSlackInviteUrl:
+        'https://join.slack.com/t/test/shared_invite/123',
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('UpdateCommunicationSchema rejects non-https volunteerSlackInviteUrl', () => {
+    const parsed = UpdateCommunicationSchema.safeParse({
+      contactEmail: 'contact@example.com',
+      cfpEmail: 'cfp@example.com',
+      sponsorEmail: 'sponsor@example.com',
+      volunteerSlackInviteUrl: 'http://join.slack.com/t/test/shared_invite/123',
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
+
+describe('UpdateVolunteerDetailsSchema assignedTasks', () => {
+  const base = {
+    volunteerId: 'v1',
+    name: 'Ola',
+    email: 'ola@example.com',
+    phone: '+4712345678',
+    occupation: Occupation.STUDENT,
+  }
+  it('is optional and nullable', () => {
+    expect(UpdateVolunteerDetailsSchema.safeParse(base).success).toBe(true)
+    expect(
+      UpdateVolunteerDetailsSchema.safeParse({ ...base, assignedTasks: null })
+        .success,
+    ).toBe(true)
+  })
+  it('trims entries and rejects blank or too many', () => {
+    const ok = UpdateVolunteerDetailsSchema.parse({
+      ...base,
+      assignedTasks: [' Info desk '],
+    })
+    expect(ok.assignedTasks).toEqual(['Info desk'])
+    expect(
+      UpdateVolunteerDetailsSchema.parse({
+        ...base,
+        assignedTasks: ['Info desk', 'info DESK', 'Bar'],
+      }).assignedTasks,
+    ).toEqual(['Info desk', 'Bar'])
+    expect(
+      UpdateVolunteerDetailsSchema.safeParse({ ...base, assignedTasks: ['  '] })
+        .success,
+    ).toBe(false)
+    expect(
+      UpdateVolunteerDetailsSchema.safeParse({
+        ...base,
+        assignedTasks: Array.from({ length: 21 }, (_, i) => `t${i}`),
+      }).success,
+    ).toBe(false)
+  })
+})

@@ -35,6 +35,12 @@ vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: vi.fn().mockResolvedValue(undefined),
   deleteMessageNotificationsFor: vi.fn().mockResolvedValue(0),
 }))
+vi.mock('@/lib/cospeaker/server', () => ({
+  sendCoSpeakerRemovedEmail: vi.fn().mockResolvedValue(true),
+}))
+vi.mock('@/server/runAfterResponse', () => ({
+  runAfterResponse: (task: () => Promise<void>) => void task(),
+}))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: vi.fn().mockResolvedValue({
     conference: {
@@ -87,6 +93,9 @@ function mockFetch({
     params: Record<string, string> = {},
   ) => {
     if (query.includes('speakers[]._ref')) return previousSpeakerIds
+    if (query.includes('_type == "speaker"')) {
+      return [{ _id: CO, name: 'Co Speaker', email: 'co@test.com' }]
+    }
     if (query.includes('coSpeakerInvitation')) {
       return invitationsBySpeaker[params.speakerId] ?? []
     }
@@ -135,6 +144,35 @@ describe('proposal.admin.update co-speaker reconciliation', () => {
       proposalIds: ['proposal-1'],
       speakerId: CO,
     })
+  })
+
+  it('tells the dropped speaker: hub row and email', async () => {
+    mockFetch({ previousSpeakerIds: [PRIMARY, CO] })
+    vi.mocked(updateProposal).mockResolvedValue({
+      proposal: {
+        _id: 'proposal-1',
+        title: 'Test Proposal',
+        conference: { _type: 'reference', _ref: 'conf-1' },
+      } as never,
+      err: null as never,
+    })
+
+    await createAdminCaller().proposal.admin.update({
+      id: 'proposal-1',
+      data: { ...updatePayload, speakers: [PRIMARY] },
+    })
+
+    const { createNotifications } = await import('@/lib/notification/sanity')
+    expect(createNotifications).toHaveBeenCalledWith([
+      expect.objectContaining({
+        recipientId: CO,
+        title: 'You are no longer a speaker on "Test Proposal"',
+      }),
+    ])
+    const { sendCoSpeakerRemovedEmail } = await import('@/lib/cospeaker/server')
+    expect(sendCoSpeakerRemovedEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ toEmail: 'co@test.com' }),
+    )
   })
 
   it('leaves invitations alone when no speaker was dropped', async () => {

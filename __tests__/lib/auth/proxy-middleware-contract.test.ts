@@ -24,15 +24,12 @@
  * `scripts/smoke-protected-routes.mjs` (CI job "Runtime Smoke Test").
  */
 import { describe, it, expect, vi } from 'vitest'
-import { NextRequest, type NextFetchEvent } from 'next/server'
+import { NextRequest } from 'next/server'
 
-// The proxy statically imports the WorkOS middleware factory and the app
-// environment; stub both so importing the REAL proxy (and the REAL @/lib/auth)
-// does not require a live WorkOS client or a fixed NODE_ENV. @/lib/auth is
-// deliberately NOT mocked — this test exercises its real wrapper export.
-vi.mock('@workos-inc/authkit-nextjs', () => ({
-  authkitMiddleware: vi.fn(() => vi.fn()),
-}))
+// The proxy statically imports the app environment; stub it so importing the
+// REAL proxy (and the REAL @/lib/auth) does not require a fixed NODE_ENV.
+// @/lib/auth is deliberately NOT mocked — this test exercises its real wrapper
+// export.
 vi.mock('@/lib/environment/config', () => ({
   AppEnvironment: {
     isTestMode: false,
@@ -55,7 +52,7 @@ describe('proxy middleware wrapper shape (#462 regression contract)', () => {
   it('exports a middleware function that returns a Response for a protected route', async () => {
     expect(typeof middleware).toBe('function')
     const req = new NextRequest('http://localhost:3000/admin')
-    const result = await middleware(req, {} as NextFetchEvent)
+    const result = await middleware(req)
     // Unauthenticated → the wrapped middleware runs and redirects to sign-in.
     expect(result).toBeInstanceOf(Response)
     expect((result as Response).status).toBeGreaterThanOrEqual(300)

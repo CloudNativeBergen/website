@@ -46,6 +46,8 @@ function sanity(query: string, params?: { orgId?: string }) {
 
 const buffer = (d: Awaited<ReturnType<typeof resolveSubprocessorDisclosure>>) =>
   d.processors.find((p) => p.id === 'buffer')
+const workos = (d: Awaited<ReturnType<typeof resolveSubprocessorDisclosure>>) =>
+  d.processors.find((p) => p.id === 'workos')
 
 let savedBlob: string | undefined
 beforeEach(() => {
@@ -131,5 +133,162 @@ describe('/privacy Buffer disclosure, two tenants', () => {
       delete process.env.TENANT_ACME_BUFFER_API_KEY
       delete process.env.TENANT_ACME_BUFFER_LINKEDIN_CHANNEL_ID
     }
+  })
+
+  /**
+   * #1295: the workshop gate consults the per-org TICKETING secret stores and
+   * swallows a refused lookup into `false`. A refused lookup is "could not find
+   * out", so this page must disclose WorkOS as POSSIBLE for a pro org — not
+   * drop it — while a healthy lookup that finds no secret is a real "no".
+   */
+  it('a refused ticketing-secret lookup for a pro org discloses WorkOS as POSSIBLE; a healthy miss does not', async () => {
+    const proOrg = (query: string, params?: { orgId?: string }) =>
+      query.includes('_type == "organization"') && params?.orgId === ORG_B
+        ? Promise.resolve({ _id: ORG_B, name: ORG_B, plan: 'pro' })
+        : sanity(query, params)
+
+    // Healthy slug map, no secret for B: workshops genuinely off.
+    fetchMock.mockImplementation(proOrg)
+    const healthy = await resolveSubprocessorDisclosure(
+      conference('conf-b', ORG_B),
+    )
+    expect(workos(healthy)).toBeUndefined()
+
+    // The REAL discrete store refusing: B and a third org claim one slug, and
+    // a complete TENANT_ACME_CHECKIN_* set exists on the deployment.
+    process.env.TENANT_ACME_CHECKIN_API_KEY = 'acme-key'
+    process.env.TENANT_ACME_CHECKIN_API_SECRET = 'acme-secret'
+    process.env.TENANT_ACME_CHECKIN_WEBHOOK_SECRET = 'acme-hook'
+    fetchMock.mockImplementation(
+      (query: string, params?: { orgId?: string }) =>
+        query.includes('secretEnvSlug')
+          ? Promise.resolve([
+              { _id: ORG_B, secretEnvSlug: 'ACME' },
+              { _id: 'org-c-other', secretEnvSlug: 'ACME' },
+            ])
+          : proOrg(query, params),
+    )
+    try {
+      const refused = await resolveSubprocessorDisclosure(
+        conference('conf-b2', ORG_B),
+      )
+      expect(workos(refused)).toMatchObject({ certainty: 'possible' })
+      expect(JSON.stringify(refused)).not.toMatch(/ACME|org-c-other|acme-/)
+    } finally {
+      delete process.env.TENANT_ACME_CHECKIN_API_KEY
+      delete process.env.TENANT_ACME_CHECKIN_API_SECRET
+      delete process.env.TENANT_ACME_CHECKIN_WEBHOOK_SECRET
+    }
+  })
+
+  /**
+   * Review of #1304: a slug read that fails ONCE and then recovers. The gate's
+   * own lookup was refused, so its answer is "could not find out" — and a later
+   * lookup succeeding (with credentials the portal can use, no less) must not
+   * turn that into a recorded "no". This answer is cached; the portal is not.
+   */
+  it('a ticketing-secret lookup refused once keeps WorkOS POSSIBLE even though the next lookup would succeed', async () => {
+    process.env.TENANT_ACME_CHECKIN_API_KEY = 'acme-key'
+    process.env.TENANT_ACME_CHECKIN_API_SECRET = 'acme-secret'
+    process.env.TENANT_ACME_CHECKIN_WEBHOOK_SECRET = 'acme-hook'
+    // One lookup is two reads: the cached slug read, then its uncached retry.
+    let refusals = 2
+    let slugReads = 0
+    fetchMock.mockImplementation(
+      (query: string, params?: { orgId?: string }) => {
+        if (query.includes('secretEnvSlug')) {
+          slugReads += 1
+          return refusals-- > 0
+            ? Promise.reject(new Error('sanity blip'))
+            : Promise.resolve([{ _id: ORG_B, secretEnvSlug: 'ACME' }])
+        }
+        return query.includes('_type == "organization"') &&
+          params?.orgId === ORG_B
+          ? Promise.resolve({ _id: ORG_B, name: ORG_B, plan: 'pro' })
+          : sanity(query, params)
+      },
+    )
+    try {
+      const blip = await resolveSubprocessorDisclosure(
+        conference('conf-b3', ORG_B),
+      )
+      expect(workos(blip)).toMatchObject({ certainty: 'possible' })
+      // The refusal really was the gate's lookup, both reads of it.
+      expect(slugReads).toBe(2)
+
+      // Recovered: B's own complete Checkin set is readable, workshops are on.
+      const recovered = await resolveSubprocessorDisclosure(
+        conference('conf-b4', ORG_B),
+      )
+      expect(workos(recovered)).toMatchObject({ certainty: 'confirmed' })
+    } finally {
+      delete process.env.TENANT_ACME_CHECKIN_API_KEY
+      delete process.env.TENANT_ACME_CHECKIN_API_SECRET
+      delete process.env.TENANT_ACME_CHECKIN_WEBHOOK_SECRET
+    }
+  })
+})
+
+describe('/privacy OpenRouter disclosure, two tenants (Content judgement §13.1)', () => {
+  const ORG_ON = 'org-judging'
+  const ORG_OFF = 'org-not-judging'
+  const openrouter = (
+    d: Awaited<ReturnType<typeof resolveSubprocessorDisclosure>>,
+  ) => d.processors.find((p) => p.id === 'openrouter')
+
+  /** ORG_ON has the setting on; `stored` answers the stored-Judgement read. */
+  function judging(stored: (orgId: string) => Promise<boolean>) {
+    return (query: string, params?: { orgId?: string }) => {
+      if (query.includes('"contentJudgement"')) return stored(params!.orgId!)
+      if (query.includes('_type == "organization"') && params?.orgId)
+        return Promise.resolve({
+          _id: params.orgId,
+          name: params.orgId,
+          ...(params.orgId === ORG_ON
+            ? { contentJudgement: { enabled: true } }
+            : {}),
+        })
+      return sanity(query, params)
+    }
+  }
+
+  it('confirms OpenRouter for the organization that turned it on, never for the other', async () => {
+    fetchMock.mockImplementation(judging(async () => false))
+    const [on, off] = await Promise.all([
+      resolveSubprocessorDisclosure(conference('conf-on', ORG_ON)),
+      resolveSubprocessorDisclosure(conference('conf-off', ORG_OFF)),
+    ])
+    expect(openrouter(on)?.certainty).toBe('confirmed')
+    expect(openrouter(off)).toBeUndefined()
+  })
+
+  it('keeps OpenRouter for an organization that turned it off while a Judgement is stored', async () => {
+    fetchMock.mockImplementation(judging(async (orgId) => orgId === ORG_OFF))
+    const off = await resolveSubprocessorDisclosure(
+      conference('conf-off', ORG_OFF),
+    )
+    expect(openrouter(off)?.certainty).toBe('confirmed')
+  })
+
+  it('a failed stored-Judgement read discloses OpenRouter as POSSIBLE for the organization with it off', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    fetchMock.mockImplementation(
+      judging(() => Promise.reject(new Error('sanity down'))),
+    )
+    const off = await resolveSubprocessorDisclosure(
+      conference('conf-off', ORG_OFF),
+    )
+    expect(openrouter(off)?.certainty).toBe('possible')
+  })
+
+  it('an answer that is not a boolean is unknown, never a "no"', async () => {
+    fetchMock.mockImplementation(
+      // A count-shaped answer: `0` must not read as "nothing stored".
+      judging(async () => 0 as unknown as boolean),
+    )
+    const off = await resolveSubprocessorDisclosure(
+      conference('conf-off', ORG_OFF),
+    )
+    expect(openrouter(off)?.certainty).toBe('possible')
   })
 })

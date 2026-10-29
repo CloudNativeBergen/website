@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { buildContactsCsv, contactsCsvFilename } from './contacts-csv'
+import {
+  buildContactsCsv,
+  contactEmails,
+  contactsCsvFilename,
+} from './contacts-csv'
 import {
   mockSponsor,
   mockBillingInfo,
@@ -91,5 +95,27 @@ describe('contactsCsvFilename', () => {
 
   it('falls back to a bare name when the title has no usable characters', () => {
     expect(contactsCsvFilename('—')).toBe('sponsor-contacts.csv')
+  })
+})
+
+describe('contactEmails', () => {
+  it('returns distinct, trimmed, lowercased addresses and skips blanks', () => {
+    expect(
+      contactEmails([
+        mockSponsor({
+          contactPersons: [
+            mockContactPerson({ email: ' Jane@Example.com ' }),
+            mockContactPerson({ email: '' }),
+          ],
+        }),
+        mockSponsor({
+          contactPersons: [
+            mockContactPerson({ email: 'jane@example.com' }),
+            mockContactPerson({ email: 'john@example.com' }),
+          ],
+        }),
+        mockSponsor({ contactPersons: [] }),
+      ]),
+    ).toEqual(['jane@example.com', 'john@example.com'])
   })
 })

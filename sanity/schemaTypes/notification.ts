@@ -52,9 +52,6 @@ export default defineType({
             title: 'Proposal Status Changed',
             value: 'proposal_status_changed',
           },
-          // Reserved, currently unused — superseded by 'message_received'
-          // (decision comments relay via the message thread). No emitter.
-          { title: 'Proposal Comment', value: 'proposal_comment' },
           { title: 'Message Received', value: 'message_received' },
           { title: 'Stale Conversation', value: 'message_stale' },
           { title: 'Conversation Assigned', value: 'conversation_assigned' },
@@ -78,6 +75,27 @@ export default defineType({
           {
             title: 'Marketing Task Posted Without a Tag',
             value: 'marketing_task_tag_withheld',
+          },
+          // A ticket type with no workshop decision was sold or refused at
+          // the portal (#1335); once per type per conference.
+          {
+            title: 'Workshop Ticket Type Not Set',
+            value: 'workshop_ticket_type_not_set',
+          },
+          // A workshop reached 80% of capacity, or its waitlist started;
+          // once per workshop per threshold.
+          { title: 'Workshop Filling Up', value: 'workshop_capacity' },
+          // A session's Feedback Window closed: its totals, once per talk
+          // and speaker (speaker feedback spec §11.1).
+          {
+            title: 'Session Feedback Summary',
+            value: 'session_feedback_summary',
+          },
+          // A speaker flagged a comment for organizers (speaker feedback
+          // spec §11.2); once per unset-to-set flag, to the organizers.
+          {
+            title: 'Session Feedback Flagged',
+            value: 'session_feedback_flagged',
           },
           { title: 'System', value: 'system' },
         ],

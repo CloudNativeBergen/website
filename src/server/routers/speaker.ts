@@ -23,6 +23,7 @@ import {
   updateSpeaker,
   getOrganizers,
   getSpeakers,
+  getSpeakersUncached,
   getOrgSpeakerDirectory,
   getDuplicateSpeakerCandidateRecords,
   getSpeakerTicketGrantState,
@@ -33,6 +34,11 @@ import {
   type DuplicateCandidatesReport,
 } from '@/lib/speaker/duplicates'
 import { clientWrite } from '@/lib/sanity/client'
+import {
+  getDinnerChoiceContext,
+  setDinnerChoice,
+} from '@/lib/speaker/dinnerChoice-sanity'
+import { dinnerChoiceOptions } from '@/lib/speaker/dinnerChoice'
 import { generateKey } from '@/lib/sanity/helpers'
 import { getProposals } from '@/lib/proposal/data/sanity'
 import { handleSpeakerTicket } from '@/lib/events/handlers/speakerTicket'
@@ -44,23 +50,28 @@ import {
 } from '@/lib/profile/server'
 import { updateProfileEmail } from '@/lib/profile/sanity'
 import { SocialTagOptOutClearForbiddenError } from '@/lib/speaker/socialTag'
+import { expireSpeakerTalkPhotos } from '@/lib/photo-wall/cache'
 import { encode } from 'next-auth/jwt'
 
 const CLI_TOKEN_MAX_AGE = 30 * 24 * 60 * 60 // 30 days
 const JWT_SALT = 'authjs.session-token'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import type { Conference } from '@/lib/conference/types'
 import { getFeaturedSpeakers } from '@/lib/featured/sanity'
 import { Status } from '@/lib/proposal/types'
 import type { Speaker, TicketEmailGrant } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
 import { sendMultiSpeakerEmail } from '@/lib/email/speaker'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
-import {
-  syncConferenceAudience,
-  getOrCreateConferenceAudience,
-} from '@/lib/email/audience'
+import { syncConferenceAudience } from '@/lib/email/audience'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
+import {
+  findUnsupportedVariables,
+  formatUnmergedVariablesMessage,
+  RESEND_BROADCAST_VARIABLES,
+} from '@/lib/sponsor/templates'
+import type { PortableTextBlock as TemplateBlock } from '@/lib/sponsor/types'
 import { buildOrganizerCreatedSpeaker } from '@/lib/speaker/sanity'
 import { canonicalEmail, normalizeEmail } from '@/lib/speaker/email'
 import {
@@ -109,14 +120,70 @@ function redactForeignGrants(
   grants: TicketEmailGrant[],
   orgId: string | null | undefined,
 ): TicketEmailGrant[] {
-  return grants.map((grant) => {
-    if (orgId && grant.addedByOrg === orgId) return grant
-    const { addedBy, addedByName, ticketId, ...rest } = grant
-    void addedBy
-    void addedByName
-    void ticketId
-    return rest
-  })
+  return grants.map((grant) =>
+    orgId && grant.addedByOrg === orgId
+      ? grant
+      : {
+          ...grant,
+          addedBy: undefined,
+          addedByName: undefined,
+          ticketId: undefined,
+        },
+  )
+}
+
+async function syncConfirmedSpeakerAudience(
+  conference: Conference,
+  conferenceId: string,
+  options?: { requireNonEmpty?: boolean },
+) {
+  const { speakers, err } = await getSpeakersUncached(
+    conferenceId,
+    [Status.confirmed],
+    false,
+    conference.organization?._ref ?? null,
+  )
+
+  if (err) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to fetch speakers',
+    })
+  }
+
+  const eligibleSpeakers = speakers.filter(
+    (speaker: Speaker & { proposals: ProposalExisting[] }) =>
+      Boolean(speaker.email?.trim()) &&
+      speaker.proposals?.some(
+        (proposal: ProposalExisting) => proposal.status === 'confirmed',
+      ),
+  )
+
+  if (options?.requireNonEmpty && eligibleSpeakers.length === 0) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'No confirmed speakers with email addresses found for this conference.',
+    })
+  }
+
+  const { audienceId, syncedCount, error } = await syncConferenceAudience(
+    conference,
+    eligibleSpeakers,
+  )
+
+  if (error) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: error.message || 'Failed to sync audience',
+    })
+  }
+
+  return {
+    audienceId,
+    syncedCount,
+    eligibleSpeakers,
+  }
 }
 
 /** The conference shape the ticket sweep passes straight to the handler. */
@@ -142,6 +209,7 @@ async function ticketSweepContext(): Promise<{
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({
       includeSpeakerRegistrationLink: true,
+      uncached: true,
     })
 
   if (conferenceError || !conference) {
@@ -466,6 +534,76 @@ export const speakerRouter = router({
         // says "committed, timestamp not read" rather than inventing one.
         socialTagOptOutAt: err ? null : (speaker?.socialTagOptOutAt ?? null),
       }
+    }),
+
+  /**
+   * NARROW autosave for the talk photos opt-out (talk photos spec §7.4), the
+   * same shape and rules as `setSocialTagOptOut` above: SELF ONLY, one boolean
+   * on the caller's own document. Then expires the photos of every talk of
+   * theirs and the speaker pages (§8).
+   */
+  setTalkPhotosOptOut: protectedProcedure
+    .input(z.object({ talkPhotosOptOut: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const { speaker, err, committed } = await updateSpeaker(
+        ctx.speaker._id,
+        { talkPhotosOptOut: input.talkPhotosOptOut },
+        { actor: 'self' },
+      )
+      // As `setSocialTagOptOut`: only a failed write is a failure.
+      if (!committed) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update talk photos preference',
+          cause: err ?? undefined,
+        })
+      }
+      await expireSpeakerTalkPhotos(ctx.speaker._id)
+      return {
+        talkPhotosOptOut: input.talkPhotosOptOut,
+        talkPhotosOptOutAt: err ? null : (speaker?.talkPhotosOptOutAt ?? null),
+      }
+    }),
+
+  /**
+   * How the caller gets to the speaker dinner (#1592). SELF ONLY, for the
+   * current domain's conference, and only with a confirmed talk there. The
+   * choice must be one the conference offers right now.
+   */
+  setDinnerChoice: protectedProcedure
+    .input(z.object({ choice: z.string().min(1).max(100) }))
+    .mutation(async ({ input, ctx }) => {
+      // An organizer impersonating a speaker must not answer for them.
+      if (ctx.session?.isImpersonating) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Not available while impersonating a speaker',
+        })
+      }
+      const conferenceId = await resolveConferenceId()
+      const speakerId = ctx.speaker._id
+      const { routes, hasConfirmedTalk } = await getDinnerChoiceContext(
+        conferenceId,
+        speakerId,
+      )
+      if (!hasConfirmedTalk) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only speakers with a confirmed talk can choose a route',
+        })
+      }
+      if (
+        !dinnerChoiceOptions(routes ?? undefined).some(
+          (o) => o.value === input.choice,
+        )
+      ) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'That dinner route is not offered',
+        })
+      }
+      await setDinnerChoice(conferenceId, speakerId, input.choice)
+      return { choice: input.choice }
     }),
 
   // Get OAuth provider emails
@@ -827,6 +965,12 @@ export const speakerRouter = router({
           const { speaker, err } = await updateSpeaker(input.id, input.data, {
             actor: 'organizer',
           })
+
+          // The organizer may only SET the talk photos opt-out (§7.4); a
+          // set that changed nothing expires harmlessly.
+          if (input.data.talkPhotosOptOut === true) {
+            await expireSpeakerTalkPhotos(input.id)
+          }
 
           if (err) {
             throw new TRPCError({
@@ -1455,6 +1599,23 @@ export const speakerRouter = router({
           })
         }
 
+        const unmergedVariables = findUnsupportedVariables(
+          RESEND_BROADCAST_VARIABLES,
+          input.subject,
+          messagePortableText as unknown as TemplateBlock[],
+        )
+        if (unmergedVariables.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: formatUnmergedVariablesMessage(unmergedVariables),
+          })
+        }
+
+        const conferenceId = await resolveConferenceId()
+        await syncConfirmedSpeakerAudience(conference, conferenceId, {
+          requireNonEmpty: true,
+        })
+
         const response = await sendBroadcastEmail({
           conference,
           subject: input.subject,
@@ -1485,36 +1646,10 @@ export const speakerRouter = router({
       }
 
       const conferenceId = await resolveConferenceId()
-      const { speakers, err } = await getSpeakers(conferenceId)
-
-      if (err) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch speakers',
-        })
-      }
-
-      const eligibleSpeakers = speakers.filter(
-        (speaker: Speaker & { proposals: ProposalExisting[] }) =>
-          speaker.email &&
-          speaker.proposals?.some(
-            (proposal: ProposalExisting) => proposal.status === 'confirmed',
-          ),
-      )
-
-      const { syncedCount, error } = await syncConferenceAudience(
+      const { audienceId, syncedCount } = await syncConfirmedSpeakerAudience(
         conference,
-        eligibleSpeakers,
+        conferenceId,
       )
-
-      if (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to sync audience',
-        })
-      }
-
-      const { audienceId } = await getOrCreateConferenceAudience(conference)
 
       return {
         success: true,
@@ -1586,6 +1721,7 @@ export const speakerRouter = router({
     ticketInvitationConfig: adminProcedure.query(async () => {
       const { conference, error } = await getConferenceForCurrentDomain({
         includeSpeakerRegistrationLink: true,
+        uncached: true,
       })
       // A FAILED READ IS NOT "NO LINK". The read returns a normalized empty
       // conference alongside its error, which would answer `false` and tell

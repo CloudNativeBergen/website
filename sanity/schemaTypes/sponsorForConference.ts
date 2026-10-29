@@ -208,6 +208,16 @@ export default defineType({
       validation: (Rule) => Rule.min(0),
     }),
     defineField({
+      name: 'reminderClaims',
+      title: 'Reminder Claims (in flight)',
+      type: 'array',
+      of: [{ type: 'string' }],
+      description:
+        'Ids of reminder slots claimed by the reminder cron and not yet settled; a claim is removed when its reminder went out or its slot was given back.',
+      readOnly: true,
+      hidden: true,
+    }),
+    defineField({
       name: 'contractTemplate',
       title: 'Contract Template',
       type: 'reference',
@@ -264,6 +274,35 @@ export default defineType({
       title: 'Contract Signed Date',
       type: 'datetime',
       description: 'When the sponsorship contract was signed',
+    }),
+    defineField({
+      name: 'contractSignedBy',
+      title: 'Contract Signed By',
+      type: 'string',
+      readOnly: true,
+      description:
+        'Name entered by the signer in the digital signing flow. Set only by that flow — its presence proves the stored document is the signed one.',
+    }),
+    defineField({
+      name: 'contractReservedTerms',
+      title: 'Contract Agreement Reserved Terms',
+      type: 'string',
+      description:
+        'Fingerprint of the terms (value, currency, tier) the reserved PDF was rendered from; a retry whose terms differ issues a fresh agreement.',
+    }),
+    defineField({
+      name: 'contractReservedInputs',
+      title: 'Contract Agreement Reserved Inputs',
+      type: 'string',
+      description:
+        'Hash of every input the reserved PDF was rendered from (sponsor, contact, tier, add-ons, conference, template revision); a retry after any of them changed issues a fresh agreement.',
+    }),
+    defineField({
+      name: 'contractReservedAt',
+      title: 'Contract Agreement Reserved At',
+      type: 'datetime',
+      description:
+        'Set while a contract send is in flight (the agreement is stored before the email goes out); cleared once the deal is contract-sent or the send failed.',
     }),
     defineField({
       name: 'contractValue',
@@ -473,6 +512,18 @@ export default defineType({
       title: 'Registration Token',
       type: 'string',
       description: 'Unique token for sponsor self-service registration portal',
+      readOnly: true,
+    }),
+    defineField({
+      // The workshop early-access link (#1346). Separate from
+      // `registrationToken`, which opens the sponsor's own portal. Created and
+      // revoked on the sponsor's record in the admin, which also keeps drafts
+      // and release copies in step.
+      name: 'workshopEarlyAccessToken',
+      title: 'Workshop Early-Access Token',
+      type: 'string',
+      description:
+        'Token of the link that lets people this sponsor sends sign up for workshops early',
       readOnly: true,
     }),
     defineField({

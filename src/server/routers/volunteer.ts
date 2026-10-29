@@ -8,24 +8,46 @@ import {
 import {
   GetVolunteerByIdSchema,
   UpdateVolunteerStatusSchema,
+  BulkUpdateVolunteerStatusSchema,
   UpdateVolunteerDetailsSchema,
   SendVolunteerEmailSchema,
+  SendVolunteerBulkEmailSchema,
+  SendVolunteerTicketReminderSchema,
   DeleteVolunteerSchema,
+  ConfirmVolunteerAttendanceSchema,
+  DeclineVolunteerAttendanceSchema,
   CreateVolunteerSchema,
 } from '../schemas/volunteer'
 import { requireDocumentInCurrentConference } from '../tenancy'
+import { fillVolunteerName } from '@/lib/volunteer/fillName'
+import type { VolunteerSendFailure } from '@/lib/volunteer/chunkedSend'
+import type { EmailResult } from '@/lib/email/config'
 import {
   getVolunteersByConference,
   getVolunteerById,
   updateVolunteerStatus,
+  bulkUpdateVolunteerStatus,
   updateVolunteerDetails,
   deleteVolunteer,
   createVolunteer,
+  hasActiveVolunteerByEmail,
+  recordVolunteerApprovalEmailSent,
+  recordVolunteerTicketReminderSent,
+  confirmVolunteerAttendance,
+  declineVolunteerAttendance,
 } from '@/lib/volunteer/sanity'
+import { verifyVolunteerConfirmToken } from '@/lib/volunteer/token'
 import { VolunteerStatus } from '@/lib/volunteer/types'
-import type { VolunteerInput } from '@/lib/volunteer/types'
+import type {
+  VolunteerInput,
+  VolunteerWithConference,
+} from '@/lib/volunteer/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sendVolunteerApprovalEmail } from '@/lib/email/volunteer'
+import {
+  fetchRedeemedVolunteerEmails,
+  joinVolunteerTicketStatus,
+} from '@/lib/tickets/volunteerStatus'
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy/config'
 import { notifyNewVolunteer } from '@/lib/slack/notify'
 import { runAfterResponse } from '@/server/runAfterResponse'
@@ -34,12 +56,67 @@ import { createNotifications } from '@/lib/notification/sanity'
 import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
 
+/** Refuse up front, before any send, when the conference has no sender address. */
+function requireSenderAddress(recipients: VolunteerWithConference[]) {
+  const conf = recipients[0]?.conference
+  if (conf && !conf.contactEmail && !conf.cfpEmail) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'The conference has no contact email set, so nothing was sent. Add one in the conference settings.',
+    })
+  }
+}
+
+/**
+ * Send to each volunteer in turn (callers cap the list at
+ * VOLUNTEER_EMAIL_CHUNK, which fits the route's time budget).
+ */
+async function sendEachVolunteer(
+  recipients: VolunteerWithConference[],
+  send: (v: VolunteerWithConference) => Promise<EmailResult<unknown>>,
+  onSent?: (v: VolunteerWithConference) => Promise<void>,
+): Promise<{ sent: number; failed: VolunteerSendFailure[] }> {
+  let sent = 0
+  const failed: VolunteerSendFailure[] = []
+  for (const v of recipients) {
+    const result = await send(v)
+    if (result.error) {
+      failed.push({ id: v._id, email: v.email, error: result.error.error })
+      continue
+    }
+    sent++
+    await onSent?.(v)
+  }
+  return { sent, failed }
+}
+
 export const volunteerRouter = router({
   create: publicProcedure
     .input(CreateVolunteerSchema)
     .mutation(async ({ input, ctx }) => {
       try {
         const ipAddress = ctx.ipAddress || ''
+        const conferenceId = await resolveConferenceId()
+
+        const { exists, error: dupError } = await hasActiveVolunteerByEmail(
+          conferenceId,
+          input.email,
+        )
+        if (dupError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to check existing volunteer applications',
+            cause: dupError,
+          })
+        }
+        if (exists) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message:
+              'An application with this email has already been submitted for this conference',
+          })
+        }
 
         const volunteerInput: VolunteerInput = {
           name: input.name,
@@ -53,7 +130,7 @@ export const volunteerRouter = router({
           otherInfo: input.otherInfo,
           conference: {
             _type: 'reference',
-            _ref: await resolveConferenceId(),
+            _ref: conferenceId,
           },
           consent: {
             dataProcessing: {
@@ -126,6 +203,267 @@ export const volunteerRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to create volunteer application',
+          cause: error,
+        })
+      }
+    }),
+
+  confirmAttendance: publicProcedure
+    .input(ConfirmVolunteerAttendanceSchema)
+    .mutation(async ({ input }) => {
+      try {
+        const verification = verifyVolunteerConfirmToken(input.token)
+        if (!verification.ok) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Invalid confirmation link',
+          })
+        }
+        const { payload } = verification
+
+        const conferenceId = await resolveConferenceId()
+        if (payload.conferenceId !== conferenceId) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'No volunteer with that id for this request',
+          })
+        }
+
+        await requireDocumentInCurrentConference(
+          payload.volunteerId,
+          'volunteer',
+        )
+
+        const { volunteer, error: fetchError } = await getVolunteerById(
+          payload.volunteerId,
+        )
+        if (fetchError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch volunteer',
+            cause: fetchError,
+          })
+        }
+
+        if (
+          !volunteer ||
+          volunteer.email?.trim().toLowerCase() !== payload.email
+        ) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Volunteer not found',
+          })
+        }
+
+        if (
+          volunteer.status !== VolunteerStatus.APPROVED &&
+          volunteer.status !== VolunteerStatus.CONFIRMED
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Only approved volunteers can confirm attendance',
+          })
+        }
+
+        let confirmedAt = volunteer.confirmedAt
+        if (volunteer.status === VolunteerStatus.APPROVED) {
+          confirmedAt = getCurrentDateTime()
+          const { success, error: confirmError } =
+            await confirmVolunteerAttendance(
+              volunteer._id,
+              confirmedAt,
+              volunteer._rev,
+            )
+          if (confirmError || !success) {
+            const { volunteer: latest } = await getVolunteerById(volunteer._id)
+            if (
+              !latest ||
+              latest.email?.trim().toLowerCase() !== payload.email
+            ) {
+              throw new TRPCError({
+                code: 'NOT_FOUND',
+                message: 'Volunteer not found',
+              })
+            }
+            if (latest.status === VolunteerStatus.CONFIRMED) {
+              confirmedAt = latest.confirmedAt || confirmedAt
+            } else if (latest.status !== VolunteerStatus.APPROVED) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: 'Only approved volunteers can confirm attendance',
+              })
+            } else {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to confirm volunteer attendance',
+                cause: confirmError,
+              })
+            }
+          } else {
+            try {
+              const organizerIds = await resolveRoutedOrganizerIds({
+                conferenceId,
+                teamKey: 'volunteers',
+              })
+              await createNotifications(
+                organizerIds
+                  .filter((id) => id)
+                  .map((id): NotificationInput => ({
+                    recipientId: id,
+                    conferenceId,
+                    notificationType: 'system',
+                    title: `Volunteer confirmed attendance: ${volunteer.name}`,
+                    link: '/admin/volunteers',
+                  })),
+              )
+            } catch {
+              // Never fail confirmation on notification error
+            }
+          }
+        }
+
+        return {
+          status: VolunteerStatus.CONFIRMED,
+          confirmedAt: confirmedAt || getCurrentDateTime(),
+          volunteerName: volunteer.name,
+          conferenceTitle: volunteer.conference?.title || '',
+          registrationUrl:
+            volunteer.conference?.volunteerRegistrationLink ?? null,
+          slackInviteUrl: volunteer.conference?.volunteerSlackInviteUrl ?? null,
+        }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to confirm volunteer attendance',
+          cause: error,
+        })
+      }
+    }),
+
+  declineAttendance: publicProcedure
+    .input(DeclineVolunteerAttendanceSchema)
+    .mutation(async ({ input }) => {
+      try {
+        const verification = verifyVolunteerConfirmToken(input.token)
+        if (!verification.ok) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Invalid confirmation link',
+          })
+        }
+        const { payload } = verification
+
+        const conferenceId = await resolveConferenceId()
+        if (payload.conferenceId !== conferenceId) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'No volunteer with that id for this request',
+          })
+        }
+
+        await requireDocumentInCurrentConference(
+          payload.volunteerId,
+          'volunteer',
+        )
+
+        const { volunteer, error: fetchError } = await getVolunteerById(
+          payload.volunteerId,
+        )
+        if (fetchError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch volunteer',
+            cause: fetchError,
+          })
+        }
+
+        if (
+          !volunteer ||
+          volunteer.email?.trim().toLowerCase() !== payload.email
+        ) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Volunteer not found',
+          })
+        }
+
+        if (volunteer.status === VolunteerStatus.PENDING) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'Only approved or confirmed volunteers can decline attendance',
+          })
+        }
+
+        if (volunteer.status !== VolunteerStatus.REJECTED) {
+          const declinedAt = getCurrentDateTime()
+          const { success, error: declineError } =
+            await declineVolunteerAttendance(
+              volunteer._id,
+              declinedAt,
+              volunteer._rev,
+              input.reason,
+              volunteer.reviewNotes,
+            )
+          if (declineError || !success) {
+            const { volunteer: latest } = await getVolunteerById(volunteer._id)
+            if (
+              !latest ||
+              latest.email?.trim().toLowerCase() !== payload.email
+            ) {
+              throw new TRPCError({
+                code: 'NOT_FOUND',
+                message: 'Volunteer not found',
+              })
+            }
+            if (latest.status === VolunteerStatus.PENDING) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message:
+                  'Only approved or confirmed volunteers can decline attendance',
+              })
+            }
+            if (latest.status !== VolunteerStatus.REJECTED) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to decline volunteer attendance',
+                cause: declineError,
+              })
+            }
+          } else {
+            try {
+              const organizerIds = await resolveRoutedOrganizerIds({
+                conferenceId,
+                teamKey: 'volunteers',
+              })
+              await createNotifications(
+                organizerIds
+                  .filter((id) => id)
+                  .map((id): NotificationInput => ({
+                    recipientId: id,
+                    conferenceId,
+                    notificationType: 'system',
+                    title: `Volunteer declined attendance: ${volunteer.name}`,
+                    link: '/admin/volunteers',
+                  })),
+              )
+            } catch {
+              // Never fail decline on notification error
+            }
+          }
+        }
+
+        return {
+          status: VolunteerStatus.REJECTED,
+          volunteerName: volunteer.name,
+          conferenceTitle: volunteer.conference?.title || '',
+        }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to decline volunteer attendance',
           cause: error,
         })
       }
@@ -228,6 +566,8 @@ export const volunteerRouter = router({
             input.status,
             reviewerId,
             input.reviewNotes,
+            volunteer.status === VolunteerStatus.CONFIRMED &&
+              input.status === VolunteerStatus.APPROVED,
           )
 
           if (error || !success) {
@@ -247,6 +587,65 @@ export const volunteerRouter = router({
             cause: error,
           })
         }
+      }),
+
+    /**
+     * Approve or reject several pending volunteers at once. Only pending
+     * ones move; the rest are reported as skipped. No email is sent.
+     */
+    bulkUpdateStatus: adminProcedure
+      .input(BulkUpdateVolunteerStatusSchema)
+      .mutation(async ({ input, ctx }) => {
+        // OWNERSHIP: one query scoped to the current conference. Any id that
+        // is not in it (another tenant's, or gone) refuses the whole batch.
+        const conferenceId = await resolveConferenceId()
+        const { volunteers, error } =
+          await getVolunteersByConference(conferenceId)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch volunteers',
+            cause: error,
+          })
+        }
+        const byId = new Map(volunteers.map((v) => [v._id, v]))
+        if (input.volunteerIds.some((id) => !byId.has(id))) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'One or more volunteers were not found',
+          })
+        }
+
+        const unique = [...new Set(input.volunteerIds)]
+        const pending = unique
+          .map((id) => byId.get(id)!)
+          .filter((v) => v.status === VolunteerStatus.PENDING)
+        const skipped = unique.length - pending.length
+        if (pending.length === 0) return { updated: 0, skipped }
+
+        const { error: writeError } = await bulkUpdateVolunteerStatus(
+          pending.map(({ _id, _rev }) => ({ _id, _rev })),
+          input.status,
+          ctx.speaker._id,
+        )
+        if (
+          (writeError as { statusCode?: unknown } | null)?.statusCode === 409
+        ) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message:
+              'Someone else changed these volunteers, reload and try again',
+            cause: writeError,
+          })
+        }
+        if (writeError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update volunteer status',
+            cause: writeError,
+          })
+        }
+        return { updated: pending.length, skipped }
       }),
 
     update: adminProcedure
@@ -303,7 +702,7 @@ export const volunteerRouter = router({
 
     sendEmail: adminProcedure
       .input(SendVolunteerEmailSchema)
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         try {
           // OWNERSHIP (#858) — see `updateStatus` above. Unguarded, this read
           // any tenant's volunteer application and mailed its owner. It also
@@ -334,18 +733,25 @@ export const volunteerRouter = router({
             })
           }
 
-          if (volunteer.status !== VolunteerStatus.APPROVED) {
+          if (
+            volunteer.status !== VolunteerStatus.APPROVED &&
+            volunteer.status !== VolunteerStatus.CONFIRMED
+          ) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
               message: 'Can only send approval emails to approved volunteers',
             })
           }
 
-          let conferenceForEmail: typeof volunteer.conference =
-            volunteer.conference
-          if (!conferenceForEmail || !conferenceForEmail.contactEmail) {
+          let conferenceForEmail = volunteer.conference
+          if (
+            !conferenceForEmail ||
+            (!conferenceForEmail.contactEmail && !conferenceForEmail.cfpEmail)
+          ) {
             const { conference: currentConf, error: confError } =
-              await getConferenceForCurrentDomain()
+              await getConferenceForCurrentDomain({
+                includeVolunteerRegistrationLink: true,
+              })
             if (confError || !currentConf) {
               throw new TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
@@ -353,39 +759,25 @@ export const volunteerRouter = router({
                 cause: confError,
               })
             }
+            // SAME PRECEDENCE as `_id`/`title`: `organization` is the key
+            // `resolveEmailSender` resolves the Resend account from, so every
+            // defined field on `volunteer.conference` overrides `currentConf`
+            // (#856, #858).
+            const vc = volunteer.conference
             conferenceForEmail = {
-              _id: volunteer.conference?._id || currentConf._id,
-              title: volunteer.conference?.title || currentConf.title,
-              // SAME PRECEDENCE as the `_id`/`title` above, deliberately: this
-              // is the key `resolveEmailSender` resolves the Resend account
-              // from, so it must follow the identity it accompanies — the
-              // VOLUNTEER's conference — not the request's domain. Taking it
-              // from `currentConf` would send a volunteer of org A through org
-              // B's Resend account whenever B's organizer processes A's
-              // volunteer, which `getVolunteerById` (a global by-id fetch) made
-              // reachable while this procedure had no ownership guard (#856,
-              // #858). The guard above now closes that door — the precedence
-              // stays because it is what makes this object's identity coherent
-              // regardless, and it must not silently regress if the guard ever
-              // moves.
-              organization:
-                volunteer.conference?.organization ?? currentConf.organization,
-              contactEmail: currentConf.contactEmail,
-              cfpEmail: currentConf.cfpEmail,
-              city: currentConf.city,
-              country: currentConf.country,
-              startDate: currentConf.startDate,
-              domains: currentConf.domains,
-              organizer: currentConf.organizer,
-              socialLinks:
-                Array.isArray(currentConf.socialLinks) &&
-                currentConf.socialLinks.length > 0 &&
-                typeof currentConf.socialLinks[0] === 'object'
-                  ? (currentConf.socialLinks as unknown as Array<{
-                      platform: string
-                      url: string
-                    }>)
-                  : [],
+              ...currentConf,
+              ...Object.fromEntries(
+                Object.entries(vc ?? {}).filter(
+                  ([, v]) => v != null && v !== '',
+                ),
+              ),
+              socialLinks: Array.isArray(currentConf.socialLinks)
+                ? currentConf.socialLinks.map((link) =>
+                    typeof link === 'string'
+                      ? { platform: 'web', url: link }
+                      : (link as { platform: string; url: string }),
+                  )
+                : [],
             }
           }
 
@@ -394,6 +786,10 @@ export const volunteerRouter = router({
             conferenceForEmail,
             input.subject,
             input.message,
+            {
+              registrationUrl: input.ticketUrl,
+              slackInviteUrl: input.slackInviteUrl,
+            },
           )
 
           if (result.error) {
@@ -403,9 +799,25 @@ export const volunteerRouter = router({
             })
           }
 
+          let trackingRecorded = false
+          if (ctx.speaker?._id) {
+            const recordResult = await recordVolunteerApprovalEmailSent(
+              input.volunteerId,
+              ctx.speaker._id,
+            )
+            trackingRecorded = recordResult.success
+            if (!recordResult.success) {
+              console.error(
+                'Failed to record volunteer approval email sent in Sanity:',
+                recordResult.error,
+              )
+            }
+          }
+
           return {
             success: true,
             emailId: result.data?.emailId,
+            trackingRecorded,
           }
         } catch (error) {
           if (error instanceof TRPCError) throw error
@@ -414,6 +826,193 @@ export const volunteerRouter = router({
             message: 'Failed to send email',
             cause: error,
           })
+        }
+      }),
+
+    sendBulkEmail: adminProcedure
+      .input(SendVolunteerBulkEmailSchema)
+      .mutation(async ({ input }) => {
+        // OWNERSHIP: one query scoped to the current conference. Any id that
+        // is not in it (another tenant's, or gone) refuses the whole batch.
+        const conferenceId = await resolveConferenceId()
+        const { volunteers, error } =
+          await getVolunteersByConference(conferenceId)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch volunteers',
+            cause: error,
+          })
+        }
+        const byId = new Map(volunteers.map((v) => [v._id, v]))
+        if (input.volunteerIds.some((id) => !byId.has(id))) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'One or more volunteers were not found',
+          })
+        }
+
+        // Recipients come from the DB, deduped by email.
+        const seen = new Set<string>()
+        const recipients = input.volunteerIds
+          .map((id) => byId.get(id)!)
+          .filter((v) => {
+            const key = v.email?.trim().toLowerCase()
+            if (!key || seen.has(key)) return false
+            seen.add(key)
+            return true
+          })
+        requireSenderAddress(recipients)
+
+        const { sent, failed } = await sendEachVolunteer(recipients, (v) =>
+          sendVolunteerApprovalEmail(
+            v,
+            v.conference,
+            fillVolunteerName(input.subject, v.name),
+            fillVolunteerName(
+              input.message,
+              v.name,
+              input.message.trim().startsWith('['),
+            ),
+            {
+              template: 'message',
+              registrationUrl: null,
+              slackInviteUrl: null,
+              confirmUrl: null,
+            },
+          ),
+        )
+        console.log(
+          `Volunteer bulk email: ${sent} sent, ${failed.length} failed (${conferenceId})`,
+        )
+        return {
+          sent,
+          failed,
+          skipped: input.volunteerIds.length - recipients.length,
+        }
+      }),
+
+    /**
+     * Remind approved/confirmed volunteers who have not redeemed their
+     * volunteer ticket to register it. Eligibility is computed here from the
+     * ticket provider, never taken from the client; ids only narrow it. The
+     * client sends at most VOLUNTEER_EMAIL_CHUNK ids per call.
+     * Anyone reminded in the last day is skipped, so a double press or two
+     * organizers at once do not mail twice.
+     */
+    sendTicketReminder: adminProcedure
+      .input(SendVolunteerTicketReminderSchema)
+      .mutation(async ({ input }) => {
+        // TENANCY: the conference resolveConferenceId() resolves, and the
+        // domain's document must be that conference.
+        const conferenceId = await resolveConferenceId()
+        const { conference } = await getConferenceForCurrentDomain({
+          includeVolunteerRegistrationLink: true,
+        })
+        if (conference?._id !== conferenceId) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Conference not found',
+          })
+        }
+        const { volunteers, error } =
+          await getVolunteersByConference(conferenceId)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch volunteers',
+            cause: error,
+          })
+        }
+        const byId = new Map(volunteers.map((v) => [v._id, v]))
+        if (input.volunteerIds.some((id) => !byId.has(id))) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'One or more volunteers were not found',
+          })
+        }
+
+        const redeemed = await fetchRedeemedVolunteerEmails(conference)
+        if (!redeemed) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'Ticket status could not be read, so nothing was sent. Try again in a few minutes.',
+          })
+        }
+
+        const candidates = input.volunteerIds.map((id) => byId.get(id)!)
+        const unredeemed = new Set(
+          joinVolunteerTicketStatus(candidates, redeemed)
+            .filter((s) => s.state !== 'redeemed')
+            .map((s) => s.volunteerId),
+        )
+        const now = Date.now()
+        const recentCutoff = now - 24 * 60 * 60 * 1000
+        const seen = new Set<string>()
+        const recipients = candidates.filter((v) => {
+          if (
+            v.status !== VolunteerStatus.APPROVED &&
+            v.status !== VolunteerStatus.CONFIRMED
+          )
+            return false
+          if (!unredeemed.has(v._id)) return false
+          if (
+            v.ticketReminderSentAt &&
+            Date.parse(v.ticketReminderSentAt) > recentCutoff
+          )
+            return false
+          const key = v.email?.trim().toLowerCase()
+          if (!key || seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+        if (recipients.length && !conference.volunteerRegistrationLink) {
+          // Without a link the reminder has nothing to ask them to open.
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'No volunteer ticket registration link is set, so nothing was sent.',
+          })
+        }
+
+        requireSenderAddress(recipients)
+
+        const sentAt = new Date(now).toISOString()
+        const { sent, failed } = await sendEachVolunteer(
+          recipients,
+          (v) =>
+            sendVolunteerApprovalEmail(
+              v,
+              v.conference,
+              `Reminder: register your volunteer ticket for ${v.conference.title}`,
+              'Our records show you have not registered your volunteer ticket yet. Please use the button below to register it, so we have you on the list at the door.\n\nIf you have already registered, you can ignore this email.',
+              {
+                template: 'message',
+                title: `Reminder: register your volunteer ticket for ${v.conference.title}`,
+                registrationUrl: conference.volunteerRegistrationLink,
+                slackInviteUrl: null,
+                confirmUrl: null,
+              },
+            ),
+          async (v) => {
+            const recorded = await recordVolunteerTicketReminderSent(
+              v._id,
+              sentAt,
+            )
+            if (!recorded.success) {
+              console.error(
+                'Failed to record volunteer ticket reminder:',
+                recorded.error,
+              )
+            }
+          },
+        )
+        return {
+          sent,
+          failed,
+          skipped: candidates.length - recipients.length,
+          sentAt,
         }
       }),
 

@@ -124,6 +124,38 @@ export default defineType({
     }),
 
     defineField({
+      // #1346: set only for a sign-up made before the official opening. Weak,
+      // so the sponsor can still be removed from the conference; the server's
+      // own write stores `_weak: true`, since this flag governs Studio only.
+      name: 'earlyAccessSponsor',
+      title: 'Early Access Sponsor',
+      type: 'reference',
+      to: [{ type: 'sponsorForConference' }],
+      weak: true,
+      readOnly: true,
+      description: 'The sponsor whose early-access link admitted this sign-up',
+    }),
+    defineField({
+      // #1357: set by the capacity change that promotes this sign-up from the
+      // waitlist, in the same write; cleared by the sender that emails it (or
+      // by a move back to the waitlist). Not edited by hand: it is the record
+      // of an email owed, which the hourly cron pays.
+      name: 'promotionEmailDue',
+      title: 'Promotion Email Due',
+      type: 'boolean',
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
+      // #1357: the token of the run that took the promotion email on itself,
+      // so two runs at once never both send it.
+      name: 'promotionEmailClaim',
+      title: 'Promotion Email Claim',
+      type: 'string',
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
       name: 'confirmationEmailSent',
       title: 'Confirmation Email Sent',
       type: 'boolean',
@@ -134,6 +166,25 @@ export default defineType({
       title: 'Admin Notes',
       type: 'text',
       rows: 3,
+    }),
+    defineField({
+      // Set only for an early sign-up admitted by its ticket type instead of
+      // a sponsor's link: the type, as configured on the conference.
+      name: 'earlyAccessTicketType',
+      title: 'Early Access Ticket Type',
+      type: 'string',
+      readOnly: true,
+      description: 'The ticket type that admitted this early sign-up',
+    }),
+    defineField({
+      // Set by "Move participants" on /admin/workshops: the canceled
+      // workshop's sign-up this one replaced. A retried move finds its own
+      // sign-up by it, and tells it from one the person made themselves.
+      name: 'movedFromSignup',
+      title: 'Moved From Sign-up',
+      type: 'string',
+      readOnly: true,
+      hidden: ({ document }) => !document?.movedFromSignup,
     }),
   ],
 

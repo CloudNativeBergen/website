@@ -5,7 +5,6 @@ import {
   ContractTemplateListSchema,
   GenerateContractPdfSchema,
   FindBestContractTemplateSchema,
-  SendContractSchema,
   ContractTemplateSectionSchema,
 } from '@/server/schemas/contractTemplate'
 
@@ -303,56 +302,5 @@ describe('FindBestContractTemplateSchema', () => {
       language: 'fr',
     })
     expect(result.success).toBe(false)
-  })
-})
-
-describe('SendContractSchema', () => {
-  it('passes with required fields', () => {
-    const result = SendContractSchema.safeParse({
-      sponsorForConferenceId: 'sfc-1',
-      templateId: 'tmpl-1',
-    })
-    expect(result.success).toBe(true)
-  })
-
-  it('passes with optional signerEmail', () => {
-    const result = SendContractSchema.safeParse({
-      sponsorForConferenceId: 'sfc-1',
-      templateId: 'tmpl-1',
-      signerEmail: 'signer@example.com',
-    })
-    expect(result.success).toBe(true)
-  })
-
-  it('fails with invalid signerEmail', () => {
-    const result = SendContractSchema.safeParse({
-      sponsorForConferenceId: 'sfc-1',
-      templateId: 'tmpl-1',
-      signerEmail: 'not-an-email',
-    })
-    expect(result.success).toBe(false)
-  })
-
-  it('fails without sponsorForConferenceId', () => {
-    const result = SendContractSchema.safeParse({ templateId: 'tmpl-1' })
-    expect(result.success).toBe(false)
-  })
-
-  it('fails without templateId', () => {
-    const result = SendContractSchema.safeParse({
-      sponsorForConferenceId: 'sfc-1',
-    })
-    expect(result.success).toBe(false)
-  })
-
-  it('passes without signerEmail (skip digital signing)', () => {
-    const result = SendContractSchema.safeParse({
-      sponsorForConferenceId: 'sfc-1',
-      templateId: 'tmpl-1',
-    })
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.signerEmail).toBeUndefined()
-    }
   })
 })

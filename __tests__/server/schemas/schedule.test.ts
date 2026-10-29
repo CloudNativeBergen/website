@@ -129,3 +129,35 @@ describe('SaveScheduleSchema — size bounds (F5)', () => {
     expect(SaveScheduleSchema.safeParse(bad).success).toBe(false)
   })
 })
+
+describe('SaveScheduleSchema — a track sponsor', () => {
+  it("keeps the track's sponsor reference through the parse", () => {
+    const result = SaveScheduleSchema.parse(
+      base({
+        tracks: [
+          {
+            ...validTrack(),
+            sponsor: { _ref: 'proact', _type: 'reference', _weak: true },
+          },
+        ],
+      }),
+    )
+    expect(result.tracks[0].sponsor).toEqual({ _ref: 'proact' })
+  })
+
+  it('accepts a track whose sponsor was cleared', () => {
+    const result = SaveScheduleSchema.parse(
+      base({ tracks: [{ ...validTrack(), sponsor: null }] }),
+    )
+    expect(result.tracks[0].sponsor).toBeNull()
+  })
+
+  it('rejects an oversized sponsor id', () => {
+    const result = SaveScheduleSchema.safeParse(
+      base({
+        tracks: [{ ...validTrack(), sponsor: { _ref: 'x'.repeat(201) } }],
+      }),
+    )
+    expect(result.success).toBe(false)
+  })
+})

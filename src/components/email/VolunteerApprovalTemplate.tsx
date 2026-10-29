@@ -11,20 +11,128 @@ import {
   brandedTintOr,
   resolveEmailBrandPalette,
 } from '@/lib/branding/email'
+import { isValidPortableText } from '@/lib/portabletext/validation'
+import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
+import type { PortableTextBlock } from '@portabletext/types'
 
-interface VolunteerApprovalTemplateProps {
+function tryParsePortableText(message: string): PortableTextBlock[] | null {
+  const trimmed = message.trim()
+  if (!trimmed.startsWith('[')) return null
+  try {
+    const parsed: unknown = JSON.parse(trimmed)
+    return isValidPortableText(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+/** The organizer's message: portable text JSON or plain paragraphs. */
+function MessageBody({
+  message,
+  brandColor,
+}: {
+  message: string
+  brandColor?: string
+}) {
+  const blocks = tryParsePortableText(message)
+  if (blocks) {
+    return (
+      <div
+        dangerouslySetInnerHTML={{
+          __html: portableTextToHTML(blocks, brandColor),
+        }}
+      />
+    )
+  }
+  return (
+    <>
+      {message.split(/\n\n+/).map((paragraph, idx) => (
+        <EmailText key={idx}>{paragraph}</EmailText>
+      ))}
+    </>
+  )
+}
+
+export interface VolunteerMessageTemplateProps {
   volunteerName: string
   eventName: string
   eventLocation: string
   eventDate: string
   eventUrl: string
   message: string
-  socialLinks: string[]
+  socialLinks?: string[]
+  brandColor?: string
+  /** Heading; defaults to the event name. */
+  title?: string
+  /** Adds a "Register your volunteer ticket" button. */
+  registrationUrl?: string
+}
+
+/**
+ * A plain organizer message to a volunteer (bulk email, reminders): the
+ * greeting, the message and nothing that claims an approval happened.
+ */
+export const VolunteerMessageTemplate: React.FC<
+  VolunteerMessageTemplateProps
+> = ({
+  volunteerName,
+  eventName,
+  eventLocation,
+  eventDate,
+  eventUrl,
+  message,
+  socialLinks = [],
+  brandColor,
+  title,
+  registrationUrl,
+}) => (
+  <BaseEmailTemplate
+    title={title || eventName}
+    titleTone="brand"
+    speakerName={volunteerName}
+    eventName={eventName}
+    eventLocation={eventLocation}
+    eventDate={eventDate}
+    eventUrl={eventUrl}
+    socialLinks={socialLinks}
+    brandColor={brandColor}
+  >
+    <MessageBody message={message} brandColor={brandColor} />
+    {registrationUrl && (
+      <div style={{ marginTop: '16px' }}>
+        <EmailButton href={registrationUrl}>
+          Register Your Volunteer Ticket
+        </EmailButton>
+      </div>
+    )}
+  </BaseEmailTemplate>
+)
+
+export interface VolunteerApprovalTemplateProps {
+  volunteerName: string
+  eventName: string
+  eventLocation: string
+  eventDate: string
+  eventUrl: string
+  message: string
+  socialLinks?: string[]
   /**
    * Tenant brand primary (THEMING L1). Resolved by the sender via
    * `emailBrandColor`; absent falls back to the house blue.
    */
   brandColor?: string
+  /**
+   * Dedicated registration link for volunteers to claim their ticket.
+   */
+  registrationUrl?: string
+  /**
+   * Slack invitation link for volunteers to join the community workspace.
+   */
+  slackInviteUrl?: string
+  /**
+   * Signed one-click confirmation link for the volunteer to confirm attendance.
+   */
+  confirmUrl?: string
 }
 
 export const VolunteerApprovalTemplate: React.FC<
@@ -36,10 +144,14 @@ export const VolunteerApprovalTemplate: React.FC<
   eventDate,
   eventUrl,
   message,
-  socialLinks,
+  socialLinks = [],
   brandColor,
+  registrationUrl,
+  slackInviteUrl,
+  confirmUrl,
 }) => {
   const brand = resolveEmailBrandPalette(brandColor)
+
   return (
     <BaseEmailTemplate
       title={`Welcome to the ${eventName} Volunteer Team!`}
@@ -62,7 +174,66 @@ export const VolunteerApprovalTemplate: React.FC<
           borderColor="#CBD5E1"
           borderLeftColor={brandedOr(brand, '#1D4ED8')}
         >
-          <EmailText>{message}</EmailText>
+          <MessageBody message={message} brandColor={brandColor} />
+        </EmailSection>
+      )}
+
+      {confirmUrl && (
+        <EmailSection
+          backgroundColor="#FEF3C7"
+          borderColor="#F59E0B"
+          borderLeftColor="#D97706"
+        >
+          <EmailSectionHeader color="#1F2937">
+            ⚠️ Action Required: Confirm Your Attendance
+          </EmailSectionHeader>
+          <EmailText color="#1F2937" weight="600">
+            Please confirm that you will be joining us as a volunteer at{' '}
+            {eventName} by clicking the button below:
+          </EmailText>
+          <div style={{ marginTop: '16px' }}>
+            <EmailButton href={confirmUrl}>Confirm Your Attendance</EmailButton>
+          </div>
+        </EmailSection>
+      )}
+
+      {registrationUrl && (
+        <EmailSection
+          backgroundColor={brandedTintOr(brand, '#E0F2FE')}
+          borderColor="#CBD5E1"
+          borderLeftColor={brandedOr(brand, '#1D4ED8')}
+        >
+          <EmailSectionHeader>
+            🎟️ Volunteer Ticket Registration
+          </EmailSectionHeader>
+          <EmailText size="14px" color="#64748B">
+            Please claim your complimentary volunteer ticket using the link
+            below:
+          </EmailText>
+          <div style={{ marginTop: '16px' }}>
+            <EmailButton href={registrationUrl}>
+              Claim Your Volunteer Ticket
+            </EmailButton>
+          </div>
+        </EmailSection>
+      )}
+
+      {slackInviteUrl && (
+        <EmailSection
+          backgroundColor={brandedTintOr(brand, '#E0F2FE')}
+          borderColor="#CBD5E1"
+          borderLeftColor={brandedOr(brand, '#1D4ED8')}
+        >
+          <EmailSectionHeader>💬 Join Our Slack Community</EmailSectionHeader>
+          <EmailText size="14px" color="#64748B">
+            Join our Slack workspace to coordinate with the organizer team and
+            fellow volunteers:
+          </EmailText>
+          <div style={{ marginTop: '16px' }}>
+            <EmailButton href={slackInviteUrl}>
+              Join Volunteer Slack
+            </EmailButton>
+          </div>
         </EmailSection>
       )}
 

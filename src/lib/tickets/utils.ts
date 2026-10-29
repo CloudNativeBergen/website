@@ -1,3 +1,4 @@
+import { canonicalEmail } from '@/lib/speaker/email'
 import { parseTicketAmount } from './amount'
 import type { EventTicket } from './types'
 import { ticketEntitlementOf, type TierWithEntitlement } from './entitlement'
@@ -17,7 +18,7 @@ export function deduplicateTicketsByEmail(
   const emailMap = new Map<string, EventTicket>()
 
   tickets.forEach((ticket) => {
-    const email = ticket.crm?.email?.toLowerCase()
+    const email = canonicalEmail(ticket.crm?.email)
     if (!email) {
       emailMap.set(`no-email-${ticket.id}`, ticket)
       return

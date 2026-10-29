@@ -148,11 +148,14 @@ export function canAcceptProposals(conference: {
 /**
  * Check if the program has been published
  */
-export function isProgramPublished(conference: Conference): boolean {
+export function isProgramPublished(
+  conference: { programDate?: Conference['programDate'] | null },
+  now: Date = new Date(),
+): boolean {
   if (!conference.programDate) {
     return false
   }
-  return new Date() >= new Date(conference.programDate)
+  return now >= new Date(conference.programDate)
 }
 
 /**
@@ -173,26 +176,6 @@ export function isRegistrationAvailable(
     !!conference.registrationLink &&
     !isConferenceOver(conference)
   )
-}
-
-/**
- * Check if workshop registration is currently open
- */
-export function isWorkshopRegistrationOpen(conference: Conference): boolean {
-  if (
-    !conference.workshopRegistrationStart ||
-    !conference.workshopRegistrationEnd
-  ) {
-    return false
-  }
-  const now = new Date()
-  const startDate = new Date(
-    conference.workshopRegistrationStart + 'T00:00:00Z',
-  )
-  const endDate = new Date(
-    conference.workshopRegistrationEnd + 'T23:59:59.999Z',
-  )
-  return now >= startDate && now <= endDate
 }
 
 /**

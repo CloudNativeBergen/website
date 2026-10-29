@@ -8,6 +8,7 @@ import {
   conferenceBaseUrl,
   hasConferenceDomain,
 } from '@/lib/conference/baseUrl'
+import { formatConferenceDateLong } from '@/lib/time'
 
 export const CATEGORY_LABELS: Record<string, string> = {
   'cold-outreach': 'Cold Outreach',
@@ -42,6 +43,8 @@ export const TEMPLATE_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   PROSPECTUS_URL: 'Sponsor prospectus/deck URL',
   SPONSOR_REGISTRATION_URL:
     'The sponsor ticket-registration link set on the conference',
+  SPONSOR_PORTAL_URL:
+    "The sponsor's own registration (portal) link — registration sends only",
   SENDER_NAME: 'Name of the person sending the email',
   TIER_NAME: 'Sponsor tier name (if assigned)',
   SIGNER_NAME: 'Name of the contract signer',
@@ -57,10 +60,21 @@ const URL_VARIABLE_KEYS = new Set([
   'SPONSOR_PAGE_URL',
   'PROSPECTUS_URL',
   'SPONSOR_REGISTRATION_URL',
+  'SPONSOR_PORTAL_URL',
 ])
 
 /**
- * Replace {{{VAR}}} placeholders in a plain string.
+ * Merge variables resolved natively by Resend Broadcasts at delivery time.
+ */
+export const RESEND_BROADCAST_VARIABLES: Record<string, string> = {
+  FIRST_NAME: 'First Name',
+  LAST_NAME: 'Last Name',
+  EMAIL: 'email@example.com',
+  RESEND_UNSUBSCRIBE_URL: 'https://example.com/unsubscribe',
+}
+
+/**
+ * Replace {{{VAR}}} and {{{VAR|fallback}}} placeholders in a plain string.
  */
 export function processTemplateVariables(
   text: string,
@@ -68,8 +82,14 @@ export function processTemplateVariables(
 ): string {
   let result = text
   for (const [key, value] of Object.entries(variables)) {
-    const pattern = new RegExp(`\\{\\{\\{${key}\\}\\}\\}`, 'g')
-    result = result.replace(pattern, value)
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const pattern = new RegExp(
+      `\\{\\{\\{${escapedKey}(?:\\|([^{}\\r\\n]*))?\\}\\}\\}`,
+      'g',
+    )
+    result = result.replace(pattern, (_match, fallback?: string) =>
+      value !== '' ? value : (fallback ?? ''),
+    )
   }
   return result
 }
@@ -123,7 +143,21 @@ export function processPortableTextVariables(
     }
   }
 
-  let keySeq = 0
+  // Keys continue past any `tpl-N` already present (a block merged once in
+  // the composer and once more on the server, #1263): a restarted counter
+  // would re-issue a key an existing link annotation holds, and the span
+  // would then resolve to the WRONG href.
+  let keySeq = blocks.reduce((max, block) => {
+    const keys = [
+      ...((block.markDefs as Array<{ _key?: unknown }> | undefined) ?? []),
+      ...((block.children as Array<{ _key?: unknown }> | undefined) ?? []),
+    ].map((k) => k._key)
+    for (const key of keys) {
+      const m = typeof key === 'string' && /^tpl-(\d+)$/.exec(key)
+      if (m) max = Math.max(max, Number(m[1]))
+    }
+    return max
+  }, 0)
   const genKey = () => `tpl-${++keySeq}`
 
   return blocks.map((block) => {
@@ -221,8 +255,27 @@ export function buildTemplateVariables(opts: {
   }
   senderName?: string
   tierName?: string
+  /**
+   * The sponsor's own registration (portal) link, built from its registration
+   * token (#1263). Only a registration send has one.
+   */
+  portalUrl?: string
+  /** Contract sends (#1264): the signer and the formatted contract total. */
+  signerName?: string
+  signerEmail?: string
+  contractValue?: string
 }): Record<string, string> {
-  const { sponsorName, contactNames, conference, senderName, tierName } = opts
+  const {
+    sponsorName,
+    contactNames,
+    conference,
+    senderName,
+    tierName,
+    portalUrl,
+    signerName,
+    signerEmail,
+    contractValue,
+  } = opts
 
   const vars: Record<string, string> = {
     SPONSOR_NAME: sponsorName,
@@ -245,16 +298,24 @@ export function buildTemplateVariables(opts: {
     }
     const year = conference.startDate.slice(0, 4)
     if (year) vars.CONFERENCE_YEAR = year
+    // The contract templates' long form (the old contract-email renderer).
+    vars.EVENT_DATE = formatConferenceDateLong(conference.startDate)
   }
 
   if (conference.city) {
     vars.CONFERENCE_CITY = conference.city
+    vars.EVENT_LOCATION = conference.city
   }
 
   if (hasConferenceDomain(conference)) {
     vars.CONFERENCE_URL = conferenceBaseUrl(conference)
     vars.SPONSOR_PAGE_URL = `${vars.CONFERENCE_URL}/sponsor`
+    vars.EVENT_URL = vars.CONFERENCE_URL
   }
+
+  if (signerName) vars.SIGNER_NAME = signerName
+  if (signerEmail) vars.SIGNER_EMAIL = signerEmail
+  if (contractValue) vars.CONTRACT_VALUE = contractValue
 
   if (conference.prospectusUrl) {
     vars.PROSPECTUS_URL = conference.prospectusUrl
@@ -264,6 +325,10 @@ export function buildTemplateVariables(opts: {
   // a template that wants the link now places it with this merge field.
   if (conference.sponsorRegistrationLink) {
     vars.SPONSOR_REGISTRATION_URL = conference.sponsorRegistrationLink
+  }
+
+  if (portalUrl) {
+    vars.SPONSOR_PORTAL_URL = portalUrl
   }
 
   if (senderName) {
@@ -355,9 +420,13 @@ export function findBestTemplate(
  * Extract all {{{VARIABLE_NAME}}} references from a plain string.
  */
 export function extractVariablesFromText(text: string): string[] {
-  const matches = text.match(/\{\{\{([A-Z_]+)\}\}\}/g)
+  const matches = text.match(/\{\{\{[^{}\r\n]+\}\}\}/g)
   if (!matches) return []
-  return [...new Set(matches.map((m) => m.slice(3, -3)))]
+  return [
+    ...new Set(
+      matches.map((m) => m.slice(3, -3)).filter((s) => s.trim().length > 0),
+    ),
+  ]
 }
 
 /**
@@ -368,11 +437,25 @@ export function extractVariablesFromPortableText(
 ): string[] {
   const vars = new Set<string>()
   for (const block of blocks) {
-    if (block._type === 'block' && Array.isArray(block.children)) {
-      for (const child of block.children) {
-        if (child._type === 'span' && typeof child.text === 'string') {
-          for (const v of extractVariablesFromText(child.text)) {
-            vars.add(v)
+    if (block._type === 'block') {
+      if (Array.isArray(block.children)) {
+        const combinedText = block.children
+          .map((child) =>
+            child._type === 'span' && typeof child.text === 'string'
+              ? child.text
+              : '',
+          )
+          .join('')
+        for (const v of extractVariablesFromText(combinedText)) {
+          vars.add(v)
+        }
+      }
+      if (Array.isArray(block.markDefs)) {
+        for (const markDef of block.markDefs) {
+          if (markDef._type === 'link' && typeof markDef.href === 'string') {
+            for (const v of extractVariablesFromText(markDef.href)) {
+              vars.add(v)
+            }
           }
         }
       }
@@ -383,26 +466,42 @@ export function extractVariablesFromPortableText(
 
 /**
  * Find unsupported variables in text and Portable Text blocks.
- * Returns an array of variable names that are not in the supported set.
+ * Returns an array of variable names that are not in the supported set
+ * or cannot be merged cleanly (e.g. split across rich-text spans).
  */
 export function findUnsupportedVariables(
   supportedVariables: Record<string, string>,
   ...sources: Array<string | PortableTextBlock[]>
 ): string[] {
-  const supported = new Set(Object.keys(supportedVariables))
+  const placeholderVars: Record<string, string> = {}
+  for (const key of Object.keys(supportedVariables)) {
+    placeholderVars[key] = '__MERGED__'
+  }
   const found = new Set<string>()
 
   for (const source of sources) {
     if (typeof source === 'string') {
-      for (const v of extractVariablesFromText(source)) {
-        if (!supported.has(v)) found.add(v)
+      const merged = processTemplateVariables(source, placeholderVars)
+      for (const v of extractVariablesFromText(merged)) {
+        found.add(v)
       }
     } else if (Array.isArray(source)) {
-      for (const v of extractVariablesFromPortableText(source)) {
-        if (!supported.has(v)) found.add(v)
+      const merged = processPortableTextVariables(source, placeholderVars)
+      for (const v of extractVariablesFromPortableText(merged)) {
+        found.add(v)
       }
     }
   }
 
   return [...found]
+}
+
+/**
+ * Human-readable error message when an email still contains unmerged {{{VARIABLE}}} placeholders.
+ */
+export function formatUnmergedVariablesMessage(
+  variables: readonly string[],
+): string {
+  const formatted = variables.map((v) => `{{{${v}}}}`).join(', ')
+  return `Email contains unmerged template variables (${formatted}). Fill in the missing values or remove the placeholders before sending.`
 }

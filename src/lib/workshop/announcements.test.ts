@@ -171,6 +171,27 @@ describe('sendAnnouncementToConfirmedParticipants', () => {
     expect(sendEmailMock).toHaveBeenCalledTimes(9)
   })
 
+  it('stays at or under 5 sends a second (Resend allows 10)', async () => {
+    vi.useFakeTimers()
+    sendEmailMock.mockResolvedValue({ data: { emailId: 'e' } })
+
+    const pending = sendAnnouncementToConfirmedParticipants({
+      workshopTitle: 'W',
+      authorName: 'Owner',
+      body: 'hi',
+      recipients: makeRecipients(9),
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sendEmailMock).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(599)
+    expect(sendEmailMock).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(sendEmailMock).toHaveBeenCalledTimes(6)
+    await vi.advanceTimersByTimeAsync(600)
+    expect(await pending).toEqual({ sent: 9, failed: 0 })
+    vi.useRealTimers()
+  })
+
   it('handles an empty recipient list without sending', async () => {
     const result = await sendAnnouncementToConfirmedParticipants({
       workshopTitle: 'W',

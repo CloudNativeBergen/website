@@ -164,6 +164,21 @@ describe('actionStateMachine', () => {
     })
   })
 
+  describe('cancel', () => {
+    it.each([Status.accepted, Status.confirmed])(
+      'lets an organizer cancel a %s proposal',
+      (from) => {
+        expect(actionStateMachine(from, Action.cancel, true)).toEqual({
+          status: Status.canceled,
+          isValidAction: true,
+        })
+        expect(
+          actionStateMachine(from, Action.cancel, false).isValidAction,
+        ).toBe(false)
+      },
+    )
+  })
+
   describe('full lifecycle: draft → submitted → accepted → confirmed', () => {
     it('transitions through the complete happy path', () => {
       let { status } = actionStateMachine(Status.draft, Action.submit, false)

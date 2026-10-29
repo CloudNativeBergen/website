@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 'use client'
 
 import { api } from '@/lib/trpc/client'
@@ -60,7 +59,7 @@ export function SponsorContractWidget({
               Contract Status
             </dt>
             <dd className="mt-1 text-sm text-gray-900 capitalize dark:text-white">
-              {data.contractStatus.replace(/-/g, ' ')}
+              {(data.contractStatus || 'none').replace(/-/g, ' ')}
             </dd>
           </div>
           <div className="sm:col-span-1">

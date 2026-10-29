@@ -42,6 +42,7 @@
 import { removesFullPrice } from './classification'
 import { ticketEntitlementOf, type TierWithEntitlement } from './entitlement'
 import type { SpeakerTicketStatus } from './speakerStatus'
+import type { VolunteerTicketStatus } from './volunteerStatus'
 import { sponsorOwningCode } from '@/lib/discounts/attribution'
 import { resolveRedemptionCount } from '@/lib/discounts/usage'
 import type { EventDiscountWithUsage } from '@/lib/discounts/types'
@@ -70,6 +71,7 @@ export interface FreeAllocationCategory {
 export interface FreeTicketAllocation {
   sponsors: FreeAllocationCategory
   speakers: FreeAllocationCategory
+  volunteers?: FreeAllocationCategory
   organizers: FreeAllocationCategory
   /** Every category's allowance. `'unknown'` if any one could not be read. */
   totalAllocated: FreeTicketCount
@@ -110,6 +112,13 @@ export interface FreeTicketAllocationInput {
    * invitation records could not be read.
    */
   speakerStatuses: readonly SpeakerTicketStatus[] | null
+  /** Approved/confirmed volunteers; omitted when not tracked on this surface. */
+  volunteerCount?: FreeTicketCount
+  /**
+   * Per-volunteer claim state from `joinVolunteerTicketStatus`, or `null` when
+   * volunteer ticket claims could not be verified.
+   */
+  volunteerStatuses?: readonly VolunteerTicketStatus[] | null
   /**
    * Organizer seats; `'unknown'` when `getOrganizerCount` returned an error —
    * it answers `{ count: 0, err }` on failure, and a 0 rendered as fact is the
@@ -246,11 +255,51 @@ function speakerRow(
   }
 }
 
+function volunteerRow(
+  allocated: FreeTicketCount,
+  statuses: FreeTicketAllocationInput['volunteerStatuses'],
+): FreeAllocationCategory {
+  if (!statuses) {
+    return {
+      allocated,
+      claimed: 'unknown',
+      fromProvider: false,
+      status: 'Volunteer ticket claims could not be confirmed.',
+    }
+  }
+
+  const count = (state: VolunteerTicketStatus['state']) =>
+    statuses.filter((s) => s.state === state).length
+  const unknown = count('unknown')
+
+  if (unknown > 0) {
+    return {
+      allocated,
+      claimed: 'unknown',
+      fromProvider: false,
+      status: `${plural(unknown, 'volunteer')} could not be checked against the ticket provider.`,
+    }
+  }
+
+  const invited = count('invited')
+  const notInvited = count('not-invited')
+  return {
+    allocated,
+    claimed: count('redeemed'),
+    fromProvider: false,
+    status: `${plural(invited, 'approval email')} unclaimed · ${plural(notInvited, 'volunteer')} not yet emailed.`,
+  }
+}
+
 export function calculateFreeTicketAllocation(
   input: FreeTicketAllocationInput,
 ): FreeTicketAllocation {
   const sponsors = sponsorRow(input.sponsors, input.discounts)
   const speakers = speakerRow(input.speakerCount, input.speakerStatuses)
+  const volunteers =
+    input.volunteerCount !== undefined
+      ? volunteerRow(input.volunteerCount, input.volunteerStatuses)
+      : undefined
   const organizers: FreeAllocationCategory = {
     allocated: input.organizerCount,
     // NOT 0, and not derivable: `./classification` produces no
@@ -265,26 +314,24 @@ export function calculateFreeTicketAllocation(
         : 'Organizer comps cannot be told apart from any other free ticket.',
   }
 
+  const allEntries: readonly (readonly [string, FreeAllocationCategory])[] = [
+    ['sponsors', sponsors],
+    ['speakers', speakers],
+    ...(volunteers ? ([['volunteers', volunteers]] as const) : []),
+    ['organizers', organizers],
+  ]
+
   // The rows we can actually count, in table order. Excluding a row from the
   // total is NOT the same as counting it as zero: it leaves `claimedCovers`,
   // which every surface has to render beside the number.
-  const counted = (
-    [
-      ['sponsors', sponsors],
-      ['speakers', speakers],
-      ['organizers', organizers],
-    ] as const
-  ).filter(([, row]) => row.claimed !== 'unknown')
+  const counted = allEntries.filter(([, row]) => row.claimed !== 'unknown')
 
   return {
     sponsors,
     speakers,
+    ...(volunteers ? { volunteers } : {}),
     organizers,
-    totalAllocated: sumCounts([
-      sponsors.allocated,
-      speakers.allocated,
-      organizers.allocated,
-    ]),
+    totalAllocated: sumCounts(allEntries.map(([, row]) => row.allocated)),
     totalClaimed: counted.length
       ? sumCounts(counted.map(([, row]) => row.claimed))
       : 'unknown',
@@ -337,6 +384,9 @@ export function claimedCoverageNote(
   allocation: FreeTicketAllocation,
 ): string | null {
   if (allocation.claimedCovers.length === 0) return null
-  if (allocation.claimedCovers.length === CATEGORIES.length) return null
+  const totalCategories = allocation.volunteers
+    ? CATEGORIES.length + 1
+    : CATEGORIES.length
+  if (allocation.claimedCovers.length === totalCategories) return null
   return `${claimedCoverageLabel(allocation)} only`
 }

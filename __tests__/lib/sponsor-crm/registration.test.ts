@@ -70,6 +70,7 @@ describe('registration', () => {
 
       const mockPatch = {
         set: vi.fn().mockReturnThis(),
+        setIfMissing: vi.fn().mockReturnThis(),
         // @ts-ignore
         commit: vi.fn().mockResolvedValue({}),
       }
@@ -81,6 +82,31 @@ describe('registration', () => {
       )
       expect(result.error).toBeUndefined()
       expect(clientWrite.patch).toHaveBeenCalledWith('sfc-123')
+      // Atomic first mint: never a plain `set` that could overwrite a
+      // concurrent writer's token.
+      expect(mockPatch.setIfMissing).toHaveBeenCalledWith({
+        registrationToken: result.token,
+        registrationComplete: false,
+      })
+      expect(mockPatch.set).not.toHaveBeenCalled()
+    })
+
+    it('returns the token another writer stored first, not the one it minted', async () => {
+      // @ts-ignore
+      ;(clientReadUncached.fetch as any).mockResolvedValue({
+        registrationToken: null,
+        registrationComplete: false,
+      })
+      const mockPatch = {
+        set: vi.fn().mockReturnThis(),
+        setIfMissing: vi.fn().mockReturnThis(),
+        // @ts-ignore
+        commit: vi.fn().mockResolvedValue({ registrationToken: 'tok-winner' }),
+      }
+      ;(clientWrite.patch as Mock).mockReturnValue(mockPatch)
+
+      const result = await generateRegistrationToken('sfc-123')
+      expect(result.token).toBe('tok-winner')
     })
 
     it('returns error when document not found', async () => {

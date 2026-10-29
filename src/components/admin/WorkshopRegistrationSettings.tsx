@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   CalendarIcon,
@@ -12,6 +12,12 @@ import { AdminButton } from '@/components/admin/AdminButton'
 import { StatusBadge } from '@/components/StatusBadge'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
+import { WorkshopSection } from './workshop/WorkshopSection'
+import { useOpenedByAnchor } from './workshop/useOpenedByAnchor'
+
+/** The card's anchor: the sponsor early-access card links to it (#1452). */
+export const WORKSHOP_REGISTRATION_ANCHOR = 'workshop-registration'
+import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
 import {
   formatDateTimeSafe,
   instantToOsloLocalInput,
@@ -19,12 +25,14 @@ import {
 } from '@/lib/time'
 
 interface WorkshopRegistrationSettingsProps {
+  /** The sponsor start time: when sign-up opens for people with early access. */
+  workshopRegistrationSponsorStart?: string
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
 }
 
 /**
- * Workshop registration window (open/close datetimes). This is the one settings
+ * Workshop registration window (sponsor start, open and close datetimes). This is the one settings
  * island that can't fold into the generic {@link EditConferenceCard} fieldset
  * table because it is patched through the dedicated `workshop.admin` router
  * rather than a `conference.*` mutation. So it keeps its own mutation but adopts
@@ -33,6 +41,7 @@ interface WorkshopRegistrationSettingsProps {
  * after a successful save.
  */
 export function WorkshopRegistrationSettings({
+  workshopRegistrationSponsorStart,
   workshopRegistrationStart,
   workshopRegistrationEnd,
 }: WorkshopRegistrationSettingsProps) {
@@ -50,45 +59,100 @@ export function WorkshopRegistrationSettings({
   const toLocalInput = (value?: string) => instantToOsloLocalInput(value)
 
   const [isOpen, setIsOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  // The sponsor early-access card links here, to the time it shows.
+  useOpenedByAnchor(WORKSHOP_REGISTRATION_ANCHOR, expanded, setExpanded)
   const [error, setError] = useState<string | null>(null)
-  const [startDate, setStartDate] = useState(
-    toLocalInput(workshopRegistrationStart),
+  // A REFUSAL IS BROUGHT INTO VIEW when it arrives: on a short screen it sits
+  // above the Save button that was just tapped. Counted, not keyed on the
+  // text, so the same refusal a second time comes into view again.
+  const errorRef = useRef<HTMLParagraphElement>(null)
+  const [refusals, setRefusals] = useState(0)
+  useEffect(() => {
+    if (refusals > 0) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [refusals])
+  const stored = () => ({
+    sponsorStartDate: toLocalInput(workshopRegistrationSponsorStart),
+    startDate: toLocalInput(workshopRegistrationStart),
+    endDate: toLocalInput(workshopRegistrationEnd),
+  })
+  // WHAT THE FORM TAKES AS STORED. A save sends only the fields that differ
+  // from it (the server leaves the others alone), so a form opened before a
+  // colleague's save cannot erase a time it never showed.
+  const [opened, setOpened] = useState(stored)
+  const [sponsorStartDate, setSponsorStartDate] = useState(
+    opened.sponsorStartDate,
   )
-  const [endDate, setEndDate] = useState(toLocalInput(workshopRegistrationEnd))
+  const [startDate, setStartDate] = useState(opened.startDate)
+  const [endDate, setEndDate] = useState(opened.endDate)
 
+  // THE CARD WAS READ AGAIN (after a save, accepted or refused) and a stored
+  // time is not what the form took it to be. A field the organizer has not
+  // touched follows the stored time; one they have changed keeps what they
+  // typed, and is still a change. This is what makes a refusal about a time
+  // the form did not show recoverable: the time appears, and can be cleared.
+  const current = stored()
+  if (
+    current.sponsorStartDate !== opened.sponsorStartDate ||
+    current.startDate !== opened.startDate ||
+    current.endDate !== opened.endDate
+  ) {
+    if (sponsorStartDate === opened.sponsorStartDate) {
+      setSponsorStartDate(current.sponsorStartDate)
+    }
+    if (startDate === opened.startDate) setStartDate(current.startDate)
+    if (endDate === opened.endDate) setEndDate(current.endDate)
+    setOpened(current)
+  }
+
+  const utils = api.useUtils()
   const updateRegistrationTimes =
     api.workshop.admin.updateRegistrationTimes.useMutation({
       onSuccess: () => {
+        // The bulk send's count and refusal follow these times.
+        void utils.workshop.admin.earlyAccessBulkPreview.invalidate()
         setIsOpen(false)
         setError(null)
         showNotification({
           type: 'success',
           title: 'Settings updated',
-          message: 'Workshop Registration saved.',
+          message: 'Workshop registration saved.',
         })
         router.refresh()
       },
       onError: (err) => {
+        // A REFUSAL IS JUDGED ON WHAT IS STORED, which this card may not be
+        // showing: read the card again, so the form above takes it in.
+        router.refresh()
+        // SAID ONCE, in the form, where it stays while the organizer acts
+        // on it. A toast as well said it twice, and on a phone it covered
+        // the fields and Save.
         setError(
           err.message ||
             'Failed to update the workshop registration window. Please try again.',
         )
-        showNotification({
-          type: 'error',
-          title: 'Could not save',
-          message: err.message || 'Failed to update workshop registration.',
-        })
+        setRefusals((count) => count + 1)
       },
     })
 
   const openModal = () => {
-    setStartDate(toLocalInput(workshopRegistrationStart))
-    setEndDate(toLocalInput(workshopRegistrationEnd))
+    const now = stored()
+    setOpened(now)
+    setSponsorStartDate(now.sponsorStartDate)
+    setStartDate(now.startDate)
+    setEndDate(now.endDate)
     setError(null)
     setIsOpen(true)
   }
 
+  // The header X, Escape and the backdrop all arrive here (ModalShell's one
+  // `onClose`), and so does Cancel.
   const closeModal = () => {
+    // NOT WHILE A SAVE IS ON ITS WAY. Its refusal is shown in this form and
+    // nowhere else, so a form closed during "Saving…" would report a failed
+    // save nowhere; and one closed and reopened would be closed again by that
+    // save's success, with whatever was typed since.
+    if (updateRegistrationTimes.isPending) return
     setIsOpen(false)
     setError(null)
   }
@@ -99,10 +163,21 @@ export function WorkshopRegistrationSettings({
     // the read-only rows); persist the unambiguous ISO instant. Malformed
     // values degrade to unset rather than throwing.
     const toIso = (v: string) => osloLocalInputToIso(v)
-    updateRegistrationTimes.mutate({
-      startDate: toIso(startDate),
-      endDate: toIso(endDate),
-    })
+    const changes = {
+      ...(sponsorStartDate !== opened.sponsorStartDate && {
+        sponsorStartDate: toIso(sponsorStartDate),
+      }),
+      ...(startDate !== opened.startDate && { startDate: toIso(startDate) }),
+      ...(endDate !== opened.endDate && { endDate: toIso(endDate) }),
+    }
+    if (Object.keys(changes).length === 0) {
+      // Nothing to send, but the card may be out of date: read it again, so
+      // what the organizer leaves behind is what is stored.
+      router.refresh()
+      closeModal()
+      return
+    }
+    updateRegistrationTimes.mutate(changes)
   }
 
   const formatDateTime = (dateString?: string) => {
@@ -114,46 +189,60 @@ export function WorkshopRegistrationSettings({
 
   const getRegistrationStatus = (): {
     label: string
-    color: 'gray' | 'yellow' | 'red' | 'green'
+    color: 'gray' | 'yellow' | 'red' | 'green' | 'blue'
     note?: string
   } => {
-    const now = new Date()
-    const start = workshopRegistrationStart
-      ? new Date(workshopRegistrationStart)
-      : null
-    const end = workshopRegistrationEnd
-      ? new Date(workshopRegistrationEnd)
-      : null
-
-    if (start && end) {
-      if (now < start) return { label: 'Not yet open', color: 'yellow' }
-      if (now > end) return { label: 'Closed', color: 'red' }
-      return { label: 'Currently open', color: 'green' }
+    if (!workshopRegistrationStart && !workshopRegistrationEnd) {
+      return { label: 'Not configured', color: 'gray' }
     }
 
-    if (!start && !end) {
-      return { label: 'Not configured', color: 'gray' }
+    // THE ONE WINDOW RULE (#1345), asked as a person WITH early access: that
+    // is the answer that tells the early-access window apart, so an organizer
+    // is not told "Not yet open" while sponsors' people are signing up.
+    const registration = workshopRegistrationWindow(
+      {
+        workshopRegistrationSponsorStart,
+        workshopRegistrationStart,
+        workshopRegistrationEnd,
+      },
+      { now: new Date(), earlyAccess: true },
+    )
+    const earlyAccessOpen = registration.status === 'open' && registration.early
+
+    if (workshopRegistrationStart && workshopRegistrationEnd) {
+      if (registration.status === 'not-open-yet') {
+        return { label: 'Not yet open', color: 'yellow' }
+      }
+      if (registration.status === 'closed') {
+        return { label: 'Closed', color: 'red' }
+      }
+      return earlyAccessOpen
+        ? { label: 'Open for early access', color: 'blue' }
+        : { label: 'Currently open', color: 'green' }
     }
 
     // Partial window. Enforcement (the workshop signup mutation and the public
     // workshop list) checks each bound independently — a missing bound is
     // simply not enforced — so a half-set window still gates signups and must
     // not read as "Not configured".
-    if (start) {
+    if (workshopRegistrationStart) {
+      const opens = formatDateTimeSafe(workshopRegistrationStart)
       return {
         label: 'Partially configured',
         color: 'yellow',
         note:
-          now < start
-            ? `Signups open ${formatDateTimeSafe(workshopRegistrationStart!)}. No close date is set, so once open they never close.`
-            : 'Signups are open. No close date is set, so they never close.',
+          registration.status === 'not-open-yet'
+            ? `Signups open ${opens}. No close date is set, so once open they never close.`
+            : earlyAccessOpen
+              ? `Early access is open. Registration opens for everyone ${opens}. No close date is set, so once open it never closes.`
+              : 'Signups are open. No close date is set, so they never close.',
       }
     }
     return {
       label: 'Partially configured',
       color: 'yellow',
       note:
-        now > end!
+        registration.status === 'closed'
           ? `Signups closed ${formatDateTimeSafe(workshopRegistrationEnd!)}. No open date is set, so they were open until then.`
           : `Signups are open now (no open date is set) and close ${formatDateTimeSafe(workshopRegistrationEnd!)}.`,
     }
@@ -162,62 +251,70 @@ export function WorkshopRegistrationSettings({
   const status = getRegistrationStatus()
 
   return (
-    <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <div className="flex items-center">
-          <CalendarIcon className="mr-2 h-5 w-5 text-gray-400 dark:text-gray-500" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-            Workshop Registration
-          </h3>
-        </div>
+    <WorkshopSection
+      id={WORKSHOP_REGISTRATION_ANCHOR}
+      icon={CalendarIcon}
+      // Under the Settings h2.
+      headingLevel={3}
+      title="Workshop registration"
+      description="When workshop sign-ups open and close."
+      // The status, also while collapsed.
+      badge={<StatusBadge label={status.label} color={status.color} />}
+      open={expanded}
+      onOpenChange={setExpanded}
+      action={
         <button
           type="button"
           onClick={openModal}
-          aria-label="Edit Workshop Registration"
+          aria-label="Edit workshop registration"
           className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:text-gray-400 dark:hover:bg-gray-800"
         >
           <PencilSquareIcon className="h-5 w-5" />
         </button>
-      </div>
+      }
+    >
+      <div className="mt-4">
+        <div className="space-y-3">
+          <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Sponsor early access opens
+            </span>
+            <span className="text-right text-sm text-gray-900 dark:text-white">
+              {formatDateTime(workshopRegistrationSponsorStart)}
+            </span>
+          </div>
 
-      <div className="space-y-3">
-        <div className="flex justify-between border-b border-gray-200 py-2 dark:border-gray-700">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Registration Opens
-          </span>
-          <span className="text-sm text-gray-900 dark:text-white">
-            {formatDateTime(workshopRegistrationStart)}
-          </span>
+          <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Registration opens
+            </span>
+            <span className="text-right text-sm text-gray-900 dark:text-white">
+              {formatDateTime(workshopRegistrationStart)}
+            </span>
+          </div>
+
+          <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Registration closes
+            </span>
+            <span className="text-right text-sm text-gray-900 dark:text-white">
+              {formatDateTime(workshopRegistrationEnd)}
+            </span>
+          </div>
+
+          {status.note ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {status.note}
+            </p>
+          ) : null}
         </div>
-
-        <div className="flex justify-between border-b border-gray-200 py-2 dark:border-gray-700">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Registration Closes
-          </span>
-          <span className="text-sm text-gray-900 dark:text-white">
-            {formatDateTime(workshopRegistrationEnd)}
-          </span>
-        </div>
-
-        <div className="flex items-center justify-between py-2">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Status
-          </span>
-          <StatusBadge label={status.label} color={status.color} />
-        </div>
-
-        {status.note ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {status.note}
-          </p>
-        ) : null}
       </div>
 
       <ModalShell
         isOpen={isOpen}
         onClose={closeModal}
         size="lg"
-        title="Edit Workshop Registration"
+        title="Edit workshop registration"
         subtitle="When workshop sign-ups open and close"
         icon={<PencilSquareIcon className="h-5 w-5" />}
       >
@@ -231,6 +328,8 @@ export function WorkshopRegistrationSettings({
         >
           {error ? (
             <p
+              ref={errorRef}
+              id="workshop-reg-error"
               role="alert"
               className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300"
             >
@@ -240,13 +339,42 @@ export function WorkshopRegistrationSettings({
 
           <div>
             <label
+              htmlFor="workshop-reg-sponsor-start"
+              className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Sponsor early access opens (Europe/Oslo)
+            </label>
+            <input
+              id="workshop-reg-sponsor-start"
+              type="datetime-local"
+              value={sponsorStartDate}
+              onChange={(e) => setSponsorStartDate(e.target.value)}
+              aria-describedby={
+                error
+                  ? 'workshop-reg-sponsor-start-help workshop-reg-error'
+                  : 'workshop-reg-sponsor-start-help'
+              }
+              className="block min-h-[44px] w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            />
+            <p
+              id="workshop-reg-sponsor-start-help"
+              className="mt-1 text-sm text-gray-500 dark:text-gray-400"
+            >
+              Optional. When people with a sponsor&apos;s early-access link can
+              sign up. Must be earlier than Registration opens.
+            </p>
+          </div>
+
+          <div>
+            <label
               htmlFor="workshop-reg-start"
               className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Registration Opens (Europe/Oslo)
+              Registration opens (Europe/Oslo)
             </label>
             <input
               id="workshop-reg-start"
+              aria-describedby={error ? 'workshop-reg-error' : undefined}
               type="datetime-local"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
@@ -259,10 +387,11 @@ export function WorkshopRegistrationSettings({
               htmlFor="workshop-reg-end"
               className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Registration Closes (Europe/Oslo)
+              Registration closes (Europe/Oslo)
             </label>
             <input
               id="workshop-reg-end"
+              aria-describedby={error ? 'workshop-reg-error' : undefined}
               type="datetime-local"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
@@ -294,6 +423,6 @@ export function WorkshopRegistrationSettings({
           </div>
         </form>
       </ModalShell>
-    </div>
+    </WorkshopSection>
   )
 }

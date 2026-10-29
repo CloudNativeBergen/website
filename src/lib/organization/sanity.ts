@@ -72,6 +72,8 @@ export async function getOrganizationRefForCurrentConference(): Promise<
  */
 export async function getOrganizationRefViaParentConference(
   parentId: string | null | undefined,
+  /** Conference from a reliable parent document read, avoiding parent GROQ lag. */
+  conferenceId?: string,
 ): Promise<string | null> {
   if (!parentId) return null
   try {
@@ -83,8 +85,12 @@ export async function getOrganizationRefViaParentConference(
       // itself, no tenant data), and the value is used to STAMP the child being
       // created so it is born inside the parent's tenant rather than outside
       // one. Authorization over the parent id belongs to the calling procedure.
-      `*[_id == $parentId][0].conference->organization._ref`,
-      { parentId },
+      conferenceId
+        ? // groq-global-scoped: conference id from the authorized parent's document.
+          `*[_type == "conference" && _id == $conferenceId][0].organization._ref`
+        : // groq-global: tenant resolution only; parent authorization belongs to caller.
+          `*[_id == $parentId][0].conference->organization._ref`,
+      conferenceId ? { conferenceId } : { parentId },
     )
     return ref ?? null
   } catch {
@@ -104,7 +110,12 @@ const ORGANIZATION_PROJECTION = `{
   contactEmail,
   plan,
   featureOverrides,
-  analyticsPosthogToken
+  analyticsPosthogToken,
+  contentJudgement {
+    enabled,
+    changedAt,
+    "changedByName": changedBy->name
+  }
 }`
 
 /**

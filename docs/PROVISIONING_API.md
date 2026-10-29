@@ -176,6 +176,7 @@ Content-Type: application/json
 
 - **1 to 20 targets** per call (`MAX_INVALIDATION_TARGETS`).
 - The caller names a **document**, never a tag. Which cache tag that implies is this app's decision, so the tag structure stays ours to change — and the broad `content:*` tags (which bust every tenant at once) are not in the vocabulary and cannot be reached.
+- A `conference` target busts that conference's tag and also **expires at once** (`{ expire: 0 }`) its Feedback Code index (`sanity:feedback-code-index-<id>`, `docs/SPEAKER_FEEDBACK_SPEC.md` §5.1), so the response lists two tags for it. Every other tag is revalidated with the `'default'` profile.
 - Ids are validated by **shape only** (`[A-Za-z0-9._-]{1,200}`); hostnames are lowercased and validated with the same helper the `domains[]` editor uses, so the computed tag is byte-identical to the one the cached read registered.
 - **No `Idempotency-Key`.** Invalidation is naturally idempotent — revalidating a tag twice is indistinguishable from once — so a key would add a required header and a stored receipt to protect nothing.
 
@@ -206,7 +207,7 @@ Two limits, both on the same durable, Sanity-backed limiter as provisioning but 
 - `invalidate-attempt`, bucketed by client IP, charged **before** the token is compared — 60/min, 600/hour, 3000/day. The bound on brute-forcing the secret.
 - `invalidate`, a **single global** bucket, charged after authentication and after validation — 60/min, 600/hour, 5000/day. Not keyed on anything the caller can rotate, because `x-forwarded-for` is caller-controlled.
 
-Together with the 20-target cap that is at most **1200 tag revalidations a minute, platform-wide**, no matter what is sent. Without both halves, a holder of the secret could drop every tenant's cached reads in a loop and turn the site into an uncached passthrough to Sanity.
+Together with the 20-target cap that is at most **2400 tag revalidations a minute, platform-wide** (60 calls × 20 targets × at most two tags, since a `conference` target also expires its Feedback Code index), no matter what is sent. Without both halves, a holder of the secret could drop every tenant's cached reads in a loop and turn the site into an uncached passthrough to Sanity.
 
 Both fail **closed** on a limiter outage. When the limit does trip the cost is bounded and self-healing: the caller gets a `429`, and the entry it wanted to bust still revalidates on its own within the hour.
 

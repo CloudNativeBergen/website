@@ -12,11 +12,13 @@ import {
   BanknotesIcon,
   BuildingOfficeIcon,
   CalendarDaysIcon,
+  CameraIcon,
   ChatBubbleLeftRightIcon,
   DocumentPlusIcon,
   DocumentTextIcon,
   HomeIcon,
   PencilSquareIcon,
+  PhotoIcon,
   Squares2X2Icon,
   TicketIcon,
   UsersIcon,
@@ -149,6 +151,11 @@ export interface UserMenuProps {
   speaker?: Speaker
   /** The account the user authenticated with (`session.account`). */
   account?: Account
+  /**
+   * Photo Wall state (computed server-side): `open` while posting is open,
+   * `closed` when a wall exists but posting is not; undefined hides the group.
+   */
+  photoWall?: 'open' | 'closed'
 }
 
 /**
@@ -158,7 +165,13 @@ export interface UserMenuProps {
  * provider, sign out). Built on Headless UI `Menu` so it is fully keyboard
  * accessible and focus-visible; dark-mode and mobile aware.
  */
-export function UserMenu({ name, picture, speaker, account }: UserMenuProps) {
+export function UserMenu({
+  name,
+  picture,
+  speaker,
+  account,
+  photoWall,
+}: UserMenuProps) {
   const { canInstall } = usePwaInstall()
 
   const isOrganizer = Boolean(speaker?.isOrganizer)
@@ -200,6 +213,27 @@ export function UserMenu({ name, picture, speaker, account }: UserMenuProps) {
             icon={ArrowTopRightOnSquareIcon}
             external
           />
+        )}
+
+        {photoWall && (
+          <Fragment>
+            <Divider />
+            <SectionLabel>Photo Wall</SectionLabel>
+            {photoWall === 'open' ? (
+              <LinkItem
+                href="/wall/post"
+                label="Post a photo"
+                icon={CameraIcon}
+              />
+            ) : (
+              <LinkItem
+                href="/wall/post#my-posts"
+                label="My posts"
+                icon={CameraIcon}
+              />
+            )}
+            <LinkItem href="/wall" label="View the wall" icon={PhotoIcon} />
+          </Fragment>
         )}
 
         {isOrganizer && (

@@ -99,14 +99,15 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
   cacheLife('hours')
   cacheTag('content:tickets')
 
-  const { conference, error } = await getConferenceForDomain(domain)
+  const { conference, error, status } = await getConferenceForDomain(domain)
 
   if (conference?._id) {
     cacheTag(conferenceTag(conference._id))
   }
 
   if (isUnknownHost({ conference, error })) {
-    if (error) console.error('Error fetching conference data:', error)
+    if (status === 'unavailable')
+      console.error('Error fetching conference data:', error)
     return <div>Error loading conference data</div>
   }
 

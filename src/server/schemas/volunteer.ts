@@ -1,5 +1,34 @@
+import { VOLUNTEER_EMAIL_CHUNK } from '@/lib/volunteer/chunkedSend'
 import { z } from 'zod'
 import { VolunteerStatus, Occupation, TShirtSize } from '@/lib/volunteer/types'
+import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
+import { isValidPortableText } from '@/lib/portabletext/validation'
+
+function getMessageTextLength(raw: string): number {
+  const trimmed = raw.trim()
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (isValidPortableText(parsed)) {
+        return parsed.reduce((sum, block, idx) => {
+          const blockText = Array.isArray(block.children)
+            ? block.children
+                .map((child) =>
+                  'text' in child && typeof child.text === 'string'
+                    ? child.text
+                    : '',
+                )
+                .join('')
+            : ''
+          return sum + blockText.length + (idx > 0 ? 1 : 0)
+        }, 0)
+      }
+    } catch {
+      // Fall back to raw length
+    }
+  }
+  return raw.length
+}
 
 export const GetVolunteerByIdSchema = z.object({
   id: z.string(),
@@ -11,14 +40,75 @@ export const UpdateVolunteerStatusSchema = z.object({
   reviewNotes: z.string().optional(),
 })
 
+export const BulkUpdateVolunteerStatusSchema = z.object({
+  volunteerIds: z.array(z.string()).min(1).max(50),
+  status: z.enum([VolunteerStatus.APPROVED, VolunteerStatus.REJECTED]),
+})
+
 export const SendVolunteerEmailSchema = z.object({
   volunteerId: z.string(),
-  subject: z.string().min(1),
-  message: z.string().min(1),
+  subject: z
+    .string()
+    .trim()
+    .min(1, 'Subject is required')
+    .max(200, 'Subject must be less than 200 characters')
+    .refine((val) => !/[\r\n]/.test(val), {
+      message: 'Subject cannot contain newline characters',
+    }),
+  message: z
+    .string()
+    .min(1, 'Message is required')
+    .max(200000, 'Message is too long')
+    .refine((val) => getMessageTextLength(val) <= 20000, {
+      message: 'Message is too long',
+    }),
+  ticketUrl: z
+    .string()
+    .trim()
+    .refine((val) => !val || isAbsoluteHttpsUrl(val), {
+      message: 'Ticket URL must be an absolute HTTPS URL',
+    })
+    .nullish()
+    .transform((val) => (val === '' ? null : val)),
+  slackInviteUrl: z
+    .string()
+    .trim()
+    .refine((val) => !val || isAbsoluteHttpsUrl(val), {
+      message: 'Slack invite URL must be an absolute HTTPS URL',
+    })
+    .nullish()
+    .transform((val) => (val === '' ? null : val)),
+})
+
+/** Overall recipient limit; the client sends it in VOLUNTEER_EMAIL_CHUNK calls. */
+export const VOLUNTEER_BULK_EMAIL_MAX = 200
+
+export const SendVolunteerBulkEmailSchema = SendVolunteerEmailSchema.pick({
+  subject: true,
+  message: true,
+}).extend({
+  volunteerIds: z.array(z.string()).min(1).max(VOLUNTEER_EMAIL_CHUNK),
+})
+
+export const SendVolunteerTicketReminderSchema = z.object({
+  volunteerIds: z.array(z.string()).min(1).max(VOLUNTEER_EMAIL_CHUNK),
 })
 
 export const DeleteVolunteerSchema = z.object({
   volunteerId: z.string(),
+})
+
+export const ConfirmVolunteerAttendanceSchema = z.object({
+  token: z.string().trim().min(1, 'Confirmation token is required'),
+})
+
+export const DeclineVolunteerAttendanceSchema = z.object({
+  token: z.string().trim().min(1, 'Confirmation token is required'),
+  reason: z
+    .string()
+    .trim()
+    .max(500, 'Reason must be less than 500 characters')
+    .optional(),
 })
 
 /**
@@ -40,8 +130,10 @@ export const UpdateVolunteerDetailsSchema = z.object({
     .min(1, 'Email is required'),
   phone: z
     .string()
+    .trim()
     .min(1, 'Phone number is required')
-    .max(50, 'Phone number must be less than 50 characters'),
+    .max(50, 'Phone number must be less than 50 characters')
+    .regex(/^[0-9+\s()./-]+$/, 'Please enter a valid phone number'),
   occupation: z.nativeEnum(Occupation),
   availability: z
     .string()
@@ -53,6 +145,24 @@ export const UpdateVolunteerDetailsSchema = z.object({
     .max(10, 'Maximum 10 tasks allowed')
     .nullable()
     .optional(),
+  assignedTasks: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(100, 'Each task must be less than 100 characters'),
+    )
+    .max(20, 'Maximum 20 assigned tasks allowed')
+    // Case-insensitive dedupe, first spelling wins.
+    .transform((tasks) =>
+      tasks.filter(
+        (t, i) =>
+          tasks.findIndex((o) => o.toLowerCase() === t.toLowerCase()) === i,
+      ),
+    )
+    .nullable()
+    .optional(),
   tshirtSize: z.nativeEnum(TShirtSize).nullable().optional(),
   dietaryRestrictions: z
     .string()
@@ -62,6 +172,11 @@ export const UpdateVolunteerDetailsSchema = z.object({
   otherInfo: z
     .string()
     .max(1000, 'Other information must be less than 1000 characters')
+    .nullable()
+    .optional(),
+  reviewNotes: z
+    .string()
+    .max(2000, 'Review notes must be less than 2000 characters')
     .nullable()
     .optional(),
 })
@@ -77,8 +192,10 @@ export const CreateVolunteerSchema = z.object({
     .min(1, 'Email is required'),
   phone: z
     .string()
+    .trim()
     .min(1, 'Phone number is required')
-    .max(50, 'Phone number must be less than 50 characters'),
+    .max(50, 'Phone number must be less than 50 characters')
+    .regex(/^[0-9+\s()./-]+$/, 'Please enter a valid phone number'),
   occupation: z.nativeEnum(Occupation, {
     message: 'Please select an occupation',
   }),

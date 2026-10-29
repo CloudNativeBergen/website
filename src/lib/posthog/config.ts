@@ -1,6 +1,7 @@
 import type { CaptureResult, PostHogConfig } from 'posthog-js'
 import { CTA_CAPTURE_ATTR, resolvePosthogToken } from '@/lib/analytics'
 import { UTM_PARAMS } from '@/lib/marketing/strip-utm'
+import { SCREEN_MODE_PATH } from '@/lib/photo-wall/screen'
 import { POSTHOG_INGEST_PATH } from './ingest'
 
 export { POSTHOG_INGEST_PATH, posthogRewrites } from './ingest'
@@ -52,17 +53,31 @@ export function parseTenantAnalyticsConfig(
  * both behind the `(cfp)` layout's speaker check). Neither is public traffic,
  * and organizer clicks must never land in a Campaign's Outcomes. The public
  * `/cfp` landing page is NOT excluded — it is where the `cta-cfp-*` buttons
- * send visitors. Used twice: the client entry does not init on these paths
- * (`./init`), and `before_send` drops events captured on them after a
+ * send visitors. The attendee feedback page `/f/<code>` is excluded too
+ * (speaker feedback spec §7.1): its URL is the Feedback Code, and §8 promises
+ * it no consent prompt. So is the Photo Wall's Screen Mode `/wall/screen`
+ * (Photo Wall spec §9.2). Used twice: the client entry does not init on these
+ * paths (`./init`), and `before_send` drops events captured on them after a
  * client-side navigation into one.
  */
-const EXCLUDED_PATH_PREFIXES = ['/admin', '/cfp/', '/notifications'] as const
+const EXCLUDED_PATH_PREFIXES = [
+  '/admin',
+  '/cfp/',
+  '/notifications',
+  '/f',
+  // The Photo Wall's Screen Mode (Photo Wall spec §9.2): a venue screen
+  // polling for days is not a visit, and must see no consent bar.
+  SCREEN_MODE_PATH,
+] as const
 
 export function isAnalyticsExcludedPath(pathname: string): boolean {
+  // Case-insensitive, like the Feedback Code itself: `/F/K7M2QX` (typed with
+  // caps lock) must not slip past and send the code to PostHog.
+  const path = pathname.toLowerCase()
   return EXCLUDED_PATH_PREFIXES.some(
     (prefix) =>
-      pathname === prefix ||
-      pathname.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`),
+      path === prefix ||
+      path.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`),
   )
 }
 

@@ -224,15 +224,13 @@ describe('no speaker registration link', () => {
     expect(confirmation().message).not.toContain('ticketing configuration')
   })
 
-  it('replaces the row action with the reason', () => {
+  it('leaves the row action enabled to trigger the inline link prompt', () => {
     configQuery.data = { hasRegistrationLink: false }
 
     const props = renderPage()
 
-    expect(props.ticketActionsUnavailableReason).toBe(
-      'No speaker registration link — add one in Settings → Registration',
-    )
-    // Still a live table: this is not the sweep-in-flight hold.
+    expect(props.ticketActionsUnavailableReason).toBeUndefined()
+    // Still a live table: clicking it opens the modal instead of sending.
     expect(props.ticketActionsDisabled).toBe(false)
   })
 

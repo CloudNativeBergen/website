@@ -322,6 +322,7 @@ describe('proposal.admin.create with a new primary speaker', () => {
       expect.objectContaining({
         toEmail: 'nina@example.com',
         toName: 'Nina Keynote',
+        proposalId: expect.any(String),
         proposalTitle: 'A keynote entered by an organizer',
         role: 'speaker',
       }),

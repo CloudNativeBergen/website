@@ -402,6 +402,10 @@ send; it can no longer make it invisible.
 
 **Deprecated shim for `cnctl`:** `POST /api/trpc/sponsor.crm.sendEmailBySfc` with `{ sponsorForConferenceId, subject, body (Markdown) }` converts the Markdown to PortableText and calls the same primitive for every contact with an email (kind `information`). It exists only until `cnctl admin sponsors email` calls `sendCommunication` itself.
 
+`kind` is one of `information`, `contract`, `registration`, `discount` and `workshop-early-access`. Each kind but `information` carries a block the server builds and appends after the organizer's message, so an edited message cannot lose what the email is for: the signing link, the sponsor's portal link, the discount codes, or the workshop early-access link.
+
+**`workshop-early-access`** (#1347, `docs/WORKSHOP_SPONSOR_EARLY_ACCESS_SPEC.md` §8) sends the sponsor's early-access link, creating it when the sponsor has none and otherwise reusing the stored one. The block names the sponsor start time and the official opening in the conference's time zone. The send is refused, before anything is created or sent, when the conference has no early-access window, when the official opening has passed, when the workshop portal has no working host, from localhost, and for a sponsor without a won deal. `sponsor.crm.earlyAccess.getSendReadiness` answers the same decision without writing anything; the Send modal asks it and shows the answer. Both read the conference's registration times without a cache (the read `/admin/workshops` makes), so an email never names times an organizer has just replaced: one live conference read per send and per opening of the modal. A message with no blocks (`"[]"`) is accepted for this kind only.
+
 The server renders the branded email ONCE to an HTML string, sends that string via the tenant's Resend sender, and writes a `sponsorActivity` audit record carrying the recipients as sent, the subject and body as sent, template provenance, the provider message id and `deliveryStatus`. A provider failure is recorded too (`deliveryStatus: "failed"`, `error`) and surfaces as `INTERNAL_SERVER_ERROR`; the record write itself can never fail or roll back the send. An `information` send also stamps first outreach and moves a `prospect` to `contacted`.
 
 **Response**:
@@ -414,6 +418,8 @@ The server renders the branded email ONCE to an HTML string, sends that string v
   "recipientCount": 2
 }
 ```
+
+A kind may add fields. `workshop-early-access` adds `earlyAccessCopiesBehind` (a number) when the link was stored and an unpublished copy of the sponsor in Sanity Studio did not get it: publishing that copy would remove the link.
 
 Read the records back with `sponsor.crm.activities.get` (one record in full, conference-scoped) and `sponsor.crm.activities.listCommunications` (sends only, by kind, paged).
 

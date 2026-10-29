@@ -49,7 +49,7 @@ function isOverrideActive(
 /**
  * Whether the org carries an ACTIVE (present, known id, unexpired) override for
  * `feature` — REGARDLESS of its direction. Callers that layer an implicit
- * default grant on top of the registry (see `./workshops.ts`) need this to keep
+ * default grant on top of the registry (see `./platform-default.ts`) need this to keep
  * the "overrides always win, in both directions" invariant: an explicit
  * `enabled: false` must be able to revoke a default the plan never granted, and
  * `computeEntitlements`' Set cannot express "explicitly denied" vs "not

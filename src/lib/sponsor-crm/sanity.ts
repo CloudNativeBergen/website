@@ -1,4 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import {
+  SPONSOR_OVERVIEW_FIELDS,
+  SPONSOR_CONTACTS_FIELDS,
+  SPONSOR_CONTRACT_FIELDS,
+} from './queries'
 import {
   clientWrite,
   clientReadCached,
@@ -20,8 +25,32 @@ import type {
   SponsorTag,
 } from './types'
 
+/**
+ * How many early sign-ups were made through this sponsor's workshop
+ * early-access links (#1348, spec §9), as a field of the sponsor's record.
+ *
+ * WHAT IT COSTS: no request of its own, since it rides the read that already
+ * fetches the record. It does add one sub-query per sponsor to EVERY reader
+ * of these fields: the CRM board (which polls), the budget page, the status
+ * summary and the audience sync, none of which but the board's record show
+ * it.
+ *
+ * Sign-ups, not people, confirmed and waitlisted together: every published
+ * sign-up that records this sponsor, which is what the "Early sign-ups" list
+ * (`listEarlySignups`) shows when narrowed to it. A draft or a release copy
+ * of a sign-up is not a second sign-up, there as here. A sign-up records the
+ * sponsor, not the link, so the ones made through a link revoked since are
+ * counted too.
+ *
+ * ONLY SIGN-UPS OF THE SPONSOR'S OWN CONFERENCE: a sign-up of another
+ * conference that names this sponsor (a bad write) is not this conference's.
+ */
+// groq-global-scoped: correlated to the sponsor it is projected on (`conference._ref == ^.conference._ref`); every read that carries these fields reads sponsors of one conference.
+const EARLY_SIGNUP_COUNT = `count(*[_type == "workshopSignup" && conference._ref == ^.conference._ref && earlyAccessSponsor._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))])`
+
 const SPONSOR_FOR_CONFERENCE_FIELDS = `
   _id,
+  _rev,
   _createdAt,
   _updatedAt,
   sponsor->{
@@ -43,6 +72,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     organizerAddress,
     signingProvider,
     city,
+    country,
     venueName,
     venueAddress,
     startDate,
@@ -91,6 +121,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     }
   },
   reminderCount,
+  reminderClaims,
   contractTemplate->{
     _id,
     title
@@ -103,6 +134,10 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   },
   contactInitiatedAt,
   contractSignedAt,
+  contractSignedBy,
+  contractReservedAt,
+  contractReservedTerms,
+  contractReservedInputs,
   organizerSignedAt,
   organizerSignedBy,
   contractValue,
@@ -129,6 +164,8 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   registrationToken,
   registrationComplete,
   registrationCompletedAt,
+  "hasWorkshopEarlyAccessLink": defined(workshopEarlyAccessToken),
+  "workshopEarlySignupCount": ${EARLY_SIGNUP_COUNT},
   nextFollowUpAt,
   outreachCount,
   "lastActivity": *[_type == "sponsorActivity" && sponsorForConference._ref == ^._id] | order(createdAt desc)[0]{
@@ -863,62 +900,28 @@ export async function importAllHistoricSponsors(
   }
 }
 
-import {
-  SPONSOR_OVERVIEW_FIELDS,
-  SPONSOR_CONTACTS_FIELDS,
-  SPONSOR_CONTRACT_FIELDS,
-} from './queries'
-
-export async function getSponsorOverview(id: string): Promise<{
-  data?: any // We'll refine the type later if needed
-  error?: Error
-}> {
+// Scoped to the conference in GROQ, so an id from another tenant and an id that
+// does not exist both come back as null: the caller cannot tell them apart.
+async function getSponsorProjection(
+  id: string,
+  conferenceId: string,
+  fields: string,
+): Promise<{ data?: any; error?: Error }> {
   try {
     const data = await clientRead.fetch(
-      // groq-global-scoped: isolation enforced via trpc router output check
-      `*[_type == "sponsorForConference" && _id == $id][0]{${SPONSOR_OVERVIEW_FIELDS}}`,
-      { id },
+      `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{${fields}}`,
+      { id, conferenceId },
     )
-    if (!data) return { error: new Error('Sponsor not found') }
-    return { data }
-  } catch (error: any) {
-    console.error('Error fetching sponsor overview:', error)
-    return { error }
+    return { data: data ?? null }
+  } catch (error) {
+    console.error('Error fetching sponsor projection:', error)
+    return { error: error as Error }
   }
 }
 
-export async function getSponsorContacts(id: string): Promise<{
-  data?: any
-  error?: Error
-}> {
-  try {
-    const data = await clientRead.fetch(
-      // groq-global-scoped: isolation enforced via trpc router output check
-      `*[_type == "sponsorForConference" && _id == $id][0]{${SPONSOR_CONTACTS_FIELDS}}`,
-      { id },
-    )
-    if (!data) return { error: new Error('Sponsor not found') }
-    return { data }
-  } catch (error: any) {
-    console.error('Error fetching sponsor contacts:', error)
-    return { error }
-  }
-}
-
-export async function getSponsorContractDetails(id: string): Promise<{
-  data?: any
-  error?: Error
-}> {
-  try {
-    const data = await clientRead.fetch(
-      // groq-global-scoped: isolation enforced via trpc router output check
-      `*[_type == "sponsorForConference" && _id == $id][0]{${SPONSOR_CONTRACT_FIELDS}}`,
-      { id },
-    )
-    if (!data) return { error: new Error('Sponsor not found') }
-    return { data }
-  } catch (error: any) {
-    console.error('Error fetching sponsor contract details:', error)
-    return { error }
-  }
-}
+export const getSponsorOverview = (id: string, conferenceId: string) =>
+  getSponsorProjection(id, conferenceId, SPONSOR_OVERVIEW_FIELDS)
+export const getSponsorContacts = (id: string, conferenceId: string) =>
+  getSponsorProjection(id, conferenceId, SPONSOR_CONTACTS_FIELDS)
+export const getSponsorContractDetails = (id: string, conferenceId: string) =>
+  getSponsorProjection(id, conferenceId, SPONSOR_CONTRACT_FIELDS)

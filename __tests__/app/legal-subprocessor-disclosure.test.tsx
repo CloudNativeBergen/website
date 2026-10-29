@@ -22,6 +22,7 @@
  * the worst possible surface.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { stubPlatformTicketingAccount } from '../helpers/ticketingSecrets'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactElement } from 'react'
 
@@ -49,6 +50,12 @@ vi.mock('@/lib/sponsor-crm/sanity', () => ({
 }))
 
 import PrivacyPage from '@/app/(main)/privacy/page'
+import {
+  SESSION_TTL_SECONDS,
+  sessionSchema,
+  type WorkshopSession,
+} from '@/lib/workshop/central-sign-in/session'
+import { START_TTL_SECONDS } from '@/lib/workshop/central-sign-in/start-seals'
 import TermsPage from '@/app/(main)/terms/page'
 
 const PLATFORM_ORG = 'organization-platform'
@@ -63,11 +70,14 @@ const POSTHOG_TOKEN = 'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh'
 const SLACK = 'Slack'
 const WORKOS = 'WorkOS (AuthKit)'
 const UNCERTAIN = 'May not apply to this event'
+// The workshop login is ONE WorkOS account across every conference on the
+// platform (#1299), which the participant has to be told where it is used.
+const SHARED_LOGIN = 'One login for every conference on this platform'
 
 /**
  * The Cloud Native Days Norway shape, verified against the production dataset:
- * `ticketingProvider` is NULL with a full Checkin binding, an analytics code is
- * set, Slack channels are configured, and its organization IS the platform org.
+ * `ticketingProvider` is NULL with a full Checkin binding, a legacy analytics
+ * code is stored, Slack is configured, and its organization IS the platform org.
  */
 function conference(overrides: Record<string, unknown> = {}) {
   return {
@@ -111,6 +121,8 @@ interface World {
    * `organizationReadFails` takes it down with the rest.
    */
   secretEnvSlugs?: { _id: string; secretEnvSlug: string }[]
+  /** Whether any Judgement is stored for the organization; `'fails'` rejects. */
+  storedJudgements?: boolean | 'fails'
 }
 
 /**
@@ -125,8 +137,16 @@ function world({
   conferenceReadFails = false,
   organizationReadFails = false,
   secretEnvSlugs = [],
+  storedJudgements = false,
 }: World = {}) {
   sanityFetch.mockImplementation(async (query: string) => {
+    // The stored-Judgement read (Content judgement §13.1). Matched first: its
+    // subquery names `_type == "conference"` too.
+    if (query.includes('_type == "contentJudgement"')) {
+      if (storedJudgements === 'fails')
+        throw new Error('ECONNREFUSED sanity.io')
+      return storedJudgements
+    }
     if (query.includes('_type == "conference"')) {
       if (conferenceReadFails) throw new Error('ECONNREFUSED sanity.io')
       return conf
@@ -159,6 +179,7 @@ const renderTerms = () => render(TermsPage)
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG)
+  stubPlatformTicketingAccount()
   vi.stubEnv('SLACK_BOT_TOKEN', 'xoxb-platform-token')
   vi.stubEnv('TENANT_SECRETS_JSON', '')
   vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -218,24 +239,18 @@ describe('the ticketing vendor disclosed is the one the tenant uses', () => {
 })
 
 describe('analytics is disclosed only when the tenant configured it', () => {
-  it('discloses Pirsch when a code is set and the organization has no token', async () => {
+  it('ignores a stored legacy analytics code when the organization has no token', async () => {
     world()
     const html = await renderPrivacy()
-    expect(html).toContain(PIRSCH)
+    expect(html).not.toContain(PIRSCH)
     expect(html).not.toContain(POSTHOG)
-    // The pre-cutover promise still holds for this tenant.
-    expect(html).toContain('Our analytics are cookie-less')
+    expect(html).toContain('Vercel Analytics and Speed Insights')
+    expect(html).not.toContain('anonymous, aggregated counts of interactions')
   })
 
-  it('omits Pirsch when there is no code — no script, no processor', async () => {
-    world({ conference: conference({ analyticsPirschCode: undefined }) })
-    expect(await renderPrivacy()).not.toContain(PIRSCH)
-  })
-
-  it('switches the whole page to PostHog once the organization has a token', async () => {
-    // The hard cutover (#1008): token present ⇒ PostHog is the processor and
-    // Pirsch is gone even though the edition still stores a code — and the
-    // page stops promising "cookie-less", because Accept sets one cookie.
+  it('discloses PostHog when the organization has a token', async () => {
+    // The stored legacy code is ignored. Accepting PostHog sets one cookie,
+    // so the page must not promise that all analytics are cookie-less.
     world({
       organization: organization({ analyticsPosthogToken: POSTHOG_TOKEN }),
     })
@@ -251,28 +266,27 @@ describe('analytics is disclosed only when the tenant configured it', () => {
     expect(html).not.toContain(`${POSTHOG} • Location`)
   })
 
-  it('keeps Pirsch as POSSIBLE when the org read fails and a code is stored', async () => {
-    // With the token unknowable the page cannot tell which script serves, so
-    // it names both rather than dropping either (rule 1).
+  it('keeps PostHog as POSSIBLE when the org read fails', async () => {
+    // With the token unknowable the page keeps the possible processor (rule 1).
     world({ organizationReadFails: true })
     const html = await renderPrivacy()
-    expect(html).toContain(PIRSCH)
+    expect(html).not.toContain(PIRSCH)
     expect(html).toContain(POSTHOG)
     expect(html).toContain(UNCERTAIN)
   })
 })
 
 describe('Slack and WorkOS follow the tenant, not the platform', () => {
-  it('Cloud Native Days Norway keeps Checkin, Slack and Pirsch', async () => {
+  it('Cloud Native Days Norway keeps Checkin, Slack and WorkOS', async () => {
     // The hard constraint on this change: the platform org is also a tenant and
-    // genuinely uses all three. Verified against the production documents.
+    // uses all three. The stored legacy analytics code is ignored.
     world()
 
     const html = await renderPrivacy()
 
     expect(html).toContain(CHECKIN)
     expect(html).toContain(SLACK)
-    expect(html).toContain(PIRSCH)
+    expect(html).not.toContain(PIRSCH)
     expect(html).toContain(WORKOS)
     expect(html).not.toContain(UNCERTAIN)
   })
@@ -295,6 +309,190 @@ describe('Slack and WorkOS follow the tenant, not the platform', () => {
     expect(html).not.toContain(WORKOS)
     // Its own vendors are unaffected.
     expect(html).toContain(CHECKIN)
+  })
+})
+
+describe('the workshop login is shared across conferences (#1299)', () => {
+  it('tells a workshop participant the login is one account for every conference', async () => {
+    world()
+
+    const html = await renderPrivacy()
+
+    expect(html).toContain(SHARED_LOGIN)
+    // Said where the identifier is listed, and where its retention is.
+    expect(html.split(SHARED_LOGIN)).toHaveLength(2)
+    expect(html).toContain('one login for every conference on this platform')
+    // Who sees the registrations: the organization, not every organizer on
+    // the platform. (This sentence was wrong once, as "their own conference".)
+    expect(html).toContain(
+      'only the workshop registrations for their own organization',
+    )
+    // …and what removing a registration does not reach.
+    expect(html).toContain(
+      'does not delete this login or your registrations at other conferences',
+    )
+  })
+
+  it('says nothing about a login to a tenant that has no workshop sign-in', async () => {
+    world({
+      conference: conference({
+        organization: { _ref: OTHER_ORG, _type: 'reference' },
+      }),
+      organization: organization({
+        _id: OTHER_ORG,
+        name: 'Acme Events',
+        plan: 'community',
+      }),
+    })
+
+    const html = await renderPrivacy()
+
+    // The real policy rendered, with this tenant's own vendor on it.
+    expect(html).toContain(CHECKIN)
+    expect(html).not.toContain(SHARED_LOGIN)
+    expect(html.toLowerCase()).not.toContain('one login for every conference')
+  })
+})
+
+describe('the workshop portal’s own sign-in cookie (#1316)', () => {
+  /**
+   * The plain words /privacy uses for each field the session seals, in each of
+   * the two places. The data list names WorkOS; the cookies section is shown
+   * to every tenant and names no processor.
+   */
+  const DISCLOSED: Record<string, Record<keyof WorkshopSession, RegExp>> = {
+    'the data list': {
+      userId: /your WorkOS User ID/,
+      email: /email address/,
+      emailVerified: /whether WorkOS reports that address as verified/,
+      name: /your name/,
+      sessionId: /the WorkOS session ID/,
+      host: /the site and conference it was issued for/,
+      conferenceId: /site and conference it was issued for/,
+    },
+    'the cookies section': {
+      userId: /the ID of your sign-in account/,
+      email: /your email address/,
+      emailVerified: /whether it is verified/,
+      name: /your name/,
+      sessionId: /the ID of the sign-in session/,
+      host: /the site and conference it was issued for/,
+      conferenceId: /site and conference it was issued for/,
+    },
+  }
+  const days = SESSION_TTL_SECONDS / 86_400
+
+  /** The two places the page describes the cookies, as rendered text. */
+  function passages(html: string): Record<string, string | undefined> {
+    return {
+      'the data list': html.match(/A sign-in cookie on this site[^<]*/)?.[0],
+      'the cookies section': html.match(
+        /<strong>Workshop sign-in:<\/strong>[^<]*/,
+      )?.[0],
+    }
+  }
+
+  /** A tenant whose organization has no workshop sign-in. */
+  function withoutWorkshops() {
+    world({
+      conference: conference({
+        organization: { _ref: OTHER_ORG, _type: 'reference' },
+      }),
+      organization: organization({
+        _id: OTHER_ORG,
+        name: 'Acme Events',
+        plan: 'community',
+      }),
+    })
+  }
+
+  it('tells a workshop participant how long it lasts and every field it holds, in both places', async () => {
+    world()
+
+    const html = await renderPrivacy()
+
+    for (const [where, passage] of Object.entries(passages(html))) {
+      expect(passage, where).toContain(`kept for ${days} days`)
+      for (const field of Object.keys(sessionSchema.shape)) {
+        expect(passage, `${where} names ${field}`).toMatch(
+          DISCLOSED[where][field as keyof WorkshopSession],
+        )
+      }
+    }
+    expect(html).toContain(
+      `The sign-in cookie on this site expires ${days} days after you sign in, or when you sign out.`,
+    )
+  })
+
+  it('promises no shorter a life for the cookies of a sign-in in progress than the code gives them', async () => {
+    world()
+
+    const html = await renderPrivacy()
+
+    const words: Record<string, number> = {
+      five: 5,
+      ten: 10,
+      fifteen: 15,
+      thirty: 30,
+    }
+    for (const [where, passage] of Object.entries(passages(html))) {
+      const promised = passage?.match(/expire within (\w+) minutes/)?.[1]
+      // The longest of them is the sign-in's own; the sign-out's five minutes
+      // are pinned on its `Set-Cookie` line in the sign-out suite.
+      expect(words[promised ?? ''] * 60, where).toBeGreaterThanOrEqual(
+        START_TTL_SECONDS,
+      )
+    }
+  })
+
+  it('names the sign-in host as the other place the short-lived cookies are set', async () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org')
+    world()
+
+    const found = passages(await renderPrivacy())
+
+    expect(found['the data list']).toContain(
+      'on this site and on the platform&#x27;s sign-in host (auth.example.org) while you sign in or sign out',
+    )
+    expect(found['the cookies section']).toContain(
+      'on this site and on the platform&#x27;s sign-in host (auth.example.org); they expire',
+    )
+  })
+
+  it('names no other host where every host signs attendees in on itself', async () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', '')
+    world()
+
+    const found = passages(await renderPrivacy())
+
+    expect(found['the data list']).toContain(
+      'on this site while you sign in or sign out',
+    )
+    expect(found['the cookies section']).toContain('on this site; they expire')
+  })
+
+  it('describes the cookie to a tenant without workshop sign-in too, naming no processor', async () => {
+    // A session cookie can outlive a switch-off of workshops by its lifetime,
+    // so the cookies section does not follow the tenant's present entitlement.
+    withoutWorkshops()
+
+    const html = await renderPrivacy()
+
+    // The real policy rendered, with this tenant's own vendor on it.
+    expect(html).toContain(CHECKIN)
+    const found = passages(html)
+    expect(found['the cookies section']).toContain(`kept for ${days} days`)
+    for (const field of Object.keys(sessionSchema.shape)) {
+      expect(found['the cookies section'], field).toMatch(
+        DISCLOSED['the cookies section'][field as keyof WorkshopSession],
+      )
+    }
+    expect(found['the cookies section']).toContain(
+      'If workshop registration is switched off for the event while you are signed in, the cookie stays in your browser until it expires or you clear this site&#x27;s cookies.',
+    )
+    // What names WorkOS stays with the tenants that use it.
+    expect(found['the data list']).toBeUndefined()
+    expect(html).not.toContain('WorkOS')
   })
 })
 
@@ -408,6 +606,8 @@ describe('a failed read must NOT shorten the disclosure', () => {
     expect(html).toContain(WORKOS)
     expect(html).toContain(UNCERTAIN)
     expect(html).toContain('could not be read just now')
+    // What follows from WorkOS is disclosed with it, not held back (#1299).
+    expect(html).toContain(SHARED_LOGIN)
   })
 
   it('renders NO uncertainty notice when every signal resolved', async () => {
@@ -461,6 +661,61 @@ describe('a failed read must NOT shorten the disclosure', () => {
   })
 })
 
+describe('/privacy describes early access to workshop sign-up (#1346)', () => {
+  /** A tenant whose organization has no workshop sign-in. */
+  function withoutWorkshops() {
+    world({
+      conference: conference({
+        organization: { _ref: OTHER_ORG, _type: 'reference' },
+      }),
+      organization: organization({
+        _id: OTHER_ORG,
+        name: 'Acme Events',
+        plan: 'community',
+      }),
+    })
+  }
+  const cookiePassage = (html: string) =>
+    html.match(/<strong>Workshop early access:<\/strong>[^<]*/)?.[0]
+
+  it('names the recorded sponsor among the workshop registration data', async () => {
+    world()
+
+    const html = await renderPrivacy()
+
+    expect(html).toContain(
+      'If you sign up through a sponsor&#x27;s early-access link before registration opens for everyone: which sponsor&#x27;s link you used. This usually says who you work for.',
+    )
+  })
+
+  it('lists the cookie: what it holds, that only opening a link sets it, and when it expires', async () => {
+    world()
+
+    const passage = cookiePassage(await renderPrivacy())
+
+    expect(passage).toContain(
+      'this site sets one cookie that holds the code of that link and nothing else',
+    )
+    expect(passage).toContain('It is set only by opening such a link')
+    expect(passage).toContain(
+      'It expires when registration opens for everyone, as that time stood when you opened the link',
+    )
+    expect(passage).toContain('Signing out does not remove it')
+  })
+
+  it('lists the cookie for a tenant without workshop sign-in too, naming no processor', async () => {
+    // The cookie can outlive a switch-off of workshops, until it expires.
+    withoutWorkshops()
+
+    const html = await renderPrivacy()
+
+    expect(cookiePassage(html)).toContain(
+      'this site sets one cookie that holds the code of that link and nothing else',
+    )
+    expect(html).not.toContain('WorkOS')
+  })
+})
+
 describe('/terms names only the sign-in routes this tenant has', () => {
   it('mentions WorkOS AuthKit for a tenant with workshops', async () => {
     world()
@@ -495,5 +750,47 @@ describe('/terms names only the sign-in routes this tenant has', () => {
 
     expect(html).not.toContain('Konf')
     expect(html).toContain('could not be confirmed right now')
+  })
+})
+
+describe('content judgement: OpenRouter and the Automatic checks section (§13)', () => {
+  const OPENROUTER = 'OpenRouter'
+  const SECTION = 'Automatic checks on what you write'
+
+  it('a tenant that never turned it on shows neither', async () => {
+    world()
+    const html = await renderPrivacy()
+    expect(html).toContain('Sanity.io')
+    expect(html).not.toContain(OPENROUTER)
+    expect(html).not.toContain(SECTION)
+  })
+
+  it('turned on: OpenRouter is listed, as a US transfer, and the section shows', async () => {
+    world({
+      organization: organization({ contentJudgement: { enabled: true } }),
+    })
+    const html = await renderPrivacy()
+    expect(html).toContain(SECTION)
+    expect(html).toContain(OPENROUTER)
+    expect(html).toContain('TypeSafe')
+    expect(html).not.toContain(UNCERTAIN)
+  })
+
+  it('turned off with a Judgement still stored: both stay', async () => {
+    world({
+      organization: organization({ contentJudgement: { enabled: false } }),
+      storedJudgements: true,
+    })
+    const html = await renderPrivacy()
+    expect(html).toContain(SECTION)
+    expect(html).toContain(OPENROUTER)
+  })
+
+  it('a failed stored-Judgement read shows both, marked as possibly not applying', async () => {
+    world({ storedJudgements: 'fails' })
+    const html = await renderPrivacy()
+    expect(html).toContain(SECTION)
+    expect(html).toContain(OPENROUTER)
+    expect(html).toContain(UNCERTAIN)
   })
 })

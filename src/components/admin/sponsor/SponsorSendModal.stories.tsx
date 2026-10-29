@@ -1,10 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
-import { http, HttpResponse } from 'msw'
+import { delay, http, HttpResponse } from 'msw'
 import { SponsorSendModal } from './SponsorSendModal'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { withPortalTheme } from '@/lib/storybook'
 import { mockContactPerson, mockSponsor } from '@/__mocks__/sponsor-data'
+import { EARLY_ACCESS_SEND_REFUSALS } from '@/lib/sponsor-crm/early-access-email'
 
 const FIXED_NOW = new Date('2026-02-15T12:00:00Z')
 
@@ -38,12 +39,27 @@ const templates = [
     _createdAt: '2026-01-01T00:00:00Z',
     _updatedAt: '2026-01-01T00:00:00Z',
     title: 'Contract (EN)',
-    slug: { current: 'contract-en' },
+    slug: { current: 'contract-sent' },
     category: 'contract',
     language: 'en',
     subject: 'Your sponsorship contract',
     isDefault: true,
-    body: [],
+    body: [
+      {
+        _type: 'block',
+        _key: 'cb1',
+        style: 'normal',
+        markDefs: [],
+        children: [
+          {
+            _type: 'span',
+            _key: 'cs1',
+            text: 'Dear {{{SIGNER_NAME}}}, your sponsorship agreement for {{{CONFERENCE_TITLE}}} ({{{CONTRACT_VALUE}}}) is ready for review and digital signing.',
+            marks: [],
+          },
+        ],
+      },
+    ],
   },
   {
     _id: 'tpl-info-en',
@@ -127,6 +143,24 @@ const discountOptions = {
 const discountHandlers = [
   http.get('/api/trpc/sponsor.crm.discountCodeOptions', () =>
     HttpResponse.json({ result: { data: discountOptions } }),
+  ),
+  ...handlers,
+]
+
+/**
+ * What `registration.generateToken` answers for the Acme sponsor (#1263): the
+ * EXISTING token, so a re-send previews the link already in an inbox.
+ */
+const registrationHandlers = [
+  http.post('/api/trpc/registration.generateToken', () =>
+    HttpResponse.json({
+      result: {
+        data: {
+          token: 'tok-acme-existing',
+          url: 'https://cloudnativebergen.dev/sponsor/portal/tok-acme-existing',
+        },
+      },
+    }),
   ),
   ...handlers,
 ]
@@ -335,10 +369,10 @@ export const DiscountCodes: Story = {
       }),
     ).toBeChecked()
     await expect(
-      within(codes).getByRole('checkbox', {
-        name: 'GLOBEX-VIP (linked to Globex Corporation)',
+      within(codes).queryByRole('checkbox', {
+        name: /GLOBEX-VIP/,
       }),
-    ).toBeDisabled()
+    ).not.toBeInTheDocument()
     await userEvent.click(
       within(codes).getByRole('checkbox', { name: 'ACMECLOUD-WORKSHOP' }),
     )
@@ -470,5 +504,785 @@ export const DiscountCodesNoInviteLink: Story = {
         },
       ]),
     )
+  },
+}
+
+/** What `contractTemplates.contractReadiness` answers (#1264). */
+const readinessHandler = (missing: Array<Record<string, string>> = []) =>
+  http.get('/api/trpc/sponsor.contractTemplates.contractReadiness', () =>
+    HttpResponse.json({
+      result: {
+        data: {
+          ready: missing.length === 0,
+          canSend: !missing.some((m) => m.severity === 'required'),
+          missing,
+        },
+      },
+    }),
+  )
+const contractHandlers = [readinessHandler(), ...handlers]
+const SIGNING_URL = 'https://cloudnativebergen.dev/sponsor/contract/sign/agr-1'
+
+/**
+ * Send → Contract, first send (#1264). The button says what will happen; the
+ * default contract template is applied; the signer is chosen among the
+ * recipients (the primary contact by default); the preview carries the card
+ * whose link is created when sending.
+ */
+export const Contract: Story = {
+  args: { kind: 'contract', contractSend: { contractTemplateId: 'tpl-A' } },
+  parameters: { msw: { handlers: contractHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    // The action label (the send button itself reads "Disabled in Dev" locally).
+    await expect(
+      body.getByRole('heading', { name: 'Send contract' }),
+    ).toBeInTheDocument()
+    await expect(
+      body.getByRole('radio', { name: 'Kari Nordmann signs' }),
+    ).toBeChecked()
+    await expect(
+      body.getByDisplayValue('Your sponsorship contract'),
+    ).toBeInTheDocument()
+    await userEvent.click(body.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    await userEvent.click(
+      body.getByRole('radio', { name: 'Ola Nordmann signs' }),
+    )
+    await expect(
+      body.getByRole('radio', { name: 'Ola Nordmann signs' }),
+    ).toBeChecked()
+    // Two recipients, one signer: only the signer gets the link.
+    await expect(body.getByText(/receives the signing link/)).toHaveTextContent(
+      'Only Ola Nordmann receives the signing link; the other recipients get a copy without it.',
+    )
+    // The greeting was merged for Kari; re-applying names the new signer.
+    await userEvent.click(
+      body.getByRole('button', { name: 'Re-apply template' }),
+    )
+    await expect(await body.findByText(/Dear Ola Nordmann/)).toBeInTheDocument()
+  },
+}
+
+/** Readiness fails: the modal lists what is missing and refuses (story 11). */
+export const ContractNotReady: Story = {
+  args: { kind: 'contract' },
+  parameters: {
+    msw: {
+      handlers: [
+        readinessHandler([
+          {
+            field: 'tier',
+            label: 'Sponsor tier',
+            source: 'pipeline',
+            severity: 'required',
+          },
+          {
+            field: 'contractValue',
+            label: 'Contract value',
+            source: 'pipeline',
+            severity: 'required',
+          },
+          {
+            field: 'conference.venueName',
+            label: 'Venue',
+            source: 'organizer',
+            severity: 'recommended',
+          },
+        ]),
+        ...handlers,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    const alert = await body.findByRole('alert')
+    await expect(alert).toHaveTextContent('Sponsor tier')
+    await expect(alert).toHaveTextContent('Contract value')
+    await expect(alert).not.toHaveTextContent('Venue')
+  },
+}
+
+/** A signature is pending: the same action is a reminder with the same signing link. */
+export const ContractReminder: Story = {
+  args: {
+    kind: 'contract',
+    sponsorForConference: mockSponsor({
+      contactPersons: contacts,
+      contractStatus: 'contract-sent',
+      signatureStatus: 'pending',
+      signatureId: 'agr-1',
+      signingUrl: SIGNING_URL,
+      signerName: 'Kari Nordmann',
+      signerEmail: 'kari@acme.example',
+    }),
+  },
+  parameters: { msw: { handlers: contractHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await expect(
+      body.getByRole('heading', { name: 'Send reminder' }),
+    ).toBeInTheDocument()
+    await expect(body.queryByRole('radiogroup')).not.toBeInTheDocument()
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    const button = await body.findByText('Review & sign agreement')
+    await expect(button.closest('a')).toHaveAttribute('href', SIGNING_URL)
+  },
+}
+
+/** The signer on record is no longer a contact: the server mails them too, and the composer says so. */
+export const ContractReminderExternalSigner: Story = {
+  args: {
+    kind: 'contract',
+    sponsorForConference: mockSponsor({
+      contactPersons: contacts,
+      contractStatus: 'contract-sent',
+      signatureStatus: 'pending',
+      signatureId: 'agr-1',
+      signingUrl: SIGNING_URL,
+      signerName: 'Eva Ekstern',
+      signerEmail: 'eva@other.example',
+    }),
+  },
+  parameters: { msw: { handlers: contractHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await expect(
+      body.getByText(/also goes to the signer on record/),
+    ).toHaveTextContent(
+      'The reminder also goes to the signer on record, Eva Ekstern (eva@other.example), who is not among the contacts.',
+    )
+  },
+}
+
+/** Every contact was removed after issuance: the reminder still reaches the signer on record. */
+export const ContractReminderNoContacts: Story = {
+  args: {
+    kind: 'contract',
+    sponsorForConference: mockSponsor({
+      contactPersons: [],
+      contractStatus: 'contract-sent',
+      signatureStatus: 'pending',
+      signatureId: 'agr-1',
+      signingUrl: SIGNING_URL,
+      signerName: 'Eva Ekstern',
+      signerEmail: 'eva@other.example',
+    }),
+  },
+  parameters: { msw: { handlers: contractHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByText('No contact persons on this sponsor.')
+    await expect(
+      body.getByText(/also goes to the signer on record/),
+    ).toBeInTheDocument()
+    await expect(
+      body.queryByText('Choose at least one recipient before sending.'),
+    ).not.toBeInTheDocument()
+  },
+}
+
+/** Signed: the same action sends the signed copy, linking the stored document. */
+export const ContractSignedCopy: Story = {
+  args: {
+    kind: 'contract',
+    sponsorForConference: mockSponsor({
+      contactPersons: contacts,
+      status: 'closed-won',
+      contractStatus: 'contract-signed',
+      signatureStatus: 'signed',
+      signerName: 'Kari Nordmann',
+      signerEmail: 'kari@acme.example',
+      contractSignedBy: 'Kari Nordmann',
+      contractDocument: {
+        asset: {
+          _ref: 'file-1',
+          url: 'https://cdn.sanity.io/files/x/signed.pdf',
+        },
+      },
+    }),
+  },
+  parameters: { msw: { handlers: contractHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await expect(
+      body.getByRole('heading', { name: 'Send signed copy' }),
+    ).toBeInTheDocument()
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    const button = await body.findByText('Download signed agreement')
+    await expect(button.closest('a')).toHaveAttribute(
+      'href',
+      'https://cdn.sanity.io/files/x/signed.pdf',
+    )
+    // Addressed to the person who signed.
+    await expect(body.getByText(/Dear Kari Nordmann/)).toBeInTheDocument()
+  },
+}
+
+export const ContractDark: Story = {
+  args: { kind: 'contract', contractSend: { contractTemplateId: 'tpl-A' } },
+  globals: { theme: 'dark' },
+  parameters: { msw: { handlers: contractHandlers } },
+}
+
+/**
+ * Send → Registration (#1263). The link is prepared on open from the sponsor's
+ * existing token; the built-in welcome is the starting body, and the preview
+ * carries the same "Complete your sponsor registration" card the server
+ * appends — so editing the message can never lose the link.
+ */
+export const Registration: Story = {
+  args: { kind: 'registration' },
+  parameters: { msw: { handlers: registrationHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await waitFor(() =>
+      expect(
+        body.queryByText('Preparing the registration link…'),
+      ).not.toBeInTheDocument(),
+    )
+    await expect(
+      body.getByDisplayValue('Registration: Cloud Native Days Norway 2026'),
+    ).toBeInTheDocument()
+    await expect(body.getByText(/Welcome aboard, /)).toBeInTheDocument()
+    await expect(
+      body.queryByText(/has already completed registration/),
+    ).not.toBeInTheDocument()
+  },
+}
+
+/** Registration already complete: a notice, not a refusal — the send button stays. */
+export const RegistrationComplete: Story = {
+  args: {
+    kind: 'registration',
+    sponsorForConference: mockSponsor({
+      contactPersons: contacts,
+      registrationComplete: true,
+      registrationToken: 'tok-acme-existing',
+    }),
+  },
+  parameters: { msw: { handlers: registrationHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    const notice = await body.findByText(/has already completed registration/)
+    await expect(notice).toHaveAttribute('role', 'status')
+    await expect(notice).toHaveTextContent(
+      'opens their sponsorship status page',
+    )
+    // The composer is intact beneath the notice (the send button itself reads
+    // "Disabled in Dev" on localhost, so it is not asserted by name).
+    await expect(
+      body.getByDisplayValue('Registration: Cloud Native Days Norway 2026'),
+    ).toBeInTheDocument()
+  },
+}
+
+/** The preview shows the registration card the server appends, with the portal link. */
+export const RegistrationPreview: Story = {
+  args: { kind: 'registration' },
+  parameters: { msw: { handlers: registrationHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await waitFor(() =>
+      expect(
+        body.queryByText('Preparing the registration link…'),
+      ).not.toBeInTheDocument(),
+    )
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    await expect(
+      await body.findByText('Complete your sponsor registration'),
+    ).toBeInTheDocument()
+    await expect(
+      body.getByRole('link', { name: 'Complete registration' }),
+    ).toHaveAttribute(
+      'href',
+      'https://cloudnativebergen.dev/sponsor/portal/tok-acme-existing',
+    )
+  },
+}
+
+/** The link could not be prepared: the modal says why and refuses to send. */
+export const RegistrationLinkFailed: Story = {
+  args: { kind: 'registration' },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/registration.generateToken', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message: 'Conference has no domain configured.',
+                code: -32603,
+              },
+            },
+            { status: 500 },
+          ),
+        ),
+        ...handlers,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(
+      await body.findByRole('alert', undefined, { timeout: 15_000 }),
+    ).toHaveTextContent(/could not be prepared/)
+  },
+}
+
+/**
+ * A template with a link annotation on the merge field, applied BEFORE the
+ * link was prepared (the token request is slow here): the preview merges the
+ * blocks the way the server does, so the link points at the portal — never at
+ * a sanitised "#".
+ */
+export const RegistrationTemplateAppliedBeforeLink: Story = {
+  args: { kind: 'registration' },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/registration.generateToken', async () => {
+          await delay(2500)
+          return HttpResponse.json({
+            result: {
+              data: {
+                token: 'tok-acme-existing',
+                url: 'https://cloudnativebergen.dev/sponsor/portal/tok-acme-existing',
+              },
+            },
+          })
+        }),
+        http.get('/api/trpc/sponsor.emailTemplates.list', () =>
+          HttpResponse.json({
+            result: {
+              data: [
+                {
+                  _id: 'tpl-registration-link',
+                  _createdAt: '2026-01-01T00:00:00Z',
+                  _updatedAt: '2026-01-01T00:00:00Z',
+                  title: 'Registration (link annotation)',
+                  slug: { current: 'registration-link' },
+                  category: 'custom',
+                  language: 'en',
+                  subject: 'Please register for {{{CONFERENCE_TITLE}}}',
+                  isDefault: false,
+                  body: [
+                    {
+                      _type: 'block',
+                      _key: 'b1',
+                      style: 'normal',
+                      markDefs: [
+                        {
+                          _key: 'l1',
+                          _type: 'link',
+                          href: '{{{SPONSOR_PORTAL_URL}}}',
+                        },
+                      ],
+                      children: [
+                        {
+                          _type: 'span',
+                          _key: 's1',
+                          text: 'Open the ',
+                          marks: [],
+                        },
+                        {
+                          _type: 'span',
+                          _key: 's2',
+                          text: 'registration form',
+                          marks: ['l1'],
+                        },
+                        { _type: 'span', _key: 's3', text: '.', marks: [] },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
+        ),
+        ...handlers.filter(
+          (h) => !String(h.info.header).includes('emailTemplates'),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    // Still preparing: apply the template now.
+    await expect(
+      body.getByText('Preparing the registration link…'),
+    ).toBeInTheDocument()
+    const picker = await body.findByRole('combobox')
+    await userEvent.selectOptions(picker, 'tpl-registration-link')
+    await waitFor(() =>
+      expect(
+        body.getByDisplayValue(
+          'Please register for Cloud Native Days Norway 2026',
+        ),
+      ).toBeInTheDocument(),
+    )
+    await waitFor(
+      () =>
+        expect(
+          body.queryByText('Preparing the registration link…'),
+        ).not.toBeInTheDocument(),
+      { timeout: 10_000 },
+    )
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    await expect(
+      await body.findByRole('link', { name: 'registration form' }),
+    ).toHaveAttribute(
+      'href',
+      'https://cloudnativebergen.dev/sponsor/portal/tok-acme-existing',
+    )
+  },
+}
+
+export const RegistrationMobile: Story = {
+  args: {
+    kind: 'registration',
+    sponsorForConference: mockSponsor({
+      contactPersons: contacts,
+      registrationComplete: true,
+    }),
+  },
+  parameters: {
+    msw: { handlers: registrationHandlers },
+    viewport: { value: 'mobile1', isRotated: false },
+  },
+}
+
+export const RegistrationDark: Story = {
+  args: {
+    kind: 'registration',
+    sponsorForConference: mockSponsor({
+      contactPersons: contacts,
+      registrationComplete: true,
+    }),
+  },
+  globals: { theme: 'dark' },
+  parameters: { msw: { handlers: registrationHandlers } },
+}
+
+/**
+ * What `crm.earlyAccess.getSendReadiness` answers (#1347): the decision the Send
+ * action itself refuses with. The modal shows the answer and decides nothing.
+ */
+const EARLY_ACCESS_LINK =
+  'https://cloudnativebergen.dev/workshop/early-access/4b1c9d2e-7a55-4f0a-9c3e-1f2a3b4c5d6e'
+const earlyAccessReady = {
+  refusal: null,
+  url: EARLY_ACCESS_LINK as string | null,
+  // 10:00 in Oslo on both days.
+  sponsorStart: '2026-09-24T08:00:00.000Z',
+  officialOpening: '2026-10-01T08:00:00.000Z',
+}
+const earlyAccessHandlers = (answer: unknown) => [
+  http.get('/api/trpc/sponsor.crm.earlyAccess.getSendReadiness', () =>
+    HttpResponse.json({ result: { data: answer } }),
+  ),
+  ...handlers,
+]
+const wonSponsor = mockSponsor({
+  contactPersons: contacts,
+  status: 'closed-won',
+  hasWorkshopEarlyAccessLink: true,
+})
+const NO_WINDOW = EARLY_ACCESS_SEND_REFUSALS['no-window']
+
+/**
+ * A story at phone width. `.storybook/test-runner.ts` sizes the page from
+ * `parameters.viewport.defaultViewport` and from nothing else (`mobile1` is
+ * 320 x 568); the `viewport` global is what sizes the preview in the
+ * Storybook UI. A story that sets only one of the two is tested, or looked
+ * at, at desktop width.
+ */
+const phone = {
+  viewport: { defaultViewport: 'mobile1' },
+} as const
+const phoneGlobals = { viewport: { value: 'mobile1', isRotated: false } }
+
+type Play = NonNullable<Story['play']>
+type PlayContext = Parameters<Play>[0]
+
+/** The story really is narrow, and nothing in it pushes the page sideways. */
+async function expectPhoneWidth({ canvasElement }: PlayContext) {
+  const page = canvasElement.ownerDocument
+  await expect(page.defaultView!.innerWidth).toBeLessThan(640)
+  await expect(page.documentElement.scrollWidth).toBeLessThanOrEqual(
+    page.documentElement.clientWidth,
+  )
+}
+
+/**
+ * The held-send notice at phone width: its "Check again" action wraps below
+ * the words (beside them, it would squeeze them into a sliver), and the
+ * notice stays inside the screen.
+ */
+async function expectNoticeStacked(context: PlayContext) {
+  const page = context.canvasElement.ownerDocument
+  const body = within(page.body)
+  const words = await body.findByRole('alert')
+  const action = body.getByRole('button', { name: 'Check again' })
+  await expect(action.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+    words.getBoundingClientRect().bottom,
+  )
+  await expect(
+    words.parentElement!.getBoundingClientRect().right,
+  ).toBeLessThanOrEqual(page.defaultView!.innerWidth)
+  await expectPhoneWidth(context)
+}
+
+/**
+ * Send → Workshop early access (#1347). The modal asks the server whether
+ * the link may be sent; here it may. The built-in text is the starting body,
+ * no template is preselected, and the link rides in the block the server
+ * appends, so editing the message cannot lose it.
+ */
+export const EarlyAccess: Story = {
+  args: { kind: 'workshop-early-access', sponsorForConference: wonSponsor },
+  parameters: { msw: { handlers: earlyAccessHandlers(earlyAccessReady) } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await waitFor(() =>
+      expect(
+        body.queryByText('Checking whether early access can be sent…'),
+      ).not.toBeInTheDocument(),
+    )
+    await expect(
+      body.getByRole('heading', { name: 'Send workshop early access' }),
+    ).toBeInTheDocument()
+    await expect(
+      body.getByDisplayValue(
+        'Workshop early access: Cloud Native Days Norway 2026',
+      ),
+    ).toBeInTheDocument()
+    await expect(
+      body.getByText(/gets early access to workshop sign-up/),
+    ).toBeInTheDocument()
+    await expect(body.queryByRole('alert')).not.toBeInTheDocument()
+    await expect(body.getByRole('combobox')).toHaveValue('')
+  },
+}
+
+/** The sponsor has no link yet: the modal says that sending creates it. */
+export const EarlyAccessNoLinkYet: Story = {
+  args: {
+    kind: 'workshop-early-access',
+    sponsorForConference: mockSponsor({
+      contactPersons: contacts,
+      status: 'closed-won',
+    }),
+  },
+  parameters: {
+    msw: { handlers: earlyAccessHandlers({ ...earlyAccessReady, url: null }) },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(
+      await body.findByText(
+        'This sponsor has no early-access link yet. Sending creates it.',
+      ),
+    ).toHaveAttribute('role', 'status')
+  },
+}
+
+/** The preview shows the block the server appends: both times, who can use the link, and the link. */
+export const EarlyAccessPreview: Story = {
+  args: { kind: 'workshop-early-access', sponsorForConference: wonSponsor },
+  parameters: { msw: { handlers: earlyAccessHandlers(earlyAccessReady) } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await waitFor(() =>
+      expect(
+        body.queryByText('Checking whether early access can be sent…'),
+      ).not.toBeInTheDocument(),
+    )
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    const heading = await body.findByText('Early access to workshop sign-up')
+    await expect(heading.parentElement).toHaveTextContent(
+      'With this link, workshop sign-up opens on Thursday, September 24, 2026 at 10:00 AM. For everyone else it opens on Thursday, October 1, 2026 at 10:00 AM.',
+    )
+    await expect(
+      body.getByRole('link', { name: 'Open early access' }),
+    ).toHaveAttribute('href', EARLY_ACCESS_LINK)
+  },
+}
+
+/** No link yet: the preview says where the link will be, and offers none. */
+export const EarlyAccessPreviewNoLinkYet: Story = {
+  ...EarlyAccessNoLinkYet,
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByText(
+      'This sponsor has no early-access link yet. Sending creates it.',
+    )
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    await expect(
+      await body.findByText(
+        'The link is created when this email is sent, and appears here.',
+      ),
+    ).toBeInTheDocument()
+    await expect(
+      body.queryByRole('link', { name: 'Open early access' }),
+    ).not.toBeInTheDocument()
+  },
+}
+
+/**
+ * Refused: the server's reason, in its words. Every refusal looks like this
+ * one (no early-access period, the official opening passed, no working
+ * portal host, localhost, a deal that is not won), and so does a server that
+ * could not be asked.
+ */
+export const EarlyAccessRefused: Story = {
+  args: { kind: 'workshop-early-access', sponsorForConference: wonSponsor },
+  parameters: {
+    msw: {
+      handlers: earlyAccessHandlers({
+        refusal: { reason: 'no-window', message: NO_WINDOW },
+      }),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(await body.findByRole('alert')).toHaveTextContent(NO_WINDOW)
+    // Send is held, so the way out is in the notice: ask again, after the
+    // organizer has set the time in another tab.
+    await expect(
+      body.getByRole('button', { name: 'Check again' }),
+    ).toBeInTheDocument()
+  },
+}
+
+/**
+ * The server could not be asked (here: it answers with an error). Nothing is
+ * known, so Send is held, and the notice offers "Check again": the question
+ * is asked once per open and never retried by itself.
+ */
+export const EarlyAccessNotChecked: Story = {
+  args: { kind: 'workshop-early-access', sponsorForConference: wonSponsor },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/sponsor.crm.earlyAccess.getSendReadiness', () =>
+          HttpResponse.json(
+            { error: { message: 'Failed to fetch conference', code: -32603 } },
+            { status: 500 },
+          ),
+        ),
+        ...handlers,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(await body.findByRole('alert')).toHaveTextContent(
+      'Could not check whether early access can be sent: Failed to fetch conference',
+    )
+    await expect(
+      body.getByRole('button', { name: 'Check again' }),
+    ).toBeInTheDocument()
+  },
+}
+
+export const EarlyAccessNotCheckedDark: Story = {
+  ...EarlyAccessNotChecked,
+  globals: { theme: 'dark' },
+}
+
+export const EarlyAccessNotCheckedMobile: Story = {
+  ...EarlyAccessNotChecked,
+  parameters: { ...EarlyAccessNotChecked.parameters, ...phone },
+  globals: phoneGlobals,
+  play: async (context) => {
+    await EarlyAccessNotChecked.play!(context)
+    await expectNoticeStacked(context)
+  },
+}
+
+/** While the server is being asked, nothing can be sent. */
+export const EarlyAccessChecking: Story = {
+  args: { kind: 'workshop-early-access', sponsorForConference: wonSponsor },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(
+          '/api/trpc/sponsor.crm.earlyAccess.getSendReadiness',
+          async () => {
+            await delay('infinite')
+            return HttpResponse.json({ result: { data: earlyAccessReady } })
+          },
+        ),
+        ...handlers,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(
+      await body.findByText('Checking whether early access can be sent…'),
+    ).toHaveAttribute('role', 'status')
+  },
+}
+
+export const EarlyAccessDark: Story = {
+  ...EarlyAccess,
+  globals: { theme: 'dark' },
+}
+
+export const EarlyAccessRefusedDark: Story = {
+  ...EarlyAccessRefused,
+  globals: { theme: 'dark' },
+}
+
+export const EarlyAccessPreviewDark: Story = {
+  ...EarlyAccessPreview,
+  globals: { theme: 'dark' },
+}
+
+export const EarlyAccessMobile: Story = {
+  ...EarlyAccessNoLinkYet,
+  parameters: { ...EarlyAccessNoLinkYet.parameters, ...phone },
+  globals: phoneGlobals,
+  play: async (context) => {
+    await EarlyAccessNoLinkYet.play!(context)
+    await expectPhoneWidth(context)
+  },
+}
+
+export const EarlyAccessRefusedMobile: Story = {
+  ...EarlyAccessRefused,
+  parameters: { ...EarlyAccessRefused.parameters, ...phone },
+  globals: phoneGlobals,
+  play: async (context) => {
+    await EarlyAccessRefused.play!(context)
+    await expectNoticeStacked(context)
+  },
+}
+
+/** The block inside the preview at phone width: the address wraps inside it. */
+export const EarlyAccessPreviewMobile: Story = {
+  ...EarlyAccessPreview,
+  parameters: { ...EarlyAccessPreview.parameters, ...phone },
+  globals: phoneGlobals,
+  play: async (context) => {
+    await EarlyAccessPreview.play!(context)
+    const page = context.canvasElement.ownerDocument
+    const address = within(page.body).getByRole('link', {
+      name: EARLY_ACCESS_LINK,
+    })
+    await expect(address.getBoundingClientRect().right).toBeLessThanOrEqual(
+      page.defaultView!.innerWidth,
+    )
+    await expectPhoneWidth(context)
   },
 }

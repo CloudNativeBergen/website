@@ -9,7 +9,19 @@ import {
   resolveLegalConfig,
   resolveSubprocessorDisclosure,
 } from '@/lib/legal'
-import { SubprocessorList } from '@/components/legal'
+import {
+  PhotoWallCookieNote,
+  PhotoWallPrivacy,
+  ContentJudgementPrivacy,
+  SessionFeedbackCookieNote,
+  SessionFeedbackPrivacy,
+  SharedWorkshopLoginNotice,
+  SubprocessorList,
+  WorkshopEarlyAccessCookieNote,
+  WorkshopEarlyAccessSponsorItem,
+  WorkshopSessionCookieItem,
+  WorkshopSignInCookieNote,
+} from '@/components/legal'
 import { AnalyticsChoice } from '@/components/analytics'
 import { resolveMetadataBrand } from '@/lib/seo/brand'
 import { ErrorDisplay } from '@/components/admin'
@@ -54,6 +66,7 @@ import { conferenceTag, organizationTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
+import { authOrigin } from '@/lib/workshop/central-sign-in/decision'
 
 export async function generateMetadata(): Promise<Metadata> {
   const brand = await resolveMetadataBrand()
@@ -117,7 +130,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'October 2, 2026'
+  const lastUpdated = 'October 25, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -128,16 +141,24 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     : 'The organizer of this event'
 
   // The tenant's REAL subprocessor chain (#690), derived from its ticketing
-  // binding, analytics code, Slack token and workshop entitlement. An
-  // unresolvable signal DISCLOSES rather than omits — see
+  // binding, organization analytics token, Slack token and workshop entitlement.
+  // An unresolvable signal DISCLOSES rather than omits — see
   // `@/lib/legal/subprocessors` for the two rules.
   const subprocessors = await resolveSubprocessorDisclosure(conference)
   const usesWorkOS = discloses(subprocessors, 'workos')
+  // Where the sign-in's own short-lived cookies are set besides this site:
+  // the host `WORKSHOP_AUTH_ORIGIN` names. Unset, there is no other host.
+  const configuredAuthOrigin = authOrigin()
+  const signInHost =
+    typeof configuredAuthOrigin === 'object' ? configuredAuthOrigin.host : null
   const overseasProcessors = internationalTransferProcessors(subprocessors)
-  // The analytics wording follows the organization's cutover (#1008, #1034):
-  // PostHog is anonymous by default with ONE optional cookie, so the old
-  // "cookie-less" promise is only true for tenants still on Pirsch (or none).
+  // PostHog is anonymous by default with ONE optional cookie. Without an
+  // organization token, only the platform's cookie-less Vercel insights run.
   const usesPostHog = discloses(subprocessors, 'posthog')
+  // Content judgement (spec §13.2): the section shows exactly when OpenRouter
+  // is disclosed, while the organization has it on or still stores any
+  // Judgement, and as possible when that could not be read.
+  const usesContentJudgement = discloses(subprocessors, 'openrouter')
 
   return (
     <>
@@ -390,6 +411,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               • Operating system preference (Windows, macOS,
                               Linux)
                             </li>
+                            <WorkshopEarlyAccessSponsorItem />
                             {/*
                               Named only when WorkOS is actually in this
                               tenant's chain (#690) — the identifier does not
@@ -415,12 +437,25 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             <li>• Signup date and confirmation details</li>
                             <li>• Workshop attendance tracking</li>
                             <li>• Capacity and waitlist management</li>
-                            <li>
-                              • Authentication session data for workshop access
-                            </li>
+                            {/*
+                              The portal's session is the platform's own cookie
+                              (#1311). Gated like the identifier above: this
+                              line names WorkOS.
+                            */}
+                            {usesWorkOS ? (
+                              <WorkshopSessionCookieItem
+                                signInHost={signInHost}
+                              />
+                            ) : null}
                           </ul>
                         </div>
                       </div>
+                      {/*
+                        The workshop login lives in ONE WorkOS environment for
+                        every tenant (#1293), so it is not this event's alone.
+                        Gated like the identifier above.
+                      */}
+                      {usesWorkOS ? <SharedWorkshopLoginNotice /> : null}
                     </div>
 
                     {/* Communication Data */}
@@ -449,6 +484,16 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           confirmed participants — we store the message text,
                           its author, and when it was sent, and display it on
                           the workshop page
+                        </li>
+                        <li>
+                          • <strong>Workshop Sign-up Reminders:</strong> If your
+                          ticket includes workshops and you have not signed up
+                          for one, organizers may email you a reminder, using
+                          the name and email address your ticket is registered
+                          to. We compare that address with workshop sign-ups to
+                          decide who gets it, and keep only when the last
+                          reminder went out and how many people it reached — not
+                          who they were
                         </li>
                       </ul>
                     </div>
@@ -1194,6 +1239,15 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       </p>
                     </div>
 
+                    {/* Session Feedback (speaker feedback spec §8) */}
+                    <SessionFeedbackPrivacy />
+
+                    {/* Photo Wall (Photo Wall spec §12) */}
+                    <PhotoWallPrivacy />
+
+                    {/* Automatic checks (Content judgement spec §13.2) */}
+                    {usesContentJudgement ? <ContentJudgementPrivacy /> : null}
+
                     {/* Website Usage (Analytics) */}
                     <div className="rounded-lg border border-teal-200 bg-teal-50 p-6 dark:border-teal-800 dark:bg-teal-900/20">
                       <h3 className="mb-4 flex items-center text-lg font-semibold text-teal-800 dark:text-teal-200">
@@ -1222,8 +1276,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               information, approximate region
                             </li>
                             <li>
-                              • Cookie-less analytics, aggregated; no
-                              advertising profiles
+                              • Cookie-less Vercel Analytics and Speed Insights;
+                              aggregated, no advertising profiles
                             </li>
                           </>
                         )}
@@ -1376,7 +1430,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         <li>
                           {usesPostHog
                             ? '• Privacy-friendly analytics by PostHog (EU): anonymous by default, one optional cookie if you accept it.'
-                            : '• Privacy-friendly website analytics and performance monitoring (no advertising)'}
+                            : '• Cookie-less Vercel Analytics and Speed Insights (no advertising)'}
                         </li>
                       </ul>
                     </div>
@@ -1499,7 +1553,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       <p className="text-sm text-pink-700 dark:text-pink-300">
                         {usesPostHog
                           ? 'Privacy-friendly analytics by PostHog (EU): anonymous by default, one optional cookie if you accept it.'
-                          : 'Privacy-friendly, cookie-less analytics to understand site usage, including anonymous, aggregated counts of interactions such as button clicks (no advertising, no personal identifiers)'}
+                          : 'Cookie-less Vercel Analytics and Speed Insights to understand site usage and performance (no advertising)'}
                       </p>
                     </div>
 
@@ -2020,9 +2074,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               Not deleted automatically
                               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                Cancelling moves you to the waitlist; the record
-                                is deleted when a workshop organizer removes it
-                                or you ask us to
+                                Cancelling deletes your signup. Earlier,
+                                cancelling moved you to the waitlist instead; a
+                                signup cancelled that way is still kept. Any
+                                signup is deleted when a workshop organizer
+                                removes it or you ask us to
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
@@ -2087,11 +2143,19 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                                 WorkOS Authentication Data
                                 <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                   (User ID, email, name, authentication
-                                  sessions)
+                                  sessions; one login for every conference on
+                                  this platform)
                                 </div>
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                                 Not deleted automatically
+                                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                  Removing your registrations at one conference
+                                  does not delete this login or your
+                                  registrations at other conferences. The
+                                  sign-in cookie on this site expires 7 days
+                                  after you sign in, or when you sign out.
+                                </div>
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                                 <span className="font-medium text-blue-600 dark:text-blue-400">
@@ -2431,8 +2495,16 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       cookies for advertising or cross-site tracking.
                       {usesPostHog
                         ? ' Our analytics are aggregated and, unless you accept the cookie above, anonymous.'
-                        : ' Our analytics are cookie-less and aggregated.'}
+                        : ' Vercel Analytics and Speed Insights are cookie-less and aggregated.'}
                     </p>
+                    {/*
+                      NOT gated on `usesWorkOS`: the cookie can outlive a
+                      switch-off of workshops by up to its 7 days.
+                    */}
+                    <WorkshopSignInCookieNote signInHost={signInHost} />
+                    <WorkshopEarlyAccessCookieNote />
+                    <SessionFeedbackCookieNote />
+                    <PhotoWallCookieNote />
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                       <strong>localStorage:</strong> We use your browser’s
                       localStorage to save personal bookmarks on your device.

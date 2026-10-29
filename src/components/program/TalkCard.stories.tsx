@@ -5,6 +5,9 @@ import { Format, Language, Level, Audience, Status } from '@/lib/proposal/types'
 import { Flags, Speaker } from '@/lib/speaker/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import type { TrackTalk } from '@/lib/conference/types'
+import { expect, userEvent, within } from 'storybook/test'
+import { http, HttpResponse } from 'msw'
+import { STORY_PHOTOS, storyPhoto } from '@/components/photo-wall/story-photos'
 
 const mockSpeakers: Speaker[] = [
   {
@@ -151,6 +154,155 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   args: {
     talk: createMockTalk(),
+  },
+}
+
+/** A confirmed talk that holds a Feedback Code (`hasFeedbackCode`, #1472). */
+const withFeedbackCode = (overrides: Partial<TalkCardTalk> = {}) => {
+  const base = createMockTalk(overrides)
+  return { ...base, talk: { ...base.talk!, hasFeedbackCode: true } }
+}
+
+export const WithFeedbackLink: Story = {
+  args: { talk: withFeedbackCode(), showDate: true, showTrack: true },
+  parameters: {
+    viewport: { defaultViewport: 'phone' },
+    docs: {
+      description: {
+        story:
+          'A talk with a Feedback Code links to `/program/<talkId>/feedback`, which redirects to its current attendee page. Shown on every scheduled talk with a code, at all times.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const link = within(canvasElement).getByRole('link', {
+      name: /^Give feedback/,
+    })
+    await expect(link).toHaveAttribute('href', '/program/talk-1/feedback')
+    await expect(link).toHaveTextContent('Give feedback')
+    // Each card's link names its talk, so a screen reader's link list can
+    // tell 30 of them apart.
+    await expect(link).toHaveAccessibleName(
+      'Give feedback on Building Scalable Cloud Native Applications with Kubernetes',
+    )
+  },
+}
+
+export const WithFeedbackLinkDark: Story = {
+  ...WithFeedbackLink,
+  globals: { theme: 'dark' },
+}
+
+export const WithFeedbackLinkCompact: Story = {
+  args: { talk: withFeedbackCode(), compact: true },
+  parameters: { viewport: { defaultViewport: 'phone' } },
+  play: async ({ canvasElement }) => {
+    const link = within(canvasElement).getByRole('link', {
+      name: /^Give feedback/,
+    })
+    await expect(link).toHaveAttribute('href', '/program/talk-1/feedback')
+    // Icon only: the name comes from the label, not from visible text.
+    await expect(link).toHaveTextContent('')
+    await expect(link).toHaveAccessibleName(
+      'Give feedback on Building Scalable Cloud Native Applications with Kubernetes',
+    )
+    await expect(link.querySelector('svg')).not.toBeNull()
+  },
+}
+
+export const WithFeedbackLinkCompactDark: Story = {
+  ...WithFeedbackLinkCompact,
+  globals: { theme: 'dark' },
+}
+
+/** The product of every ancestor's opacity: what the eye actually gets. */
+const renderedOpacity = (element: Element | null) => {
+  let opacity = 1
+  for (let el = element; el; el = el.parentElement)
+    opacity *= Number(getComputedStyle(el).opacity)
+  return opacity
+}
+
+export const PastWithFeedbackLink: Story = {
+  args: { talk: withFeedbackCode(), status: 'past' },
+  parameters: {
+    viewport: { defaultViewport: 'phone' },
+    docs: {
+      description: {
+        story:
+          'After the session, when feedback is wanted most: the content is dimmed, the link is not.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const title = canvas.getByText(
+      'Building Scalable Cloud Native Applications with Kubernetes',
+    )
+    // Positive control: the past state still dims the card's content.
+    await expect(renderedOpacity(title)).toBeCloseTo(0.6)
+    await expect(
+      renderedOpacity(canvas.getByRole('link', { name: /^Give feedback/ })),
+    ).toBe(1)
+  },
+}
+
+export const HappeningNowWithFeedbackLink: Story = {
+  args: { talk: withFeedbackCode(), status: 'happening-now' },
+  parameters: { viewport: { defaultViewport: 'phone' } },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByRole('link', { name: /^Give feedback/ }),
+    ).toHaveAttribute('href', '/program/talk-1/feedback')
+  },
+}
+
+/** A code on a talk that is not confirmed never shows: the route would refuse. */
+const notConfirmedStory = (status: Status, shown: string): Story => ({
+  args: {
+    talk: (() => {
+      const base = withFeedbackCode()
+      return { ...base, talk: { ...base.talk, status } }
+    })(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // Positive control: the card rendered in its own state.
+    await expect(canvas.getAllByText(shown).length).toBeGreaterThan(0)
+    await expect(
+      canvas.queryByRole('link', { name: /^Give feedback/ }),
+    ).toBeNull()
+  },
+})
+
+export const CancelledWithFeedbackCode = notConfirmedStory(
+  Status.withdrawn,
+  'This session has been cancelled',
+)
+
+export const TBAWithFeedbackCode = notConfirmedStory(Status.accepted, 'TBA')
+
+export const WithoutFeedbackCode: Story = {
+  args: { talk: createMockTalk() },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'No Feedback Code minted yet: no link and no placeholder. Compare `WithFeedbackLink`, whose only difference is the code.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // The card rendered (positive control), and it has no feedback link.
+    await expect(
+      canvas.getByText(
+        'Building Scalable Cloud Native Applications with Kubernetes',
+      ),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.queryByRole('link', { name: /^Give feedback/ }),
+    ).toBeNull()
   },
 }
 
@@ -470,4 +622,65 @@ export const ProgramGrid: Story = {
       },
     },
   },
+}
+
+const FIXTURES = Object.values(STORY_PHOTOS)
+/** `photoWallPublic.talkPhotos` answering `count` photos, the first six of them. */
+const talkPhotos = (count: number) => [
+  http.get('/api/trpc/photoWallPublic.talkPhotos', () =>
+    HttpResponse.json({
+      result: {
+        data: {
+          count,
+          posts: Array.from({ length: Math.min(count, 6) }, (_, i) => ({
+            _id: `post-${i}`,
+            ...storyPhoto(FIXTURES[i % FIXTURES.length]),
+            caption: i === 0 ? 'Live demo on the main stage' : null,
+            name: i === 0 ? 'Kari' : null,
+            approvedAt: '2026-10-26T10:00:00Z',
+          })),
+        },
+      },
+    }),
+  ),
+]
+
+/** A card expanded, so it loads its photos (talk photos spec §7.1). */
+const photosStory = (count: number): Story => ({
+  args: { talk: createMockTalk() },
+  parameters: {
+    viewport: { defaultViewport: 'phone' },
+    msw: { handlers: talkPhotos(count) },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: /Show more/ }))
+    if (count === 0) {
+      await new Promise((r) => setTimeout(r, 300))
+      await expect(canvas.queryByText(/Photos from this talk/)).toBeNull()
+      return
+    }
+    await expect(
+      await canvas.findByText(`Photos from this talk (${count})`),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.getByRole('link', { name: 'See all on the Photo Wall' }),
+    ).toHaveAttribute('href', '/wall')
+  },
+})
+
+export const PhotosNone = photosStory(0)
+export const PhotosFew = photosStory(3)
+export const PhotosMany = photosStory(11)
+export const PhotosManyDark: Story = {
+  ...PhotosMany,
+  globals: { theme: 'dark' },
+}
+export const PhotosManyDesktop: Story = {
+  ...PhotosMany,
+  parameters: { ...PhotosMany.parameters, viewport: undefined },
+}
+export const PhotosManyDesktopDark: Story = {
+  ...PhotosManyDesktop,
+  globals: { theme: 'dark' },
 }

@@ -1,19 +1,6 @@
 import { auth } from '@/lib/auth'
-import {
-  NextResponse,
-  type NextRequest,
-  type NextFetchEvent,
-} from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { AppEnvironment } from '@/lib/environment/config'
-import { authkitMiddleware } from '@workos-inc/authkit-nextjs'
-
-const workOSMiddleware = authkitMiddleware({
-  middlewareAuth: {
-    enabled: true,
-    unauthenticatedPaths: [],
-  },
-  debug: process.env.NODE_ENV === 'development',
-})
 
 // The session cookie's `Domain` is rewritten PER REQUEST for every response
 // this produces: `auth` itself applies it to its handler-wrapper form (see
@@ -72,54 +59,14 @@ const nextAuthMiddleware = auth((req) => {
 })
 
 /**
- * CAPABILITY check (NOT the feature gate) for the workshop portal: the AuthKit
- * round-trip can only complete on the ONE host the global WorkOS client is
- * configured for — `wos-session` is sealed host-only on the redirect origin, so
- * on any other tenant domain the attendee bounces back to the sign-in button
- * forever (#689). Starting that round-trip from a foreign host is therefore
- * never useful, and it would happen BEFORE the request ever reaches the
- * portal's feature gate (middleware auth redirects unauthenticated users away).
- *
- * Returns false ONLY when the request host is positively known not to be the
- * WorkOS host. Both env vars the workshop flow uses are accepted
- * (`WORKOS_REDIRECT_URI` — the middleware's own callback — and
- * `NEXT_PUBLIC_URL`, from which the portal builds its authorize URL), and an
- * unset/unparsable configuration falls back to TRUE so a missing env var can
- * never take the portal down on the host where it works today.
- *
- * The feature gate proper (`isWorkshopsEnabledForConference`) lives in the
- * portal layout/page and the ticket-sold webhook, where a Sanity read is
- * possible; this only avoids an auth bounce that provably cannot succeed.
+ * `/workshop*` IS NOT HANDLED HERE (#1311). The portal keeps a session of its
+ * own, which the page and the `workshop.*` procedures read for themselves; the
+ * routes that begin and redeem a sign-in take their own decision. Nothing on
+ * that path needs a redirect or a header from the proxy, so it is not in the
+ * matcher.
  */
-function isWorkOSAuthHost(req: NextRequest): boolean {
-  const host = req.headers.get('host')?.toLowerCase()
-  if (!host) return true
-
-  const configuredHosts = [
-    process.env.WORKOS_REDIRECT_URI,
-    process.env.NEXT_PUBLIC_URL,
-  ].flatMap((value) => {
-    if (!value) return []
-    try {
-      return [new URL(value).host.toLowerCase()]
-    } catch {
-      return []
-    }
-  })
-
-  if (configuredHosts.length === 0) return true
-  return configuredHosts.includes(host)
-}
-
-export default function middleware(req: NextRequest, event: NextFetchEvent) {
+export default function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
-
-  if (pathname.startsWith('/workshop')) {
-    if (!isWorkOSAuthHost(req)) {
-      return new NextResponse('Not Found', { status: 404 })
-    }
-    return workOSMiddleware(req, event)
-  }
 
   if (
     (pathname.startsWith('/cfp') && pathname !== '/cfp') ||
@@ -133,11 +80,5 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
 }
 
 export const config = {
-  matcher: [
-    '/cfp/:path*',
-    '/admin/:path*',
-    '/cli/:path*',
-    '/workshop',
-    '/workshop/:path*',
-  ],
+  matcher: ['/cfp/:path*', '/admin/:path*', '/cli/:path*'],
 }

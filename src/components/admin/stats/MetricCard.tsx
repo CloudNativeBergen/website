@@ -44,7 +44,7 @@ export function MetricCard({
   return (
     <div
       className={clsx(
-        'rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800',
+        'rounded-lg border border-gray-200 bg-white p-3 shadow-sm sm:p-6 dark:border-gray-700 dark:bg-gray-800',
         className,
       )}
     >
@@ -56,7 +56,7 @@ export function MetricCard({
           {isLoading ? (
             <div className="mt-2 h-8 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
           ) : (
-            <p className="mt-2 text-3xl font-semibold text-gray-900 dark:text-white">
+            <p className="mt-1 text-lg font-semibold text-gray-900 sm:mt-2 sm:text-3xl dark:text-white">
               {value}
             </p>
           )}
@@ -68,7 +68,10 @@ export function MetricCard({
         </div>
         {Icon && (
           <div
-            className={clsx('shrink-0 rounded-full p-3', trendBgClasses[trend])}
+            className={clsx(
+              'hidden shrink-0 rounded-full p-3 sm:block',
+              trendBgClasses[trend],
+            )}
           >
             <Icon className={clsx('h-6 w-6', trendIconClasses[trend])} />
           </div>

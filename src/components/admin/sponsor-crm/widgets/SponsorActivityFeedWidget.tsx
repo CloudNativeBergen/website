@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 'use client'
 
 import { useState } from 'react'
@@ -10,6 +9,7 @@ import {
 
 interface SponsorActivityFeedWidgetProps {
   sponsorId: string
+  /** Opens the record on its history tab. */
   onNewActivity: () => void
 }
 
@@ -71,6 +71,12 @@ export function SponsorActivityFeedWidget({
             Activity Feed
           </h2>
         </div>
+        <button
+          onClick={onNewActivity}
+          className="text-sm font-medium text-brand-cloud-blue hover:text-indigo-500 dark:text-indigo-400"
+        >
+          Full history
+        </button>
       </div>
 
       <div className="border-b border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/30">

@@ -1,5 +1,5 @@
-import Link from 'next/link'
-import { formatDatesSafe } from '@/lib/time'
+import { formatConferenceDateShort, formatDatesSafe } from '@/lib/time'
+import { isCfpOpen } from '@/lib/conference/state'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
 import {
   CalendarIcon,
@@ -8,6 +8,7 @@ import {
   DocumentTextIcon,
   LockClosedIcon,
   AcademicCapIcon,
+  ClockIcon,
 } from '@heroicons/react/24/outline'
 
 interface CompactConferenceHeaderProps {
@@ -18,7 +19,20 @@ export function CompactConferenceHeader({
   data,
 }: CompactConferenceHeaderProps) {
   const { conference, proposals, galleryImages, workshopStats, isOver } = data
-  const domain = conference.domains?.[0]
+  const hasSubmittedTalk = proposals.some((p) => p.status === 'submitted')
+  const cfpNote = isOver
+    ? null
+    : hasSubmittedTalk && conference.cfpNotifyDate
+      ? {
+          label: 'Decisions by',
+          date: conference.cfpNotifyDate,
+        }
+      : isCfpOpen(conference)
+        ? { label: 'Call for papers closes', date: conference.cfpEndDate }
+        : null
+  const place = [conference.venueName, conference.venueAddress]
+    .filter(Boolean)
+    .join(', ')
 
   return (
     <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
@@ -43,10 +57,19 @@ export function CompactConferenceHeader({
           </div>
           <div className="flex items-center gap-1">
             <MapPinIcon className="h-3.5 w-3.5" />
-            <span>
-              {conference.city}, {conference.country}
-            </span>
+            <span>{place || `${conference.city}, ${conference.country}`}</span>
           </div>
+          {cfpNote && (
+            <div className="flex items-center gap-1 font-medium text-gray-800 dark:text-gray-200">
+              <ClockIcon className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>
+                {cfpNote.label}{' '}
+                <time dateTime={cfpNote.date}>
+                  {formatConferenceDateShort(cfpNote.date)}
+                </time>
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -68,17 +91,6 @@ export function CompactConferenceHeader({
             <PhotoIcon className="h-4 w-4" />
             <span className="font-medium">{galleryImages.length}</span>
           </div>
-        )}
-        {domain && (
-          <Link
-            href={`https://${domain}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs font-medium text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80 dark:text-blue-400 dark:hover:text-blue-300"
-            onClick={(e) => e.stopPropagation()}
-          >
-            View →
-          </Link>
         )}
       </div>
     </div>

@@ -85,6 +85,20 @@ const collectGarbage = () => {
   ;(runInNewContext('gc') as () => void)()
 }
 
+/**
+ * The picked track has reached the preview's player: its first mix is loaded.
+ *
+ * "Plays from…" in the status line is NOT that moment. The text is committed
+ * by the same render that computes the mix, but the player is loaded from an
+ * EFFECT of that render, which React flushes afterwards. A test that waits for
+ * the text and then clears `playerCalls` can clear it before that first load,
+ * which then lands in the middle of whatever the test does next — one of the
+ * two causes of this file's intermittent failures (#1284). Wait for the load
+ * itself.
+ */
+const firstMixLoaded = () =>
+  waitFor(() => expect(playerCalls).toContain('load'))
+
 import { act } from '@testing-library/react'
 import { setFlagsFromString } from 'node:v8'
 import { runInNewContext } from 'node:vm'
@@ -633,6 +647,7 @@ describe('a video’s music', () => {
       target: { value: 'asset-theme' },
     })
     await within(music()).findByText(/Plays from/)
+    await firstMixLoaded()
     playerCalls.length = 0
     for (const value of ['70', '55', '40'])
       fireEvent.change(within(music()).getByLabelText(/Volume/), {
@@ -1050,6 +1065,7 @@ describe('a video’s music', () => {
       target: { value: 'asset-theme' },
     })
     await within(music()).findByText(/Plays from/)
+    await firstMixLoaded()
     playerCalls.length = 0
     // As a drag of the scene's edge does: one length after another.
     const length = screen.getByLabelText('Scene 1 length (s)')
@@ -1249,6 +1265,15 @@ describe('a video’s music', () => {
       await waitFor(() => expect(decodes.waiting).toHaveLength(1))
       save()
       await within(project()).findByText('All changes saved')
+      // …and the editor has TAKEN THE DECODE OVER under the file's new name.
+      // "All changes saved" is not that moment: the text is committed by the
+      // render that renames the track, and the take-over happens in an EFFECT
+      // of that render, flushed afterwards. Releasing the decode in between is
+      // a different scenario (see #1284), and one a test cannot pin. What can
+      // be observed is the effect re-running: it gives up the first fetch's
+      // signal in the same breath as it adopts the decode in flight.
+      const [, firstFetch] = gallery.loadTrack.mock.calls[0]
+      await waitFor(() => expect(firstFetch.aborted).toBe(true))
       decodes.hold = false
       decodes.waiting.splice(0).forEach((release) => release())
       await within(music()).findByText(/Plays from/)

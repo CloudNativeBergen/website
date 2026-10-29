@@ -216,9 +216,16 @@ export const WithApprovedAndRejected: Story = {
     docs: {
       description: {
         story:
-          'When speaker has an approved talk, rejected ones show "Not selected" with muted styling.',
+          'When speaker has an approved talk, rejected ones show "Not selected" with muted styling. Submitted talks are still under review, so they are not dimmed.',
       },
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const row = (title: string) =>
+      canvas.getByRole('link', { name: title }).closest('.rounded-lg')
+    await expect(row('Another Proposal')).toHaveClass('opacity-60')
+    await expect(row('Third Proposal')).not.toHaveClass('opacity-60')
   },
 }
 
@@ -407,6 +414,29 @@ export const WithdrawnStatusRendered: Story = {
   },
 }
 
+export const CanceledStatusRendered: Story = {
+  args: {
+    proposals: [
+      createMockProposal('talk-1', 'Canceled Talk', Status.canceled),
+      createMockProposal('talk-2', 'Confirmed Talk', Status.confirmed),
+    ],
+    canEdit: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A talk the organizers canceled shows like a withdrawn one: a Canceled badge, sorted last and muted next to an approved talk, with no Confirm action.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(canvas.getByText('Canceled')).toBeInTheDocument()
+    expect(canvas.queryByRole('button', { name: /confirm/i })).toBeNull()
+  },
+}
+
 export const ShowsProposalCount: Story = {
   args: {
     proposals: allSubmittedProposals,
@@ -442,16 +472,92 @@ export const ConferenceEnded: Story = {
       ),
     ],
     canEdit: false,
-    conferenceHasEnded: true,
+    // Card Counts only (an edition before Feedback Codes): 42 of 60 green.
+    feedbackChips: {
+      'talk-1': { kind: 'results', lovedItPercent: 70, total: 60 },
+    },
+    // An earlier edition: its section opens on its own host.
+    feedbackLinkOrigin: 'https://2025.cloudnativedays.no',
   },
   parameters: {
     docs: {
       description: {
         story:
-          'After conference ends: shows audience feedback count and warning for missing slides.',
+          'After conference ends: shows the Session Feedback chip ("<n>% loved it · <total>", speaker feedback spec §9.4) and the warning for missing slides. An earlier edition’s chip links to its own host, the only one where its section opens (§5).',
       },
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      canvas.getByRole('link', { name: /70% loved it · 60 responses/ }),
+    ).toHaveAttribute(
+      'href',
+      'https://2025.cloudnativedays.no/cfp/proposal/talk-1#session-feedback',
+    )
+  },
+}
+
+const feedbackProposals = [
+  createMockProposal(
+    'talk-1',
+    'Kubernetes: the hard parts',
+    Status.confirmed,
+    Format.presentation_45,
+  ),
+  createMockProposal(
+    'talk-2',
+    'Platform engineering in ten minutes',
+    Status.confirmed,
+    Format.lightning_10,
+  ),
+  createMockProposal(
+    'talk-3',
+    'A talk still under review',
+    Status.submitted,
+    Format.presentation_25,
+  ),
+]
+
+/**
+ * The Session Feedback chips on this host's edition (speaker feedback spec
+ * §9.4): "Feedback Code" until feedback is visible, then the loved-it share
+ * and total. Both link to the talk's Session Feedback section.
+ */
+export const SessionFeedbackChips: Story = {
+  args: {
+    proposals: feedbackProposals,
+    canEdit: true,
+    feedbackLinkOrigin: '',
+    feedbackChips: {
+      'talk-1': { kind: 'results', lovedItPercent: 82, total: 57 },
+      'talk-2': { kind: 'code' },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      canvas.getByRole('link', { name: /82% loved it · 57 responses/ }),
+    ).toHaveAttribute('href', '/cfp/proposal/talk-1#session-feedback')
+    expect(
+      canvas.getByRole('link', { name: 'Show feedback QR code' }),
+    ).toHaveAttribute('href', '/cfp/proposal/talk-2#session-feedback')
+    // A talk with no chip shows none.
+    expect(canvas.getAllByText(/Show feedback QR code|loved it/)).toHaveLength(
+      2,
+    )
+  },
+}
+
+export const SessionFeedbackChipsDark: Story = {
+  ...SessionFeedbackChips,
+  globals: { theme: 'dark' },
+}
+
+/** Phone width: the chips wrap under the title. */
+export const SessionFeedbackChipsPhone: Story = {
+  ...SessionFeedbackChips,
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
 }
 
 export const MultiSpeaker: Story = {
@@ -610,5 +716,143 @@ export const DraftProposals: Story = {
         story: 'Proposals in draft status not yet submitted.',
       },
     },
+  },
+}
+
+export const AcceptedNeedsConfirmation: Story = {
+  args: {
+    proposals: [
+      createMockProposal('talk-1', 'Accepted Talk', Status.accepted),
+      createMockProposal('talk-2', 'Confirmed Talk', Status.confirmed),
+    ],
+    canEdit: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'An accepted talk asks the speaker to confirm. Accepted and confirmed talks offer "Can\'t make it", which opens the withdraw flow with a reason.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      canvas.getByRole('button', { name: 'Confirm participation' }),
+    ).toBeInTheDocument()
+    expect(
+      canvas.getAllByRole('button', { name: "Can't make it" }),
+    ).toHaveLength(2)
+  },
+}
+
+export const CoSpeakerInvites: Story = {
+  args: {
+    proposals: [
+      createMockProposal(
+        'talk-1',
+        'Talk With Invites',
+        Status.submitted,
+        Format.presentation_45,
+        {
+          coSpeakerInvitations: [
+            {
+              _id: 'inv-1',
+              invitedEmail: 'carol@example.com',
+              invitedName: 'Carol Lee',
+              status: 'pending',
+              expiresAt: '2025-02-01T00:00:00Z',
+            },
+            {
+              _id: 'inv-2',
+              invitedEmail: 'dan@example.com',
+              status: 'expired',
+              expiresAt: '2025-01-01T00:00:00Z',
+            },
+            {
+              _id: 'inv-3',
+              invitedEmail: 'erin@example.com',
+              status: 'accepted',
+              expiresAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+        },
+      ),
+    ],
+    canEdit: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Pending and expired co-speaker invites show on the row.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(canvas.getByText(/invite pending: Carol Lee/)).toBeInTheDocument()
+    expect(
+      canvas.getByText(/invite expired: dan@example.com/),
+    ).toBeInTheDocument()
+    expect(canvas.queryByText(/erin@example.com/)).toBeNull()
+  },
+}
+
+export const MissingSlidesBeforeEvent: Story = {
+  args: {
+    proposals: [
+      createMockProposal('talk-1', 'Talk Without Slides', Status.confirmed),
+    ],
+    canEdit: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      canvas.getByRole('link', { name: /no slides uploaded yet/i }),
+    ).toHaveAttribute('href', '/cfp/proposal/talk-1#slides')
+  },
+}
+
+export const MissingSlidesAfterEvent: Story = {
+  args: {
+    proposals: [
+      createMockProposal('talk-1', 'Talk Without Slides', Status.confirmed),
+    ],
+    canEdit: false,
+    isOver: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'After the event, missing slides become a gentle request.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      canvas.getByRole('link', { name: 'Upload your slides' }),
+    ).toHaveAttribute('href', '/cfp/proposal/talk-1#slides')
+  },
+}
+
+export const WithdrawnLinksToMessages: Story = {
+  args: {
+    proposals: [
+      createMockProposal('talk-1', 'Withdrawn Talk', Status.withdrawn),
+      createMockProposal('talk-2', 'Canceled Talk', Status.canceled),
+    ],
+    canEdit: true,
+    unreadByProposalId: { 'talk-2': 1 },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const links = canvas.getAllByRole('link', {
+      name: 'See messages about this talk',
+    })
+    expect(links[0]).toHaveAttribute('href', '/cfp/proposal/talk-1#messages')
+    expect(
+      canvas.getByRole('link', { name: /unread message/ }),
+    ).toHaveAttribute('href', '/cfp/proposal/talk-2#messages')
   },
 }

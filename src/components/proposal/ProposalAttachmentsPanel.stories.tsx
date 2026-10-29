@@ -78,3 +78,13 @@ export const ReadOnly: Story = {
     readonly: true,
   },
 }
+
+export const AdminWithDelete: Story = {
+  args: {
+    proposalId: 'proposal-1',
+    initialAttachments: mockAttachments,
+    readonly: true,
+    allowDelete: true,
+    isAdmin: true,
+  },
+}

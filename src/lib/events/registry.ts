@@ -6,6 +6,8 @@ import { handleGalleryTagNotification } from './handlers/galleryTagNotification'
 import { handleGalleryTagPersistNotification } from './handlers/galleryTagPersistNotification'
 import { handlePersistNotification } from './handlers/persistNotification'
 import { handleSpeakerTicket } from './handlers/speakerTicket'
+import { handleTicketTypeNotSetNotification } from './handlers/ticketTypeNotSetNotification'
+import { handleWorkshopCapacityNotification } from './handlers/workshopCapacityNotification'
 import {
   handleMarketingSpeakerConfirmed,
   handleMarketingSponsorSigned,
@@ -36,6 +38,18 @@ export function registerEventHandlers(): void {
   eventBus.subscribe(
     'gallery.speaker.tagged',
     handleGalleryTagPersistNotification,
+  )
+
+  // A ticket type with no workshop decision (workshop tickets spec §8)
+  eventBus.subscribe(
+    'workshop.ticket-type.not-set',
+    handleTicketTypeNotSetNotification,
+  )
+
+  // A workshop is 80% full, or its waitlist started
+  eventBus.subscribe(
+    'workshop.capacity.threshold',
+    handleWorkshopCapacityNotification,
   )
 }
 

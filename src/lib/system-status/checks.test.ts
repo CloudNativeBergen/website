@@ -94,6 +94,133 @@ describe('collectStaticChecks — status semantics', () => {
   })
 })
 
+describe('collectStaticChecks — workshop auth origin', () => {
+  it('shows the configured origin', () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org')
+    const check = byId(
+      collectStaticChecks(CONFERENCE),
+      'auth.workshopAuthOrigin',
+    )
+    expect(check).toMatchObject({
+      group: 'auth',
+      label: 'WORKSHOP_AUTH_ORIGIN',
+      status: 'ok',
+      value: 'https://auth.example.org',
+    })
+  })
+
+  it('is an error when the origin is one of the conference’s own domains', () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org')
+    const own = {
+      ...CONFERENCE,
+      domains: ['conf.example.org', 'Auth.Example.org'],
+    }
+    // Another conference on the same deployment is not affected.
+    expect(
+      byId(
+        collectStaticChecks({ ...CONFERENCE, domains: ['conf.example.org'] }),
+        'auth.workshopAuthOrigin',
+      ).status,
+    ).toBe('ok')
+
+    const check = byId(collectStaticChecks(own), 'auth.workshopAuthOrigin')
+
+    expect(check.status).toBe('error')
+    expect(check.value).toBe('https://auth.example.org')
+    expect(check.detail).toContain(
+      'This conference’s own domains serve this host',
+    )
+  })
+
+  it('is an error when a wildcard the conference claims covers the origin', () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org')
+    // A wildcard over another zone does not serve it.
+    expect(
+      byId(
+        collectStaticChecks({ ...CONFERENCE, domains: ['*.example.com'] }),
+        'auth.workshopAuthOrigin',
+      ).status,
+    ).toBe('ok')
+
+    const check = byId(
+      collectStaticChecks({ ...CONFERENCE, domains: ['*.example.org'] }),
+      'auth.workshopAuthOrigin',
+    )
+
+    expect(check.status).toBe('error')
+    expect(check.value).toBe('https://auth.example.org')
+    expect(check.detail).toContain(
+      'This conference’s own domains serve this host',
+    )
+  })
+
+  it('reports unset as the normal setup in development', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', undefined)
+    const check = byId(
+      collectStaticChecks(CONFERENCE),
+      'auth.workshopAuthOrigin',
+    )
+    expect(check.status).toBe('ok')
+    expect(check.value).toBe('not set')
+    expect(check.detail).toContain('local development')
+  })
+
+  it.each(['', '   ', undefined])(
+    'warns when unset in a deployed build, and says what to register: %j',
+    (raw) => {
+      // `production` is what every deployed build runs as, previews included.
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('WORKSHOP_AUTH_ORIGIN', raw)
+      const check = byId(
+        collectStaticChecks(CONFERENCE),
+        'auth.workshopAuthOrigin',
+      )
+      expect(check.status).toBe('warn')
+      expect(check.value).toBe('not set')
+      expect(check.detail).toContain('registered at WorkOS by hand')
+      expect(check.detail).toContain('https://<host>/api/auth/callback')
+      expect(check.detail).toContain(
+        'https://<host>/api/auth/workshop/signed-out',
+      )
+      expect(check.detail).toContain('single-domain installation')
+    },
+  )
+
+  it.each([
+    'https://auth.example.org/callback',
+    'https://auth.example.org?query=1',
+    'https://user:password@auth.example.org',
+    'https://[::1]',
+    'http://auth.example.org',
+    'not an origin',
+  ])(
+    'reports invalid configuration and its sign-in consequence: %s',
+    (origin) => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('WORKSHOP_AUTH_ORIGIN', origin)
+      const check = byId(
+        collectStaticChecks(CONFERENCE),
+        'auth.workshopAuthOrigin',
+      )
+      expect(check.status).toBe('error')
+      expect(check.value).toBe('invalid')
+      expect(check.detail).toContain('sign-in is refused on every host')
+    },
+  )
+
+  it('uses the sign-in parser’s HTTP exception in development', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'http://localhost:3000')
+    const check = byId(
+      collectStaticChecks(CONFERENCE),
+      'auth.workshopAuthOrigin',
+    )
+    expect(check.status).toBe('ok')
+    expect(check.value).toBe('http://localhost:3000')
+  })
+})
+
 describe('collectStaticChecks — organizer teams', () => {
   it('is off with a helpful detail when no teams are configured', () => {
     const check = byId(collectStaticChecks(CONFERENCE), 'conference.teams')

@@ -69,6 +69,21 @@ export function getTicketingProvider(
 }
 
 /**
+ * Whether `credentials` would make the `providerType` provider report
+ * `isConfigured()` — the provider's own rule, asked without building one (see
+ * `CheckinProvider.canCallApi` for why that matters). For gates; anything that
+ * is about to CALL the vendor should hold a provider and ask it.
+ */
+export function ticketingCredentialsConfigured(
+  providerType: TicketingProviderType,
+  credentials: TicketingProviderCredentials,
+): boolean {
+  return providerType === 'tito'
+    ? TitoProvider.canCallApi(credentials)
+    : CheckinProvider.canCallApi(credentials)
+}
+
+/**
  * Platform-default credentials, assembled from environment variables.
  *
  * These are the PLATFORM ORG's credentials, not a universal default. Org-aware
