@@ -1,0 +1,47 @@
+/*
+ * The same self-hosted font files the site serves (src/app/layout.tsx), so
+ * Storybook needs no request to Google Fonts either.
+ */
+@import '@fontsource-variable/inter/wght.css';
+@import '@fontsource-variable/jetbrains-mono/wght.css';
+@import '@fontsource-variable/space-grotesk/wght.css';
+@import '@fontsource-variable/bricolage-grotesque/opsz.css';
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-sans/700.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+@import '@fontsource/ibm-plex-mono/700.css';
+@import '@fontsource/atkinson-hyperlegible/400.css';
+@import '@fontsource/atkinson-hyperlegible/400-italic.css';
+@import '@fontsource/atkinson-hyperlegible/700.css';
+@import '@fontsource/atkinson-hyperlegible/700-italic.css';
+
+@font-face {
+  font-family: 'Caveat';
+  font-weight: 500;
+  font-display: swap;
+  src: url('../src/fonts/caveat/caveat-latin-latin-ext-500-normal.woff2')
+    format('woff2');
+}
+
+@font-face {
+  font-family: 'Caveat';
+  font-weight: 700;
+  font-display: swap;
+  src: url('../src/fonts/caveat/caveat-latin-latin-ext-700-normal.woff2')
+    format('woff2');
+}
+
+:root {
+  --font-inter: 'Inter Variable', sans-serif;
+  --font-jetbrains: 'JetBrains Mono Variable', monospace;
+  --font-space-grotesk: 'Space Grotesk Variable', sans-serif;
+  --font-ibm-plex-sans: 'IBM Plex Sans', sans-serif;
+  --font-ibm-plex-mono: 'IBM Plex Mono', monospace;
+  --font-bricolage: 'Bricolage Grotesque Variable', sans-serif;
+  --font-atkinson: 'Atkinson Hyperlegible', sans-serif;
+  --font-caveat: 'Caveat', cursive;
+}

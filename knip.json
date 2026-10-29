@@ -32,7 +32,12 @@
     "src/components/admin/dashboard/widgets/__matrix__/mock-use-widget-data.ts",
     ".storybook/mocks/tickets-provider.ts"
   ],
-  "ignoreDependencies": ["eslint-config-next", "ts-node"],
+  "ignoreDependencies": [
+    "eslint-config-next",
+    "ts-node",
+    "@fontsource/.+",
+    "@fontsource-variable/.+"
+  ],
   "ignoreExportsUsedInFile": true,
   "includeEntryExports": true
 }
