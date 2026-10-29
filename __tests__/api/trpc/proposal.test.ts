@@ -1,21 +1,19 @@
 vi.mock('@/lib/auth', () => ({
-  getAuthSession: vi.fn().mockResolvedValue(null),
+  getAuthSession: vi.fn(async () => null),
 }))
 
 vi.mock('@/lib/events/registry', () => ({}))
 
 vi.mock('@/lib/events/bus', () => ({
-  eventBus: { publish: vi.fn().mockResolvedValue(undefined) },
+  eventBus: { publish: vi.fn(async () => undefined) },
 }))
 
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     fetch: vi.fn(),
     create: vi.fn(),
-    getDocument: vi.fn().mockResolvedValue({ _id: 'p1', _type: 'talk' }),
-    patch: vi
-      .fn()
-      .mockReturnValue({ set: vi.fn().mockReturnValue({ commit: vi.fn() }) }),
+    getDocument: vi.fn(async () => ({ _id: 'p1', _type: 'talk' })),
+    patch: vi.fn(() => ({ set: vi.fn(() => ({ commit: vi.fn() })) })),
     delete: vi.fn(),
   },
   // OWNERSHIP PROBE (#730): the admin proposal mutations now resolve the
@@ -49,7 +47,7 @@ vi.mock('@/lib/sanity/client', () => ({
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: vi.fn(),
   // A foreign talk's own conference: unloadable unless a test says otherwise.
-  getConferenceById: vi.fn().mockResolvedValue(null),
+  getConferenceById: vi.fn(async () => null),
 }))
 
 vi.mock('next/cache', async (importOriginal) => ({
@@ -99,7 +97,7 @@ vi.mock('@/lib/messaging/notify', () => ({
 }))
 
 vi.mock('@/lib/slack/notify', () => ({
-  notifyNewProposal: vi.fn().mockResolvedValue(undefined),
+  notifyNewProposal: vi.fn(async () => undefined),
 }))
 
 // The status-change event is handed to `runAfterResponse` (Next `after()` /
@@ -212,7 +210,11 @@ const mockProposal = {
 
 describe('proposal router', () => {
   beforeEach(() => {
-    vi.restoreAllMocks()
+    vi.resetAllMocks()
+    vi.mocked(getProposals).mockResolvedValue({
+      proposals: [],
+      proposalsError: null,
+    })
     vi.mocked(getConferenceForCurrentDomain).mockResolvedValue({
       conference: mockConference as any,
       domain: 'localhost',

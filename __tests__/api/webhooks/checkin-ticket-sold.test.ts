@@ -189,6 +189,7 @@ describe('api/webhooks/checkin/ticket-sold — HMAC signature', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    h.fetch.mockReset()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     // Default: the conference belongs to the platform org on the pro plan,
     // which has the workshop feature (#1295: by plan, with the platform env
@@ -352,6 +353,7 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    h.fetch.mockReset()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     // A configured platform org that matches none of the tenants below, so a
     // case is platform ONLY when it points the contract at its own org id.
@@ -699,6 +701,7 @@ describe('api/webhooks/checkin/ticket-sold — per-tenant credentials (#886)', (
 
   beforeEach(() => {
     vi.clearAllMocks()
+    h.fetch.mockReset()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
     vi.stubEnv('TENANT_SECRETS_JSON', TENANT_SECRETS_JSON)
@@ -823,6 +826,7 @@ describe('api/webhooks/checkin/ticket-sold — uniform failure', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    h.fetch.mockReset()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
     vi.stubEnv('TENANT_SECRETS_JSON', TENANT_SECRETS_JSON)
@@ -861,6 +865,7 @@ describe('api/webhooks/checkin/ticket-sold — uniform failure', () => {
 
     // (b) the event id resolves, but the signature is wrong
     vi.clearAllMocks()
+    h.fetch.mockReset()
     bindConferenceTo('org-tenant2')
     const badSignature = await onTheWire(
       await post(sign(data, 'not-the-tenant-secret'), data),
@@ -991,6 +996,7 @@ describe('api/webhooks/checkin/ticket-sold — pre-filter (no unauthenticated re
 
   beforeEach(() => {
     vi.clearAllMocks()
+    h.fetch.mockReset()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
     bindConferenceTo('org-platform')

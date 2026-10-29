@@ -3,7 +3,7 @@ import { getCopySources } from '@/lib/marketing/copy-sanity'
 import { conferenceOrgId } from '@/lib/marketing/snapshots'
 import type { ReportSnapshot } from '@/lib/marketing/report/types'
 import type { Conference } from '@/lib/conference/types'
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 const fetch = vi.hoisted(() =>
   vi.fn(async (..._args: unknown[]): Promise<unknown> => []),
 )
@@ -19,6 +19,10 @@ import {
   previousSource,
   readReportSnapshots,
 } from '@/lib/marketing/report/data'
+
+// Restores each vi.fn's own implementation, so a case's override cannot
+// reach the next one.
+beforeEach(() => vi.resetAllMocks())
 
 describe('report data boundaries', () => {
   it('refuses a loader without a resolved conference', async () => {

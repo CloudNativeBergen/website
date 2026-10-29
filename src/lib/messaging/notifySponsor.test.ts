@@ -2,8 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // --- Mocks (channel boundaries) --------------------------------------------
 
-const upsertMock = vi.fn().mockResolvedValue(undefined)
-const getOrganizerSpeakerIdsMock = vi.fn().mockResolvedValue(['org-1', 'org-2'])
+const upsertMock = vi.fn<(...args: unknown[]) => Promise<unknown>>(
+  async () => undefined,
+)
+const getOrganizerSpeakerIdsMock = vi.fn<
+  (...args: unknown[]) => Promise<unknown>
+>(async () => ['org-1', 'org-2'])
 vi.mock('@/lib/notification/sanity', () => ({
   upsertMessageNotifications: (...a: unknown[]) => upsertMock(...a),
   getOrganizerSpeakerIds: () => getOrganizerSpeakerIdsMock(),
@@ -13,23 +17,33 @@ vi.mock('@/lib/notification/sanity', () => ({
 // `resolveRoutedOrganizerIds({ teamKey: 'sponsors' })`. Mock the teams SOURCE so
 // the REAL helper runs: default [] proves the ABSENT-MEANS-TODAY fallback (all
 // organizers), and a per-test override exercises members-only routing.
-const getConferenceTeamsMock = vi.fn().mockResolvedValue([])
+const getConferenceTeamsMock = vi.fn<
+  (...args: unknown[]) => Promise<unknown[]>
+>(async () => [])
 vi.mock('@/lib/teams/sanity', () => ({
   getConferenceTeams: (...a: unknown[]) => getConferenceTeamsMock(...a),
 }))
 
-const slackMock = vi.fn().mockResolvedValue(undefined)
+const slackMock = vi.fn<(...args: unknown[]) => Promise<unknown>>(
+  async () => undefined,
+)
 vi.mock('@/lib/slack/notify', () => ({
   notifyNewSpeakerMessage: vi.fn(),
   notifySponsorMessage: (...a: unknown[]) => slackMock(...a),
 }))
 
-const activityMock = vi.fn().mockResolvedValue({ activityId: 'act-1' })
+const activityMock = vi.fn<(...args: unknown[]) => Promise<unknown>>(
+  async () => ({
+    activityId: 'act-1',
+  }),
+)
 vi.mock('@/lib/sponsor-crm/activity', () => ({
   createSponsorActivity: (...a: unknown[]) => activityMock(...a),
 }))
 
-const sponsorEmailMock = vi.fn().mockResolvedValue(2)
+const sponsorEmailMock = vi.fn<(...args: unknown[]) => Promise<unknown>>(
+  async () => 2,
+)
 vi.mock('./sponsorEmail', () => ({
   sendSponsorMessageEmails: (...a: unknown[]) => sponsorEmailMock(...a),
 }))
@@ -93,7 +107,7 @@ const conversation: ConversationWithContext = {
   ],
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => vi.resetAllMocks())
 
 describe('notifySponsorMessage — SPONSOR-authored', () => {
   const message: Message = {

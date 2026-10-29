@@ -100,6 +100,9 @@ function clearTenantVars() {
 }
 
 beforeEach(() => {
+  // A case may break the org read (orgLookupFails); every case starts healthy.
+  orgRows.get = async () => orgRows.rows
+  orgRows.read = async () => orgRows.rows
   h.sent.length = 0
   h.result = { data: { id: 'email_1' } }
   resetSenderPolicyWarnings()
@@ -292,11 +295,6 @@ describe('a failed org lookup never lands mail on the platform account', () => {
     orgRows.get = boom
     orgRows.read = boom
   }
-
-  beforeEach(() => {
-    orgRows.get = async () => orgRows.rows
-    orgRows.read = async () => orgRows.rows
-  })
 
   it('rejects instead of returning the platform client', async () => {
     vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', EXISTING_ACCOUNT_KEY)

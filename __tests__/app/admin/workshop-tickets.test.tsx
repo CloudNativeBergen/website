@@ -358,6 +358,9 @@ afterEach(async () => {
   // dataset, so it cannot write into the next case's.
   await Promise.allSettled(h.saves)
   cleanup()
+  // The /admin/workshops case writes prerendered HTML straight into the body,
+  // which cleanup() does not track.
+  document.body.innerHTML = ''
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
 })

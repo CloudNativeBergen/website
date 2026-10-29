@@ -150,13 +150,15 @@ describe('PostHog on /wall/screen', () => {
       value: beacon,
     })
     const init = vi.spyOn(posthog, 'init')
+    // Fake timers hold the SDK's deferred work (its debounced flags request)
+    // to this run: useRealTimers() drops whatever is still pending, so an
+    // init here cannot send into the next run's spies.
+    vi.useFakeTimers()
     try {
       // Resolves only once a client-side navigation reaches a public route,
       // which a venue screen never makes: give it a moment, then look.
-      await Promise.race([
-        initTenantAnalytics(window),
-        new Promise((resolve) => setTimeout(resolve, 50)),
-      ])
+      void initTenantAnalytics(window)
+      await vi.advanceTimersByTimeAsync(50)
       return {
         init: init.mock.calls.length,
         sent:
@@ -166,6 +168,7 @@ describe('PostHog on /wall/screen', () => {
         script: document.querySelector('script[src*="posthog"]') !== null,
       }
     } finally {
+      vi.useRealTimers()
       vi.restoreAllMocks()
       element.remove()
       window.history.replaceState(null, '', '/')
@@ -180,8 +183,9 @@ describe('PostHog on /wall/screen', () => {
     })
   })
 
-  // Runs after the negative: the SDK keeps its state once initialised. It
-  // sends nothing in 50 ms even here (no consent yet), so the control is
+  // The SDK keeps its state once initialised, so this may run before or
+  // after the negative: runAt holds its timers to the run. It sends nothing
+  // in 50 ms even here (no consent yet), so the control is
   // the init itself, which every request of the SDK needs first.
   it('control: the same setup on the Wall page does start the SDK', async () => {
     const result = await runAt('/wall')
