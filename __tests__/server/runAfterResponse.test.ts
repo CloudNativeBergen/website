@@ -10,7 +10,7 @@ describe('runAfterResponse', () => {
   let errorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 

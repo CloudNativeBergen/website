@@ -89,6 +89,11 @@ import { PendingSummaryView } from './PendingSummary'
 import { PhotoWallAdmin } from './PhotoWallAdmin'
 import { MODERATION_POLL_MS, moderationQueuePolling } from './polling'
 
+// The hoisted tRPC mocks are shared by every test: start each one with no
+// calls and no implementation left by another.
+beforeEach(() => {
+  for (const fn of Object.values(h)) fn.mockReset()
+})
 afterEach(() => {
   cleanup()
   vi.useRealTimers()

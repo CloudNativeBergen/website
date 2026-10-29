@@ -103,7 +103,9 @@ async function promoteTwo() {
 }
 
 beforeEach(async () => {
-  vi.clearAllMocks()
+  // Reset, not clear: a test's `mockImplementation` on the hoisted mocks
+  // (a send that never resolves, a failing delay) must not reach the next.
+  vi.resetAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   await promoteTwo()
 })

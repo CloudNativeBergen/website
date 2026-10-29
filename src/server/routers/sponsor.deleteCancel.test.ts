@@ -109,7 +109,7 @@ function caller() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   store().reset(DATASET)
   h.getConference.mockResolvedValue({
     conference: { _id: CONF, organization: { _ref: ORG } },

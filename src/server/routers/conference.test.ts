@@ -148,7 +148,7 @@ function makeCaller(opts: { isOrganizer?: boolean } | null) {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   lastPatchId = undefined
   lastSet = undefined
   lastUnset = undefined
