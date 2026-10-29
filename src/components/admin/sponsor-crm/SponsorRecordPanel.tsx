@@ -127,6 +127,8 @@ interface SponsorRecordPanelProps {
   canSendDiscountCodes?: boolean
   workshopsEnabled?: boolean
   headerActions?: ReactNode
+  /** Open this send on mount, e.g. the sponsor page's "Send Email". */
+  initialSendKind?: SendableKind
 }
 
 /** The sponsor record side panel, shared by the board and the sponsor page. */
@@ -141,10 +143,13 @@ export function SponsorRecordPanel({
   canSendDiscountCodes = false,
   workshopsEnabled = false,
   headerActions,
+  initialSendKind,
 }: SponsorRecordPanelProps) {
   const { data: session } = useSession()
   const { data: sponsor } = api.sponsor.crm.getById.useQuery({ id: sponsorId })
-  const [sendKind, setSendKind] = useState<SendableKind | null>(null)
+  const [sendKind, setSendKind] = useState<SendableKind | null>(
+    initialSendKind ?? null,
+  )
   const [contractSend, setContractSend] = useState<ContractSendOptions>({})
 
   if (!sponsor) return null

@@ -46,6 +46,8 @@ interface SponsorCRMFormProps {
   onClose: () => void
   onSuccess: (createdId?: string) => void
   existingSponsorsInCRM?: string[]
+  /** Create mode: the tier to start on, e.g. "Add Sponsor" inside a tier. */
+  initialTierId?: string
   initialView?: FormView
   onViewChange?: (view: FormView) => void
   /**
@@ -81,6 +83,7 @@ export function SponsorCRMForm({
   onClose,
   onSuccess,
   existingSponsorsInCRM = [],
+  initialTierId,
   initialView = 'pipeline',
   onViewChange,
   onSendEmail,
@@ -124,7 +127,7 @@ export function SponsorCRMForm({
     address: sponsor?.sponsor.address || '',
     blueskyHandle: sponsor?.sponsor.blueskyHandle || '',
     linkedinUrl: sponsor?.sponsor.linkedinUrl || '',
-    tierId: sponsor?.tier?._id || '',
+    tierId: sponsor?.tier?._id || initialTierId || '',
     addonIds: sponsor?.addons?.map((a) => a._id) || ([] as string[]),
     contractStatus: (sponsor?.contractStatus || 'none') as ContractStatus,
     status: (sponsor?.status || 'prospect') as SponsorStatus,

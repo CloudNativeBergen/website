@@ -167,12 +167,6 @@ export const Overview: Story = {
               hasStory
             />
             <ComponentCard
-              name="SponsorAddModal"
-              path="@/components/admin/sponsor/SponsorAddModal"
-              description="Modal for adding sponsors to a specific tier."
-              hasStory
-            />
-            <ComponentCard
               name="MobileFilterSheet"
               path="@/components/admin/sponsor-crm/MobileFilterSheet"
               description="Bottom sheet filter panel for mobile devices."

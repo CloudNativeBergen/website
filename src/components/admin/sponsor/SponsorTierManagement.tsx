@@ -16,34 +16,48 @@ import { ConferenceSponsor, SponsorTierExisting } from '@/lib/sponsor/types'
 import { formatCurrency } from '@/lib/format'
 import { formatTierLabel, downloadSvg } from '@/lib/sponsor/utils'
 import { useNotification, ConfirmationModal } from '@/components/admin'
-import { SponsorAddModal } from './SponsorAddModal'
+import { useRouter } from 'next/navigation'
+import type { Conference } from '@/lib/conference/types'
+import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
+import {
+  SponsorRecordPanel,
+  useRefreshSponsor,
+  useSponsorRecordPanel,
+} from '@/components/admin/sponsor-crm/SponsorRecordPanel'
 import { api } from '@/lib/trpc/client'
 
 const ADMIN_LOGO_SIZE = { maxWidth: '48px', maxHeight: '48px' }
 
 interface SponsorManagementProps {
-  conferenceId: string
+  conference: Conference
+  domain: string
+  canSendDiscountCodes?: boolean
+  workshopsEnabled?: boolean
   sponsors: ConferenceSponsor[]
   sponsorTiers: SponsorTierExisting[]
   sponsorsByTier: Record<string, ConferenceSponsor[]>
   sortedTierNames: string[]
 }
 
+/**
+ * Sponsors grouped by tier. Adding and editing use the board's flow: the
+ * create form, then the shared record panel (`?sponsor=<id>&view=<tab>`).
+ */
 export function SponsorTierManagement({
-  conferenceId,
-  sponsors: initialSponsors,
+  conference,
+  domain,
+  canSendDiscountCodes = false,
+  workshopsEnabled = false,
+  sponsors,
   sponsorTiers,
-  sponsorsByTier: initialSponsorsByTier,
-  sortedTierNames: initialSortedTierNames,
+  sponsorsByTier,
+  sortedTierNames,
 }: SponsorManagementProps) {
-  const [sponsors, setSponsors] = useState(initialSponsors)
-  const [sponsorsByTier, setSponsorsByTier] = useState(initialSponsorsByTier)
-  const [sortedTierNames, setSortedTierNames] = useState(initialSortedTierNames)
-  const [modalState, setModalState] = useState<{
-    isOpen: boolean
-    preselectedTierId?: string
-    editingSponsor?: ConferenceSponsor | null
-  }>({ isOpen: false, preselectedTierId: undefined, editingSponsor: null })
+  const router = useRouter()
+  const panel = useSponsorRecordPanel({ viewParam: 'view', idParam: 'sponsor' })
+  const refreshSponsor = useRefreshSponsor()
+  // `undefined`: closed; `''`: open with no tier chosen.
+  const [createTierId, setCreateTierId] = useState<string | undefined>()
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean
     sponsorName: string
@@ -58,6 +72,7 @@ export function SponsorTierManagement({
         title: 'Sponsor removed',
         message: 'Sponsor has been successfully removed from the conference.',
       })
+      router.refresh()
     },
     onError: (error) => {
       showNotification({
@@ -68,105 +83,10 @@ export function SponsorTierManagement({
     },
   })
 
-  const addSponsorToState = (newSponsor: ConferenceSponsor) => {
-    setSponsors((prev) =>
-      [...prev, newSponsor].sort((a, b) =>
-        a.sponsor.name.localeCompare(b.sponsor.name),
-      ),
-    )
-
-    setSponsorsByTier((prev) => {
-      const tierName = newSponsor.tier?.title ?? 'No Tier'
-      const currentTierSponsors = prev[tierName] || []
-      const updatedTierSponsors = [...currentTierSponsors, newSponsor].sort(
-        (a, b) => a.sponsor.name.localeCompare(b.sponsor.name),
-      )
-      return {
-        ...prev,
-        [tierName]: updatedTierSponsors,
-      }
-    })
-
-    setSortedTierNames((prev) => {
-      const tierName = newSponsor.tier?.title ?? 'No Tier'
-      if (!prev.includes(tierName)) {
-        return [...prev, tierName]
-      }
-      return prev
-    })
-
-    showNotification({
-      type: 'success',
-      title: 'Sponsor added successfully',
-      message: `${newSponsor.sponsor.name} has been added to the ${newSponsor.tier?.title ?? 'No Tier'} tier.`,
-    })
-  }
-
-  const openAddModal = (tierId?: string) => {
-    setModalState({
-      isOpen: true,
-      preselectedTierId: tierId,
-      editingSponsor: null,
-    })
-  }
+  const openAddModal = (tierId?: string) => setCreateTierId(tierId ?? '')
 
   const openEditModal = (sponsor: ConferenceSponsor) => {
-    setModalState({
-      isOpen: true,
-      editingSponsor: sponsor,
-      preselectedTierId: undefined,
-    })
-  }
-
-  const closeModal = () => {
-    setModalState({
-      isOpen: false,
-      preselectedTierId: undefined,
-      editingSponsor: null,
-    })
-  }
-
-  const updateSponsorInState = (updatedSponsor: ConferenceSponsor) => {
-    setSponsors((prev) =>
-      prev
-        .map((sponsor) =>
-          sponsor.sponsor.name === updatedSponsor.sponsor.name
-            ? updatedSponsor
-            : sponsor,
-        )
-        .sort((a, b) => a.sponsor.name.localeCompare(b.sponsor.name)),
-    )
-
-    setSponsorsByTier((prev) => {
-      const newSponsorsByTier = { ...prev }
-
-      Object.keys(newSponsorsByTier).forEach((tierName) => {
-        newSponsorsByTier[tierName] = newSponsorsByTier[tierName].filter(
-          (sponsor) => sponsor.sponsor.name !== updatedSponsor.sponsor.name,
-        )
-      })
-
-      const tierName = updatedSponsor.tier?.title ?? 'No Tier'
-      if (!newSponsorsByTier[tierName]) {
-        newSponsorsByTier[tierName] = []
-      }
-      newSponsorsByTier[tierName].push(updatedSponsor)
-
-      // Sort sponsors alphabetically within each tier
-      Object.keys(newSponsorsByTier).forEach((tierTitle) => {
-        newSponsorsByTier[tierTitle].sort((a, b) =>
-          a.sponsor.name.localeCompare(b.sponsor.name),
-        )
-      })
-
-      return newSponsorsByTier
-    })
-
-    showNotification({
-      type: 'success',
-      title: 'Sponsor updated successfully',
-      message: `${updatedSponsor.sponsor.name} has been updated.`,
-    })
+    if (sponsor._sfcId) panel.open(sponsor._sfcId)
   }
 
   const handleRemoveSponsor = async (sponsorName: string, sfcId: string) => {
@@ -178,29 +98,10 @@ export function SponsorTierManagement({
   }
 
   const confirmRemoveSponsor = async () => {
-    const { sponsorName, sfcId } = confirmationModal
+    const { sfcId } = confirmationModal
     setConfirmationModal({ isOpen: false, sponsorName: '', sfcId: '' })
-
     try {
       await removeSponsorMutation.mutateAsync({ id: sfcId })
-
-      const updatedSponsors = sponsors
-        .filter((s) => s.sponsor.name !== sponsorName)
-        .sort((a, b) => a.sponsor.name.localeCompare(b.sponsor.name))
-      setSponsors(updatedSponsors)
-
-      const newSponsorsByTier = { ...sponsorsByTier }
-      Object.keys(newSponsorsByTier).forEach((tierName) => {
-        newSponsorsByTier[tierName] = newSponsorsByTier[tierName]
-          .filter((s) => s.sponsor.name !== sponsorName)
-          .sort((a, b) => a.sponsor.name.localeCompare(b.sponsor.name))
-      })
-      setSponsorsByTier(newSponsorsByTier)
-
-      const newSortedTierNames = sortedTierNames.filter(
-        (tierName) => newSponsorsByTier[tierName]?.length > 0,
-      )
-      setSortedTierNames(newSortedTierNames)
     } catch {}
   }
 
@@ -441,21 +342,42 @@ export function SponsorTierManagement({
         </div>
       )}
 
-      <SponsorAddModal
-        key={
-          modalState.editingSponsor
-            ? `edit-${modalState.editingSponsor.sponsor.name}`
-            : modalState.preselectedTierId || 'default'
-        }
-        isOpen={modalState.isOpen}
-        onClose={closeModal}
-        conferenceId={conferenceId}
-        sponsorTiers={sponsorTiers}
-        preselectedTierId={modalState.preselectedTierId}
-        editingSponsor={modalState.editingSponsor}
-        onSponsorAdded={addSponsorToState}
-        onSponsorUpdated={updateSponsorInState}
-      />
+      {createTierId !== undefined && (
+        <SponsorCRMForm
+          conferenceId={conference._id}
+          workshopsEnabled={workshopsEnabled}
+          sponsorStartSet={!!conference.workshopRegistrationSponsorStart}
+          sponsor={null}
+          isOpen
+          initialTierId={createTierId || undefined}
+          onClose={() => setCreateTierId(undefined)}
+          // A new sponsor continues in the side panel, as on the board.
+          onSuccess={(createdId) => {
+            if (createdId) {
+              setCreateTierId(undefined)
+              router.refresh()
+              panel.open(createdId, 'pipeline')
+            }
+          }}
+          existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
+        />
+      )}
+      {panel.id && (
+        <SponsorRecordPanel
+          sponsorId={panel.id}
+          view={panel.view}
+          onViewChange={panel.setView}
+          onClose={panel.close}
+          onChanged={() => {
+            if (panel.id) refreshSponsor(panel.id)
+            router.refresh()
+          }}
+          conference={conference}
+          domain={domain}
+          canSendDiscountCodes={canSendDiscountCodes}
+          workshopsEnabled={workshopsEnabled}
+        />
+      )}
 
       <ConfirmationModal
         isOpen={confirmationModal.isOpen}

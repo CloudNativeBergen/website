@@ -17,6 +17,7 @@ const m = vi.hoisted(() => ({
   notify: vi.fn(),
   global: vi.fn(),
   crmUpdate: vi.fn(),
+  crmCreate: vi.fn(),
   /** What `sponsor.update` answers: data, or an error message. */
   answer: { data: { warnings: [] as string[] } } as
     { data: { warnings: string[] } } | { error: string },
@@ -57,7 +58,7 @@ vi.mock('@/lib/trpc/client', () => {
         update: { useMutation: mutation(m.global, true) },
         crm: {
           update: { useMutation: mutation(m.crmUpdate) },
-          create: { useMutation: mutation(vi.fn()) },
+          create: { useMutation: mutation(m.crmCreate) },
         },
       },
     },
@@ -171,4 +172,53 @@ describe('saving the company’s social accounts', () => {
     )
     expect(m.crmUpdate).not.toHaveBeenCalled()
   })
+})
+
+// What the retired SponsorAddModal's "Edit sponsor" did: the company record
+// (name, website, logos) and the tier, saved from the record panel.
+it('an edited name, website, logo and tier reach the company and the deal', async () => {
+  const { handleSubmit } = hook()
+  await act(() =>
+    handleSubmit(
+      form({
+        name: 'Acme AS',
+        website: 'https://acme.no',
+        logo: '<svg/>',
+        tierId: 'tier-gold',
+      }),
+    ),
+  )
+  expect(m.global).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: sponsor.sponsor._id,
+      data: expect.objectContaining({
+        name: 'Acme AS',
+        website: 'https://acme.no',
+        logo: '<svg/>',
+      }),
+    }),
+  )
+  expect(m.crmUpdate).toHaveBeenCalledWith(
+    expect.objectContaining({ id: sponsor._id, tier: 'tier-gold' }),
+  )
+})
+
+// The retired SponsorAddModal's "Add Sponsor" with an existing company: the
+// create form links that company to this conference on the chosen tier.
+it('a new deal links an existing company on the chosen tier', async () => {
+  const { handleSubmit } = renderHook(() =>
+    useSponsorCRMFormMutations({
+      conferenceId: 'conf-A',
+      sponsor: null,
+      isOpen: true,
+      onSuccess: vi.fn(),
+    }),
+  ).result.current
+  await act(() =>
+    handleSubmit(form({ sponsorId: 'sp-existing', tierId: 'tier-gold' })),
+  )
+  expect(m.crmCreate).toHaveBeenCalledWith(
+    expect.objectContaining({ sponsor: 'sp-existing', tier: 'tier-gold' }),
+  )
+  expect(m.global).not.toHaveBeenCalled()
 })

@@ -743,7 +743,7 @@ async function blueskyHandleWarnings(
 /**
  * SE-3: sanitize sponsor logo SVG fields SERVER-SIDE before persistence.
  *
- * Sponsor logos are `inlineSvg` strings uploaded by organizers (SponsorAddModal)
+ * Sponsor logos are `inlineSvg` strings uploaded by organizers (the record panel's logo editor)
  * AND by sponsors themselves via the public registration portal — the client
  * `sanitizeSvg` pass is defence-in-depth only and is trivially bypassed by a
  * crafted request. This is the authoritative gate: a hard rejection (oversize /

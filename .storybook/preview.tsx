@@ -126,7 +126,6 @@ const preview: Preview = {
                   'SponsorTiersPage',
                   'SponsorTierManagement',
                   'SponsorTierEditor',
-                  'SponsorAddModal',
                 ],
                 'Contracts',
                 ['ContractTemplateListPage', 'ContractTemplateEditorPage'],

@@ -2,12 +2,26 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ConferenceSponsor } from '@/lib/sponsor/types'
 import { ErrorDisplay, SponsorTiersPageClient } from '@/components/admin'
 import { sortTierNamesByValue } from '@/lib/sponsor/utils'
+import { denyNonOrganizer } from '@/lib/authz/page-guard'
+import { headers } from 'next/headers'
+import { isTicketingEnabledForConference } from '@/lib/features/ticketing'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 
+// `?sponsor=<id>&view=<tab>` opens that sponsor in the shared record panel.
 export default async function AdminSponsorTiers() {
+  const domain = (await headers()).get('host') || 'localhost:3000'
+
+  // The record panel's Send modal needs `sponsorRegistrationLink`, a ticket
+  // token, so this page refuses non-organizers before the read, like the board.
+  const denied = await denyNonOrganizer()
+  if (denied) return denied
+
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({
       sponsors: true,
       sponsorTiers: true,
+      organizers: true,
+      includeSponsorRegistrationLink: true,
     })
 
   if (conferenceError) {
@@ -48,6 +62,12 @@ export default async function AdminSponsorTiers() {
   return (
     <SponsorTiersPageClient
       conference={conference}
+      domain={domain}
+      canSendDiscountCodes={
+        !!conference.checkinEventId &&
+        (await isTicketingEnabledForConference(conference))
+      }
+      workshopsEnabled={await isWorkshopsEnabledForConference(conference)}
       sponsors={sponsors}
       sponsorTiers={sponsorTiers}
       sponsorsByTier={sponsorsByTier}
