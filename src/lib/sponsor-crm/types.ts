@@ -17,22 +17,26 @@ export type ContractStatus =
 export type SignatureStatus =
   'not-started' | 'pending' | 'signed' | 'rejected' | 'expired'
 
-export type ActivityType =
-  | 'stage_change'
-  | 'invoice_status_change'
-  | 'contract_status_change'
-  | 'contract_signed'
-  | 'note'
-  | 'email'
-  | 'call'
-  | 'meeting'
-  | 'signature_status_change'
-  | 'registration_complete'
-  | 'contract_reminder_sent'
+/** Every activity type with its label (mirrors the sponsorActivity schema). */
+export const ACTIVITY_TYPE_LABELS = {
+  stage_change: 'Stage Change',
+  invoice_status_change: 'Invoice Status Change',
+  contract_status_change: 'Contract Status Change',
+  contract_signed: 'Contract Signed',
+  note: 'Note',
+  email: 'Email',
+  call: 'Call',
+  meeting: 'Meeting',
+  signature_status_change: 'Signature Status Change',
+  registration_complete: 'Registration Complete',
+  contract_reminder_sent: 'Contract Reminder Sent',
   // A sponsor↔organizer thread message (messaging G2b).
-  | 'message'
+  message: 'Message',
   // Discount codes linked to the sponsor without a send (#1262).
-  | 'discount_codes_assigned'
+  discount_codes_assigned: 'Discount Codes Assigned',
+} as const
+
+export type ActivityType = keyof typeof ACTIVITY_TYPE_LABELS
 
 /**
  * What kind of email a sent-communication record is (#1261). Slice 1 sends
