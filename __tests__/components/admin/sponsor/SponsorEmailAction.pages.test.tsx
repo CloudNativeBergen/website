@@ -41,7 +41,9 @@ describe('Email sponsors on every sponsor page that had a broadcast', () => {
     render(
       <SponsorContactActions visibleSponsors={[]} conference={conference} />,
     )
-    expect(screen.getAllByRole('button', { name: 'Email sponsors' })).toHaveLength(1)
+    expect(
+      screen.getAllByRole('button', { name: 'Email sponsors' }),
+    ).toHaveLength(1)
   })
 
   it('renders on the tiers page', () => {
@@ -55,6 +57,8 @@ describe('Email sponsors on every sponsor page that had a broadcast', () => {
         sortedTierNames={[]}
       />,
     )
-    expect(screen.getAllByRole('button', { name: 'Email sponsors' })).toHaveLength(1)
+    expect(
+      screen.getAllByRole('button', { name: 'Email sponsors' }),
+    ).toHaveLength(1)
   })
 })

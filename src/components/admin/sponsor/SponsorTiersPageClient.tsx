@@ -197,7 +197,6 @@ export function SponsorTiersPageClient({
           </CollapsibleSection>
         </div>
       </div>
-
     </>
   )
 }

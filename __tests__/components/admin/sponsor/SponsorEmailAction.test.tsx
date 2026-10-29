@@ -19,7 +19,11 @@ vi.mock('@/lib/trpc/client', () => ({
                 contactCount: 2,
                 sponsorCount: 1,
                 recipients: [
-                  { email: 'kari@acme.test', name: 'Kari', sponsorName: 'Acme' },
+                  {
+                    email: 'kari@acme.test',
+                    name: 'Kari',
+                    sponsorName: 'Acme',
+                  },
                   { email: 'ola@acme.test', name: 'Ola', sponsorName: 'Acme' },
                 ],
               },

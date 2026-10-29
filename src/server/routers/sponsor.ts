@@ -244,7 +244,6 @@ import {
 import { logBulkEmailSent } from '@/lib/sponsor-crm/activity'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
-import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import type { SponsorEmailTemplate } from '@/lib/sponsor/types'
 import { publishSponsorStatusChange } from '@/lib/sponsor-crm/events'
 import '@/lib/events/registry'

@@ -592,7 +592,9 @@ describe('a sync refuses to reconcile against a partial roster (#895)', () => {
 
 describe('the sponsor audience keeps its opt-outs when a send narrows it (#1704)', () => {
   it('removes subscribed contacts outside the filter but keeps unsubscribed ones', async () => {
-    const created = await account.create({ name: `Alpha Sponsors [${CONF_ID}]` })
+    const created = await account.create({
+      name: `Alpha Sponsors [${CONF_ID}]`,
+    })
     const audienceId = created.data.id
     account.fillWith(
       audienceId,
@@ -600,7 +602,10 @@ describe('the sponsor audience keeps its opt-outs when a send narrows it (#1704)
       ['optout@a.test'],
     )
 
-    const result = await syncSponsorAudience(conference, asContacts(['in@a.test']))
+    const result = await syncSponsorAudience(
+      conference,
+      asContacts(['in@a.test']),
+    )
 
     expect(result.success).toBe(true)
     expect(account.contactsIn(audienceId).sort()).toEqual([

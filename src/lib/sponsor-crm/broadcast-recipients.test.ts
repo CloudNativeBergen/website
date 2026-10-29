@@ -16,7 +16,11 @@ const sfc = (
     status,
     tier: tierId ? { _id: tierId, title: tierId } : undefined,
     sponsor: { name: id },
-    contactPersons: contacts.map((c, i) => ({ _key: `k${i}`, name: 'A B', ...c })),
+    contactPersons: contacts.map((c, i) => ({
+      _key: `k${i}`,
+      name: 'A B',
+      ...c,
+    })),
   }) as unknown as SponsorForConferenceExpanded
 
 const sponsors = [
@@ -33,8 +37,10 @@ const sponsors = [
 ]
 
 const emails = (input: unknown) =>
-  resolveBroadcastRecipients(sponsors, BroadcastFiltersSchema.parse(input))
-    .recipients.map((r) => r.email)
+  resolveBroadcastRecipients(
+    sponsors,
+    BroadcastFiltersSchema.parse(input),
+  ).recipients.map((r) => r.email)
 
 describe('resolveBroadcastRecipients', () => {
   it('defaults to every contact at closed-won sponsors, deduplicated', () => {
@@ -42,7 +48,10 @@ describe('resolveBroadcastRecipients', () => {
   })
 
   it('filters by tier', () => {
-    expect(emails({ tierIds: ['silver'] })).toEqual(['p@beta.test', 'P@ACME.test'])
+    expect(emails({ tierIds: ['silver'] })).toEqual([
+      'p@beta.test',
+      'P@ACME.test',
+    ])
   })
 
   it('filters by stage', () => {

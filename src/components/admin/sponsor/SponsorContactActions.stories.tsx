@@ -173,7 +173,8 @@ export const Documentation: Story = {
         </h3>
         <p className="mt-2 text-sm text-blue-700 dark:text-blue-300">
           Used on the /admin/sponsors/contacts page as the header action bar.
-          Renders SponsorEmailAction, the same action as the overview and tiers pages.
+          Renders SponsorEmailAction, the same action as the overview and tiers
+          pages.
         </p>
       </div>
     </div>

@@ -30,10 +30,7 @@ export const BroadcastFiltersSchema = z
   .object({
     /** Tier ids; empty means every tier (and sponsors without one). */
     tierIds: z.array(z.string().min(1)).max(100).default([]),
-    statuses: z
-      .array(z.enum(SPONSOR_STATUSES))
-      .min(1)
-      .default(['closed-won']),
+    statuses: z.array(z.enum(SPONSOR_STATUSES)).min(1).default(['closed-won']),
     contactRole: z.enum(BROADCAST_CONTACT_ROLES).default('all'),
   })
   .strict()

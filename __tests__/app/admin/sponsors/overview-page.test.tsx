@@ -60,10 +60,9 @@ describe('sponsor page names (#1704 C2)', () => {
         .getAllByRole('link')
         .find((a) => a.getAttribute('href') === href)
       expect(card, href).toHaveTextContent(title)
-      expect(
-        ADMIN_DESTINATIONS.find((d) => d.href === href)?.title,
-        href,
-      ).toBe(title)
+      expect(ADMIN_DESTINATIONS.find((d) => d.href === href)?.title, href).toBe(
+        title,
+      )
     }
   })
 })
