@@ -3,10 +3,27 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay } from '@/components/admin'
 import { SponsorCRMPageClient } from '@/components/admin/sponsor-crm'
 import { headers } from 'next/headers'
+import { permanentRedirect } from 'next/navigation'
 import { isTicketingEnabledForConference } from '@/lib/features/ticketing'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 
-export default async function AdminSponsorsCRM() {
+export default async function AdminSponsorsCRM({
+  searchParams,
+}: {
+  searchParams: Promise<{ sponsor?: string; view?: string; board?: string }>
+}) {
+  // Old links opened the sponsor as a modal on the board
+  // (`?sponsor=<id>&view=<tab>`, also stored in notifications). The sponsor
+  // now has its own page (#1274), so keep those links working.
+  const { sponsor, view, board } = await searchParams
+  if (sponsor) {
+    const params = new URLSearchParams()
+    if (view) params.set('view', view)
+    if (board) params.set('board', board)
+    const qs = params.size ? `?${params}` : ''
+    permanentRedirect(`/admin/sponsors/${encodeURIComponent(sponsor)}${qs}`)
+  }
+
   const headerList = await headers()
   const domain = headerList.get('host') || 'localhost:3000'
 

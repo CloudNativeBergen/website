@@ -6,7 +6,7 @@
  * "Workshop early access" kind, for that sponsor.
  *
  * The intent travels through three components (the section, the contract
- * view, the record's form) to the pipeline, which owns the modal. A prop
+ * view, the record's form) to the sponsor page, which owns the modal. A prop
  * dropped on the way leaves no button and no error, so the REAL four are
  * rendered here together. Stubbed: the board around them, the panels of the
  * record this is not about, and the Send modal itself (its own behaviour is
@@ -43,8 +43,8 @@ vi.mock('@/lib/trpc/client', () => {
   const procedure = (path: string) => ({
     useQuery: (_input: unknown, options?: { enabled?: boolean }) => {
       if (options?.enabled !== false) h.asked.push(path)
-      return path === 'sponsor.crm.list'
-        ? { data: h.sponsors, isLoading: false }
+      return path === 'sponsor.crm.getById'
+        ? { data: h.sponsors[0], isLoading: false }
         : { data: undefined, isLoading: false, isError: false }
     },
     useMutation: () => ({
@@ -77,6 +77,9 @@ vi.mock('@/lib/trpc/client', () => {
   }
 })
 
+vi.mock('@/components/admin/NotificationProvider', () => ({
+  useNotification: () => ({ showNotification: vi.fn() }),
+}))
 vi.mock('@/hooks/useSponsorDragDrop', () => ({
   __esModule: true,
   useSponsorDragDrop: () => ({
@@ -191,7 +194,7 @@ vi.mock('@/components/admin/OrganizerSignatureCapture', () => ({
   OrganizerSignatureCapture: nothing,
 }))
 
-import { SponsorCRMPipeline } from '@/components/admin/sponsor-crm/SponsorCRMPipeline'
+import { SponsorDashboardClient } from '@/app/(admin)/admin/sponsors/[id]/SponsorDashboardClient'
 
 const conference = {
   _id: 'conf-2026',
@@ -207,13 +210,14 @@ function openRecord(
   workshopsEnabled = true,
 ) {
   h.sponsors = [mockSponsor({ _id: 'sfc-acme', ...sponsor })]
-  searchParams = new URLSearchParams('sponsor=sfc-acme&view=contract')
+  searchParams = new URLSearchParams('view=contract')
   return render(
-    <SponsorCRMPipeline
-      conferenceId="conf-2026"
+    <SponsorDashboardClient
+      sponsorId="sfc-acme"
       conference={conference}
       domain="cloudnativebergen.dev"
       workshopsEnabled={workshopsEnabled}
+      initialView="contract"
     />,
   )
 }
@@ -259,6 +263,6 @@ describe('"Send by email" in the early-access section', () => {
 
     expect(h.asked.filter((path) => path.includes('earlyAccess'))).toEqual([])
     // The mock does record what IS asked.
-    expect(h.asked).toContain('sponsor.crm.list')
+    expect(h.asked).toContain('sponsor.crm.getById')
   })
 })

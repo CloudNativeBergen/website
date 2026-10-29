@@ -1,3 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import {
+  SPONSOR_OVERVIEW_FIELDS,
+  SPONSOR_CONTACTS_FIELDS,
+  SPONSOR_CONTRACT_FIELDS,
+} from './queries'
 import {
   clientWrite,
   clientReadCached,
@@ -893,3 +899,29 @@ export async function importAllHistoricSponsors(
     return { error: error as Error }
   }
 }
+
+// Scoped to the conference in GROQ, so an id from another tenant and an id that
+// does not exist both come back as null: the caller cannot tell them apart.
+async function getSponsorProjection(
+  id: string,
+  conferenceId: string,
+  fields: string,
+): Promise<{ data?: any; error?: Error }> {
+  try {
+    const data = await clientRead.fetch(
+      `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{${fields}}`,
+      { id, conferenceId },
+    )
+    return { data: data ?? null }
+  } catch (error) {
+    console.error('Error fetching sponsor projection:', error)
+    return { error: error as Error }
+  }
+}
+
+export const getSponsorOverview = (id: string, conferenceId: string) =>
+  getSponsorProjection(id, conferenceId, SPONSOR_OVERVIEW_FIELDS)
+export const getSponsorContacts = (id: string, conferenceId: string) =>
+  getSponsorProjection(id, conferenceId, SPONSOR_CONTACTS_FIELDS)
+export const getSponsorContractDetails = (id: string, conferenceId: string) =>
+  getSponsorProjection(id, conferenceId, SPONSOR_CONTRACT_FIELDS)

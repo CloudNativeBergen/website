@@ -1,0 +1,101 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import type { Conference } from '@/lib/conference/types'
+import { SponsorDashboardClient } from './SponsorDashboardClient'
+import { http, HttpResponse } from 'msw'
+import { mockSponsor } from '@/__mocks__/sponsor-data'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
+
+const meta: Meta<typeof SponsorDashboardClient> = {
+  title: 'Admin/Sponsor CRM/SponsorDashboardClient',
+  component: SponsorDashboardClient,
+  parameters: {
+    layout: 'fullscreen',
+  },
+  decorators: [
+    (Story) => (
+      <NotificationProvider>
+        <Story />
+      </NotificationProvider>
+    ),
+  ],
+}
+
+export default meta
+type Story = StoryObj<typeof SponsorDashboardClient>
+
+const mockOverview = {
+  sponsor: {
+    _id: 'sponsor-1',
+    name: 'Acme Corp',
+    logo: 'https://via.placeholder.com/150',
+  },
+  status: 'negotiating',
+  tier: { title: 'Gold Tier', price: 10000 },
+  conference: { _ref: 'conf-1' },
+}
+
+const trpcResult = (data: any) => HttpResponse.json({ result: { data } })
+
+export const Default: Story = {
+  args: {
+    sponsorId: 'sponsor-1',
+    conference: { _id: 'conf-1', title: 'Cloud Native Days' } as Conference,
+    domain: 'cloudnativedays.no',
+    initialOverview: mockOverview,
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        // The full record the header buttons and Manage links open.
+        http.get('/api/trpc/sponsor.crm.getById', () =>
+          trpcResult(
+            mockSponsor({
+              _id: 'sponsor-1',
+              status: 'negotiating',
+              sponsor: { _id: 'sponsor-1', name: 'Acme Corp' } as any,
+            }),
+          ),
+        ),
+        http.get('/api/trpc/sponsor.crm.getOverview', () =>
+          trpcResult(mockOverview),
+        ),
+        http.get('/api/trpc/sponsor.crm.getContacts', () =>
+          trpcResult({
+            sponsor: { _id: 'sponsor-1' },
+            contactPersons: [
+              {
+                _key: 'c1',
+                name: 'Jane Doe',
+                email: 'jane@acme.com',
+                roles: ['decision-maker'],
+              },
+            ],
+            billing: { email: 'billing@acme.com' },
+          }),
+        ),
+        http.get('/api/trpc/sponsor.crm.getContractDetails', () =>
+          trpcResult({
+            sponsor: { _id: 'sponsor-1' },
+            contractValue: 10000,
+            contractCurrency: 'NOK',
+            contractStatus: 'verbal-agreement',
+            invoiceStatus: 'not-sent',
+            tags: [{ value: 'warm-lead', label: 'Warm Lead' }],
+          }),
+        ),
+        http.get('/api/trpc/sponsor.crm.activities.list', () =>
+          trpcResult([
+            {
+              _id: 'act-1',
+              activityType: 'note',
+              description: 'Called Jane, she wants Gold tier.',
+              createdBy: { name: 'Admin' },
+              _createdAt: '2026-10-01T09:00:00.000Z',
+            },
+          ]),
+        ),
+      ],
+    },
+  },
+}
