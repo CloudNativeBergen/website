@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
+import { MAX_WORKSHOP_CAPACITY } from '@/lib/proposal/types'
 
 /**
  * Full signup payload INCLUDING the user identity fields. This is only safe for
@@ -130,7 +131,7 @@ export const updateWorkshopCapacitySchema = z.object({
     .number()
     .int()
     .positive('Capacity must be positive')
-    .max(500, 'Capacity too large'),
+    .max(MAX_WORKSHOP_CAPACITY, 'Capacity too large'),
 })
 
 /** Owner/organizer composing a broadcast announcement to confirmed participants. */

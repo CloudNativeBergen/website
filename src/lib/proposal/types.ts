@@ -38,6 +38,11 @@ export enum Format {
   workshop_240 = 'workshop_240',
 }
 
+/** The most seats an organizer may give a workshop. */
+export const MAX_WORKSHOP_CAPACITY = 500
+/** The most seats a speaker may ask for; more is the organizers' call. */
+export const MAX_SPEAKER_WORKSHOP_CAPACITY = 200
+
 export function isWorkshopFormat(format: Format): boolean {
   return format === Format.workshop_120 || format === Format.workshop_240
 }

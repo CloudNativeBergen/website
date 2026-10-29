@@ -8,6 +8,7 @@ import {
   Status,
   ReviewStatus,
   isWorkshopFormat,
+  MAX_WORKSHOP_CAPACITY,
 } from '@/lib/proposal/types'
 import { Flags } from '@/lib/speaker/types'
 import { canonicalEmail, normalizeEmail } from '@/lib/speaker/email'
@@ -98,6 +99,12 @@ const ProposalInputBaseSchema = z.object({
     .number()
     .int('Capacity must be a whole number')
     .positive('Capacity must be at least 1')
+    // The absolute bound, as in the Sanity schema (talk.ts). A speaker's own
+    // limit (200) is checked in the proposal router, where it knows who asks.
+    .max(
+      MAX_WORKSHOP_CAPACITY,
+      `Capacity cannot exceed ${MAX_WORKSHOP_CAPACITY} participants`,
+    )
     .nullable()
     .optional()
     .transform(nullToUndefined),

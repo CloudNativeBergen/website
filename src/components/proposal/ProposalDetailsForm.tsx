@@ -11,6 +11,7 @@ import {
   languages,
   Level,
   levels,
+  MAX_SPEAKER_WORKSHOP_CAPACITY,
   ProposalInput,
 } from '@/lib/proposal/types'
 import { Topic } from '@/lib/topic/types'
@@ -373,7 +374,12 @@ export function ProposalDetailsForm({
                 }
               />
               <HelpText>
-                Maximum number of participants for the workshop (1-200)
+                Maximum number of participants for the workshop (1-
+                {MAX_SPEAKER_WORKSHOP_CAPACITY})
+                {proposal?.capacity &&
+                  proposal.capacity > MAX_SPEAKER_WORKSHOP_CAPACITY &&
+                  capacity === proposal.capacity &&
+                  `. Set to ${proposal.capacity} by the organizers.`}
               </HelpText>
             </div>
           )}

@@ -179,7 +179,7 @@ export default defineType({
       validation: (Rule) =>
         Rule.integer()
           .min(1)
-          .max(200)
+          .max(500)
           .custom((capacity, context) => {
             const format = context.document?.format as string | undefined
             const isWorkshop =
@@ -196,8 +196,10 @@ export default defineType({
               if (!Number.isInteger(capacity))
                 return 'Capacity must be a whole number'
               if (capacity < 1) return 'Capacity must be at least 1'
-              if (capacity > 200)
-                return 'Capacity cannot exceed 200 participants'
+              // Organizers may set up to 500; speakers are held to 200 by
+              // the proposal router.
+              if (capacity > 500)
+                return 'Capacity cannot exceed 500 participants'
             }
             return true
           }),
