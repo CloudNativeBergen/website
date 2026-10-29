@@ -130,6 +130,13 @@ export const Paused: Story = {
 export const PausedKeyboard: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
+    // The header comes first: the back link, then the quick Open posting.
+    await userEvent.tab()
+    await expect(canvas.getByRole('link', { name: 'Photo Wall' })).toHaveFocus()
+    await userEvent.tab()
+    await expect(
+      canvas.getByRole('button', { name: 'Open posting' }),
+    ).toHaveFocus()
     await userEvent.tab()
     await expect(canvas.getByRole('radio', { name: 'Paused' })).toHaveFocus()
     await userEvent.keyboard('{ArrowLeft}')
