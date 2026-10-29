@@ -477,6 +477,7 @@ describe('approveAllPending (§10)', () => {
     await expect(run()).resolves.toEqual({
       approved: 3,
       approvedIds: [id(1), id(2), id(3)],
+      decidedAt: T,
       pending: 3,
       deviceKeys: ['device-1'],
       talkIds: ['talk-1'],
@@ -596,6 +597,7 @@ describe('approveAllPending (§10)', () => {
     await expect(run(undefined, [])).resolves.toEqual({
       approved: 0,
       approvedIds: [],
+      decidedAt: T,
       pending: 0,
       deviceKeys: [],
       talkIds: [],
@@ -653,11 +655,66 @@ describe('approveAllPending (§10)', () => {
     await expect(run()).resolves.toEqual({
       approved: 0,
       approvedIds: [],
+      decidedAt: T,
       pending: 0,
       deviceKeys: [],
       talkIds: [],
     })
     expect(store().commits).toEqual([])
+  })
+})
+
+describe('Undo of Approve all (§10): Remove guarded by the batch’s decidedAt', () => {
+  const LATER = new Date('2026-10-26T09:05:00.000Z')
+  const batch = () =>
+    approveAllPending({
+      conferenceId: 'conf-A',
+      shown: [
+        {
+          id: P1,
+          createdAt:
+            (store().doc(P1)?._createdAt as string | undefined) ?? null,
+          assetId: null,
+        },
+      ],
+      now: NOW,
+    })
+  const undo = (decidedAt: string) =>
+    moderateWallPost({
+      conferenceId: 'conf-A',
+      postId: P1,
+      action: 'remove',
+      from: 'approved',
+      decidedAt,
+      now: LATER,
+    })
+
+  it('removes a post the batch approved, its answer lost or not', async () => {
+    const { decidedAt } = await batch()
+    await expect(undo(decidedAt)).resolves.toMatchObject({ status: 'done' })
+    expect(store().doc(P1)?.status).toBe('notShown')
+  })
+
+  it('a post the batch never approved is changed, nothing written', async () => {
+    await expect(undo(T)).resolves.toEqual({ status: 'changed' })
+    expect(store().doc(P1)?.status).toBe('pending')
+    expect(store().commits).toEqual([])
+  })
+
+  it('another organizer approved it in parallel: the batch skipped it, Undo leaves it', async () => {
+    store().beforeNextCommit(() => act('approve', 'pending', LATER))
+    const { decidedAt, approved } = await batch()
+    expect(approved).toBe(0)
+    await expect(undo(decidedAt)).resolves.toEqual({ status: 'changed' })
+    expect(store().doc(P1)?.status).toBe('approved')
+  })
+
+  it('removed and approved again since: Undo leaves the newer approval', async () => {
+    const { decidedAt } = await batch()
+    await act('remove', 'approved', LATER)
+    await act('approve', 'notShown', new Date('2026-10-26T09:06:00.000Z'))
+    await expect(undo(decidedAt)).resolves.toEqual({ status: 'changed' })
+    expect(store().doc(P1)?.status).toBe('approved')
   })
 })
 
@@ -739,6 +796,7 @@ describe('a wall closed by the retention cron (§11.1)', () => {
     expect(result).toEqual({
       approved: 0,
       approvedIds: [],
+      decidedAt: T,
       pending: 2,
       deviceKeys: [],
       talkIds: [],

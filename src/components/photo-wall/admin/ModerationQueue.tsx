@@ -59,6 +59,7 @@ export function ModerationQueue({ posting }: { posting?: PostingState }) {
   const onAction = async (
     post: ModerationPost,
     action: PostAction,
+    decidedAt?: string,
   ): Promise<PostActionOutcome> => {
     const id = post._id
     // Which post the card showed: never an action on a replacement under
@@ -76,8 +77,14 @@ export function ModerationQueue({ posting }: { posting?: PostingState }) {
           return (await reject.mutateAsync({ id, shown })).status
         case 'remove':
           if (!allowsFrom('remove', post.status)) return 'changed'
-          return (await remove.mutateAsync({ id, from: post.status, shown }))
-            .status
+          return (
+            await remove.mutateAsync({
+              id,
+              from: post.status,
+              decidedAt,
+              shown,
+            })
+          ).status
         case 'withdrawMarketing':
           return (await withdrawMarketing.mutateAsync({ id, shown })).status
         case 'delete': {
@@ -184,10 +191,14 @@ export interface ModerationQueueViewProps {
   loading?: boolean
   /** The last read failed; with `queue`, the one before it is still shown. */
   failed?: boolean
-  /** Runs a card's action; without it the cards are read only. */
+  /**
+   * Runs a card's action; without it the cards are read only. `decidedAt`
+   * (Remove only) is the decision time the post must still carry.
+   */
   onAction?: (
     post: ModerationPost,
     action: PostAction,
+    decidedAt?: string,
   ) => Promise<PostActionOutcome>
   /**
    * Approve all pending of these posts (the Pending cards shown); without it
@@ -195,7 +206,7 @@ export interface ModerationQueueViewProps {
    */
   onApproveAll?: (
     posts: ModerationPost[],
-  ) => Promise<{ approved: number; approvedIds?: string[] }>
+  ) => Promise<{ approved: number; decidedAt?: string }>
   /** The cards' tag picker and its write (Talk photos spec §6.3). */
   talks?: WallPostCardProps['talks']
   onSetTalk?: WallPostCardProps['onSetTalk']
@@ -418,19 +429,20 @@ export function ModerationQueueView({
     setNotice('')
     setUndoable(null)
     try {
-      const { approved, approvedIds = [] } = await onApproveAll(shownNow)
+      const { approved, decidedAt } = await onApproveAll(shownNow)
       const photos = `${approved} ${approved === 1 ? 'photo' : 'photos'}`
       if (approved !== shownNow.length) {
         setNotice(
           `Approved ${approved} of ${shownNow.length}. The others changed meanwhile or took too long; any still pending can be approved again.`,
         )
       }
-      // One Undo for the batch: exactly the posts it approved.
-      const taken = shownNow.filter((post) => approvedIds.includes(post._id))
-      if (taken.length && onAction) {
+      // One Undo for the batch: every post it SENT, acknowledged or not.
+      // Each Remove requires the batch's decision time, so a post that was
+      // never approved, or approved by anyone else, is left as it is.
+      if (approved && decidedAt && onAction) {
         setUndoable({
-          says: `Approved ${photos} · Undo takes ${taken.length === 1 ? 'it' : 'them'} off the wall`,
-          undo: () => void undoApproveAll(taken),
+          says: `Approved ${photos} · Undo takes ${approved === 1 ? 'it' : 'them'} off the wall`,
+          undo: () => void undoApproveAll(shownNow, decidedAt),
         })
       } else if (approved === shownNow.length) {
         setNotice(`Approved ${photos}.`)
@@ -444,25 +456,33 @@ export function ModerationQueueView({
     }
   }
 
-  /** Undo of Approve all: Remove each post it approved, four at a time. */
-  const undoApproveAll = async (taken: ModerationPost[]) => {
+  /**
+   * Undo of Approve all: Remove each post it sent, four at a time. One not
+   * approved by this batch is refused as `changed`: nothing to undo.
+   */
+  const undoApproveAll = async (sent: ModerationPost[], decidedAt: string) => {
     if (!onAction) return
     setNotice('')
     let next = 0
     let done = 0
+    let failed = 0
     const worker = async () => {
-      while (next < taken.length) {
-        const post = taken[next++]
+      while (next < sent.length) {
+        const post = sent[next++]
         const after = { ...post, status: 'approved' as const }
-        if ((await onAction(after, 'remove').catch(() => 'failed')) === 'done')
-          done += 1
+        const outcome = await onAction(after, 'remove', decidedAt).catch(
+          () => 'failed' as const,
+        )
+        if (outcome === 'done') done += 1
+        else if (outcome === 'failed') failed += 1
       }
     }
     await Promise.all([0, 1, 2, 3].map(worker))
+    const photos = `${done} ${done === 1 ? 'photo' : 'photos'}`
     setNotice(
-      done === taken.length
-        ? `Took ${done} ${done === 1 ? 'photo' : 'photos'} off the wall. They’re in Not shown.`
-        : `Took ${done} of ${taken.length} off the wall. The others changed meanwhile or failed.`,
+      failed
+        ? `Took ${photos} off the wall. ${failed} could not be taken off; remove ${failed === 1 ? 'it' : 'them'} by hand.`
+        : `Took ${photos} off the wall. They’re in Not shown.`,
     )
   }
 

@@ -165,7 +165,7 @@ const meta = {
     onAction: fn(async (): Promise<PostActionOutcome> => 'done'),
     onApproveAll: fn<ApproveAllFn>(async (posts) => ({
       approved: posts.length,
-      approvedIds: posts.map((p) => p._id),
+      decidedAt: '2026-10-29T10:00:00.000Z',
       pending: posts.length,
     })),
   },
