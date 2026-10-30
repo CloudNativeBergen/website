@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/overdue-invoices",
+      "schedule": "0 7 * * *"
+    },
+    {
       "path": "/api/cron/content-judgement-sweep",
       "schedule": "50 4 * * *"
     },
