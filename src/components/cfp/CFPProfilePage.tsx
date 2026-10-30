@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react'
 import { useState, useEffect, useCallback } from 'react'
 import { Speaker, SpeakerInput } from '@/lib/speaker/types'
 import { api } from '@/lib/trpc/client'
+import { withoutNarrowlyAutosavedFields } from '@/lib/speaker/utils'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { SelfTalkPhotosOptOutSwitch } from '@/components/photo-wall/talk/TalkPhotosOptOutSwitch'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -68,9 +69,11 @@ export function CFPProfilePage({
     onSuccess: async (data) => {
       setSuccessMessage('Profile updated successfully!')
       setTimeout(() => setSuccessMessage(''), 3000)
+      setSpeakerData(data)
       refreshProfile()
       await update({ speaker: data })
     },
+    onError: (err) => setSubmitError([err.message]),
   })
 
   const [submitError, setSubmitError] = useState<string[]>([])
@@ -132,10 +135,9 @@ export function CFPProfilePage({
     speakerId: speaker._id,
   })
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync speaker data with profile
-    setSpeakerData(profile || initialSpeaker)
-  }, [profile, initialSpeaker])
+  // No effect syncing `speakerData` from `profile`: any refetch (e.g. after
+  // the message-emails autosave) would wipe unsaved form edits. A successful
+  // save writes the server copy back instead.
 
   useEffect(() => {
     if (uploadError) {
@@ -159,7 +161,7 @@ export function CFPProfilePage({
     setSubmitError([])
     setSuccessMessage('')
 
-    updateProfileMutation.mutate(speakerData)
+    updateProfileMutation.mutate(withoutNarrowlyAutosavedFields(speakerData))
   }
 
   if (profileError && !profile) {

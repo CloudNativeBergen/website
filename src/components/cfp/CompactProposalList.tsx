@@ -22,9 +22,10 @@ import {
   DocumentTextIcon,
   SparklesIcon,
 } from '@heroicons/react/24/solid'
-import type { ProposalExisting, Status } from '@/lib/proposal/types'
-import { statuses } from '@/lib/proposal/types'
+import type { ProposalExisting } from '@/lib/proposal/types'
+import { Status, statuses } from '@/lib/proposal/types'
 import { formatConfig } from '@/lib/proposal'
+import { getProposalStatusBadgeColor } from '@/lib/proposal/ui/badges'
 import { formatConferenceDateLong } from '@/lib/time'
 import { hasProposalVideo } from '@/lib/proposal/video'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
@@ -125,31 +126,26 @@ function getProposalStatusConfig(
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
   label: string
 } {
-  switch (status) {
-    case 'confirmed':
-      return { color: 'green', icon: CheckBadgeIcon, label: 'Confirmed' }
-    case 'accepted':
-      return { color: 'blue', icon: SparklesIcon, label: 'Accepted' }
-    case 'submitted':
-      return { color: 'yellow', icon: ClockIcon, label: 'Submitted' }
-    case 'rejected':
-      return hasApprovedTalk
-        ? { color: 'gray', icon: MinusCircleIcon, label: 'Not selected' }
-        : { color: 'red', icon: XCircleIcon, label: 'Rejected' }
-    case 'waitlisted':
-      return { color: 'orange', icon: ClockIcon, label: 'Waitlisted' }
-    case 'withdrawn':
-      return { color: 'purple', icon: XCircleIcon, label: 'Withdrawn' }
-    case 'canceled':
-      return { color: 'purple', icon: XCircleIcon, label: 'Canceled' }
-    case 'draft':
-      return { color: 'gray', icon: DocumentTextIcon, label: 'Draft' }
-    default:
-      return {
-        color: 'gray',
-        icon: DocumentTextIcon,
-        label: statuses.get(status) || status,
-      }
+  // Colours come from the shared ladder so the list matches admin and the
+  // proposal page; only "Not selected" (a softer rejected) deviates.
+  if (status === 'rejected' && hasApprovedTalk) {
+    return { color: 'gray', icon: MinusCircleIcon, label: 'Not selected' }
+  }
+  const icons: Partial<
+    Record<Status, React.ComponentType<React.SVGProps<SVGSVGElement>>>
+  > = {
+    [Status.confirmed]: CheckBadgeIcon,
+    [Status.accepted]: SparklesIcon,
+    [Status.submitted]: ClockIcon,
+    [Status.rejected]: XCircleIcon,
+    [Status.waitlisted]: ClockIcon,
+    [Status.withdrawn]: XCircleIcon,
+    [Status.canceled]: XCircleIcon,
+  }
+  return {
+    color: getProposalStatusBadgeColor(status),
+    icon: icons[status] ?? DocumentTextIcon,
+    label: statuses.get(status) || status,
   }
 }
 
@@ -405,17 +401,18 @@ export function CompactProposalList({
                     Confirm participation
                   </button>
                 )}
-                {isApproved && canEdit && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPendingAction({ proposal, action: Action.withdraw })
-                    }
-                    className="inline-flex cursor-pointer items-center rounded-md px-2 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-                  >
-                    Can&apos;t make it
-                  </button>
-                )}
+                {(isApproved || proposal.status === 'waitlisted') &&
+                  canEdit && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPendingAction({ proposal, action: Action.withdraw })
+                      }
+                      className="inline-flex cursor-pointer items-center rounded-md px-2 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                    >
+                      Can&apos;t make it
+                    </button>
+                  )}
               </div>
             </div>
           )

@@ -27,40 +27,13 @@ import Link from 'next/link'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { ProposalDetailsForm } from '@/components/proposal/ProposalDetailsForm'
 import { validateSpeakerConsent } from '@/lib/speaker/validation'
+import { withoutNarrowlyAutosavedFields } from '@/lib/speaker/utils'
 import {
   rememberLandingUtmTags,
   resolveSubmissionUtm,
   sessionStorageOrNull,
 } from '@/lib/marketing/landing-utm'
 import type { ProposalUtmTags } from '@/lib/proposal/types'
-
-/**
- * Preferences that have their OWN narrow autosave mutation and are therefore
- * never part of a bulk profile payload (#1148).
- *
- * `speaker` state here is seeded from the whole loaded speaker and submitted
- * wholesale, so a value loaded at mount is re-sent on submit. For a field the
- * speaker can change ELSEWHERE while this form sits open, that re-send is a
- * stale write that silently undoes the newer narrow save. `socialTagOptOut`
- * is already kept out by `SpeakerDetailsForm` omitting it; `messagingEmailDefault`
- * is edited on `CFPProfilePage` and was not, so a proposal submitted after
- * changing it there reverted it.
- *
- * This form edits neither, so dropping both is a pure removal of staleness.
- * Listing them in one place is the point: a third narrow autosave must be
- * added here too, and a name in this array is cheaper to notice than a bug.
- */
-const NARROWLY_AUTOSAVED_SPEAKER_FIELDS = [
-  'socialTagOptOut',
-  'socialTagOptOutAt',
-  'messagingEmailDefault',
-] as const
-
-function withoutNarrowlyAutosavedFields<T extends object>(speaker: T): T {
-  const next = { ...speaker } as Record<string, unknown>
-  for (const field of NARROWLY_AUTOSAVED_SPEAKER_FIELDS) delete next[field]
-  return next as T
-}
 
 export function ProposalForm({
   initialProposal,
@@ -127,6 +100,11 @@ export function ProposalForm({
   const [lastAction, setLastAction] = useState<'draft' | 'submit' | null>(null)
   const [draftSaved, setDraftSaved] = useState(false)
   const [currentProposalId, setCurrentProposalId] = useState(proposalId)
+  // Whether the proposal is (still) a draft on the server. A draft created on
+  // this page stays a draft until submitted, long after the "saved" note fades.
+  const [savedAsDraft, setSavedAsDraft] = useState(
+    initialStatus === Status.draft,
+  )
   const draftTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
 
   const showDraftSaved = useCallback(() => {
@@ -145,6 +123,7 @@ export function ProposalForm({
     onSuccess: (data) => {
       if (lastAction === 'draft') {
         setCurrentProposalId(data._id)
+        setSavedAsDraft(true)
         window.history.replaceState(null, '', `/cfp/proposal/${data._id}`)
         showDraftSaved()
       } else {
@@ -179,9 +158,8 @@ export function ProposalForm({
 
   const [confirmAction, setConfirmAction] = useState<Action | null>(null)
 
-  const isDraft = initialStatus === Status.draft || !currentProposalId
-  const isExistingDraft =
-    (initialStatus === Status.draft || draftSaved) && !!currentProposalId
+  const isDraft = savedAsDraft || !currentProposalId
+  const isExistingDraft = savedAsDraft && !!currentProposalId
   const buttonPrimary =
     currentProposalId && !isExistingDraft ? 'Update' : 'Submit'
   const buttonPrimaryLoading =
@@ -209,7 +187,8 @@ export function ProposalForm({
   const mutationError =
     createProposalMutation.error ||
     updateProposalMutation.error ||
-    actionMutation.error
+    // While the confirm dialog is open it shows the action error itself.
+    (confirmAction ? null : actionMutation.error)
 
   const prepareTopicRefs = () =>
     (proposal.topics ?? [])
@@ -584,8 +563,8 @@ export function ProposalForm({
       )}
 
       {!isReadOnly && (
-        <div className="mt-6 flex items-center justify-between">
-          <div className="flex items-center gap-x-3">
+        <div className="mt-6 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
             {canDeleteDraft && (
               <button
                 type="button"
@@ -626,11 +605,11 @@ export function ProposalForm({
                 </button>
               ))}
           </div>
-          <div className="flex items-center gap-x-4">
+          <div className="flex flex-wrap items-center gap-4">
             <Link
               href="/cfp/list"
               type="button"
-              className="text-sm leading-6 font-semibold text-gray-600 transition-colors hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400"
+              className="py-1.5 text-sm leading-6 font-semibold text-gray-600 transition-colors hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400"
             >
               Cancel
             </Link>
@@ -670,12 +649,11 @@ export function ProposalForm({
           onClose={() => {
             setConfirmAction(null)
             setWithdrawReason('')
+            actionMutation.reset()
           }}
-          onConfirm={() => {
-            handleProposalAction(confirmAction)
-            setConfirmAction(null)
-            setWithdrawReason('')
-          }}
+          // Stays open until the action succeeds (which navigates away), so a
+          // failure keeps the reason and shows the error right here.
+          onConfirm={() => handleProposalAction(confirmAction)}
           title={confirmActionLabels[confirmAction]!.title}
           message={confirmActionLabels[confirmAction]!.message}
           confirmButtonText={confirmActionLabels[confirmAction]!.button}
@@ -705,6 +683,14 @@ export function ProposalForm({
                 className="font-inter mt-1 block w-full rounded-lg border border-brand-frosted-steel bg-white px-3 py-2 text-sm text-brand-slate-gray shadow-xs focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
               />
             </div>
+          )}
+          {actionMutation.error && (
+            <p
+              role="alert"
+              className="font-inter mt-3 text-sm text-red-600 dark:text-red-400"
+            >
+              {actionMutation.error.message}
+            </p>
           )}
         </ConfirmationModal>
       )}

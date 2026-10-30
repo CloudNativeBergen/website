@@ -44,6 +44,31 @@ export function TravelSupportPageClient({
     variant: 'danger' | 'warning' | 'info'
     onConfirm: () => Promise<void>
   } | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [confirmError, setConfirmError] = useState('')
+
+  const closeConfirm = () => {
+    setConfirmAction(null)
+    setConfirmError('')
+  }
+
+  // Close only on success; on failure keep the dialog open with the reason.
+  // `confirming` also blocks a second click while the first is in flight.
+  const runConfirm = async () => {
+    if (!confirmAction || confirming) return
+    setConfirming(true)
+    setConfirmError('')
+    try {
+      await confirmAction.onConfirm()
+      setConfirmAction(null)
+    } catch (error) {
+      setConfirmError(
+        error instanceof Error ? error.message : 'Something went wrong',
+      )
+    } finally {
+      setConfirming(false)
+    }
+  }
 
   const {
     data: travelSupport,
@@ -216,7 +241,6 @@ export function TravelSupportPageClient({
       variant: 'danger',
       onConfirm: async () => {
         await deleteExpense(expenseId)
-        setConfirmAction(null)
       },
     })
   }
@@ -231,7 +255,6 @@ export function TravelSupportPageClient({
       variant: 'danger',
       onConfirm: async () => {
         await deleteReceipt(expenseId, receiptIndex)
-        setConfirmAction(null)
       },
     })
   }
@@ -244,7 +267,6 @@ export function TravelSupportPageClient({
       variant: 'warning',
       onConfirm: async () => {
         await submitTravelSupport()
-        setConfirmAction(null)
       },
     })
   }
@@ -502,13 +524,20 @@ export function TravelSupportPageClient({
 
       <ConfirmationModal
         isOpen={!!confirmAction}
-        onClose={() => setConfirmAction(null)}
-        onConfirm={() => confirmAction?.onConfirm()}
+        onClose={closeConfirm}
+        onConfirm={runConfirm}
         title={confirmAction?.title ?? ''}
         message={confirmAction?.message ?? ''}
         confirmButtonText="Confirm"
         variant={confirmAction?.variant ?? 'danger'}
-      />
+        isLoading={confirming}
+      >
+        {confirmError && (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {confirmError}
+          </p>
+        )}
+      </ConfirmationModal>
     </div>
   )
 }
