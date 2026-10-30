@@ -891,16 +891,19 @@ async function loadInvitationForOrganizer(
 }
 
 /**
- * After an edit to a talk's title, description or speakers: expire the public
- * programme (conference tag) and speaker pages that render it.
+ * After a change to a confirmed talk's title, description or speakers: expire
+ * the public programme of its conference. Only confirmed talks are public, so
+ * a draft or submitted talk leaves the cache alone.
  */
-function expirePublicTalkReads(proposal: ProposalExisting) {
-  const conference = proposal.conference as
+function expirePublicTalkReads(
+  talk: Pick<ProposalExisting, 'status' | 'conference'>,
+  wasConfirmed = false,
+) {
+  if (!wasConfirmed && talk.status !== Status.confirmed) return
+  const conference = talk.conference as
     { _ref?: string; _id?: string } | undefined
   const conferenceId = conference?._ref ?? conference?._id
   if (conferenceId) revalidateTag(conferenceTag(conferenceId), 'default')
-  revalidateTag('content:speakers', 'default')
-  revalidateTag('content:speaker-detail', 'default')
 }
 
 export const proposalRouter = router({
@@ -1315,7 +1318,7 @@ export const proposalRouter = router({
           )
         }
 
-        expirePublicTalkReads(proposal)
+        expirePublicTalkReads(proposal, existing.status === Status.confirmed)
         return proposal
       } catch (error) {
         if (error instanceof TRPCError) throw error
@@ -1685,6 +1688,7 @@ export const proposalRouter = router({
           speakerIds,
           proposal._rev,
         )
+        expirePublicTalkReads(proposal)
 
         // Only for a talk of the host conference: the notice carries its
         // branding, and the owner arm admits a talk of another tenant.
@@ -3521,6 +3525,7 @@ export const proposalRouter = router({
             )
 
             await transaction.commit()
+            expirePublicTalkReads(proposal)
 
             // SNAPSHOT SYNC (G2a): keep the proposal thread's participants[] in
             // step with the newly-accepted co-speaker so the flipped read path

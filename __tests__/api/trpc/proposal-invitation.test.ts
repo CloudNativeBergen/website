@@ -1,3 +1,4 @@
+import { revalidateTag } from 'next/cache'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { appRouter } from '@/server/_app'
 import { getProposal } from '@/lib/proposal/data/sanity'
@@ -27,6 +28,11 @@ const { mockPatchChain, mockTransaction } = vi.hoisted(() => {
 })
 
 // Mock dependencies
+// revalidateTag needs a Next request store, which a direct router call lacks.
+vi.mock('next/cache', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  revalidateTag: vi.fn(),
+}))
 vi.mock('@/lib/auth', () => ({
   getAuthSession: vi.fn(),
 }))
@@ -384,6 +390,39 @@ describe('proposal.invitation router', () => {
   })
 
   describe('respond', () => {
+    it('expires the public programme when accepting onto a confirmed talk', async () => {
+      vi.mocked(getInvitationByToken).mockResolvedValue(mockInvitation as any)
+      vi.mocked(getProposal).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.confirmed } as any,
+        proposalError: null,
+      })
+
+      await createCaller(invitedSpeaker).proposal.invitation.respond({
+        token: 'valid-token',
+        accept: true,
+      })
+
+      expect(revalidateTag).toHaveBeenCalledWith(
+        'sanity:conference-conf-1',
+        'default',
+      )
+    })
+
+    it('expires nothing when accepting onto a submitted talk', async () => {
+      vi.mocked(getInvitationByToken).mockResolvedValue(mockInvitation as any)
+      vi.mocked(getProposal).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+
+      await createCaller(invitedSpeaker).proposal.invitation.respond({
+        token: 'valid-token',
+        accept: true,
+      })
+
+      expect(revalidateTag).not.toHaveBeenCalled()
+    })
+
     it('should allow accepting an invitation and atomically add the speaker to the proposal', async () => {
       vi.mocked(getInvitationByToken).mockResolvedValue(mockInvitation as any)
       vi.mocked(getProposal).mockResolvedValue({

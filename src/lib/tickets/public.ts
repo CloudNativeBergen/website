@@ -65,14 +65,14 @@ export type PublicTicketTypesResult =
 
 export async function getPublicTicketTypes(
   conference: ConferenceTicketingBinding,
-  conferenceId?: string,
+  conferenceId: string,
 ): Promise<PublicTicketTypesResult> {
   'use cache'
   cacheLife('hours')
   cacheTag('content:tickets')
   // Ticket mutations revalidate conferenceTag, not 'content:tickets'; without
   // this tag a nested cache hit would keep serving old prices.
-  if (conferenceId) cacheTag(conferenceTag(conferenceId))
+  cacheTag(conferenceTag(conferenceId))
 
   try {
     // Route through the request-boundary resolver (B7) so a tenant's per-org
