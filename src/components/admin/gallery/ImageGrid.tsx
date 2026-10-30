@@ -263,7 +263,7 @@ export function ImageGrid({
 
             {!readOnly && (
               <div
-                className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center gap-2 transition-opacity ${
+                className={`absolute inset-x-0 top-2 flex justify-center gap-2 transition-opacity ${
                   hoveredImage === image._id
                     ? 'opacity-100'
                     : 'opacity-0 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100'

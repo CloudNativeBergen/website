@@ -112,7 +112,10 @@ export function SponsorRenewalStripView({
         </ul>
       )}
       {error && (
-        <p role="alert" className="px-3 pb-2 text-sm text-red-600">
+        <p
+          role="alert"
+          className="px-3 pb-2 text-sm text-red-600 dark:text-red-400"
+        >
           {error}
         </p>
       )}
