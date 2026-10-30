@@ -71,7 +71,7 @@ import {
  */
 function logFailedConfirmationEmails(
   sent: { id: string; result: PromiseSettledResult<{ error?: unknown }> }[],
-) {
+): number {
   const failed = sent.flatMap(({ id, result }) => {
     const why =
       result.status === 'rejected' ? result.reason : result.value?.error
@@ -86,6 +86,7 @@ function logFailedConfirmationEmails(
       failed.map((f) => f.why),
     )
   }
+  return failed.length
 }
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { workshopAdminProcedure } from '../workshopAdmin'
@@ -1024,6 +1025,7 @@ export const workshopRouter = router({
           const wasWaitlisted = outcome.newlyConfirmed.includes(signup._id)
           const beyond = wasWaitlisted && outcome.seatsTaken > outcome.capacity
 
+          let emailSent = false
           if (input.sendEmail && wasWaitlisted) {
             const { conference } = await getConferenceForCurrentDomain({})
             if (conference) {
@@ -1039,21 +1041,27 @@ export const workshopRouter = router({
                     ?.startTime,
                 }),
               ])
-              logFailedConfirmationEmails([{ id: signup._id, result }])
+              emailSent =
+                logFailedConfirmationEmails([{ id: signup._id, result }]) === 0
             }
           }
 
           revalidateTag('admin:workshops', 'default')
           revalidateTag('content:workshops', 'default')
 
+          const emailNote =
+            input.sendEmail && wasWaitlisted
+              ? emailSent
+                ? ' and notification email sent'
+                : ', but the notification email could not be sent'
+              : ''
+
           return {
             success: true as const,
             message: beyond
-              ? `Participant confirmed beyond capacity (${outcome.seatsTaken} of ${outcome.capacity} seats)${input.sendEmail && wasWaitlisted ? ' and notification email sent' : ''}`
+              ? `Participant confirmed beyond capacity (${outcome.seatsTaken} of ${outcome.capacity} seats)${emailNote}`
               : wasWaitlisted
-                ? input.sendEmail
-                  ? 'Participant confirmed and notification email sent'
-                  : 'Participant confirmed'
+                ? `Participant confirmed${emailNote}`
                 : 'Workshop signup confirmed successfully',
           }
         } catch (error) {

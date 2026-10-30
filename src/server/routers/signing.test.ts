@@ -36,6 +36,7 @@ const h = vi.hoisted(() => ({
   logContractStatusChange: vi.fn(),
   publishSponsorStatusChange: vi.fn(),
   notifySponsorContractSigned: vi.fn(),
+  emailSend: vi.fn(),
 }))
 
 vi.mock('@/lib/signing/sanity', () => ({
@@ -65,6 +66,17 @@ vi.mock('@/lib/slack/notify', () => ({
 }))
 vi.mock('@/lib/time', () => ({
   getCurrentDateTime: () => '2026-01-02T03:04:05.000Z',
+}))
+
+vi.mock('@/lib/email/contract-email', () => ({
+  CONTRACT_EMAIL_SLUGS: { SIGNED: 'signed' },
+  renderContractEmail: async () => ({ subject: 'Signed', react: null }),
+}))
+vi.mock('@/lib/email/config', () => ({
+  resolveEmailSender: async () => ({
+    client: { emails: { send: h.emailSend } },
+  }),
+  retryWithBackoff: <T>(fn: () => Promise<T>) => fn(),
 }))
 
 import { signingRouter } from './signing'
@@ -499,5 +511,39 @@ describe('signing tenancy — the token is the only boundary', () => {
       expect.anything(),
       'signer',
     )
+  })
+})
+
+describe('signing.submitSignature — confirmation email', () => {
+  it('does not report a Resend `{ error }` result as sent', async () => {
+    h.getSigningContract.mockResolvedValue(
+      contract({
+        conference: {
+          _id: 'conf-1',
+          title: 'Test Conf',
+          sponsorEmail: 'sponsors@conf.test',
+        },
+      }),
+    )
+    h.emailSend.mockResolvedValue({
+      data: null,
+      error: { name: 'validation_error', message: 'domain not verified' },
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const result = await caller.submitSignature(submitInput)
+
+    expect(result.success).toBe(true)
+    expect(h.emailSend).toHaveBeenCalledOnce()
+    expect(log).not.toHaveBeenCalledWith(
+      expect.stringContaining('Confirmation email sent'),
+    )
+    expect(err).toHaveBeenCalledWith(
+      '[signing] Failed to send confirmation email:',
+      expect.objectContaining({ message: 'domain not verified' }),
+    )
+    log.mockRestore()
+    err.mockRestore()
   })
 })

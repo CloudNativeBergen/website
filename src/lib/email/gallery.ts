@@ -1,3 +1,4 @@
+import { formatDate } from '@/lib/time'
 import React from 'react'
 import { render } from '@react-email/render'
 import { GallerySpeakerTaggedTemplate } from '@/components/email/GallerySpeakerTaggedTemplate'
@@ -115,7 +116,7 @@ export async function sendGalleryTagEmail(
         imageAlt: image.imageAlt || image.image?.alt,
         eventName: conference.title,
         eventLocation: `${conference.city}, ${conference.country}`,
-        eventDate: conference.startDate,
+        eventDate: formatDate(conference.startDate),
         eventUrl,
         galleryUrl,
         dashboardUrl,

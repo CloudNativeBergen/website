@@ -174,27 +174,22 @@ export async function renewCoSpeakerInvitation(params: {
 }
 
 /**
- * Builds the shared event-related email template context (protocol,
- * event name/location/date/url) from the current conference and domain.
+ * Builds the shared event-related email template context (event
+ * name/location/date/url) from the conference.
  */
-export function buildEmailEventContext(
-  conference: {
-    title?: string
-    city?: string
-    country?: string
-    startDate?: string
-    domains?: string[]
-  },
-  domain: string,
-): {
-  protocol: string
+export function buildEmailEventContext(conference: {
+  title?: string
+  city?: string
+  country?: string
+  startDate?: string
+  domains?: string[]
+}): {
   eventName: string
   eventLocation: string
   eventDate: string
   eventUrl: string
 } {
   return {
-    protocol: domain.includes('localhost') ? 'http://' : 'https://',
     eventName: conference.title || PLATFORM_NAME,
     // Never assume a country — an unset one is omitted rather than defaulted,
     // which would place a tenant's event in the wrong place.
@@ -407,9 +402,9 @@ export async function sendInvitationEmail(
       return false
     }
 
-    const { protocol, eventName, eventLocation, eventDate, eventUrl } =
-      buildEmailEventContext(conference, domain)
-    const invitationUrl = `${protocol}${domain}/invitation/respond?token=${token}${AppEnvironment.isTestMode ? '&test=true' : ''}`
+    const { eventName, eventLocation, eventDate, eventUrl } =
+      buildEmailEventContext(conference)
+    const invitationUrl = `${eventUrl}/invitation/respond?token=${token}${AppEnvironment.isTestMode ? '&test=true' : ''}`
 
     const proposalId =
       typeof invitation.proposal === 'object' && invitation.proposal !== null
@@ -537,8 +532,8 @@ export async function sendCoSpeakerAddedEmail(params: {
       return false
     }
 
-    const { protocol, eventName, eventLocation, eventDate, eventUrl } =
-      buildEmailEventContext(conference, domain)
+    const { eventName, eventLocation, eventDate, eventUrl } =
+      buildEmailEventContext(conference)
     const subject = `You've been added as a ${role} on "${params.proposalTitle}"`
 
     if (AppEnvironment.isTestMode) {
@@ -570,7 +565,7 @@ export async function sendCoSpeakerAddedEmail(params: {
         organizerName: params.organizerName,
         contactEmail,
         proposalTitle: params.proposalTitle,
-        dashboardUrl: `${protocol}${domain}/cfp/proposal/${params.proposalId}`,
+        dashboardUrl: `${eventUrl}/cfp/proposal/${params.proposalId}`,
         eventName,
         eventLocation,
         eventDate,
@@ -600,7 +595,7 @@ export async function sendCoSpeakerRemovedEmail(params: {
   conference: Conference
   domain: string
 }): Promise<boolean> {
-  const { conference, domain } = params
+  const { conference } = params
   const subject = `You are no longer a speaker on "${params.proposalTitle}"`
   try {
     if (AppEnvironment.isTestMode) {
@@ -610,7 +605,7 @@ export async function sendCoSpeakerRemovedEmail(params: {
       return true
     }
     const { eventName, eventLocation, eventDate, eventUrl } =
-      buildEmailEventContext(conference, domain)
+      buildEmailEventContext(conference)
     const result = await sendEmail({
       to: canonicalEmail(params.toEmail),
       subject,
@@ -700,11 +695,11 @@ export async function sendResponseNotificationEmail(params: {
         ? invitation.proposal.title
         : 'your proposal'
 
-    const { protocol, eventName, eventLocation, eventDate, eventUrl } =
-      buildEmailEventContext(conference, domain)
+    const { eventName, eventLocation, eventDate, eventUrl } =
+      buildEmailEventContext(conference)
     const proposalUrl = proposalId
-      ? `${protocol}${domain}/cfp/proposal/${proposalId}`
-      : `${protocol}${domain}/cfp/list`
+      ? `${eventUrl}/cfp/proposal/${proposalId}`
+      : `${eventUrl}/cfp/list`
 
     const subject = accepted
       ? `${respondentName} accepted your co-speaker invitation for "${proposalTitle}"`

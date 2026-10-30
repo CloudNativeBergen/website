@@ -161,3 +161,21 @@ describe('notifyNewMessage — TEAMS-2 access-vs-routing split', () => {
     expect(emails).not.toContain('org2@ex.test')
   })
 })
+
+describe('notifyNewMessage — email reply link', () => {
+  it('is absolute even when the conference has no domain', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await notifyNewMessage({
+      conversation,
+      message,
+      authorId: 'spk-1',
+      conference: { ...conference, domains: [] } as unknown as Conference,
+    })
+    const recipients = emailMock.mock.calls.flatMap(
+      (c) => c[0] as { replyUrl: string }[],
+    )
+    expect(recipients.length).toBeGreaterThan(0)
+    for (const r of recipients) expect(r.replyUrl).toMatch(/^https?:\/\//)
+    err.mockRestore()
+  })
+})
