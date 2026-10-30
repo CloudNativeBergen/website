@@ -85,6 +85,7 @@ import type {
   SponsorTierExisting,
 } from '@/lib/sponsor/types'
 import type {
+  InvoiceStatus,
   SponsorTag,
   SponsorForConferenceInput,
 } from '@/lib/sponsor-crm/types'
@@ -954,6 +955,7 @@ async function withSponsorSendLock<T>(
 async function updateCrmRecord(
   input: z.infer<typeof SponsorForConferenceUpdateSchema>,
   userId: string,
+  opts?: { invoiceFrom?: InvoiceStatus[] },
 ) {
   const { id, ...updateData } = input
 
@@ -971,6 +973,21 @@ async function updateCrmRecord(
       code: 'NOT_FOUND',
       message: 'Sponsor relationship not found',
     })
+  }
+
+  // Bulk changes only move an invoice forward: never overdue back to sent,
+  // nor a paid or cancelled invoice anywhere.
+  const invoiceNow = existing.invoiceStatus || 'not-sent'
+  if (opts?.invoiceFrom && !opts.invoiceFrom.includes(invoiceNow)) {
+    throw preconditionFailed([
+      {
+        field: 'invoiceStatus',
+        label: 'Invoice status',
+        source: 'pipeline',
+        severity: 'required',
+        message: `Invoice is ${invoiceNow}, so it can't be marked ${updateData.invoiceStatus} from the list.`,
+      },
+    ])
   }
 
   // Enforce the pipeline invariant when an edit changes status or tier (a
@@ -2310,7 +2327,9 @@ export const sponsorRouter = router({
     bulkSetInvoiceStatus: adminProcedure
       .input(
         z.object({
-          ids: z.array(z.string().min(1)).min(1).max(200),
+          // Capped so the sequential loop stays well inside a request timeout;
+          // a conference rarely has more invoices than this to move at once.
+          ids: z.array(z.string().min(1)).min(1).max(50),
           invoiceStatus: z.enum(['sent', 'paid']),
         }),
       )
@@ -2325,6 +2344,12 @@ export const sponsorRouter = router({
             await updateCrmRecord(
               { id, invoiceStatus: input.invoiceStatus },
               ctx.speaker._id,
+              {
+                invoiceFrom:
+                  input.invoiceStatus === 'sent'
+                    ? ['not-sent']
+                    : ['sent', 'overdue'],
+              },
             )
             results.push({ id, ok: true })
           } catch (error) {

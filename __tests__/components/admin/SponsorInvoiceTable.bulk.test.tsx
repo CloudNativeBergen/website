@@ -14,6 +14,7 @@ import {
 import { TAP_GUARD_MS } from '@/hooks/useOpenedLongEnough'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import type { InvoiceRow } from '@/lib/sponsor-crm/invoice'
+import type { InvoiceStatus } from '@/lib/sponsor-crm/types'
 import { SponsorInvoiceTable } from '@/components/admin/sponsor/SponsorInvoiceTable'
 
 const h = vi.hoisted(() => ({
@@ -40,7 +41,11 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-const row = (id: string, name: string): InvoiceRow => ({
+const row = (
+  id: string,
+  name: string,
+  invoiceStatus: InvoiceStatus,
+): InvoiceRow => ({
   sponsorForConferenceId: id,
   sponsorName: name,
   amount: 1000,
@@ -48,17 +53,23 @@ const row = (id: string, name: string): InvoiceRow => ({
   amountFromTier: false,
   addonTitles: [],
   invoiceFormat: 'EHF',
-  invoiceStatus: 'sent',
+  invoiceStatus,
   readiness: { ready: true, blockers: [] },
 })
 
-const rows = [row('a', 'Acme'), row('b', 'Globex'), row('c', 'Initech')]
+// Mixed states, as "select all" sees them in the default view.
+const rows = [
+  row('a', 'Acme', 'sent'),
+  row('b', 'Globex', 'paid'),
+  row('c', 'Initech', 'overdue'),
+  row('d', 'Umbrella', 'not-sent'),
+]
 
 describe('SponsorInvoiceTable bulk status', () => {
   it('marks the selected invoices paid after confirming and reports failures', async () => {
     h.bulk.mockResolvedValue([
       { id: 'a', ok: true },
-      { id: 'c', ok: false, error: 'refused' },
+      { id: 'c', ok: false, error: 'Billing email missing' },
     ])
     render(
       <NotificationProvider>
@@ -71,9 +82,12 @@ describe('SponsorInvoiceTable bulk status', () => {
       screen.getAllByRole('checkbox', { name: 'Select Acme invoice' })[0],
     )
     fireEvent.click(
+      screen.getAllByRole('checkbox', { name: 'Select Globex invoice' })[0],
+    )
+    fireEvent.click(
       screen.getAllByRole('checkbox', { name: 'Select Initech invoice' })[1],
     )
-    expect(screen.getByText('2 selected')).toBeInTheDocument()
+    expect(screen.getByText('3 selected')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Mark paid' }))
     expect(h.bulk).not.toHaveBeenCalled()
@@ -91,6 +105,10 @@ describe('SponsorInvoiceTable bulk status', () => {
     expect(
       await screen.findByText('1 marked paid, 1 failed'),
     ).toBeInTheDocument()
+    // The server's reason per sponsor, and the paid row skipped, not counted.
+    expect(
+      screen.getByText(/Initech: Billing email missing\..*1 skipped/),
+    ).toBeInTheDocument()
     expect(h.invalidate).toHaveBeenCalled()
     // The failed row stays selected for another try.
     await waitFor(() =>
@@ -98,10 +116,8 @@ describe('SponsorInvoiceTable bulk status', () => {
     )
   })
 
-  it('select all picks every shown row and marks them sent without a dialog', async () => {
-    h.bulk.mockResolvedValue(
-      rows.map((r) => ({ id: r.sponsorForConferenceId, ok: true })),
-    )
+  it('select all marks only not-sent invoices sent, without a dialog', async () => {
+    h.bulk.mockResolvedValue([{ id: 'd', ok: true }])
     render(
       <NotificationProvider>
         <SponsorInvoiceTable rows={rows} />
@@ -113,10 +129,11 @@ describe('SponsorInvoiceTable bulk status', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mark sent' }))
     await waitFor(() =>
       expect(h.bulk).toHaveBeenCalledWith({
-        ids: ['a', 'b', 'c'],
+        ids: ['d'],
         invoiceStatus: 'sent',
       }),
     )
-    expect(await screen.findByText('3 marked sent')).toBeInTheDocument()
+    expect(await screen.findByText('1 marked sent')).toBeInTheDocument()
+    expect(screen.getByText(/3 skipped/)).toBeInTheDocument()
   })
 })

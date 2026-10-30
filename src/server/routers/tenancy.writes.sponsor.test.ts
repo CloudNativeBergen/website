@@ -1059,6 +1059,35 @@ describe('CRM references must belong to this tenant (#863 row 7)', () => {
 })
 
 describe('crm.bulkSetInvoiceStatus', () => {
+  it.each(['paid', 'overdue', 'cancelled'] as const)(
+    'bulk sent refuses a %s invoice and leaves it untouched',
+    async (from) => {
+      h.ownedCount = 1
+      h.tenantById = { 'sfc-A': tenantOf('ours', 'sponsorForConference') }
+      lib.getSponsorForConference.mockResolvedValue({
+        sponsorForConference: {
+          ...CONTRACT_READY_SFC,
+          _id: 'sfc-A',
+          status: 'closed-won',
+          contractStatus: 'contract-signed',
+          invoiceStatus: from,
+          invoicePaidAt: '2026-10-01T10:00:00Z',
+          billing: { email: 'billing@acme.test' },
+        },
+        error: undefined,
+      })
+
+      const results = await sponsor().crm.bulkSetInvoiceStatus({
+        ids: ['sfc-A'],
+        invoiceStatus: 'sent',
+      })
+      expect(results).toEqual([
+        { id: 'sfc-A', ok: false, error: expect.stringContaining(from) },
+      ])
+      expect(lib.updateSponsorForConference).not.toHaveBeenCalled()
+    },
+  )
+
   it('refuses the WHOLE batch when one id is not ours', async () => {
     h.ownedCount = 1
     await expect(

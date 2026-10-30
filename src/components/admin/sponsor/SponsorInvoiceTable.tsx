@@ -373,6 +373,9 @@ const InvoiceActions = ({ row }: { row: InvoiceRow }) => {
   )
 }
 
+/** Matches the server's cap on `crm.bulkSetInvoiceStatus`. */
+const BULK_LIMIT = 50
+
 const checkboxClass =
   'h-5 w-5 cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-blue-500 sm:h-4 sm:w-4 dark:border-gray-600 dark:bg-gray-800'
 
@@ -398,24 +401,44 @@ const BulkInvoiceBar = ({
   const allSelected = selected.length === rows.length
   const busy = bulk.isPending
 
+  // Only rows whose next step is this status; the server refuses the rest.
+  const eligible = (status: 'sent' | 'paid') =>
+    selected.filter((r) => NEXT_ACTIONS[r.invoiceStatus]?.includes(status))
+  const nameOf = (id: string) =>
+    rows.find((r) => r.sponsorForConferenceId === id)?.sponsorName ?? id
+
   const run = async (status: 'sent' | 'paid') => {
+    const targets = eligible(status)
+    const skipped = selected.length - targets.length
+    const skippedNote = skipped
+      ? ` ${skipped} skipped: their current status cannot move to ${status}.`
+      : ''
+    if (targets.length === 0 || targets.length > BULK_LIMIT) {
+      setConfirmPaid(false)
+      showNotification({
+        type: 'warning',
+        title: `Nothing marked ${status}`,
+        message:
+          targets.length === 0
+            ? `None of the selected invoices can be marked ${status}.`
+            : `Select at most ${BULK_LIMIT} invoices at a time.`,
+      })
+      return
+    }
     try {
       const results = await bulk.mutateAsync({
-        ids: selected.map((r) => r.sponsorForConferenceId),
+        ids: targets.map((r) => r.sponsorForConferenceId),
         invoiceStatus: status,
       })
       const failed = results.filter((r) => !r.ok)
-      const names = failed.map(
-        (f) =>
-          rows.find((r) => r.sponsorForConferenceId === f.id)?.sponsorName ??
-          f.id,
-      )
+      const reasons = failed
+        .map((f) => `${nameOf(f.id)}: ${f.error ?? 'Update failed'}`)
+        .join('; ')
       showNotification({
-        type: failed.length ? 'warning' : 'success',
+        type: failed.length || skipped ? 'warning' : 'success',
         title: `${results.length - failed.length} marked ${status}${failed.length ? `, ${failed.length} failed` : ''}`,
-        message: failed.length
-          ? `Not updated: ${names.join(', ')}. Open each in the CRM to see why.`
-          : 'Invoices updated.',
+        message:
+          (failed.length ? `${reasons}.` : 'Invoices updated.') + skippedNote,
       })
       setSelected(new Set(failed.map((f) => f.id)))
     } catch (err) {
@@ -429,6 +452,7 @@ const BulkInvoiceBar = ({
       await utils.sponsor.crm.invalidate()
     }
   }
+  const toPay = eligible('paid')
 
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900">
@@ -437,6 +461,7 @@ const BulkInvoiceBar = ({
           type="checkbox"
           className={checkboxClass}
           checked={allSelected}
+          aria-label="Select all shown invoices"
           ref={(el) => {
             if (el) el.indeterminate = selected.length > 0 && !allSelected
           }}
@@ -486,7 +511,7 @@ const BulkInvoiceBar = ({
         onClose={() => setConfirmPaid(false)}
         onConfirm={() => run('paid')}
         title="Mark invoices paid?"
-        message={`Mark ${selected.length} invoice${selected.length === 1 ? '' : 's'} as paid: ${selected.map((r) => r.sponsorName).join(', ')}. Today is stored as the payment date.`}
+        message={`Mark ${toPay.length} invoice${toPay.length === 1 ? '' : 's'} as paid: ${toPay.map((r) => r.sponsorName).join(', ')}. Today is stored as the payment date.${selected.length > toPay.length ? ` ${selected.length - toPay.length} selected invoice(s) are not sent or overdue and will be skipped.` : ''}`}
         confirmButtonText="Mark paid"
         variant="warning"
         isLoading={busy}
