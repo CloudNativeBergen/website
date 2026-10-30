@@ -35,11 +35,14 @@ export async function GET(request: NextRequest) {
     const conferences = await clientReadUncached.fetch<Conference[]>(
       // groq-global: a system sweep over every tenant; each conference's
       // invoices are then read scoped to that conference.
-      `*[_type == "conference"]{
+      `*[_type == "conference" && defined(endDate) && endDate >= $cutoff]{
         ...,
         teams[]{ _key, key, title, slackChannel, emailIdentity, "members": members[]._ref }
       }`,
-      {},
+      {
+        // Editions that ended over 90 days ago are left alone.
+        cutoff: osloTodayDateString(new Date(Date.now() - 90 * 86_400_000)),
+      },
       { cache: 'no-store' },
     )
 
@@ -65,7 +68,8 @@ export async function GET(request: NextRequest) {
           ]{
             "sponsorName": sponsor->name,
             invoiceStatus, invoiceDueAt, invoicePaidAt,
-            contractValue, contractCurrency
+            contractValue, contractCurrency,
+            tier->{ price }
           }`,
           { conferenceId: conference._id },
           { cache: 'no-store' },
@@ -73,7 +77,11 @@ export async function GET(request: NextRequest) {
         const overdue = selectOverdueInvoices(rows ?? [], today)
         if (overdue.length === 0) continue
         const ok = await notifyOverdueInvoices(
-          buildOverdueInvoicesMessage(overdue, conferenceBaseUrl(conference)),
+          buildOverdueInvoicesMessage(
+            overdue,
+            conference.title,
+            conferenceBaseUrl(conference),
+          ),
           conference,
         )
         if (ok) posted++

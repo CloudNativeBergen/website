@@ -87,13 +87,48 @@ describe('buildOverdueInvoicesMessage', () => {
         { sponsorName: 'A<b>', amount: 'kr 1 000', daysOverdue: 1 },
         { sponsorName: 'Beta', amount: 'amount not set', daysOverdue: 14 },
       ],
+      'Bergen 2026',
       'https://example.com',
     )
-    expect(msg.text).toBe('💸 2 overdue sponsor invoices')
+    expect(msg.text).toBe('💸 Bergen 2026: 2 overdue sponsor invoices')
     const json = JSON.stringify(msg.blocks)
     expect(json).toContain('kr 1 000, 1 day overdue')
     expect(json).toContain('*Beta*: amount not set, 14 days overdue')
     expect(json).toContain('A&lt;b&gt;')
     expect(json).toContain('https://example.com/admin/sponsors/invoices')
+    expect(json).toContain('Mark paid or cancelled to stop these reminders.')
+  })
+
+  it('splits long lists into sections under 3000 characters', () => {
+    const many = Array.from({ length: 200 }, (_, i) => ({
+      sponsorName: `Sponsor number ${i} with a fairly long name`,
+      amount: 'kr 100 000',
+      daysOverdue: 7,
+    }))
+    const msg = buildOverdueInvoicesMessage(many, 'X', 'https://e.com')
+    const sections = msg.blocks!.filter((b) => b.type === 'section')
+    expect(sections.length).toBeGreaterThan(2)
+    for (const b of sections)
+      expect(b.text!.text.length).toBeLessThanOrEqual(3000)
+    expect(JSON.stringify(msg.blocks)).toContain('Sponsor number 199')
+  })
+})
+
+describe('amount', () => {
+  const amount = (over: Partial<InvoiceRow>) =>
+    selectOverdueInvoices([row(over)], '2026-10-02')[0].amount
+
+  it('falls back to a plain amount for a non-ISO currency', () => {
+    expect(amount({ contractCurrency: 'OTHER' })).toBe('50000 OTHER')
+  })
+
+  it('uses the tier price when no contract value is set', () => {
+    expect(
+      amount({
+        contractValue: null,
+        tier: { price: [{ amount: 30000, currency: 'EUR' }] },
+      }),
+    ).toMatch(/30.000.*€|€.*30.000/)
+    expect(amount({ contractValue: null })).toBe('amount not set')
   })
 })

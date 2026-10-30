@@ -74,8 +74,11 @@ describe('/api/cron/overdue-invoices', () => {
     expect(fetch.mock.calls[1][1]).toEqual({ conferenceId: 'c1' })
     expect(fetch.mock.calls[2][1]).toEqual({ conferenceId: 'c3' })
     expect(notify).toHaveBeenCalledTimes(1)
-    expect(JSON.stringify(notify.mock.calls[0][0])).toContain(
-      'https://one.dev/admin/sponsors/invoices',
-    )
+    const sent = JSON.stringify(notify.mock.calls[0][0])
+    expect(sent).toContain('https://one.dev/admin/sponsors/invoices')
+    expect(notify.mock.calls[0][0].text).toContain('One')
+    // Only editions that ended within the last 90 Oslo days are read.
+    expect(fetch.mock.calls[0][0]).toContain('endDate >= $cutoff')
+    expect(fetch.mock.calls[0][1]).toEqual({ cutoff: '1999-10-04' })
   })
 })
