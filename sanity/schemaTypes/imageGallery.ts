@@ -41,6 +41,21 @@ export default defineType({
       initialValue: () => new Date().toISOString(),
       validation: (Rule) => Rule.required(),
     }),
+    // Undo values from one-off migrations 056 and 057 (October 2026).
+    defineField({
+      name: 'dateBeforeTzFix',
+      title: 'Date before time zone fix',
+      type: 'string',
+      readOnly: true,
+      hidden: true,
+    }),
+    defineField({
+      name: 'dateBeforeEventDayFix',
+      title: 'Date before event day fix',
+      type: 'string',
+      readOnly: true,
+      hidden: true,
+    }),
     defineField({
       name: 'location',
       title: 'Location',
