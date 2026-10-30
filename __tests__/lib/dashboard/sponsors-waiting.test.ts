@@ -131,6 +131,7 @@ describe('renewal reminders in the composed query (R2, #1687)', () => {
         _id: 'y2025',
         title: 'CNB 2025',
         origin: 'https://y2025.test',
+        ended: true,
       },
       candidates: [
         {

@@ -5,6 +5,8 @@ import {
   copyToNextEdition,
   getPreviousEditionRenewals,
   getRenewalContext,
+  getRenewalContextIntoCurrent,
+  PREVIOUS_EDITION_RENEWALS_ROOT,
   hasEnded,
   isRenewalWindowOpen,
   shapeRenewals,
@@ -276,5 +278,98 @@ describe('renewal reminders (R2)', () => {
     const renewals = shapeRenewals({ ...row, domains: ['*.example.test'] })
     expect(renewals?.edition.origin).toBeNull()
     expect(generateRenewalItems(renewals)[0].link).toBe('')
+  })
+})
+
+describe('renewing into the current edition (board strip)', () => {
+  const current = { _id: 'conf-2026', startDate: '2026-10-27' }
+  const after = new Date('2026-06-01')
+  const prev = {
+    _id: 'conf-2025',
+    title: 'CNB 2025',
+    startDate: '2025-10-27',
+    endDate: '2025-10-28',
+  }
+  const src = { _id: 'sfc-old', sponsor: { _ref: 's-1' }, tierTitle: 'Gold' }
+
+  it('finds last edition’s record when its next edition is this one', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ _id: 'conf-2025' })
+      .mockResolvedValueOnce(prev)
+      .mockResolvedValueOnce(src)
+      .mockResolvedValueOnce({ _id: 'conf-2026', title: 'CNB 2026' })
+    const ctx = await getRenewalContextIntoCurrent(
+      'org-a',
+      current,
+      'sfc-old',
+      after,
+    )
+    expect(ctx.source?._id).toBe('sfc-old')
+    expect(ctx.next?._id).toBe('conf-2026')
+    expect(fetchMock.mock.calls[0][0]).toContain('organization._ref == $orgId')
+    expect(fetchMock.mock.calls[0][0]).toContain('!(_id in path("drafts.**"))')
+  })
+
+  it('is not found when the record belongs to another conference', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ _id: 'conf-2025' })
+      .mockResolvedValueOnce(prev)
+      .mockResolvedValueOnce(null)
+    const ctx = await getRenewalContextIntoCurrent(
+      'org-a',
+      current,
+      'sfc-x',
+      after,
+    )
+    expect(ctx).toEqual({ source: null, next: null })
+  })
+
+  it('hands back the source before last edition has ended, so the route can say why', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ _id: 'conf-2025' })
+      .mockResolvedValueOnce(prev)
+      .mockResolvedValueOnce(src)
+    const ctx = await getRenewalContextIntoCurrent(
+      'org-a',
+      current,
+      'sfc-old',
+      new Date('2025-10-01'),
+    )
+    expect(ctx.source?._id).toBe('sfc-old')
+    expect(ctx.next).toBeNull()
+  })
+
+  it('is not found when the next edition is not this one', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ _id: 'conf-2025' })
+      .mockResolvedValueOnce(prev)
+      .mockResolvedValueOnce(src)
+      .mockResolvedValueOnce({ _id: 'conf-2027', title: 'CNB 2027' })
+    const ctx = await getRenewalContextIntoCurrent(
+      'org-a',
+      current,
+      'sfc-old',
+      after,
+    )
+    expect(ctx).toEqual({ source: null, next: null })
+  })
+
+  it('is not found without a previous edition', async () => {
+    fetchMock.mockResolvedValueOnce(null)
+    const ctx = await getRenewalContextIntoCurrent(
+      'org-a',
+      current,
+      'sfc-old',
+      after,
+    )
+    expect(ctx).toEqual({ source: null, next: null })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('candidates skip sponsors already in this edition and carry the tier', () => {
+    expect(PREVIOUS_EDITION_RENEWALS_ROOT).toContain(
+      '!(sponsor._ref in *[_type == "sponsorForConference" && conference._ref == $conferenceId].sponsor._ref)',
+    )
+    expect(PREVIOUS_EDITION_RENEWALS_ROOT).toContain('"tierTitle": tier->title')
   })
 })
