@@ -15,6 +15,7 @@ exports[`the sponsor mutation surface is pinned (#731 F10) > sponsor 1`] = `
   "crm.assignDiscountCodes",
   "crm.broadcastEmail",
   "crm.bulkDelete",
+  "crm.bulkSetInvoiceStatus",
   "crm.bulkUpdate",
   "crm.checkSignatureStatus",
   "crm.copyFromPreviousYear",

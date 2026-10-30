@@ -18,6 +18,9 @@ vi.mock('@/lib/trpc/client', () => ({
         update: {
           useMutation: () => ({ mutateAsync, isPending: false }),
         },
+        bulkSetInvoiceStatus: {
+          useMutation: () => ({ isPending: false }),
+        },
       },
     },
   },

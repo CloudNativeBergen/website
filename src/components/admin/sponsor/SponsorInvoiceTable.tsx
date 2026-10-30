@@ -11,7 +11,7 @@ import {
   EllipsisVerticalIcon,
 } from '@heroicons/react/24/outline'
 import { CheckIcon } from '@heroicons/react/24/solid'
-import { useNotification } from '@/components/admin'
+import { ConfirmationModal, useNotification } from '@/components/admin'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { StatusBadge } from '@/components/StatusBadge'
 import {
@@ -373,6 +373,129 @@ const InvoiceActions = ({ row }: { row: InvoiceRow }) => {
   )
 }
 
+const checkboxClass =
+  'h-5 w-5 cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-blue-500 sm:h-4 sm:w-4 dark:border-gray-600 dark:bg-gray-800'
+
+/**
+ * Select-all plus "Mark sent" / "Mark paid" for the selected rows. Each id runs
+ * through `sponsor.crm.bulkSetInvoiceStatus`, the same path as one row's
+ * button, so a refused transition fails only that sponsor. Failed rows stay
+ * selected.
+ */
+const BulkInvoiceBar = ({
+  rows,
+  selected,
+  setSelected,
+}: {
+  rows: InvoiceRow[]
+  selected: InvoiceRow[]
+  setSelected: (ids: Set<string>) => void
+}) => {
+  const utils = api.useUtils()
+  const { showNotification } = useNotification()
+  const [confirmPaid, setConfirmPaid] = useState(false)
+  const bulk = api.sponsor.crm.bulkSetInvoiceStatus.useMutation()
+  const allSelected = selected.length === rows.length
+  const busy = bulk.isPending
+
+  const run = async (status: 'sent' | 'paid') => {
+    try {
+      const results = await bulk.mutateAsync({
+        ids: selected.map((r) => r.sponsorForConferenceId),
+        invoiceStatus: status,
+      })
+      const failed = results.filter((r) => !r.ok)
+      const names = failed.map(
+        (f) =>
+          rows.find((r) => r.sponsorForConferenceId === f.id)?.sponsorName ??
+          f.id,
+      )
+      showNotification({
+        type: failed.length ? 'warning' : 'success',
+        title: `${results.length - failed.length} marked ${status}${failed.length ? `, ${failed.length} failed` : ''}`,
+        message: failed.length
+          ? `Not updated: ${names.join(', ')}. Open each in the CRM to see why.`
+          : 'Invoices updated.',
+      })
+      setSelected(new Set(failed.map((f) => f.id)))
+    } catch (err) {
+      showNotification({
+        type: 'error',
+        title: `Could not mark invoices ${status}`,
+        message: err instanceof Error ? err.message : 'Update failed',
+      })
+    } finally {
+      setConfirmPaid(false)
+      await utils.sponsor.crm.invalidate()
+    }
+  }
+
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900">
+      <label className="flex min-h-10 cursor-pointer items-center gap-2 text-sm text-gray-700 sm:min-h-0 dark:text-gray-300">
+        <input
+          type="checkbox"
+          className={checkboxClass}
+          checked={allSelected}
+          ref={(el) => {
+            if (el) el.indeterminate = selected.length > 0 && !allSelected
+          }}
+          onChange={() =>
+            setSelected(
+              new Set(
+                allSelected ? [] : rows.map((r) => r.sponsorForConferenceId),
+              ),
+            )
+          }
+        />
+        {selected.length > 0
+          ? `${selected.length} selected`
+          : 'Select all shown invoices'}
+      </label>
+      {selected.length > 0 && (
+        <div className="ml-auto flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={actionButtonClass}
+            disabled={busy}
+            aria-busy={busy}
+            onClick={() => run('sent')}
+          >
+            Mark sent
+          </button>
+          <button
+            type="button"
+            className={actionButtonClass}
+            disabled={busy}
+            onClick={() => setConfirmPaid(true)}
+          >
+            Mark paid
+          </button>
+          <button
+            type="button"
+            className={actionButtonClass}
+            disabled={busy}
+            onClick={() => setSelected(new Set())}
+          >
+            Clear
+          </button>
+        </div>
+      )}
+      <ConfirmationModal
+        isOpen={confirmPaid}
+        onClose={() => setConfirmPaid(false)}
+        onConfirm={() => run('paid')}
+        title="Mark invoices paid?"
+        message={`Mark ${selected.length} invoice${selected.length === 1 ? '' : 's'} as paid: ${selected.map((r) => r.sponsorName).join(', ')}. Today is stored as the payment date.`}
+        confirmButtonText="Mark paid"
+        variant="warning"
+        isLoading={busy}
+        guardSecondTap
+      />
+    </div>
+  )
+}
+
 function crmLink(id: string) {
   // A quick edit from the list: the invoice board, with the sponsor in its
   // side panel.
@@ -383,6 +506,25 @@ export function SponsorInvoiceTable({
   rows,
   emptyDescription = 'No sponsors to invoice for this conference.',
 }: SponsorInvoiceTableProps) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  // Only rows still shown count, so a filter change never acts on hidden rows.
+  const selected = rows.filter((r) => selectedIds.has(r.sponsorForConferenceId))
+  const toggle = (id: string) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedIds(next)
+  }
+  const rowCheckbox = (row: InvoiceRow) => (
+    <input
+      type="checkbox"
+      className={checkboxClass}
+      checked={selectedIds.has(row.sponsorForConferenceId)}
+      onChange={() => toggle(row.sponsorForConferenceId)}
+      aria-label={`Select ${row.sponsorName} invoice`}
+    />
+  )
+
   if (rows.length === 0) {
     return (
       <TableEmptyState
@@ -396,6 +538,11 @@ export function SponsorInvoiceTable({
 
   return (
     <div>
+      <BulkInvoiceBar
+        rows={rows}
+        selected={selected}
+        setSelected={setSelectedIds}
+      />
       <div className="space-y-3 lg:hidden">
         {rows.map((row) => (
           <div
@@ -407,7 +554,10 @@ export function SponsorInvoiceTable({
             }`}
           >
             <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
+              <div className="flex min-h-10 shrink-0 items-center">
+                {rowCheckbox(row)}
+              </div>
+              <div className="min-w-0 flex-1">
                 <div className="truncate font-medium text-gray-900 dark:text-white">
                   {row.sponsorName}
                 </div>
@@ -452,6 +602,9 @@ export function SponsorInvoiceTable({
         <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
           <TableHeader>
             <tr>
+              <Th width="3rem">
+                <span className="sr-only">Select</span>
+              </Th>
               <Th>Sponsor</Th>
               <Th>Amount</Th>
               <Th>Invoice delivery</Th>
@@ -472,6 +625,7 @@ export function SponsorInvoiceTable({
                     : undefined
                 }
               >
+                <Td>{rowCheckbox(row)}</Td>
                 <Td>
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-gray-900 dark:text-white">
