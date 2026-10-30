@@ -260,7 +260,7 @@ export function SponsorProspectus({
                             standardTiers.length <= 2 ? 'text-4xl' : 'text-xl',
                           )}
                         >
-                          {tier.price[0].amount
+                          {(tier.price[0].amount ?? 0)
                             .toString()
                             .replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}{' '}
                           {tier.price[0].currency}
@@ -400,7 +400,7 @@ export function SponsorProspectus({
                     {tier.price && tier.price.length > 0 && (
                       <p className="mt-4 flex items-baseline gap-x-1">
                         <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-                          {tier.price[0].amount
+                          {(tier.price[0].amount ?? 0)
                             .toString()
                             .replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}{' '}
                           {tier.price[0].currency}

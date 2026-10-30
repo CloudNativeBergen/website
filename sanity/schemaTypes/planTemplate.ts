@@ -231,6 +231,20 @@ export default defineType({
                       name: 'targetPage',
                       title: 'Target page',
                       type: 'string',
+                      validation: (Rule) => [
+                        Rule.custom((page?: string) =>
+                          !page || page.startsWith('/')
+                            ? true
+                            : 'Must be a site path starting with /',
+                        ),
+                        Rule.warning().custom((page, context) =>
+                          page ||
+                          (context.parent as { kind?: string } | undefined)
+                            ?.kind !== 'publishing'
+                            ? true
+                            : 'Publishing recipes link here; the front page is used when empty',
+                        ),
+                      ],
                     }),
                     defineField({
                       name: 'subjectSource',

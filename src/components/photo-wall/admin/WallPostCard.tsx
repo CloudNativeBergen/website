@@ -491,8 +491,8 @@ function TalkTag({
 
   const needle = search.trim().toLowerCase()
   const found = talks.filter((talk) =>
-    [talk.title, ...talk.speakers].some((text) =>
-      text.toLowerCase().includes(needle),
+    [talk.title, ...(talk.speakers ?? [])].some((text) =>
+      text?.toLowerCase().includes(needle),
     ),
   )
 

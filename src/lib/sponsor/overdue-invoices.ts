@@ -53,11 +53,7 @@ export function selectOverdueInvoices(
 function formatAmount(row: InvoiceRow): string {
   const { value, currency } = calculateSponsorValue(row)
   if (!value) return 'amount not set'
-  try {
-    return formatCurrency(value, currency)
-  } catch {
-    return `${value} ${currency}` // non-ISO code such as 'OTHER'
-  }
+  return formatCurrency(value, currency)
 }
 
 /** Slack rejects a section text over 3000 characters. */

@@ -129,7 +129,8 @@ export function ProposalReviewList({
                 { key: 'relevance', label: 'Relevance' },
                 { key: 'speaker', label: 'Speaker' },
               ].map(({ key, label }) => {
-                const score = review.score[key as keyof typeof review.score]
+                const score =
+                  review.score?.[key as keyof typeof review.score] ?? 0
                 return (
                   <div key={key} className="flex items-center justify-between">
                     <span className="w-24 text-sm text-gray-600 dark:text-gray-300">

@@ -41,7 +41,7 @@ describe('validateSponsorTier', () => {
     it('fails with invalid currency', () => {
       const errors = validateSponsorTier({
         ...baseTier,
-        price: [{ amount: 1000, currency: 'GBP' }],
+        price: [{ amount: 1000, currency: 'XYZ' }],
       })
       expect(errors).toContainEqual(
         expect.objectContaining({ field: 'price.0.currency' }),
@@ -303,5 +303,31 @@ describe('validateSponsor', () => {
     expect(fields).toContain('name')
     expect(fields).toContain('website')
     expect(fields).toContain('logo')
+  })
+})
+
+describe('validateSponsorTier currencies', () => {
+  const tier: SponsorTierInput = {
+    title: 'Tier',
+    tagline: 'Tagline',
+    tierType: 'standard',
+    soldOut: false,
+    mostPopular: false,
+    price: [{ amount: 1000, currency: 'SEK' }],
+    perks: [{ label: 'Perk', description: 'Desc' }],
+  }
+
+  it('accepts every ISO currency the tier editor offers', () => {
+    expect(validateSponsorTier(tier)).toHaveLength(0)
+  })
+
+  it("rejects 'OTHER', which cannot be formatted or totalled", () => {
+    const errors = validateSponsorTier({
+      ...tier,
+      price: [{ amount: 1000, currency: 'OTHER' }],
+    })
+    expect(errors).toContainEqual(
+      expect.objectContaining({ field: 'price.0.currency' }),
+    )
   })
 })

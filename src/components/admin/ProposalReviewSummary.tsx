@@ -10,23 +10,25 @@ interface ProposalReviewSummaryProps {
 }
 
 export function ProposalReviewSummary({ reviews }: ProposalReviewSummaryProps) {
+  // A review saved in Studio without scores has no `score` object.
+  const scored = reviews.filter((review) => review.score)
   const averageScores =
-    reviews.length > 0
+    scored.length > 0
       ? {
           content:
-            reviews.reduce((acc, review) => acc + review.score.content, 0) /
-            reviews.length,
+            scored.reduce((acc, review) => acc + review.score.content, 0) /
+            scored.length,
           relevance:
-            reviews.reduce((acc, review) => acc + review.score.relevance, 0) /
-            reviews.length,
+            scored.reduce((acc, review) => acc + review.score.relevance, 0) /
+            scored.length,
           speaker:
-            reviews.reduce((acc, review) => acc + review.score.speaker, 0) /
-            reviews.length,
+            scored.reduce((acc, review) => acc + review.score.speaker, 0) /
+            scored.length,
         }
       : { content: 0, relevance: 0, speaker: 0 }
 
   const overallAverage =
-    reviews.length > 0
+    scored.length > 0
       ? (averageScores.content +
           averageScores.relevance +
           averageScores.speaker) /

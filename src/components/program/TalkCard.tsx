@@ -148,7 +148,7 @@ const calculateDurationMinutes = (
     const [h, m] = hhmm.split(':').map(Number)
     return h * 60 + m
   }
-  return toMinutes(endTime) - toMinutes(startTime)
+  return Math.max(0, toMinutes(endTime) - toMinutes(startTime))
 }
 
 export function TalkCard({

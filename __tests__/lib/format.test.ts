@@ -1,4 +1,4 @@
-import { formatOrgNumber, mailtoHref } from '@/lib/format'
+import { formatCurrency, formatOrgNumber, mailtoHref } from '@/lib/format'
 
 const nbsp = '\u00A0'
 
@@ -82,5 +82,11 @@ describe('mailtoHref', () => {
   it('returns null for an absent address', () => {
     expect(mailtoHref(undefined)).toBeNull()
     expect(mailtoHref('   ')).toBeNull()
+  })
+})
+
+describe('formatCurrency', () => {
+  it('falls back to a plain number for a non-ISO code instead of throwing', () => {
+    expect(formatCurrency(1500, 'OTHER')).toBe(`1${nbsp}500 OTHER`)
   })
 })

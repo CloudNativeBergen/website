@@ -31,6 +31,7 @@ function build(
   kind: TaskKind,
   newShortCode: () => string,
   shortLinkOrigin: string | null = CONFERENCE.baseUrl,
+  targetPage: string | null = '/program',
 ) {
   const input: MaterializeInput = {
     recipe: {
@@ -39,7 +40,7 @@ function build(
       title: 'A Task',
       kind,
       ...(kind === 'publishing' ? { channel: 'bluesky' as const } : {}),
-      targetPage: '/program',
+      targetPage: targetPage ?? undefined,
       subjectSource: 'none',
       skeleton: 'See the program: {url}',
     },
@@ -158,4 +159,20 @@ describe('a whole plan mints distinct codes', () => {
     expect(new Set(codes).size).toBe(codes.length)
     for (const code of codes) expect(code).toMatch(/^[a-hjkmnp-z2-9]{6}$/)
   })
+})
+
+describe('a publishing recipe without a usable target page', () => {
+  it.each([null, 'tickets'])(
+    'links the front page for %s instead of throwing',
+    (page) => {
+      const { tasks, variants } = build(
+        'publishing',
+        sequentialShortCodes(),
+        CONFERENCE.baseUrl,
+        page,
+      )
+      expect(tasks[0].targetPage).toBe('/')
+      expect(variants[0].link).toMatch(/^https:\/\/cloudnativebergen\.dev\/\?/)
+    },
+  )
 })

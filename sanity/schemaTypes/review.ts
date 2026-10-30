@@ -24,6 +24,7 @@ export default defineType({
       type: 'object',
       title: 'Score',
       description: 'Scores for the proposal.',
+      validation: (Rule) => Rule.required().warning(),
       fields: [
         defineField({
           name: 'content',

@@ -47,7 +47,12 @@ export default defineType({
           type: 'object',
           name: 'priceItem',
           fields: [
-            { name: 'amount', title: 'Amount', type: 'number' },
+            {
+              name: 'amount',
+              title: 'Amount',
+              type: 'number',
+              validation: (Rule) => [Rule.min(0), Rule.required().warning()],
+            },
             {
               name: 'currency',
               title: 'Currency',

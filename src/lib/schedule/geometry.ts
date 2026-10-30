@@ -31,7 +31,7 @@ export const calculateTalkPosition = (
 ): { top: number; height: number } => {
   const top = calculateTimePosition(talk.startTime)
   const durationMinutes = durationBetween(talk.startTime, talk.endTime)
-  const height = durationMinutes * PIXELS_PER_MINUTE
+  const height = Math.max(0, durationMinutes) * PIXELS_PER_MINUTE
   return { top, height }
 }
 

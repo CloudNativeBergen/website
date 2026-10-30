@@ -97,6 +97,12 @@ export default defineType({
       description:
         'Required for publishing; an optional label for other Kinds.',
       type: 'string',
+      validation: (Rule) =>
+        Rule.warning().custom((channel, context) =>
+          channel || context.document?.kind !== 'publishing'
+            ? true
+            : 'Publishing tasks need a channel',
+        ),
       options: {
         list: MARKETING_CHANNELS.map((value) => ({
           title: MARKETING_CHANNEL_LABELS[value],

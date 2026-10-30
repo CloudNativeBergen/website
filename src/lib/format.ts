@@ -50,12 +50,16 @@ export function formatCurrency(
   } = options || {}
 
   if (useIntlFormat) {
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency,
-      minimumFractionDigits,
-      maximumFractionDigits,
-    }).format(amount)
+    try {
+      return new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency,
+        minimumFractionDigits,
+        maximumFractionDigits,
+      }).format(amount)
+    } catch {
+      // Not an ISO 4217 code (Studio offers 'OTHER'): Intl throws a RangeError.
+    }
   }
 
   return `${formatNumber(amount)} ${currency}`

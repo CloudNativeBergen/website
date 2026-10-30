@@ -182,4 +182,21 @@ describe('SponsorProspectus', () => {
     expect(screen.queryByTestId('sponsors-grid')).not.toBeInTheDocument()
     expect(screen.queryByText('The Vibe')).not.toBeInTheDocument()
   })
+
+  it('renders a tier whose price has no amount instead of crashing', () => {
+    const unpriced = {
+      ...mockStandardTiers[0],
+      price: [{ currency: 'NOK' }],
+    } as unknown as SponsorTier
+    render(
+      <SponsorProspectus
+        conference={mockConference}
+        standardTiers={[unpriced]}
+        specialTiers={[unpriced]}
+        addonTiers={[]}
+        pastSponsors={[]}
+      />,
+    )
+    expect(screen.getAllByText(/0\s+NOK/).length).toBeGreaterThan(0)
+  })
 })
