@@ -367,3 +367,40 @@ describe('formatSessionInstant', () => {
     )
   })
 })
+
+describe('gallery photo time helpers (Europe/Oslo)', () => {
+  it('reads and writes Oslo wall-clock, across DST', async () => {
+    const t = await import('@/lib/time')
+    // Summer (UTC+2): 22:30 UTC is 00:30 the next Oslo day.
+    expect(t.extractDateFromISO('2026-06-10T22:30:00.000Z')).toBe('2026-06-11')
+    expect(t.extractTimeFromISO('2026-06-10T22:30:00.000Z')).toBe('00:30')
+    expect(t.updateTimeInISO('2026-06-10T08:00:00.000Z', '14:15')).toBe(
+      '2026-06-10T12:15:00.000Z',
+    )
+    // Winter (UTC+1).
+    expect(t.updateDateInISO('2026-06-10T08:00:00.000Z', '2026-12-01')).toBe(
+      '2026-12-01T09:00:00.000Z',
+    )
+    expect(t.exifDateTimeToISO('2026:01:15 23:30:45')).toBe(
+      '2026-01-15T22:30:45.000Z',
+    )
+    expect(t.extractDateFromISO('2026-03-14')).toBe('2026-03-14')
+  })
+})
+
+describe('Oslo day boundaries used by admin badges and domain cards', () => {
+  it('formats and dates an instant just after Oslo midnight as the next day', async () => {
+    const t = await import('@/lib/time')
+    // 23:30 UTC on 31 Dec is 00:30 on 1 Jan in Oslo (winter, UTC+1).
+    expect(t.formatDateTimeSafe('2025-12-31T23:30:00Z')).toMatch(
+      /1\. januar 2026 kl\. 00:30/,
+    )
+    expect(t.osloTodayDateString(new Date('2025-12-31T23:30:00Z'))).toBe(
+      '2026-01-01',
+    )
+    // 22:30 UTC in summer (UTC+2) is already the next Oslo day.
+    expect(t.osloTodayDateString(new Date('2026-06-10T22:30:00Z'))).toBe(
+      '2026-06-11',
+    )
+  })
+})

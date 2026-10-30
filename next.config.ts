@@ -115,6 +115,18 @@ const config: NextConfig = {
         destination: '/program',
         permanent: true,
       },
+      // Travel support moved under speakers; the dashboard widget also used
+      // to link to a per-request path that never existed.
+      {
+        source: '/admin/travel-support',
+        destination: '/admin/speakers/travel-support',
+        permanent: true,
+      },
+      {
+        source: '/admin/travel-support/:id',
+        destination: '/admin/speakers/travel-support?request=:id',
+        permanent: true,
+      },
     ]
   },
 }
