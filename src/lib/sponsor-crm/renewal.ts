@@ -106,7 +106,7 @@ export async function getRenewalContext(
   const next = await scopedFetch<NextEdition | null>(
     clientReadUncached,
     { orgId },
-    `*[_type == "conference" && startDate > $startDate] | order(startDate asc)[0]{
+    `*[_type == "conference" && startDate > $startDate && !(_id in path("drafts.**"))] | order(startDate asc)[0]{
       _id, title, domains, "organizers": organizers[]._ref,
       "existingId": *[_type == "sponsorForConference" && conference._ref == ^._id && conference->organization._ref == $orgId && sponsor._ref == $sponsorId][0]._id,
       "tierId": *[_type == "sponsorTier" && conference._ref == ^._id && conference->organization._ref == $orgId && title == $tierTitle][0]._id
@@ -136,7 +136,7 @@ export async function getRenewalContextIntoCurrent(
   const previous = await scopedFetch<{ _id: string } | null>(
     clientReadUncached,
     { orgId },
-    `*[_type == "conference" && startDate < $startDate] | order(startDate desc)[0]{ _id }`,
+    `*[_type == "conference" && startDate < $startDate && !(_id in path("drafts.**"))] | order(startDate desc)[0]{ _id }`,
     { startDate: current.startDate },
   )
   if (!previous) return none
@@ -146,7 +146,10 @@ export async function getRenewalContextIntoCurrent(
     sponsorForConferenceId,
     now,
   )
-  return context.next?._id === current._id ? context : none
+  if (!context.source) return none
+  // `next` is null until last edition has ended: let the route say so.
+  if (context.next && context.next._id !== current._id) return none
+  return context
 }
 
 /** Deterministic, so two organizers copying at once land on one record. */
@@ -220,15 +223,19 @@ export async function copyToNextEdition(
 export interface RenewalCandidate {
   _id: string
   name: string
-  logo?: string
-  logoBright?: string
   tierTitle?: string
   assignedTo?: { _id: string; name: string; image?: string }
 }
 
 export interface PreviousEditionRenewals {
   /** `origin` is null when no domain derives a usable URL: hide the link. */
-  edition: { _id: string; title: string; origin: string | null }
+  edition: {
+    _id: string
+    title: string
+    origin: string | null
+    /** False until the edition is over; renewing is refused before that. */
+    ended: boolean
+  }
   candidates: RenewalCandidate[]
 }
 
@@ -237,19 +244,20 @@ export interface PreviousEditionRenewals {
  * closed-won sponsors with no deal (any status) in `$conferenceId`. A root of
  * its own, so the `/admin` dashboard composes it into its single query.
  */
-export const PREVIOUS_EDITION_RENEWALS_ROOT = `*[_type == "conference" && organization._ref == $orgId && startDate < $currentStartDate] | order(startDate desc)[0]{
-  _id, title, domains,
+export const PREVIOUS_EDITION_RENEWALS_ROOT = `*[_type == "conference" && organization._ref == $orgId && startDate < $currentStartDate && !(_id in path("drafts.**"))] | order(startDate desc)[0]{
+  _id, title, domains, endDate,
   "candidates": *[_type == "sponsorForConference" && conference._ref == ^._id && conference->organization._ref == $orgId && status == "closed-won"
     && !(sponsor._ref in *[_type == "sponsorForConference" && conference._ref == $conferenceId].sponsor._ref)]{
-    _id, "name": sponsor->name, "logo": sponsor->logo, "logoBright": sponsor->logoBright, "tierTitle": tier->title, assignedTo->{ _id, name, "image": coalesce(image.asset->url, imageURL) }
+    _id, "name": sponsor->name, "tierTitle": tier->title, assignedTo->{ _id, name, "image": coalesce(image.asset->url, imageURL) }
   }
 }`
 
 export type PreviousEditionRenewalsRow =
-  (EditionRow & { candidates?: RenewalCandidate[] }) | null
+  (EditionRow & { endDate?: string; candidates?: RenewalCandidate[] }) | null
 
 export function shapeRenewals(
   row: PreviousEditionRenewalsRow | undefined,
+  now = new Date(),
 ): PreviousEditionRenewals | null {
   if (!row) return null
   return {
@@ -257,6 +265,7 @@ export function shapeRenewals(
       _id: row._id,
       title: row.title,
       origin: findOutboundOrigin(row),
+      ended: hasEnded(row.endDate, now),
     },
     candidates: row.candidates ?? [],
   }
@@ -278,5 +287,5 @@ export async function getPreviousEditionRenewals(
       currentStartDate: conference.startDate,
     },
   )
-  return shapeRenewals(row)
+  return shapeRenewals(row, now)
 }

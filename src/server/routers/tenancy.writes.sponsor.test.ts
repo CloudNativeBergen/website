@@ -37,6 +37,9 @@ const h = vi.hoisted(() => ({
   /** How many of a bulk request's ids the scoped count reports as ours. */
   ownedCount: 0,
   writes: [] as string[],
+  /** Per-test answers for the renewal reads; `undefined` falls through. */
+  renewalFetch: null as
+    ((query: string, params?: Record<string, unknown>) => unknown) | null,
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -45,6 +48,8 @@ vi.mock('@/lib/conference/sanity', () => ({
 
 vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string, params?: Record<string, unknown>) => {
+    const renewal = h.renewalFetch?.(query, params)
+    if (renewal !== undefined) return renewal
     // The contract send's fresh state read before any costly work (#1264):
     // nothing out, nothing reserved.
     if (query.includes('"addonIds": addons[]._ref }')) {
@@ -88,7 +93,10 @@ vi.mock('@/lib/sanity/client', () => {
       h.writes.push(`delete:${id}`)
       return { results: [] }
     },
-    create: async () => ({ _id: 'new' }),
+    create: async (doc: { _id?: string }) => {
+      h.writes.push(`create:${doc._id}`)
+      return { _id: doc._id ?? 'new' }
+    },
   }
   return {
     clientRead: client,
@@ -289,6 +297,7 @@ beforeEach(() => {
   h.tenant = null
   h.tenantById = {}
   h.ownedCount = 0
+  h.renewalFetch = null
   h.getConference.mockResolvedValue({
     conference: { _id: CONF_A, organization: { _ref: ORG_A } },
     domain: 'localhost',
@@ -1078,5 +1087,66 @@ describe('the sponsor mutation surface is pinned (#731 F10)', () => {
 
   it('sponsor', () => {
     expect(mutationPaths(sponsorRouter)).toMatchSnapshot()
+  })
+})
+
+describe('crm.copyToNextYear with intoCurrent (board renewal strip)', () => {
+  const PREV = 'conf-prev'
+  /** Org-scoped reads for this org's previous edition and its records. */
+  function editions(opts: { sourceIn: string; ended: boolean }) {
+    h.getConference.mockResolvedValue({
+      conference: {
+        _id: CONF_A,
+        startDate: '2099-10-27',
+        organization: { _ref: ORG_A },
+      },
+      domain: 'localhost',
+      error: null,
+    })
+    h.renewalFetch = (query, params) => {
+      if (query.includes('order(startDate desc)[0]{ _id }'))
+        return { _id: PREV }
+      if (query.includes('_type == "conference" && _id == $conferenceId'))
+        return {
+          _id: PREV,
+          title: 'Last year',
+          startDate: '2000-10-27',
+          endDate: opts.ended ? '2000-10-28' : '2999-01-01',
+        }
+      if (query.includes('_type == "sponsorForConference" && _id == $id'))
+        return params?.conferenceId === opts.sourceIn
+          ? { _id: 'sfc-old', sponsor: { _ref: 'sp-A' }, tierTitle: 'Gold' }
+          : null
+      if (query.includes('order(startDate asc)[0]'))
+        return { _id: CONF_A, title: 'This year', domains: [] }
+      return undefined
+    }
+  }
+
+  it('refuses a record that is not from our previous edition', async () => {
+    editions({ sourceIn: 'conf-B', ended: true })
+    await expect(
+      sponsor().crm.copyToNextYear({ id: 'sfc-B', intoCurrent: true }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.writes).toEqual([])
+  })
+
+  it('says the event has not ended rather than "not found"', async () => {
+    editions({ sourceIn: PREV, ended: false })
+    await expect(
+      sponsor().crm.copyToNextYear({ id: 'sfc-old', intoCurrent: true }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' })
+    expect(h.writes).toEqual([])
+  })
+
+  it('copies last year’s record into this conference', async () => {
+    editions({ sourceIn: PREV, ended: true })
+    await expect(
+      sponsor().crm.copyToNextYear({ id: 'sfc-old', intoCurrent: true }),
+    ).resolves.toMatchObject({
+      id: `sfc-renewal-${CONF_A}-sp-A`,
+      created: true,
+    })
+    expect(h.writes).toContain(`create:sfc-renewal-${CONF_A}-sp-A`)
   })
 })

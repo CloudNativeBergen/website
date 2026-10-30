@@ -307,6 +307,7 @@ describe('renewing into the current edition (board strip)', () => {
     expect(ctx.source?._id).toBe('sfc-old')
     expect(ctx.next?._id).toBe('conf-2026')
     expect(fetchMock.mock.calls[0][0]).toContain('organization._ref == $orgId')
+    expect(fetchMock.mock.calls[0][0]).toContain('!(_id in path("drafts.**"))')
   })
 
   it('is not found when the record belongs to another conference', async () => {
@@ -321,6 +322,21 @@ describe('renewing into the current edition (board strip)', () => {
       after,
     )
     expect(ctx).toEqual({ source: null, next: null })
+  })
+
+  it('hands back the source before last edition has ended, so the route can say why', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ _id: 'conf-2025' })
+      .mockResolvedValueOnce(prev)
+      .mockResolvedValueOnce(src)
+    const ctx = await getRenewalContextIntoCurrent(
+      'org-a',
+      current,
+      'sfc-old',
+      new Date('2025-10-01'),
+    )
+    expect(ctx.source?._id).toBe('sfc-old')
+    expect(ctx.next).toBeNull()
   })
 
   it('is not found when the next edition is not this one', async () => {

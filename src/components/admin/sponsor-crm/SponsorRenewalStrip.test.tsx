@@ -14,7 +14,7 @@ import { SponsorRenewalStripView } from './SponsorRenewalStrip'
 vi.mock('@/lib/trpc/client', () => ({ api: {} }))
 
 const renewals = {
-  edition: { _id: 'conf-2025', title: 'CNB 2025', origin: null },
+  edition: { _id: 'conf-2025', title: 'CNB 2025', origin: null, ended: true },
   candidates: [
     { _id: 'sfc-1', name: 'Acme', tierTitle: 'Gold' },
     { _id: 'sfc-2', name: 'Kube Corp' },
@@ -35,6 +35,52 @@ describe('SponsorRenewalStripView', () => {
     expect(container).toBeEmptyDOMElement()
     rerender(<SponsorRenewalStripView renewals={null} onRenew={vi.fn()} />)
     expect(container).toBeEmptyDOMElement()
+  })
+
+  it('stays hidden until last edition has ended', () => {
+    const { container } = render(
+      <SponsorRenewalStripView
+        renewals={{
+          ...renewals,
+          edition: { ...renewals.edition, ended: false },
+        }}
+        onRenew={vi.fn()}
+      />,
+    )
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('disables every Renew button while one is running', async () => {
+    let resolve: (v: unknown) => void = () => {}
+    const onRenew = vi.fn(() => new Promise((r) => (resolve = r)))
+    render(<SponsorRenewalStripView renewals={renewals} onRenew={onRenew} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Renew Acme' }))
+    expect(screen.getByRole('button', { name: 'Renew Acme' })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Renew Kube Corp' }),
+    ).toBeDisabled()
+    resolve({})
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Renew Kube Corp' }),
+      ).toBeEnabled(),
+    )
+  })
+
+  it('shows the strip expanded when localStorage throws', () => {
+    const boom = () => {
+      throw new Error('blocked')
+    }
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(boom)
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(boom)
+    render(<SponsorRenewalStripView renewals={renewals} onRenew={vi.fn()} />)
+    expect(
+      screen.getByRole('button', { name: 'Renew Acme' }),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { expanded: true }))
+    expect(screen.queryByRole('button', { name: 'Renew Acme' })).toBeNull()
+    get.mockRestore()
+    set.mockRestore()
   })
 
   it('removes the chip once renewed', async () => {

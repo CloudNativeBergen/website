@@ -2,7 +2,6 @@
 
 import { useState, useSyncExternalStore } from 'react'
 import { ArrowPathIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
-import { SponsorLogo } from '@/components/SponsorLogo'
 import { api } from '@/lib/trpc/client'
 import type { PreviousEditionRenewals } from '@/lib/sponsor-crm/renewal'
 
@@ -22,7 +21,13 @@ export function SponsorRenewalStripView({
   // Read after hydration; the server renders it expanded.
   const stored = useSyncExternalStore(
     noSubscribe,
-    () => localStorage.getItem(STORAGE_KEY) === '1',
+    () => {
+      try {
+        return localStorage.getItem(STORAGE_KEY) === '1'
+      } catch {
+        return false // Storage blocked: show it expanded.
+      }
+    },
     () => false,
   )
   const [toggled, setCollapsed] = useState<boolean | null>(null)
@@ -34,12 +39,16 @@ export function SponsorRenewalStripView({
   const candidates = (renewals?.candidates ?? []).filter(
     (c) => !done.includes(c._id),
   )
-  if (!renewals || candidates.length === 0) return null
+  if (!renewals?.edition.ended || candidates.length === 0) return null
 
   const toggle = () => {
     const next = !collapsed
     setCollapsed(next)
-    localStorage.setItem(STORAGE_KEY, next ? '1' : '0')
+    try {
+      localStorage.setItem(STORAGE_KEY, next ? '1' : '0')
+    } catch {
+      // Best-effort: collapsed for this visit even if it can't be saved.
+    }
   }
 
   const renew = async (id: string) => {
@@ -81,14 +90,6 @@ export function SponsorRenewalStripView({
               key={c._id}
               className="flex shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-gray-50 py-1 pr-1 pl-3 text-sm dark:border-gray-600 dark:bg-gray-900"
             >
-              {c.logo && (
-                <SponsorLogo
-                  logo={c.logo}
-                  logoBright={c.logoBright}
-                  name={c.name}
-                  className="h-5 w-auto max-w-10 object-contain"
-                />
-              )}
               <span className="font-medium text-gray-900 dark:text-white">
                 {c.name}
               </span>
@@ -102,7 +103,7 @@ export function SponsorRenewalStripView({
                 onClick={() => renew(c._id)}
                 disabled={pending !== null}
                 aria-label={`Renew ${c.name}`}
-                className="min-h-8 rounded-full bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                className="min-h-11 rounded-full bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:opacity-50 sm:min-h-8"
               >
                 {pending === c._id ? 'Renewing…' : 'Renew'}
               </button>

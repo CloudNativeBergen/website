@@ -3,7 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test'
 import { SponsorRenewalStripView } from './SponsorRenewalStrip'
 
 const renewals = {
-  edition: { _id: 'conf-2025', title: 'CNB 2025', origin: null },
+  edition: { _id: 'conf-2025', title: 'CNB 2025', origin: null, ended: true },
   candidates: [
     { _id: 'sfc-1', name: 'Acme Cloud', tierTitle: 'Ingress' },
     { _id: 'sfc-2', name: 'Kube Corp', tierTitle: 'Service' },
