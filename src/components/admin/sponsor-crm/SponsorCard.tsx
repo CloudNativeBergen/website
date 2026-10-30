@@ -295,10 +295,12 @@ export function SponsorCard({
       </p>
 
       {/* Selection checkbox */}
-      <div
+      <label
         className={clsx(
-          'absolute top-1 left-1 z-10 leading-none transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-within:opacity-100',
-          isSelected || isSelectionMode ? 'opacity-100' : 'opacity-0',
+          'absolute top-0 left-0 z-10 p-2.5 leading-none transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-within:opacity-100',
+          isSelected || isSelectionMode
+            ? 'opacity-100'
+            : 'opacity-0 [@media(hover:none)]:opacity-100',
         )}
         {...stop}
       >
@@ -309,7 +311,7 @@ export function SponsorCard({
           onChange={() => onToggleSelect?.()}
           className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
         />
-      </div>
+      </label>
 
       {/* Options menu */}
       <div className="absolute top-1 right-1 z-10" {...stop}>

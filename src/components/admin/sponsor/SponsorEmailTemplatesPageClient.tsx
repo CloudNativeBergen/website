@@ -371,14 +371,16 @@ function SortableTemplateRow({
       <div className="flex shrink-0 gap-1">
         <Link
           href={`/admin/sponsors/templates/${template._id}`}
-          className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+          className="rounded p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+          aria-label="Edit template"
           title="Edit template"
         >
           <PencilSquareIcon className="h-4 w-4" />
         </Link>
         <button
           onClick={onDelete}
-          className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+          className="rounded p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+          aria-label="Delete template"
           title="Delete template"
         >
           <TrashIcon className="h-4 w-4" />

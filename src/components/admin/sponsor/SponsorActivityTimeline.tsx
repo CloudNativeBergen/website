@@ -319,7 +319,7 @@ export function ActivityLine({
             type="button"
             onClick={startEdit}
             aria-label="Edit activity"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-600 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-600 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-gray-700 dark:hover:text-gray-200 [@media(hover:none)]:opacity-100"
           >
             <PencilSquareIcon className="h-4 w-4" />
           </button>

@@ -207,7 +207,8 @@ export function SponsorTierManagement({
                               onClick={() =>
                                 handleDownloadSvg(sponsor.name, sponsor.logo!)
                               }
-                              className="rounded-md bg-blue-50 p-1.5 text-blue-600 hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:bg-blue-900/50 dark:text-blue-400 dark:hover:bg-blue-900"
+                              className="rounded-md bg-blue-50 p-2 text-blue-600 hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:bg-blue-900/50 dark:text-blue-400 dark:hover:bg-blue-900"
+                              aria-label="Download SVG logo"
                               title="Download SVG logo"
                             >
                               <ArrowDownTrayIcon className="h-4 w-4" />
@@ -215,7 +216,8 @@ export function SponsorTierManagement({
                           )}
                           <button
                             onClick={() => openEditModal(sponsorData)}
-                            className="rounded-md bg-indigo-50 p-1.5 text-indigo-600 hover:bg-indigo-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400 dark:hover:bg-indigo-900"
+                            className="rounded-md bg-indigo-50 p-2 text-indigo-600 hover:bg-indigo-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400 dark:hover:bg-indigo-900"
+                            aria-label="Edit sponsor"
                             title="Edit sponsor"
                           >
                             <PencilIcon className="h-4 w-4" />
@@ -225,7 +227,8 @@ export function SponsorTierManagement({
                               handleRemoveSponsor(sponsor.name, sfcId)
                             }
                             disabled={removeSponsorMutation.isPending}
-                            className="rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-900"
+                            className="rounded-md bg-red-50 p-2 text-red-600 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-900"
+                            aria-label="Remove sponsor"
                             title="Remove sponsor"
                           >
                             <TrashIcon className="h-4 w-4" />
