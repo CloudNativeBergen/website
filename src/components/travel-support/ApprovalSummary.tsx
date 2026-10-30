@@ -16,7 +16,7 @@ import {
 } from '@/lib/travel-support/types'
 import { TravelSupportService } from '@/lib/travel-support/service'
 import { useExchangeRates } from '@/hooks/useExchangeRates'
-import { formatConferenceDateLong } from '@/lib/time'
+import { formatConferenceDateLong, osloTodayDateString } from '@/lib/time'
 
 interface ApprovalSummaryProps {
   travelSupport: TravelSupportWithExpenses
@@ -129,7 +129,7 @@ export function ApprovalSummary({ travelSupport }: ApprovalSummaryProps) {
                       Paid on{' '}
                       {travelSupport.paidAt
                         ? formatConferenceDateLong(
-                            travelSupport.paidAt.split('T')[0],
+                            osloTodayDateString(new Date(travelSupport.paidAt)),
                           )
                         : 'Recently'}
                     </>
