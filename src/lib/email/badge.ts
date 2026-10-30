@@ -83,7 +83,10 @@ export async function sendBadgeEmail({
     // `sendBadgeEmailWithRetry` sends it again.
     await updateBadgeEmailStatus(badge.badgeId, 'sent', data?.id).catch(
       (statusError) =>
-        console.error('Badge email sent, status update failed:', statusError),
+        console.error(
+          `Badge email sent, status update failed for ${badge.badgeId}:`,
+          statusError,
+        ),
     )
 
     return {

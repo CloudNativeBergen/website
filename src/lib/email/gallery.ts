@@ -29,7 +29,9 @@ export async function sendGalleryTagEmail(
   request: GalleryTagEmailRequest,
 ): Promise<GalleryTagEmailResponse> {
   try {
-    const { speaker, image, conference, domain } = request
+    const { speaker, image, conference } = request
+    const eventUrl = conferenceBaseUrl(conference)
+    const galleryUrl = buildGalleryImageUrl(eventUrl, image._id)
 
     // Skip email sending in development mode
     if (process.env.NODE_ENV === 'development') {
@@ -38,7 +40,7 @@ export async function sendGalleryTagEmail(
         speakerEmail: speaker.email,
         imageId: image._id,
         eventName: conference.title,
-        galleryUrl: buildGalleryImageUrl(domain, image._id),
+        galleryUrl,
       })
       return {
         success: true,
@@ -99,8 +101,6 @@ export async function sendGalleryTagEmail(
       }
     }
 
-    const eventUrl = conferenceBaseUrl(conference)
-    const galleryUrl = `${eventUrl}/#gallery?img=${image._id}`
     const dashboardUrl = `${eventUrl}/cfp/list`
 
     // Use the conference's own social links; omit rather than fall back to

@@ -342,7 +342,11 @@ export const signingRouter = router({
                   },
                 ],
               })
-              if (sent.error) throw new Error(sent.error.message)
+              if (sent.error) {
+                throw Object.assign(new Error(sent.error.message), {
+                  status: sent.error.statusCode,
+                })
+              }
               return sent
             })
 
