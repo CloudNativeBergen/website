@@ -223,7 +223,10 @@ export function ExpenseSummary({
               if (total === 0) return null
 
               return (
-                <div key={currency} className="flex justify-between text-sm">
+                <div
+                  key={currency}
+                  className="flex flex-wrap justify-between gap-x-2 text-sm"
+                >
                   <span className="text-gray-600 dark:text-gray-300">
                     {currency}:
                   </span>

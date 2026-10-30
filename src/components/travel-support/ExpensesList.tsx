@@ -128,10 +128,10 @@ function ExpenseItem({
 
   return (
     <div className="rounded-lg border border-gray-200 p-4 transition-all duration-200 hover:border-gray-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-gray-600">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h4 className="font-medium text-gray-900 dark:text-white">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="font-medium break-words text-gray-900 dark:text-white">
               {expense.description}
             </h4>
             {(() => {

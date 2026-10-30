@@ -94,7 +94,7 @@ export function ExchangeRateDebugPanel() {
 
   return (
     <div
-      className={`fixed right-4 bottom-20 z-50 w-96 rounded-lg border border-gray-300 bg-white font-mono text-xs shadow-lg dark:border-gray-600 dark:bg-gray-800 ${
+      className={`fixed right-4 bottom-20 z-50 w-[calc(100vw-2rem)] rounded-lg border border-gray-300 bg-white font-mono text-xs shadow-lg sm:w-96 dark:border-gray-600 dark:bg-gray-800 ${
         isMinimized ? '' : 'max-h-96 overflow-y-auto'
       }`}
     >
