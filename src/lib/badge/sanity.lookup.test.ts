@@ -17,7 +17,8 @@ vi.mock('../sanity/client', () => ({
   clientReadUncached: { fetch: (...a: unknown[]) => badgeFetch(...a) },
 }))
 
-import { getBadgeById } from './sanity'
+import { getBadgeById, getBadgeSVGUrl } from './sanity'
+import type { BadgeRecord } from './types'
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -50,5 +51,20 @@ describe('getBadgeById distinguishes absence from failure', () => {
     expect(result.badge).toEqual({ badgeId: 'real-badge' })
     expect(result.reason).toBeUndefined()
     expect(result.error).toBeUndefined()
+  })
+})
+
+describe('getBadgeSVGUrl', () => {
+  const withUrl = (url: string) =>
+    ({ bakedSvg: { asset: { url } } }) as unknown as BadgeRecord
+
+  it('returns Sanity CDN URLs', () => {
+    const url = 'https://cdn.sanity.io/files/p/d/x.svg'
+    expect(getBadgeSVGUrl(withUrl(url))).toBe(url)
+  })
+
+  it('refuses any other host', () => {
+    expect(getBadgeSVGUrl(withUrl('http://169.254.169.254/x'))).toBeNull()
+    expect(getBadgeSVGUrl(withUrl('not a url'))).toBeNull()
   })
 })

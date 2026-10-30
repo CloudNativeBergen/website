@@ -18,6 +18,8 @@ import { unstable_noStore as noStore } from 'next/cache'
  */
 const NOTIFICATION_RETENTION_DAYS = 90
 
+export const maxDuration = 300
+
 export async function GET(request: NextRequest) {
   noStore()
   try {
@@ -37,8 +39,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { deleted } = await deleteNotificationsOlderThan(
-      NOTIFICATION_RETENTION_DAYS,
+    // Each pass runs even when an earlier one throws: a Sanity hiccup in the
+    // notification purge must not skip the GDPR-bound invitation cleanup.
+    const failures: Array<{ pass: string; error: string }> = []
+    const pass = async <T>(name: string, run: () => Promise<T>, empty: T) => {
+      try {
+        return await run()
+      } catch (error) {
+        console.error(`Cleanup pass ${name} failed:`, error)
+        failures.push({
+          pass: name,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+        return empty
+      }
+    }
+    const none = { deleted: 0 }
+
+    const { deleted } = await pass(
+      'notifications',
+      () => deleteNotificationsOlderThan(NOTIFICATION_RETENTION_DAYS),
+      none,
     )
 
     console.log(
@@ -51,7 +72,13 @@ export async function GET(request: NextRequest) {
     // Ordered after the notification pass so the 90-day hub cleanup has already
     // removed aged-out message notifications; whatever remains for a fully
     // expired conference is swept here.
-    const messaging = await deleteExpiredMessagingData()
+    const messaging = await pass('messaging', deleteExpiredMessagingData, {
+      conferences: 0,
+      messages: 0,
+      conversations: 0,
+      preferences: 0,
+      notifications: 0,
+    })
 
     console.log(
       `Messaging retention: purged ${messaging.conferences} expired conference(s) —` +
@@ -66,7 +93,13 @@ export async function GET(request: NextRequest) {
     // get one hub notification (to the assignee, else the routed team/all
     // organizers), escalating to the team after a further 3 days. This never
     // throws — a failure only zeroes its summary and is logged.
-    const staleNudge = await nudgeStaleConversations()
+    const staleNudge = await pass('staleNudge', nudgeStaleConversations, {
+      scanned: 0,
+      nudged: 0,
+      escalated: 0,
+      notifications: 0,
+      failed: 0,
+    })
 
     console.log(
       `Stale nudge: scanned=${staleNudge.scanned}` +
@@ -83,7 +116,11 @@ export async function GET(request: NextRequest) {
     // the two selections are read from the same organizer set within one run;
     // they are mutually exclusive (opposite last-author tests), so neither can
     // act on a thread the other just touched. Also never throws.
-    const autoClose = await autoCloseStaleConversations()
+    const autoClose = await pass('autoClose', autoCloseStaleConversations, {
+      scanned: 0,
+      closed: 0,
+      failed: 0,
+    })
 
     console.log(
       `Messaging auto-close: scanned=${autoClose.scanned}` +
@@ -99,8 +136,8 @@ export async function GET(request: NextRequest) {
     // a consume did not land. Purely additive: neither purge can affect a live
     // session, and a failure only logs.
     const [signInTokens, signInRateLimits] = await Promise.all([
-      deleteExpiredEmailSignInTokens(),
-      deleteExpiredEmailSignInRateLimits(),
+      pass('signInTokens', deleteExpiredEmailSignInTokens, none),
+      pass('signInRateLimits', deleteExpiredEmailSignInRateLimits, none),
     ])
 
     console.log(
@@ -113,7 +150,11 @@ export async function GET(request: NextRequest) {
     // THEM rather than housekeeping: `/privacy` states that an ignored
     // invitation leaves nothing behind, and this is what makes that true.
     // Accepted invitations are kept as the provenance of a live admin grant.
-    const organizerInvites = await deleteExpiredOrganizerInvitations()
+    const organizerInvites = await pass(
+      'organizerInvitations',
+      deleteExpiredOrganizerInvitations,
+      none,
+    )
     console.log(
       `Organizer invitation cleanup: deleted=${organizerInvites.deleted}`,
     )
@@ -125,11 +166,15 @@ export async function GET(request: NextRequest) {
     // which is far past any real retry.
     const [provisioningReceipts, provisioningRateLimits, marketingRateLimits] =
       await Promise.all([
-        deleteExpiredProvisioningReceipts(),
-        deleteExpiredProvisioningRateLimits(),
+        pass('provisioningReceipts', deleteExpiredProvisioningReceipts, none),
+        pass(
+          'provisioningRateLimits',
+          deleteExpiredProvisioningRateLimits,
+          none,
+        ),
         // The snapshot-refresh budget (#1018) rides the same primitive and the
         // same daily sweep; an elapsed bucket is nothing but a row.
-        deleteExpiredMarketingRateLimits(),
+        pass('marketingRateLimits', deleteExpiredMarketingRateLimits, none),
       ])
 
     console.log(
@@ -137,6 +182,17 @@ export async function GET(request: NextRequest) {
         ` rateLimits=${provisioningRateLimits.deleted}` +
         ` | marketing rateLimits=${marketingRateLimits.deleted}`,
     )
+
+    if (failures.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Internal server error',
+          details: failures.map((f) => f.error).join('; '),
+          failures,
+        },
+        { status: 500 },
+      )
+    }
 
     return NextResponse.json({
       success: true,

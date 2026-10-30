@@ -104,6 +104,7 @@ describe('api/cron/sponsor-follow-ups', () => {
     await run()
     expect(h.query).toContain('status != "closed-lost"')
     expect(h.query).not.toContain('closed-won')
+    expect(h.query).toContain('!(_id in path("drafts.**"))')
     expect(h.query).toContain('dateTime(nextFollowUpAt) < dateTime(now())')
   })
 

@@ -245,6 +245,37 @@ describe('api/webhooks/checkin/ticket-sold — HMAC signature', () => {
     expect(response.status).toBe(200)
     expect(mockGetConference).toHaveBeenCalledWith(42)
     expect(mockSendWorkshop).toHaveBeenCalledTimes(1)
+    // A redelivery carries the same key, so Resend sends once.
+    expect(mockSendWorkshop.mock.calls[0][0]).toMatchObject({
+      idempotencyKey: `workshop-signup/${data.id}/1`,
+    })
+  })
+
+  it('keys each attendee separately when they share a ticket category', async () => {
+    const { POST } =
+      await import('@/app/api/webhooks/checkin/ticket-sold/route')
+
+    bindConferenceTo('org-platform')
+    mockSendWorkshop.mockResolvedValue({ data: { emailId: 'em' }, error: null })
+
+    const second = {
+      ...workshopBuyer(),
+      id: 9,
+      crm: { ...workshopBuyer().crm, email: { email: 'b@example.com' } },
+    }
+    const data = makeData({ users: [workshopBuyer(), second] })
+    const response = await POST(
+      postRequest(makePayload(data), sign(data, SECRET)),
+    )
+
+    expect(response.status).toBe(200)
+    const keys = mockSendWorkshop.mock.calls.map(
+      ([req]) => (req as { idempotencyKey: string }).idempotencyKey,
+    )
+    expect(keys).toEqual([
+      `workshop-signup/${data.id}/1`,
+      `workshop-signup/${data.id}/9`,
+    ])
   })
 
   it('rejects a request with a missing signature header (401)', async () => {

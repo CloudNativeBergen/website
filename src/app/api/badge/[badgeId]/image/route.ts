@@ -53,6 +53,10 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': 'image/svg+xml',
+        // Served from the conference origin: never let the SVG run script.
+        'Content-Security-Policy':
+          "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+        'X-Content-Type-Options': 'nosniff',
         'Cache-Control': BADGE_ARTIFACT_CACHE_CONTROL,
         ETag: etag,
       },

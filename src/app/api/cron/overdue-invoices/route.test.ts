@@ -79,6 +79,9 @@ describe('/api/cron/overdue-invoices', () => {
     expect(notify.mock.calls[0][0].text).toContain('One')
     // Only editions that ended within the last 90 Oslo days are read.
     expect(fetch.mock.calls[0][0]).toContain('endDate >= $cutoff')
+    // Studio drafts would duplicate conferences and invoice rows.
+    expect(fetch.mock.calls[0][0]).toContain('!(_id in path("drafts.**"))')
+    expect(fetch.mock.calls[1][0]).toContain('!(_id in path("drafts.**"))')
     expect(fetch.mock.calls[0][1]).toEqual({ cutoff: '1999-10-04' })
   })
 })

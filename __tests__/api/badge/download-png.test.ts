@@ -108,4 +108,13 @@ describe('GET /api/badge/[badgeId]/download?format=png', () => {
     expect(res.status).toBe(304)
     expect(vi.mocked(loadBadgeFontFiles)).not.toHaveBeenCalled()
   })
+
+  it('serves the SVG image with a script-blocking CSP', async () => {
+    const { GET } = await import('@/app/api/badge/[badgeId]/image/route')
+    const res = await GET(pngRequest(), {
+      params: Promise.resolve({ badgeId: 'test-badge-id' }),
+    })
+    expect(res.headers.get('Content-Security-Policy')).toContain('sandbox')
+    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff')
+  })
 })

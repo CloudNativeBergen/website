@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       // groq-global: a system sweep over EVERY tenant's sponsors; the alert
       // resolves its tenant (channel, token, domain) off the sponsor's own
       // conference.
-      `*[_type == "sponsorForConference"
+      `*[_type == "sponsorForConference" && !(_id in path("drafts.**"))
         && status != "closed-lost"
         && dateTime(nextFollowUpAt) < dateTime(now())
         && nextFollowUpAt != followUpAlertedFor

@@ -74,6 +74,8 @@ describe('api/cron/contract-reminders', () => {
     const [query, params] = h.fetch.mock.calls[0]
     expect(query).toMatch(/signatureStatus == "pending"/)
     expect(query).toMatch(/reminderCount < \$maxReminders/)
+    // Studio drafts would get a second reminder.
+    expect(query).toContain('!(_id in path("drafts.**"))')
     expect(params).toMatchObject({ maxReminders: 2 })
     // Threshold is "now minus 5 days", to the day.
     const threshold = new Date(params.threshold as string).getTime()
