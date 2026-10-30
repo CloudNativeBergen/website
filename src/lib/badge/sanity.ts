@@ -412,7 +412,13 @@ export function getBadgeSVGUrl(badge: BadgeRecord): string | null {
   }
 
   const asset = badge.bakedSvg.asset
-  if ('url' in asset && typeof asset.url === 'string') {
+  // Only relay Sanity's own CDN: the routes fetch this URL server-side.
+  if (
+    'url' in asset &&
+    typeof asset.url === 'string' &&
+    URL.canParse(asset.url) &&
+    new URL(asset.url).hostname === 'cdn.sanity.io'
+  ) {
     return asset.url
   }
 
