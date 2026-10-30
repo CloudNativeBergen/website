@@ -5,6 +5,7 @@ import {
   type ConferenceTicketingBinding,
 } from './provider'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { stripHtml } from '@/lib/html/text'
 
 // Public ticket-type shapes now live with the provider contract (they are
@@ -64,10 +65,14 @@ export type PublicTicketTypesResult =
 
 export async function getPublicTicketTypes(
   conference: ConferenceTicketingBinding,
+  conferenceId: string,
 ): Promise<PublicTicketTypesResult> {
   'use cache'
   cacheLife('hours')
   cacheTag('content:tickets')
+  // Ticket mutations revalidate conferenceTag, not 'content:tickets'; without
+  // this tag a nested cache hit would keep serving old prices.
+  cacheTag(conferenceTag(conferenceId))
 
   try {
     // Route through the request-boundary resolver (B7) so a tenant's per-org

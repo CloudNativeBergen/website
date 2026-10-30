@@ -1604,6 +1604,7 @@ export const conferenceRouter = router({
       try {
         const ticketData = await getPublicTicketTypes(
           ticketingBinding(conference),
+          conference._id,
         )
         if (ticketData.status === 'ok') {
           ticketsFromPrice =

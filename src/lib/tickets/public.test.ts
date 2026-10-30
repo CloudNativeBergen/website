@@ -4,9 +4,10 @@ import { describe, it, expect, vi, beforeEach, assert } from 'vitest'
 // tenant's per-org Checkin key is honored, and must preserve the prior soft-fail
 // (null on unconfigured/error). The `'use cache'` directive is inert in vitest;
 // the next/cache helpers are stubbed to no-ops.
+const cacheTagMock = vi.fn()
 vi.mock('next/cache', () => ({
   cacheLife: () => {},
-  cacheTag: () => {},
+  cacheTag: (...t: string[]) => cacheTagMock(...t),
 }))
 const resolveTicketingProviderMock = vi.fn()
 vi.mock('./provider', () => ({
@@ -42,6 +43,12 @@ function pubTicket(over: Record<string, unknown>) {
 beforeEach(() => vi.clearAllMocks())
 
 describe('getPublicTicketTypes — resolver routing (B7)', () => {
+  it('tags the entry with the conference tag that ticket mutations revalidate', async () => {
+    resolveTicketingProviderMock.mockResolvedValue({ configured: false })
+    await getPublicTicketTypes(CONF, 'conf-1')
+    expect(cacheTagMock).toHaveBeenCalledWith('sanity:conference-conf-1')
+  })
+
   it('resolves from the conference and fetches with the resolved eventRef', async () => {
     const fetchPublicTicketTypes = vi.fn().mockResolvedValue({
       event: { id: 7, name: 'Event' },
@@ -53,7 +60,7 @@ describe('getPublicTicketTypes — resolver routing (B7)', () => {
       eventRef: { customerId: 42, eventId: 7 },
     })
 
-    const result = await getPublicTicketTypes(CONF)
+    const result = await getPublicTicketTypes(CONF, 'conf-1')
 
     expect(resolveTicketingProviderMock).toHaveBeenCalledWith(CONF)
     // Now passes the provider-shaped eventRef (not a bare id) so a Tito-bound
@@ -73,7 +80,7 @@ describe('getPublicTicketTypes — resolver routing (B7)', () => {
       provider: null,
       eventRef: null,
     })
-    expect(await getPublicTicketTypes({})).toEqual({
+    expect(await getPublicTicketTypes({}, 'conf-1')).toEqual({
       status: 'not-configured',
     })
   })
@@ -88,7 +95,7 @@ describe('getPublicTicketTypes — resolver routing (B7)', () => {
       },
       eventRef: { customerId: 42, eventId: 7 },
     })
-    const result = await getPublicTicketTypes(CONF)
+    const result = await getPublicTicketTypes(CONF, 'conf-1')
     expect(result.status).toBe('unavailable')
   })
 })
@@ -121,7 +128,7 @@ describe('getPublicTicketTypes — empty is not unknown, and free is not empty',
       }),
     ])
 
-    const result = await getPublicTicketTypes(CONF)
+    const result = await getPublicTicketTypes(CONF, 'conf-1')
 
     assert(result.status === 'ok')
     // No priced types — but the event HAS tickets, and now says so.
@@ -134,7 +141,7 @@ describe('getPublicTicketTypes — empty is not unknown, and free is not empty',
 
   it('a genuinely empty event is distinguishable from a failed read', async () => {
     withTickets([])
-    const empty = await getPublicTicketTypes(CONF)
+    const empty = await getPublicTicketTypes(CONF, 'conf-1')
 
     resolveTicketingProviderMock.mockResolvedValue({
       configured: true,
@@ -143,7 +150,7 @@ describe('getPublicTicketTypes — empty is not unknown, and free is not empty',
       },
       eventRef: { customerId: 42, eventId: 7 },
     })
-    const failed = await getPublicTicketTypes(CONF)
+    const failed = await getPublicTicketTypes(CONF, 'conf-1')
 
     // THE point of the union: these two must not be the same value.
     expect(empty.status).toBe('ok')
@@ -157,7 +164,7 @@ describe('getPublicTicketTypes — empty is not unknown, and free is not empty',
       pubTicket({ id: 2, name: 'Free entry', price: [] }),
     ])
 
-    const result = await getPublicTicketTypes(CONF)
+    const result = await getPublicTicketTypes(CONF, 'conf-1')
 
     assert(result.status === 'ok')
     expect(result.tickets).toHaveLength(0)
@@ -276,7 +283,7 @@ describe('resolveDisplayTickets', () => {
         },
         eventRef: { customerId: 42, eventId: 7 },
       })
-      const result = await getPublicTicketTypes(CONF)
+      const result = await getPublicTicketTypes(CONF, 'conf-1')
       assert(result.status === 'ok')
 
       const { tickets } = resolveDisplayTickets(result, [5])

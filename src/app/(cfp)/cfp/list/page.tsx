@@ -104,8 +104,15 @@ export default async function SpeakerDashboard() {
   // then fanning out per-conference reads across all of them — and its
   // `!defined(organization)` arm showed org-less conferences to every tenant.
   const orgRef = currentConference?.organization?._ref ?? null
+  // Only editions the speaker took part in (a talk, gallery image, badge or
+  // travel support of that edition names them) or this host's own edition
+  // (the briefing). Each listed edition costs about eight reads below, so
+  // skipping the ones the activity filter would drop saves most of them.
   const conferencesQuery = groq`
-    *[_type == "conference" && organization._ref == $orgId] | order(startDate desc) {
+    *[_type == "conference" && organization._ref == $orgId && (
+      _id == $currentConferenceId ||
+      count(*[_type in ["talk", "imageGallery", "travelSupport", "speakerBadge"] && conference->organization._ref == $orgId && conference._ref == ^._id && references($speakerId)]) > 0
+    )] | order(startDate desc) {
       _id,
       title,
       organization,
@@ -139,7 +146,11 @@ export default async function SpeakerDashboard() {
   const conferences = orgRef
     ? await clientReadCached.fetch<Conference[]>(
         conferencesQuery,
-        { orgId: orgRef },
+        {
+          orgId: orgRef,
+          speakerId,
+          currentConferenceId: currentConference?._id ?? '',
+        },
         { next: { revalidate: 300 } },
       )
     : []

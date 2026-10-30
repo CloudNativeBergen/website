@@ -12,6 +12,11 @@ const { mockTransaction } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/auth', () => ({ getAuthSession: vi.fn() }))
+// revalidateTag needs a Next request store, which a direct router call lacks.
+vi.mock('next/cache', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  revalidateTag: vi.fn(),
+}))
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     fetch: vi.fn().mockResolvedValue([]),

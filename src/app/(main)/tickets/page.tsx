@@ -132,7 +132,7 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
   // requires) and pass only the minimal binding so the 'use cache' key stays
   // stable across unrelated conference-field changes.
   const ticketData: PublicTicketTypesResult = hasTicketingBinding(conference)
-    ? await getPublicTicketTypes(ticketingBinding(conference))
+    ? await getPublicTicketTypes(ticketingBinding(conference), conference._id)
     : { status: 'not-configured' }
 
   // What we may actually SHOW. `free` is true when the event has no priced

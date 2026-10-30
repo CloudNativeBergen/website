@@ -890,6 +890,22 @@ async function loadInvitationForOrganizer(
   return { invitation, proposal, proposalId }
 }
 
+/**
+ * After a change to a confirmed talk's title, description or speakers: expire
+ * the public programme of its conference. Only confirmed talks are public, so
+ * a draft or submitted talk leaves the cache alone.
+ */
+function expirePublicTalkReads(
+  talk: Pick<ProposalExisting, 'status' | 'conference'>,
+  wasConfirmed = false,
+) {
+  if (!wasConfirmed && talk.status !== Status.confirmed) return
+  const conference = talk.conference as
+    { _ref?: string; _id?: string } | undefined
+  const conferenceId = conference?._ref ?? conference?._id
+  if (conferenceId) revalidateTag(conferenceTag(conferenceId), 'default')
+}
+
 export const proposalRouter = router({
   // List current user&apos;s proposals
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -1302,6 +1318,7 @@ export const proposalRouter = router({
           )
         }
 
+        expirePublicTalkReads(proposal, existing.status === Status.confirmed)
         return proposal
       } catch (error) {
         if (error instanceof TRPCError) throw error
@@ -1671,6 +1688,7 @@ export const proposalRouter = router({
           speakerIds,
           proposal._rev,
         )
+        expirePublicTalkReads(proposal)
 
         // Only for a talk of the host conference: the notice carries its
         // branding, and the owner arm admits a talk of another tenant.
@@ -2515,6 +2533,8 @@ export const proposalRouter = router({
               message: 'Proposal not found',
             })
           }
+
+          expirePublicTalkReads(proposal)
 
           // SNAPSHOT SYNC (G2a): an admin speaker swap also changes who is on the
           // proposal, so keep any existing thread's participants[] in step with
@@ -3505,6 +3525,7 @@ export const proposalRouter = router({
             )
 
             await transaction.commit()
+            expirePublicTalkReads(proposal)
 
             // SNAPSHOT SYNC (G2a): keep the proposal thread's participants[] in
             // step with the newly-accepted co-speaker so the flipped read path

@@ -125,6 +125,10 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
 
   // Filter out widgets that should be hidden in the current phase
   const visibleWidgets = useMemo(() => {
+    // Mount nothing until the saved layout is known: rendering the defaults
+    // first fetched their data, then the saved layout fetched again (and the
+    // grid jumped).
+    if (loadStatus === 'loading') return []
     return widgets.filter((w) => {
       const meta = getWidgetMetadata(w.type)
       if (!meta?.phaseConfig) return true
@@ -132,7 +136,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
       if (!hideInIrrelevantPhases) return true
       return relevantPhases.includes(currentPhase)
     })
-  }, [widgets, currentPhase])
+  }, [widgets, currentPhase, loadStatus])
 
   // Reflow widget positions for current column count
   const displayWidgets = useMemo(

@@ -3,7 +3,6 @@
 import { useState, useRef } from 'react'
 import { ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import { LinkedInIcon, BlueskyIcon } from '@/components/SocialIcons'
-import html2canvas from 'html2canvas-pro'
 
 interface SpeakerSharingActionsProps {
   filename?: string
@@ -103,6 +102,8 @@ export function SpeakerSharingActions({
   const generateCanvas = async (
     element: HTMLElement,
   ): Promise<HTMLCanvasElement> => {
+    // Loaded on demand: the library is large and only needed on export.
+    const { default: html2canvas } = await import('html2canvas-pro')
     const canvas = await html2canvas(element, {
       backgroundColor: '#ffffff',
       scale: 2,

@@ -30,8 +30,15 @@ const code = source.replace(/^\s*\/\/.*$/gm, '')
 describe('/cfp/list conferences query', () => {
   it('carries the tenant predicate UNCONDITIONALLY', () => {
     expect(code).toContain(
-      '*[_type == "conference" && organization._ref == $orgId]',
+      '*[_type == "conference" && organization._ref == $orgId && (',
     )
+  })
+
+  it('lists only editions the speaker took part in, plus this host’s own', () => {
+    // One query decides which editions get the per-edition reads, instead of
+    // reading every edition and discarding the inactive ones afterwards.
+    expect(code).toContain('_id == $currentConferenceId ||')
+    expect(code).toContain('conference._ref == ^._id && references($speakerId)')
   })
 
   it('has no optional-tenant arm — an org-less conference belongs to nobody', () => {

@@ -1,11 +1,16 @@
 import { notFound } from 'next/navigation'
-import { getBadgeById } from '@/lib/badge/sanity'
+import { cache } from 'react'
+import { getBadgeById as fetchBadgeById } from '@/lib/badge/sanity'
 import { BadgeDisplay } from '@/components/badge/BadgeDisplay'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import type { Metadata } from 'next'
 import type { Speaker } from '@/lib/speaker/types'
 import type { Conference } from '@/lib/conference/types'
+
+// generateMetadata and the page read the same badge in one request: one Sanity
+// read, not two. Deliberately not 'use cache': a revoked badge must show at once.
+const getBadgeById = cache(fetchBadgeById)
 
 interface BadgePageProps {
   params: Promise<{

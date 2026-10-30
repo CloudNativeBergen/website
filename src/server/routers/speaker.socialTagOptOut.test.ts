@@ -97,7 +97,12 @@ vi.mock('@/lib/sanity/client', async () => {
   }
 })
 
-vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
+const revalidateTagMock = vi.hoisted(() => vi.fn())
+vi.mock('next/cache', () => ({
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
+  revalidateTag: revalidateTagMock,
+}))
 vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getConferenceForCurrentDomain: async () => ({
@@ -312,6 +317,19 @@ describe('the bulk profile save CANNOT touch the opt-out (#1148)', () => {
     } as Parameters<ReturnType<typeof speakerCaller>['update']>[0])
 
     expect(stored().socialTagOptOut).toBeUndefined()
+  })
+
+  it('expires the cached public speaker pages after a save', async () => {
+    revalidateTagMock.mockClear()
+    await speakerCaller().update({ name: 'Alice Speaker' })
+    expect(revalidateTagMock).toHaveBeenCalledWith(
+      'content:speakers',
+      'default',
+    )
+    expect(revalidateTagMock).toHaveBeenCalledWith(
+      'content:speaker-detail',
+      'default',
+    )
   })
 
   it('cannot CLEAR a live opt-out through a stale `false` either', async () => {

@@ -1,3 +1,4 @@
+import { revalidateTag } from 'next/cache'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { appRouter } from '@/server/_app'
 import { getProposal } from '@/lib/proposal/data/sanity'
@@ -23,6 +24,11 @@ const { mockPatchChain, mockTransaction } = vi.hoisted(() => {
 })
 
 // Mock dependencies
+// revalidateTag needs a Next request store, which a direct router call lacks.
+vi.mock('next/cache', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  revalidateTag: vi.fn(),
+}))
 vi.mock('@/lib/auth', () => ({
   getAuthSession: vi.fn(),
 }))
@@ -170,6 +176,24 @@ describe('proposal.removeCoSpeaker', () => {
     ])
     expect(sendCoSpeakerRemovedEmail).toHaveBeenCalledWith(
       expect.objectContaining({ toEmail: coSpeaker.email }),
+    )
+  })
+
+  it('expires the public programme when the talk is confirmed', async () => {
+    vi.mocked(getProposal).mockResolvedValue({
+      proposal: { ...mockProposal, status: Status.confirmed } as any,
+      proposalError: null,
+    })
+    vi.mocked(clientWrite.fetch).mockResolvedValue([] as never)
+
+    await createCaller(regularSpeaker).proposal.removeCoSpeaker({
+      proposalId: 'proposal-1',
+      speakerId: coSpeaker._id,
+    })
+
+    expect(revalidateTag).toHaveBeenCalledWith(
+      'sanity:conference-conf-1',
+      'default',
     )
   })
 

@@ -113,6 +113,7 @@ async function CachedHomeContent({ domain }: { domain: string }) {
     try {
       const ticketData = await getPublicTicketTypes(
         ticketingBinding(conference),
+        conference._id,
       )
       if (ticketData.status === 'ok') {
         lowestTicketPrice = getLowestTicketPrice(ticketData.tickets)
