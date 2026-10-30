@@ -283,7 +283,7 @@ export function CompactProposalList({
                   {openInvites.map((invite) => (
                     <span
                       key={invite._id}
-                      className="flex items-center text-xs text-gray-600 dark:text-gray-400"
+                      className="flex min-w-0 items-center text-xs break-all text-gray-600 dark:text-gray-400"
                     >
                       <UserPlusIcon
                         className="mr-1 h-3.5 w-3.5 shrink-0"
@@ -386,7 +386,7 @@ export function CompactProposalList({
                 {canEdit && (
                   <Link
                     href={proposalHref}
-                    className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                    className="rounded-md p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
                     title="Edit proposal"
                     aria-label="Edit proposal"
                   >

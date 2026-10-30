@@ -25,7 +25,7 @@ function BankingDetailField({
         {label}
       </dt>
       <dd
-        className={`text-sm text-gray-900 dark:text-white ${isMonospace ? 'font-mono' : ''}`}
+        className={`text-sm break-words text-gray-900 dark:text-white ${isMonospace ? 'font-mono break-all' : ''}`}
       >
         {value}
       </dd>
