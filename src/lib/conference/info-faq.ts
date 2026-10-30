@@ -128,7 +128,8 @@ export function getScheduleDayInfo(
 
   return {
     hasMultipleDays,
-    workshopDay: days[0] ?? null, // First day is always workshop day
+    // Day 1 is the workshop day only when its tracks say so.
+    workshopDay: days[0]?.isWorkshopDay ? days[0] : null,
     conferenceDay: days[1] ?? days[0] ?? null, // Second day is conference day, or first if only one day
     days,
   }

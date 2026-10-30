@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
+import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getStaffMembers } from '@/lib/staff/sanity'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
@@ -43,6 +44,8 @@ async function CachedStaffContent({
   if (orgId) cacheTag(organizationTag(orgId))
 
   const staff = await getStaffMembers(role, orgId)
+  // Roles are free-form, so a role with nobody in it is an unknown URL.
+  if (!staff.err && staff.data.length === 0) notFound()
 
   return (
     <>

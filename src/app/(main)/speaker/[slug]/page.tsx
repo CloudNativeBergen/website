@@ -16,6 +16,7 @@ import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
+import { withoutUnpublishedSchedule } from '@/lib/conference/state'
 import { BlueskyFeed } from '@/components/BlueskyFeed'
 import { ScrollFadeBlueskyFeed } from '@/components/ScrollFadeBlueskyFeed'
 import { hasBlueskySocial } from '@/lib/bluesky/utils'
@@ -134,7 +135,12 @@ async function CachedSpeakerContent({
     return null
   }
 
-  const { speaker, talks, err } = await getPublicSpeaker(conference._id, slug)
+  const {
+    speaker,
+    talks: allTalks,
+    err,
+  } = await getPublicSpeaker(conference._id, slug)
+  const talks = withoutUnpublishedSchedule(conference, allTalks ?? [])
 
   if (err) {
     console.error('Error loading speaker:', err)

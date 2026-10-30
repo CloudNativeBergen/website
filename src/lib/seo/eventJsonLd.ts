@@ -5,6 +5,7 @@ import type {
   TicketAvailability,
 } from '@/lib/tickets/public'
 import { Status } from '@/lib/proposal/types'
+import { canonicalOrigin } from './canonical'
 import type { Speaker } from '@/lib/speaker/types'
 
 /**
@@ -59,8 +60,8 @@ export function buildEventJsonLd({
   ticketAvailability,
   performers,
 }: BuildEventJsonLdOptions): Record<string, unknown> {
-  const protocol = domain.includes('localhost') ? 'http' : 'https'
-  const siteUrl = `${protocol}://${domain}`
+  // Same origin as the page's canonical link, not the request host.
+  const siteUrl = canonicalOrigin(conference, domain)
 
   const organizer: Record<string, unknown> = {
     '@type': 'Organization',

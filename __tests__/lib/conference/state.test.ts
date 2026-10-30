@@ -79,12 +79,14 @@ describe('Conference State Helpers', () => {
     })
 
     it('returns true on end date', () => {
-      vi.setSystemTime(new Date('2025-03-31T23:59:59Z'))
+      // 23:59:59 in Oslo (CEST)
+      vi.setSystemTime(new Date('2025-03-31T21:59:59Z'))
       expect(isCfpOpen(baseConference)).toBe(true)
     })
 
     it('returns false before CFP starts', () => {
-      vi.setSystemTime(new Date('2024-12-31T23:59:59Z'))
+      // 23:59:59 in Oslo (CET), the evening before
+      vi.setSystemTime(new Date('2024-12-31T22:59:59Z'))
       expect(isCfpOpen(baseConference)).toBe(false)
     })
 

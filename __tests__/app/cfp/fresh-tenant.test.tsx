@@ -71,6 +71,9 @@ const ORGANIZER_TOPICS = [
  * the real `buildOnboardingDocuments` so this fixture can never drift away from
  * what production creates.
  */
+/** The submit button also needs the CFP window to be open. */
+const OPEN_CFP = { cfpStartDate: '2000-01-01', cfpEndDate: '2999-12-31' }
+
 function provisionedConferenceDocument(domains: string[] = [FRESH_HOST]) {
   let key = 0
   const { conference } = buildOnboardingDocuments(
@@ -210,7 +213,11 @@ describe('a freshly provisioned tenant', () => {
     // the starter formats buy — one step instead of two.
     conferenceFetchMock.mockResolvedValue(
       conferenceReadFixture(
-        { ...provisionedConferenceDocument(), topics: ORGANIZER_TOPICS },
+        {
+          ...provisionedConferenceDocument(),
+          ...OPEN_CFP,
+          topics: ORGANIZER_TOPICS,
+        },
         { topics: ORGANIZER_TOPICS },
       ),
     )
@@ -317,6 +324,7 @@ describe('a tenant that has added workshops', () => {
       conferenceReadFixture(
         {
           ...provisionedConferenceDocument(),
+          ...OPEN_CFP,
           formats: ['lightning_10', 'presentation_25', 'workshop_120'],
           topics: ORGANIZER_TOPICS,
         },

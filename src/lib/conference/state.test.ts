@@ -4,6 +4,7 @@ import {
   hasSubmittableFormats,
   hasSubmittableTopics,
   isCfpOpen,
+  withoutUnpublishedSchedule,
 } from './state'
 import type { Conference } from './types'
 import { Format } from '@/lib/proposal/types'
@@ -125,5 +126,46 @@ describe('the CFP-open / can-submit split', () => {
     const conf = conference({ formats: [Format.lightning_10] })
     expect(isCfpOpen(conf)).toBe(false)
     expect(hasSubmittableFormats(conf)).toBe(true)
+  })
+})
+
+describe('isCfpOpen in Oslo time', () => {
+  afterEach(() => vi.useRealTimers())
+  const cfp = { cfpStartDate: '2026-03-01', cfpEndDate: '2026-06-01' }
+  const at = (iso: string) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(iso))
+    return isCfpOpen(cfp)
+  }
+
+  it('opens at Oslo midnight, not UTC midnight', () => {
+    expect(at('2026-02-28T22:59:59Z')).toBe(false)
+    expect(at('2026-02-28T23:00:00Z')).toBe(true) // 00:00 CET
+  })
+
+  it('closes at the end of the Oslo day, not the UTC day', () => {
+    expect(at('2026-06-01T21:59:59Z')).toBe(true) // 23:59:59 CEST
+    expect(at('2026-06-01T22:00:00Z')).toBe(false)
+  })
+})
+
+describe('withoutUnpublishedSchedule', () => {
+  const talks = [{ _id: 't1', scheduleInfo: { date: '2026-10-27' } }]
+  const now = new Date('2026-09-01T12:00:00Z')
+
+  it('hides the slot before the programme date', () => {
+    const out = withoutUnpublishedSchedule(
+      { programDate: '2026-09-15' },
+      talks,
+      now,
+    )
+    expect(out[0].scheduleInfo).toBeUndefined()
+    expect(out[0]._id).toBe('t1')
+  })
+
+  it('keeps it once the programme is published', () => {
+    expect(
+      withoutUnpublishedSchedule({ programDate: '2026-09-01' }, talks, now),
+    ).toEqual(talks)
   })
 })

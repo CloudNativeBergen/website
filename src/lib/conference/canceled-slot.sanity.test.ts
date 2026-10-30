@@ -1,8 +1,9 @@
 /**
  * @vitest-environment node
  *
- * A canceled or withdrawn talk keeps its slot on the public programme, but
- * the programme read never carries its title, description or speakers.
+ * A talk that is not confirmed (canceled, withdrawn, or not yet accepted by
+ * the speaker) keeps its slot on the public programme, but the programme read
+ * never carries its title, description or speakers.
  * Executed against stored documents through groq-js.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -42,6 +43,8 @@ beforeEach(() => {
     talk('live', 'confirmed'),
     talk('canceled', 'canceled'),
     talk('withdrawn', 'withdrawn'),
+    talk('accepted', 'accepted'),
+    talk('submitted', 'submitted'),
     {
       _id: 'day-1',
       _type: 'schedule',
@@ -57,6 +60,8 @@ beforeEach(() => {
             slot('live', '09:00'),
             slot('canceled', '10:00'),
             slot('withdrawn', '11:00'),
+            slot('accepted', '12:00'),
+            slot('submitted', '13:00'),
           ],
         },
       ],
@@ -72,7 +77,7 @@ beforeEach(() => {
   ])
 })
 
-describe('the programme read of a canceled or withdrawn talk', () => {
+describe('the programme read of a talk that is not confirmed', () => {
   it('keeps id, status and timing but drops title and speakers', async () => {
     const conference = await clientReadCached.fetch<{
       __expanded: {
@@ -90,13 +95,15 @@ describe('the programme read of a canceled or withdrawn talk', () => {
       wildcardSubdomain: 'conf-a.example',
     })
 
-    const [live, canceled, withdrawn] =
+    const [live, canceled, withdrawn, accepted, submitted] =
       conference.__expanded.schedules[0].tracks[0].talks
 
     expect(live.talk.title).toBe('Title of live')
     for (const [s, status] of [
       [canceled, 'canceled'],
       [withdrawn, 'withdrawn'],
+      [accepted, 'accepted'],
+      [submitted, 'submitted'],
     ] as const) {
       expect(s.startTime).toBeDefined()
       expect(s.talk._id).toBe(status)
@@ -104,6 +111,34 @@ describe('the programme read of a canceled or withdrawn talk', () => {
       expect(s.talk).not.toHaveProperty('title')
       expect(s.talk).not.toHaveProperty('speakers')
     }
-    expect(JSON.stringify([canceled, withdrawn])).not.toContain('Wanda')
+    expect(
+      JSON.stringify([canceled, withdrawn, accepted, submitted]),
+    ).not.toContain('Wanda')
+  })
+})
+
+describe('the conference lookup by domain', () => {
+  it('never serves a Studio draft of the conference', async () => {
+    h.store!.reset([
+      {
+        _id: 'drafts.conf-a',
+        _type: 'conference',
+        _rev: 'r0',
+        title: 'Unpublished edit',
+        domains: ['conf-a.example'],
+      },
+      {
+        _id: 'conf-a',
+        _type: 'conference',
+        _rev: 'r0',
+        title: 'Conf A',
+        domains: ['conf-a.example'],
+      },
+    ])
+    const conference = await clientReadCached.fetch<{ _id: string }>(
+      CONFERENCE_QUERY_FULL,
+      { domain: 'conf-a.example', wildcardSubdomain: 'conf-a.example' },
+    )
+    expect(conference._id).toBe('conf-a')
   })
 })

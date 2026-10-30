@@ -82,26 +82,28 @@ export function formatDateRange(
 ): string | null {
   if (!startDate && !endDate) return null
 
+  // `YYYY-MM-DD` parses as UTC midnight, so format in UTC to keep the day.
   if (startDate && endDate) {
     const start = new Date(startDate)
     const end = new Date(endDate)
 
-    if (start.toDateString() === end.toDateString()) {
+    if (startDate === endDate) {
       return start.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
+        timeZone: 'UTC',
       })
     }
 
     if (
-      start.getMonth() === end.getMonth() &&
-      start.getFullYear() === end.getFullYear()
+      start.getUTCMonth() === end.getUTCMonth() &&
+      start.getUTCFullYear() === end.getUTCFullYear()
     ) {
-      return `${start.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${end.getDate()}, ${end.getFullYear()}`
+      return `${start.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' })} - ${end.getUTCDate()}, ${end.getUTCFullYear()}`
     }
 
-    return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+    return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}`
   }
 
   const singleDate = startDate || endDate
@@ -111,6 +113,7 @@ export function formatDateRange(
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+    timeZone: 'UTC',
   })
 }
 

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 import {
   fetchImageDataUrl,
+  formatDateRange,
   loadBrandFonts,
   resetBrandFontCacheForTests,
 } from './helpers'
@@ -135,5 +136,23 @@ describe('loadBrandFonts', () => {
 
     const retried = await loadBrandFonts('example.test')
     expect(retried).toHaveLength(3)
+  })
+})
+
+describe('formatDateRange west of UTC', () => {
+  const tz = process.env.TZ
+  beforeEach(() => {
+    process.env.TZ = 'America/Los_Angeles'
+  })
+  afterEach(() => {
+    process.env.TZ = tz
+  })
+
+  it('keeps the calendar days of the conference', () => {
+    expect(formatDateRange('2026-05-15', '2026-05-15')).toBe('May 15, 2026')
+    expect(formatDateRange('2026-05-15', '2026-05-16')).toBe(
+      'May 15 - 16, 2026',
+    )
+    expect(formatDateRange('2026-05-01', undefined)).toBe('May 1, 2026')
   })
 })

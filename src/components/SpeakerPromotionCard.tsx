@@ -133,7 +133,9 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
   )
 
   const finalCtaText = ctaText || (isFeatured ? 'View Speaker' : 'View Profile')
-  const finalCtaUrl = ctaUrl || speakerPath(speaker.slug)
+  // Organizers need not be speakers, and /speaker/[slug] 404s for those.
+  const finalCtaUrl =
+    ctaUrl || (variant === 'organizer' ? null : speakerPath(speaker.slug))
 
   const { name, bio, image } = speaker
 
