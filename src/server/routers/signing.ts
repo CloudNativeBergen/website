@@ -329,7 +329,8 @@ export const signingRouter = router({
             )
 
             await retryWithBackoff(async () => {
-              return client.emails.send({
+              // Resend reports a rejected send as `{ error }`, not a throw.
+              const sent = await client.emails.send({
                 from: `${fromName} <${fromEmail}>`,
                 to: [doc.signerEmail],
                 subject: result.subject,
@@ -341,6 +342,12 @@ export const signingRouter = router({
                   },
                 ],
               })
+              if (sent.error) {
+                throw Object.assign(new Error(sent.error.message), {
+                  status: sent.error.statusCode,
+                })
+              }
+              return sent
             })
 
             console.log(

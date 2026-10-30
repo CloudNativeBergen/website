@@ -90,6 +90,11 @@ export async function sendBasicWorkshopConfirmation({
     const statusText = status === 'confirmed' ? 'Confirmed' : 'Waitlist'
     const statusColor = status === 'confirmed' ? '#059669' : '#D97706'
 
+    const safeName = escapeHtml(userName)
+    const safeTitle = escapeHtml(workshopTitle)
+    const safeContact = escapeHtml(contactEmail)
+    const safeOrganizer = escapeHtml(conference?.organizer || PLATFORM_NAME)
+
     const html = `
       <!DOCTYPE html>
       <html>
@@ -105,8 +110,8 @@ export async function sendBasicWorkshopConfirmation({
                 <tr>
                   <td style="padding: 40px;">
                     <h2 style="margin: 0 0 20px 0; font-size: 28px; font-weight: 700; color: ${brand.accent};">Workshop Confirmation</h2>
-                    <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${userName},</p>
-                    <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">Your registration for <strong>${workshopTitle}</strong> has been confirmed!</p>
+                    <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${safeName},</p>
+                    <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">Your registration for <strong>${safeTitle}</strong> has been confirmed!</p>
 
                     ${
                       workshopDate && workshopTime
@@ -114,8 +119,8 @@ export async function sendBasicWorkshopConfirmation({
                     <div style="background-color: ${brand.cardBackground}; border-left: 4px solid ${brand.accent}; padding: 16px; margin: 0 0 24px 0;">
                       <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #334155;">Workshop Details:</p>
                       <p style="margin: 0; font-size: 16px; line-height: 24px; color: #334155;">
-                        <strong>Date:</strong> ${workshopDate}<br>
-                        <strong>Time:</strong> ${workshopTime}
+                        <strong>Date:</strong> ${escapeHtml(workshopDate)}<br>
+                        <strong>Time:</strong> ${escapeHtml(workshopTime)}
                       </p>
                     </div>
                     `
@@ -131,14 +136,14 @@ export async function sendBasicWorkshopConfirmation({
 
                     <p style="margin: 24px 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">We look forward to seeing you at the workshop!</p>
 
-                    <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions, please contact us at <a href="mailto:${contactEmail}" style="color: ${brand.accent}; text-decoration: none;">${contactEmail}</a>.</p>
+                    <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions, please contact us at <a href="mailto:${safeContact}" style="color: ${brand.accent}; text-decoration: none;">${safeContact}</a>.</p>
 
-                    <p style="margin: 24px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${conference?.organizer || PLATFORM_NAME}</strong></p>
+                    <p style="margin: 24px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${safeOrganizer}</strong></p>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding: 24px 40px; background-color: #F9FAFB; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
-                    <p style="margin: 0; font-size: 12px; line-height: 18px; color: #64748B; text-align: center;">© ${new Date().getFullYear()} ${conference?.organizer || PLATFORM_NAME}. All rights reserved.</p>
+                    <p style="margin: 0; font-size: 12px; line-height: 18px; color: #64748B; text-align: center;">© ${new Date().getFullYear()} ${safeOrganizer}. All rights reserved.</p>
                   </td>
                 </tr>
               </table>

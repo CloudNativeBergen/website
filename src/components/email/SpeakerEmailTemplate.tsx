@@ -82,9 +82,11 @@ export function SpeakerEmailTemplate({
         lineHeight: '1.6',
         color: '#334155',
         marginBottom: '24px',
+        whiteSpace: 'pre-line',
       }}
-      dangerouslySetInnerHTML={{ __html: message }}
-    />
+    >
+      {message}
+    </div>
   )
 
   const proposalLink = (

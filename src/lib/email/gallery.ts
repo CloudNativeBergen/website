@@ -1,8 +1,10 @@
+import { formatDate } from '@/lib/time'
 import React from 'react'
 import { render } from '@react-email/render'
 import { GallerySpeakerTaggedTemplate } from '@/components/email/GallerySpeakerTaggedTemplate'
 import { resolveEmailSender, retryWithBackoff } from './config'
 import { buildGalleryImageUrl } from '@/lib/gallery/url'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { logger } from '@/lib/logger'
 import type { Speaker } from '@/lib/speaker/types'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
@@ -27,7 +29,9 @@ export async function sendGalleryTagEmail(
   request: GalleryTagEmailRequest,
 ): Promise<GalleryTagEmailResponse> {
   try {
-    const { speaker, image, conference, domain } = request
+    const { speaker, image, conference } = request
+    const eventUrl = conferenceBaseUrl(conference)
+    const galleryUrl = buildGalleryImageUrl(eventUrl, image._id)
 
     // Skip email sending in development mode
     if (process.env.NODE_ENV === 'development') {
@@ -36,7 +40,7 @@ export async function sendGalleryTagEmail(
         speakerEmail: speaker.email,
         imageId: image._id,
         eventName: conference.title,
-        galleryUrl: buildGalleryImageUrl(domain, image._id),
+        galleryUrl,
       })
       return {
         success: true,
@@ -97,8 +101,6 @@ export async function sendGalleryTagEmail(
       }
     }
 
-    const eventUrl = `https://${domain}`
-    const galleryUrl = buildGalleryImageUrl(domain, image._id)
     const dashboardUrl = `${eventUrl}/cfp/list`
 
     // Use the conference's own social links; omit rather than fall back to
@@ -115,7 +117,7 @@ export async function sendGalleryTagEmail(
         imageAlt: image.imageAlt || image.image?.alt,
         eventName: conference.title,
         eventLocation: `${conference.city}, ${conference.country}`,
-        eventDate: conference.startDate,
+        eventDate: formatDate(conference.startDate),
         eventUrl,
         galleryUrl,
         dashboardUrl,

@@ -281,7 +281,7 @@ export async function GET(request: NextRequest) {
       if (claimed.length === 0) continue
 
       const { eventName, eventLocation, eventDate, eventUrl } =
-        buildEmailEventContext(conference, tenant.context.domain)
+        buildEmailEventContext(conference)
 
       const items: LapsedCoSpeakerItem[] = claimed.map((row) => ({
         proposalTitle: row.proposal?.title || 'Untitled proposal',

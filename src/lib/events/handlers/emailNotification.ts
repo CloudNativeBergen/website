@@ -3,6 +3,7 @@ import { sendAcceptRejectNotification } from '@/lib/proposal/server'
 import { Action } from '@/lib/proposal/types'
 import { formatDate } from '@/lib/time'
 import { emailBrandColor } from '@/lib/branding/theme'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 
 /** An organizer canceled or withdrew the talk (not a speaker's own withdrawal). */
 export function isOrganizerRemoval(event: ProposalStatusChangeEvent): boolean {
@@ -96,7 +97,7 @@ export async function handleEmailNotification(
           date: formatDate(event.conference.startDate),
           name: event.conference.title,
           organizer: event.conference.organizer,
-          url: `https://${event.metadata.domain}`,
+          url: conferenceBaseUrl(event.conference),
           socialLinks: event.conference.socialLinks,
           contactEmail: event.conference.contactEmail,
           // THEMING L1: carry the tenant's brand primary into the mail accent.

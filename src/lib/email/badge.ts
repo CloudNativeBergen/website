@@ -79,8 +79,15 @@ export async function sendBadgeEmail({
       }
     }
 
-    // Update badge record with email sent status
-    await updateBadgeEmailStatus(badge.badgeId, 'sent', data?.id)
+    // The email is out: a failed status write must not report failure, or
+    // `sendBadgeEmailWithRetry` sends it again.
+    await updateBadgeEmailStatus(badge.badgeId, 'sent', data?.id).catch(
+      (statusError) =>
+        console.error(
+          `Badge email sent, status update failed for ${badge.badgeId}:`,
+          statusError,
+        ),
+    )
 
     return {
       success: true,

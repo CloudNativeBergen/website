@@ -612,6 +612,9 @@ describe('admin.confirmSignup', () => {
     })
 
     expect(result.success).toBe(true)
+    expect(result.message).toBe(
+      'Participant confirmed, but the notification email could not be sent',
+    )
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('confirmation emails not sent'),
       ['s-1'],

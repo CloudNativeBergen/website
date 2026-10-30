@@ -4,6 +4,7 @@ import {
   getOrganizerSpeakerIdsForOrg,
 } from '@/lib/notification/sanity'
 import { resolveRoutedOrganizerIds } from '@/lib/teams'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { clientReadUncached } from '@/lib/sanity/client'
 import {
   notifyNewSpeakerMessage,
@@ -56,8 +57,7 @@ function absoluteEmailLink(
   conference: Conference,
 ): string {
   const path = conversationEmailLinkPath(conversation, isOrganizer)
-  const domain = conference.domains?.[0]
-  return domain ? `https://${domain}${path}` : path
+  return `${conferenceBaseUrl(conference)}${path}`
 }
 
 /**

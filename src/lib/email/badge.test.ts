@@ -71,3 +71,17 @@ describe('sendBadgeEmail download URL', () => {
     )
   })
 })
+
+describe('sendBadgeEmail status write', () => {
+  it('reports success when the email went out but the status write failed', async () => {
+    updateStatusMock.mockRejectedValue(new Error('sanity 503'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const result = await sendBadgeEmail({
+      ...baseParams,
+      conference: { domains: ['cloudnativebergen.no'] } as never,
+    })
+
+    expect(result).toEqual({ success: true, emailId: 'email-1' })
+  })
+})

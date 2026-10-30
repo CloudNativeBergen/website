@@ -16,7 +16,10 @@ vi.mock('./config', () => ({
   }),
 }))
 
-import { sendWorkshopAnnouncementEmail } from './workshop'
+import {
+  sendBasicWorkshopConfirmation,
+  sendWorkshopAnnouncementEmail,
+} from './workshop'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -77,5 +80,25 @@ describe('sendWorkshopAnnouncementEmail', () => {
 
     expect(result.error).toBeTruthy()
     expect(result.data).toBeUndefined()
+  })
+})
+
+describe('sendBasicWorkshopConfirmation', () => {
+  it('HTML-escapes the attendee and workshop fields', async () => {
+    await sendBasicWorkshopConfirmation({
+      userEmail: 'attendee@example.com',
+      userName: '<b>Ada</b>',
+      workshopTitle: 'Q&A <script>x</script>',
+      workshopDate: '<i>Mon</i>',
+      workshopTime: '10 & 11',
+    })
+
+    const html = sendMock.mock.calls[0][0].html as string
+    expect(html).not.toContain('<b>Ada</b>')
+    expect(html).not.toContain('<script>')
+    expect(html).not.toContain('<i>Mon</i>')
+    expect(html).toContain('&lt;b&gt;Ada&lt;/b&gt;')
+    expect(html).toContain('Q&amp;A')
+    expect(html).toContain('10 &amp; 11')
   })
 })
