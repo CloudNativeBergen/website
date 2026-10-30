@@ -171,6 +171,9 @@ describe('api/cron/cleanup-notifications', () => {
       const data = await response.json()
       expect(data.error).toBe('Internal server error')
       expect(data.details).toBe('sanity down')
+      // The later passes still ran.
+      expect(mockDeleteMessaging).toHaveBeenCalled()
+      expect(mockAutoClose).toHaveBeenCalled()
     })
   })
 })
