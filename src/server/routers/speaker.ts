@@ -1,3 +1,4 @@
+import { revalidateTag } from 'next/cache'
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import {
@@ -426,6 +427,15 @@ function ticketResultMessage(totals: SpeakerTicketIssuanceResult): string {
     : summary
 }
 
+/**
+ * A speaker appears on every edition they spoke at, so a profile edit expires
+ * the public speaker reads globally (as erasure does), not per conference.
+ */
+function expirePublicSpeakerReads() {
+  revalidateTag('content:speakers', 'default')
+  revalidateTag('content:speaker-detail', 'default')
+}
+
 export const speakerRouter = router({
   // Get current user&apos;s speaker profile
   getCurrent: protectedProcedure.query(async ({ ctx }) => {
@@ -473,6 +483,7 @@ export const speakerRouter = router({
           })
         }
 
+        expirePublicSpeakerReads()
         return speaker
       } catch (error) {
         if (error instanceof TRPCError) throw error
@@ -1010,6 +1021,7 @@ export const speakerRouter = router({
             })
           }
 
+          expirePublicSpeakerReads()
           return speaker
         } catch (error) {
           if (error instanceof TRPCError) throw error

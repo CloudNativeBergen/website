@@ -4,9 +4,10 @@ import { describe, it, expect, vi, beforeEach, assert } from 'vitest'
 // tenant's per-org Checkin key is honored, and must preserve the prior soft-fail
 // (null on unconfigured/error). The `'use cache'` directive is inert in vitest;
 // the next/cache helpers are stubbed to no-ops.
+const cacheTagMock = vi.fn()
 vi.mock('next/cache', () => ({
   cacheLife: () => {},
-  cacheTag: () => {},
+  cacheTag: (...t: string[]) => cacheTagMock(...t),
 }))
 const resolveTicketingProviderMock = vi.fn()
 vi.mock('./provider', () => ({
@@ -42,6 +43,12 @@ function pubTicket(over: Record<string, unknown>) {
 beforeEach(() => vi.clearAllMocks())
 
 describe('getPublicTicketTypes — resolver routing (B7)', () => {
+  it('tags the entry with the conference tag that ticket mutations revalidate', async () => {
+    resolveTicketingProviderMock.mockResolvedValue({ configured: false })
+    await getPublicTicketTypes(CONF, 'conf-1')
+    expect(cacheTagMock).toHaveBeenCalledWith('sanity:conference-conf-1')
+  })
+
   it('resolves from the conference and fetches with the resolved eventRef', async () => {
     const fetchPublicTicketTypes = vi.fn().mockResolvedValue({
       event: { id: 7, name: 'Event' },

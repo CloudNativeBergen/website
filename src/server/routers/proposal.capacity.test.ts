@@ -112,6 +112,7 @@ vi.mock('@/lib/workshop/promoted', () => ({
   deliverPromotionEmails: h.emailPromoted,
 }))
 
+import { revalidateTag } from 'next/cache'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Context } from '@/server/trpc'
 import { proposalRouter } from './proposal'
@@ -148,6 +149,19 @@ const update = (data: Record<string, unknown>) =>
   organizer().admin.update({ id: 'talk-1', data } as never)
 
 describe('proposal.admin.update and a workshop capacity (#1344)', () => {
+  it("expires the talk's public programme and speaker pages", async () => {
+    h.updateProposal.mockResolvedValue({
+      proposal: { _id: 'talk-1', conference: { _ref: 'conf-A' } },
+      err: null,
+    })
+    await update({ title: 'Renamed' })
+    expect(revalidateTag).toHaveBeenCalledWith(
+      'sanity:conference-conf-A',
+      'default',
+    )
+    expect(revalidateTag).toHaveBeenCalledWith('content:speakers', 'default')
+  })
+
   it("a changed capacity is written through the seats guard of the talk's conference, not by the plain patch", async () => {
     await update({ title: 'Kubernetes hands-on', capacity: 12 })
 

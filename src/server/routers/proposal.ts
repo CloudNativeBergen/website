@@ -890,6 +890,19 @@ async function loadInvitationForOrganizer(
   return { invitation, proposal, proposalId }
 }
 
+/**
+ * After an edit to a talk's title, description or speakers: expire the public
+ * programme (conference tag) and speaker pages that render it.
+ */
+function expirePublicTalkReads(proposal: ProposalExisting) {
+  const conference = proposal.conference as
+    { _ref?: string; _id?: string } | undefined
+  const conferenceId = conference?._ref ?? conference?._id
+  if (conferenceId) revalidateTag(conferenceTag(conferenceId), 'default')
+  revalidateTag('content:speakers', 'default')
+  revalidateTag('content:speaker-detail', 'default')
+}
+
 export const proposalRouter = router({
   // List current user&apos;s proposals
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -1302,6 +1315,7 @@ export const proposalRouter = router({
           )
         }
 
+        expirePublicTalkReads(proposal)
         return proposal
       } catch (error) {
         if (error instanceof TRPCError) throw error
@@ -2515,6 +2529,8 @@ export const proposalRouter = router({
               message: 'Proposal not found',
             })
           }
+
+          expirePublicTalkReads(proposal)
 
           // SNAPSHOT SYNC (G2a): an admin speaker swap also changes who is on the
           // proposal, so keep any existing thread's participants[] in step with
