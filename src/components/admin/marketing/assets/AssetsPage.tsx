@@ -110,7 +110,7 @@ function AssetCard({
             type="button"
             onClick={onEdit}
             aria-label={`Edit ${asset.title}`}
-            className="-m-1 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-2 focus-visible:outline-brand-cloud-blue dark:hover:bg-gray-800 dark:hover:text-white"
+            className="-mx-1 -my-2 rounded p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-2 focus-visible:outline-brand-cloud-blue dark:hover:bg-gray-800 dark:hover:text-white"
           >
             <PencilSquareIcon className="size-4" aria-hidden />
           </button>
@@ -118,7 +118,7 @@ function AssetCard({
             type="button"
             onClick={onDelete}
             aria-label={`Delete ${asset.title}`}
-            className="-m-1 rounded p-1 text-gray-500 hover:bg-red-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-red-600 dark:hover:bg-red-950/60 dark:hover:text-red-400"
+            className="-mx-1 -my-2 rounded p-2 text-gray-500 hover:bg-red-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-red-600 dark:hover:bg-red-950/60 dark:hover:text-red-400"
           >
             <TrashIcon className="size-4" aria-hidden />
           </button>

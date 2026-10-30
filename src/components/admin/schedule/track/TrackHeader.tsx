@@ -149,7 +149,7 @@ export const TrackHeader = ({
             <div className="ml-3 flex shrink-0 gap-1">
               <button
                 onClick={onStartEdit}
-                className="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-gray-500 dark:hover:text-gray-300"
+                className="rounded p-2 text-gray-400 transition-colors hover:text-gray-600 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-gray-500 dark:hover:text-gray-300"
                 title="Edit track"
                 aria-label="Edit track"
                 type="button"
@@ -158,7 +158,7 @@ export const TrackHeader = ({
               </button>
               <button
                 onClick={() => setConfirmingRemove(true)}
-                className="rounded p-1 text-gray-400 transition-colors hover:text-red-600 focus:ring-2 focus:ring-red-500 focus:outline-none dark:text-gray-500 dark:hover:text-red-400"
+                className="rounded p-2 text-gray-400 transition-colors hover:text-red-600 focus:ring-2 focus:ring-red-500 focus:outline-none dark:text-gray-500 dark:hover:text-red-400"
                 title="Remove track"
                 aria-label="Remove track"
                 type="button"

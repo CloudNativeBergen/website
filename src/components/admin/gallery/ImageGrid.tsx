@@ -246,7 +246,7 @@ export function ImageGrid({
               className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity ${
                 hoveredImage === image._id
                   ? 'opacity-100'
-                  : 'opacity-0 group-hover:opacity-100'
+                  : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100'
               }`}
             >
               <div className="text-sm text-white">

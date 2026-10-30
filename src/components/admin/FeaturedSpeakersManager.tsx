@@ -166,7 +166,7 @@ export function FeaturedSpeakersManager({
                     key={speaker._id}
                     className="flex items-center justify-between rounded-md border border-gray-200 bg-white p-3 hover:border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-gray-500"
                   >
-                    <div className="flex items-center space-x-3">
+                    <div className="flex min-w-0 items-center space-x-3">
                       {speaker.image ? (
                         <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full">
                           <SpeakerAvatarImage
@@ -178,7 +178,7 @@ export function FeaturedSpeakersManager({
                       ) : (
                         <MissingAvatar name={speaker.name} size={40} />
                       )}
-                      <div>
+                      <div className="min-w-0 break-words">
                         <p className="text-sm font-medium text-gray-900 dark:text-white">
                           {speaker.name}
                         </p>
@@ -198,7 +198,7 @@ export function FeaturedSpeakersManager({
                     <button
                       onClick={() => handleAddSpeaker(speaker._id)}
                       disabled={addSpeakerMutation.isPending}
-                      className="inline-flex items-center rounded border border-transparent bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-200 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-800/50"
+                      className="inline-flex shrink-0 items-center rounded border border-transparent bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-200 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-800/50"
                     >
                       <StarIconSolid className="mr-1 h-3 w-3" />
                       Feature
@@ -230,7 +230,7 @@ export function FeaturedSpeakersManager({
                 key={speaker._id}
                 className="flex items-center justify-between rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800/50 dark:bg-yellow-900/20"
               >
-                <div className="flex items-center space-x-4">
+                <div className="flex min-w-0 items-center space-x-4">
                   {speaker.image ? (
                     <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full">
                       <SpeakerAvatarImage
@@ -242,7 +242,7 @@ export function FeaturedSpeakersManager({
                   ) : (
                     <MissingAvatar name={speaker.name} size={48} />
                   )}
-                  <div>
+                  <div className="min-w-0 break-words">
                     <h4 className="text-sm font-medium text-gray-900 dark:text-white">
                       {speaker.name}
                     </h4>
@@ -263,7 +263,7 @@ export function FeaturedSpeakersManager({
                 <button
                   onClick={() => handleRemoveSpeaker(speaker._id)}
                   disabled={removeSpeakerMutation.isPending}
-                  className="inline-flex items-center rounded-full border border-transparent p-1 text-red-400 hover:bg-red-100 hover:text-red-600 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/50 dark:hover:text-red-300"
+                  className="inline-flex shrink-0 items-center rounded-full border border-transparent p-1 text-red-400 hover:bg-red-100 hover:text-red-600 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/50 dark:hover:text-red-300"
                   title="Remove from featured"
                 >
                   <XMarkIcon className="h-5 w-5" />

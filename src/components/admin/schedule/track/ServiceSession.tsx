@@ -166,7 +166,7 @@ export const ServiceSession = ({
             <div className="absolute top-0.5 right-0.5 z-20 flex gap-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
               <button
                 onClick={handleStartEdit}
-                className="rounded-full bg-gray-100 p-0.5 text-gray-600 transition-colors hover:bg-gray-200 hover:opacity-100 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
+                className="rounded-full bg-gray-100 p-1.5 text-gray-600 transition-colors hover:bg-gray-200 hover:opacity-100 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
                 title="Rename session"
                 aria-label="Rename session"
                 type="button"
@@ -175,7 +175,7 @@ export const ServiceSession = ({
               </button>
               <button
                 onClick={handleDuplicate}
-                className="rounded-full bg-blue-100 p-0.5 text-blue-600 transition-colors hover:bg-blue-200 hover:opacity-100 dark:bg-blue-900/50 dark:text-blue-400 dark:hover:bg-blue-800/50"
+                className="rounded-full bg-blue-100 p-1.5 text-blue-600 transition-colors hover:bg-blue-200 hover:opacity-100 dark:bg-blue-900/50 dark:text-blue-400 dark:hover:bg-blue-800/50"
                 title="Duplicate to all tracks"
                 aria-label="Duplicate to all tracks"
                 type="button"
@@ -184,7 +184,7 @@ export const ServiceSession = ({
               </button>
               <button
                 onClick={handleRemove}
-                className="rounded-full bg-red-100 p-0.5 text-red-600 transition-colors hover:bg-red-200 hover:opacity-100 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-800/50"
+                className="rounded-full bg-red-100 p-1.5 text-red-600 transition-colors hover:bg-red-200 hover:opacity-100 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-800/50"
                 title="Remove session"
                 aria-label="Remove session"
                 type="button"

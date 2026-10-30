@@ -159,7 +159,7 @@ export function MarketingPlanTimeline({
                     aria-label={`${open ? 'Collapse' : 'Expand'} ${campaign.title}`}
                     aria-expanded={open}
                     onClick={() => toggle(campaign._id)}
-                    className="mt-0.5 shrink-0 rounded p-1 hover:bg-gray-100 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:hover:bg-gray-800"
+                    className="-mx-1 -mt-0.5 -mb-1 shrink-0 rounded p-2 hover:bg-gray-100 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:hover:bg-gray-800"
                   >
                     <ChevronRightIcon
                       className={clsx(

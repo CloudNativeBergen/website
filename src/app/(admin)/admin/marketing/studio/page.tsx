@@ -475,12 +475,12 @@ export default async function MarketingPage({
                   selectedId={selection.speaker}
                   pinnedTitle={pinnedTitle}
                   label="speakers"
-                  className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4"
+                  className="grid grid-cols-[repeat(auto-fill,minmax(min(256px,100%),1fr))] gap-6"
                 >
                   {speakersWithTalks.map(({ speaker, talks }) => (
                     <div
                       key={speaker._id}
-                      className="flex flex-col items-center"
+                      className="flex min-w-0 flex-col items-center-safe overflow-x-auto"
                     >
                       <DownloadableImage
                         filename={`${getSpeakerFilename(speaker)}-speaker-spotlight`}
@@ -526,7 +526,7 @@ export default async function MarketingPage({
                   selectedId={selection.sponsor}
                   pinnedTitle={pinnedTitle}
                   label="sponsors"
-                  className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+                  className="grid grid-cols-[repeat(auto-fill,minmax(min(400px,100%),1fr))] gap-6"
                 >
                   {sponsorsWithData.map((sponsorRef, index) => {
                     const sponsor = sponsorRef.sponsor as SponsorData
@@ -539,7 +539,7 @@ export default async function MarketingPage({
                     return (
                       <div
                         key={sponsor._id}
-                        className="flex flex-col items-center"
+                        className="flex min-w-0 flex-col items-center-safe overflow-x-auto"
                       >
                         <DownloadableImage
                           filename={`${sponsor.name.replace(/\s+/g, '-').toLowerCase()}-${tier.title.replace(/\s+/g, '-').toLowerCase()}-thank-you`}

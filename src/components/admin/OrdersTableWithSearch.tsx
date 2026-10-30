@@ -564,7 +564,9 @@ export function OrdersTableWithSearch({
                   {hasMultipleTickets && (
                     <button
                       onClick={() => toggleExpanded(order.order_id)}
-                      className="rounded p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600"
+                      aria-label="Toggle tickets"
+                      aria-expanded={expandedOrders.has(order.order_id)}
+                      className="-m-1.5 rounded p-2 hover:bg-gray-200 dark:hover:bg-gray-600"
                     >
                       {expandedOrders.has(order.order_id) ? (
                         <ChevronDownIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
@@ -618,7 +620,7 @@ export function OrdersTableWithSearch({
                   <div className="text-sm text-gray-500 dark:text-gray-400">
                     <a
                       href={`mailto:${primaryTicket.crm.email}`}
-                      className="text-indigo-600 hover:text-indigo-800 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
+                      className="break-all text-indigo-600 hover:text-indigo-800 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
                     >
                       {primaryTicket.crm.email}
                     </a>

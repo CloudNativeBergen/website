@@ -111,7 +111,7 @@ export function UnassignedProposals({
 
   return (
     <div
-      className="sticky z-20 flex h-full w-80 flex-col bg-white shadow-sm dark:bg-gray-900"
+      className="sticky z-20 flex h-full w-64 flex-col bg-white shadow-sm lg:w-80 dark:bg-gray-900"
       style={{ top: '80px' }}
     >
       <div className="relative flex min-h-[64px] w-full items-center border-b border-gray-200 bg-gray-50/50 px-4 py-2 dark:border-gray-700 dark:bg-gray-800/50">
