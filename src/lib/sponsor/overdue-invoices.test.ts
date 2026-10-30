@@ -119,7 +119,7 @@ describe('amount', () => {
     selectOverdueInvoices([row(over)], '2026-10-02')[0].amount
 
   it('falls back to a plain amount for a non-ISO currency', () => {
-    expect(amount({ contractCurrency: 'OTHER' })).toBe('50000 OTHER')
+    expect(amount({ contractCurrency: 'OTHER' })).toBe('50\u00A0000 OTHER')
   })
 
   it('uses the tier price when no contract value is set', () => {
