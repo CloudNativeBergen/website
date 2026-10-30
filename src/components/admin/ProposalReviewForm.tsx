@@ -64,6 +64,11 @@ export function ProposalReviewForm({
       })
     } catch (error) {
       console.error('Error submitting review:', error)
+      showNotification({
+        type: 'error',
+        title: 'Failed to submit review',
+        message: error instanceof Error ? error.message : 'Please try again.',
+      })
     } finally {
       setIsSubmitting(false)
     }

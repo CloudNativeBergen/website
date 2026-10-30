@@ -1,5 +1,6 @@
 'use client'
 
+import { useNotification } from '@/components/admin/NotificationProvider'
 import { useState } from 'react'
 import { api } from '@/lib/trpc/client'
 import { PlusIcon, XMarkIcon, StarIcon } from '@heroicons/react/24/outline'
@@ -19,6 +20,7 @@ export function FeaturedSpeakersManager({
   const [showSearch, setShowSearch] = useState(false)
 
   const utils = api.useUtils()
+  const { showNotification } = useNotification()
 
   const {
     data: featuredSpeakers = [],
@@ -44,6 +46,11 @@ export function FeaturedSpeakersManager({
     },
     onError: (err) => {
       console.error('Failed to add featured speaker:', err)
+      showNotification({
+        type: 'error',
+        title: 'Failed to add featured speaker',
+        message: err.message,
+      })
     },
   })
 
@@ -55,19 +62,28 @@ export function FeaturedSpeakersManager({
     },
     onError: (err) => {
       console.error('Failed to remove featured speaker:', err)
+      showNotification({
+        type: 'error',
+        title: 'Failed to remove featured speaker',
+        message: err.message,
+      })
     },
   })
 
   const handleAddSpeaker = async (speakerId: string) => {
     try {
       await addSpeakerMutation.mutateAsync({ speakerId })
-    } catch {}
+    } catch {
+      // onError shows the notification
+    }
   }
 
   const handleRemoveSpeaker = async (speakerId: string) => {
     try {
       await removeSpeakerMutation.mutateAsync({ speakerId })
-    } catch {}
+    } catch {
+      // onError shows the notification
+    }
   }
 
   if (featuredLoading) {

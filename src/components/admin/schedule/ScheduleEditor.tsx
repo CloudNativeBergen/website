@@ -61,6 +61,7 @@ import {
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useNotification } from '@/components/admin/NotificationProvider'
 
 interface ScheduleEditorProps {
   officialSchedules: EditorSchedule[]
@@ -308,6 +309,7 @@ export function ScheduleEditor({
   const isDesktop = useMediaQuery('(min-width: 768px)', true)
   const router = useRouter()
   const utils = api.useUtils()
+  const { showNotification } = useNotification()
   const saveMutation = api.schedule.save.useMutation()
   const actionMutation = api.schedule.action.useMutation()
 
@@ -681,15 +683,17 @@ export function ScheduleEditor({
         id: currentSchedule._id,
         action: 'promote',
       })
-      alert('Day published successfully!')
-      // Optionally reload the page to get the freshest data, or just let the cache revalidate.
-      window.location.reload()
+      showNotification({ type: 'success', title: 'Day published' })
+      router.refresh()
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to publish schedule'
-      alert(`Error publishing: ${message}`)
+      showNotification({
+        type: 'error',
+        title: 'Failed to publish day',
+        message:
+          err instanceof Error ? err.message : 'Failed to publish schedule',
+      })
     }
-  }, [currentSchedule, actionMutation])
+  }, [currentSchedule, actionMutation, showNotification, router])
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event

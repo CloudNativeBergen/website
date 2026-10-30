@@ -1,5 +1,6 @@
 'use client'
 
+import { useNotification } from '@/components/admin/NotificationProvider'
 import { useState } from 'react'
 import { api } from '@/lib/trpc/client'
 import {
@@ -27,6 +28,7 @@ export function FeaturedTalksManager({
   )
 
   const utils = api.useUtils()
+  const { showNotification } = useNotification()
 
   const {
     data: featuredTalks = [],
@@ -53,6 +55,11 @@ export function FeaturedTalksManager({
     },
     onError: (err) => {
       console.error('Failed to add featured talk:', err)
+      showNotification({
+        type: 'error',
+        title: 'Failed to add featured talk',
+        message: err.message,
+      })
     },
   })
 
@@ -64,19 +71,28 @@ export function FeaturedTalksManager({
     },
     onError: (err) => {
       console.error('Failed to remove featured talk:', err)
+      showNotification({
+        type: 'error',
+        title: 'Failed to remove featured talk',
+        message: err.message,
+      })
     },
   })
 
   const handleAddTalk = async (talkId: string) => {
     try {
       await addTalkMutation.mutateAsync({ talkId })
-    } catch {}
+    } catch {
+      // onError shows the notification
+    }
   }
 
   const handleRemoveTalk = async (talkId: string) => {
     try {
       await removeTalkMutation.mutateAsync({ talkId })
-    } catch {}
+    } catch {
+      // onError shows the notification
+    }
   }
 
   const formatTalkFormat = (format: string) => {

@@ -21,7 +21,11 @@ const COLUMNS = [
   'Assigned tasks',
 ] as const
 
-const TICKET_LABELS: Record<VolunteerTicketStatus['state'], string> = {
+/** Volunteer ticket-state labels, shared by the admin table and the CSV export. */
+export const VOLUNTEER_TICKET_LABELS: Record<
+  VolunteerTicketStatus['state'],
+  string
+> = {
   redeemed: 'Ticket claimed',
   invited: 'Approval email sent',
   'not-invited': 'No approval email',
@@ -63,7 +67,7 @@ export function buildVolunteersCsv(
         v.dietaryRestrictions,
         v.preferredTasks?.join('; '),
         v.availability,
-        ticket ? TICKET_LABELS[ticket.state] : '',
+        ticket ? VOLUNTEER_TICKET_LABELS[ticket.state] : '',
         v.confirmedAt,
         v.assignedTasks?.join('; '),
       ]
