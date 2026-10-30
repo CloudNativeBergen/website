@@ -240,6 +240,26 @@ describe('renewal reminders (R2)', () => {
     )
   })
 
+  it('opens 12 months ahead across the year boundary', () => {
+    const conf = { startDate: '2026-01-31', sponsorRenewalLeadMonths: 12 }
+    expect(isRenewalWindowOpen(conf, new Date('2025-01-30T22:59:59Z'))).toBe(
+      false,
+    )
+    expect(isRenewalWindowOpen(conf, new Date('2025-01-30T23:00:00Z'))).toBe(
+      true,
+    )
+  })
+
+  it('opens 1 month ahead when set to 1', () => {
+    const conf = { startDate: '2026-03-31', sponsorRenewalLeadMonths: 1 }
+    expect(isRenewalWindowOpen(conf, new Date('2026-02-27T22:59:59Z'))).toBe(
+      false,
+    )
+    expect(isRenewalWindowOpen(conf, new Date('2026-02-27T23:00:00Z'))).toBe(
+      true,
+    )
+  })
+
   it('clamps to the last day of the target month', () => {
     // 31 Aug - 6 months = 28 Feb (2026 is not a leap year), not 3 March.
     expect(

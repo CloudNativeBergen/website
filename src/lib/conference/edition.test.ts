@@ -188,8 +188,15 @@ describe('buildEditionDocuments — always-applied invariants', () => {
     ).toBe('New Org')
   })
 
-  it('copies the sponsor renewal lead time with the goals', () => {
+  it('copies the sponsor renewal lead time with the sponsorship copy', () => {
     expect(build(makeInput()).conference.sponsorRenewalLeadMonths).toBe(4)
+    const { conference, summary } = build(
+      makeInput({
+        clone: { ...DEFAULT_CLONE_FLAGS, sponsorshipCopy: false },
+      }),
+    )
+    expect(conference.sponsorRenewalLeadMonths).toBeUndefined()
+    expect(summary.sponsorshipCopy).toBeUndefined()
   })
 
   it('never carries source content (schedules/announcement) into the clone', () => {
