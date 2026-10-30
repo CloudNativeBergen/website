@@ -330,8 +330,9 @@ export function FeaturedTalksManager({
                       <button
                         onClick={() => handleRemoveTalk(talk._id)}
                         disabled={removeTalkMutation.isPending}
-                        className="ml-2 inline-flex items-center rounded-full border border-transparent p-1 text-red-400 hover:bg-red-100 hover:text-red-600 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/50 dark:hover:text-red-300"
+                        className="-m-1 ml-1 inline-flex shrink-0 items-center rounded-full border border-transparent p-2 text-red-400 hover:bg-red-100 hover:text-red-600 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/50 dark:hover:text-red-300"
                         title="Remove from featured"
+                        aria-label="Remove from featured"
                       >
                         <XMarkIcon className="h-4 w-4" />
                       </button>

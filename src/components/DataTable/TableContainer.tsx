@@ -7,14 +7,11 @@ export interface TableContainerProps {
 }
 
 export function TableContainer({ children, className }: TableContainerProps) {
+  // className lands on the outer wrapper so `hidden md:block` hides the whole
+  // table, scroll container included.
   return (
-    <div className="overflow-x-auto">
-      <div
-        className={clsx(
-          'overflow-hidden shadow-sm ring-1 ring-gray-200 md:rounded-lg dark:ring-gray-700',
-          className,
-        )}
-      >
+    <div className={clsx('overflow-x-auto', className)}>
+      <div className="overflow-hidden shadow-sm ring-1 ring-gray-200 md:rounded-lg dark:ring-gray-700">
         {children}
       </div>
     </div>

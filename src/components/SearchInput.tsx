@@ -40,7 +40,8 @@ export function SearchInput({
         <button
           type="button"
           onClick={() => onChange('')}
-          className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+          aria-label="Clear search"
+          className="absolute top-1/2 right-0.5 -translate-y-1/2 rounded p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
         >
           <XMarkIcon className="h-4 w-4" />
         </button>
