@@ -245,6 +245,10 @@ describe('api/webhooks/checkin/ticket-sold — HMAC signature', () => {
     expect(response.status).toBe(200)
     expect(mockGetConference).toHaveBeenCalledWith(42)
     expect(mockSendWorkshop).toHaveBeenCalledTimes(1)
+    // A redelivery carries the same key, so Resend sends once.
+    expect(mockSendWorkshop.mock.calls[0][0]).toMatchObject({
+      idempotencyKey: `workshop-signup/${data.id}/3`,
+    })
   })
 
   it('rejects a request with a missing signature header (401)', async () => {

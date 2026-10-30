@@ -52,6 +52,8 @@ export interface WorkshopSignupInstructionsRequest {
    * domain. The email then says online sign-up is not available yet.
    */
   portalUrl: string | null
+  /** Resend idempotency key, so a redelivered webhook does not mail twice. */
+  idempotencyKey?: string
 }
 
 export interface WorkshopReminderRequest {
@@ -447,7 +449,9 @@ export async function sendWorkshopSignupInstructions(
     )
 
     const emailResult = await retryWithBackoff(async () => {
-      const result = await client.emails.send(email)
+      const result = await client.emails.send(email, {
+        idempotencyKey: request.idempotencyKey,
+      })
 
       if (result.error) {
         throw new Error(`Failed to send email: ${result.error.message}`)
