@@ -834,7 +834,7 @@ export function SponsorTierEditor({
                 </div>
               )}
 
-              <div className="absolute top-4 right-4 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="absolute top-4 right-4 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
                 <div className="flex space-x-1">
                   <button
                     onClick={() => openEditModal(tier)}

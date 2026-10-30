@@ -237,7 +237,8 @@ export function SponsorContactEditor({
                   <button
                     type="button"
                     onClick={() => handleRemoveContact(index)}
-                    className="cursor-pointer rounded-md p-1.5 text-gray-400 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                    className="cursor-pointer rounded-md p-2 text-gray-400 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 dark:hover:bg-red-900/20 dark:hover:text-red-400 [@media(hover:none)]:opacity-100"
+                    aria-label="Remove contact"
                     title="Remove contact"
                   >
                     <TrashIcon className="h-4 w-4" />

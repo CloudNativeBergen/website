@@ -196,7 +196,7 @@ export function SponsorBulkActions({
               disabled={isProcessing}
             >
               <ArrowPathIcon className="h-4 w-4" />
-              Status
+              <span className="sr-only sm:not-sr-only">Status</span>
               <ChevronDownIcon className="h-3 w-3" />
             </MenuButton>
             <Transition
@@ -234,7 +234,7 @@ export function SponsorBulkActions({
               disabled={isProcessing}
             >
               <UserPlusIcon className="h-4 w-4" />
-              Assign
+              <span className="sr-only sm:not-sr-only">Assign</span>
               <ChevronDownIcon className="h-3 w-3" />
             </MenuButton>
             <Transition
@@ -286,7 +286,7 @@ export function SponsorBulkActions({
               disabled={isProcessing}
             >
               <TagIcon className="h-4 w-4" />
-              Tags
+              <span className="sr-only sm:not-sr-only">Tags</span>
               <ChevronDownIcon className="h-3 w-3" />
             </MenuButton>
             <Transition
