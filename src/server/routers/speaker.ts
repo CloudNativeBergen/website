@@ -1585,9 +1585,9 @@ export const speakerRouter = router({
       .input(
         z.object({
           proposalId: z.string().min(1),
-          speakerIds: z.array(z.string()).min(1),
-          subject: z.string().min(1),
-          message: z.string().min(1),
+          speakerIds: z.array(z.string()).min(1).max(20),
+          subject: z.string().min(1).max(300),
+          message: z.string().min(1).max(100000),
         }),
       )
       .mutation(async ({ input, ctx }) => {
@@ -1611,8 +1611,8 @@ export const speakerRouter = router({
     broadcastEmail: adminProcedure
       .input(
         z.object({
-          subject: z.string().min(1),
-          message: z.string().min(1),
+          subject: z.string().min(1).max(300),
+          message: z.string().min(1).max(100000),
         }),
       )
       .mutation(async ({ input }) => {

@@ -311,6 +311,7 @@ export function ProposalPublishedContent({
               attachments={attachments}
               onAttachmentsChange={handleAttachmentsChange}
               onDeleteAttachment={handleDeleteAttachment}
+              allowRecording
             />
           </dd>
         </div>

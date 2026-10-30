@@ -10,7 +10,10 @@ export const IssueBadgeInputSchema = z.object({
 })
 
 export const BulkIssueBadgeInputSchema = z.object({
-  speakerIds: z.array(z.string()).min(1, 'At least one speaker required'),
+  speakerIds: z
+    .array(z.string())
+    .min(1, 'At least one speaker required')
+    .max(300, 'Too many speakers in one batch'),
   badgeType: BadgeTypeSchema,
   centerGraphicSvg: z.string().optional(),
   sendEmail: z.boolean().optional().default(true),

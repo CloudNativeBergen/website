@@ -57,6 +57,7 @@ vi.mock('@/lib/sanity/client', () => {
     return chain
   }
   return {
+    clientRead: { fetch: (...a: unknown[]) => fetchMock(...a) },
     clientReadUncached: { fetch: (...a: unknown[]) => fetchMock(...a) },
     clientReadCached: { fetch: (...a: unknown[]) => fetchMock(...a) },
     clientWrite: {
@@ -69,6 +70,22 @@ vi.mock('@/lib/sanity/client', () => {
     },
   }
 })
+
+const { transferMock, createInvitationMock, sendInvitationMock } = vi.hoisted(
+  () => ({
+    transferMock: vi.fn(),
+    createInvitationMock: vi.fn(),
+    sendInvitationMock: vi.fn(),
+  }),
+)
+vi.mock('@/lib/attachment/blob', () => ({
+  transferBlobToSanity: transferMock,
+}))
+vi.mock('@/lib/cospeaker/server', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  createCoSpeakerInvitation: createInvitationMock,
+  sendInvitationEmail: sendInvitationMock,
+}))
 
 import { parse, evaluate } from 'groq-js'
 import { proposalRouter } from './proposal'
@@ -85,11 +102,38 @@ const DOMAIN_CONFERENCE = {
   domains: ['a.test'],
 }
 
+const RECORDING = {
+  _key: 'rec-1',
+  _type: 'urlAttachment',
+  url: 'https://video.test/rec',
+  attachmentType: 'recording',
+}
+
 const DATASET = [
   { _id: 'org-A', _type: 'organization', name: 'Org A' },
   { _id: 'org-B', _type: 'organization', name: 'Org B' },
   { _id: 'conf-A', _type: 'conference', organization: ref('org-A') },
   { _id: 'conf-B', _type: 'conference', organization: ref('org-B') },
+  // An earlier edition of org A; its domain was released on createEdition.
+  { _id: 'conf-A-old', _type: 'conference', organization: ref('org-A') },
+  {
+    _id: 'talk-A-old',
+    _type: 'talk',
+    title: 'Last year',
+    status: 'confirmed',
+    format: 'presentation_40',
+    conference: ref('conf-A-old'),
+    speakers: [ref('sp-other')],
+  },
+  {
+    _id: 'inv-old',
+    _type: 'coSpeakerInvitation',
+    status: 'pending',
+    invitedEmail: 'new@x.test',
+    proposal: ref('talk-A-old'),
+    conference: ref('conf-A-old'),
+    expiresAt: '2999-01-01T00:00:00Z',
+  },
   { _id: 'sp-dual', _type: 'speaker', name: 'Dual Role', email: 'd@x.test' },
   { _id: 'sp-other', _type: 'speaker', name: 'Other', email: 'o@x.test' },
   {
@@ -97,8 +141,10 @@ const DATASET = [
     _type: 'talk',
     title: 'Org A talk',
     status: 'submitted',
+    format: 'presentation_40',
     conference: ref('conf-A'),
     speakers: [ref('sp-other')],
+    attachments: [RECORDING],
   },
   // The dual-role caller's OWN proposal at tenant B.
   {
@@ -108,6 +154,7 @@ const DATASET = [
     status: 'submitted',
     conference: ref('conf-B'),
     speakers: [ref('sp-dual')],
+    attachments: [RECORDING],
   },
   {
     _id: 'rev-A',
@@ -146,6 +193,23 @@ function dualRoleCtx(): Context {
 }
 
 const caller = () => proposalRouter.createCaller(dualRoleCtx())
+
+/** A plain speaker who owns talk-A, the domain conference's talk. */
+function ownerOfTalkA() {
+  const speaker = {
+    _id: 'sp-other',
+    name: 'Other',
+    email: 'o@x.test',
+    organizerOrgIds: [],
+  }
+  const session = { speaker, user: { email: 'o@x.test' } }
+  return proposalRouter.createCaller({
+    req: {},
+    session,
+    speaker,
+    user: session.user,
+  } as unknown as Context)
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -235,5 +299,133 @@ describe('dual-role organizer ∧ foreign-tenant speaker (owner arm ≠ organize
       conference: { _ref: 'conf-A' },
       reviewer: { _ref: 'sp-dual' },
     })
+  })
+})
+
+describe('updateAttachments keeps the recording-deletion rule of deleteAttachment', () => {
+  it('puts back a stored recording a speaker left out', async () => {
+    await caller().updateAttachments({ id: 'talk-B', attachments: [] })
+    expect(patchCalls[0].fields.attachments).toEqual([RECORDING])
+  })
+
+  it('refuses a NEW recording from a speaker and writes nothing', async () => {
+    await expect(
+      caller().updateAttachments({
+        id: 'talk-B',
+        attachments: [{ ...RECORDING, _key: 'rec-new' } as never],
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(patchCalls).toEqual([])
+  })
+
+  it('drops duplicate keys, keeping the first', async () => {
+    const slides = {
+      _key: 's-1',
+      _type: 'urlAttachment' as const,
+      url: 'https://slides.test/a',
+      attachmentType: 'slides' as const,
+    }
+    await caller().updateAttachments({
+      id: 'talk-A',
+      attachments: [slides, { ...slides, url: 'https://slides.test/b' }],
+    })
+    expect(patchCalls[0].fields.attachments).toEqual([slides])
+  })
+
+  it('keeps the stored recording when a speaker sends an altered copy', async () => {
+    await caller().updateAttachments({
+      id: 'talk-B',
+      attachments: [
+        { ...RECORDING, url: 'https://evil.test/x' } as typeof RECORDING & {
+          _type: 'urlAttachment'
+          attachmentType: 'recording'
+        },
+      ],
+    })
+    expect(patchCalls[0].fields.attachments).toEqual([RECORDING])
+  })
+
+  it('lets an organizer of the proposal’s org remove a recording', async () => {
+    await caller().updateAttachments({ id: 'talk-A', attachments: [] })
+    expect(patchCalls.map((p) => p.id)).toEqual(['talk-A'])
+    expect(patchCalls[0].fields.attachments).toEqual([])
+  })
+})
+
+describe('speaker writes to a talk go through the domain conference only', () => {
+  beforeEach(() => {
+    transferMock.mockResolvedValue({ asset: { _id: 'file-1' }, error: null })
+    createInvitationMock.mockImplementation(async (i: object) => ({
+      _id: 'inv-1',
+      token: 'secret',
+      ...i,
+    }))
+    sendInvitationMock.mockResolvedValue(true)
+  })
+
+  const upload = (id: string) => ({
+    id,
+    blobUrl: 'https://blob.test/f.pdf',
+    filename: 'f.pdf',
+    attachmentType: 'slides' as const,
+  })
+
+  it('uploadAttachment refuses the caller’s own talk from another org’s domain', async () => {
+    await expect(
+      caller().uploadAttachment(upload('talk-B')),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(transferMock).not.toHaveBeenCalled()
+    expect(patchCalls).toEqual([])
+  })
+
+  it('uploadAttachment still works for the owner on the right domain', async () => {
+    await ownerOfTalkA().uploadAttachment(upload('talk-A'))
+    expect(patchCalls.map((p) => p.id)).toEqual(['talk-A'])
+  })
+
+  it('uploadAttachment lets the owner upload to an earlier edition of the same org', async () => {
+    await ownerOfTalkA().uploadAttachment(upload('talk-A-old'))
+    expect(patchCalls.map((p) => p.id)).toEqual(['talk-A-old'])
+  })
+
+  it('uploadAttachment refuses a recording from a speaker', async () => {
+    await expect(
+      ownerOfTalkA().uploadAttachment({
+        ...upload('talk-A'),
+        attachmentType: 'recording',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(transferMock).not.toHaveBeenCalled()
+    expect(patchCalls).toEqual([])
+  })
+
+  it('invitation.resend refuses an invitation for another conference’s talk', async () => {
+    await expect(
+      ownerOfTalkA().invitation.resend({ invitationId: 'inv-old' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(sendInvitationMock).not.toHaveBeenCalled()
+    expect(patchCalls).toEqual([])
+  })
+
+  it('invitation.send refuses the caller’s own talk from another conference’s domain', async () => {
+    await expect(
+      caller().invitation.send({
+        proposalId: 'talk-B',
+        invitedEmail: 'new@x.test',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(createInvitationMock).not.toHaveBeenCalled()
+    expect(sendInvitationMock).not.toHaveBeenCalled()
+  })
+
+  it('invitation.send still works for the owner on the right domain', async () => {
+    await ownerOfTalkA().invitation.send({
+      proposalId: 'talk-A',
+      invitedEmail: 'new@x.test',
+    })
+    expect(createInvitationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ proposalId: 'talk-A', conferenceId: 'conf-A' }),
+    )
+    expect(sendInvitationMock).toHaveBeenCalled()
   })
 })

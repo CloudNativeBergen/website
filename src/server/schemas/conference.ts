@@ -428,6 +428,7 @@ export const UpdateDomainsSchema = z.object({
   domains: z
     .array(z.string())
     .min(1, 'At least one domain is required')
+    .max(20, 'Too many domains')
     .transform((list) => list.map(normalizeDomain))
     .superRefine((list, ctx) => {
       const seen = new Set<string>()
@@ -479,6 +480,7 @@ export const UpdateOrganizersSchema = z.object({
   organizers: z
     .array(documentId)
     .min(1, 'At least one organizer is required')
+    .max(100, 'Too many organizers')
     .refine((ids) => new Set(ids).size === ids.length, {
       message: 'Organizers must be unique',
     }),
@@ -492,6 +494,7 @@ export const UpdateTopicsSchema = z.object({
   topics: z
     .array(documentId)
     .min(1, 'At least one topic is required')
+    .max(100, 'Too many topics')
     .refine((ids) => new Set(ids).size === ids.length, {
       message: 'Topics must be unique',
     }),
@@ -676,6 +679,7 @@ export const SanitizeSvgPreviewSchema = z.object({
 const NewEditionDomains = z
   .array(z.string())
   .min(1, 'At least one domain is required')
+  .max(20, 'Too many domains')
   .transform((list) => list.map(normalizeDomain))
   .superRefine((list, ctx) => {
     const seen = new Set<string>()

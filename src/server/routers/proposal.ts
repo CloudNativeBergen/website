@@ -14,6 +14,7 @@ import {
   resolveOrganizationId,
 } from '@/server/trpc'
 import {
+  requireDocumentInCurrentConference,
   requireDocumentInCurrentOrg,
   requireDocumentsInCurrentOrg,
   requireSpeakersInCurrentOrg,
@@ -875,6 +876,9 @@ async function loadInvitationForOrganizer(
       message: 'You do not have permission to manage this invitation',
     })
   }
+
+  // The resent email is branded with this domain's conference.
+  await requireDocumentInCurrentConference(proposalId, 'talk')
 
   if (isInactiveProposal(proposal.status)) {
     throw new TRPCError({
@@ -2651,7 +2655,7 @@ export const proposalRouter = router({
     updateAttachments: adminProcedure
       .input(
         IdParamSchema.extend({
-          attachments: z.array(AttachmentSchema),
+          attachments: z.array(AttachmentSchema).max(50),
         }),
       )
       .mutation(async ({ input }) => {
@@ -2829,7 +2833,7 @@ export const proposalRouter = router({
     search: adminProcedure
       .input(
         z.object({
-          query: z.string().min(1, 'Search query is required'),
+          query: z.string().min(1, 'Search query is required').max(200),
         }),
       )
       .query(async ({ input }) => {
@@ -2856,7 +2860,7 @@ export const proposalRouter = router({
     searchTalks: adminProcedure
       .input(
         z.object({
-          query: z.string().min(1, 'Search query is required'),
+          query: z.string().min(1, 'Search query is required').max(200),
           status: z
             .enum(['confirmed', 'accepted'])
             .optional()
@@ -2950,6 +2954,9 @@ export const proposalRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        // Org, not conference: speakers upload slides to past editions,
+        // whose domains are released when a new edition is created.
+        await requireDocumentInCurrentOrg(input.id, 'talk')
         const { proposal, proposalError } = await getProposal({
           id: input.id,
           speakerId: ctx.speaker._id,
@@ -2961,6 +2968,20 @@ export const proposalRouter = router({
           throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'Proposal not found or access denied',
+          })
+        }
+
+        if (
+          input.attachmentType === 'recording' &&
+          !(
+            ctx.isOrgOrganizer &&
+            !!ctx.orgId &&
+            proposal._organizationId === ctx.orgId
+          )
+        ) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Only organizers can add recordings',
           })
         }
 
@@ -3045,7 +3066,7 @@ export const proposalRouter = router({
   updateAttachments: organizerProcedure
     .input(
       IdParamSchema.extend({
-        attachments: z.array(AttachmentSchema),
+        attachments: z.array(AttachmentSchema).max(50),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -3065,8 +3086,45 @@ export const proposalRouter = router({
           })
         }
 
+        // Same rule as `deleteAttachment`: only an organizer of the proposal's
+        // own org may remove or change a recording. A full-array replace must
+        // not be a way around it, so stored recordings are kept as stored.
+        const isOrganizerForProposal =
+          ctx.isOrgOrganizer &&
+          !!ctx.orgId &&
+          proposal._organizationId === ctx.orgId
+        // Dedupe by `_key`; the first copy wins.
+        const seen = new Set<string>()
+        let attachments = input.attachments.filter(
+          (a) => !seen.has(a._key) && !!seen.add(a._key),
+        )
+        if (!isOrganizerForProposal) {
+          const recordings = new Map(
+            (proposal.attachments ?? [])
+              .filter((a) => a.attachmentType === 'recording')
+              .map((a) => [a._key, a]),
+          )
+          if (
+            attachments.some(
+              (a) =>
+                a.attachmentType === 'recording' && !recordings.has(a._key),
+            )
+          ) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Only organizers can add recordings',
+            })
+          }
+          // Stored recordings are kept as stored: sent copies are swapped
+          // back, omitted ones are put back.
+          attachments = [
+            ...attachments.map((a) => recordings.get(a._key) ?? a),
+            ...[...recordings.values()].filter((r) => !seen.has(r._key)),
+          ]
+        }
+
         const { proposal: updated, err } = await updateProposal(input.id, {
-          attachments: input.attachments,
+          attachments,
         })
 
         if (err) {
@@ -3181,6 +3239,9 @@ export const proposalRouter = router({
       .input(InvitationCreateSchema)
       .mutation(async ({ input, ctx }) => {
         try {
+          // The invitation email is branded with this domain's conference,
+          // so the talk must belong to it.
+          await requireDocumentInCurrentConference(input.proposalId, 'talk')
           // Verify user owns the proposal (or is organizer)
           const { proposal, proposalError } = await getProposal({
             id: input.proposalId,
