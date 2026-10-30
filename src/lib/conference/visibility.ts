@@ -70,7 +70,7 @@ export async function getDiscoveryVisibilityForDomain(
       _id: string
       visibility?: string | null
     } | null>(
-      `*[_type == "conference" && ($domain in domains || $wildcardSubdomain in domains)][0]{ _id, visibility }`,
+      `*[_type == "conference" && ($domain in domains || $wildcardSubdomain in domains) && !(_id in path("drafts.**"))][0]{ _id, visibility }`,
       {
         domain: normalizeDomain(host),
         wildcardSubdomain: wildcardFormForHost(normalizeDomain(host)) ?? '',

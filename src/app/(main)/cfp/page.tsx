@@ -140,7 +140,20 @@ async function CachedCFPContent({ domain }: { domain: string }) {
           role="status"
           className="font-inter mt-10 text-lg text-brand-slate-gray dark:text-gray-300"
         >
-          The call for presentations is not open for submissions.
+          The call for presentations is not open for submissions
+          {cfpContactEmail ? (
+            <>
+              . Reach out to{' '}
+              <Link
+                href={`mailto:${cfpContactEmail}`}
+                className="underline hover:no-underline"
+              >
+                {cfpContactEmail}
+              </Link>{' '}
+              if you have questions
+            </>
+          ) : null}
+          .
         </p>
       )}
 

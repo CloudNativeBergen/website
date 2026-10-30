@@ -214,7 +214,7 @@ function buildConferenceQuery(withSchedules: boolean): string {
   // by `$domain`/`$wildcardSubdomain`, which come from the request Host header
   // and never from the session — see `getConferenceForCurrentDomain`. There is no
   // conference id to scope it to yet; resolving one is what it does.
-  return `*[ _type == "conference" && ($domain in domains || $wildcardSubdomain in domains)][0]{
+  return `*[ _type == "conference" && ($domain in domains || $wildcardSubdomain in domains) && !(_id in path("drafts.**"))][0]{
       ...,
       teams[]{
         _key,

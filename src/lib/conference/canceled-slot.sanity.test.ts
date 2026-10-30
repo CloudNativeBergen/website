@@ -116,3 +116,29 @@ describe('the programme read of a talk that is not confirmed', () => {
     ).not.toContain('Wanda')
   })
 })
+
+describe('the conference lookup by domain', () => {
+  it('never serves a Studio draft of the conference', async () => {
+    h.store!.reset([
+      {
+        _id: 'drafts.conf-a',
+        _type: 'conference',
+        _rev: 'r0',
+        title: 'Unpublished edit',
+        domains: ['conf-a.example'],
+      },
+      {
+        _id: 'conf-a',
+        _type: 'conference',
+        _rev: 'r0',
+        title: 'Conf A',
+        domains: ['conf-a.example'],
+      },
+    ])
+    const conference = await clientReadCached.fetch<{ _id: string }>(
+      CONFERENCE_QUERY_FULL,
+      { domain: 'conf-a.example', wildcardSubdomain: 'conf-a.example' },
+    )
+    expect(conference._id).toBe('conf-a')
+  })
+})
