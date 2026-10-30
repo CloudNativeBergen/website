@@ -27,13 +27,16 @@ describe('sendGalleryTagEmail', () => {
         country: 'Norway',
         startDate: '2026-10-28T09:00:00.000Z',
         cfpEmail: 'cfp@conf.example',
+        domains: ['conf.example'],
       },
-      domain: 'conf.example',
+      domain: 'admin.internal',
     } as unknown as GalleryTagEmailRequest)
 
     expect(result.success).toBe(true)
     const html = (send.mock.calls[0][0] as { html: string }).html
     expect(html).not.toContain('2026-10-28T09:00')
     expect(html).toContain(formatDate('2026-10-28T09:00:00.000Z'))
+    expect(html).toContain('https://conf.example/#gallery?img=img1')
+    expect(html).not.toContain('admin.internal')
   })
 })

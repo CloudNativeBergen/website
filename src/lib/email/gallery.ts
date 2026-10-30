@@ -4,6 +4,7 @@ import { render } from '@react-email/render'
 import { GallerySpeakerTaggedTemplate } from '@/components/email/GallerySpeakerTaggedTemplate'
 import { resolveEmailSender, retryWithBackoff } from './config'
 import { buildGalleryImageUrl } from '@/lib/gallery/url'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { logger } from '@/lib/logger'
 import type { Speaker } from '@/lib/speaker/types'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
@@ -98,8 +99,8 @@ export async function sendGalleryTagEmail(
       }
     }
 
-    const eventUrl = `https://${domain}`
-    const galleryUrl = buildGalleryImageUrl(domain, image._id)
+    const eventUrl = conferenceBaseUrl(conference)
+    const galleryUrl = `${eventUrl}/#gallery?img=${image._id}`
     const dashboardUrl = `${eventUrl}/cfp/list`
 
     // Use the conference's own social links; omit rather than fall back to
