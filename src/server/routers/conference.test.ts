@@ -524,6 +524,21 @@ describe('conference router — validation', () => {
     expect(commitMock).not.toHaveBeenCalled()
   })
 
+  it('accepts a renewal lead time of 1-12 whole months and rejects others', async () => {
+    await makeCaller({ isOrganizer: true }).updateCfpGoals({
+      sponsorRenewalLeadMonths: 3,
+    })
+    expect(lastSet).toEqual({ sponsorRenewalLeadMonths: 3 })
+    for (const bad of [0, 13, 2.5]) {
+      await expect(
+        makeCaller({ isOrganizer: true }).updateCfpGoals({
+          sponsorRenewalLeadMonths: bad,
+        }),
+      ).rejects.toBeTruthy()
+    }
+    expect(commitMock).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects a non-integer checkin id', async () => {
     await expect(
       makeCaller({ isOrganizer: true }).updateTicketingIds({

@@ -67,7 +67,9 @@ export default async function NewEditionPage() {
     teams: conference.teams?.length ?? 0,
     sponsorTiers: conference.sponsorTiers?.length ?? 0,
     contractTemplates: contractTemplateCount ?? 0,
-    sponsorshipCopy: conference.sponsorBenefits?.length ?? 0,
+    sponsorshipCopy:
+      (conference.sponsorBenefits?.length ?? 0) +
+      (conference.sponsorRenewalLeadMonths ? 1 : 0),
     cfpGoals: numericGoals,
     agentConfig: conference.agentConfig ? 1 : 0,
     emailsAndChannels: emailChannelCount,

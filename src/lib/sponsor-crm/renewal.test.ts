@@ -9,6 +9,7 @@ import {
   PREVIOUS_EDITION_RENEWALS_ROOT,
   hasEnded,
   isRenewalWindowOpen,
+  renewalLeadMonths,
   shapeRenewals,
   type NextEdition,
   type RenewalSource,
@@ -206,20 +207,72 @@ describe('renewal reminders (R2)', () => {
   it('opens at Oslo midnight 6 months before the start date', () => {
     // 00:00 Oslo is 22:00Z the day before in summer, 23:00Z in winter.
     expect(
-      isRenewalWindowOpen('2026-10-27', new Date('2026-04-26T21:59:59Z')),
+      isRenewalWindowOpen(
+        { startDate: '2026-10-27' },
+        new Date('2026-04-26T21:59:59Z'),
+      ),
     ).toBe(false)
     expect(
-      isRenewalWindowOpen('2026-10-27', new Date('2026-04-26T22:00:00Z')),
+      isRenewalWindowOpen(
+        { startDate: '2026-10-27' },
+        new Date('2026-04-26T22:00:00Z'),
+      ),
     ).toBe(true)
+  })
+
+  it('defaults the lead time to 6 and ignores out-of-range values', () => {
+    expect(renewalLeadMonths({})).toBe(6)
+    expect(renewalLeadMonths({ sponsorRenewalLeadMonths: 3 })).toBe(3)
+    expect(renewalLeadMonths({ sponsorRenewalLeadMonths: 1 })).toBe(1)
+    expect(renewalLeadMonths({ sponsorRenewalLeadMonths: 12 })).toBe(12)
+    expect(renewalLeadMonths({ sponsorRenewalLeadMonths: 0 })).toBe(6)
+    expect(renewalLeadMonths({ sponsorRenewalLeadMonths: 13 })).toBe(6)
+    expect(renewalLeadMonths({ sponsorRenewalLeadMonths: 2.5 })).toBe(6)
+  })
+
+  it('opens at Oslo midnight 3 months before the start date when set to 3', () => {
+    const conf = { startDate: '2026-10-27', sponsorRenewalLeadMonths: 3 }
+    expect(isRenewalWindowOpen(conf, new Date('2026-07-26T21:59:59Z'))).toBe(
+      false,
+    )
+    expect(isRenewalWindowOpen(conf, new Date('2026-07-26T22:00:00Z'))).toBe(
+      true,
+    )
+  })
+
+  it('opens 12 months ahead across the year boundary', () => {
+    const conf = { startDate: '2026-01-31', sponsorRenewalLeadMonths: 12 }
+    expect(isRenewalWindowOpen(conf, new Date('2025-01-30T22:59:59Z'))).toBe(
+      false,
+    )
+    expect(isRenewalWindowOpen(conf, new Date('2025-01-30T23:00:00Z'))).toBe(
+      true,
+    )
+  })
+
+  it('opens 1 month ahead when set to 1', () => {
+    const conf = { startDate: '2026-03-31', sponsorRenewalLeadMonths: 1 }
+    expect(isRenewalWindowOpen(conf, new Date('2026-02-27T22:59:59Z'))).toBe(
+      false,
+    )
+    expect(isRenewalWindowOpen(conf, new Date('2026-02-27T23:00:00Z'))).toBe(
+      true,
+    )
   })
 
   it('clamps to the last day of the target month', () => {
     // 31 Aug - 6 months = 28 Feb (2026 is not a leap year), not 3 March.
     expect(
-      isRenewalWindowOpen('2026-08-31', new Date('2026-02-27T22:59:59Z')),
+      isRenewalWindowOpen(
+        { startDate: '2026-08-31' },
+        new Date('2026-02-27T22:59:59Z'),
+      ),
     ).toBe(false)
     expect(
-      isRenewalWindowOpen('2026-08-31', new Date('2026-02-27T23:00:00Z')),
+      isRenewalWindowOpen(
+        { startDate: '2026-08-31' },
+        new Date('2026-02-27T23:00:00Z'),
+      ),
     ).toBe(true)
   })
 

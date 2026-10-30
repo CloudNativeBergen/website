@@ -87,7 +87,8 @@ export const CLONE_FAMILY_META: Record<
   },
   sponsorshipCopy: {
     label: 'Sponsorship copy',
-    description: 'Prospectus copy, benefits, signing provider and CRM cadence.',
+    description:
+      'Prospectus copy, benefits, signing provider, CRM cadence and renewal lead time.',
   },
   cfpGoals: {
     label: 'CFP & revenue goals',
@@ -220,6 +221,7 @@ export interface SourceConference {
   cfpPresentationGoal?: number
   cfpWorkshopGoal?: number
   sponsorRevenueGoal?: number
+  sponsorRenewalLeadMonths?: number
   travelSupportBudget?: number
   signingProvider?: string
   sponsorBenefits?: Array<Record<string, unknown>>
@@ -437,6 +439,10 @@ export function buildEditionDocuments(
         src.crmInactivityThresholds,
         mintKey,
       )
+      copied = true
+    }
+    if (typeof src.sponsorRenewalLeadMonths === 'number') {
+      conference.sponsorRenewalLeadMonths = src.sponsorRenewalLeadMonths
       copied = true
     }
     if (copied) summary.sponsorshipCopy = 1

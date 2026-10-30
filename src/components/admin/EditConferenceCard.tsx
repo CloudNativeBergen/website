@@ -110,6 +110,8 @@ export interface EditFieldDef {
   nullableWhenEmpty?: boolean
   /** Numeric floor (inclusive) for `number` fields. */
   min?: number
+  /** Numeric ceiling (inclusive) for `number` fields. */
+  max?: number
   /** `number` field must be a whole number. */
   integer?: boolean
   /** `number` field must be strictly greater than zero. */
@@ -600,6 +602,17 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         min: 0,
         nullableWhenEmpty: true,
       },
+      {
+        name: 'sponsorRenewalLeadMonths',
+        label: 'Sponsor Renewal Lead Time (months)',
+        type: 'number',
+        min: 1,
+        max: 12,
+        integer: true,
+        nullableWhenEmpty: true,
+        description:
+          "How many months before the conference starts to remind you to renew last year's sponsors. Leave empty for 6.",
+      },
     ],
   },
   socialLinks: {
@@ -1079,6 +1092,8 @@ export function EditConferenceCard({
           errs[f.name] = 'Must be a positive number'
         else if (f.min !== undefined && n < f.min)
           errs[f.name] = `Must be at least ${f.min}`
+        else if (f.max !== undefined && n > f.max)
+          errs[f.name] = `Must be at most ${f.max}`
       }
     }
     Object.assign(errs, crossFieldErrors(fieldset, values))

@@ -11,21 +11,28 @@ import { createSponsorActivity } from './activity'
  * conference id ever comes from the client.
  */
 
-// ponytail: no conference setting for when sponsor outreach starts
-// (`sponsorDeadlineDate` is the signing deadline), so renewal reminders open a
-// fixed 6 months before `startDate`. Add a conference field if editions differ.
-export const RENEWAL_LEAD_MONTHS = 6
+interface RenewalWindowConference {
+  startDate?: string
+  sponsorRenewalLeadMonths?: number
+}
 
-/** True from `RENEWAL_LEAD_MONTHS` before `startDate` onwards, by Oslo date. */
+/** Months before `startDate` the renewal window opens; 6 when unset. */
+export function renewalLeadMonths(conference: RenewalWindowConference) {
+  const n = conference.sponsorRenewalLeadMonths
+  return Number.isInteger(n) && n! >= 1 && n! <= 12 ? n! : 6
+}
+
+/** True from `renewalLeadMonths` before `startDate` onwards, by Oslo date. */
 export function isRenewalWindowOpen(
-  startDate: string | undefined,
+  conference: RenewalWindowConference,
   now = new Date(),
 ) {
+  const { startDate } = conference
   if (!startDate) return false
   // `startDate` is a plain Oslo date; do the month arithmetic on it as a
   // calendar date and compare with today's Oslo date.
   const [y, m, d] = startDate.slice(0, 10).split('-').map(Number)
-  const month = m - 1 - RENEWAL_LEAD_MONTHS
+  const month = m - 1 - renewalLeadMonths(conference)
   // Clamp to the target month's last day: 31 Aug minus 6 months is 28 Feb,
   // not the 3 March a plain month shift would overflow to.
   const lastDay = new Date(Date.UTC(y, month + 1, 0)).getUTCDate()
@@ -274,11 +281,11 @@ export function shapeRenewals(
 /** ONE query, for the CRM board. Null outside the lead window. */
 export async function getPreviousEditionRenewals(
   orgId: string,
-  conference: { _id: string; startDate?: string },
+  conference: { _id: string } & RenewalWindowConference,
   now = new Date(),
 ): Promise<PreviousEditionRenewals | null> {
   if (!orgId || !conference._id) return null // FAIL CLOSED: no tenant.
-  if (!isRenewalWindowOpen(conference.startDate, now)) return null
+  if (!isRenewalWindowOpen(conference, now)) return null
   const row = await clientReadUncached.fetch<PreviousEditionRenewalsRow>(
     PREVIOUS_EDITION_RENEWALS_ROOT,
     {

@@ -50,6 +50,7 @@ import {
   SettingsGroupSection,
 } from './settingsLayout'
 import { SettingsFilter, FilterableCard } from './SettingsFilter'
+import { renewalLeadMonths } from '@/lib/sponsor-crm/renewal'
 import {
   CalendarIcon,
   GlobeAltIcon,
@@ -559,6 +560,8 @@ export default async function AdminSettings() {
                     cfpPresentationGoal: conference.cfpPresentationGoal,
                     cfpWorkshopGoal: conference.cfpWorkshopGoal,
                     sponsorRevenueGoal: conference.sponsorRevenueGoal,
+                    sponsorRenewalLeadMonths:
+                      conference.sponsorRenewalLeadMonths,
                   }}
                 />
               }
@@ -582,6 +585,10 @@ export default async function AdminSettings() {
               <FieldRow
                 label="Sponsor Revenue Goal"
                 value={conference.sponsorRevenueGoal}
+              />
+              <FieldRow
+                label="Sponsor Renewal Lead Time"
+                value={`${renewalLeadMonths(conference)} months`}
               />
             </InfoCard>
           </SettingsGroupSection>
