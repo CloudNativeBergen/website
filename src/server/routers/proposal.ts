@@ -2651,7 +2651,7 @@ export const proposalRouter = router({
     updateAttachments: adminProcedure
       .input(
         IdParamSchema.extend({
-          attachments: z.array(AttachmentSchema),
+          attachments: z.array(AttachmentSchema).max(50),
         }),
       )
       .mutation(async ({ input }) => {
@@ -2829,7 +2829,7 @@ export const proposalRouter = router({
     search: adminProcedure
       .input(
         z.object({
-          query: z.string().min(1, 'Search query is required'),
+          query: z.string().min(1, 'Search query is required').max(200),
         }),
       )
       .query(async ({ input }) => {
@@ -2856,7 +2856,7 @@ export const proposalRouter = router({
     searchTalks: adminProcedure
       .input(
         z.object({
-          query: z.string().min(1, 'Search query is required'),
+          query: z.string().min(1, 'Search query is required').max(200),
           status: z
             .enum(['confirmed', 'accepted'])
             .optional()
@@ -3045,7 +3045,7 @@ export const proposalRouter = router({
   updateAttachments: organizerProcedure
     .input(
       IdParamSchema.extend({
-        attachments: z.array(AttachmentSchema),
+        attachments: z.array(AttachmentSchema).max(50),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -3065,8 +3065,32 @@ export const proposalRouter = router({
           })
         }
 
+        // Same rule as `deleteAttachment`: only an organizer of the proposal's
+        // own org may remove or change a recording. A full-array replace must
+        // not be a way around it, so stored recordings are kept as stored.
+        const isOrganizerForProposal =
+          ctx.isOrgOrganizer &&
+          !!ctx.orgId &&
+          proposal._organizationId === ctx.orgId
+        let attachments = input.attachments
+        if (!isOrganizerForProposal) {
+          const recordings = new Map(
+            (proposal.attachments ?? [])
+              .filter((a) => a.attachmentType === 'recording')
+              .map((a) => [a._key, a]),
+          )
+          const sentKeys = new Set(attachments.map((a) => a._key))
+          if ([...recordings.keys()].some((key) => !sentKeys.has(key))) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Cannot delete recording attachments',
+            })
+          }
+          attachments = attachments.map((a) => recordings.get(a._key) ?? a)
+        }
+
         const { proposal: updated, err } = await updateProposal(input.id, {
-          attachments: input.attachments,
+          attachments,
         })
 
         if (err) {

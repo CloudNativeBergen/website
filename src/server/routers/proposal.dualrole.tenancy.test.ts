@@ -85,6 +85,13 @@ const DOMAIN_CONFERENCE = {
   domains: ['a.test'],
 }
 
+const RECORDING = {
+  _key: 'rec-1',
+  _type: 'urlAttachment',
+  url: 'https://video.test/rec',
+  attachmentType: 'recording',
+}
+
 const DATASET = [
   { _id: 'org-A', _type: 'organization', name: 'Org A' },
   { _id: 'org-B', _type: 'organization', name: 'Org B' },
@@ -99,6 +106,7 @@ const DATASET = [
     status: 'submitted',
     conference: ref('conf-A'),
     speakers: [ref('sp-other')],
+    attachments: [RECORDING],
   },
   // The dual-role caller's OWN proposal at tenant B.
   {
@@ -108,6 +116,7 @@ const DATASET = [
     status: 'submitted',
     conference: ref('conf-B'),
     speakers: [ref('sp-dual')],
+    attachments: [RECORDING],
   },
   {
     _id: 'rev-A',
@@ -235,5 +244,33 @@ describe('dual-role organizer ∧ foreign-tenant speaker (owner arm ≠ organize
       conference: { _ref: 'conf-A' },
       reviewer: { _ref: 'sp-dual' },
     })
+  })
+})
+
+describe('updateAttachments keeps the recording-deletion rule of deleteAttachment', () => {
+  it('refuses to drop a recording from the foreign own proposal and writes nothing', async () => {
+    await expect(
+      caller().updateAttachments({ id: 'talk-B', attachments: [] }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(patchCalls).toEqual([])
+  })
+
+  it('keeps the stored recording when a speaker sends an altered copy', async () => {
+    await caller().updateAttachments({
+      id: 'talk-B',
+      attachments: [
+        { ...RECORDING, url: 'https://evil.test/x' } as typeof RECORDING & {
+          _type: 'urlAttachment'
+          attachmentType: 'recording'
+        },
+      ],
+    })
+    expect(patchCalls[0].fields.attachments).toEqual([RECORDING])
+  })
+
+  it('lets an organizer of the proposal’s org remove a recording', async () => {
+    await caller().updateAttachments({ id: 'talk-A', attachments: [] })
+    expect(patchCalls.map((p) => p.id)).toEqual(['talk-A'])
+    expect(patchCalls[0].fields.attachments).toEqual([])
   })
 })
