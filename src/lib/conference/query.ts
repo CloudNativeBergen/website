@@ -189,10 +189,11 @@ const EXPANDED_SCHEDULES = `schedules[]-> {
             slug,
             description
           },
-          // A canceled or withdrawn talk keeps its slot on the public
-          // programme, but its title, description and speakers never ship:
-          // a speaker who withdrew is not named.
-          !(status in ["canceled", "withdrawn"]) => {
+          // Only a confirmed talk ships its title, description and speakers.
+          // Any other talk keeps its slot on the public programme (shown as
+          // TBA), but an unconfirmed proposal or a speaker who withdrew is
+          // never named.
+          status == "confirmed" => {
             title,
             description,
             speakers[]->{

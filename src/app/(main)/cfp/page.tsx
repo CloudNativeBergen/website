@@ -9,7 +9,7 @@ import { SubmissionsNotOpenNotice } from '@/components/cfp/SubmissionsNotOpenNot
 import { LandingUtmCapture } from '@/components/cfp/LandingUtmCapture'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
-import { canAcceptProposals } from '@/lib/conference/state'
+import { canAcceptProposals, isCfpOpen } from '@/lib/conference/state'
 import { formatDate } from '@/lib/time'
 import { Topic } from '@/lib/topic/types'
 import { formats } from '@/lib/proposal/types'
@@ -36,7 +36,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 async function CachedCFPContent({ domain }: { domain: string }) {
   'use cache'
-  cacheLife('days')
+  // Hours, not days: the CTA below flips when the CFP window opens or closes.
+  cacheLife('hours')
   cacheTag('content:cfp')
   const { conference, error } = await getConferenceForDomain(domain, {
     topics: true,
@@ -128,12 +129,19 @@ async function CachedCFPContent({ domain }: { domain: string }) {
         {conference.description ? <p>{conference.description}</p> : null}
       </div>
 
-      {acceptingSubmissions ? (
+      {!acceptingSubmissions ? (
+        <SubmissionsNotOpenNotice contactEmail={cfpContactEmail} />
+      ) : isCfpOpen(conference) ? (
         <Button href="/cfp/proposal" variant="warning" className="mt-10 w-full">
           Submit your proposal
         </Button>
       ) : (
-        <SubmissionsNotOpenNotice contactEmail={cfpContactEmail} />
+        <p
+          role="status"
+          className="font-inter mt-10 text-lg text-brand-slate-gray dark:text-gray-300"
+        >
+          The call for presentations is not open for submissions.
+        </p>
       )}
 
       <dl className="mt-10 grid grid-cols-2 gap-x-10 gap-y-6 sm:mt-16 sm:gap-x-16 sm:gap-y-10 sm:text-center lg:auto-cols-auto lg:grid-flow-col lg:grid-cols-none lg:justify-start lg:text-left">

@@ -81,6 +81,16 @@ describe('buildEventJsonLd', () => {
     expect(JSON.stringify(jsonLd)).not.toContain('undefined')
   })
 
+  it('uses the canonical domain, not an alias request host', () => {
+    const jsonLd = buildEventJsonLd({
+      conference: makeConference({
+        domains: ['conf.example', 'alias.example'],
+      }),
+      domain: 'alias.example',
+    })
+    expect(jsonLd.url).toBe('https://conf.example')
+  })
+
   it('uses http and localhost host for local domains', () => {
     const jsonLd = buildEventJsonLd({
       conference: makeConference(),

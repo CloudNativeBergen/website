@@ -64,10 +64,9 @@ export function isCfpOpen(
   if (!conference.cfpStartDate || !conference.cfpEndDate) {
     return false
   }
-  const now = new Date()
-  const startDate = new Date(conference.cfpStartDate + 'T00:00:00Z')
-  const endDate = new Date(conference.cfpEndDate + 'T23:59:59.999Z')
-  return now >= startDate && now <= endDate
+  // Both are Sanity `date`s: whole Oslo calendar days, inclusive.
+  const today = osloTodayDateString()
+  return today >= conference.cfpStartDate && today <= conference.cfpEndDate
 }
 
 /**
@@ -158,6 +157,21 @@ export function isProgramPublished(
     return false
   }
   return osloTodayDateString(now) >= conference.programDate
+}
+
+/**
+ * Strip each talk's date, time and room until the programme is published, so
+ * a public page outside `/program` cannot reveal the schedule early.
+ */
+export function withoutUnpublishedSchedule<
+  T extends { scheduleInfo?: unknown },
+>(
+  conference: { programDate?: Conference['programDate'] | null },
+  talks: readonly T[],
+  now: Date = new Date(),
+): T[] {
+  if (isProgramPublished(conference, now)) return [...talks]
+  return talks.map((talk) => ({ ...talk, scheduleInfo: undefined }))
 }
 
 /**

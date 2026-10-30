@@ -39,7 +39,7 @@ function getLocation(conference: ConferenceData): string | null {
 
 function formatCfpDeadline(cfpEndDate: string | undefined): string | null {
   if (!cfpEndDate) return null
-  return `Deadline: ${new Date(cfpEndDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`
+  return `Deadline: ${new Date(cfpEndDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}`
 }
 
 export async function generateOGImage(

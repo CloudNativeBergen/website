@@ -8,6 +8,7 @@
 
 import { Conference } from './types'
 import { isCfpOpen, isProgramPublished, isConferenceOver } from './state'
+import { osloTodayDateString } from '@/lib/time'
 
 export type ConferencePhase =
   | 'initialization' // Before CFP opens
@@ -40,15 +41,14 @@ export function getCurrentPhase(conference: Conference): ConferencePhase {
   }
 
   // Check if CFP has closed but program not yet published (still planning/review)
-  const now = new Date()
-  const cfpEnd = conference.cfpEndDate
-    ? new Date(conference.cfpEndDate + 'T23:59:59.999Z')
-    : null
-  const programDate = conference.programDate
-    ? new Date(conference.programDate)
-    : null
-
-  if (cfpEnd && programDate && now > cfpEnd && now < programDate) {
+  // Oslo calendar days, like `isCfpOpen` and `isProgramPublished`.
+  const today = osloTodayDateString()
+  if (
+    conference.cfpEndDate &&
+    conference.programDate &&
+    today > conference.cfpEndDate &&
+    today < conference.programDate
+  ) {
     return 'planning' // Still in review/selection phase
   }
 

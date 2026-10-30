@@ -42,6 +42,8 @@ export interface BuildSitemapInput {
    * for crawlers (robots additionally serves a blanket disallow).
    */
   unlisted?: boolean
+  /** False until the programme is published: `/program` is a placeholder. */
+  programPublished?: boolean
 }
 
 /**
@@ -64,7 +66,12 @@ export function isDisallowed(path: string): boolean {
  */
 export function buildSitemap(
   host: string,
-  { speakers = [], lastModified, unlisted = false }: BuildSitemapInput = {},
+  {
+    speakers = [],
+    lastModified,
+    unlisted = false,
+    programPublished = true,
+  }: BuildSitemapInput = {},
 ): MetadataRoute.Sitemap {
   // An unlisted conference contributes no discovery URLs at all.
   if (unlisted) return []
@@ -72,7 +79,7 @@ export function buildSitemap(
   const baseUrl = getBaseUrl(host)
 
   const staticEntries: MetadataRoute.Sitemap = PUBLIC_STATIC_PATHS.filter(
-    (path) => !isDisallowed(path),
+    (path) => !isDisallowed(path) && (programPublished || path !== '/program'),
   ).map((path) => ({
     url: `${baseUrl}${path || '/'}`,
     ...(lastModified ? { lastModified } : {}),

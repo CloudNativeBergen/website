@@ -104,12 +104,11 @@ function keepsSlotWhenConfirmedOnly(slot: {
  * every slot once and each caller narrows locally.
  *
  * THIS IS NOT A CONFIDENTIALITY BOUNDARY, and must not be mistaken for one.
- * `/program` is a fully public page that already passes
- * `confirmedTalksOnly: false` (`src/app/(main)/program/page.tsx`), so
- * unconfirmed talks are public content today, with or without this change. What
- * this preserves is the RENDERED SHAPE the confirmed-only callers have always
- * seen — the homepage program highlights and `/info` must not start listing
- * slots whose talk is still a draft.
+ * `/program` passes `confirmedTalksOnly: false`; the boundary is the GROQ
+ * projection in `./query.ts`, which ships title, description and speakers for
+ * confirmed talks only. What this preserves is the RENDERED SHAPE the
+ * confirmed-only callers have always seen — the homepage program highlights
+ * and `/info` must not start listing slots whose talk is not confirmed.
  *
  * Rebuilds rather than mutates. The input is the object `'use cache'` handed
  * back, and the same entry serves the confirmed and unconfirmed callers; an
