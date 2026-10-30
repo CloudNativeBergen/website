@@ -13,8 +13,12 @@ export function sortSponsorTiers(tiers: SponsorTier[]): SponsorTier[] {
     if (aOrder !== bOrder) return aOrder - bOrder
 
     // Sort by highest price (descending) within same type
-    const maxPriceA = a.price ? Math.max(...a.price.map((p) => p.amount)) : 0
-    const maxPriceB = b.price ? Math.max(...b.price.map((p) => p.amount)) : 0
+    const maxPriceA = a.price
+      ? Math.max(...a.price.map((p) => p.amount ?? 0))
+      : 0
+    const maxPriceB = b.price
+      ? Math.max(...b.price.map((p) => p.amount ?? 0))
+      : 0
 
     if (maxPriceA !== maxPriceB) return maxPriceB - maxPriceA
 
@@ -137,10 +141,10 @@ export function sortTierNamesByValue(
     if (aOrder !== bOrder) return aOrder - bOrder
 
     const maxPriceA = tierA?.price
-      ? Math.max(...tierA.price.map((p) => p.amount))
+      ? Math.max(...tierA.price.map((p) => p.amount ?? 0))
       : 0
     const maxPriceB = tierB?.price
-      ? Math.max(...tierB.price.map((p) => p.amount))
+      ? Math.max(...tierB.price.map((p) => p.amount ?? 0))
       : 0
 
     if (maxPriceA !== maxPriceB) return maxPriceB - maxPriceA

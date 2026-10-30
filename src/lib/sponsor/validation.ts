@@ -1,4 +1,9 @@
 import { SponsorTierInput, SponsorInput } from './types'
+import { CURRENCY_VALUES } from '../../../sanity/schemaTypes/constants'
+
+// Every ISO code the tier editor offers. 'OTHER' is not one: nothing can
+// format or total it.
+const TIER_CURRENCIES: string[] = CURRENCY_VALUES.filter((c) => c !== 'OTHER')
 
 export interface ValidationError {
   field: string
@@ -56,13 +61,10 @@ export function validateSponsorTier(
             message: 'Price amount must be 0 or greater',
           })
         }
-        if (
-          !price.currency ||
-          !['NOK', 'USD', 'EUR'].includes(price.currency)
-        ) {
+        if (!price.currency || !TIER_CURRENCIES.includes(price.currency)) {
           errors.push({
             field: `price.${index}.currency`,
-            message: 'Currency must be NOK, USD, or EUR',
+            message: `Currency must be one of ${TIER_CURRENCIES.join(', ')}`,
           })
         }
       })

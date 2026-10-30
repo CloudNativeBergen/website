@@ -39,7 +39,8 @@ export function ApprovalSummary({ travelSupport }: ApprovalSummaryProps) {
     (expense) => expense.status === ExpenseStatus.REJECTED,
   )
 
-  const preferredCurrency = travelSupport.bankingDetails.preferredCurrency
+  const preferredCurrency =
+    travelSupport.bankingDetails?.preferredCurrency ?? 'NOK'
 
   const calculateTotalInCurrency = (
     expenseList: TravelExpense[],

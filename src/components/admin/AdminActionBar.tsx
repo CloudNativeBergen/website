@@ -404,7 +404,9 @@ export function AdminActionBar({
                 {proposal.reviews.length} review
                 {proposal.reviews.length !== 1 ? 's' : ''}
                 {(() => {
-                  const totalScore = proposal.reviews.reduce((sum, review) => {
+                  const scored = proposal.reviews.filter((r) => r.score)
+                  if (scored.length === 0) return ''
+                  const totalScore = scored.reduce((sum, review) => {
                     const reviewScore =
                       (review.score.content +
                         review.score.relevance +
@@ -412,7 +414,7 @@ export function AdminActionBar({
                       3
                     return sum + reviewScore
                   }, 0)
-                  const averageScore = totalScore / proposal.reviews.length
+                  const averageScore = totalScore / scored.length
                   return ` (${averageScore.toFixed(1)}/5)`
                 })()}
               </span>

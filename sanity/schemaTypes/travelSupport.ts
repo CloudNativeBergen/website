@@ -90,7 +90,7 @@ export default defineType({
           description: 'Currency for expense summaries and reimbursements',
         }),
       ],
-      validation: (Rule) =>
+      validation: (Rule) => [
         Rule.custom((bankingDetails) => {
           if (!bankingDetails) return true
 
@@ -100,6 +100,12 @@ export default defineType({
           }
           return true
         }),
+        Rule.warning().custom((value, context) =>
+          value || context.document?.status !== 'approved'
+            ? true
+            : 'Approved requests need banking details to be paid out',
+        ),
+      ],
     }),
     defineField({
       name: 'totalAmount',

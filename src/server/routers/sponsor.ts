@@ -1448,7 +1448,7 @@ export const sponsorRouter = router({
         if (validationErrors.length > 0) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
-            message: 'Sponsor tier contains invalid fields',
+            message: `Sponsor tier contains invalid fields: ${validationErrors.map((e) => e.message).join('; ')}`,
             cause: { validationErrors },
           })
         }
@@ -1506,7 +1506,7 @@ export const sponsorRouter = router({
             console.error('Sponsor tier validation errors:', validationErrors)
             throw new TRPCError({
               code: 'BAD_REQUEST',
-              message: 'Sponsor tier contains invalid fields',
+              message: `Sponsor tier contains invalid fields: ${validationErrors.map((e) => e.message).join('; ')}`,
               cause: { validationErrors },
             })
           }

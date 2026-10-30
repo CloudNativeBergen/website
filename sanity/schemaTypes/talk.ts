@@ -132,6 +132,7 @@ export default defineType({
       // The numbers come from `CO_SPEAKER_LIMITS` — never re-hardcode them here.
       validation: (Rule) => [
         Rule.min(1),
+        Rule.required().warning(),
         Rule.warning().custom((speakers, context) => {
           if (!Array.isArray(speakers)) return true
 

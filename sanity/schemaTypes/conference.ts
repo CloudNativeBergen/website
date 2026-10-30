@@ -478,7 +478,13 @@ export default defineType({
       title: 'End Date',
       type: 'date',
       fieldset: 'dates',
-      validation: (Rule) => Rule.required(),
+      validation: (Rule) =>
+        Rule.required().custom((end: string | undefined, context) => {
+          const start = context.document?.startDate as string | undefined
+          return !end || !start || end >= start
+            ? true
+            : 'End date must be on or after start date'
+        }),
     }),
     defineField({
       name: 'cfpStartDate',

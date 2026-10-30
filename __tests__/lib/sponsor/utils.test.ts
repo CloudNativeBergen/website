@@ -276,3 +276,28 @@ describe('deterministicShuffle', () => {
     expect(deterministicShuffle([1], 42)).toEqual([1])
   })
 })
+
+describe('sortSponsorTiers with a price missing its amount', () => {
+  it('treats the missing amount as 0 instead of sorting on NaN', () => {
+    const tiers = [
+      makeTier({
+        _id: 'a',
+        title: 'Unpriced',
+        price: [
+          { _key: 'x', currency: 'NOK' } as NonNullable<
+            SponsorTier['price']
+          >[number],
+        ],
+      }),
+      makeTier({
+        _id: 'b',
+        title: 'Priced',
+        price: [{ _key: 'y', amount: 100, currency: 'NOK' }],
+      }),
+    ]
+    expect(sortSponsorTiers(tiers).map((t) => t.title)).toEqual([
+      'Priced',
+      'Unpriced',
+    ])
+  })
+})

@@ -336,9 +336,11 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
   }
 
   const channel = r.channel!
+  // Studio data may lack a site path; link the front page rather than throw.
+  const targetPage = r.targetPage?.startsWith('/') ? r.targetPage : '/'
   const link = taggedUrl({
     baseUrl: conference.baseUrl,
-    targetPage: r.targetPage!,
+    targetPage,
     channel,
     campaignKey: input.campaign.key,
     taskKey: input.key,
@@ -373,7 +375,7 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
   const variantId = input.newId('socialPostVariant')
   task.postId = postId
   task.variantId = variantId
-  task.targetPage = r.targetPage
+  task.targetPage = targetPage
   return {
     tasks: [task],
     posts: [

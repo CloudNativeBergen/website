@@ -36,6 +36,15 @@ import {
   MusicalNoteIcon,
   CheckBadgeIcon,
   TicketIcon,
+  BriefcaseIcon,
+  BuildingOfficeIcon,
+  ChartBarIcon,
+  HandRaisedIcon,
+  HandThumbUpIcon,
+  MegaphoneIcon,
+  NewspaperIcon,
+  RocketLaunchIcon,
+  SignalIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { headers } from 'next/headers'
@@ -68,6 +77,15 @@ const INCLUSION_ICONS: Record<string, ElementType> = {
   GlobeAltIcon,
   MusicalNoteIcon,
   CheckBadgeIcon,
+  BriefcaseIcon,
+  BuildingOfficeIcon,
+  ChartBarIcon,
+  HandRaisedIcon,
+  HandThumbUpIcon,
+  MegaphoneIcon,
+  NewspaperIcon,
+  RocketLaunchIcon,
+  SignalIcon,
 }
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -89,8 +107,7 @@ function DynamicIcon({
   name: string
   className?: string
 }) {
-  const IconComponent = INCLUSION_ICONS[name]
-  if (!IconComponent) return null
+  const IconComponent = INCLUSION_ICONS[name] ?? TicketIcon
   return <IconComponent className={className} aria-hidden="true" />
 }
 

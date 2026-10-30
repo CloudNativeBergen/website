@@ -119,7 +119,7 @@ export default defineType({
                       name: 'endTime',
                       title: 'End Time',
                       type: 'string',
-                      validation: (Rule) =>
+                      validation: (Rule) => [
                         Rule.required()
                           .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, {
                             name: 'time',
@@ -128,6 +128,15 @@ export default defineType({
                           .error(
                             'Time must be in the format HH:mm (e.g., 14:30)',
                           ),
+                        Rule.custom((end: string | undefined, context) => {
+                          const start = (
+                            context.parent as { startTime?: string } | undefined
+                          )?.startTime
+                          return !end || !start || end > start
+                            ? true
+                            : 'End time must be after start time'
+                        }),
+                      ],
                     },
                   ],
                   preview: {
