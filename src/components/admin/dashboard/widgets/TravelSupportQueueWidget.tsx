@@ -239,7 +239,7 @@ export function TravelSupportQueueWidget({
               {data.requests.map((request) => (
                 <Link
                   key={request.id}
-                  href={`/admin/travel-support/${request.id}`}
+                  href={`/admin/speakers/travel-support?request=${encodeURIComponent(request.id)}`}
                   className="block rounded-lg border border-gray-200 bg-white p-2.5 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:border-blue-600 dark:hover:bg-blue-900/20"
                 >
                   <div className="mb-0.5 flex items-start justify-between">

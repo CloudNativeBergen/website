@@ -13,6 +13,7 @@ import clsx from 'clsx'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { useNotification } from './NotificationProvider'
 import { api } from '@/lib/trpc/client'
+import { osloTodayDateString } from '@/lib/time'
 import type { DomainVerificationView } from '@/lib/domain-verification'
 import type { WorkshopSignInStanding } from '@/lib/domain-verification/sign-in-standing'
 import {
@@ -115,7 +116,7 @@ function formatDay(iso: string | null): string | null {
   if (!iso) return null
   const parsed = Date.parse(iso)
   if (Number.isNaN(parsed)) return null
-  return new Date(parsed).toISOString().slice(0, 10)
+  return osloTodayDateString(new Date(parsed))
 }
 
 function CopyValue({ label, value }: { label: string; value: string }) {

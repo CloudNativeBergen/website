@@ -427,51 +427,46 @@ export function fileTimestampToISO(file: File): string {
   return new Date(file.lastModified).toISOString()
 }
 
+// Gallery photo times are instants (UTC ISO). The date/time inputs show and
+// accept Europe/Oslo wall-clock, so the helpers below convert both ways.
+
+/** Oslo `YYYY-MM-DDTHH:MM` for an instant, or the raw parts for anything else. */
+function osloInputParts(isoDateTime: string): [string, string] {
+  const local = isoDateTime.includes('T')
+    ? instantToOsloLocalInput(isoDateTime)
+    : ''
+  const [date, time] = (local || isoDateTime).split('T')
+  return [date, time?.slice(0, 5) || '00:00']
+}
+
 /**
- * Extracts the date portion from an ISO datetime string for date input fields.
- * @param isoDateTime ISO 8601 datetime string
- * @returns Date string in YYYY-MM-DD format
+ * Europe/Oslo calendar date (YYYY-MM-DD) of an ISO instant, for date inputs.
+ * A bare date is returned as-is.
  */
 export function extractDateFromISO(isoDateTime: string): string {
-  return isoDateTime.split('T')[0]
+  return osloInputParts(isoDateTime)[0]
 }
 
-/**
- * Extracts the time portion from an ISO datetime string for time input fields.
- * @param isoDateTime ISO 8601 datetime string
- * @returns Time string in HH:MM format
- */
+/** Europe/Oslo wall-clock time (HH:MM) of an ISO instant, for time inputs. */
 export function extractTimeFromISO(isoDateTime: string): string {
-  return isoDateTime.split('T')[1]?.slice(0, 5) || '00:00'
+  return osloInputParts(isoDateTime)[1]
 }
 
-/**
- * Updates the date portion of an ISO datetime string while preserving the time.
- * @param isoDateTime Current ISO datetime string
- * @param newDate New date in YYYY-MM-DD format
- * @returns Updated ISO 8601 datetime string
- */
+/** Replaces the Oslo date of an instant, keeping its Oslo time. */
 export function updateDateInISO(isoDateTime: string, newDate: string): string {
-  const [, time] = isoDateTime.split('T')
-  return `${newDate}T${time || '00:00:00.000Z'}`
+  const [, time] = osloInputParts(isoDateTime)
+  return osloLocalInputToIso(`${newDate}T${time}`) ?? isoDateTime
 }
 
-/**
- * Updates the time portion of an ISO datetime string while preserving the date.
- * @param isoDateTime Current ISO datetime string
- * @param newTime New time in HH:MM format
- * @returns Updated ISO 8601 datetime string
- */
+/** Replaces the Oslo time (HH:MM) of an instant, keeping its Oslo date. */
 export function updateTimeInISO(isoDateTime: string, newTime: string): string {
-  const [date] = isoDateTime.split('T')
-  return `${date}T${newTime}:00.000Z`
+  const [date] = osloInputParts(isoDateTime)
+  return osloLocalInputToIso(`${date}T${newTime}`) ?? isoDateTime
 }
 
 /**
- * Converts EXIF datetime format to ISO 8601.
- * EXIF format: "YYYY:MM:DD HH:MM:SS"
- * @param exifDateTime EXIF datetime string
- * @returns ISO 8601 datetime string
+ * Converts EXIF datetime ("YYYY:MM:DD HH:MM:SS", camera wall-clock with no
+ * zone) to an ISO instant, reading it as Europe/Oslo time.
  */
 export function exifDateTimeToISO(exifDateTime: string): string {
   const match = exifDateTime.match(
@@ -480,7 +475,11 @@ export function exifDateTimeToISO(exifDateTime: string): string {
   if (!match) {
     throw new Error('Invalid EXIF datetime format')
   }
-  return `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}.000Z`
+  const iso = osloLocalInputToIso(
+    `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}`,
+  )
+  if (!iso) throw new Error('Invalid EXIF datetime format')
+  return new Date(Date.parse(iso) + Number(match[6]) * 1000).toISOString()
 }
 
 /**

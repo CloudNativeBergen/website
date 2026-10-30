@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ScheduleEditor } from './ScheduleEditor'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import {
   ConferenceSchedule,
   ScheduleTrack,
@@ -319,6 +320,13 @@ const meta: Meta<typeof ScheduleEditor> = {
       },
     },
   },
+  decorators: [
+    (Story) => (
+      <NotificationProvider>
+        <Story />
+      </NotificationProvider>
+    ),
+  ],
 }
 
 export default meta

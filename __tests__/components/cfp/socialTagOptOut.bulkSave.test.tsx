@@ -192,6 +192,11 @@ vi.mock('@/lib/trpc/client', () => {
                 h.adminPayloads.push(input.data)
                 applyAdminBulk(input.data)
               },
+              mutateAsync: async (input: { id: string; data: unknown }) => {
+                h.adminPayloads.push(input.data)
+                applyAdminBulk(input.data)
+                return OPTED_OUT_SPEAKER
+              },
             }),
           },
         },

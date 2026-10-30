@@ -105,8 +105,9 @@ export const ScheduledTalk = ({
           <>
             <button
               onClick={handleRemove}
-              className="absolute top-0.5 right-0.5 z-20 rounded-full bg-red-100 p-0.5 text-red-600 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-200 hover:opacity-100 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-800/50"
+              className="absolute top-0.5 right-0.5 z-20 rounded-full bg-red-100 p-0.5 text-red-600 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-200 hover:opacity-100 focus-visible:opacity-100 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-800/50 [@media(hover:none)]:opacity-100"
               title="Remove from schedule"
+              aria-label="Remove from schedule"
               type="button"
             >
               <TrashIcon className="h-3 w-3" />
@@ -115,7 +116,7 @@ export const ScheduledTalk = ({
               className={`absolute right-0 bottom-0 left-0 z-20 h-2 cursor-ns-resize border-t transition-all ${
                 isResizing
                   ? 'border-blue-400 bg-blue-200 opacity-100 dark:border-blue-500 dark:bg-blue-800'
-                  : 'border-gray-400 bg-gray-200 opacity-0 group-hover:opacity-100 dark:border-gray-500 dark:bg-gray-600'
+                  : 'border-gray-400 bg-gray-200 opacity-0 group-hover:opacity-100 dark:border-gray-500 dark:bg-gray-600 [@media(hover:none)]:opacity-100'
               }`}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}

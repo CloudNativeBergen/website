@@ -65,12 +65,9 @@ export function SpeakerManagementModal({
     },
   })
 
+  // Success handling lives in handleSubmit: the optional email update must
+  // finish (or fail) before the list refreshes and the modal closes.
   const updateMutation = api.speaker.admin.update.useMutation({
-    onSuccess: (speaker) => {
-      queryClient.invalidateQueries({ queryKey: [['speaker']] })
-      onSpeakerUpdated?.(speaker)
-      onClose()
-    },
     onError: (error) => {
       setError(error.message || 'Failed to update speaker')
     },
@@ -168,24 +165,23 @@ export function SpeakerManagementModal({
     setValidationErrors({})
 
     if (editingSpeaker) {
-      // Update speaker profile
-      updateMutation.mutate(
-        {
+      try {
+        const speaker = await updateMutation.mutateAsync({
           id: editingSpeaker._id,
           data: speakerData,
-        },
-        {
-          onSuccess: async () => {
-            // If email changed, update it separately
-            if (email && email !== editingSpeaker.email) {
-              updateEmailMutation.mutate({
-                id: editingSpeaker._id,
-                email,
-              })
-            }
-          },
-        },
-      )
+        })
+        if (email && email !== editingSpeaker.email) {
+          await updateEmailMutation.mutateAsync({
+            id: editingSpeaker._id,
+            email,
+          })
+        }
+        await queryClient.invalidateQueries({ queryKey: [['speaker']] })
+        onSpeakerUpdated?.(speaker)
+        onClose()
+      } catch {
+        // onError already put the message in the modal; keep it open.
+      }
     } else {
       createMutation.mutate({
         ...speakerData,

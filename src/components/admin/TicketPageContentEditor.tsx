@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import { AdminPageHeader } from '@/components/admin'
 import {
@@ -67,8 +68,11 @@ export function TicketPageContentEditor({
     'idle',
   )
 
+  const router = useRouter()
   const updateMutation = api.tickets.admin.updatePageContent.useMutation({
     onSuccess: () => {
+      // Refresh the server props so a back/forward visit shows the saved copy.
+      router.refresh()
       setSaveStatus('success')
       setTimeout(() => setSaveStatus('idle'), 3000)
     },

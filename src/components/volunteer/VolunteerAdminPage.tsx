@@ -43,6 +43,7 @@ import {
   buildVolunteersCsv,
   volunteerLogistics,
   volunteersCsvFilename,
+  VOLUNTEER_TICKET_LABELS,
 } from '@/lib/volunteer/export'
 
 const volunteerStatusConfig: Record<
@@ -68,22 +69,22 @@ const ticketStatusConfig: Record<
   }
 > = {
   redeemed: {
-    label: 'Ticket Claimed',
+    label: VOLUNTEER_TICKET_LABELS['redeemed'],
     color: 'green',
     icon: CheckBadgeIcon,
   },
   invited: {
-    label: 'Approval Email Sent',
+    label: VOLUNTEER_TICKET_LABELS['invited'],
     color: 'yellow',
     icon: ClockIcon,
   },
   'not-invited': {
-    label: 'No Approval Email',
+    label: VOLUNTEER_TICKET_LABELS['not-invited'],
     color: 'gray',
     icon: MinusCircleIcon,
   },
   unknown: {
-    label: 'Ticket Unknown',
+    label: VOLUNTEER_TICKET_LABELS['unknown'],
     color: 'gray',
     icon: QuestionMarkCircleIcon,
     className:

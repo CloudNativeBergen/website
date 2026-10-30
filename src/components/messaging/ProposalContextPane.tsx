@@ -10,34 +10,12 @@ import {
   MapPinIcon,
 } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
-import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
+import { ProposalStatusBadge } from '@/lib/proposal/ui/badges'
 import { SpeakerAvatarsWithNames } from '@/components/SpeakerAvatars'
 import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
-import {
-  formats,
-  statuses,
-  Status,
-  type ProposalExisting,
-} from '@/lib/proposal/types'
+import { formats, type ProposalExisting } from '@/lib/proposal/types'
 import { Flags } from '@/lib/speaker/types'
 import { formatConferenceDateShort } from '@/lib/time'
-
-/**
- * Proposal status → the shared {@link StatusBadge} palette. Kept as a map over
- * the `Status` enum (rather than a chain of ternaries) so a status added to
- * `@/lib/proposal/types` shows up here as a missing key at typecheck time.
- */
-const STATUS_COLOR: Record<Status, BadgeColor> = {
-  [Status.draft]: 'gray',
-  [Status.submitted]: 'yellow',
-  [Status.accepted]: 'green',
-  [Status.waitlisted]: 'orange',
-  [Status.confirmed]: 'blue',
-  [Status.rejected]: 'red',
-  [Status.withdrawn]: 'gray',
-  [Status.canceled]: 'gray',
-  [Status.deleted]: 'gray',
-}
 
 /** One labelled fact row. `icon` is optional so text-only facts line up too. */
 function Fact({
@@ -123,10 +101,7 @@ export function ProposalContextPaneView({
         </h3>
 
         <div>
-          <StatusBadge
-            label={statuses.get(proposal.status) ?? proposal.status}
-            color={STATUS_COLOR[proposal.status] ?? 'gray'}
-          />
+          <ProposalStatusBadge status={proposal.status} />
         </div>
 
         {speakers.length > 0 ? (

@@ -9,6 +9,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { api } from '@/lib/trpc/client'
+import { formatDateTimeSafe } from '@/lib/time'
 
 interface ValidationCheck {
   name: string
@@ -301,7 +302,7 @@ export default function BadgeValidator() {
                   Valid From:
                 </span>
                 <span className="ml-2 text-gray-900 dark:text-gray-100">
-                  {new Date(credential.validFrom).toLocaleString()}
+                  {formatDateTimeSafe(credential.validFrom)}
                 </span>
               </div>
             )}

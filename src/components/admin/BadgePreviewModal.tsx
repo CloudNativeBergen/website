@@ -8,6 +8,7 @@ import {
 import type { BadgeRecord } from '@/lib/badge/types'
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
+import { formatDateTimeSafe } from '@/lib/time'
 
 interface BadgePreviewModalProps {
   isOpen: boolean
@@ -190,10 +191,7 @@ export function BadgePreviewModal({
                 Issued At
               </dt>
               <dd className="mt-1 text-sm text-gray-900 dark:text-white">
-                {new Date(badge.issuedAt).toLocaleString('en-US', {
-                  dateStyle: 'long',
-                  timeStyle: 'short',
-                })}
+                {formatDateTimeSafe(badge.issuedAt)}
               </dd>
             </div>
 
@@ -221,10 +219,7 @@ export function BadgePreviewModal({
                     </div>
                     {badge.emailSentAt && (
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {new Date(badge.emailSentAt).toLocaleString('en-US', {
-                          dateStyle: 'medium',
-                          timeStyle: 'short',
-                        })}
+                        {formatDateTimeSafe(badge.emailSentAt)}
                       </div>
                     )}
                     {badge.emailId && (
