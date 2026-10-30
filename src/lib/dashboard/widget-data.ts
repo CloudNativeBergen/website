@@ -1163,7 +1163,7 @@ export async function loadDashboardWidgetData(
   const sources = sourcesForWidgets(wanted, myTeamKeys)
   // Renewal reminders only exist inside their lead window: skip the root
   // entirely outside it.
-  if (!isRenewalWindowOpen(ctx.conference.startDate)) sources.delete('renewals')
+  if (!isRenewalWindowOpen(ctx.conference)) sources.delete('renewals')
   try {
     groqResult = await fetchDashboardGroq(ctx.conferenceId, sources, {
       orgId: ctx.conference.organization?._ref,

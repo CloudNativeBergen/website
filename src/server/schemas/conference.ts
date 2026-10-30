@@ -345,6 +345,13 @@ export const UpdateCfpGoalsSchema = z.object({
   cfpPresentationGoal: nonNegativeGoal,
   cfpWorkshopGoal: nonNegativeGoal,
   sponsorRevenueGoal: nonNegativeGoal,
+  sponsorRenewalLeadMonths: z
+    .number()
+    .int('Must be a whole number')
+    .min(1, 'Must be at least 1')
+    .max(12, 'Must be at most 12')
+    .nullable()
+    .optional(),
 })
 
 // === Social Links (array of URL strings) ===

@@ -46,6 +46,7 @@ const SOURCE: SourceConference = {
   socialLinks: ['https://x.com/cnb'],
   cfpSubmissionGoal: 100,
   sponsorRevenueGoal: 500000,
+  sponsorRenewalLeadMonths: 4,
   signingProvider: 'self-hosted',
   sponsorBenefits: [{ title: 'Reach', description: 'Devs' }],
   sponsorshipCustomization: { heroHeadline: 'Sponsor us' },
@@ -185,6 +186,10 @@ describe('buildEditionDocuments — always-applied invariants', () => {
     expect(
       build(makeInput({ organizer: 'New Org' })).conference.organizer,
     ).toBe('New Org')
+  })
+
+  it('copies the sponsor renewal lead time with the goals', () => {
+    expect(build(makeInput()).conference.sponsorRenewalLeadMonths).toBe(4)
   })
 
   it('never carries source content (schedules/announcement) into the clone', () => {

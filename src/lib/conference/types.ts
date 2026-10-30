@@ -277,6 +277,7 @@ export interface Conference {
    */
   signingProvider?: 'self-hosted'
   sponsorRevenueGoal?: number
+  sponsorRenewalLeadMonths?: number
   salesNotificationChannel?: string
   cfpNotificationChannel?: string
   /** Where `postBriefingToSlack` posts the shared speaker info (#1592). */

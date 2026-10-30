@@ -220,6 +220,7 @@ export interface SourceConference {
   cfpPresentationGoal?: number
   cfpWorkshopGoal?: number
   sponsorRevenueGoal?: number
+  sponsorRenewalLeadMonths?: number
   travelSupportBudget?: number
   signingProvider?: string
   sponsorBenefits?: Array<Record<string, unknown>>
@@ -384,6 +385,7 @@ export function buildEditionDocuments(
       'cfpPresentationGoal',
       'cfpWorkshopGoal',
       'sponsorRevenueGoal',
+      'sponsorRenewalLeadMonths',
       'travelSupportBudget',
     ] as const) {
       const value = src[key]

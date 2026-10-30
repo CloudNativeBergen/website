@@ -1559,6 +1559,15 @@ export default defineType({
       validation: (Rule) => Rule.min(0),
     }),
     defineField({
+      name: 'sponsorRenewalLeadMonths',
+      title: 'Sponsor Renewal Lead Time (months)',
+      type: 'number',
+      fieldset: 'sponsorship',
+      description:
+        "How many months before the conference starts to remind organizers to renew last year's sponsors. Leave empty for 6.",
+      validation: (Rule) => Rule.integer().min(1).max(12),
+    }),
+    defineField({
       name: 'sponsorBenefits',
       title: 'Sponsor Benefits',
       type: 'array',
