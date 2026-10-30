@@ -98,12 +98,12 @@ export default function InvitationResponseClient({
   const displayName = userName || invitation.invitedName || 'there'
 
   return (
-    <div className="bg-sky-mist flex min-h-screen items-center justify-center px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-brand-sky-mist px-4 py-12">
       <div className="w-full max-w-2xl">
         <div className="overflow-hidden rounded-lg bg-white shadow-lg">
-          <div className="from-cloud-blue to-cloud-blue-dark bg-gradient-to-r px-6 py-8 text-white">
+          <div className="bg-gradient-to-r from-brand-cloud-blue to-brand-cloud-blue-hover px-6 py-8 text-white">
             <h1 className="mb-2 text-2xl font-bold">Co-Speaker Invitation</h1>
-            <p className="text-sky-mist">
+            <p className="text-brand-sky-mist">
               You&apos;ve been invited to collaborate on a proposal
             </p>
           </div>
@@ -117,20 +117,20 @@ export default function InvitationResponseClient({
               </p>
             </div>
 
-            <div className="bg-sky-mist/20 space-y-3 rounded-lg p-4">
+            <div className="space-y-3 rounded-lg bg-brand-sky-mist/20 p-4">
               <div>
-                <h3 className="text-cloud-blue-dark text-sm font-medium">
+                <h3 className="text-sm font-medium text-brand-cloud-blue-hover">
                   Proposal Title
                 </h3>
-                <p className="text-cloud-blue mt-1 text-lg font-semibold">
+                <p className="mt-1 text-lg font-semibold text-brand-cloud-blue">
                   {invitation.proposal.title}
                 </p>
               </div>
               <div>
-                <h3 className="text-cloud-blue-dark text-sm font-medium">
+                <h3 className="text-sm font-medium text-brand-cloud-blue-hover">
                   Format
                 </h3>
-                <p className="text-cloud-blue mt-1">
+                <p className="mt-1 text-brand-cloud-blue">
                   {formatProposalFormat(invitation.proposal.format)}
                 </p>
               </div>
@@ -246,7 +246,7 @@ export default function InvitationResponseClient({
                 </p>
                 <button
                   onClick={() => router.push('/')}
-                  className="bg-cloud-blue hover:bg-cloud-blue-dark inline-flex items-center space-x-2 rounded-lg px-6 py-3 text-white transition-colors"
+                  className="inline-flex items-center space-x-2 rounded-lg bg-brand-cloud-blue px-6 py-3 text-white transition-colors hover:bg-brand-cloud-blue-hover"
                 >
                   <span>Return to Home</span>
                 </button>

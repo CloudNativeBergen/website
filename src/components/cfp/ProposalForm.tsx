@@ -127,6 +127,11 @@ export function ProposalForm({
   const [lastAction, setLastAction] = useState<'draft' | 'submit' | null>(null)
   const [draftSaved, setDraftSaved] = useState(false)
   const [currentProposalId, setCurrentProposalId] = useState(proposalId)
+  // Whether the proposal is (still) a draft on the server. A draft created on
+  // this page stays a draft until submitted, long after the "saved" note fades.
+  const [savedAsDraft, setSavedAsDraft] = useState(
+    initialStatus === Status.draft,
+  )
   const draftTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
 
   const showDraftSaved = useCallback(() => {
@@ -145,6 +150,7 @@ export function ProposalForm({
     onSuccess: (data) => {
       if (lastAction === 'draft') {
         setCurrentProposalId(data._id)
+        setSavedAsDraft(true)
         window.history.replaceState(null, '', `/cfp/proposal/${data._id}`)
         showDraftSaved()
       } else {
@@ -179,9 +185,8 @@ export function ProposalForm({
 
   const [confirmAction, setConfirmAction] = useState<Action | null>(null)
 
-  const isDraft = initialStatus === Status.draft || !currentProposalId
-  const isExistingDraft =
-    (initialStatus === Status.draft || draftSaved) && !!currentProposalId
+  const isDraft = savedAsDraft || !currentProposalId
+  const isExistingDraft = savedAsDraft && !!currentProposalId
   const buttonPrimary =
     currentProposalId && !isExistingDraft ? 'Update' : 'Submit'
   const buttonPrimaryLoading =
@@ -584,8 +589,8 @@ export function ProposalForm({
       )}
 
       {!isReadOnly && (
-        <div className="mt-6 flex items-center justify-between">
-          <div className="flex items-center gap-x-3">
+        <div className="mt-6 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
             {canDeleteDraft && (
               <button
                 type="button"
@@ -626,11 +631,11 @@ export function ProposalForm({
                 </button>
               ))}
           </div>
-          <div className="flex items-center gap-x-4">
+          <div className="flex flex-wrap items-center gap-4">
             <Link
               href="/cfp/list"
               type="button"
-              className="text-sm leading-6 font-semibold text-gray-600 transition-colors hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400"
+              className="py-1.5 text-sm leading-6 font-semibold text-gray-600 transition-colors hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400"
             >
               Cancel
             </Link>
@@ -670,12 +675,11 @@ export function ProposalForm({
           onClose={() => {
             setConfirmAction(null)
             setWithdrawReason('')
+            actionMutation.reset()
           }}
-          onConfirm={() => {
-            handleProposalAction(confirmAction)
-            setConfirmAction(null)
-            setWithdrawReason('')
-          }}
+          // Stays open until the action succeeds (which navigates away), so a
+          // failure keeps the reason and shows the error right here.
+          onConfirm={() => handleProposalAction(confirmAction)}
           title={confirmActionLabels[confirmAction]!.title}
           message={confirmActionLabels[confirmAction]!.message}
           confirmButtonText={confirmActionLabels[confirmAction]!.button}
@@ -705,6 +709,14 @@ export function ProposalForm({
                 className="font-inter mt-1 block w-full rounded-lg border border-brand-frosted-steel bg-white px-3 py-2 text-sm text-brand-slate-gray shadow-xs focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
               />
             </div>
+          )}
+          {actionMutation.error && (
+            <p
+              role="alert"
+              className="font-inter mt-3 text-sm text-red-600 dark:text-red-400"
+            >
+              {actionMutation.error.message}
+            </p>
           )}
         </ConfirmationModal>
       )}

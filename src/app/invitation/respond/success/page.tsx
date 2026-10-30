@@ -19,7 +19,7 @@ export default async function InvitationSuccessPage({
     process.env.NODE_ENV === 'development' && params.test === 'true'
 
   return (
-    <div className="bg-sky-mist flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-brand-sky-mist">
       {isTestMode && (
         <div className="border-b border-yellow-200 bg-yellow-50 p-4">
           <div className="mx-auto max-w-4xl">
@@ -34,16 +34,16 @@ export default async function InvitationSuccessPage({
           <div className="rounded-lg bg-white p-8 shadow">
             <div className="text-center">
               {isAccepted ? (
-                <CheckCircleIcon className="text-fresh-green mx-auto h-16 w-16" />
+                <CheckCircleIcon className="mx-auto h-16 w-16 text-brand-fresh-green" />
               ) : (
-                <XCircleIcon className="text-cloud-blue-dark mx-auto h-16 w-16" />
+                <XCircleIcon className="mx-auto h-16 w-16 text-brand-cloud-blue-hover" />
               )}
 
-              <h1 className="text-cloud-blue-darker mt-4 text-2xl font-bold">
+              <h1 className="mt-4 text-2xl font-bold text-brand-cloud-blue-hover">
                 {isAccepted ? 'Invitation Accepted!' : 'Invitation Declined'}
               </h1>
 
-              <p className="text-cloud-blue-dark mt-2">
+              <p className="mt-2 text-brand-cloud-blue-hover">
                 {isAccepted ? (
                   <>
                     You have successfully accepted the invitation to be a
@@ -65,7 +65,7 @@ export default async function InvitationSuccessPage({
               </p>
 
               {isAccepted && (
-                <p className="text-cloud-blue-dark mt-4 text-sm">
+                <p className="mt-4 text-sm text-brand-cloud-blue-hover">
                   You&apos;ll receive a confirmation email shortly. The primary
                   speaker will be notified of your decision.
                 </p>
@@ -75,7 +75,7 @@ export default async function InvitationSuccessPage({
                 {isAccepted && (
                   <Link
                     href="/cfp/list"
-                    className="bg-cloud-blue hover:bg-cloud-blue-dark focus:ring-cloud-blue block w-full rounded-md px-4 py-2 text-white focus:ring-2 focus:ring-offset-2 focus:outline-none"
+                    className="block w-full rounded-md bg-brand-cloud-blue px-4 py-2 text-white hover:bg-brand-cloud-blue-hover focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none"
                   >
                     Go to Speaker Dashboard
                   </Link>
@@ -85,9 +85,9 @@ export default async function InvitationSuccessPage({
                   href="/"
                   className={`block w-full rounded-md px-4 py-2 ${
                     isAccepted
-                      ? 'bg-sky-mist text-cloud-blue-dark hover:bg-sky-mist/80'
-                      : 'bg-cloud-blue hover:bg-cloud-blue-dark text-white'
-                  } focus:ring-cloud-blue focus:ring-2 focus:ring-offset-2 focus:outline-none`}
+                      ? 'bg-brand-sky-mist text-brand-cloud-blue-hover hover:bg-brand-sky-mist/80'
+                      : 'bg-brand-cloud-blue text-white hover:bg-brand-cloud-blue-hover'
+                  } focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none`}
                 >
                   Return to Home
                 </Link>

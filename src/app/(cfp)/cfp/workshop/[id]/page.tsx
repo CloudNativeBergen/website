@@ -17,6 +17,7 @@ import {
   ExperienceLevelIcon,
 } from '@/components/icons/OSIcons'
 import { buildUrlWithImpersonation } from '@/lib/impersonation'
+import { formatConferenceDateLong } from '@/lib/time'
 import {
   getWorkshopDuration,
   formatParticipantName,
@@ -35,11 +36,15 @@ interface WorkshopDetails {
   language: string
   description: unknown[]
   capacity?: number
-  date?: string
+  conferenceId?: string
+  speakers?: Speaker[]
+}
+
+interface WorkshopSlot {
+  date: string
+  trackTitle?: string
   startTime?: string
   endTime?: string
-  room?: string
-  speakers?: Speaker[]
 }
 
 export default async function WorkshopDetailsPage({
@@ -93,11 +98,8 @@ export default async function WorkshopDetailsPage({
       language,
       description,
       capacity,
-      date,
-      startTime,
-      endTime,
-      room,
-      "speakers": speakers[]->{ _id, name, email, organization }
+      "speakers": speakers[]->{ _id, name, email, organization },
+      "conferenceId": conference._ref
     }`,
     { workshopId },
   )
@@ -161,6 +163,20 @@ export default async function WorkshopDetailsPage({
       </div>
     )
   }
+
+  // Date, time and room live on the official schedule, not on the talk. Same
+  // lookup as SCHEDULE_INFO_PROJECTION in src/lib/proposal/data/sanity.ts.
+  const slot = workshop.conferenceId
+    ? await clientReadUncached.fetch<WorkshopSlot | null>(
+        groq`*[_type == "schedule" && conference._ref == $conferenceId && (status == "official" || !defined(status)) && $workshopId in tracks[].talks[].talk._ref] | order(date asc) [0] {
+          date,
+          "trackTitle": tracks[$workshopId in talks[].talk._ref][0].trackTitle,
+          "startTime": tracks[$workshopId in talks[].talk._ref][0].talks[talk._ref == $workshopId][0].startTime,
+          "endTime": tracks[$workshopId in talks[].talk._ref][0].talks[talk._ref == $workshopId][0].endTime
+        }`,
+        { conferenceId: workshop.conferenceId, workshopId },
+      )
+    : null
 
   const signups = await clientReadUncached.fetch<WorkshopSignupExisting[]>(
     groq`*[_type == "workshopSignup" && workshop._ref == $workshopId && status in ["confirmed", "waitlist"]] | order(signedUpAt asc) {
@@ -454,27 +470,27 @@ export default async function WorkshopDetailsPage({
                   </dd>
                 </div>
               )}
-              {workshop.date && (
+              {slot?.date && (
                 <div className="flex justify-between">
                   <dt className="text-gray-600 dark:text-gray-400">Date:</dt>
                   <dd className="font-medium text-gray-900 dark:text-white">
-                    {workshop.date}
+                    {formatConferenceDateLong(slot.date)}
                   </dd>
                 </div>
               )}
-              {workshop.startTime && workshop.endTime && (
+              {slot?.startTime && slot.endTime && (
                 <div className="flex justify-between">
                   <dt className="text-gray-600 dark:text-gray-400">Time:</dt>
                   <dd className="font-medium text-gray-900 dark:text-white">
-                    {workshop.startTime} - {workshop.endTime}
+                    {slot.startTime} - {slot.endTime}
                   </dd>
                 </div>
               )}
-              {workshop.room && (
+              {slot?.trackTitle && (
                 <div className="flex justify-between">
                   <dt className="text-gray-600 dark:text-gray-400">Room:</dt>
                   <dd className="font-medium text-gray-900 dark:text-white">
-                    {workshop.room}
+                    {slot.trackTitle}
                   </dd>
                 </div>
               )}
