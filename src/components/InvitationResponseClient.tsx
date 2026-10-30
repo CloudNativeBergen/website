@@ -119,18 +119,16 @@ export default function InvitationResponseClient({
 
             <div className="space-y-3 rounded-lg bg-brand-sky-mist/20 p-4">
               <div>
-                <h3 className="text-sm font-medium text-brand-cloud-blue-hover">
+                <h3 className="text-sm font-medium text-gray-600">
                   Proposal Title
                 </h3>
-                <p className="mt-1 text-lg font-semibold text-brand-cloud-blue">
+                <p className="mt-1 text-lg font-semibold text-gray-900">
                   {invitation.proposal.title}
                 </p>
               </div>
               <div>
-                <h3 className="text-sm font-medium text-brand-cloud-blue-hover">
-                  Format
-                </h3>
-                <p className="mt-1 text-brand-cloud-blue">
+                <h3 className="text-sm font-medium text-gray-600">Format</h3>
+                <p className="mt-1 text-gray-900">
                   {formatProposalFormat(invitation.proposal.format)}
                 </p>
               </div>

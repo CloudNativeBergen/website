@@ -34,7 +34,7 @@ export default async function InvitationSuccessPage({
           <div className="rounded-lg bg-white p-8 shadow">
             <div className="text-center">
               {isAccepted ? (
-                <CheckCircleIcon className="mx-auto h-16 w-16 text-brand-fresh-green" />
+                <CheckCircleIcon className="mx-auto h-16 w-16 text-green-600" />
               ) : (
                 <XCircleIcon className="mx-auto h-16 w-16 text-brand-cloud-blue-hover" />
               )}

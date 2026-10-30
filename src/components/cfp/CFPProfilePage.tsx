@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react'
 import { useState, useEffect, useCallback } from 'react'
 import { Speaker, SpeakerInput } from '@/lib/speaker/types'
 import { api } from '@/lib/trpc/client'
+import { withoutNarrowlyAutosavedFields } from '@/lib/speaker/utils'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { SelfTalkPhotosOptOutSwitch } from '@/components/photo-wall/talk/TalkPhotosOptOutSwitch'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -160,7 +161,7 @@ export function CFPProfilePage({
     setSubmitError([])
     setSuccessMessage('')
 
-    updateProfileMutation.mutate(speakerData)
+    updateProfileMutation.mutate(withoutNarrowlyAutosavedFields(speakerData))
   }
 
   if (profileError && !profile) {

@@ -8,7 +8,14 @@ import { describe, it, expect, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import type { Speaker } from '@/lib/speaker/types'
 
-let profile = { _id: 'sp-1', name: 'Kari', bio: 'old' } as unknown as Speaker
+const sent: unknown[] = []
+let profile = {
+  _id: 'sp-1',
+  name: 'Kari',
+  bio: 'old',
+  talkPhotosOptOut: false,
+  messagingEmailDefault: true,
+} as unknown as Speaker
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
@@ -20,11 +27,17 @@ vi.mock('@/lib/trpc/client', () => ({
       update: {
         useMutation: (opts: { onError: (e: Error) => void }) => ({
           isPending: false,
-          mutate: () => opts.onError(new Error('Session expired')),
+          mutate: (input: unknown) => {
+            sent.push(input)
+            opts.onError(new Error('Session expired'))
+          },
         }),
       },
       setTalkPhotosOptOut: {
-        useMutation: () => ({ isPending: false, mutateAsync: vi.fn() }),
+        useMutation: () => ({
+          isPending: false,
+          mutateAsync: vi.fn(async () => ({})),
+        }),
       },
       setMessagingEmailDefault: {
         useMutation: () => ({ isPending: false, mutate: vi.fn() }),
@@ -81,5 +94,22 @@ describe('CFPProfilePage save errors and edits', () => {
     rerender(<CFPProfilePage initialSpeaker={initial} />)
 
     expect(screen.getByLabelText('bio')).toHaveValue('new bio')
+  })
+
+  it('does not re-send the autosaved talk photos opt-out on profile save', async () => {
+    sent.length = 0
+    render(<CFPProfilePage initialSpeaker={profile} />)
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: /hide photos of my talks/i }),
+    )
+    fireEvent.change(screen.getByLabelText('bio'), {
+      target: { value: 'edited' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Update Profile' }))
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({ bio: 'edited' })
+    expect(sent[0]).not.toHaveProperty('talkPhotosOptOut')
+    expect(sent[0]).not.toHaveProperty('messagingEmailDefault')
   })
 })

@@ -27,40 +27,13 @@ import Link from 'next/link'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { ProposalDetailsForm } from '@/components/proposal/ProposalDetailsForm'
 import { validateSpeakerConsent } from '@/lib/speaker/validation'
+import { withoutNarrowlyAutosavedFields } from '@/lib/speaker/utils'
 import {
   rememberLandingUtmTags,
   resolveSubmissionUtm,
   sessionStorageOrNull,
 } from '@/lib/marketing/landing-utm'
 import type { ProposalUtmTags } from '@/lib/proposal/types'
-
-/**
- * Preferences that have their OWN narrow autosave mutation and are therefore
- * never part of a bulk profile payload (#1148).
- *
- * `speaker` state here is seeded from the whole loaded speaker and submitted
- * wholesale, so a value loaded at mount is re-sent on submit. For a field the
- * speaker can change ELSEWHERE while this form sits open, that re-send is a
- * stale write that silently undoes the newer narrow save. `socialTagOptOut`
- * is already kept out by `SpeakerDetailsForm` omitting it; `messagingEmailDefault`
- * is edited on `CFPProfilePage` and was not, so a proposal submitted after
- * changing it there reverted it.
- *
- * This form edits neither, so dropping both is a pure removal of staleness.
- * Listing them in one place is the point: a third narrow autosave must be
- * added here too, and a name in this array is cheaper to notice than a bug.
- */
-const NARROWLY_AUTOSAVED_SPEAKER_FIELDS = [
-  'socialTagOptOut',
-  'socialTagOptOutAt',
-  'messagingEmailDefault',
-] as const
-
-function withoutNarrowlyAutosavedFields<T extends object>(speaker: T): T {
-  const next = { ...speaker } as Record<string, unknown>
-  for (const field of NARROWLY_AUTOSAVED_SPEAKER_FIELDS) delete next[field]
-  return next as T
-}
 
 export function ProposalForm({
   initialProposal,
@@ -214,7 +187,8 @@ export function ProposalForm({
   const mutationError =
     createProposalMutation.error ||
     updateProposalMutation.error ||
-    actionMutation.error
+    // While the confirm dialog is open it shows the action error itself.
+    (confirmAction ? null : actionMutation.error)
 
   const prepareTopicRefs = () =>
     (proposal.topics ?? [])
