@@ -48,6 +48,7 @@ import { teamMembersForKey } from '@/lib/teams/members'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorDragDrop } from '@/hooks/useSponsorDragDrop'
 import { TierPickerPrompt } from '@/components/admin/sponsor-crm/TierPickerPrompt'
+import { SponsorRenewalStrip } from './SponsorRenewalStrip'
 import { SponsorHealthPanel } from '@/components/admin/sponsor-crm/SponsorHealthPanel'
 import {
   DndContext,
@@ -1043,6 +1044,8 @@ export function SponsorCRMPipeline({
         violations={healthViolations}
         isError={healthCheckFailed}
       />
+
+      <SponsorRenewalStrip />
 
       {/* Board Columns */}
       <DndContext

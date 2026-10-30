@@ -75,6 +75,7 @@ import {
   copyToNextEdition,
   getPreviousEditionRenewals,
   getRenewalContext,
+  getRenewalContextIntoCurrent,
   hasEnded,
 } from '@/lib/sponsor-crm/renewal'
 import { findOutboundOrigin } from '@/lib/conference/baseUrl'
@@ -545,12 +546,28 @@ async function prepareDiscountSend(
  * conference, which must belong to the request org; the next edition is read
  * org-scoped from that org. A foreign id is simply not found.
  */
-async function loadRenewal(orgId: string | null | undefined, id: string) {
-  const conferenceId = await resolveConferenceId()
-  const { source, next } =
-    orgId && conferenceId
-      ? await getRenewalContext(orgId, conferenceId, id)
-      : { source: null, next: null }
+async function loadRenewal(
+  orgId: string | null | undefined,
+  id: string,
+  intoCurrent = false,
+) {
+  let context: Awaited<ReturnType<typeof getRenewalContext>> = {
+    source: null,
+    next: null,
+  }
+  if (intoCurrent) {
+    // From the board of the next edition: `id` is last year's record.
+    const { conference } = await getConferenceForCurrentDomain()
+    if (orgId && conference?._id) {
+      context = await getRenewalContextIntoCurrent(orgId, conference, id)
+    }
+  } else {
+    const conferenceId = await resolveConferenceId()
+    if (orgId && conferenceId) {
+      context = await getRenewalContext(orgId, conferenceId, id)
+    }
+  }
+  const { source, next } = context
   if (!source) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Sponsor not found' })
   }
@@ -2496,10 +2513,15 @@ export const sponsorRouter = router({
 
     // R1 (#1687). The target edition is derived server-side from the source
     // record's org; the client only names the source record.
+    // `intoCurrent`: called from this edition's board with last year's id.
     copyToNextYear: adminProcedure
-      .input(SponsorIdSchema)
+      .input(SponsorIdSchema.extend({ intoCurrent: z.boolean().optional() }))
       .mutation(async ({ input, ctx }) => {
-        const { source, next } = await loadRenewal(ctx.orgId, input.id)
+        const { source, next } = await loadRenewal(
+          ctx.orgId,
+          input.id,
+          input.intoCurrent,
+        )
         if (!hasEnded(source.conference.endDate)) {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',

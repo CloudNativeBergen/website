@@ -120,6 +120,35 @@ export async function getRenewalContext(
   return { source: { ...source, conference }, next }
 }
 
+/**
+ * The same context, seen from the next edition's board: the source record
+ * must belong to the org edition right before `current`, and that edition's
+ * next must be `current`. Anything else is not found.
+ */
+export async function getRenewalContextIntoCurrent(
+  orgId: string,
+  current: { _id: string; startDate?: string },
+  sponsorForConferenceId: string,
+  now = new Date(),
+): Promise<{ source: RenewalSource | null; next: NextEdition | null }> {
+  const none = { source: null, next: null }
+  if (!current.startDate) return none
+  const previous = await scopedFetch<{ _id: string } | null>(
+    clientReadUncached,
+    { orgId },
+    `*[_type == "conference" && startDate < $startDate] | order(startDate desc)[0]{ _id }`,
+    { startDate: current.startDate },
+  )
+  if (!previous) return none
+  const context = await getRenewalContext(
+    orgId,
+    previous._id,
+    sponsorForConferenceId,
+    now,
+  )
+  return context.next?._id === current._id ? context : none
+}
+
 /** Deterministic, so two organizers copying at once land on one record. */
 export function renewalDocId(nextId: string, sponsorId: string) {
   return `sfc-renewal-${nextId}-${sponsorId}`
@@ -191,6 +220,9 @@ export async function copyToNextEdition(
 export interface RenewalCandidate {
   _id: string
   name: string
+  logo?: string
+  logoBright?: string
+  tierTitle?: string
   assignedTo?: { _id: string; name: string; image?: string }
 }
 
@@ -209,7 +241,7 @@ export const PREVIOUS_EDITION_RENEWALS_ROOT = `*[_type == "conference" && organi
   _id, title, domains,
   "candidates": *[_type == "sponsorForConference" && conference._ref == ^._id && conference->organization._ref == $orgId && status == "closed-won"
     && !(sponsor._ref in *[_type == "sponsorForConference" && conference._ref == $conferenceId].sponsor._ref)]{
-    _id, "name": sponsor->name, assignedTo->{ _id, name, "image": coalesce(image.asset->url, imageURL) }
+    _id, "name": sponsor->name, "logo": sponsor->logo, "logoBright": sponsor->logoBright, "tierTitle": tier->title, assignedTo->{ _id, name, "image": coalesce(image.asset->url, imageURL) }
   }
 }`
 

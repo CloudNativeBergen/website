@@ -144,6 +144,10 @@ vi.mock('@/components/admin/sponsor-crm/SponsorCard', () => ({
   SponsorCard: () => <div />,
 }))
 
+vi.mock('@/components/admin/sponsor-crm/SponsorRenewalStrip', () => ({
+  SponsorRenewalStrip: () => null,
+}))
+
 vi.mock('@/components/admin/sponsor-crm/SponsorBulkActions', () => ({
   __esModule: true,
   SponsorBulkActions: () => <div />,
