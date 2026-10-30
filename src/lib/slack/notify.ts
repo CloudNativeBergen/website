@@ -774,3 +774,11 @@ export async function notifySponsorContractSigned(
   const message = { blocks }
   await sendSalesNotification(message, conference)
 }
+
+/** Posts the overdue-invoice digest to the conference's sales channel. */
+export async function notifyOverdueInvoices(
+  message: SlackMessage,
+  conference: Conference,
+): Promise<boolean> {
+  return sendSalesNotification(message, conference)
+}
