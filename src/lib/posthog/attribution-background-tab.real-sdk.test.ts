@@ -34,15 +34,17 @@ beforeAll(() => {
   element.setAttribute('data-token', TOKEN)
   element.setAttribute('data-conference', 'conf-1')
   document.body.appendChild(element)
+  // Nothing leaves: the SDK's own requests (flags, config) go nowhere.
   vi.spyOn(
     posthog as unknown as { _send_request(o: unknown): void },
     '_send_request',
-  ).mockImplementation((options) => {
-    const { url, data } = options as { url: string; data: unknown }
-    if (!/\/e\/?(\?|$)/.test(new URL(url, 'http://x').pathname + '?')) return
-    for (const event of Array.isArray(data) ? data : [data]) {
-      sent.push(event as (typeof sent)[number])
-    }
+  ).mockImplementation(() => {})
+  // Since posthog-js 1.433.2 events reach the network through the retry
+  // queue, which no longer calls `_send_request`, so they are recorded where
+  // the SDK hands them over: `eventCaptured` fires after `before_send`, with
+  // the payload that is queued for sending.
+  posthog.on('eventCaptured', (event) => {
+    sent.push(event as unknown as (typeof sent)[number])
   })
 })
 afterAll(async () => {

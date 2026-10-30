@@ -3,9 +3,9 @@
  *
  * The #1146 attribution path against the REAL `posthog-js` (no module mock):
  * the real init entry, the real SDK capture pipeline and `before_send`, the
- * real `opt_in_capturing()` reset. Only the transport is faked — the SDK's
- * `_send_request` is replaced with a recorder, so what is asserted is the
- * payload the SDK hands to the network. A mocked SDK could not show any of
+ * real `opt_in_capturing()` reset. Only the transport is faked: the SDK's
+ * `_send_request` goes nowhere, and events are recorded from `eventCaptured`,
+ * the final payload queued for the network. A mocked SDK could not show any of
  * this: the whole question is what the SDK does inside its own calls.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -39,15 +39,17 @@ beforeAll(async () => {
   element.setAttribute('data-conference', 'conf-1')
   document.body.appendChild(element)
   // Replace the transport on the singleton BEFORE init, so nothing leaves.
+  // Nothing leaves: the SDK's own requests (flags, config) go nowhere.
   vi.spyOn(
     posthog as unknown as { _send_request(o: unknown): void },
     '_send_request',
-  ).mockImplementation((options) => {
-    const { url, data } = options as { url: string; data: unknown }
-    if (!/\/e\/?(\?|$)/.test(new URL(url, 'http://x').pathname + '?')) return
-    for (const event of Array.isArray(data) ? data : [data]) {
-      sent.push(event as SentEvent)
-    }
+  ).mockImplementation(() => {})
+  // Since posthog-js 1.433.2 events reach the network through the retry
+  // queue, which no longer calls `_send_request`, so they are recorded where
+  // the SDK hands them over: `eventCaptured` fires after `before_send`, with
+  // the payload that is queued for sending.
+  posthog.on('eventCaptured', (event) => {
+    sent.push(event as unknown as SentEvent)
   })
   // Every test below starts from this one landing: init, the SDK's own
   // landing pageview, and the strip it triggers.

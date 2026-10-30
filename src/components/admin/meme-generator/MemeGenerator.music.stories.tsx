@@ -258,7 +258,9 @@ export const MusicRealExport: Story = {
     ).buffers()) {
       const at = Math.round(timestamp * MIX_RATE)
       const data = buffer.getChannelData(0)
-      left.set(data.subarray(0, Math.max(0, left.length - at)), at)
+      // Mediabunny 1.63+ puts the encoder's priming before 0 s: skip it.
+      const from = Math.max(0, -at)
+      left.set(data.subarray(from, Math.max(from, left.length - at)), at + from)
       written = Math.max(written, at + data.length)
     }
     input.dispose()
@@ -297,7 +299,9 @@ export const MusicPrimingMeasured: Story = {
       return
     }
     expect(result).toHaveProperty('priming')
-    expect([1024, 2112]).toContain((result as { priming: number }).priming)
+    // Mediabunny 1.63+ compensates the priming itself (Project Sync), so
+    // what is left to measure is 0; 1024 and 2112 are the raw delays.
+    expect([0, 1024, 2112]).toContain((result as { priming: number }).priming)
   },
 }
 
