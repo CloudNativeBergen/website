@@ -45,3 +45,18 @@ export const Default: Story = {
 export const Mobile: Story = {
   parameters: { viewport: { defaultViewport: 'mobile1' } },
 }
+
+export const RenewFails: Story = {
+  args: {
+    onRenew: fn(async () => {
+      throw new Error('Could not renew Acme Cloud: sponsor already exists')
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Renew Acme Cloud' }),
+    )
+    await expect(await canvas.findByRole('alert')).toBeVisible()
+  },
+}

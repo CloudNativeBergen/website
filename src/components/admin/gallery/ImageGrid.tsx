@@ -12,6 +12,7 @@ import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { ConfirmationModal } from '../ConfirmationModal'
 import { sanityImage } from '@/lib/sanity/client'
 import { AdminButton } from '@/components/admin/AdminButton'
+import { formatDateTimeSafe } from '@/lib/time'
 
 interface ImageGridProps {
   images: GalleryImageWithSpeakers[]
@@ -252,7 +253,9 @@ export function ImageGrid({
               <div className="text-sm text-white">
                 <p className="font-medium">{image.photographer}</p>
                 <p className="text-xs opacity-90">{image.location}</p>
-                <p className="text-xs opacity-90">{image.date}</p>
+                <p className="text-xs opacity-90">
+                  {formatDateTimeSafe(image.date)}
+                </p>
                 {image.speakers && image.speakers.length > 0 && (
                   <p className="mt-1 text-xs">
                     {image.speakers.map((s) => s.name).join(', ')}
@@ -263,7 +266,7 @@ export function ImageGrid({
 
             {!readOnly && (
               <div
-                className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center gap-2 transition-opacity ${
+                className={`absolute inset-x-0 top-2 flex justify-center gap-2 transition-opacity ${
                   hoveredImage === image._id
                     ? 'opacity-100'
                     : 'opacity-0 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100'
