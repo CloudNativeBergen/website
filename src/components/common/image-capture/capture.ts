@@ -1,5 +1,3 @@
-import html2canvas from 'html2canvas-pro'
-
 const waitForImages = async (element: HTMLElement): Promise<void> => {
   const images = element.querySelectorAll('img')
   if (images.length === 0) return
@@ -75,6 +73,8 @@ const generateCanvas = async (
   element: HTMLElement,
   scale: number,
 ): Promise<HTMLCanvasElement> => {
+  // Loaded on demand: the library is large and only needed on export.
+  const { default: html2canvas } = await import('html2canvas-pro')
   const canvas = await html2canvas(element, {
     backgroundColor: null,
     scale,

@@ -285,6 +285,14 @@ describe('AdminDashboard persistence', () => {
     ).toBe('7')
   })
 
+  it('mounts no widget (so fetches no widget data) until the saved layout is known', async () => {
+    vi.mocked(loadDashboardConfig).mockReturnValue(new Promise(() => {}))
+
+    renderDashboard()
+
+    expect(screen.getByTestId('widget-count').textContent).toBe('0')
+  })
+
   it('null load falls back to the default preset widgets', async () => {
     vi.mocked(loadDashboardConfig).mockResolvedValue(null)
 
