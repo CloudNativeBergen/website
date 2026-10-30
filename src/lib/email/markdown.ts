@@ -34,5 +34,10 @@ export function markdownToPortableTextBody(
     return []
   }
 
-  return markdownToPortableText(markdown) as PortableTextBlock[]
+  // @portabletext/markdown 2.1+ follows CommonMark and reads a single
+  // newline as a space. In an email a newline means a line break (e.g.
+  // "Best regards,\nHans"), so turn each one into a hard break first.
+  // ponytail: also hits fenced code blocks, which are outside the email subset.
+  const withBreaks = markdown.replace(/([^\n\\])\n(?=[^\n])/g, '$1  \n')
+  return markdownToPortableText(withBreaks) as PortableTextBlock[]
 }
