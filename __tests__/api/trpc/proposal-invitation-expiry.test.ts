@@ -54,6 +54,12 @@ vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: vi.fn() },
   clientRead: { fetch: vi.fn() },
 }))
+// The talk-in-this-conference guard is covered by
+// src/server/routers/proposal.dualrole.tenancy.test.ts.
+vi.mock('@/server/tenancy', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  requireDocumentInCurrentConference: vi.fn().mockResolvedValue('conf-1'),
+}))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: vi.fn().mockResolvedValue({
     conference: {

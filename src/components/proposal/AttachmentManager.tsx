@@ -26,6 +26,8 @@ interface AttachmentManagerProps {
   onDeleteAttachment: (attachmentKey: string) => void
   readonly?: boolean
   allowDelete?: boolean
+  /** Only organizers of the talk's org may add recordings. */
+  allowRecording?: boolean
 }
 
 const attachmentTypeOptions = new Map([
@@ -34,6 +36,10 @@ const attachmentTypeOptions = new Map([
   ['resource', 'Resource'],
 ])
 
+const speakerAttachmentTypeOptions = new Map(
+  [...attachmentTypeOptions].filter(([type]) => type !== 'recording'),
+)
+
 export function AttachmentManager({
   proposalId,
   attachments,
@@ -41,6 +47,7 @@ export function AttachmentManager({
   onDeleteAttachment,
   readonly = false,
   allowDelete = false,
+  allowRecording = false,
 }: AttachmentManagerProps) {
   const visibleAttachments = getNonRecordingAttachments(attachments)
 
@@ -429,7 +436,11 @@ export function AttachmentManager({
             name="attachmentType"
             label="Attachment Type"
             value={attachmentType}
-            options={attachmentTypeOptions}
+            options={
+              allowRecording
+                ? attachmentTypeOptions
+                : speakerAttachmentTypeOptions
+            }
             setValue={(value) => setAttachmentType(value as AttachmentType)}
           />
 

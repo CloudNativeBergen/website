@@ -877,6 +877,9 @@ async function loadInvitationForOrganizer(
     })
   }
 
+  // The resent email is branded with this domain's conference.
+  await requireDocumentInCurrentConference(proposalId, 'talk')
+
   if (isInactiveProposal(proposal.status)) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
@@ -2951,8 +2954,9 @@ export const proposalRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        // Uploads land on the talk via this domain's conference only.
-        await requireDocumentInCurrentConference(input.id, 'talk')
+        // Org, not conference: speakers upload slides to past editions,
+        // whose domains are released when a new edition is created.
+        await requireDocumentInCurrentOrg(input.id, 'talk')
         const { proposal, proposalError } = await getProposal({
           id: input.id,
           speakerId: ctx.speaker._id,
@@ -2964,6 +2968,20 @@ export const proposalRouter = router({
           throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'Proposal not found or access denied',
+          })
+        }
+
+        if (
+          input.attachmentType === 'recording' &&
+          !(
+            ctx.isOrgOrganizer &&
+            !!ctx.orgId &&
+            proposal._organizationId === ctx.orgId
+          )
+        ) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Only organizers can add recordings',
           })
         }
 
@@ -3075,21 +3093,34 @@ export const proposalRouter = router({
           ctx.isOrgOrganizer &&
           !!ctx.orgId &&
           proposal._organizationId === ctx.orgId
-        let attachments = input.attachments
+        // Dedupe by `_key`; the first copy wins.
+        const seen = new Set<string>()
+        let attachments = input.attachments.filter(
+          (a) => !seen.has(a._key) && !!seen.add(a._key),
+        )
         if (!isOrganizerForProposal) {
           const recordings = new Map(
             (proposal.attachments ?? [])
               .filter((a) => a.attachmentType === 'recording')
               .map((a) => [a._key, a]),
           )
-          const sentKeys = new Set(attachments.map((a) => a._key))
-          if ([...recordings.keys()].some((key) => !sentKeys.has(key))) {
+          if (
+            attachments.some(
+              (a) =>
+                a.attachmentType === 'recording' && !recordings.has(a._key),
+            )
+          ) {
             throw new TRPCError({
               code: 'FORBIDDEN',
-              message: 'Cannot delete recording attachments',
+              message: 'Only organizers can add recordings',
             })
           }
-          attachments = attachments.map((a) => recordings.get(a._key) ?? a)
+          // Stored recordings are kept as stored: sent copies are swapped
+          // back, omitted ones are put back.
+          attachments = [
+            ...attachments.map((a) => recordings.get(a._key) ?? a),
+            ...[...recordings.values()].filter((r) => !seen.has(r._key)),
+          ]
         }
 
         const { proposal: updated, err } = await updateProposal(input.id, {
