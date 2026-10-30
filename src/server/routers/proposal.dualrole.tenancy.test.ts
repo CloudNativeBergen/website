@@ -70,6 +70,22 @@ vi.mock('@/lib/sanity/client', () => {
   }
 })
 
+const { transferMock, createInvitationMock, sendInvitationMock } = vi.hoisted(
+  () => ({
+    transferMock: vi.fn(),
+    createInvitationMock: vi.fn(),
+    sendInvitationMock: vi.fn(),
+  }),
+)
+vi.mock('@/lib/attachment/blob', () => ({
+  transferBlobToSanity: transferMock,
+}))
+vi.mock('@/lib/cospeaker/server', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  createCoSpeakerInvitation: createInvitationMock,
+  sendInvitationEmail: sendInvitationMock,
+}))
+
 import { parse, evaluate } from 'groq-js'
 import { proposalRouter } from './proposal'
 import { Action } from '@/lib/proposal/types'
@@ -104,6 +120,7 @@ const DATASET = [
     _type: 'talk',
     title: 'Org A talk',
     status: 'submitted',
+    format: 'presentation_40',
     conference: ref('conf-A'),
     speakers: [ref('sp-other')],
     attachments: [RECORDING],
@@ -155,6 +172,23 @@ function dualRoleCtx(): Context {
 }
 
 const caller = () => proposalRouter.createCaller(dualRoleCtx())
+
+/** A plain speaker who owns talk-A, the domain conference's talk. */
+function ownerOfTalkA() {
+  const speaker = {
+    _id: 'sp-other',
+    name: 'Other',
+    email: 'o@x.test',
+    organizerOrgIds: [],
+  }
+  const session = { speaker, user: { email: 'o@x.test' } }
+  return proposalRouter.createCaller({
+    req: {},
+    session,
+    speaker,
+    user: session.user,
+  } as unknown as Context)
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -272,5 +306,59 @@ describe('updateAttachments keeps the recording-deletion rule of deleteAttachmen
     await caller().updateAttachments({ id: 'talk-A', attachments: [] })
     expect(patchCalls.map((p) => p.id)).toEqual(['talk-A'])
     expect(patchCalls[0].fields.attachments).toEqual([])
+  })
+})
+
+describe('speaker writes to a talk go through the domain conference only', () => {
+  beforeEach(() => {
+    transferMock.mockResolvedValue({ asset: { _id: 'file-1' }, error: null })
+    createInvitationMock.mockImplementation(async (i: object) => ({
+      _id: 'inv-1',
+      token: 'secret',
+      ...i,
+    }))
+    sendInvitationMock.mockResolvedValue(true)
+  })
+
+  const upload = (id: string) => ({
+    id,
+    blobUrl: 'https://blob.test/f.pdf',
+    filename: 'f.pdf',
+    attachmentType: 'slides' as const,
+  })
+
+  it('uploadAttachment refuses the caller’s own talk from another conference’s domain', async () => {
+    await expect(
+      caller().uploadAttachment(upload('talk-B')),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(transferMock).not.toHaveBeenCalled()
+    expect(patchCalls).toEqual([])
+  })
+
+  it('uploadAttachment still works for the owner on the right domain', async () => {
+    await ownerOfTalkA().uploadAttachment(upload('talk-A'))
+    expect(patchCalls.map((p) => p.id)).toEqual(['talk-A'])
+  })
+
+  it('invitation.send refuses the caller’s own talk from another conference’s domain', async () => {
+    await expect(
+      caller().invitation.send({
+        proposalId: 'talk-B',
+        invitedEmail: 'new@x.test',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(createInvitationMock).not.toHaveBeenCalled()
+    expect(sendInvitationMock).not.toHaveBeenCalled()
+  })
+
+  it('invitation.send still works for the owner on the right domain', async () => {
+    await ownerOfTalkA().invitation.send({
+      proposalId: 'talk-A',
+      invitedEmail: 'new@x.test',
+    })
+    expect(createInvitationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ proposalId: 'talk-A', conferenceId: 'conf-A' }),
+    )
+    expect(sendInvitationMock).toHaveBeenCalled()
   })
 })

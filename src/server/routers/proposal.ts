@@ -14,6 +14,7 @@ import {
   resolveOrganizationId,
 } from '@/server/trpc'
 import {
+  requireDocumentInCurrentConference,
   requireDocumentInCurrentOrg,
   requireDocumentsInCurrentOrg,
   requireSpeakersInCurrentOrg,
@@ -2950,6 +2951,8 @@ export const proposalRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        // Uploads land on the talk via this domain's conference only.
+        await requireDocumentInCurrentConference(input.id, 'talk')
         const { proposal, proposalError } = await getProposal({
           id: input.id,
           speakerId: ctx.speaker._id,
@@ -3205,6 +3208,9 @@ export const proposalRouter = router({
       .input(InvitationCreateSchema)
       .mutation(async ({ input, ctx }) => {
         try {
+          // The invitation email is branded with this domain's conference,
+          // so the talk must belong to it.
+          await requireDocumentInCurrentConference(input.proposalId, 'talk')
           // Verify user owns the proposal (or is organizer)
           const { proposal, proposalError } = await getProposal({
             id: input.proposalId,

@@ -37,6 +37,7 @@ vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: h.getConference,
 }))
 vi.mock('@/server/tenancy', () => ({
+  requireDocumentInCurrentConference: vi.fn().mockResolvedValue('conf-A'),
   requireDocumentInCurrentOrg: vi.fn().mockResolvedValue(undefined),
   requireDocumentsInCurrentOrg: vi.fn().mockResolvedValue(undefined),
   requireSpeakersInCurrentOrg: vi.fn().mockResolvedValue(undefined),
