@@ -6,7 +6,7 @@ describe('staff role labels', () => {
     expect(staffRoleTitle('photographer')).toBe('Photographers')
     expect(staffRoleLabel('photographer')).toBe('Photographer')
     expect(staffRoleTitle('videographer')).toBe('Videographers')
-    expect(staffRoleTitle('stage-crew')).toBe('Stage Crews')
+    expect(staffRoleTitle('stage-crew')).toBe('Stage Crew')
     expect(staffRoleLabel('stage-crew')).toBe('Stage Crew')
   })
 })

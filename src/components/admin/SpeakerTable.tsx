@@ -530,9 +530,9 @@ export function SpeakerTable({
         selected: [filters.ticketClaimState],
         options: [
           { value: 'all', label: 'All states' },
-          { value: 'redeemed', label: 'Ticket Claimed' },
-          { value: 'invited', label: 'Ticket Invited (Pending)' },
-          { value: 'not-invited', label: 'Ticket Not Invited' },
+          { value: 'redeemed', label: 'Claimed' },
+          { value: 'invited', label: 'Invited' },
+          { value: 'not-invited', label: 'Not invited' },
         ],
         onChange: (value) =>
           setFilters((prev) => ({ ...prev, ticketClaimState: value })),
