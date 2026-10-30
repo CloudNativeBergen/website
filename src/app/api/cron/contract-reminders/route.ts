@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     >(
       // groq-global: a system sweep over EVERY tenant's pending contracts;
       // each send then resolves its tenant off the sponsor's own conference.
-      `*[_type == "sponsorForConference"
+      `*[_type == "sponsorForConference" && !(_id in path("drafts.**"))
         && signatureStatus == "pending"
         && defined(signatureId)
         && contractSentAt < $threshold

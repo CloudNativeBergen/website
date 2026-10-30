@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     const conferences = await clientReadUncached.fetch<Conference[]>(
       // groq-global: a system sweep over every tenant; each conference's
       // invoices are then read scoped to that conference.
-      `*[_type == "conference" && defined(endDate) && endDate >= $cutoff]{
+      `*[_type == "conference" && !(_id in path("drafts.**")) && defined(endDate) && endDate >= $cutoff]{
         ...,
         teams[]{ _key, key, title, slackChannel, emailIdentity, "members": members[]._ref }
       }`,
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
         continue
       try {
         const rows = await clientReadUncached.fetch<InvoiceRow[]>(
-          `*[_type == "sponsorForConference"
+          `*[_type == "sponsorForConference" && !(_id in path("drafts.**"))
             && conference._ref == $conferenceId
             && invoiceStatus in ["sent", "overdue"]
             && !defined(invoicePaidAt)
