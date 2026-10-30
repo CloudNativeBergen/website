@@ -1058,6 +1058,88 @@ describe('CRM references must belong to this tenant (#863 row 7)', () => {
   })
 })
 
+describe('crm.bulkSetInvoiceStatus', () => {
+  it.each(['paid', 'overdue', 'cancelled'] as const)(
+    'bulk sent refuses a %s invoice and leaves it untouched',
+    async (from) => {
+      h.ownedCount = 1
+      h.tenantById = { 'sfc-A': tenantOf('ours', 'sponsorForConference') }
+      lib.getSponsorForConference.mockResolvedValue({
+        sponsorForConference: {
+          ...CONTRACT_READY_SFC,
+          _id: 'sfc-A',
+          status: 'closed-won',
+          contractStatus: 'contract-signed',
+          invoiceStatus: from,
+          invoicePaidAt: '2026-10-01T10:00:00Z',
+          billing: { email: 'billing@acme.test' },
+        },
+        error: undefined,
+      })
+
+      const results = await sponsor().crm.bulkSetInvoiceStatus({
+        ids: ['sfc-A'],
+        invoiceStatus: 'sent',
+      })
+      expect(results).toEqual([
+        { id: 'sfc-A', ok: false, error: expect.stringContaining(from) },
+      ])
+      expect(lib.updateSponsorForConference).not.toHaveBeenCalled()
+    },
+  )
+
+  it('refuses the WHOLE batch when one id is not ours', async () => {
+    h.ownedCount = 1
+    await expect(
+      sponsor().crm.bulkSetInvoiceStatus({
+        ids: ['sfc-A', 'sfc-B'],
+        invoiceStatus: 'paid',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(lib.updateSponsorForConference).not.toHaveBeenCalled()
+  })
+
+  it('reports a refused transition per id and updates the rest', async () => {
+    h.ownedCount = 2
+    h.tenantById = {
+      'sfc-A': tenantOf('ours', 'sponsorForConference'),
+      'sfc-A2': tenantOf('ours', 'sponsorForConference'),
+    }
+    const base = {
+      ...CONTRACT_READY_SFC,
+      status: 'closed-won',
+      contractStatus: 'contract-signed',
+      billing: { email: 'billing@acme.test' },
+    }
+    lib.getSponsorForConference.mockImplementation(async (id: string) => ({
+      sponsorForConference: {
+        ...base,
+        _id: id,
+        // cancelled -> paid is refused by the state machine.
+        invoiceStatus: id === 'sfc-A' ? 'sent' : 'cancelled',
+      },
+      error: undefined,
+    }))
+
+    const results = await sponsor().crm.bulkSetInvoiceStatus({
+      ids: ['sfc-A', 'sfc-A2'],
+      invoiceStatus: 'paid',
+    })
+    expect(results).toEqual([
+      { id: 'sfc-A', ok: true },
+      { id: 'sfc-A2', ok: false, error: expect.any(String) },
+    ])
+    expect(lib.updateSponsorForConference).toHaveBeenCalledTimes(1)
+    expect(lib.updateSponsorForConference).toHaveBeenCalledWith(
+      'sfc-A',
+      expect.objectContaining({
+        invoiceStatus: 'paid',
+        invoicePaidAt: expect.any(String),
+      }),
+    )
+  })
+})
+
 /**
  * SURFACE TRIPWIRE, matching `tenancy.writes.test.ts`. Pins the sponsor router's
  * mutation set so adding one is a deliberate act that forces the author to

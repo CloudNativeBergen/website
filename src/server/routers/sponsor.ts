@@ -85,6 +85,7 @@ import type {
   SponsorTierExisting,
 } from '@/lib/sponsor/types'
 import type {
+  InvoiceStatus,
   SponsorTag,
   SponsorForConferenceInput,
 } from '@/lib/sponsor-crm/types'
@@ -946,6 +947,207 @@ async function withSponsorSendLock<T>(
   }
 }
 
+/**
+ * The single-record CRM edit behind `crm.update`, also looped over by
+ * `crm.bulkSetInvoiceStatus` so both share the state machine guards and the
+ * server-stamped invoice timestamps.
+ */
+async function updateCrmRecord(
+  input: z.infer<typeof SponsorForConferenceUpdateSchema>,
+  userId: string,
+  opts?: { invoiceFrom?: InvoiceStatus[] },
+) {
+  const { id, ...updateData } = input
+
+  // OWNERSHIP of every reference this edit would write (#863). `sponsor`
+  // is not editable here, but `tier`, `addons[]` and `contractTemplate`
+  // are — and they are refused before the record is even read.
+  await assertCrmReferencesAreOurs(updateData)
+
+  // Fetch existing data for change detection
+  const { sponsorForConference: existing } =
+    await getSponsorForCurrentConference(id)
+
+  if (!existing) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Sponsor relationship not found',
+    })
+  }
+
+  // Bulk changes only move an invoice forward: never overdue back to sent,
+  // nor a paid or cancelled invoice anywhere.
+  const invoiceNow = existing.invoiceStatus || 'not-sent'
+  if (opts?.invoiceFrom && !opts.invoiceFrom.includes(invoiceNow)) {
+    throw preconditionFailed([
+      {
+        field: 'invoiceStatus',
+        label: 'Invoice status',
+        source: 'pipeline',
+        severity: 'required',
+        message: `Invoice is ${invoiceNow}, so it can't be marked ${updateData.invoiceStatus} from the list.`,
+      },
+    ])
+  }
+
+  // Enforce the pipeline invariant when an edit changes status or tier (a
+  // field edit can reach closed-won, or clear the tier of a closed-won
+  // sponsor, without going through moveStage). Only guard when one of
+  // those actually changes, so unrelated edits to a pre-existing invalid
+  // record aren't trapped — that back-catalog is cleaned in #379.
+  const statusChanging =
+    updateData.status !== undefined && updateData.status !== existing.status
+  const tierChanging = updateData.tier !== undefined
+  if (statusChanging || tierChanging) {
+    const resultingStatus = updateData.status ?? existing.status
+    const resultingTier =
+      updateData.tier !== undefined ? updateData.tier : existing.tier
+    assertGuard(checkPipelineState(resultingStatus, { tier: resultingTier }))
+    // A freshly-supplied tier id is an unresolved string here (unlike the
+    // dereferenced existing.tier), so verify it points at a real tier.
+    if (tierChanging) {
+      await assertTierResolvable(resultingStatus, updateData.tier)
+    }
+  }
+
+  const invoiceStatusChanging =
+    updateData.invoiceStatus !== undefined &&
+    updateData.invoiceStatus !== existing.invoiceStatus
+
+  if (invoiceStatusChanging) {
+    const resultingState = { ...existing, ...updateData }
+    const transition = canTransition(
+      'invoice',
+      existing.invoiceStatus || 'not-sent',
+      updateData.invoiceStatus!,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      resultingState as any,
+    )
+    if (!transition.ok) {
+      throw preconditionFailed(transition.missing)
+    }
+
+    // Handle timestamp side-effects
+    if (updateData.invoiceStatus === 'sent' && !existing.invoiceSentAt) {
+      updateData.invoiceSentAt = getCurrentDateTime()
+    }
+    if (
+      updateData.invoiceStatus === 'sent' &&
+      !existing.invoiceDueAt &&
+      !updateData.invoiceDueAt
+    ) {
+      updateData.invoiceDueAt = defaultInvoiceDueDate()
+    }
+    if (updateData.invoiceStatus === 'paid' && !existing.invoicePaidAt) {
+      updateData.invoicePaidAt = getCurrentDateTime()
+    }
+    if (updateData.invoiceStatus !== 'paid') {
+      updateData.invoicePaidAt = null
+    }
+    if (
+      updateData.invoiceStatus === 'not-sent' ||
+      updateData.invoiceStatus === 'cancelled'
+    ) {
+      updateData.invoiceSentAt = null
+      updateData.invoiceDueAt = null
+    }
+  }
+
+  // Ensure assigned person is an organizer of this conference
+  if (updateData.assignedTo) {
+    const conferenceId = await resolveConferenceId()
+    const { getOrganizersByConference } = await import('@/lib/speaker/sanity')
+    const { speakers: organizers } =
+      await getOrganizersByConference(conferenceId)
+    if (!organizers?.some((o) => o._id === updateData.assignedTo)) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Assigned person must be an organizer of this conference',
+      })
+    }
+  }
+
+  const { sponsorForConference, error } = await updateSponsorForConference(id, {
+    ...updateData,
+    tags: updateData.tags as SponsorTag[] | undefined,
+  })
+
+  if (error) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to update sponsor relationship',
+      cause: error,
+    })
+  }
+
+  await publishSponsorStatusChange({
+    conferenceId: existing.conference._id,
+    sponsorForConferenceId: id,
+    previous: existing,
+    next: {
+      status: updateData.status,
+      contractStatus: updateData.contractStatus,
+    },
+    source: 'crm.update',
+    triggeredBy: userId,
+  })
+
+  // Log activity for key field changes
+  if (userId) {
+    try {
+      if (updateData.status && updateData.status !== existing.status) {
+        await logStageChange(id, existing.status, updateData.status, userId)
+      }
+
+      if (
+        updateData.invoiceStatus &&
+        updateData.invoiceStatus !== existing.invoiceStatus
+      ) {
+        await logInvoiceStatusChange(
+          id,
+          existing.invoiceStatus,
+          updateData.invoiceStatus,
+          userId,
+        )
+      }
+
+      if (
+        updateData.contractStatus &&
+        updateData.contractStatus !== existing.contractStatus
+      ) {
+        await logContractStatusChange(
+          id,
+          existing.contractStatus,
+          updateData.contractStatus,
+          userId,
+        )
+      }
+
+      if (
+        updateData.assignedTo !== undefined &&
+        updateData.assignedTo !== (existing.assignedTo?._id || null)
+      ) {
+        let assigneeName: string | null = null
+        if (updateData.assignedTo) {
+          try {
+            const { getSpeaker } = await import('@/lib/speaker/sanity')
+            const { speaker } = await getSpeaker(updateData.assignedTo)
+            assigneeName = speaker?.name || updateData.assignedTo
+          } catch (lookupError) {
+            console.error('Failed to lookup assignee name:', lookupError)
+            assigneeName = updateData.assignedTo
+          }
+        }
+        await logAssignmentChange(id, assigneeName, userId)
+      }
+    } catch (logError) {
+      console.error('Failed to log activity:', logError)
+    }
+  }
+
+  return sponsorForConference
+}
+
 export const sponsorRouter = router({
   list: adminProcedure
     .input(z.object({ query: z.string().optional() }).optional())
@@ -1767,192 +1969,7 @@ export const sponsorRouter = router({
     update: adminProcedure
       .input(SponsorForConferenceUpdateSchema)
       .mutation(async ({ input, ctx }) => {
-        const { id, ...updateData } = input
-
-        // OWNERSHIP of every reference this edit would write (#863). `sponsor`
-        // is not editable here, but `tier`, `addons[]` and `contractTemplate`
-        // are — and they are refused before the record is even read.
-        await assertCrmReferencesAreOurs(updateData)
-
-        // Fetch existing data for change detection
-        const { sponsorForConference: existing } =
-          await getSponsorForCurrentConference(id)
-
-        if (!existing) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Sponsor relationship not found',
-          })
-        }
-
-        // Enforce the pipeline invariant when an edit changes status or tier (a
-        // field edit can reach closed-won, or clear the tier of a closed-won
-        // sponsor, without going through moveStage). Only guard when one of
-        // those actually changes, so unrelated edits to a pre-existing invalid
-        // record aren't trapped — that back-catalog is cleaned in #379.
-        const statusChanging =
-          updateData.status !== undefined &&
-          updateData.status !== existing.status
-        const tierChanging = updateData.tier !== undefined
-        if (statusChanging || tierChanging) {
-          const resultingStatus = updateData.status ?? existing.status
-          const resultingTier =
-            updateData.tier !== undefined ? updateData.tier : existing.tier
-          assertGuard(
-            checkPipelineState(resultingStatus, { tier: resultingTier }),
-          )
-          // A freshly-supplied tier id is an unresolved string here (unlike the
-          // dereferenced existing.tier), so verify it points at a real tier.
-          if (tierChanging) {
-            await assertTierResolvable(resultingStatus, updateData.tier)
-          }
-        }
-
-        const invoiceStatusChanging =
-          updateData.invoiceStatus !== undefined &&
-          updateData.invoiceStatus !== existing.invoiceStatus
-
-        if (invoiceStatusChanging) {
-          const resultingState = { ...existing, ...updateData }
-          const transition = canTransition(
-            'invoice',
-            existing.invoiceStatus || 'not-sent',
-            updateData.invoiceStatus!,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            resultingState as any,
-          )
-          if (!transition.ok) {
-            throw preconditionFailed(transition.missing)
-          }
-
-          // Handle timestamp side-effects
-          if (updateData.invoiceStatus === 'sent' && !existing.invoiceSentAt) {
-            updateData.invoiceSentAt = getCurrentDateTime()
-          }
-          if (
-            updateData.invoiceStatus === 'sent' &&
-            !existing.invoiceDueAt &&
-            !updateData.invoiceDueAt
-          ) {
-            updateData.invoiceDueAt = defaultInvoiceDueDate()
-          }
-          if (updateData.invoiceStatus === 'paid' && !existing.invoicePaidAt) {
-            updateData.invoicePaidAt = getCurrentDateTime()
-          }
-          if (updateData.invoiceStatus !== 'paid') {
-            updateData.invoicePaidAt = null
-          }
-          if (
-            updateData.invoiceStatus === 'not-sent' ||
-            updateData.invoiceStatus === 'cancelled'
-          ) {
-            updateData.invoiceSentAt = null
-            updateData.invoiceDueAt = null
-          }
-        }
-
-        // Ensure assigned person is an organizer of this conference
-        if (updateData.assignedTo) {
-          const conferenceId = await resolveConferenceId()
-          const { getOrganizersByConference } =
-            await import('@/lib/speaker/sanity')
-          const { speakers: organizers } =
-            await getOrganizersByConference(conferenceId)
-          if (!organizers?.some((o) => o._id === updateData.assignedTo)) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message:
-                'Assigned person must be an organizer of this conference',
-            })
-          }
-        }
-
-        const { sponsorForConference, error } =
-          await updateSponsorForConference(id, {
-            ...updateData,
-            tags: updateData.tags as SponsorTag[] | undefined,
-          })
-
-        if (error) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to update sponsor relationship',
-            cause: error,
-          })
-        }
-
-        await publishSponsorStatusChange({
-          conferenceId: existing.conference._id,
-          sponsorForConferenceId: id,
-          previous: existing,
-          next: {
-            status: updateData.status,
-            contractStatus: updateData.contractStatus,
-          },
-          source: 'crm.update',
-          triggeredBy: ctx.speaker._id,
-        })
-
-        // Log activity for key field changes
-        const userId = ctx.speaker._id
-        if (userId) {
-          try {
-            if (updateData.status && updateData.status !== existing.status) {
-              await logStageChange(
-                id,
-                existing.status,
-                updateData.status,
-                userId,
-              )
-            }
-
-            if (
-              updateData.invoiceStatus &&
-              updateData.invoiceStatus !== existing.invoiceStatus
-            ) {
-              await logInvoiceStatusChange(
-                id,
-                existing.invoiceStatus,
-                updateData.invoiceStatus,
-                userId,
-              )
-            }
-
-            if (
-              updateData.contractStatus &&
-              updateData.contractStatus !== existing.contractStatus
-            ) {
-              await logContractStatusChange(
-                id,
-                existing.contractStatus,
-                updateData.contractStatus,
-                userId,
-              )
-            }
-
-            if (
-              updateData.assignedTo !== undefined &&
-              updateData.assignedTo !== (existing.assignedTo?._id || null)
-            ) {
-              let assigneeName: string | null = null
-              if (updateData.assignedTo) {
-                try {
-                  const { getSpeaker } = await import('@/lib/speaker/sanity')
-                  const { speaker } = await getSpeaker(updateData.assignedTo)
-                  assigneeName = speaker?.name || updateData.assignedTo
-                } catch (lookupError) {
-                  console.error('Failed to lookup assignee name:', lookupError)
-                  assigneeName = updateData.assignedTo
-                }
-              }
-              await logAssignmentChange(id, assigneeName, userId)
-            }
-          } catch (logError) {
-            console.error('Failed to log activity:', logError)
-          }
-        }
-
-        return sponsorForConference
+        return updateCrmRecord(input, ctx.speaker._id)
       }),
 
     moveStage: adminProcedure
@@ -2302,6 +2319,48 @@ export const sponsorRouter = router({
             cause: error,
           })
         }
+      }),
+
+    // Mark several invoices sent or paid from the invoice list. Each id goes
+    // through the same path as `crm.update`, so one refused transition fails
+    // only that row; the result lists every id.
+    bulkSetInvoiceStatus: adminProcedure
+      .input(
+        z.object({
+          // Capped so the sequential loop stays well inside a request timeout;
+          // a conference rarely has more invoices than this to move at once.
+          ids: z.array(z.string().min(1)).min(1).max(50),
+          invoiceStatus: z.enum(['sent', 'paid']),
+        }),
+      )
+      .mutation(async ({ input, ctx }) => {
+        await requireDocumentsInCurrentConference(
+          input.ids,
+          'sponsorForConference',
+        )
+        const results: Array<{ id: string; ok: boolean; error?: string }> = []
+        for (const id of input.ids) {
+          try {
+            await updateCrmRecord(
+              { id, invoiceStatus: input.invoiceStatus },
+              ctx.speaker._id,
+              {
+                invoiceFrom:
+                  input.invoiceStatus === 'sent'
+                    ? ['not-sent']
+                    : ['sent', 'overdue'],
+              },
+            )
+            results.push({ id, ok: true })
+          } catch (error) {
+            results.push({
+              id,
+              ok: false,
+              error: error instanceof Error ? error.message : 'Update failed',
+            })
+          }
+        }
+        return results
       }),
 
     bulkDelete: adminProcedure
