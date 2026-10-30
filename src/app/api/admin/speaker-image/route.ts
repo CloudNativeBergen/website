@@ -18,6 +18,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
+    // Same limits as the speaker's own upload (/api/upload/speaker-image).
+    if (!file.type.startsWith('image/')) {
+      return NextResponse.json(
+        { error: 'Please upload an image.' },
+        { status: 400 },
+      )
+    }
+    if (file.size > 1024 * 1024 * 10) {
+      return NextResponse.json(
+        { error: 'File size is too large. Maximum file size is 10MB.' },
+        { status: 400 },
+      )
+    }
+
     const buffer = await file.arrayBuffer()
     const asset = await clientWrite.assets.upload(
       'image',
