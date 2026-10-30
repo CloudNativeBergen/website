@@ -339,7 +339,7 @@ export async function POST(request: NextRequest) {
         ticketCategory: user.ticket.name,
         portalUrl,
         // Checkin redelivers on a timeout or 5xx; Resend drops the repeat.
-        idempotencyKey: `workshop-signup/${orderData.id}/${user.ticket.id}`,
+        idempotencyKey: `workshop-signup/${orderData.id}/${user.id}`,
       })
 
       if (emailResult.error) {

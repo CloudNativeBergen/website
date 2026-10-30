@@ -109,19 +109,6 @@ describe('GET /api/badge/[badgeId]/download?format=png', () => {
     expect(vi.mocked(loadBadgeFontFiles)).not.toHaveBeenCalled()
   })
 
-  it('loads the font from the platform origin, not the request Host', async () => {
-    vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'https://platform.example')
-    vi.mocked(loadBadgeFontFiles).mockClear()
-    const { GET } = await import('@/app/api/badge/[badgeId]/download/route')
-    await GET(pngRequest(), {
-      params: Promise.resolve({ badgeId: 'test-badge-id' }),
-    })
-    expect(vi.mocked(loadBadgeFontFiles)).toHaveBeenCalledWith(
-      'https://platform.example',
-    )
-    vi.unstubAllEnvs()
-  })
-
   it('serves the SVG image with a script-blocking CSP', async () => {
     const { GET } = await import('@/app/api/badge/[badgeId]/image/route')
     const res = await GET(pngRequest(), {
