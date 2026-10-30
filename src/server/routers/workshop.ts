@@ -1808,9 +1808,21 @@ export const workshopRouter = router({
           // OMITTED MEANS UNCHANGED, `null` means cleared. A form sends only
           // the times its organizer changed, so a form seeded before a
           // colleague's save cannot erase a time it never showed.
-          sponsorStartDate: z.string().nullable().optional(),
-          startDate: z.string().nullable().optional(),
-          endDate: z.string().nullable().optional(),
+          sponsorStartDate: z
+            .string()
+            .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date')
+            .nullable()
+            .optional(),
+          startDate: z
+            .string()
+            .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date')
+            .nullable()
+            .optional(),
+          endDate: z
+            .string()
+            .refine((v) => !v || !Number.isNaN(Date.parse(v)), 'Invalid date')
+            .nullable()
+            .optional(),
         }),
       )
       .mutation(async ({ input }) => {

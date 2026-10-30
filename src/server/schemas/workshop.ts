@@ -99,14 +99,20 @@ export const confirmWorkshopSignupSchema = z.object({
 })
 
 export const batchConfirmSignupsSchema = z.object({
-  signupIds: z.array(z.string()).min(1, 'At least one signup ID is required'),
+  signupIds: z
+    .array(z.string())
+    .min(1, 'At least one signup ID is required')
+    .max(500, 'Too many signups in one batch'),
   sendEmails: z.boolean().optional().default(true),
   /** By workshop id. */
   acceptPast: z.record(z.string(), acceptPastSchema).optional(),
 })
 
 export const batchCancelSignupsSchema = z.object({
-  signupIds: z.array(z.string()).min(1, 'At least one signup ID is required'),
+  signupIds: z
+    .array(z.string())
+    .min(1, 'At least one signup ID is required')
+    .max(500, 'Too many signups in one batch'),
   reason: z.string().max(500, 'Reason too long').optional(),
 })
 

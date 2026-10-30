@@ -38,7 +38,7 @@ export const searchRouter = router({
          * declines to send one, and this refuses to serve one, so a future
          * client edit cannot reinstate the per-character fan-out.
          */
-        query: z.string().trim().min(MIN_SEARCH_QUERY_LENGTH),
+        query: z.string().trim().min(MIN_SEARCH_QUERY_LENGTH).max(200),
       }),
     )
     .query(async ({ ctx, input }): Promise<UnifiedSearchPayload> => {
