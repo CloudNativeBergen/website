@@ -1026,7 +1026,7 @@ export interface ConversationThreadProps {
  * it only ever runs while someone is actively reading a conversation, and there
  * the latency of an incoming reply is felt.
  */
-const THREAD_POLL_MS = 20_000
+const THREAD_POLL_MS = 60_000
 
 /**
  * Data container shared by BOTH audiences. Resolves the conversation id (given

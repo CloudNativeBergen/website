@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  *
- * My posts' polling (Photo Wall spec §8, §14): on load, every 15 s while
+ * My posts' polling (Photo Wall spec §8, §14): on load, every 30 s while
  * the page is visible, and with NO idle stop: past five idle minutes a
  * Waiting post still turns into On the wall. An explicit interval, so a
  * read resolving while the page is hidden can never clear the timer.
@@ -103,7 +103,7 @@ const setVisibility = async (state: DocumentVisibilityState) => {
 const tick = (ms: number) => act(async () => vi.advanceTimersByTimeAsync(ms))
 
 describe('useMyPosts', () => {
-  it('loads on mount, then every 15 s, with no idle stop: Waiting turns into On the wall after five idle minutes', async () => {
+  it('loads on mount, then every 30 s, with no idle stop: Waiting turns into On the wall after five idle minutes', async () => {
     let status: MyPost['status'] = 'pending'
     const load = vi.fn(async () => [post(status)])
     render(<Probe load={load} />)
@@ -113,12 +113,12 @@ describe('useMyPosts', () => {
 
     // Five minutes without a pointer, key or scroll event.
     await tick(5 * 60_000)
-    expect(load).toHaveBeenCalledTimes(1 + 20)
+    expect(load).toHaveBeenCalledTimes(1 + 10)
     expect(screen.getByTestId('status')).toHaveTextContent('pending')
 
     status = 'approved'
     await tick(MY_POSTS_POLL_MS)
-    expect(load).toHaveBeenCalledTimes(1 + 21)
+    expect(load).toHaveBeenCalledTimes(1 + 11)
     expect(screen.getByTestId('status')).toHaveTextContent('approved')
   })
 
@@ -166,17 +166,17 @@ describe('useMyPosts', () => {
   it('reads slower than the interval, on a server that runs actions one at a time, never pile up: at most one read is out', async () => {
     const server = serializedServer()
     let status: MyPost['status'] = 'pending'
-    // Every read takes 20 s, longer than the 15 s interval.
-    const load = vi.fn(() => server.call(20_000, () => [post(status)]))
+    // Every read takes 40 s, longer than the 30 s interval.
+    const load = vi.fn(() => server.call(40_000, () => [post(status)]))
     render(<Probe load={load} />)
     await act(async () => {})
     await tick(5 * 60_000)
     status = 'approved'
     await tick(5 * 60_000)
     expect(server.maxOutstanding).toBe(1)
-    // One read per 20-30 s, never one per tick queued up.
-    expect(load.mock.calls.length).toBeLessThanOrEqual(31)
-    expect(load.mock.calls.length).toBeGreaterThanOrEqual(20)
+    // One read per 40-60 s, never one per tick queued up.
+    expect(load.mock.calls.length).toBeLessThanOrEqual(16)
+    expect(load.mock.calls.length).toBeGreaterThanOrEqual(10)
     expect(screen.getByTestId('status')).toHaveTextContent('approved')
   })
 
