@@ -31,7 +31,27 @@ Deploy with `npx wrangler deploy --env preview` or `--env production` from
 
 ## Secrets
 
-None yet: the health query needs no secrets. Secrets are never committed. Set
+| Secret             | Envs                    | Purpose                                                                                                                                                                                                                |
+| ------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CLIENT_IP_SECRET` | `preview`, `production` | HMAC key shared with the BFF, which signs the client IP in `x-konf-client-ip` (`signClientIp` in `src/rate-limit`). If it is unset or wrong, anonymous callers are keyed on `cf-connecting-ip`, which is the BFF's IP. |
+
+Secrets are never committed. Set
 them per environment with `npx wrangler secret put <NAME> --env <env>`, and
 never reuse a production value in `preview`. List each new secret here, with
 the environments that need it, in the PR that adds it.
+
+## Rate limiting
+
+`src/rate-limit` (#1790), wired in `src/index.ts`:
+
+- `API_LIMITER` (300 per minute): one hit per operation, keyed on the SHA-256
+  of the bearer token, or on tenant plus client IP for anonymous callers. The
+  tenant is `null` until #1786 resolves one per operation, so for now anonymous
+  callers are keyed on IP alone.
+- `CODE_ATTEMPT_LIMITER` (10 per minute): resolvers that check guessable codes
+  call `countAttempt(ctx, env.CODE_ATTEMPT_LIMITER, '<action>')` once per
+  attempt.
+- Depth (max 10) and cost (max 500 fields) are checked before execution.
+
+A denial returns `RATE_LIMITED` with HTTP 429. An oversized query returns
+`QUERY_TOO_COMPLEX` with HTTP 400. Both codes pass through `maskedErrors`.
