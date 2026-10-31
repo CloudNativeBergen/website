@@ -60,9 +60,12 @@ function toFormRows(
     title: t.title ?? '',
     // A member who is no longer an organizer has no checkbox to untick, so
     // drop them here or every save would be refused.
-    members: Array.isArray(t.members)
-      ? t.members.filter((m) => organizerIds.includes(m))
-      : [],
+    // No organizer list means nothing to check against: keep them all.
+    members: !Array.isArray(t.members)
+      ? []
+      : organizerIds.length === 0
+        ? t.members
+        : t.members.filter((m) => organizerIds.includes(m)),
     slackChannel: t.slackChannel ?? '',
     emailIdentity: (t.emailIdentity?.[0] ?? '') as TeamFormRow['emailIdentity'],
   }))

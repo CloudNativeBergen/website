@@ -356,9 +356,7 @@ async function applyConferencePatch(
     // Settings belong to ONE conference, so revalidate the tenant-scoped tag
     // only — `fetchConferenceData` and every public page tag this conference's
     // cached reads with `sanity:conference-<id>`, so other tenants stay warm.
-    // `{ expire: 0 }`, not `'default'`: the settings page refreshes straight
-    // after a save and must read the new values, not one stale render.
-    revalidateTag(conferenceTag(conferenceId), { expire: 0 })
+    revalidateTag(conferenceTag(conferenceId), 'default')
 
     return { success: true, updated: result }
   } catch (error) {
@@ -1014,7 +1012,7 @@ export const conferenceRouter = router({
         (await clientReadUncached.fetch<
           { members?: { _ref: string }[] }[] | null
         >(
-          // groq-global: reads THIS request's own conference by its
+          // groq-global-scoped: reads THIS request's own conference by its
           // server-resolved id, like `updateTeams` below.
           `*[_type == "conference" && _id == $id][0].teams`,
           { id: conferenceId },
@@ -1023,15 +1021,19 @@ export const conferenceRouter = router({
         ...team,
         members: (team.members ?? []).filter((m) => keep.has(m._ref)),
       }))
+      // Pruning can leave a team with `members: []`; routing tolerates an
+      // empty team, and the editor asks for a member on the next save.
       const teamsChanged = prunedTeams.some(
         (team, i) => team.members.length !== (teams[i].members ?? []).length,
       )
-      return applyConferencePatch(conferenceId, {
+      const result = await applyConferencePatch(conferenceId, {
         organizers: input.organizers.map((id) =>
           createReferenceWithKey(id, 'organizer'),
         ),
         ...(teamsChanged ? { teams: prunedTeams } : {}),
       })
+      if (teamsChanged) clearConferenceTeamsCache()
+      return result
     }),
 
   updateTopics: adminProcedure
@@ -1048,7 +1050,7 @@ export const conferenceRouter = router({
       // the whole editor refuse every save.
       const currentTopicIds = new Set(
         (await clientReadUncached.fetch<string[] | null>(
-          // groq-global: reads THIS request's own conference by its
+          // groq-global-scoped: reads THIS request's own conference by its
           // server-resolved id (never a client id) — the same shape as
           // `updateTeams`' organizer-set read directly below.
           `*[_type == "conference" && _id == $id][0].topics[]._ref`,

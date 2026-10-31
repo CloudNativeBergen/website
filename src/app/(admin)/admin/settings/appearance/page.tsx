@@ -42,7 +42,11 @@ export const metadata = { title: 'Appearance' }
  * not a preview of them.
  */
 export default async function AppearancePage() {
+  // READ LIVE (#1345, as on the workshops page): this page reloads straight
+  // after a save, and the cached read serves the old values once
+  // (`revalidateTag(tag, 'default')` is stale-while-revalidate).
   const { conference, error } = await getConferenceForCurrentDomain({
+    uncached: true,
     organizers: true,
     schedule: true,
     featuredSpeakers: true,

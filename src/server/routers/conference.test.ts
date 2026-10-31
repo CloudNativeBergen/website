@@ -267,7 +267,7 @@ describe('conference router — tenant-scoped cache invalidation (#618)', () => 
     })
     expect(revalidateTagMock).toHaveBeenCalledWith(
       `sanity:conference-${CONFERENCE_ID}`,
-      { expire: 0 },
+      'default',
     )
     // The broad tag would bust every other tenant's cached conference read.
     expect(revalidateTagMock).not.toHaveBeenCalledWith(
@@ -329,7 +329,7 @@ describe('conference router — visibility (M0 trial state)', () => {
     })
     expect(revalidateTagMock).toHaveBeenCalledWith(
       `sanity:conference-${CONFERENCE_ID}`,
-      { expire: 0 },
+      'default',
     )
   })
 
@@ -1063,6 +1063,7 @@ describe('conference router — organizers (self-lockout guard)', () => {
     expect(lastSet!.teams).toEqual([
       { key: 'cfp', members: [{ _ref: 'sp-1' }] },
     ])
+    expect(clearTeamsCacheMock).toHaveBeenCalled()
     currentTeams = []
   })
 
@@ -1071,6 +1072,7 @@ describe('conference router — organizers (self-lockout guard)', () => {
       organizers: ['sp-1', 'sp-3'],
     })
     expect(lastSet).not.toHaveProperty('teams')
+    expect(clearTeamsCacheMock).not.toHaveBeenCalled()
   })
 
   it('rejects an empty organizer list (non-empty ALWAYS)', async () => {
