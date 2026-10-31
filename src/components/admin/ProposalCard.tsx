@@ -19,6 +19,7 @@ import {
   MetadataRow,
   getProposalSpeakerNames,
   calculateAverageRating,
+  reviewCountOf,
 } from '@/lib/proposal'
 
 interface ProposalCardProps {
@@ -48,7 +49,7 @@ export function ProposalCard({
   )
 
   const averageRating = calculateAverageRating(proposal)
-  const reviewCount = proposal.reviews?.length || 0
+  const reviewCount = reviewCountOf(proposal)
   const speakerNames = getProposalSpeakerNames(proposal)
 
   const currentConferenceId =

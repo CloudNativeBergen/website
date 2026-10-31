@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { calculateAverageRating, reviewCountOf } from '@/lib/proposal'
 import {
   CheckIcon,
   XMarkIcon,
@@ -395,28 +396,15 @@ export function AdminActionBar({
             <ProposalStatusBadge status={proposal.status} />
           </div>
 
-          {proposal.reviews && proposal.reviews.length > 0 && (
+          {reviewCountOf(proposal) > 0 && (
             <div className="flex shrink-0 items-center gap-2">
               <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 Reviews:
               </span>
               <span className="text-sm whitespace-nowrap text-gray-900 dark:text-white">
-                {proposal.reviews.length} review
-                {proposal.reviews.length !== 1 ? 's' : ''}
-                {(() => {
-                  const scored = proposal.reviews.filter((r) => r.score)
-                  if (scored.length === 0) return ''
-                  const totalScore = scored.reduce((sum, review) => {
-                    const reviewScore =
-                      (review.score.content +
-                        review.score.relevance +
-                        review.score.speaker) /
-                      3
-                    return sum + reviewScore
-                  }, 0)
-                  const averageScore = totalScore / scored.length
-                  return ` (${averageScore.toFixed(1)}/5)`
-                })()}
+                {reviewCountOf(proposal)} review
+                {reviewCountOf(proposal) !== 1 ? 's' : ''}
+                {` (${calculateAverageRating(proposal).toFixed(1)}/5)`}
               </span>
             </div>
           )}

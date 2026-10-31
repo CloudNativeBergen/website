@@ -47,21 +47,3 @@ export function extractSpeakerIds(
     })
     .filter((id): id is string => Boolean(id))
 }
-
-export function calculateReviewScore(
-  reviews: Array<{
-    score?: { content?: number; relevance?: number; speaker?: number }
-  }>,
-  scoreType: 'content' | 'relevance' | 'speaker',
-): number {
-  if (!reviews || reviews.length === 0) return 0
-
-  const total = reviews.reduce((acc, review) => {
-    if (typeof review === 'object' && 'score' in review && review.score) {
-      return acc + (review.score[scoreType] || 0)
-    }
-    return acc
-  }, 0)
-
-  return total / reviews.length
-}

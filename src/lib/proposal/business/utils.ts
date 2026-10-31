@@ -1,30 +1,18 @@
 import { ProposalExisting } from '../types'
-import { Review } from '@/lib/review/types'
+import { reviewStats } from '@/lib/review/summary'
 import { Speaker } from '@/lib/speaker/types'
 
 export function calculateAverageRating(proposal: ProposalExisting): number {
-  if (!proposal.reviews || proposal.reviews.length === 0) {
-    return 0
-  }
+  const { count, averageTotal } = reviewStats(
+    proposal.reviews,
+    proposal.reviewSummary,
+  )
+  return count > 0 ? (averageTotal / 15) * 5 : 0
+}
 
-  const totalScores = proposal.reviews.reduce((acc, review) => {
-    const reviewObj =
-      typeof review === 'object' && 'score' in review
-        ? (review as Review)
-        : null
-    if (reviewObj && reviewObj.score) {
-      return (
-        acc +
-        reviewObj.score.content +
-        reviewObj.score.relevance +
-        reviewObj.score.speaker
-      )
-    }
-    return acc
-  }, 0)
-
-  const totalPossibleScore = proposal.reviews.length * 15
-  return totalPossibleScore > 0 ? (totalScores / totalPossibleScore) * 5 : 0
+/** Live reviews plus the folded summary of deleted ones. */
+export function reviewCountOf(proposal: ProposalExisting): number {
+  return reviewStats(proposal.reviews, proposal.reviewSummary).count
 }
 
 export function getProposalSpeakerNames(proposal: ProposalExisting): string {

@@ -44,6 +44,7 @@ import {
   type VersionsClient,
 } from './talk-versions'
 import { countColours, storedCount } from './totals'
+import { osloMonthsCutoff } from '@/lib/retention/cutoffs'
 
 /** Responses per transaction (§12.2). */
 export const FOLD_CHUNK_SIZE = 100
@@ -354,9 +355,8 @@ function addCounts(
  * shape of `conference.endDate`. A conference ending on it is not folded yet.
  */
 export function foldCutoff(now: Date): string {
-  const d = new Date(now)
-  d.setUTCMonth(d.getUTCMonth() - FOLD_AFTER_MONTHS)
-  return d.toISOString().slice(0, 10)
+  // The same Oslo-day clock as the review and snapshot retention.
+  return osloMonthsCutoff(FOLD_AFTER_MONTHS, now)
 }
 
 // groq-global: platform CRON SWEEP. Retention is owed per talk across every tenant; each talk is then folded in its OWN conference's scope.

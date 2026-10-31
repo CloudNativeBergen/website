@@ -29,12 +29,10 @@ import { PortableText } from '@portabletext/react'
 import { Conference } from '@/lib/conference/types'
 import { AdminActionBar } from '@/components/admin/AdminActionBar'
 import { SpeakerAvatarsWithNames } from '@/components/SpeakerAvatars'
-import { calculateAverageRating } from '@/lib/proposal'
+import { calculateAverageRating, reviewCountOf } from '@/lib/proposal'
+import { summarizeReviews } from '@/lib/review/summary'
 import { portableTextComponents } from '@/lib/portabletext/components'
-import {
-  extractSpeakersFromProposal,
-  calculateReviewScore,
-} from '@/lib/proposal/utils'
+import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
 import { formatDateSafe } from '@/lib/time'
 
 interface ProposalPreviewProps {
@@ -70,7 +68,12 @@ export function ProposalPreview({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const speakers = extractSpeakersFromProposal(proposal)
   const averageRating = calculateAverageRating(proposal)
-  const reviewCount = proposal.reviews?.length || 0
+  const reviewCount = reviewCountOf(proposal)
+  // Live reviews plus the folded summary of deleted ones.
+  const categories = summarizeReviews(
+    proposal.reviews ?? [],
+    proposal.reviewSummary,
+  )
   const requiresTravelFunding =
     speakers.some((speaker) =>
       speaker?.flags?.includes(Flags.requiresTravelFunding),
@@ -175,36 +178,27 @@ export function ProposalPreview({
                 </span>
               </div>
 
-              {proposal.reviews && proposal.reviews.length > 0 && (
+              {reviewCount > 0 && (
                 <div className="mt-3 space-y-2">
                   <div className="text-xs text-gray-600 dark:text-gray-400">
                     <div className="flex justify-between">
                       <span>Content:</span>
                       <span>
-                        {calculateReviewScore(
-                          proposal.reviews,
-                          'content',
-                        ).toFixed(1)}
+                        {categories.content.toFixed(1)}
                         /5
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Relevance:</span>
                       <span>
-                        {calculateReviewScore(
-                          proposal.reviews,
-                          'relevance',
-                        ).toFixed(1)}
+                        {categories.relevance.toFixed(1)}
                         /5
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Speaker:</span>
                       <span>
-                        {calculateReviewScore(
-                          proposal.reviews,
-                          'speaker',
-                        ).toFixed(1)}
+                        {categories.speaker.toFixed(1)}
                         /5
                       </span>
                     </div>
