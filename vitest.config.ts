@@ -88,7 +88,13 @@ export default defineConfig({
         // same one the Studio bundle uses. Needed by
         // `__tests__/sanity/realSchema.ts`, which takes the real `inlineSvg`
         // type off the plugin instead of stubbing it.
-        inline: ['@starefossen/sanity-plugin-inline-svg-input'],
+        //
+        // /graphql/ (graphql, graphql-yoga, @graphql-tools): externalized, Node
+        // resolves `graphql` for Yoga with the `node` condition (CJS) while
+        // Vite gives api/ code the ESM build,
+        // so `GraphQLError` exists twice and Yoga's `instanceof` check masks
+        // our errors. Inlined, both sides get one copy, as in the Worker bundle.
+        inline: ['@starefossen/sanity-plugin-inline-svg-input', /graphql/],
       },
     },
     coverage: {

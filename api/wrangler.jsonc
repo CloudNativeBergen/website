@@ -9,10 +9,38 @@
     "preview": {
       "name": "konf-api-preview",
       "workers_dev": true,
+      // Rate Limiting bindings are not inherited by environments; keep both
+      // blocks in step. namespace_id is a positive integer unique per account.
+      "ratelimits": [
+        {
+          "name": "API_LIMITER",
+          "namespace_id": "1791",
+          "simple": { "limit": 300, "period": 60 },
+        },
+        {
+          "name": "CODE_ATTEMPT_LIMITER",
+          "namespace_id": "1792",
+          "simple": { "limit": 10, "period": 60 },
+        },
+      ],
     },
     "production": {
       "name": "konf-api",
       "routes": [{ "pattern": "api.konf.app", "custom_domain": true }],
+      // Rate Limiting bindings are not inherited by environments; keep both
+      // blocks in step. namespace_id is a positive integer unique per account.
+      "ratelimits": [
+        {
+          "name": "API_LIMITER",
+          "namespace_id": "1793",
+          "simple": { "limit": 300, "period": 60 },
+        },
+        {
+          "name": "CODE_ATTEMPT_LIMITER",
+          "namespace_id": "1794",
+          "simple": { "limit": 10, "period": 60 },
+        },
+      ],
     },
   },
 }

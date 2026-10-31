@@ -11,11 +11,11 @@
  * - Query depth and cost (field count, fragments expanded) are checked before
  *   execution.
  *
- * Deliberately free of `graphql` imports so it runs without the api package
- * installed. Errors are plain `Error`s named `GraphQLError`, which Yoga
- * recognises by name and serialises with their extensions (HTTP status
- * included).
+ * Errors are `GraphQLError`s, so `maskedErrors` passes them through with their
+ * code and Yoga uses `extensions.http.status` as the response status.
  */
+
+import { GraphQLError } from 'graphql'
 
 /** The shape of the Cloudflare Workers Rate Limiting binding. */
 export interface RateLimiter {
@@ -25,17 +25,20 @@ export interface RateLimiter {
 export const SIGNED_IP_HEADER = 'x-konf-client-ip'
 const SKEW_SECONDS = 5 * 60
 
-export class RateLimitedError extends Error {
-  override name = 'GraphQLError'
-  extensions = { code: 'RATE_LIMITED', http: { status: 429 } }
+export class RateLimitedError extends GraphQLError {
   constructor(message = 'Too many requests') {
-    super(message)
+    super(message, {
+      extensions: { code: 'RATE_LIMITED', http: { status: 429 } },
+    })
   }
 }
 
-export class QueryLimitError extends Error {
-  override name = 'GraphQLError'
-  extensions = { code: 'QUERY_TOO_COMPLEX', http: { status: 400 } }
+export class QueryLimitError extends GraphQLError {
+  constructor(message: string) {
+    super(message, {
+      extensions: { code: 'QUERY_TOO_COMPLEX', http: { status: 400 } },
+    })
+  }
 }
 
 const enc = new TextEncoder()
@@ -119,7 +122,7 @@ export async function verifyClientIp(
 
 export async function deriveCallerKey(
   request: Request,
-  opts: { ipSecret: string; tenant: string },
+  opts: { ipSecret: string; tenant: string | null },
   now = Date.now(),
 ): Promise<string> {
   const auth = request.headers.get('authorization')
@@ -133,7 +136,7 @@ export async function deriveCallerKey(
     )) ??
     request.headers.get('cf-connecting-ip') ??
     'unknown'
-  return `anon:${opts.tenant}:${ip}`
+  return `anon:${opts.tenant ?? '-'}:${ip}`
 }
 
 /**
@@ -210,8 +213,8 @@ export interface RateLimitOptions {
   limiter: RateLimiter
   /** Shared secret for the BFF's signed client IP header. */
   ipSecret: string
-  /** Tenant of the request (from #1786). */
-  tenant: (request: Request) => string
+  /** Tenant of the request; null until #1786 resolves one per operation. */
+  tenant: (request: Request) => string | null
   maxDepth?: number
   maxCost?: number
 }
