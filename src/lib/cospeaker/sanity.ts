@@ -115,17 +115,14 @@ export async function getInvitationByToken(
     token == $invitationToken
   ][0] ${INVITATION_PROJECTION}`
 
-  try {
-    const invitation = await clientRead.fetch(
-      query,
-      { invitationToken: token },
-      { cache: 'no-store' },
-    )
-    return invitation || null
-  } catch (error) {
-    console.error('Error fetching invitation by token:', error)
-    return null
-  }
+  // A failed read THROWS: `null` means "no such invitation", and callers must
+  // not tell the invitee their link is invalid because Sanity hiccuped.
+  const invitation = await clientRead.fetch(
+    query,
+    { invitationToken: token },
+    { cache: 'no-store' },
+  )
+  return invitation || null
 }
 
 /**

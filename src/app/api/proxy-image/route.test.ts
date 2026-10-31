@@ -21,10 +21,10 @@ const requestFor = (target: string) =>
     url: `https://conference.example/api/proxy-image?url=${encodeURIComponent(target)}`,
   }) as unknown as NextRequest
 
-const imageResponse = () =>
+const imageResponse = (contentType = 'image/png') =>
   new Response(new Uint8Array([1, 2, 3]), {
     status: 200,
-    headers: { 'content-type': 'image/png' },
+    headers: { 'content-type': contentType },
   })
 
 let fetchMock: ReturnType<typeof vi.fn>
@@ -153,6 +153,19 @@ describe('/api/proxy-image — host allowlist', () => {
   })
 })
 
+describe('/api/proxy-image — timeout', () => {
+  it('clears the abort timer when the fetch fails', async () => {
+    const clearSpy = vi.spyOn(globalThis, 'clearTimeout')
+    fetchMock.mockRejectedValue(new Error('network down'))
+
+    const res = await GET(requestFor('https://cdn.sanity.io/images/a-1x1.jpg'))
+
+    expect(res.status).toBe(500)
+    expect(clearSpy).toHaveBeenCalled()
+    clearSpy.mockRestore()
+  })
+})
+
 describe('/api/proxy-image — redirects', () => {
   it('does not let the fetch follow redirects', async () => {
     await GET(requestFor('https://cdn.sanity.io/images/p/d/a-1x1.jpg'))
@@ -191,8 +204,10 @@ describe('/api/proxy-image — redirects', () => {
 
 describe('/api/proxy-image — response hardening', () => {
   it('serves proxied bytes with sniffing and scripting neutered', async () => {
+    fetchMock.mockResolvedValue(imageResponse('image/svg+xml'))
     const res = await GET(requestFor('https://cdn.sanity.io/images/a-1x1.svg'))
 
+    expect(res.headers.get('content-type')).toBe('image/svg+xml')
     expect(res.headers.get('x-content-type-options')).toBe('nosniff')
     expect(res.headers.get('content-security-policy')).toBe(
       "default-src 'none'; sandbox",

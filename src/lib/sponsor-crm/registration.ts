@@ -222,9 +222,12 @@ async function hasLivePhotoWall(conferenceId: string): Promise<boolean> {
   return !!id
 }
 
-export async function validateRegistrationToken(
-  token: string,
-): Promise<{ sponsor?: RegistrationSponsorInfo; error?: Error }> {
+export async function validateRegistrationToken(token: string): Promise<{
+  sponsor?: RegistrationSponsorInfo
+  error?: Error
+  /** The read failed: the token may be fine, so this is not "invalid link". */
+  transient?: boolean
+}> {
   if (!token) {
     return { error: new Error('Registration token is required') }
   }
@@ -301,7 +304,7 @@ export async function validateRegistrationToken(
     return { sponsor: withAfterSigning(result) }
   } catch (error) {
     console.error('[registration] Token validation failed:', error)
-    return { error: error as Error }
+    return { error: error as Error, transient: true }
   }
 }
 

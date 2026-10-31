@@ -940,6 +940,23 @@ export function visibleDestinations(
   )
 }
 
+/**
+ * Whether a hardcoded admin link (user menu, dashboard quick actions) may be
+ * offered to an org with `enabledFeatures`: false only when the registry gates
+ * that href behind a feature the org lacks, so the `feature:` tag stays the one
+ * place a destination is gated (#829).
+ */
+export function isAdminHrefVisible(
+  href: string,
+  enabledFeatures: readonly FeatureId[],
+): boolean {
+  const path = href.split(/[?#]/)[0]
+  const visible = visibleDestinations(enabledFeatures)
+  return ADMIN_DESTINATIONS.every(
+    (destination) => destination.href !== path || visible.includes(destination),
+  )
+}
+
 export interface AdminDestinationGroup {
   group: string
   items: AdminDestination[]

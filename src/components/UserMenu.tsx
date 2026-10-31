@@ -27,6 +27,8 @@ import { GitHubIcon, LinkedInIcon } from '@/components/SocialIcons'
 import { usePwaInstall } from '@/components/pwa'
 import type { Speaker } from '@/lib/speaker/types'
 import type { Account } from 'next-auth'
+import { isAdminHrefVisible } from '@/lib/admin/registry'
+import type { FeatureId } from '@/lib/features/registry'
 
 type IconType = React.ComponentType<{ className?: string }>
 
@@ -156,7 +158,14 @@ export interface UserMenuProps {
    * `closed` when a wall exists but posting is not; undefined hides the group.
    */
   photoWall?: 'open' | 'closed'
+  /**
+   * The org's enabled features. Admin links the registry gates behind a
+   * feature the org lacks (e.g. Tickets without `ticketing`) are left out.
+   */
+  enabledFeatures?: readonly FeatureId[]
 }
+
+const NO_FEATURES: readonly FeatureId[] = []
 
 /**
  * Role-aware dropdown anchored on the signed-in speaker's avatar. Groups, in
@@ -171,6 +180,7 @@ export function UserMenu({
   speaker,
   account,
   photoWall,
+  enabledFeatures = NO_FEATURES,
 }: UserMenuProps) {
   const { canInstall } = usePwaInstall()
 
@@ -240,7 +250,9 @@ export function UserMenu({
           <Fragment>
             <Divider />
             <SectionLabel>Admin</SectionLabel>
-            {ADMIN_LINKS.map((link) => (
+            {ADMIN_LINKS.filter((link) =>
+              isAdminHrefVisible(link.href, enabledFeatures),
+            ).map((link) => (
               <LinkItem key={link.href} {...link} />
             ))}
           </Fragment>

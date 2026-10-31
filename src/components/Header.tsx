@@ -1,5 +1,6 @@
 'use client'
 
+import type { FeatureId } from '@/lib/features/registry'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
 import { DiamondIcon } from '@/components/DiamondIcon'
@@ -23,9 +24,11 @@ import { PublicHeaderBell } from '@/components/PublicHeaderBell'
 export function Header({
   c,
   photoWall,
+  enabledFeatures,
 }: {
   c: HeaderConference
   photoWall?: 'open' | 'closed'
+  enabledFeatures?: readonly FeatureId[]
 }) {
   const { data: session } = useSession()
   const isPast = isConferenceOver(c)
@@ -80,6 +83,7 @@ export function Header({
                   speaker={session.speaker}
                   account={session.account}
                   photoWall={photoWall}
+                  enabledFeatures={enabledFeatures}
                 />
               ) : (
                 <Link

@@ -74,3 +74,28 @@ describe('registration.complete Slack alert', () => {
     await expect(caller.complete(input)).resolves.toEqual({ success: true })
   })
 })
+
+describe('registration.validate (#848)', () => {
+  it('answers NOT_FOUND for an unknown token', async () => {
+    const { validateRegistrationToken } =
+      await import('@/lib/sponsor-crm/registration')
+    vi.mocked(validateRegistrationToken).mockResolvedValueOnce({
+      error: new Error('Invalid or expired registration token'),
+    })
+    await expect(caller.validate({ token: input.token })).rejects.toMatchObject(
+      { code: 'NOT_FOUND' },
+    )
+  })
+
+  it('answers INTERNAL_SERVER_ERROR when the read fails', async () => {
+    const { validateRegistrationToken } =
+      await import('@/lib/sponsor-crm/registration')
+    vi.mocked(validateRegistrationToken).mockResolvedValueOnce({
+      error: new Error('sanity down'),
+      transient: true,
+    })
+    await expect(caller.validate({ token: input.token })).rejects.toMatchObject(
+      { code: 'INTERNAL_SERVER_ERROR' },
+    )
+  })
+})
