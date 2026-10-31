@@ -470,6 +470,27 @@ describe('the stored agreement signer (#1282)', () => {
     expect(signing.cancel).not.toHaveBeenCalled()
   })
 
+  it('redacts nothing when the agreement is still pending after revoking (signed meanwhile)', async () => {
+    signers = [
+      {
+        _id: 'sfc-1',
+        _rev: 'r1',
+        signerEmail: 'kari@sponsor.no',
+        signatureId: 'tok-1',
+        signatureStatus: 'pending',
+      },
+    ]
+    signing.cancel.mockImplementationOnce(async () => {})
+    const result = await eraseSponsorContactSendRecords({
+      emails: ['kari@sponsor.no'],
+      actor: 'ops',
+    })
+    expect(result.err?.message).toBe(
+      'Agreement still pending after revocation; nothing redacted',
+    )
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
   it('redacts nothing when the revocation fails', async () => {
     signers = [
       {

@@ -68,8 +68,9 @@ export interface EraseSponsorContactResult {
   revocations: AgreementRevocation[]
   committed: boolean
   /**
-   * Records still carrying an address after the run — re-read and re-planned
-   * with the same match set, so it cannot drift from what the sweep does.
+   * Records still carrying an address, plus agreements to the signer still
+   * pending, after the run — re-read and re-planned with the same match set,
+   * so it cannot drift from what the sweep does.
    * `null` on a dry run, or when the verification read itself failed after
    * a successful commit (`err` says so; `committed` stays true).
    */
@@ -262,6 +263,13 @@ export async function eraseSponsorContactSendRecords(
     if (plan.revocations.length > 0) {
       await revokeAgreements(plan.revocations, options.actor)
       plan = await planAll(emails, options.organizationId)
+      // The provider leaves a contract signed in the meantime alone; then the
+      // signer is still on record and must not be redacted out from under it.
+      if (plan.revocations.length > 0) {
+        throw new Error(
+          'Agreement still pending after revocation; nothing redacted',
+        )
+      }
     }
 
     if (plan.patches.length > 0) {
@@ -329,11 +337,14 @@ async function revokeAgreements(
   const organizer = /^organizer:(.+)$/.exec(actor)?.[1] ?? 'system'
   for (const r of revocations) {
     await getSigningProvider(r.signingProvider).cancelAgreement(r.signatureId)
-    try {
-      await logSignatureStatusChange(r.id, 'pending', 'rejected', organizer)
-    } catch (error) {
-      console.error('[contact-erasure] activity log failed:', error)
-    }
+    // Returns its error rather than throwing; the log is best effort.
+    const { error } = await logSignatureStatusChange(
+      r.id,
+      'pending',
+      'rejected',
+      organizer,
+    )
+    if (error) console.error('[contact-erasure] activity log failed:', error)
   }
 }
 

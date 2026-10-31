@@ -502,10 +502,7 @@ export async function runOrgErasure(
   }
   if (refusals.length > 0) {
     // Counts only: the refusal texts name subject ids, so they stay out.
-    await writePrivacyErasureLog(orgId, actor, 'refused', {
-      speakers: planned.speakers,
-      ...planned.groups,
-    })
+    await writePrivacyErasureLog(orgId, actor, 'refused', planned.groups)
     throw new Error(`Refused: ${refusals.join('; ')}`)
   }
 
@@ -546,6 +543,7 @@ async function runPlannedErasure(
     signups: 0,
     sponsorRecords: 0,
     logins: 0,
+    agreements: 0,
   }
 
   for (const speakerId of plan.fullSpeakerIds) {
@@ -600,6 +598,7 @@ async function runPlannedErasure(
     throw sponsor.err
   }
   counts.sponsorRecords = sponsor.patches.length
+  counts.agreements = sponsor.revocations.length
   verification.push(
     `Sponsor contacts: ${sponsor.residual === 0 ? 'CLEAN' : `RESIDUAL DATA FOUND (${sponsor.residual ?? 'unknown'})`}`,
   )

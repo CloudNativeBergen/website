@@ -445,7 +445,7 @@ describe('privacy router', () => {
       organization: { _ref: 'org-A' },
     })
     expect(record.counts).toContainEqual(
-      expect.objectContaining({ kind: 'speakers' }),
+      expect.objectContaining({ kind: 'speaker' }),
     )
     const wire = JSON.stringify(record)
     expect(wire).not.toContain(EMAIL)

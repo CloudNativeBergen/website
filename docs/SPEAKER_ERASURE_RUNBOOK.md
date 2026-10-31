@@ -626,6 +626,12 @@ sponsor's contact list in the CRM (the tool does not), and answer the request
 naming the free text it leaves. A refusal writes nothing; a second run stages
 nothing.
 
+If the contact is the stored agreement signer, the tool also clears the signer
+fields and revokes any pending signature agreement to them (signed contracts
+are left alone). The signer is matched on the stored address lowercased, not
+trimmed: a `signerEmail` saved with surrounding whitespace is not found, so
+check the sponsor in the CRM by hand.
+
 ### An invitee without a speaker document (#1045)
 
 A person who was only ever invited as a co-speaker has no speaker document, so
