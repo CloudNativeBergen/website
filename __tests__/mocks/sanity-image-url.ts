@@ -18,4 +18,14 @@ function createChainableBuilder() {
   return builder
 }
 
-export const createImageUrlBuilder = vi.fn(() => createChainableBuilder())
+/**
+ * One builder for the whole run. `src/lib/sanity/client.ts` creates its builder
+ * at import time, so tests read calls from this export rather than from
+ * `createImageUrlBuilder.mock.results`, which Vitest's `clearMocks` wipes.
+ */
+export const builder = createChainableBuilder() as Record<
+  string,
+  ReturnType<typeof vi.fn>
+>
+
+export const createImageUrlBuilder = vi.fn(() => builder)
