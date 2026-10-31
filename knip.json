@@ -31,9 +31,9 @@
   ],
   "ignoreDependencies": [
     "eslint-config-next",
-    "ts-node",
     "@fontsource/.+",
-    "@fontsource-variable/.+"
+    "@fontsource-variable/.+",
+    "tailwindcss"
   ],
   "ignoreExportsUsedInFile": true
 }

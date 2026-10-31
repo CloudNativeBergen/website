@@ -179,7 +179,7 @@ pnpm storybook        # Storybook on port 6006`}
               <p className="font-inter text-sm leading-relaxed text-gray-600 dark:text-gray-400">
                 Utility-first with brand tokens from{' '}
                 <code className="font-jetbrains rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-gray-700">
-                  tailwind.config.ts
+                  src/styles/tailwind.css
                 </code>
                 . Use{' '}
                 <code className="font-jetbrains rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-gray-700">
