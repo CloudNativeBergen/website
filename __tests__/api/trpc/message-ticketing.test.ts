@@ -305,6 +305,44 @@ describe('viewCounts — audience-scoped tab counts (S7)', () => {
       expect.objectContaining({ isOrganizer: false, speakerId: speaker1 }),
     )
   })
+
+  it('passes filter chips through for an organizer, never for a speaker (#916)', async () => {
+    viewCounts.mockResolvedValue({ active: 0, archived: 0 })
+    await createAdminCaller().message.viewCounts({ filters: ['mine'] })
+    expect(viewCounts).toHaveBeenLastCalledWith(
+      expect.objectContaining({ filters: ['mine'] }),
+    )
+    await createAuthenticatedCaller(speaker1).message.viewCounts({
+      filters: ['mine'],
+    })
+    expect(viewCounts).toHaveBeenLastCalledWith(
+      expect.objectContaining({ filters: undefined }),
+    )
+  })
+})
+
+describe('listConversations — filter chips (#916)', () => {
+  it('forwards chips for an organizer', async () => {
+    listConvs.mockResolvedValue([])
+    await createAdminCaller().message.listConversations({
+      view: 'active',
+      filters: ['unassigned', 'needs-reply'],
+    })
+    expect(listConvs).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        view: 'active',
+        filters: ['unassigned', 'needs-reply'],
+      }),
+    )
+  })
+
+  it('rejects chips for a speaker', async () => {
+    await expect(
+      createAuthenticatedCaller(speaker1).message.listConversations({
+        filters: ['mine'],
+      }),
+    ).rejects.toThrow(/not available/)
+  })
 })
 
 describe('setPreference — per-user archive passthrough', () => {

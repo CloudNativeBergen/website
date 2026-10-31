@@ -27,9 +27,62 @@ vi.mock('@/lib/teams', () => ({
 
 import { clientReadUncached } from '@/lib/sanity/client'
 import {
+  inboxPredicate,
   rawViewPredicate,
   getConversationViewCounts,
 } from '@/lib/messaging/sanity'
+
+describe('inboxPredicate — combinable filter chips (#916)', () => {
+  it('a single chip on `active` equals the legacy chip view', () => {
+    for (const chip of [
+      'needs-reply',
+      'unassigned',
+      'mine',
+      'my-teams',
+    ] as const) {
+      expect(inboxPredicate('active', [chip], true).predicate).toBe(
+        rawViewPredicate(chip, true).predicate,
+      )
+    }
+  })
+
+  it('ANDs several chips and unions their bindings', () => {
+    const { predicate, needsOrganizerIds, needsMyTeamKeys } = inboxPredicate(
+      'active',
+      ['unassigned', 'needs-reply', 'my-teams'],
+      true,
+    )
+    expect(predicate).toContain('!defined(assignedTo)')
+    expect(predicate).toContain('$organizerIds')
+    expect(predicate).toContain('$myTeamKeys')
+    expect(needsOrganizerIds).toBe(true)
+    expect(needsMyTeamKeys).toBe(true)
+  })
+
+  it('ignores chips for a speaker', () => {
+    expect(inboxPredicate('active', ['mine'], false)).toEqual(
+      rawViewPredicate('active', false),
+    )
+  })
+
+  it('narrows chip counts by the OTHER chips, never the status counts', async () => {
+    getConferenceTeamsMock.mockResolvedValue([])
+    readMock.fetch.mockResolvedValue({})
+    await getConversationViewCounts({
+      speakerId: 'org-1',
+      isOrganizer: true,
+      conferenceId: 'conf-1',
+      filters: ['mine'],
+    })
+    const query: string = readMock.fetch.mock.calls[0][0]
+    const field = (key: string) =>
+      query.split(`"${key}": `)[1].split(/, "\w+": /)[0]
+    const mine = 'assignedTo._ref == $speakerId'
+    expect(field('unassigned')).toContain(mine)
+    expect(field('active')).not.toContain(mine)
+    expect(field('resolved')).not.toContain(mine)
+  })
+})
 
 type LooseMock = ReturnType<typeof vi.fn>
 const readMock = clientReadUncached as unknown as { fetch: LooseMock }

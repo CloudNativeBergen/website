@@ -157,7 +157,7 @@ export function FilterSection({
   )
 }
 
-function FilterChip({
+export function FilterChip({
   label,
   active,
   onClick,
@@ -168,10 +168,11 @@ function FilterChip({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       aria-pressed={active}
       className={clsx(
-        'flex min-h-11 items-center rounded-full px-3.5 text-sm font-medium transition-colors',
+        'flex min-h-11 items-center rounded-full px-3.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
         active
           ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-300 ring-inset dark:bg-indigo-900/40 dark:text-indigo-300 dark:ring-indigo-700'
           : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700',
