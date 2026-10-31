@@ -27,6 +27,19 @@ const DEFAULT_SIZE = { width: 1280, height: 720 }
 
 const config: TestRunnerConfig = {
   async preVisit(page, story) {
+    // preVisit runs BEFORE the runner's own wait for Storybook (that wait is
+    // inside `__test`). On a fresh page under load the preview has not built
+    // its index yet, and getStoryContext throws SB_PREVIEW_API_0011
+    // ("Cannot access the Story Store until the index is ready") — failing
+    // whichever story happened to be first in a file. Wait for it here.
+    await page.waitForFunction(() => '__STORYBOOK_PREVIEW__' in globalThis)
+    await page.evaluate(() =>
+      (
+        globalThis as unknown as {
+          __STORYBOOK_PREVIEW__: { ready: () => Promise<void> }
+        }
+      ).__STORYBOOK_PREVIEW__.ready(),
+    )
     const context = await getStoryContext(page, story)
     const name = (
       context.parameters?.viewport as { defaultViewport?: string } | undefined
