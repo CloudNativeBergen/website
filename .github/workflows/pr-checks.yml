@@ -9,6 +9,9 @@ on:
   push:
     branches: ['main']
 
+permissions:
+  contents: read
+
 # A push to a PR branch supersedes the run already in flight for it; let the
 # stale one die instead of finishing a 5-job matrix nobody will read. Only
 # pull_request runs share a group (per ref). main pushes and merge-queue runs
