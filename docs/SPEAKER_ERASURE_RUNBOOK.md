@@ -44,15 +44,80 @@ summarise them as "some technical data".
 
 ## Who may run this
 
-| Actor                    | May run it                           | Why                                                                                                                  |
-| ------------------------ | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| **Platform operator**    | **Yes**, after identity verification | A speaker is a global, cross-organization person document, and the right belongs to the person.                      |
-| The speaker themselves   | Not yet                              | Self-service (`speaker.eraseSelf`) is Phase 3. Until then a speaker's request is handled out of band by an operator. |
-| An organizer / org admin | **No**                               | Standing over a shared person is an accident of membership, not consent. An organizer may only _file_ a request.     |
+| Actor                  | May run it                                   | Why                                                                                                                                                      |
+| ---------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An organizer           | **Yes, for their organization**, on the page | The admin Privacy page (`/admin/settings/privacy`). It erases a speaker in full only when the speaker belongs to that organization alone (see below).    |
+| **Platform operator**  | **Yes**, with the CLI, after verification    | A speaker is a global, cross-organization person document, and the right belongs to the person. The CLI is the fallback for every case the page refuses. |
+| The speaker themselves | Not yet                                      | Self-service (`speaker.eraseSelf`) is Phase 3. Until then a speaker's request is handled out of band.                                                    |
 
-The operation is **global and never org-scoped**. It is deliberately not exposed
-in `/admin` and there is no tRPC surface for it in Phase 1 — the only entry point
-is the CLI, run by someone with the production write token.
+### The admin Privacy page (organizers)
+
+**Admin → Settings → Privacy** (`/admin/settings/privacy`) runs the same core as
+the CLI (`eraseSpeakerInPlace`, and `eraseSponsorContactSendRecords` for sponsor
+send records; both in `src/lib/privacy/org-erasure.ts`). Verify identity first,
+exactly as below. Then:
+
+1. Search by the person's email address. The page shows a dry run, grouped by
+   kind, with counts: speaker profile, talks and co-speaker links, co-speaker
+   invitations (also those with no speaker document), sponsor contacts, workshop
+   signups and the workshop login, and other references. It shows nothing about
+   other organizations: "What remains" is always the one line "Data held by
+   other organizations is neither shown nor touched here".
+2. Type the email address to confirm, and erase. The server plans again from the
+   address; it never uses the plan the page showed.
+3. File the verification it prints (`CLEAN`, or `RESIDUAL DATA FOUND`) with the
+   DSR record, as with the CLI in step 5.
+
+**The organization boundary.** The page acts for one organization only:
+
+- The **speaker profile** is erased in full only when the speaker belongs to
+  this organization alone (the same exclusivity rule a speaker merge must pass)
+  and the erasure would write no document owned by another organization.
+  Otherwise the profile, and the talks that point at it, are left exactly as
+  they are, and the page says so. The other organization, or the platform
+  operator with the CLI, has to erase it. There is no partial erasure of a
+  shared profile.
+- **Co-speaker invitations**, **workshop signups** and **sponsor send records**
+  are erased at this organization's conferences only. The page counts what is
+  left at other organizations.
+- The **workshop login** (WorkOS) is shared by every conference on the
+  platform. The page deletes it only when the person has no workshop signup at
+  another organization's conference; otherwise it deletes this organization's
+  signups and keeps the login. A login WorkOS no longer has counts as deleted.
+  A deleted signup frees the seat, but the waitlist is not promoted
+  automatically: tell the workshop host.
+
+**What the preview still reveals.** Whether the speaker profile and the
+workshop login are kept or deleted. "Kept" tells the organizer that the person
+has data somewhere else, but not where or how much. That much is needed to
+answer the person honestly.
+
+**Sign-in tokens are global, on purpose.** A full speaker erasure deletes the
+person's `emailSignInToken` documents in every organization. They belong to the
+person's address, not to a tenant, and a live token is a way into their account.
+
+**Also on erase:** the address is removed from the speaker audiences (Resend)
+of this organization's conferences. The erase runs at
+`POST /api/admin/privacy/erase`, which has its own 300-second limit for the
+Session Feedback wait.
+
+**The page refuses**, and the operator uses the CLI, when the dry run has a
+refusal (for example the sole organizer of a conference), when a social handle
+of the person is also listed by another speaker (`--accept-shared-handles`), or
+when more than five speaker profiles match the address.
+
+The audit record is a `privacyErasureLog` document: organizer id,
+organization id, time, counts and outcome (`clean`, `residual` or `failed`).
+It holds no address and no subject id, and the `cleanup-notifications` cron
+deletes it after three years. The `[privacy-erasure] started` and `finished` (or
+`failed`) log lines carry the same ids and counts. The `[speaker-erasure]` line is written
+for each speaker as with the CLI.
+
+### The CLI (platform operator)
+
+The CLI is **global and never org-scoped**: it acts for the person in every
+organization. The entry point is the CLI, run by someone with the production
+write token.
 
 ## Verifying identity before you run anything
 
@@ -561,6 +626,14 @@ sponsor's contact list in the CRM (the tool does not), and answer the request
 naming the free text it leaves. A refusal writes nothing; a second run stages
 nothing.
 
+### An invitee without a speaker document (#1045)
+
+A person who was only ever invited as a co-speaker has no speaker document, so
+`erase-speaker` has nothing to run on. The admin Privacy page handles this: it
+matches co-speaker invitations by address, deletes the organization's ones and
+prints `CLEAN` once none are left. Invitations at another organization's
+conferences are that organization's to delete; the page counts them.
+
 ### The limit: no live speaker document, no erasure
 
 The tool works from the subject's **live** `speaker` document. If they have none,
@@ -709,7 +782,9 @@ Say so.
 attendee/ticketing records are keyed on their own identities, not on the speaker
 document. **A speaker erasure does not touch them.** If the requester also has
 one of these, handle it as a separate DSR under
-`docs/PRIVACY_OPERATIONS.md` §5.
+`docs/PRIVACY_OPERATIONS.md` §5. The admin Privacy page does delete the
+organization's `workshopSignup` records and, when it may, the shared workshop
+login (see [the admin Privacy page](#the-admin-privacy-page-organizers)).
 
 ### Outside the dataset entirely
 

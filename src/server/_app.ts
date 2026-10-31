@@ -36,6 +36,7 @@ import { organizationRouter } from './routers/organization'
 import { sessionFeedbackRouter } from './routers/sessionFeedback'
 import { photoWallRouter } from './routers/photoWall'
 import { photoWallPublicRouter } from './routers/photoWallPublic'
+import { privacyRouter } from './routers/privacy'
 
 export const appRouter = router({
   badge: badgeRouter,
@@ -75,6 +76,7 @@ export const appRouter = router({
   sessionFeedback: sessionFeedbackRouter,
   photoWall: photoWallRouter,
   photoWallPublic: photoWallPublicRouter,
+  privacy: privacyRouter,
 })
 
 export type AppRouter = typeof appRouter

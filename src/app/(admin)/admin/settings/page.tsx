@@ -248,6 +248,12 @@ export default async function AdminSettings() {
             icon: <SparklesIcon />,
             variant: 'secondary',
           },
+          {
+            label: 'Privacy',
+            href: '/admin/settings/privacy',
+            icon: <ShieldCheckIcon />,
+            variant: 'secondary',
+          },
         ]}
       />
 

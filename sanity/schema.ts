@@ -56,6 +56,7 @@ import marketingCampaign from './schemaTypes/marketingCampaign'
 import marketingTask from './schemaTypes/marketingTask'
 import marketingSnapshot from './schemaTypes/marketingSnapshot'
 import marketingRateLimit from './schemaTypes/marketingRateLimit'
+import privacyErasureLog from './schemaTypes/privacyErasureLog'
 import marketingAssetCleanup from './schemaTypes/marketingAssetCleanup'
 import planTemplate from './schemaTypes/planTemplate'
 import marketingAsset from './schemaTypes/marketingAsset'
@@ -167,6 +168,8 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     marketingAssetCleanup,
     // The seats guard of a workshop (#1344). Same rule.
     workshopSeats,
+    // Audit records of admin Privacy page erasures (#1045). Same rule.
+    privacyErasureLog,
   ],
 }
 
@@ -183,4 +186,5 @@ export const STUDIO_HIDDEN_TYPES: readonly string[] = [
   'planTemplateName',
   'marketingAssetCleanup',
   'workshopSeats',
+  'privacyErasureLog',
 ]
