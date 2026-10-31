@@ -13,7 +13,9 @@ import type {
 const PROVIDER_NAME = 'Verified Document Signing'
 
 const STATUS_QUERY = `*[_type == "sponsorForConference" && signatureId == $id][0]{ signatureStatus }`
-const ID_QUERY = `*[_type == "sponsorForConference" && signatureId == $id][0]{ _id }`
+// Only a live, still-pending agreement: a contract signed in the meantime
+// must not be overwritten as rejected.
+const ID_QUERY = `*[_type == "sponsorForConference" && signatureId == $id && signatureStatus == "pending" && !(_id in path("drafts.**"))][0]{ _id }`
 
 /**
  * Self-hosted contract signing provider.

@@ -51,6 +51,7 @@ export type ErasureKind =
   | 'talks'
   | 'invitations'
   | 'sponsorContacts'
+  | 'agreements'
   | 'workshops'
   | 'login'
   | 'other'
@@ -382,6 +383,19 @@ export async function planOrgErasure(
     })
   }
 
+  if (sponsor.revocations.length > 0) {
+    groups.push({
+      kind: 'agreements',
+      title: 'Pending signature agreements',
+      action: 'erase',
+      note: 'Revoked: the signing link stops working. Signed contracts are not touched.',
+      items: sponsor.revocations.map((r) => ({
+        id: r.id,
+        label: 'pending agreement addressed to the erased signer',
+      })),
+    })
+  }
+
   if (records.signups.length > 0) {
     groups.push({
       kind: 'workshops',
@@ -479,10 +493,6 @@ export async function runOrgErasure(
 ): Promise<OrgErasureResult> {
   const plan = await planOrgErasure(rawEmail, orgId)
   const { refusals } = plan.preview
-  if (refusals.length > 0) {
-    throw new Error(`Refused: ${refusals.join('; ')}`)
-  }
-
   const planned = {
     speakers: plan.fullSpeakerIds.length,
     groups: Object.fromEntries(
@@ -490,6 +500,12 @@ export async function runOrgErasure(
     ),
     deleteLogin: plan.deleteLogin,
   }
+  if (refusals.length > 0) {
+    // Counts only: the refusal texts name subject ids, so they stay out.
+    await writePrivacyErasureLog(orgId, actor, 'refused', planned.groups)
+    throw new Error(`Refused: ${refusals.join('; ')}`)
+  }
+
   // Before the first write, so a run killed half-way still left a trace.
   console.info('[privacy-erasure] started', { actor, orgId, ...planned })
   try {
@@ -527,6 +543,7 @@ async function runPlannedErasure(
     signups: 0,
     sponsorRecords: 0,
     logins: 0,
+    agreements: 0,
   }
 
   for (const speakerId of plan.fullSpeakerIds) {
@@ -581,6 +598,7 @@ async function runPlannedErasure(
     throw sponsor.err
   }
   counts.sponsorRecords = sponsor.patches.length
+  counts.agreements = sponsor.revocations.length
   verification.push(
     `Sponsor contacts: ${sponsor.residual === 0 ? 'CLEAN' : `RESIDUAL DATA FOUND (${sponsor.residual ?? 'unknown'})`}`,
   )

@@ -31,7 +31,7 @@ export default defineType({
     defineField({
       name: 'status',
       type: 'string',
-      options: { list: ['clean', 'residual', 'failed'] },
+      options: { list: ['clean', 'residual', 'failed', 'refused'] },
     }),
     defineField({
       name: 'counts',

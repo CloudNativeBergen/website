@@ -13,7 +13,7 @@ export const PRIVACY_ERASURE_LOG_RETENTION_DAYS = 3 * 365
 export async function writePrivacyErasureLog(
   orgId: string,
   actor: string,
-  status: 'clean' | 'residual' | 'failed',
+  status: 'clean' | 'residual' | 'failed' | 'refused',
   counts: Record<string, number>,
 ): Promise<void> {
   try {

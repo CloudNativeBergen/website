@@ -52,6 +52,10 @@ async function main(): Promise<number> {
   for (const patch of result.patches) {
     console.log(`  ${patch.id}  — ${patch.reason}`)
   }
+  console.log(
+    `${commit ? 'Revoked agreements' : 'Pending agreements to revoke'} (${result.revocations.length}):`,
+  )
+  for (const r of result.revocations) console.log(`  ${r.id}`)
   if (result.refusals.length > 0) {
     console.log('\nREFUSED:')
     for (const refusal of result.refusals) console.log(`  - ${refusal}`)

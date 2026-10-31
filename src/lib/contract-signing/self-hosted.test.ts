@@ -79,3 +79,17 @@ describe('SelfHostedSigningProvider.sendForSigning — base URL resolution', () 
     await expect(send()).rejects.not.toThrow(/NEXTAUTH_URL/)
   })
 })
+
+describe('SelfHostedSigningProvider.cancelAgreement', () => {
+  it('cancels only a live pending agreement, never a signed one', async () => {
+    const { clientReadUncached, clientWrite } =
+      await import('@/lib/sanity/client')
+    const fetch = vi.mocked(clientReadUncached.fetch)
+    fetch.mockResolvedValueOnce(null as never)
+    await provider.cancelAgreement('tok-1')
+    const query = String(fetch.mock.calls.at(-1)?.[0])
+    expect(query).toContain('signatureStatus == "pending"')
+    expect(query).toContain('!(_id in path("drafts.**"))')
+    expect(clientWrite.patch).not.toHaveBeenCalled()
+  })
+})

@@ -103,6 +103,7 @@ import { buildBriefingSlackMessage } from '@/lib/slack/speaker-briefing'
 import { postSlackMessage } from '@/lib/slack/client'
 import { resolveConferenceSlackToken } from '@/lib/slack/token'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { osloTodayDateString } from '@/lib/time'
 import {
   redatePlanForConference,
   redateWarnings,
@@ -121,6 +122,18 @@ async function briefingConference() {
     })
   }
   return conference
+}
+
+/**
+ * True once the conference's last day (Oslo date) has passed. The briefing
+ * send markers are purged 60 days after the event (#1783), so a send after
+ * that would reach everyone again; sending stops when the event ends.
+ */
+function briefingClosed(conference: { endDate?: string | null }): boolean {
+  return (
+    !!conference.endDate &&
+    osloTodayDateString() > conference.endDate.slice(0, 10)
+  )
 }
 
 /** A sample speaker for previews and tests when nobody is confirmed yet. */
@@ -677,6 +690,7 @@ export const conferenceRouter = router({
       history,
       slackChannel: conference.speakerSlackChannel ?? null,
       slackLastPostedAt: slack?.lastSentAt ?? null,
+      ended: briefingClosed(conference),
     }
   }),
 
@@ -741,6 +755,13 @@ export const conferenceRouter = router({
     )
     .mutation(async ({ input }) => {
       const conference = await briefingConference()
+      if (briefingClosed(conference)) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            'The conference has ended, so speaker info can no longer be emailed.',
+        })
+      }
       const speakers = await loadBriefingSpeakers(conference)
       return sendSpeakerBriefings(conference, speakers, undefined, {
         note: input?.note,

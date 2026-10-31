@@ -133,6 +133,7 @@ function plan(over: Record<string, unknown> = {}) {
       { id: 'inv-1', type: 'coSpeakerInvitation', reason: 'invitation' },
     ],
     refusals: [],
+    revocations: [],
     sharedByLinkOnly: [],
     ...over,
   }
@@ -187,6 +188,7 @@ beforeEach(() => {
   eraseSponsor.mockResolvedValue({
     patches: [],
     refusals: [],
+    revocations: [],
     foreign: 0,
     residual: 0,
     err: null,
@@ -284,6 +286,7 @@ describe('privacy router', () => {
     eraseSponsor.mockResolvedValue({
       patches: [],
       refusals: [],
+      revocations: [],
       foreign: 4,
       residual: 0,
       err: null,
@@ -295,6 +298,22 @@ describe('privacy router', () => {
     const wire = JSON.stringify(preview)
     expect(wire).not.toContain('user_1')
     expect(wire).not.toMatch(/\b[34]\b/)
+  })
+
+  it('lists the pending agreements the erasure revokes', async () => {
+    world({})
+    eraseSponsor.mockResolvedValue({
+      patches: [],
+      refusals: [],
+      revocations: [{ id: 'sfc-1', signatureId: 'tok-1' }],
+      foreign: 0,
+      residual: 0,
+      err: null,
+    })
+    const preview = await caller().preview({ email: EMAIL })
+    const group = preview.groups.find((g) => g.kind === 'agreements')
+    expect(group?.items.map((i) => i.id)).toEqual(['sfc-1'])
+    expect(JSON.stringify(group)).not.toContain('tok-1')
   })
 
   it('counts foreign signups over the ids of this org’s own signups', async () => {
@@ -417,5 +436,19 @@ describe('privacy router', () => {
     expect(eraseSpeakerInPlace).not.toHaveBeenCalledWith(
       expect.objectContaining({ dryRun: false }),
     )
+    expect(createMock).toHaveBeenCalledTimes(1)
+    const record = createMock.mock.calls[0][0]
+    expect(record).toMatchObject({
+      _type: 'privacyErasureLog',
+      actor: 'organizer:org-1',
+      status: 'refused',
+      organization: { _ref: 'org-A' },
+    })
+    expect(record.counts).toContainEqual(
+      expect.objectContaining({ kind: 'speaker' }),
+    )
+    const wire = JSON.stringify(record)
+    expect(wire).not.toContain(EMAIL)
+    expect(wire).not.toContain('sp-1')
   })
 })

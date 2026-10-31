@@ -24,6 +24,8 @@ import {
   removeContactFromAudience,
 } from '@/lib/email/audience'
 import type { Conference } from '@/lib/conference/types'
+import { getSigningProvider } from '@/lib/contract-signing'
+import { logSignatureStatusChange } from '@/lib/sponsor-crm/activity'
 import { COUNT_API_VERSION } from '@/lib/sanity/orphaned-asset'
 import { canonicalEmail } from '@/lib/speaker/email'
 import type { ErasureDocumentPatch } from '@/lib/speaker/erasure'
@@ -58,10 +60,17 @@ export interface EraseSponsorContactResult {
   patches: ErasureDocumentPatch[]
   /** Entries that could not be addressed safely; nothing is written if any. */
   refusals: string[]
+  /**
+   * Pending signature agreements addressed to the erased signer, revoked
+   * through the signing provider before the redaction. Signed ones are never
+   * touched.
+   */
+  revocations: AgreementRevocation[]
   committed: boolean
   /**
-   * Records still carrying an address after the run — re-read and re-planned
-   * with the same match set, so it cannot drift from what the sweep does.
+   * Records still carrying an address, plus agreements to the signer still
+   * pending, after the run — re-read and re-planned with the same match set,
+   * so it cannot drift from what the sweep does.
    * `null` on a dry run, or when the verification read itself failed after
    * a successful commit (`err` says so; `committed` stays true).
    */
@@ -72,6 +81,13 @@ export interface EraseSponsorContactResult {
    * `conferenceId: reason`. Best effort: logged, never fails the erasure.
    */
   audienceFailures: string[]
+}
+
+export interface AgreementRevocation {
+  /** The `sponsorForConference` record holding the agreement. */
+  id: string
+  signatureId: string
+  signingProvider?: string | null
 }
 
 /**
@@ -98,6 +114,7 @@ async function planAll(
   foreign: number
   patches: ErasureDocumentPatch[]
   refusals: string[]
+  revocations: AgreementRevocation[]
 }> {
   const all = await fetchSponsorRecipientDocs(emails)
   const docs =
@@ -122,6 +139,7 @@ async function planAll(
     foreign: all.length - docs.length + signers.foreign,
     patches,
     refusals,
+    revocations: signers.revocations,
   }
 }
 
@@ -134,7 +152,11 @@ async function planAll(
 async function planSignerRedaction(
   emails: string[],
   organizationId?: string,
-): Promise<{ patches: ErasureDocumentPatch[]; foreign: number }> {
+): Promise<{
+  patches: ErasureDocumentPatch[]
+  foreign: number
+  revocations: AgreementRevocation[]
+}> {
   const all =
     (await clientReadUncached
       .withConfig({ apiVersion: COUNT_API_VERSION })
@@ -144,11 +166,14 @@ async function planSignerRedaction(
           _rev: string
           signerEmail?: string
           orgId?: string | null
+          signatureId?: string
+          signatureStatus?: string
+          signingProvider?: string | null
         }>
       >(
         // groq-global: the right is the person's, and the same address can
         // sign for sponsors in several organizations, like the read above.
-        `*[_type == "sponsorForConference" && lower(signerEmail) in $emails]{ _id, _rev, signerEmail, "orgId": conference->organization._ref }`,
+        `*[_type == "sponsorForConference" && lower(signerEmail) in $emails]{ _id, _rev, signerEmail, signatureId, signatureStatus, "orgId": conference->organization._ref, "signingProvider": conference->signingProvider }`,
         { emails },
         { cache: 'no-store', perspective: 'raw' },
       )) ?? []
@@ -157,16 +182,26 @@ async function planSignerRedaction(
     organizationId !== undefined
       ? all.filter((doc) => doc.orgId === organizationId)
       : all
-  const patches = docs
-    .filter((doc) => emails.includes(canonicalEmail(doc.signerEmail ?? '')))
+  const signers = docs.filter((doc) =>
+    emails.includes(canonicalEmail(doc.signerEmail ?? '')),
+  )
+  const patches = signers.map((doc) => ({
+    id: doc._id,
+    type: 'sponsorForConference',
+    rev: doc._rev,
+    unset: ['signerEmail', 'signerName'],
+    reason: 'erased contact is the stored agreement signer',
+  }))
+  // Only a pending agreement is revoked: a signed contract is a business
+  // record and stays as it is.
+  const revocations = signers
+    .filter((doc) => doc.signatureStatus === 'pending' && doc.signatureId)
     .map((doc) => ({
       id: doc._id,
-      type: 'sponsorForConference',
-      rev: doc._rev,
-      unset: ['signerEmail', 'signerName'],
-      reason: 'erased contact is the stored agreement signer',
+      signatureId: doc.signatureId!,
+      signingProvider: doc.signingProvider,
     }))
-  return { patches, foreign: all.length - docs.length }
+  return { patches, foreign: all.length - docs.length, revocations }
 }
 
 /**
@@ -186,6 +221,7 @@ export async function eraseSponsorContactSendRecords(
     foreign: 0,
     patches: [] as ErasureDocumentPatch[],
     refusals: [] as string[],
+    revocations: [] as AgreementRevocation[],
     committed: false,
     residual: null as number | null,
     err: null as Error | null,
@@ -210,7 +246,7 @@ export async function eraseSponsorContactSendRecords(
   }
 
   try {
-    const plan = await planAll(emails, options.organizationId)
+    let plan = await planAll(emails, options.organizationId)
     const result = { ...base, ...plan }
     if (plan.refusals.length > 0) {
       return {
@@ -219,6 +255,22 @@ export async function eraseSponsorContactSendRecords(
       }
     }
     if (options.dryRun) return result
+
+    // Revoke first, through the same provider call the CRM's delete uses: a
+    // failure stops here with nothing redacted, so a re-run still finds the
+    // signer. The revocation bumps the record's revision, so plan again for
+    // the guarded transaction below.
+    if (plan.revocations.length > 0) {
+      await revokeAgreements(plan.revocations, options.actor)
+      plan = await planAll(emails, options.organizationId)
+      // The provider leaves a contract signed in the meantime alone; then the
+      // signer is still on record and must not be redacted out from under it.
+      if (plan.revocations.length > 0) {
+        throw new Error(
+          'Agreement still pending after revocation; nothing redacted',
+        )
+      }
+    }
 
     if (plan.patches.length > 0) {
       // Same API version as the speaker chain's transaction, so a Content
@@ -251,7 +303,10 @@ export async function eraseSponsorContactSendRecords(
         ...result,
         audienceFailures,
         committed: true,
-        residual: after.patches.length + after.refusals.length,
+        residual:
+          after.patches.length +
+          after.refusals.length +
+          after.revocations.length,
       }
     } catch (error) {
       return {
@@ -270,6 +325,26 @@ export async function eraseSponsorContactSendRecords(
       ...base,
       err: error instanceof Error ? error : new Error(String(error)),
     }
+  }
+}
+
+async function revokeAgreements(
+  revocations: AgreementRevocation[],
+  actor: string,
+): Promise<void> {
+  // The activity log references a speaker; the Privacy page's actor is
+  // `organizer:<speaker id>`, the CLI's is free text.
+  const organizer = /^organizer:(.+)$/.exec(actor)?.[1] ?? 'system'
+  for (const r of revocations) {
+    await getSigningProvider(r.signingProvider).cancelAgreement(r.signatureId)
+    // Returns its error rather than throwing; the log is best effort.
+    const { error } = await logSignatureStatusChange(
+      r.id,
+      'pending',
+      'rejected',
+      organizer,
+    )
+    if (error) console.error('[contact-erasure] activity log failed:', error)
   }
 }
 
