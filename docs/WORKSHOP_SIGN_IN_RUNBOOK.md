@@ -295,6 +295,9 @@ From the design record (spec §9) and the code:
 - Signing out after the portal's session has run out ends nothing at WorkOS:
   there is no session left to name the WorkOS login.
 - No status row reports `WORKOS_API_KEY`.
+- A request to delete the shared login is handled on the admin Privacy page.
+  See "Workshop login (WorkOS) deletion requests" in
+  [PRIVACY_OPERATIONS.md](./PRIVACY_OPERATIONS.md) §5.
 - Not verified, because WorkOS was not exercised for this document: what
   WorkOS shows for an unregistered redirect URI or sign-out redirect; whether
   a second sign-in within the WorkOS login's lifetime is silent or shows the

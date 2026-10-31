@@ -168,9 +168,32 @@ be inaccurate, because free-text content is governed by the retention periods in
 §4 above rather than deleted on request, and paid travel records are retained
 under a legal obligation.
 
-Attendee, workshop-signup and volunteer records are keyed on different
-identities and are **not** covered by that runbook; handle them as separate
-requests under this SOP.
+Organizers handle a request for their organization on the admin Privacy page
+(`/admin/settings/privacy`). It erases a speaker profile only when the speaker
+belongs to that organization alone; a shared profile is left for the other
+organization or for the platform operator's CLI. The runbook's section "The
+admin Privacy page" has the rules.
+
+Attendee and volunteer records are keyed on different identities and are
+**not** covered by that runbook; handle them as separate requests under this
+SOP.
+
+### Workshop login (WorkOS) deletion requests (#1310)
+
+The workshop login is one WorkOS account for every conference on the platform.
+
+- **Who acts:** the organizers of the conference the person writes to, on the
+  admin Privacy page. They verify identity as for any erasure.
+- **What happens:** the page deletes the person's workshop signups at that
+  organization's conferences. It deletes the WorkOS login too, unless the person
+  has workshop signups at another organization's conference. Then the login
+  stays, and the reply says the other conference's organizers must remove their
+  signups; once they have, either organization can delete the login.
+- **Sessions:** a portal session on a conference host is a sealed cookie that
+  lasts up to 7 days. After the login is deleted, access is decided again at the
+  next sign-in. Say so in the reply.
+- **Waitlists:** a deleted signup frees the seat, but the waitlist is not
+  promoted automatically. Tell the workshop host.
 
 ### Photo Wall removal requests
 

@@ -266,6 +266,15 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     icon: CpuChipIcon,
   },
   {
+    // Erasure requests (#1045, #1310). Linked from the Settings header.
+    id: 'settings-privacy',
+    title: 'Privacy',
+    href: '/admin/settings/privacy',
+    group: 'Settings',
+    keywords: ['privacy', 'gdpr', 'erasure', 'delete', 'dsr', 'personal data'],
+    icon: ShieldCheckIcon,
+  },
+  {
     // The homepage composition workspace. A ⌘K destination of its own because
     // it is where an organizer goes to WORK, not a settings anchor: the
     // appearance page's Composition card is its at-rest display, this is the

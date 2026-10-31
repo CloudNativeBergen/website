@@ -16,7 +16,9 @@ const handler = (req: NextRequest) =>
   })
 
 // Raises the limit only: a bulk early-access send stops starting sends at
-// BULK_TIME_BUDGET_MS, and one that started near it needs the headroom.
-export const maxDuration = 60
+// BULK_TIME_BUDGET_MS, and one that started near it needs the headroom. The
+// admin Privacy page's erasure (`privacy.erase`) waits FEEDBACK_SETTLE_MS
+// (60 s or more) before folding Session Feedback, so it needs more than 60.
+export const maxDuration = 300
 
 export { handler as GET, handler as POST }

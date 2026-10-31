@@ -19,6 +19,14 @@ export function SharedWorkshopLoginNotice() {
         registrations there. Organizers see only the workshop registrations for
         their own organization&apos;s conferences.
       </p>
+      <p className="mt-2 text-sm text-amber-800 dark:text-amber-200">
+        To have the login deleted, ask this conference&apos;s organizers, as
+        described under your rights below. They delete your workshop
+        registrations here, and the login too if you have no workshop
+        registrations at another conference on the platform. If you do, the
+        login stays until the organizers of those conferences have removed
+        theirs.
+      </p>
     </div>
   )
 }
