@@ -1,6 +1,6 @@
 'use client'
 
-import { Conference } from '@/lib/conference/types'
+import type { CfpConference } from '@/lib/conference/logo'
 import {
   Audience,
   audiences as audiencesMap,
@@ -40,7 +40,7 @@ export function ProposalDetailsForm({
 }: {
   proposal: ProposalInput
   setProposal: (proposal: ProposalInput) => void
-  conference: Conference
+  conference: CfpConference
   /**
    * The formats this conference accepts. OPTIONAL — matching the already
    * optional contract on the admin `ProposalsFilter`/`ProposalsList` — because
