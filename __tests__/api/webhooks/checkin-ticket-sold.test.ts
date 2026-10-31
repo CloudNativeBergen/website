@@ -22,7 +22,12 @@ import { stubPlatformTicketingAccount } from '../../helpers/ticketingSecrets'
 import { NextRequest } from 'next/server'
 import crypto from 'crypto'
 
-const mockSendWorkshop = vi.fn()
+const mockSendWorkshop = vi.fn<(...args: unknown[]) => Promise<unknown>>(
+  async () => ({
+    data: { emailId: 'em-1' },
+    error: null,
+  }),
+)
 const mockGetConference = vi.fn()
 const mockGetTenant = vi.fn()
 const mockGetOrganizationById = vi.fn()
@@ -179,17 +184,21 @@ function postRequest(payload: unknown, signature: string | null): NextRequest {
   )
 }
 
-describe('api/webhooks/checkin/ticket-sold — HMAC signature', () => {
-  beforeAll(() => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-  })
-  afterAll(() => {
-    vi.restoreAllMocks()
-  })
+// Every test starts from the vi.fn defaults above, whatever an earlier test
+// (in any order) set. resetAllMocks also undoes the console spies, so they are
+// re-applied here.
+beforeEach(() => {
+  vi.resetAllMocks()
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+})
 
+afterAll(() => {
+  vi.restoreAllMocks()
+})
+
+describe('api/webhooks/checkin/ticket-sold — HMAC signature', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    h.fetch.mockReset()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     // Default: the conference belongs to the platform org on the pro plan,
     // which has the workshop feature (#1295: by plan, with the platform env
@@ -374,17 +383,7 @@ describe('api/webhooks/checkin/ticket-sold — HMAC signature', () => {
  * infinite sign-in loop. Silence beats a broken link.
  */
 describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
-  beforeAll(() => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-  })
-  afterAll(() => {
-    vi.restoreAllMocks()
-  })
-
   beforeEach(() => {
-    vi.clearAllMocks()
-    h.fetch.mockReset()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     // A configured platform org that matches none of the tenants below, so a
     // case is platform ONLY when it points the contract at its own org id.
@@ -395,10 +394,6 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
     // which is what makes every 200 in this suite evidence that the tenant's own
     // key verified the delivery.
     vi.stubEnv('TENANT_SECRETS_JSON', TENANT_SECRETS_JSON)
-    mockSendWorkshop.mockResolvedValue({
-      data: { emailId: 'em-1' },
-      error: null,
-    })
   })
 
   afterEach(() => {
@@ -722,24 +717,10 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
  * WHICH key was used, not on whether some guard happened to refuse.
  */
 describe('api/webhooks/checkin/ticket-sold — per-tenant credentials (#886)', () => {
-  beforeAll(() => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-  })
-  afterAll(() => {
-    vi.restoreAllMocks()
-  })
-
   beforeEach(() => {
-    vi.clearAllMocks()
-    h.fetch.mockReset()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
     vi.stubEnv('TENANT_SECRETS_JSON', TENANT_SECRETS_JSON)
-    mockSendWorkshop.mockResolvedValue({
-      data: { emailId: 'em-1' },
-      error: null,
-    })
     // Both tenants below are entitled to workshops, so the email is decided by
     // the signature and nothing else.
     mockGetOrganizationById.mockImplementation(async (id: string) => ({
@@ -847,17 +828,7 @@ describe('api/webhooks/checkin/ticket-sold — per-tenant credentials (#886)', (
  * cases are compared BYTE FOR BYTE rather than argued about.
  */
 describe('api/webhooks/checkin/ticket-sold — uniform failure', () => {
-  beforeAll(() => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-  })
-  afterAll(() => {
-    vi.restoreAllMocks()
-  })
-
   beforeEach(() => {
-    vi.clearAllMocks()
-    h.fetch.mockReset()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
     vi.stubEnv('TENANT_SECRETS_JSON', TENANT_SECRETS_JSON)
@@ -1018,16 +989,7 @@ describe('api/webhooks/checkin/ticket-sold — uniform failure', () => {
  * bound this route actually gives, so it is asserted rather than described.
  */
 describe('api/webhooks/checkin/ticket-sold — pre-filter (no unauthenticated read)', () => {
-  beforeAll(() => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-  })
-  afterAll(() => {
-    vi.restoreAllMocks()
-  })
-
   beforeEach(() => {
-    vi.clearAllMocks()
-    h.fetch.mockReset()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
     bindConferenceTo('org-platform')
