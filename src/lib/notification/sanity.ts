@@ -763,16 +763,31 @@ const RETENTION_MAX_BATCHES = 20
  */
 export async function deleteNotificationsOlderThan(
   days: number,
+  /** Restrict the sweep to these notification types (default: every type). */
+  types: string[] | null = null,
+  /** Count what would be deleted, delete nothing. */
+  dryRun = false,
 ): Promise<{ deleted: number }> {
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  const filter = `_type == "notification" && createdAt < $cutoff && ($types == null || notificationType in $types) && !(notificationType == "message_received" && !defined(readAt))`
+
+  if (dryRun) {
+    const count = await clientReadUncached.fetch<number>(
+      // groq-global: platform-wide retention sweep (dry-run count) — same
+      // cross-tenant scope as the delete below.
+      `count(*[${filter}])`,
+      { cutoff, types },
+    )
+    return { deleted: count ?? 0 }
+  }
 
   let deleted = 0
   for (let batch = 0; batch < RETENTION_MAX_BATCHES; batch++) {
     const ids = await clientReadUncached.fetch<string[]>(
       // groq-global: platform-wide retention sweep — the daily cron deletes
       // every tenant's expired notifications by design (no request tenant).
-      `*[_type == "notification" && createdAt < $cutoff && !(notificationType == "message_received" && !defined(readAt))][0...${RETENTION_DELETE_BATCH_SIZE}]._id`,
-      { cutoff },
+      `*[${filter}][0...${RETENTION_DELETE_BATCH_SIZE}]._id`,
+      { cutoff, types },
     )
 
     if (!ids || ids.length === 0) {
