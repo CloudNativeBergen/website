@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "konf-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "env": {
+    "preview": {
+      "name": "konf-api-preview",
+      "workers_dev": true,
+    },
+    "production": {
+      "name": "konf-api",
+      "routes": [{ "pattern": "api.konf.app", "custom_domain": true }],
+    },
+  },
+}
