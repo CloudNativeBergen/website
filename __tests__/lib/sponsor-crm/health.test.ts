@@ -43,6 +43,27 @@ describe('auditSponsorHealth', () => {
     expect(violations[0].missing.some((m) => m.field === 'tier')).toBe(true)
   })
 
+  it.each(['paid', 'overdue'] as const)(
+    'flags a %s invoice on an unsigned contract (#1097)',
+    (invoiceStatus) => {
+      const violations = auditSponsorHealth([
+        makeSfc({
+          contractStatus: 'contract-sent',
+          contractValue: 10000,
+          tier,
+          billing: { email: 'billing@acme.test' },
+          invoiceStatus,
+        } as Partial<SponsorForConferenceExpanded>),
+      ])
+
+      const invoice = violations.filter((v) => v.axis === 'invoice')
+      expect(invoice).toHaveLength(1)
+      // The real state is reported, not the `sent` it is checked under.
+      expect(invoice[0].state).toBe(invoiceStatus)
+      expect(invoice[0].missing.map((m) => m.field)).toEqual(['contractStatus'])
+    },
+  )
+
   it('returns no violations when every sponsor is healthy', () => {
     const violations = auditSponsorHealth([
       makeSfc({ status: 'negotiating' }),

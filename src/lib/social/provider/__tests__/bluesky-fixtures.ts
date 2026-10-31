@@ -2,14 +2,20 @@ import { delay, http, HttpResponse, type HttpHandler } from 'msw'
 import { server } from '../../../../../__tests__/mocks/msw/server'
 
 /**
- * Recorded-shape fixtures for the Bluesky PDS (`bsky.social`) XRPC calls the
+ * Recorded-shape fixtures for the Bluesky PDS XRPC calls the
  * adapter makes, plus the CDN and page hosts it fetches bytes from. Response
  * bodies follow the lexicons (`com.atproto.server.createSession`,
  * `com.atproto.repo.uploadBlob`, `com.atproto.repo.createRecord`) closely
  * enough for `@atproto/api`'s own response validation to accept them.
  */
 
-export const PDS = 'https://bsky.social'
+/**
+ * A reserved `.test` host, never the real `bsky.social`: the global MSW setup
+ * BYPASSES unhandled requests, so a handler that stopped matching would
+ * otherwise reach the live service with the fixture credentials (#1203).
+ * Tests pass it to the adapter as `service`.
+ */
+export const PDS = 'https://pds.test'
 export const XRPC = `${PDS}/xrpc`
 
 export const DID = 'did:plc:z72i7hdynmk6r22z27h6tvur'
@@ -218,6 +224,13 @@ export function pds(behaviour: PdsBehaviour = {}): Recorded {
         )
       },
     ),
+    // Last, so it only sees what no handler above matched: fail loudly
+    // instead of letting the request fall through.
+    http.all(`${PDS}/*`, ({ request }) => {
+      throw new Error(
+        `Unhandled fake PDS request: ${request.method} ${request.url}`,
+      )
+    }),
   ]
   server.use(...handlers)
   return recorded
