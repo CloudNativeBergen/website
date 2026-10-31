@@ -105,7 +105,7 @@ Then open `http://localhost:3000/f/<code>` with the Feedback Code of one of the 
 
 This project uses **Turbopack** for both development and production builds to ensure consistent CSS generation with Tailwind CSS v4. A known incompatibility exists between Turbopack (used in dev) and Webpack (Vercel's default production bundler) that causes Tailwind classes to be missing in production.
 
-**The fix is already in place** via `experimental.turbo: {}` in `next.config.ts`.
+**The fix is already in place** via the top-level `turbopack` option in `next.config.ts`.
 
 ### VS Code Configuration
 
@@ -195,7 +195,7 @@ sanity deploy
 
 ## Models
 
-Models are defined in `lib/<type>/types.ts` and in `sanity/schemaTypes/<type>.ts` for the representation in Sanity Studio.
+Models are defined in `src/lib/<type>/types.ts` and in `sanity/schemaTypes/<type>.ts` for the representation in Sanity Studio.
 
 ## Sanity Migrations
 
@@ -244,7 +244,7 @@ npx sanity@latest migration run add-required-conference-reference-to-talks
 
 When prompted, provide your Sanity auth token. The migration will process the documents and report the changes made.
 
-For more details about available migrations and creating new ones, see [Sanity Migrations Documentation](./sanity/migrations/README.md).
+Migrations live in [`migrations/`](./migrations), one directory per migration. See the [Sanity migration docs](https://www.sanity.io/docs/schema-and-content-migrations) for writing new ones.
 
 ### Learning Resources
 
@@ -265,7 +265,7 @@ openssl rand -base64 32 | fnox set AUTH_SECRET --
 
 ### New providers
 
-To add a new provider, add it to `lib/auth.ts` and store the credentials in the keychain:
+To add a new provider, add it to `src/lib/auth.ts` and store the credentials in the keychain:
 
 ```bash
 fnox set AUTH_MY_PROVIDER_ID -- "your-id"
