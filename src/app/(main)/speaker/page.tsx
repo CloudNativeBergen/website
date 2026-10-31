@@ -1,3 +1,4 @@
+import { resolvePageMetadata } from '@/lib/seo/brand'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
@@ -15,10 +16,15 @@ import { BreadcrumbJsonLd } from '@/components/seo/BreadcrumbJsonLd'
 import { canonicalAlternates, canonicalUrl } from '@/lib/seo/canonical'
 
 export async function generateMetadata(): Promise<Metadata> {
+  const { title, description } = await resolvePageMetadata(
+    'Speakers',
+    'Meet the speakers at',
+  )
   return {
-    title: 'Speakers',
-    description: 'Meet the speakers sharing their expertise.',
+    title: { absolute: title },
+    description,
     alternates: await canonicalAlternates('/speaker'),
+    openGraph: { title, description },
     twitter: {
       card: 'summary_large_image',
     },
@@ -43,8 +49,11 @@ async function CachedSpeakersContent({ domain }: { domain: string }) {
   }
 
   const { speakers, err } = await getSpeakers(conference._id)
+  // A failed read is not "no speakers" (#832). Throwing keeps the failure out
+  // of the 'use cache' entry and lets (main)/error.tsx show a retry state
+  // instead of the not-announced notice.
   if (err) {
-    console.error(err)
+    throw err
   }
 
   const speakersWithTalks: SpeakerWithTalks[] = speakers.map((speaker) => ({

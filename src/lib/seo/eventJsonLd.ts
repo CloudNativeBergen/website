@@ -42,6 +42,42 @@ export interface BuildEventJsonLdOptions {
   performers?: EventPerformer[]
 }
 
+function organizationFields(
+  conference: Conference,
+  siteUrl: string,
+): Record<string, unknown> {
+  const organization: Record<string, unknown> = {
+    '@type': 'Organization',
+    name: conference.organizer,
+    url: siteUrl,
+  }
+  if (conference.socialLinks && conference.socialLinks.length > 0) {
+    organization.sameAs = conference.socialLinks
+  }
+  return organization
+}
+
+/**
+ * Builds the top-level schema.org `Organization` for the hub page (#398): the
+ * same organizer the Event names, plus the per-host PWA icon as `logo`.
+ *
+ * @see https://schema.org/Organization
+ */
+export function buildOrganizationJsonLd({
+  conference,
+  domain,
+}: Pick<BuildEventJsonLdOptions, 'conference' | 'domain'>): Record<
+  string,
+  unknown
+> {
+  const siteUrl = canonicalOrigin(conference, domain)
+  return {
+    '@context': 'https://schema.org',
+    ...organizationFields(conference, siteUrl),
+    logo: `${siteUrl}/pwa/icon/512`,
+  }
+}
+
 /**
  * Builds a schema.org `Event` JSON-LD object from conference data.
  *
@@ -63,14 +99,7 @@ export function buildEventJsonLd({
   // Same origin as the page's canonical link, not the request host.
   const siteUrl = canonicalOrigin(conference, domain)
 
-  const organizer: Record<string, unknown> = {
-    '@type': 'Organization',
-    name: conference.organizer,
-    url: siteUrl,
-  }
-  if (conference.socialLinks && conference.socialLinks.length > 0) {
-    organizer.sameAs = conference.socialLinks
-  }
+  const organizer = organizationFields(conference, siteUrl)
 
   const jsonLd: Record<string, unknown> = {
     '@context': 'https://schema.org',

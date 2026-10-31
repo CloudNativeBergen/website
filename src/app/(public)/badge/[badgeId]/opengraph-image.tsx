@@ -3,7 +3,7 @@ import { ImageResponse } from 'next/og'
 import { getBadgeById, getBadgeSVGUrl } from '@/lib/badge/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
-import { ogBrandColors } from '@/lib/og/brand'
+import { ogBrandColors, OG_SMALL_TEXT_SCRIM } from '@/lib/og/brand'
 import { notFound } from 'next/navigation'
 import { connection } from 'next/server'
 
@@ -179,9 +179,9 @@ export default async function Image({
           position: 'absolute',
           top: '40px',
           left: '60px',
+          ...OG_SMALL_TEXT_SCRIM,
           fontSize: '16px',
           fontWeight: '600',
-          opacity: 0.8,
           textShadow: STYLES.shadow.textSmall,
           display: 'flex',
           whiteSpace: 'nowrap',
@@ -334,14 +334,15 @@ export default async function Image({
           justifyContent: 'center',
           fontSize: '16px',
           fontWeight: '500',
-          opacity: 0.7,
           textAlign: 'center',
           fontFamily: STYLES.fontFamily,
           textShadow: STYLES.shadow.textSmall,
         }}
       >
-        Cryptographically verified digital credential compliant with W3C
-        Verifiable Credentials 2.0
+        <div style={{ ...OG_SMALL_TEXT_SCRIM, display: 'flex' }}>
+          Cryptographically verified digital credential compliant with W3C
+          Verifiable Credentials 2.0
+        </div>
       </div>
     </div>,
     size,
