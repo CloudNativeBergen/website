@@ -126,6 +126,29 @@ describe('speaker briefing procedures', () => {
     })
   })
 
+  it('refuses to send once the conference has ended (Oslo date)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      getConferenceMock.mockResolvedValue({
+        conference: { ...CONFERENCE, endDate: '2026-06-10' },
+        domain: 'a.example.com',
+        error: null,
+      })
+      // 23:30 UTC on the last day is already the next day in Oslo.
+      vi.setSystemTime(new Date('2026-06-10T21:30:00Z'))
+      await caller().sendBriefing()
+      expect((await caller().briefingSpeakers()).ended).toBe(false)
+      vi.setSystemTime(new Date('2026-06-10T22:30:00Z'))
+      await expect(caller().sendBriefing()).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+      })
+      expect((await caller().briefingSpeakers()).ended).toBe(true)
+      expect(b.send).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('refuses an organizer of another org', async () => {
     await expect(caller(true, ['org-B']).sendBriefing()).rejects.toThrow()
     await expect(caller(false, []).previewBriefing({})).rejects.toThrow()

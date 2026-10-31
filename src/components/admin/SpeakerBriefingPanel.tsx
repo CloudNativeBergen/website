@@ -44,13 +44,22 @@ export function SpeakerBriefingPanel() {
       )}
 
       <div className="flex flex-wrap items-center gap-3">
-        <AdminButton onClick={() => setOpen(true)} disabled={!data}>
+        <AdminButton
+          onClick={() => setOpen(true)}
+          disabled={!data || data.ended}
+          aria-describedby={data?.ended ? 'briefing-ended' : undefined}
+        >
           {changed ? 'Send update…' : 'Send speaker info…'}
         </AdminButton>
-        <span className="text-sm text-gray-600 dark:text-gray-400">
-          {total === 0
-            ? 'No confirmed speakers yet.'
-            : `${current} of ${total} confirmed speakers have the current version.`}
+        <span
+          id={data?.ended ? 'briefing-ended' : undefined}
+          className="text-sm text-gray-600 dark:text-gray-400"
+        >
+          {data?.ended
+            ? 'The conference has ended, so speaker info can no longer be emailed. The send history is deleted 60 days after the event, and a new send would reach every speaker again.'
+            : total === 0
+              ? 'No confirmed speakers yet.'
+              : `${current} of ${total} confirmed speakers have the current version.`}
         </span>
       </div>
 

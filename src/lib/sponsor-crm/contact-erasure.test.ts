@@ -69,6 +69,17 @@ vi.mock('@/lib/email/audience', () => ({
   removeContactFromAudience: audience.remove,
 }))
 
+const signing = vi.hoisted(() => ({
+  cancel: vi.fn<(id: string) => Promise<void>>(async () => {}),
+  log: vi.fn<(...args: unknown[]) => Promise<object>>(async () => ({})),
+}))
+vi.mock('@/lib/contract-signing', () => ({
+  getSigningProvider: () => ({ cancelAgreement: signing.cancel }),
+}))
+vi.mock('@/lib/sponsor-crm/activity', () => ({
+  logSignatureStatusChange: signing.log,
+}))
+
 import {
   eraseSponsorContactSendRecords,
   sponsorContactMatchSet,
@@ -87,7 +98,14 @@ type Doc = {
 }
 
 let world: Doc[]
-let signers: Array<{ _id: string; _rev: string; signerEmail: string }>
+let signers: Array<{
+  _id: string
+  _rev: string
+  signerEmail: string
+  signatureId?: string
+  signatureStatus?: string
+  orgId?: string
+}>
 
 function record(overrides: Partial<Doc> = {}): Doc {
   return {
@@ -380,5 +398,94 @@ describe('the stored agreement signer (#1282)', () => {
       { id: 'sfc-1', rev: 'sfc-rev', unset: ['signerEmail', 'signerName'] },
     ])
     expect(result.residual).toBe(0)
+  })
+
+  it('revokes a pending agreement to the erased signer, never a signed one', async () => {
+    signers = [
+      {
+        _id: 'sfc-1',
+        _rev: 'r1',
+        signerEmail: 'kari@sponsor.no',
+        signatureId: 'tok-1',
+        signatureStatus: 'pending',
+      },
+      {
+        _id: 'sfc-2',
+        _rev: 'r2',
+        signerEmail: 'kari@sponsor.no',
+        signatureId: 'tok-2',
+        signatureStatus: 'signed',
+      },
+    ]
+    signing.cancel.mockImplementation(async () => {
+      signers[0] = { ...signers[0], _rev: 'r1b', signatureStatus: 'rejected' }
+    })
+    commitMock.mockImplementation(async () => {
+      signers = []
+    })
+
+    const preview = await eraseSponsorContactSendRecords({
+      emails: ['kari@sponsor.no'],
+      actor: 'organizer:sp-9',
+      dryRun: true,
+    })
+    expect(preview.revocations.map((r) => r.id)).toEqual(['sfc-1'])
+    expect(signing.cancel).not.toHaveBeenCalled()
+
+    const result = await eraseSponsorContactSendRecords({
+      emails: ['kari@sponsor.no'],
+      actor: 'organizer:sp-9',
+    })
+    expect(result.err).toBeNull()
+    expect(signing.cancel).toHaveBeenCalledTimes(1)
+    expect(signing.cancel).toHaveBeenCalledWith('tok-1')
+    expect(signing.log).toHaveBeenCalledWith(
+      'sfc-1',
+      'pending',
+      'rejected',
+      'sp-9',
+    )
+    // The guarded redaction uses the revision after the revocation.
+    expect(patchOps.find((p) => p.id === 'sfc-1')?.rev).toBe('r1b')
+    expect(result.residual).toBe(0)
+  })
+
+  it('keeps to one organization from the Privacy page', async () => {
+    signers = [
+      {
+        _id: 'sfc-other',
+        _rev: 'r',
+        signerEmail: 'kari@sponsor.no',
+        signatureId: 'tok-x',
+        signatureStatus: 'pending',
+        orgId: 'org-B',
+      },
+    ]
+    const result = await eraseSponsorContactSendRecords({
+      emails: ['kari@sponsor.no'],
+      actor: 'organizer:sp-9',
+      organizationId: 'org-A',
+    })
+    expect(result.revocations).toEqual([])
+    expect(signing.cancel).not.toHaveBeenCalled()
+  })
+
+  it('redacts nothing when the revocation fails', async () => {
+    signers = [
+      {
+        _id: 'sfc-1',
+        _rev: 'r1',
+        signerEmail: 'kari@sponsor.no',
+        signatureId: 'tok-1',
+        signatureStatus: 'pending',
+      },
+    ]
+    signing.cancel.mockRejectedValueOnce(new Error('provider down'))
+    const result = await eraseSponsorContactSendRecords({
+      emails: ['kari@sponsor.no'],
+      actor: 'ops',
+    })
+    expect(result.err?.message).toBe('provider down')
+    expect(commitMock).not.toHaveBeenCalled()
   })
 })
