@@ -36,7 +36,10 @@ export default async function Signin(props: {
             </div>
 
             {error && (
-              <div className="mt-8 rounded-2xl bg-red-50 p-4 dark:bg-red-900/20">
+              <div
+                role="alert"
+                className="mt-8 rounded-2xl bg-red-50 p-4 dark:bg-red-900/20"
+              >
                 <p className="text-sm text-red-800 dark:text-red-300">
                   {/*
                     Deliberately GENERIC for the email path: expired, already

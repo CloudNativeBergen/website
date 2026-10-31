@@ -360,6 +360,17 @@ function RequestCard({
           : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
       }`}
       onClick={onSelect}
+      // A <button> can't hold the heading and paragraphs inside, so the row
+      // keeps its markup and gets button semantics and keys instead.
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">

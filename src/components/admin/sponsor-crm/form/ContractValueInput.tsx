@@ -21,11 +21,15 @@ export function ContractValueInput({
 }: ContractValueInputProps) {
   return (
     <div>
-      <label className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
+      <label
+        htmlFor="contract-value"
+        className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white"
+      >
         Contract Value
       </label>
       <div className="mt-1.5 flex gap-2">
         <input
+          id="contract-value"
           type="number"
           value={value}
           onChange={(e) => onValueChange(e.target.value)}

@@ -186,9 +186,9 @@ export default async function NewProposalPage({
               />
             </div>
             <div className="ml-4">
-              <h3 className="font-space-grotesk text-lg font-semibold text-blue-900 dark:text-blue-200">
+              <h2 className="font-space-grotesk text-lg font-semibold text-blue-900 dark:text-blue-200">
                 {loadingError.type}
-              </h3>
+              </h2>
               <div className="font-inter mt-2 text-blue-800 dark:text-blue-300">
                 <p>{loadingError.message}</p>
                 {loadingError.link && (

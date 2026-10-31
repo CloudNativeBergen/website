@@ -9,6 +9,7 @@ interface SearchInputProps {
   autoFocus?: boolean
   id?: string
   showClearButton?: boolean
+  'aria-label'?: string
 }
 
 export function SearchInput({
@@ -20,6 +21,7 @@ export function SearchInput({
   autoFocus,
   id,
   showClearButton,
+  'aria-label': ariaLabel,
 }: SearchInputProps) {
   return (
     <div className={`relative ${className}`}>
@@ -28,6 +30,7 @@ export function SearchInput({
         id={id}
         type="text"
         placeholder={placeholder}
+        aria-label={ariaLabel ?? (id ? undefined : placeholder)}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         autoFocus={autoFocus}
