@@ -10,7 +10,7 @@ import {
 } from '@/lib/marketing/notifications'
 
 /**
- * Per-minute social publish reconciliation (dashboard #785). Every tick fails
+ * Five-minute social publish reconciliation (dashboard #785). Every tick fails
  * stale `publishing` claims, runs the CONFIRM sweep over variants an
  * asynchronous publisher accepted but has not settled (#1128) — before
  * dispatch, capped, and with each vendor read timed out so it cannot starve

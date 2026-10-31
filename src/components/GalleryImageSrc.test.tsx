@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
-import { createImageUrlBuilder } from '@sanity/image-url'
+import { builder as imageBuilder } from '../../__tests__/mocks/sanity-image-url'
 import { ImageCarousel } from '@/components/ImageCarousel'
 import { SimpleImageCarousel } from '@/components/SimpleImageCarousel'
 import { GalleryModal } from '@/components/GalleryModal'
@@ -42,9 +42,7 @@ vi.mock('@/lib/trpc/client', () => ({
 const MOCK_CDN_URL = 'https://cdn.sanity.io/images/mock/image.png'
 
 function builderCalls(method: 'width' | 'height' | 'quality' | 'fit' | 'auto') {
-  const builder = vi.mocked(createImageUrlBuilder).mock.results[0]
-    .value as Record<string, ReturnType<typeof vi.fn>>
-  return builder[method].mock.calls.map((call) => call[0])
+  return imageBuilder[method].mock.calls.map((call) => call[0])
 }
 
 /** A 1x1 transparent PNG — an allowed inline raster type. */
@@ -109,8 +107,7 @@ function rejectedImage(imageUrl: string): GalleryImageWithSpeakers {
 }
 
 beforeEach(() => {
-  const builder = vi.mocked(createImageUrlBuilder).mock.results[0]
-    .value as Record<string, ReturnType<typeof vi.fn>>
+  const builder = imageBuilder
   for (const method of [
     'image',
     'width',
