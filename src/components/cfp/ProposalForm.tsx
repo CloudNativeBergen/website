@@ -1,7 +1,7 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
-import { Conference } from '@/lib/conference/types'
+import type { CfpConference } from '@/lib/conference/logo'
 import { isCfpOpen, isWithdrawalCutoffActive } from '@/lib/conference/state'
 import { api } from '@/lib/trpc/client'
 import {
@@ -51,7 +51,7 @@ export function ProposalForm({
   initialSpeaker: SpeakerInput
   proposalId?: string
   userEmail: string
-  conference: Conference
+  conference: CfpConference
   /** See `ProposalDetailsForm` — optional, a conference may offer no formats. */
   allowedFormats?: Format[]
   currentUserSpeaker: Speaker

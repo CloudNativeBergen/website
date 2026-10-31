@@ -77,3 +77,44 @@ export function pickHeaderConference(conference: Conference): HeaderConference {
     registrationLink,
   }
 }
+
+/**
+ * Exactly the fields the CFP proposal pages' client components
+ * (`ProposalForm`, `ProposalDetailsForm`, `ProposalGuidanceSidebar`) read
+ * (#980). The audience is signed-in speakers, who have no business reading
+ * `agentConfig` or `checkinCustomerId` either.
+ */
+export type CfpConference = Pick<
+  Conference,
+  | 'cfpStartDate'
+  | 'cfpEndDate'
+  | 'cfpNotifyDate'
+  | 'cfpEmail'
+  | 'startDate'
+  | 'endDate'
+  | 'formats'
+  | 'topics'
+>
+
+export function pickCfpConference(conference: Conference): CfpConference {
+  const {
+    cfpStartDate,
+    cfpEndDate,
+    cfpNotifyDate,
+    cfpEmail,
+    startDate,
+    endDate,
+    formats,
+    topics,
+  } = conference
+  return {
+    cfpStartDate,
+    cfpEndDate,
+    cfpNotifyDate,
+    cfpEmail,
+    startDate,
+    endDate,
+    formats,
+    topics,
+  }
+}
