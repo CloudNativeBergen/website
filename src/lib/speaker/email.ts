@@ -84,3 +84,13 @@ export function uniqueEmails(emails: (string | null | undefined)[]): string[] {
   }
   return [...set]
 }
+
+/**
+ * GROQ guard for the display-`email` arm of the login match-set (#807). The
+ * display email can be set by an organizer without proof of ownership, so it
+ * only counts while the speaker has no verified `knownEmails` yet: the invited,
+ * never-signed-in placeholder. Once anyone has signed in, only `knownEmails`
+ * matches.
+ */
+export const DISPLAY_EMAIL_MATCHABLE =
+  '(!defined(knownEmails) || count(knownEmails) == 0)'

@@ -55,6 +55,9 @@ export default defineType({
       description:
         'OAuth providers linked to this account (e.g., github, linkedin)',
       of: [{ type: 'string' }],
+      // Login identity keys, written only by sign-in. Editing one in Studio
+      // would bind an arbitrary account to this speaker (#814).
+      readOnly: true,
       hidden: ({ currentUser }) => {
         return !(
           currentUser != null &&

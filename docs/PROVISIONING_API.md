@@ -119,12 +119,13 @@ entries in `challenges` with no TXT record to publish.
 
 **Opacity is scoped to the unauthenticated.** Every authentication failure produces a byte-identical `401 {"error":"unauthorized"}`, so a prober cannot learn whether the endpoint is configured, whether their token shape was accepted, or whether a slug or domain exists. Once a caller has proven it holds the secret it is trusted platform infrastructure, and conflicts are named — the control panel legitimately has to render "that slug is taken".
 
-**Two rate limits**, both durable (Sanity-backed, revision-conditioned CAS — an in-process counter is not a limit in a serverless deployment):
+**Three rate limits**, all durable (Sanity-backed, revision-conditioned CAS — an in-process counter is not a limit in a serverless deployment):
 
+- `attempt-global`, a **single global** bucket charged **before** the per-IP one — 30/min, 300/hour. The per-IP bucket costs one document per distinct `x-forwarded-for` value, which the caller controls; once this cap trips, no further per-IP documents are created (#776).
 - `attempt`, bucketed by client IP, charged **before** the token is compared — 10/min, 60/hour, 300/day. This is the bound on brute-forcing the secret. A missing IP charges a shared `unknown` bucket rather than skipping the limit.
 - `create`, a **single global** bucket, charged after authentication and after validation — 5/min, 30/hour, 100/day. This is the bound on bulk tenant minting if the secret leaks, and it is deliberately not keyed on anything the caller can rotate.
 
-Both **fail closed** in either direction, unlike the email sign-in limiter (which fails open on a read outage because locking everybody out of sign-in is worse than an absent cap). Here the guarded operation is a rare privileged write, so refusing it during an outage costs a retry and nothing else.
+All **fail closed** in either direction, unlike the email sign-in limiter (which fails open on a read outage because locking everybody out of sign-in is worse than an absent cap). Here the guarded operation is a rare privileged write, so refusing it during an outage costs a retry and nothing else.
 
 ## Idempotency
 
@@ -142,7 +143,9 @@ Nothing about the caller's key is stored — only its salted hash, which is alre
 
 ## Residual risk
 
-Global slug and domain uniqueness are still enforced by a read-then-write check inside the transaction's preamble, not by a database constraint (Sanity has none). Two requests with **different** idempotency keys racing on the **same** slug can therefore both pass the check. The idempotency receipt does not close this — it is keyed on the request, not the slug. In practice the wizard and the control panel both preflight, and the window is milliseconds; closing it properly means deriving the organization's `_id` from its slug so Sanity's create-CAS enforces uniqueness, which is a follow-up.
+Slug uniqueness is a constraint: the organization's `_id` is `organization.<slug>`, so two requests with **different** idempotency keys racing on the same slug collide on Sanity's create-CAS and the loser gets `slug_taken` (#777). Organizations created before this keep their random ids; lookups go by slug, not id.
+
+Domain uniqueness is still a read-then-write check, not a constraint (Sanity has none). Two requests with different slugs racing on the **same custom domain** can both pass it. Minted platform hosts derive from the slug, so they are covered by the slug constraint; only caller-supplied domains remain exposed. The window is milliseconds and the only caller is kontroll.
 
 ---
 

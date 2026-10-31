@@ -474,7 +474,11 @@ export async function provisionOrganization(
   const { organization, conference, speaker } = buildOnboardingDocuments(
     { ...input, domains },
     {
-      organizationId: generateKey('organization'),
+      // DETERMINISTIC from the slug, so two concurrent provisions of the same
+      // slug under DIFFERENT idempotency keys collide on `create` and only one
+      // commits (#777). Organizations created before this keep their random
+      // ids; nothing looks an organization up by this id pattern.
+      organizationId: `organization.${input.organization.slug}`,
       conferenceId: generateKey('conference'),
       speakerId: generateKey('speaker'),
       mintKey: () => generateKey('key'),
@@ -539,6 +543,14 @@ export async function provisionOrganization(
           ),
           replayed: true,
         }
+      }
+    }
+    // A concurrent provision under a different key took the same slug first:
+    // its organization now holds the id this transaction tried to create.
+    if (await isOrgSlugTaken(input.organization.slug).catch(() => false)) {
+      return {
+        ok: false,
+        rejection: { code: 'slug_taken', slug: input.organization.slug },
       }
     }
     return { ok: false, rejection: { code: 'commit_failed', cause: error } }

@@ -20,6 +20,7 @@ import {
   clientIpFromHeaders,
   deleteExpiredEmailSignInRateLimits,
 } from '@/lib/auth/email-link/rateLimit'
+import { rateLimitKey } from '@/lib/auth/email-link/token'
 
 const NOW = 1_700_000_000_000
 const MIN = 60_000
@@ -219,9 +220,34 @@ describe('email sign-in rate limiting', () => {
       clientIp: '203.0.113.7',
       now: NOW + 1_000,
     })
-    // The denied second request added no hits anywhere.
+    // The denied second request added no hits to the address or IP bucket
+    // (only the global bucket, which is charged first, saw it).
+    const globalId = rateLimitKey('global', 'global')
     expect(store.size).toBe(afterFirst)
-    expect([...store.values()].every((b) => b.hits.length === 1)).toBe(true)
+    expect(store.get(globalId)?.hits).toHaveLength(2)
+    expect(
+      [...store.entries()]
+        .filter(([id]) => id !== globalId)
+        .every(([, b]) => b.hits.length === 1),
+    ).toBe(true)
+  })
+
+  it('stops creating per-address and per-IP buckets once the global cap trips (#776)', async () => {
+    const store = withBucketStore()
+    const results = []
+    for (let i = 0; i < 70; i++) {
+      results.push(
+        await checkEmailLinkRateLimit({
+          normalizedEmail: `bogus${i}@example.com`,
+          clientIp: `10.0.${i}.1`,
+          now: NOW + i,
+        }),
+      )
+    }
+    // Global cap is 60/minute: 60 address + 60 IP buckets, plus the global one.
+    expect(results.filter((r) => r.allowed)).toHaveLength(60)
+    expect(results.at(-1)).toEqual({ allowed: false, scope: 'global' })
+    expect(store.size).toBe(121)
   })
 
   it('FAILS OPEN when the store is unreachable (abuse control, not an auth gate)', async () => {
@@ -242,7 +268,7 @@ describe('email sign-in rate limiting', () => {
         normalizedEmail: 'user@example.com',
         now: NOW,
       }),
-    ).toEqual({ allowed: false, scope: 'email' })
+    ).toEqual({ allowed: false, scope: 'global' })
   })
 
   it('reads the client IP from the proxy chain, degrading to none', () => {
@@ -308,7 +334,7 @@ describe('email sign-in rate limiting under concurrency', () => {
 
     // And the bucket REMEMBERS it — the failure that made the caps unable to
     // accumulate was the burst leaving a single-hit bucket behind.
-    const bucket = [...store.values()][0]
+    const bucket = store.get(rateLimitKey('email', email))!
     expect(bucket.hits).toHaveLength(1)
     expect(bucket.hits[0]).toBe(NOW)
   })

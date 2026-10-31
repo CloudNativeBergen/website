@@ -6,6 +6,7 @@ import {
 import {
   EMAIL_RATE_LIMIT_RULES,
   EMAIL_SIGN_IN_RATE_LIMIT_TYPE,
+  GLOBAL_RATE_LIMIT_RULES,
   IP_RATE_LIMIT_RULES,
 } from './constants'
 import { rateLimitKey } from './token'
@@ -32,7 +33,7 @@ import { rateLimitKey } from './token'
  * absent either way), a write outage would hand them the whole mailbox.
  */
 async function hitBucket(
-  scope: 'email' | 'ip',
+  scope: 'email' | 'ip' | 'global',
   subject: string,
   rules: readonly RateLimitRule[],
   now: number,
@@ -66,13 +67,20 @@ async function hitBucket(
  * A missing/unparseable client IP charges only the address bucket. Trusting a
  * spoofable header to LOCK PEOPLE OUT would be the wrong failure direction; the
  * address limit is the one that actually protects a targeted mailbox.
+ *
+ * A fixed GLOBAL bucket is charged before either, so once a flood trips it no
+ * further per-address or per-IP documents are created.
  */
 export async function checkEmailLinkRateLimit(params: {
   normalizedEmail: string
   clientIp?: string | null
   now?: number
-}): Promise<{ allowed: boolean; scope?: 'email' | 'ip' }> {
+}): Promise<{ allowed: boolean; scope?: 'email' | 'ip' | 'global' }> {
   const now = params.now ?? Date.now()
+
+  if (!(await hitBucket('global', 'global', GLOBAL_RATE_LIMIT_RULES, now))) {
+    return { allowed: false, scope: 'global' }
+  }
 
   if (
     !(await hitBucket(

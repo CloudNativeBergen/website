@@ -595,6 +595,20 @@ describe('provisioning API — a replayed request never creates a second tenant'
     expect(new Set([a.status, b.status])).toEqual(new Set([201, 200]))
   })
 
+  it('creates ONE tenant when two DIFFERENT keys race for the same slug (#777)', async () => {
+    const [a, b] = await Promise.all([
+      POST(request()),
+      POST(request({ key: 'a-racing-second-key-0123456789' })),
+    ])
+
+    expect(ofType('organization')).toHaveLength(1)
+    expect(ofType('organization')[0]._id).toBe('organization.cloud-native-oslo')
+    expect(ofType('conference')).toHaveLength(1)
+    expect(new Set([a.status, b.status])).toEqual(new Set([201, 409]))
+    const loser = a.status === 409 ? a : b
+    await expect(loser.json()).resolves.toMatchObject({ code: 'slug_taken' })
+  })
+
   it('lets a DIFFERENT key through — idempotency must not become a global lock', async () => {
     await POST(request())
     const res = await POST(
@@ -957,5 +971,25 @@ describe('provisioning API — the abuse control cannot be evaded or outaged awa
     expect(ofType('conference')).toHaveLength(5)
     expect(statuses.filter((s) => s === 201)).toHaveLength(5)
     expect(statuses.filter((s) => s === 429)).toHaveLength(3)
+  })
+  it('stops minting per-IP buckets once the GLOBAL attempt cap trips (#776)', async () => {
+    // Each spoofed `x-forwarded-for` value would otherwise cost one document.
+    const statuses: number[] = []
+    for (let i = 0; i < 40; i++) {
+      const res = await POST(
+        request({
+          ip: `10.${i >> 8}.${i & 255}.1`,
+          token: `bogus-flood-${i}-padded-out-abcdefghij`,
+        }),
+      )
+      statuses.push(res.status)
+    }
+
+    const buckets = ofType(RATE_LIMIT_TYPE)
+    // The global cap is 30/minute: 30 per-IP buckets, plus the one global.
+    expect(buckets.filter((d) => d.scope === 'attempt')).toHaveLength(30)
+    expect(buckets.filter((d) => d.scope === 'attempt-global')).toHaveLength(1)
+    expect(statuses.filter((s) => s === 429)).toHaveLength(10)
+    expect(statuses.filter((s) => s === 401)).toHaveLength(30)
   })
 })

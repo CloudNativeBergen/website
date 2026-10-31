@@ -71,6 +71,19 @@ export const IP_RATE_LIMIT_RULES = [
   { windowSeconds: 24 * 60 * 60, max: 60 },
 ] as const
 
+/**
+ * ONE fixed bucket for every request, charged BEFORE the per-address and
+ * per-IP buckets. Both of those cost a document per distinct subject, and the
+ * subject (any address, any `x-forwarded-for`) is caller-controlled, so this cap
+ * is what bounds how many documents an unauthenticated flood can create. Sized
+ * far above real sign-in traffic; tripping it pauses link mail for everyone, so
+ * it must stay generous.
+ */
+export const GLOBAL_RATE_LIMIT_RULES = [
+  { windowSeconds: 60, max: 60 },
+  { windowSeconds: 60 * 60, max: 600 },
+] as const
+
 /** Sanity document types owned by this feature. */
 export const EMAIL_SIGN_IN_TOKEN_TYPE = 'emailSignInToken'
 export const EMAIL_SIGN_IN_RATE_LIMIT_TYPE = 'emailSignInRateLimit'

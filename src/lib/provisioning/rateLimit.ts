@@ -8,6 +8,7 @@ import {
   INVALIDATION_ATTEMPT_RULES,
   INVALIDATION_RULES,
   PROVISIONING_ATTEMPT_RULES,
+  PROVISIONING_GLOBAL_ATTEMPT_RULES,
   PROVISIONING_CREATE_RULES,
   PROVISIONING_RATE_LIMIT_TYPE,
 } from './constants'
@@ -55,9 +56,11 @@ function bucketId(scope: string, subject: string): string {
 
 /** The four counter families. The scope is part of the bucket-id digest, so
  * each one gets its own document even for the same subject. */
-type BucketScope = 'attempt' | 'create' | 'invalidate-attempt' | 'invalidate'
+type BucketScope =
+  'attempt-global' | 'attempt' | 'create' | 'invalidate-attempt' | 'invalidate'
 
 const RULES_BY_SCOPE: Record<BucketScope, readonly RateLimitRule[]> = {
+  'attempt-global': PROVISIONING_GLOBAL_ATTEMPT_RULES,
   attempt: PROVISIONING_ATTEMPT_RULES,
   create: PROVISIONING_CREATE_RULES,
   'invalidate-attempt': INVALIDATION_ATTEMPT_RULES,
@@ -96,11 +99,15 @@ async function hit(
  * skipping the limit: unlike sign-in (where the address bucket is the real
  * protection and a spoofable header must not lock anyone out), this endpoint
  * has no other pre-auth subject, so "no IP" must still be metered.
+ *
+ * The fixed global bucket is charged FIRST: once it denies, no per-IP document
+ * is created, so rotating `x-forwarded-for` cannot mint documents without bound.
  */
 export async function chargeProvisioningAttempt(
   clientIp: string | undefined,
   now: number = Date.now(),
 ): Promise<boolean> {
+  if (!(await hit('attempt-global', 'global', now))) return false
   return hit('attempt', clientIp?.trim() || 'unknown', now)
 }
 
