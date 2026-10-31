@@ -144,6 +144,8 @@ Adjust as needed; document exceptions.
 - Raw video/photo assets: 12–24 months, then keep only mastered/publication versions needed for archive
 - Safety/incident logs: 3 years unless legal need requires longer
 - Session Feedback (anonymous colour and optional comment per session): 24 months after the conference ends, then folded into per-session totals and deleted (daily `/api/cron/feedback-fold`); earlier when every speaker of the session is erased (speaker erasure, [runbook](./SPEAKER_ERASURE_RUNBOOK.md) step 3d). A session held by a scheduled Content Release keeps its responses until the release is published or archived; answers a session got before it was moved to another conference are deleted only on request (runbook step 3d has the commands).
+- In-app notifications: 90 days after creation; 30 days for `system`, `marketing_task_overdue`, `marketing_task_due`, `message_stale` and `workshop_capacity`. An unread new-message notification is kept until read (daily `/api/cron/cleanup-notifications`)
+- Speaker reminder delivery log (`scheduledReminderLog`): 60 days after the conference ends (same cron)
 - Content judgements: with their content; orphans deleted daily by `/api/cron/content-judgement-sweep`
 - Agreement tally: indefinitely (counts only)
 
