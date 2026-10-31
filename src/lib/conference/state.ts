@@ -44,6 +44,8 @@ export function isWithdrawalCutoffActive(
 export function isConferenceOver(
   conference: Pick<Conference, 'endDate'>,
 ): boolean {
+  // An unset date (null from GROQ) would parse as 1970 and end a fresh event.
+  if (!conference.endDate) return false
   const endDate = new Date(conference.endDate)
   const dayAfterEnd = new Date(endDate)
   dayAfterEnd.setDate(dayAfterEnd.getDate() + 1)

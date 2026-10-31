@@ -356,7 +356,9 @@ async function applyConferencePatch(
     // Settings belong to ONE conference, so revalidate the tenant-scoped tag
     // only — `fetchConferenceData` and every public page tag this conference's
     // cached reads with `sanity:conference-<id>`, so other tenants stay warm.
-    revalidateTag(conferenceTag(conferenceId), 'default')
+    // `{ expire: 0 }`, not `'default'`: the settings page refreshes straight
+    // after a save and must read the new values, not one stale render.
+    revalidateTag(conferenceTag(conferenceId), { expire: 0 })
 
     return { success: true, updated: result }
   } catch (error) {
@@ -1004,10 +1006,31 @@ export const conferenceRouter = router({
         includeOrganizerStanding: true,
       })
       const conferenceId = await resolveConferenceId()
+      // Drop removed organizers from team members too: the teams editor only
+      // lists current organizers, so a stale member could never be unticked
+      // and every later team save would be refused.
+      const keep = new Set(input.organizers)
+      const teams =
+        (await clientReadUncached.fetch<
+          { members?: { _ref: string }[] }[] | null
+        >(
+          // groq-global: reads THIS request's own conference by its
+          // server-resolved id, like `updateTeams` below.
+          `*[_type == "conference" && _id == $id][0].teams`,
+          { id: conferenceId },
+        )) ?? []
+      const prunedTeams = teams.map((team) => ({
+        ...team,
+        members: (team.members ?? []).filter((m) => keep.has(m._ref)),
+      }))
+      const teamsChanged = prunedTeams.some(
+        (team, i) => team.members.length !== (teams[i].members ?? []).length,
+      )
       return applyConferencePatch(conferenceId, {
         organizers: input.organizers.map((id) =>
           createReferenceWithKey(id, 'organizer'),
         ),
+        ...(teamsChanged ? { teams: prunedTeams } : {}),
       })
     }),
 

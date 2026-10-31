@@ -29,7 +29,7 @@
  *     - staff / speaker      (global people)
  *
  * On the conference document itself, field groups are copied per the clone
- * flags; identity fields (city/country/venue/logos/org legal info) are ALWAYS
+ * flags; identity fields (city/country/venue/logos/theme/background/org legal info) are ALWAYS
  * copied, and content fields (schedules, featured, announcement, vanity
  * metrics, ticketing, checkin ids, registration link) are NEVER copied.
  */
@@ -206,6 +206,8 @@ export interface SourceConference {
   logoDark?: string
   logomarkBright?: string
   logomarkDark?: string
+  theme?: { primaryColor?: string; accentColor?: string }
+  backgroundPattern?: string
   topics?: Array<Reference & { _key?: string }>
   formats?: string[]
   organizers?: Array<Reference & { _key?: string }>
@@ -215,6 +217,7 @@ export interface SourceConference {
   sponsorEmail?: string
   salesNotificationChannel?: string
   cfpNotificationChannel?: string
+  speakerSlackChannel?: string
   socialLinks?: string[]
   cfpSubmissionGoal?: number
   cfpLightningGoal?: number
@@ -239,6 +242,7 @@ export interface SourceSponsorTier {
   price?: Array<Record<string, unknown>>
   perks?: Array<Record<string, unknown>>
   maxQuantity?: number
+  ticketEntitlement?: number
   soldOut?: boolean
   mostPopular?: boolean
 }
@@ -343,6 +347,10 @@ export function buildEditionDocuments(
     ...(src.logoDark ? { logoDark: src.logoDark } : {}),
     ...(src.logomarkBright ? { logomarkBright: src.logomarkBright } : {}),
     ...(src.logomarkDark ? { logomarkDark: src.logomarkDark } : {}),
+    ...(src.theme ? { theme: { ...src.theme } } : {}),
+    ...(src.backgroundPattern
+      ? { backgroundPattern: src.backgroundPattern }
+      : {}),
     // Fresh dates + domains from the wizard.
     startDate: input.startDate,
     endDate: input.endDate,
@@ -408,6 +416,7 @@ export function buildEditionDocuments(
       'sponsorEmail',
       'salesNotificationChannel',
       'cfpNotificationChannel',
+      'speakerSlackChannel',
     ] as const) {
       if (src[key]) {
         conference[key] = src[key]
@@ -465,6 +474,9 @@ export function buildEditionDocuments(
         ...(tier.perks ? { perks: rekey(tier.perks, mintKey) } : {}),
         ...(tier.maxQuantity !== undefined
           ? { maxQuantity: tier.maxQuantity }
+          : {}),
+        ...(tier.ticketEntitlement !== undefined
+          ? { ticketEntitlement: tier.ticketEntitlement }
           : {}),
         // soldOut is OPERATIONAL state (last edition's slots filled), not
         // structure — a cloned tier always starts available for the new

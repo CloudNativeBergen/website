@@ -204,10 +204,9 @@ describe('organization.updateAnalytics', () => {
     await organizer().updateAnalytics({ analyticsPosthogToken: TOKEN })
     expect(store().doc('org-A')?.analyticsPosthogToken).toBe(TOKEN)
     expect(store().doc('org-B')?.analyticsPosthogToken).toBeUndefined()
-    expect(h.revalidateTag).toHaveBeenCalledWith(
-      'sanity:organization-org-A',
-      'default',
-    )
+    expect(h.revalidateTag).toHaveBeenCalledWith('sanity:organization-org-A', {
+      expire: 0,
+    })
   })
 
   it('null unsets it', async () => {

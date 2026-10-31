@@ -284,18 +284,20 @@ export default defineType({
         'Registered address of the organizer (used in contracts and invoices)',
     }),
     defineField({
+      // A warning, not an error: fresh tenants and new editions can lack it,
+      // and the admin saves it as optional, so Studio must still publish.
       name: 'city',
       title: 'City',
       type: 'string',
       fieldset: 'basicInfo',
-      validation: (Rule) => Rule.required(),
+      validation: (Rule) => Rule.required().warning(),
     }),
     defineField({
       name: 'country',
       title: 'Country',
       type: 'string',
       fieldset: 'basicInfo',
-      validation: (Rule) => Rule.required(),
+      validation: (Rule) => Rule.required().warning(),
     }),
     defineField({
       name: 'venueName',
@@ -487,32 +489,34 @@ export default defineType({
         }),
     }),
     defineField({
+      // Warnings, not errors: onboarding and the new-edition wizard leave the
+      // CFP and program dates optional, so Studio must still publish.
       name: 'cfpStartDate',
       title: 'CFP Start Date',
       type: 'date',
       fieldset: 'dates',
-      validation: (Rule) => Rule.required(),
+      validation: (Rule) => Rule.required().warning(),
     }),
     defineField({
       name: 'cfpEndDate',
       title: 'CFP End Date',
       type: 'date',
       fieldset: 'dates',
-      validation: (Rule) => Rule.required(),
+      validation: (Rule) => Rule.required().warning(),
     }),
     defineField({
       name: 'cfpNotifyDate',
       title: 'CFP Notify Date',
       type: 'date',
       fieldset: 'dates',
-      validation: (Rule) => Rule.required(),
+      validation: (Rule) => Rule.required().warning(),
     }),
     defineField({
       name: 'programDate',
       title: 'Program Date',
       type: 'date',
       fieldset: 'dates',
-      validation: (Rule) => Rule.required(),
+      validation: (Rule) => Rule.required().warning(),
     }),
     defineField({
       name: 'travelSupportPaymentDate',

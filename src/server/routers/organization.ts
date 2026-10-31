@@ -19,14 +19,14 @@ import {
 /**
  * Write the request's organization (`write` commits), then bust the cached org read that the
  * root layout's analytics gate, the settings page and the /privacy
- * disclosure all run through. `'default'` serves the stale page once while
- * it refreshes; `{ expire: 0 }` makes the next request wait for fresh data.
+ * disclosure all run through. `{ expire: 0 }`, not `'default'`: the settings
+ * page refreshes straight after a save, and `'default'` would serve it the
+ * stale value once.
  */
 async function patchCurrentOrganization(
   orgId: string | null | undefined,
   write: (orgId: string) => Promise<unknown>,
   failure: string,
-  expiry: 'default' | { expire: 0 } = 'default',
 ): Promise<{ success: true }> {
   if (!orgId) {
     throw new TRPCError({
@@ -45,7 +45,7 @@ async function patchCurrentOrganization(
   } finally {
     // Even when the commit threw: its response can be lost after the write
     // landed, and a cached "off" must not outlive a stored "on".
-    revalidateTag(organizationTag(orgId), expiry)
+    revalidateTag(organizationTag(orgId), { expire: 0 })
   }
   return { success: true }
 }
@@ -104,11 +104,9 @@ export const organizationRouter = router({
               }),
             )
             .commit(),
+        // Never a stale /privacy either: once it is on, content can be sent,
+        // so the next view must already list OpenRouter (spec §13.1).
         'Failed to update content judgement',
-        // Never a stale /privacy: once it is on, content can be sent, so the
-        // next view must already list OpenRouter (spec §13.1). A tRPC route
-        // is not a Server Action, so `updateTag` is not available here.
-        { expire: 0 },
       ),
     ),
 })

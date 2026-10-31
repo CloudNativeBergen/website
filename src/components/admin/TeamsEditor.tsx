@@ -50,12 +50,19 @@ export interface TeamsEditorProps {
 let tempCounter = 0
 const nextTempKey = () => `${TEMP_KEY_PREFIX}${++tempCounter}`
 
-function toFormRows(teams: TeamStored[]): TeamFormRow[] {
+function toFormRows(
+  teams: TeamStored[],
+  organizerIds: string[],
+): TeamFormRow[] {
   return teams.map((t) => ({
     _key: t._key ?? nextTempKey(),
     key: t.key ?? '',
     title: t.title ?? '',
-    members: Array.isArray(t.members) ? t.members : [],
+    // A member who is no longer an organizer has no checkbox to untick, so
+    // drop them here or every save would be refused.
+    members: Array.isArray(t.members)
+      ? t.members.filter((m) => organizerIds.includes(m))
+      : [],
     slackChannel: t.slackChannel ?? '',
     emailIdentity: (t.emailIdentity?.[0] ?? '') as TeamFormRow['emailIdentity'],
   }))
@@ -74,7 +81,12 @@ export function TeamsEditor({
   const { showNotification } = useNotification()
 
   const [isOpen, setIsOpen] = useState(defaultOpen)
-  const [rows, setRows] = useState<TeamFormRow[]>(() => toFormRows(teams))
+  const [rows, setRows] = useState<TeamFormRow[]>(() =>
+    toFormRows(
+      teams,
+      organizers.map((o) => o._id),
+    ),
+  )
   // Rows whose key the user typed by hand — those stop auto-slugging from title.
   const [manualKeys, setManualKeys] = useState<Set<string>>(new Set())
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -82,7 +94,7 @@ export function TeamsEditor({
 
   const organizerIds = organizers.map((o) => o._id)
 
-  const baseline = JSON.stringify(toFormRows(teams).map(stripKey))
+  const baseline = JSON.stringify(toFormRows(teams, organizerIds).map(stripKey))
   const isDirty = JSON.stringify(rows.map(stripKey)) !== baseline
 
   const mutation = api.conference.updateTeams.useMutation({
@@ -107,7 +119,7 @@ export function TeamsEditor({
   })
 
   const reset = () => {
-    setRows(toFormRows(teams))
+    setRows(toFormRows(teams, organizerIds))
     setManualKeys(new Set())
     setErrors({})
     setSubmitError(null)

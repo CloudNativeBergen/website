@@ -41,6 +41,8 @@ let domainsByConference: Record<string, string[]> = {}
 let referenceableIds: Set<string> | null = null
 /** The topic refs the conference already carries — grandfathered on save. */
 let currentTopicRefs: string[] = []
+/** The teams the conference carries — `updateOrganizers` prunes them. */
+let currentTeams: Array<{ key: string; members: { _ref: string }[] }> = []
 /**
  * The ticketing binding every conference document claims, keyed by `_id`
  * (#731 F5). Like `domainsByConference`, the mock APPLIES the query's own
@@ -181,6 +183,7 @@ beforeEach(() => {
       // `updateTopics` reads the conference's CURRENT topic refs so an id that
       // is already referenced is grandfathered (see the router comment).
       if (query.includes('.topics[]._ref')) return currentTopicRefs
+      if (query.endsWith('[0].teams')) return currentTeams
       // `updateTicketingIds` reads its OWN stored binding, so a one-field patch
       // is checked against the EFFECTIVE binding, not just the fields sent.
       if (
@@ -264,7 +267,7 @@ describe('conference router — tenant-scoped cache invalidation (#618)', () => 
     })
     expect(revalidateTagMock).toHaveBeenCalledWith(
       `sanity:conference-${CONFERENCE_ID}`,
-      'default',
+      { expire: 0 },
     )
     // The broad tag would bust every other tenant's cached conference read.
     expect(revalidateTagMock).not.toHaveBeenCalledWith(
@@ -326,7 +329,7 @@ describe('conference router — visibility (M0 trial state)', () => {
     })
     expect(revalidateTagMock).toHaveBeenCalledWith(
       `sanity:conference-${CONFERENCE_ID}`,
-      'default',
+      { expire: 0 },
     )
   })
 
@@ -1048,6 +1051,26 @@ describe('conference router — organizers (self-lockout guard)', () => {
     expect(rows.map((r) => r._ref)).toEqual(['sp-1', 'sp-3'])
     expect(rows.every((r) => r._type === 'reference')).toBe(true)
     expect(rows.every((r) => typeof r._key === 'string')).toBe(true)
+  })
+
+  it('drops a removed organizer from team members', async () => {
+    currentTeams = [
+      { key: 'cfp', members: [{ _ref: 'sp-1' }, { _ref: 'sp-2' }] },
+    ]
+    await makeCaller({ isOrganizer: true }).updateOrganizers({
+      organizers: ['sp-1'],
+    })
+    expect(lastSet!.teams).toEqual([
+      { key: 'cfp', members: [{ _ref: 'sp-1' }] },
+    ])
+    currentTeams = []
+  })
+
+  it('leaves teams alone when no member was removed', async () => {
+    await makeCaller({ isOrganizer: true }).updateOrganizers({
+      organizers: ['sp-1', 'sp-3'],
+    })
+    expect(lastSet).not.toHaveProperty('teams')
   })
 
   it('rejects an empty organizer list (non-empty ALWAYS)', async () => {

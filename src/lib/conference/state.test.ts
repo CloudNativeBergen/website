@@ -4,6 +4,7 @@ import {
   hasSubmittableFormats,
   hasSubmittableTopics,
   isCfpOpen,
+  isConferenceOver,
   withoutUnpublishedSchedule,
 } from './state'
 import type { Conference } from './types'
@@ -167,5 +168,11 @@ describe('withoutUnpublishedSchedule', () => {
     expect(
       withoutUnpublishedSchedule({ programDate: '2026-09-01' }, talks, now),
     ).toEqual(talks)
+  })
+})
+
+describe('isConferenceOver with no end date', () => {
+  it('is not over when endDate is unset', () => {
+    expect(isConferenceOver({ endDate: null as unknown as string })).toBe(false)
   })
 })
