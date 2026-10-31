@@ -1,4 +1,8 @@
-import { checkState, type TransitionAxis } from './state-machine'
+import {
+  checkState,
+  guardedRestingState,
+  type TransitionAxis,
+} from './state-machine'
 import type { MissingField } from './contract-readiness'
 import type { SponsorForConferenceExpanded } from './types'
 
@@ -52,7 +56,9 @@ export function auditSponsorHealth(
       if (sponsor.status === 'closed-lost' && axis !== 'pipeline') continue
 
       const state = AXIS_STATE[axis](sponsor)
-      const result = checkState(axis, state, sponsor)
+      // A paid or overdue invoice rests under `sent`'s invariants, so a paid
+      // invoice on an unsigned contract is reported (#1097).
+      const result = checkState(axis, guardedRestingState(axis, state), sponsor)
       if (result.ok) continue
 
       violations.push({

@@ -16,6 +16,7 @@ const commitMock = vi.fn()
 interface RecordedPatch {
   id: string
   set?: Record<string, unknown>
+  unset?: string[]
   rev?: string
 }
 const patchOps: RecordedPatch[] = []
@@ -26,6 +27,10 @@ const transactionApi = {
     const builder = {
       set: (o: Record<string, unknown>) => {
         op.set = o
+        return builder
+      },
+      unset: (keys: string[]) => {
+        op.unset = keys
         return builder
       },
       ifRevisionId: (rev: string) => {
@@ -82,6 +87,7 @@ type Doc = {
 }
 
 let world: Doc[]
+let signers: Array<{ _id: string; _rev: string; signerEmail: string }>
 
 function record(overrides: Partial<Doc> = {}): Doc {
   return {
@@ -100,6 +106,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   patchOps.length = 0
   world = []
+  signers = []
   audience.conferences = []
   fetchMock.mockImplementation(
     (query: string, params: Record<string, unknown> = {}) => {
@@ -108,6 +115,12 @@ beforeEach(() => {
       }
       if (query.startsWith('*[_type == "conference"')) {
         return Promise.resolve(audience.conferences)
+      }
+      if (query.includes('_type == "sponsorForConference" && lower(')) {
+        const emails = (params.emails as string[]) ?? []
+        return Promise.resolve(
+          signers.filter((d) => emails.includes(d.signerEmail.toLowerCase())),
+        )
       }
       if (!query.includes('_type == "sponsorActivity"')) {
         return Promise.resolve(null)
@@ -260,6 +273,7 @@ describe('a sponsor contact with no speaker document is erased from send records
     fetchMock.mockImplementation(() => {
       reads += 1
       if (reads === 1) return Promise.resolve(world)
+      if (reads === 2) return Promise.resolve([]) // the signer read (#1282)
       return Promise.reject(new Error('read timed out'))
     })
     const result = await eraseSponsorContactSendRecords({
@@ -343,5 +357,28 @@ describe('the address leaves the sponsor audiences on Resend too (#1704)', () =>
       dryRun: true,
     })
     expect(audience.remove).not.toHaveBeenCalled()
+  })
+})
+
+describe('the stored agreement signer (#1282)', () => {
+  it('clears signerEmail and signerName on a sponsor whose signer is erased', async () => {
+    signers = [
+      { _id: 'sfc-1', _rev: 'sfc-rev', signerEmail: 'Kari@Sponsor.no' },
+      { _id: 'sfc-2', _rev: 'sfc-rev-2', signerEmail: 'ola@sponsor.no' },
+    ]
+    commitMock.mockImplementation(async () => {
+      signers = signers.filter((d) => d._id !== 'sfc-1')
+    })
+
+    const result = await eraseSponsorContactSendRecords({
+      emails: ['kari@sponsor.no'],
+      actor: 'ops',
+    })
+
+    expect(result.err).toBeNull()
+    expect(patchOps).toEqual([
+      { id: 'sfc-1', rev: 'sfc-rev', unset: ['signerEmail', 'signerName'] },
+    ])
+    expect(result.residual).toBe(0)
   })
 })

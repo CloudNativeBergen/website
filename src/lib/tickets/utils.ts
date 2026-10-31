@@ -166,11 +166,15 @@ export function calculateSponsorTickets(conference: {
 }
 
 /**
- * Calculates core ticket sales statistics from any ticket array.
- * Automatically filters to only count paid tickets (sum > 0) and handles invalid amounts safely.
- * Used as the foundation for statistics across admin UI, Slack notifications, and API responses.
+ * Calculates core ticket sales statistics for a population of SALES.
  *
- * @param tickets - Array of tickets (can include free tickets, will be filtered internally)
+ * The caller decides what a sale is (by what granted the ticket, see
+ * `isPaidTicket`) and this function trusts it: it does not re-filter by
+ * price, so a zero-priced genuine sale (a free-to-attend event, a free public
+ * tier) counts as a sold ticket with no revenue (#1103). Invalid amounts add
+ * nothing to revenue.
+ *
+ * @param tickets - The tickets to count as sold
  * @returns Core statistics: counts, revenue, orders, and average price
  */
 export function calculateTicketStatistics(tickets: EventTicket[]): {
@@ -179,10 +183,9 @@ export function calculateTicketStatistics(tickets: EventTicket[]): {
   totalOrders: number
   averageTicketPrice: number
 } {
-  const paidTickets = tickets.filter((t) => parseTicketAmount(t.sum) > 0)
-  const totalPaidTickets = paidTickets.length
-  const totalRevenue = sumTicketRevenue(paidTickets)
-  const totalOrders = new Set(paidTickets.map((t) => t.order_id)).size
+  const totalPaidTickets = tickets.length
+  const totalRevenue = sumTicketRevenue(tickets)
+  const totalOrders = new Set(tickets.map((t) => t.order_id)).size
   const averageTicketPrice =
     totalPaidTickets > 0 ? totalRevenue / totalPaidTickets : 0
 

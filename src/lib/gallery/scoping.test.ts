@@ -42,7 +42,10 @@ transactionMock.mockImplementation(() => ({
 }))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadCached: { fetch: (...args: unknown[]) => fetchMock(...args) },
-  clientReadUncached: { fetch: (...args: unknown[]) => fetchMock(...args) },
+  clientReadUncached: {
+    fetch: (...args: unknown[]) => fetchMock(...args),
+    withConfig: () => ({ fetch: (...args: unknown[]) => fetchMock(...args) }),
+  },
   clientWrite: {
     fetch: (...args: unknown[]) => fetchMock(...args),
     patch: (...args: unknown[]) => patchMock(...args),
@@ -240,9 +243,29 @@ describe('by-id gallery reads carry the tenant predicate (#616)', () => {
   it('deleteGalleryImage still deletes the OWN-tenant image (single-tenant behaviour unchanged)', async () => {
     fetchMock
       .mockResolvedValueOnce({ assetId: 'asset-1' }) // scoped by-id read
-      .mockResolvedValueOnce(1) // asset still referenced elsewhere
+      .mockResolvedValueOnce({ n: 1 }) // asset still referenced elsewhere
 
     await expect(deleteGalleryImage('img-1', 'conf-1')).resolves.toBe(true)
+    expect(deleteMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('deleteGalleryImage deletes the asset once nothing references it', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ assetId: 'asset-1' })
+      .mockResolvedValueOnce({ n: 0 })
+
+    await expect(deleteGalleryImage('img-1', 'conf-1')).resolves.toBe(true)
+    expect(deleteMock).toHaveBeenCalledTimes(2)
+    expect(deleteMock).toHaveBeenLastCalledWith('asset-1')
+  })
+
+  it('deleteGalleryImage KEEPS the asset when the count comes back null (#1200)', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ assetId: 'asset-1' })
+      .mockResolvedValueOnce(null)
+
+    await expect(deleteGalleryImage('img-1', 'conf-1')).resolves.toBe(true)
+    // Only the gallery document; the asset survives a count it could not read.
     expect(deleteMock).toHaveBeenCalledTimes(1)
   })
 

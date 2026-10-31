@@ -50,6 +50,11 @@ export interface FilterGroup {
    * badge and left every default-valued radio unchecked.
    */
   defaultValue?: string
+  /**
+   * Override the badge count, for a multi-select group whose default is a
+   * non-empty selection (e.g. "all statuses except rejected").
+   */
+  activeCount?: number
   /** Message shown when `options` is empty. */
   emptyText?: string
   /** Desktop dropdown panel width. */
@@ -102,6 +107,7 @@ export interface AdminFilterBarProps {
 
 /** Number of "active" selections in a group (ignores empty-string sentinels). */
 export function groupActiveCount(group: FilterGroup): number {
+  if (group.activeCount !== undefined) return group.activeCount
   return group.selected.filter(
     (value) => value !== '' && value !== group.defaultValue,
   ).length

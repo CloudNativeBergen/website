@@ -25,7 +25,7 @@ import {
   ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline'
 import { CheckBadgeIcon } from '@heroicons/react/24/solid'
-import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
+import { AdminFilterBar } from '@/components/admin/AdminFilterBar'
 import { AdminPageHeader } from '@/components/admin'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { VolunteerBulkEmailModal } from './VolunteerBulkEmailModal'
@@ -35,7 +35,6 @@ import { VolunteerApprovalModal } from '@/components/volunteer/VolunteerApproval
 import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/EmptyState'
 import { AdminButton } from '@/components/admin/AdminButton'
-import { TableToolbar } from '@/components/DataTable/TableToolbar'
 import { useNotificationSafe } from '@/components/admin/NotificationProvider'
 import type { VolunteerTicketStatus } from '@/lib/tickets/volunteerStatus'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
@@ -858,14 +857,14 @@ export default function VolunteerAdminPage() {
         </details>
       )}
 
-      <TableToolbar
-        searchValue={searchQuery}
-        onSearchChange={setSearchQuery}
-        searchPlaceholder="Search volunteers by name, email, task..."
-        showClearButton={Boolean(
-          searchQuery || !statusFilterIsDefault || ticketFilter !== 'all',
-        )}
-        onClear={() => {
+      <AdminFilterBar
+        search={{
+          value: searchQuery,
+          onChange: setSearchQuery,
+          placeholder: 'Search volunteers by name, email, task...',
+        }}
+        // Clear returns to the default (rejected hidden), not "show all".
+        onClearAll={() => {
           setSearchQuery('')
           setStatusFilter(new Set(DEFAULT_STATUS_FILTER))
           setTicketFilter('all')
@@ -873,48 +872,44 @@ export default function VolunteerAdminPage() {
         resultCount={filteredVolunteers.length}
         totalCount={volunteers?.length}
         resultLabel="applications"
-      >
-        <FilterDropdown
-          label="Status"
-          activeCount={statusFilterIsDefault ? 0 : statusFilter.size}
-        >
-          {Object.values(VolunteerStatus).map((status) => (
-            <FilterOption
-              key={status}
-              checked={statusFilter.has(status)}
-              onClick={() => {
-                const newFilter = new Set(statusFilter)
-                if (statusFilter.has(status)) {
-                  newFilter.delete(status)
-                } else {
-                  newFilter.add(status)
-                }
-                setStatusFilter(newFilter)
-              }}
-            >
-              {VOLUNTEER_STATUS_LABELS[status]}
-            </FilterOption>
-          ))}
-        </FilterDropdown>
-
-        <FilterDropdown
-          label="Ticket"
-          activeCount={ticketFilter !== 'all' ? 1 : 0}
-        >
-          {(Object.keys(TICKET_FILTER_LABELS) as TicketFilterState[]).map(
-            (state) => (
-              <FilterOption
-                key={state}
-                type="radio"
-                checked={ticketFilter === state}
-                onClick={() => setTicketFilter(state)}
-              >
-                {TICKET_FILTER_LABELS[state]}
-              </FilterOption>
-            ),
-          )}
-        </FilterDropdown>
-      </TableToolbar>
+        filters={[
+          {
+            key: 'status',
+            label: 'Status',
+            selected: [...statusFilter],
+            activeCount: statusFilterIsDefault ? 0 : statusFilter.size,
+            options: Object.values(VolunteerStatus).map((status) => ({
+              value: status,
+              label: VOLUNTEER_STATUS_LABELS[status],
+            })),
+            onChange: (value) => {
+              const status = value as VolunteerStatus
+              const newFilter = new Set(statusFilter)
+              if (statusFilter.has(status)) {
+                newFilter.delete(status)
+              } else {
+                newFilter.add(status)
+              }
+              setStatusFilter(newFilter)
+            },
+          },
+          {
+            key: 'ticket',
+            label: 'Ticket',
+            multi: false,
+            defaultValue: 'all',
+            width: 'wide',
+            selected: [ticketFilter],
+            options: (
+              Object.keys(TICKET_FILTER_LABELS) as TicketFilterState[]
+            ).map((state) => ({
+              value: state,
+              label: TICKET_FILTER_LABELS[state],
+            })),
+            onChange: (value) => setTicketFilter(value as TicketFilterState),
+          },
+        ]}
+      />
 
       {/* Main Responsive Grid Layout */}
       <div className="lg:grid lg:grid-cols-12 lg:items-start lg:gap-6">

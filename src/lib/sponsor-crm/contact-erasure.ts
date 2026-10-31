@@ -99,7 +99,38 @@ async function planAll(emails: string[]): Promise<{
     )
     if (patch) patches.push(patch)
   }
+  patches.push(...(await planSignerRedaction(emails)))
   return { matched: docs.length, patches, refusals }
+}
+
+/**
+ * The agreement signer stored on a sponsor record (#1282). Left in place, the
+ * contract reminder cron would still mail an erased signer, and the composer
+ * would still name them as the signer on record. Both fields are cleared when
+ * the stored address is one being erased.
+ */
+async function planSignerRedaction(
+  emails: string[],
+): Promise<ErasureDocumentPatch[]> {
+  const docs =
+    (await clientReadUncached
+      .withConfig({ apiVersion: COUNT_API_VERSION })
+      .fetch<Array<{ _id: string; _rev: string; signerEmail?: string }>>(
+        // groq-global: the right is the person's, and the same address can
+        // sign for sponsors in several organizations, like the read above.
+        `*[_type == "sponsorForConference" && lower(signerEmail) in $emails]{ _id, _rev, signerEmail }`,
+        { emails },
+        { cache: 'no-store', perspective: 'raw' },
+      )) ?? []
+  return docs
+    .filter((doc) => emails.includes(canonicalEmail(doc.signerEmail ?? '')))
+    .map((doc) => ({
+      id: doc._id,
+      type: 'sponsorForConference',
+      rev: doc._rev,
+      unset: ['signerEmail', 'signerName'],
+      reason: 'erased contact is the stored agreement signer',
+    }))
 }
 
 /**
@@ -160,7 +191,9 @@ export async function eraseSponsorContactSendRecords(
         .transaction()
       for (const patch of plan.patches) {
         tx.patch(patch.id, (p) => {
-          const applied = p.set(patch.set ?? {})
+          const applied = patch.unset
+            ? p.unset(patch.unset)
+            : p.set(patch.set ?? {})
           // Revision-guarded: a concurrent edit makes the whole transaction
           // 409 rather than clobber it; the operator re-runs.
           return patch.rev ? applied.ifRevisionId(patch.rev) : applied
