@@ -39,9 +39,11 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 
 const getPublicTicketTypesMock = vi.fn()
-vi.mock('@/lib/tickets/public', () => ({
+vi.mock('@/lib/tickets/public-read', () => ({
   getPublicTicketTypes: (...args: unknown[]) =>
     getPublicTicketTypesMock(...args),
+}))
+vi.mock('@/lib/tickets/public', () => ({
   getLowestTicketPrice: (tickets: { amount: number }[]) =>
     tickets.length > 0
       ? { formatted: '3 490', amount: tickets[0].amount }
