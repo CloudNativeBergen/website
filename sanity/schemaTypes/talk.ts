@@ -289,6 +289,34 @@ export default defineType({
       ],
     }),
     defineField({
+      name: 'reviewSummary',
+      title: 'Review Summary',
+      type: 'object',
+      description:
+        'Review totals kept after the reviews were deleted, 24 months after the conference. Written by the app; never edit it here.',
+      readOnly: true,
+      fields: [
+        defineField({ name: 'count', title: 'Reviews', type: 'number' }),
+        defineField({
+          name: 'content',
+          title: 'Content (avg)',
+          type: 'number',
+        }),
+        defineField({
+          name: 'relevance',
+          title: 'Relevance (avg)',
+          type: 'number',
+        }),
+        defineField({
+          name: 'speaker',
+          title: 'Speaker (avg)',
+          type: 'number',
+        }),
+        defineField({ name: 'total', title: 'Total (avg)', type: 'number' }),
+        defineField({ name: 'foldedAt', title: 'Folded At', type: 'datetime' }),
+      ],
+    }),
+    defineField({
       name: 'audienceFeedback',
       title: 'Audience Feedback',
       type: 'object',

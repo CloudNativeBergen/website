@@ -23,6 +23,28 @@ export const SHORT_RETENTION_NOTIFICATION_TYPES = [
 /** Days after a conference ends before its reminder dedup markers go. */
 export const REMINDER_LOG_RETENTION_DAYS = 60
 
+/** Months after a conference ends before its reviews fold into a summary. */
+export const REVIEW_RETENTION_MONTHS = 24
+
+/** Months after a conference ends before its marketing snapshots go. */
+export const MARKETING_SNAPSHOT_RETENTION_MONTHS = 24
+
+/**
+ * The Oslo calendar date `months` before today (Oslo). A conference whose
+ * `endDate` is strictly before it ended more than `months` months ago. A day
+ * past the target month's end clamps to its last day (Mar 31 → Feb 28).
+ */
+export function osloMonthsCutoff(
+  months: number,
+  now: Date = new Date(),
+): string {
+  const [y, m, d] = osloTodayDateString(now).split('-').map(Number)
+  const lastDay = new Date(Date.UTC(y, m - months, 0)).getUTCDate()
+  return new Date(Date.UTC(y, m - 1 - months, Math.min(d, lastDay)))
+    .toISOString()
+    .slice(0, 10)
+}
+
 /**
  * The Oslo calendar date `days` before today (Oslo), as YYYY-MM-DD. A
  * conference whose `endDate` is strictly BEFORE this ended more than `days`

@@ -9,7 +9,7 @@ import {
 } from '@/lib/proposal/types'
 import { Speaker, Flags } from '@/lib/speaker/types'
 import { Review } from '@/lib/review/types'
-import { calculateAverageRating } from '@/lib/proposal'
+import { calculateAverageRating, reviewCountOf } from '@/lib/proposal'
 
 export interface ProposalFilters {
   status?: Status[]
@@ -209,8 +209,8 @@ export function filterProposals(
         bValue = calculateAverageRating(b)
         break
       case 'reviews':
-        aValue = a.reviews?.length ?? 0
-        bValue = b.reviews?.length ?? 0
+        aValue = reviewCountOf(a)
+        bValue = reviewCountOf(b)
         break
       case 'created':
       default:
