@@ -1,5 +1,5 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
     "src/app/**/page.{ts,tsx}",
     "src/app/**/layout.{ts,tsx}",
@@ -29,8 +29,7 @@
     "src/lib/empty-module.ts",
     "src/lib/conference/contract.ts",
     "src/components/admin/dashboard/widgets/__matrix__/mock-admin-actions.ts",
-    "src/components/admin/dashboard/widgets/__matrix__/mock-use-widget-data.ts",
-    ".storybook/mocks/tickets-provider.ts"
+    "src/components/admin/dashboard/widgets/__matrix__/mock-use-widget-data.ts"
   ],
   "ignoreDependencies": [
     "eslint-config-next",

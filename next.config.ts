@@ -56,6 +56,26 @@ const config: NextConfig = {
   async headers() {
     return [
       {
+        // Baseline hardening for every response. SAMEORIGIN, not DENY: the
+        // admin composer frames /admin/homepage-preview and the program page
+        // frames the feedback form, both same-origin. No CSP yet. Camera is
+        // left alone for the photo-wall composer. Vercel already sends HSTS.
+        // Later entries override these per route (e.g. `/f/` Referrer-Policy).
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'microphone=(), geolocation=(), browsing-topics=()',
+          },
+        ],
+      },
+      {
         // The service worker lives at a stable URL and must never be cached by
         // the browser HTTP cache — otherwise a deploy's new `/sw.js` bytes are
         // not seen and the update flow never fires. Registration also uses

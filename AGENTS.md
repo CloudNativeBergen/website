@@ -3,7 +3,7 @@
 ## Overview & Architecture
 
 Multi-tenant website for Cloud Native conferences.
-**Tech Stack:** TypeScript 5.8+, Next.js 15+ (App Router), Tailwind CSS 4+, Sanity.io, tRPC + React Query, NextAuth 5.0.
+**Tech Stack:** TypeScript 6, Next.js 16 (App Router), Tailwind CSS 4+, Sanity.io, tRPC + React Query, NextAuth 5.0.
 
 ### Architecture Rules
 

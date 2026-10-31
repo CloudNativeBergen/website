@@ -1,5 +1,14 @@
 version: 2
 updates:
+  # Keep pinned action SHAs current
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    groups:
+      github-actions:
+        patterns: ['*']
+
   # Maintain dependencies for npm
   - package-ecosystem: 'npm'
     directory: '/' # Location of package manifests

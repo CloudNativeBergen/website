@@ -26,6 +26,9 @@ on:
         type: string
 
 # Never run two migrations against the same dataset concurrently
+permissions:
+  contents: read
+
 concurrency:
   group: sanity-migration-${{ inputs.dataset }}
   cancel-in-progress: false
@@ -41,13 +44,14 @@ jobs:
       SANITY_STUDIO_PROJECT_ID: ${{ vars.SANITY_STUDIO_PROJECT_ID }}
       SANITY_STUDIO_DATASET: ${{ inputs.dataset }}
       BACKFILL_CONFERENCE_ID: ${{ inputs.conference_id }}
+      MIGRATION: ${{ inputs.migration }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # ratchet:actions/checkout@v4
 
       - name: Verify migration exists
-        run: test -d "migrations/${{ inputs.migration }}" || { echo "::error::migrations/${{ inputs.migration }} not found"; exit 1; }
+        run: test -d "migrations/$MIGRATION" || { echo "::error::migrations/$MIGRATION not found"; exit 1; }
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ratchet:actions/setup-node@v4
@@ -76,7 +80,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Export dataset backup
-        run: pnpm sanity dataset export "${{ inputs.dataset }}" "backup-${{ inputs.dataset }}.tar.gz"
+        run: pnpm sanity dataset export "$SANITY_STUDIO_DATASET" "backup-$SANITY_STUDIO_DATASET.tar.gz"
 
       - name: Upload backup artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
@@ -87,10 +91,10 @@ jobs:
           if-no-files-found: error
 
       - name: Dry run
-        run: pnpm sanity migration run "${{ inputs.migration }}" --project "$SANITY_STUDIO_PROJECT_ID" --dataset "${{ inputs.dataset }}"
+        run: pnpm sanity migration run "$MIGRATION" --project "$SANITY_STUDIO_PROJECT_ID" --dataset "$SANITY_STUDIO_DATASET"
 
       - name: Run migration
         # --no-confirm: the apply step otherwise prompts for confirmation,
         # which fails in CI (non-interactive). The dry-run step above plus the
         # dataset backup artifact are the safety gates.
-        run: pnpm sanity migration run "${{ inputs.migration }}" --project "$SANITY_STUDIO_PROJECT_ID" --dataset "${{ inputs.dataset }}" --no-dry-run --no-confirm
+        run: pnpm sanity migration run "$MIGRATION" --project "$SANITY_STUDIO_PROJECT_ID" --dataset "$SANITY_STUDIO_DATASET" --no-dry-run --no-confirm

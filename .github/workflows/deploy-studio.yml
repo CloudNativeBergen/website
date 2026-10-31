@@ -26,10 +26,14 @@ on:
       - '.github/workflows/deploy-studio.yml'
   workflow_dispatch:
 
-# One studio deploy at a time; a newer push supersedes an in-flight deploy.
+permissions:
+  contents: read
+
+# One studio deploy at a time; a newer push waits for the in-flight deploy
+# instead of cancelling it mid-upload.
 concurrency:
   group: sanity-studio-deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy-studio:
