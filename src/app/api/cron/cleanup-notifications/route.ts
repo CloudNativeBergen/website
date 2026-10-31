@@ -9,7 +9,11 @@ import { deleteExpiredEmailSignInRateLimits } from '@/lib/auth/email-link/rateLi
 import { deleteExpiredProvisioningReceipts } from '@/lib/onboarding/provision'
 import { deleteExpiredProvisioningRateLimits } from '@/lib/provisioning'
 import { deleteExpiredMarketingRateLimits } from '@/lib/marketing/snapshots'
-import { deleteExpiredReminderLogs } from '@/lib/reminders/retention'
+import {
+  deleteExpiredMarketingSnapshots,
+  deleteExpiredReminderLogs,
+} from '@/lib/retention/purge'
+import { foldExpiredReviews } from '@/lib/review/retention'
 import {
   NOTIFICATION_RETENTION_DAYS,
   SHORT_NOTIFICATION_RETENTION_DAYS,
@@ -54,26 +58,33 @@ export async function GET(request: NextRequest) {
       }
     }
     const none = { deleted: 0 }
-    // `?dryRun=1` only counts what the 30-day notification and reminder-log
-    // passes would delete, and returns without running any other pass.
+    // `?dryRun=1` only counts what the 30-day notification, reminder-log,
+    // snapshot and review passes would delete, and runs no other pass.
     const dryRun = request.nextUrl.searchParams.get('dryRun') === '1'
     if (dryRun) {
-      const [shortNotifications, reminderLogs] = await Promise.all([
-        deleteNotificationsOlderThan(
-          SHORT_NOTIFICATION_RETENTION_DAYS,
-          SHORT_RETENTION_NOTIFICATION_TYPES,
-          true,
-        ),
-        deleteExpiredReminderLogs(true),
-      ])
+      const [shortNotifications, reminderLogs, snapshots, reviews] =
+        await Promise.all([
+          deleteNotificationsOlderThan(
+            SHORT_NOTIFICATION_RETENTION_DAYS,
+            SHORT_RETENTION_NOTIFICATION_TYPES,
+            true,
+          ),
+          deleteExpiredReminderLogs(true),
+          deleteExpiredMarketingSnapshots(true),
+          foldExpiredReviews(true),
+        ])
       console.log(
         `[dry-run] would delete shortNotifications=${shortNotifications.deleted}` +
-          ` reminderLogs=${reminderLogs.deleted}`,
+          ` reminderLogs=${reminderLogs.deleted}` +
+          ` marketingSnapshots=${snapshots.deleted}` +
+          ` reviews=${reviews.deleted} (folded into ${reviews.talks} talks)`,
       )
       return NextResponse.json({
         dryRun: true,
         shortNotifications: shortNotifications.deleted,
         reminderLogs: reminderLogs.deleted,
+        marketingSnapshots: snapshots.deleted,
+        reviews,
       })
     }
 
@@ -103,6 +114,22 @@ export async function GET(request: NextRequest) {
       'reminderLogs',
       deleteExpiredReminderLogs,
       none,
+    )
+    // Marketing snapshots and reviews, 24 months after the conference ends.
+    // Reviews are first folded into `talk.reviewSummary` in the same
+    // transaction that deletes them.
+    const marketingSnapshots = await pass(
+      'marketingSnapshots',
+      deleteExpiredMarketingSnapshots,
+      none,
+    )
+    const reviews = await pass('reviews', foldExpiredReviews, {
+      talks: 0,
+      deleted: 0,
+    })
+    console.log(
+      `Deleted marketingSnapshots=${marketingSnapshots.deleted}` +
+        ` reviews=${reviews.deleted} (folded into ${reviews.talks} talks)`,
     )
     console.log(
       `Deleted shortNotifications=${shortNotifications.deleted}` +
@@ -243,6 +270,8 @@ export async function GET(request: NextRequest) {
       deleted,
       shortNotifications: shortNotifications.deleted,
       reminderLogs: reminderLogs.deleted,
+      marketingSnapshots: marketingSnapshots.deleted,
+      reviews,
       messaging,
       staleNudge,
       autoClose,

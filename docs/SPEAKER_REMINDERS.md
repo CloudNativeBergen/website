@@ -143,7 +143,7 @@ and timestamps. The weak refs make speaker erasure (GDPR) non-blocking — a
 dangling reference is tolerated exactly as it is for the messaging documents. The
 marker's lifecycle is tied to the conference edition it belongs to: the daily
 `/api/cron/cleanup-notifications` deletes an edition's markers once it ended more
-than **60 days** ago (Oslo date, `src/lib/reminders/retention.ts`). That cannot
+than **60 days** ago (Oslo date, `src/lib/retention/purge.ts`). That cannot
 re-send anything, because the reminder cron only runs for editions whose
 `endDate` is today or later. It holds no free-text personal data. The reminder
 deliveries themselves are ordinary hub `notification` documents and inherit the

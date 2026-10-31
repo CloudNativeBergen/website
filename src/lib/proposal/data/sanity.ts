@@ -66,11 +66,13 @@ const SCHEDULE_INFO_PROJECTION = `"scheduleInfo": select(
 // to reviews of the ENCLOSING talk, which every interpolating query already
 // access-scopes (tenant predicate or the owner-∨-organizer disjunct), so it can
 // only count reviews of a talk the caller was allowed to see.
-const REVIEW_COUNT_FIELD = `"reviewCount": count(*[_type == "review" && proposal._ref == ^._id])`
+// Plus the count a folded `reviewSummary` keeps for deleted reviews.
+export const REVIEW_COUNT_FIELD = `"reviewCount": count(*[_type == "review" && proposal._ref == ^._id]) + select(defined(reviewSummary.foldedAt) => reviewSummary.count, 0)`
 
 // groq-global-scoped: parent-keyed — `proposal._ref == ^._id`, exactly as
 // REVIEW_COUNT_FIELD above.
-const REVIEW_SCORES_FIELD = `"reviewScores": *[_type == "review" && proposal._ref == ^._id]{"total": score.content + score.relevance + score.speaker}`
+// A folded `reviewSummary` adds one row weighted by its deleted reviews.
+export const REVIEW_SCORES_FIELD = `"reviewScores": *[_type == "review" && proposal._ref == ^._id]{"total": score.content + score.relevance + score.speaker} + select(defined(reviewSummary.foldedAt) => [{"total": reviewSummary.total, "weight": reviewSummary.count}], [])`
 
 const REVIEWS_PROJECTION_BODY = `{
       ...,

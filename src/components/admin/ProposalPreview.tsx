@@ -29,7 +29,7 @@ import { PortableText } from '@portabletext/react'
 import { Conference } from '@/lib/conference/types'
 import { AdminActionBar } from '@/components/admin/AdminActionBar'
 import { SpeakerAvatarsWithNames } from '@/components/SpeakerAvatars'
-import { calculateAverageRating } from '@/lib/proposal'
+import { calculateAverageRating, reviewCountOf } from '@/lib/proposal'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import {
   extractSpeakersFromProposal,
@@ -70,7 +70,7 @@ export function ProposalPreview({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const speakers = extractSpeakersFromProposal(proposal)
   const averageRating = calculateAverageRating(proposal)
-  const reviewCount = proposal.reviews?.length || 0
+  const reviewCount = reviewCountOf(proposal)
   const requiresTravelFunding =
     speakers.some((speaker) =>
       speaker?.flags?.includes(Flags.requiresTravelFunding),
