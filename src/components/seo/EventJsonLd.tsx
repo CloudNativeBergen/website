@@ -1,5 +1,6 @@
 import {
   buildEventJsonLd,
+  buildOrganizationJsonLd,
   serializeJsonLd,
   type BuildEventJsonLdOptions,
 } from '@/lib/seo/eventJsonLd'
@@ -18,6 +19,20 @@ export function EventJsonLd(props: BuildEventJsonLdOptions) {
     <script
       type="application/ld+json"
       dangerouslySetInnerHTML={{ __html: serializeJsonLd(data) }}
+    />
+  )
+}
+
+/** Renders the hub's top-level schema.org `Organization` JSON-LD (#398). */
+export function OrganizationJsonLd(
+  props: Pick<BuildEventJsonLdOptions, 'conference' | 'domain'>,
+) {
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{
+        __html: serializeJsonLd(buildOrganizationJsonLd(props)),
+      }}
     />
   )
 }

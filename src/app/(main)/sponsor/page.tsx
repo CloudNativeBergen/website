@@ -10,14 +10,18 @@ import { headers } from 'next/headers'
 import { SponsorProspectus } from '@/components/sponsor/SponsorProspectus'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
-import { resolveMetadataBrand } from '@/lib/seo/brand'
+import { resolvePageMetadata } from '@/lib/seo/brand'
 
 export async function generateMetadata(): Promise<Metadata> {
-  const brand = await resolveMetadataBrand()
+  const { title, description } = await resolvePageMetadata(
+    'Become a Sponsor',
+    'Sponsorship opportunities at',
+  )
   return {
-    title: { absolute: `Become a Sponsor - ${brand}` },
-    description: `Sponsorship opportunities for ${brand} conference`,
+    title: { absolute: title },
+    description,
     alternates: await canonicalAlternates('/sponsor'),
+    openGraph: { title, description },
     twitter: {
       card: 'summary_large_image',
     },

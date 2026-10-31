@@ -11,7 +11,7 @@ vi.mock('@/lib/conference/sanity', () => ({
     getConferenceForDomainMock(...args),
 }))
 
-import { resolveMetadataBrand } from './brand'
+import { resolveMetadataBrand, resolvePageMetadata } from './brand'
 
 function headersWithHost(host: string | null) {
   return { get: (name: string) => (name === 'host' ? host : null) }
@@ -40,5 +40,36 @@ describe('resolveMetadataBrand', () => {
     headersMock.mockResolvedValue(headersWithHost('x.example'))
     getConferenceForDomainMock.mockRejectedValue(new Error('sanity down'))
     expect(await resolveMetadataBrand()).toBe('Konf')
+  })
+})
+
+describe('resolvePageMetadata', () => {
+  it('puts the page first and adds dates and city to the description', async () => {
+    headersMock.mockResolvedValue(headersWithHost('cloudnativebergen.dev'))
+    getConferenceForDomainMock.mockResolvedValue({
+      conference: {
+        title: 'Cloud Native Days Norway 2026',
+        startDate: '2026-10-27',
+        endDate: '2026-10-28',
+        city: 'Bergen',
+      },
+    })
+    const { title, description } = await resolvePageMetadata(
+      'Program',
+      'Talks for',
+    )
+    expect(title).toBe('Program – Cloud Native Days Norway 2026')
+    expect(description).toMatch(
+      /^Talks for Cloud Native Days Norway 2026, .+ in Bergen\.$/,
+    )
+  })
+
+  it('omits unknown dates and falls back to the platform name', async () => {
+    headersMock.mockResolvedValue(headersWithHost('x.example'))
+    getConferenceForDomainMock.mockRejectedValue(new Error('sanity down'))
+    expect(await resolvePageMetadata('Tickets', 'Tickets for')).toEqual({
+      title: 'Tickets – Konf',
+      description: 'Tickets for Konf.',
+    })
   })
 })

@@ -28,6 +28,16 @@ interface ProgramScheduleViewProps {
   isLive?: boolean
 }
 
+/** "Sponsored by X" under a track header (#383). */
+function TrackSponsorLine({ name }: { name?: string }) {
+  if (!name) return null
+  return (
+    <p className="font-inter mt-1 text-xs font-medium text-gray-600 dark:text-gray-400">
+      Sponsored by {name}
+    </p>
+  )
+}
+
 const SCROLL_THRESHOLD = 5
 const SCROLL_DELAY = 100
 const MOBILE_BREAKPOINT = '(min-width: 640px)'
@@ -279,6 +289,7 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
               <p className="font-inter mt-1 text-sm text-brand-slate-gray dark:text-gray-300">
                 {track.trackDescription}
               </p>
+              <TrackSponsorLine name={track.sponsorName} />
             </div>
           </div>
         ))}
@@ -373,6 +384,7 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
                 {track.trackDescription}
               </p>
             )}
+            <TrackSponsorLine name={track.sponsorName} />
           </div>
         ))}
       </div>

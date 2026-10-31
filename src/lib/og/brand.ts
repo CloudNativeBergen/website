@@ -38,15 +38,11 @@ import {
  *
  * SCOPE, precisely: the cards' headline/subtitle/detail type (24–80px) is large
  * text and this ceiling is its AA guarantee. The cards ALSO carry some smaller
- * white type directly on the gradient — the 12px sponsor-section labels and the
- * 16–18px date/location/domain lines — which by WCAG needs 4.5:1 and therefore a
- * background at luminance ≤ 0.1833. Those elements are NOT covered by this
- * ceiling. That is inherited from the house design, not introduced by theming:
- * the house cyan (#06B6D4, luminance 0.3825) gives them 2.43:1 today. Tightening
- * this constant to 0.1833 would fix it for themed tenants, but it darkens every
- * themed gradient, so it is a design decision rather than a correctness fix and
- * is deliberately left alone here. Do not restate this ceiling as covering
- * "every text element" — it does not.
+ * white type — the 12px sponsor-section labels and the 16px badge domain and
+ * footer lines — which by WCAG needs 4.5:1. This ceiling does NOT cover those;
+ * they sit on {@link OG_SMALL_TEXT_SCRIM} instead (#714), which clears 4.5:1
+ * even over the house cyan (#06B6D4, luminance 0.3825, which is above this
+ * ceiling). Do not restate this ceiling as covering "every text element".
  *
  * The bound holds across the whole gradient, not just its endpoints: the sRGB
  * transfer function is convex, so the luminance of a channel-wise interpolation
@@ -54,6 +50,21 @@ import {
  * ends therefore clamps every pixel between them.
  */
 export const OG_MAX_BACKGROUND_LUMINANCE = 0.3
+
+/** Alpha of the black scrim under the cards' small (sub-24px) white text. */
+export const OG_SMALL_TEXT_SCRIM_ALPHA = 0.55
+
+/**
+ * Backdrop for small white text on the gradient (#714). The gradient itself
+ * only guarantees 3:1; this darkens just the label's box so 12–16px type
+ * reaches 4.5:1 on every palette, the house one included. Pinned in
+ * brand.test.ts.
+ */
+export const OG_SMALL_TEXT_SCRIM = {
+  backgroundColor: `rgba(0, 0, 0, ${OG_SMALL_TEXT_SCRIM_ALPHA})`,
+  padding: '4px 10px',
+  borderRadius: '6px',
+} as const
 
 /**
  * Alpha of the near-white chips the brand colour is painted ON as text — the
