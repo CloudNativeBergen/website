@@ -110,7 +110,7 @@ describe('ConversationThread — the hidden-pane poll gate', () => {
     expect(askedInterval()).toBe(false)
   })
 
-  it('polls every 20s when it IS visible', () => {
+  it('polls every 60s when it IS visible', () => {
     render(
       <ConversationThread
         conversationId="conversation.abc"
@@ -118,7 +118,7 @@ describe('ConversationThread — the hidden-pane poll gate', () => {
         isVisible
       />,
     )
-    expect(askedInterval()).toBe(20_000)
+    expect(askedInterval()).toBe(60_000)
   })
 
   it('defaults to visible, so a standalone thread page is unaffected', () => {
@@ -128,7 +128,7 @@ describe('ConversationThread — the hidden-pane poll gate', () => {
         audience="speaker"
       />,
     )
-    expect(askedInterval()).toBe(20_000)
+    expect(askedInterval()).toBe(60_000)
   })
 
   it('stops polling when a visible thread is hidden, and resumes when shown', () => {
@@ -139,7 +139,7 @@ describe('ConversationThread — the hidden-pane poll gate', () => {
         isVisible
       />,
     )
-    expect(askedInterval()).toBe(20_000)
+    expect(askedInterval()).toBe(60_000)
 
     rerender(
       <ConversationThread
@@ -157,7 +157,7 @@ describe('ConversationThread — the hidden-pane poll gate', () => {
         isVisible
       />,
     )
-    expect(askedInterval()).toBe(20_000)
+    expect(askedInterval()).toBe(60_000)
   })
 })
 
@@ -179,7 +179,7 @@ describe('ConversationThread — the idle gate', () => {
       await vi.advanceTimersByTimeAsync(POLL_IDLE_AFTER_MS + 60_000)
     })
 
-  it('stops the 20s poll after the idle threshold, on a visible thread', async () => {
+  it('stops the 60s poll after the idle threshold, on a visible thread', async () => {
     render(
       <ConversationThread
         conversationId="conversation.abc"
@@ -187,7 +187,7 @@ describe('ConversationThread — the idle gate', () => {
         isVisible
       />,
     )
-    expect(askedInterval()).toBe(20_000)
+    expect(askedInterval()).toBe(60_000)
 
     await idleOut()
 
@@ -211,7 +211,7 @@ describe('ConversationThread — the idle gate', () => {
       await vi.advanceTimersByTimeAsync(0)
     })
 
-    expect(askedInterval()).toBe(20_000)
+    expect(askedInterval()).toBe(60_000)
     // Not just the timer: nobody is shown the messages from before they left.
     expect(listMessagesInvalidate).toHaveBeenCalledWith({
       conversationId: 'conversation.abc',
@@ -234,7 +234,7 @@ describe('ConversationThread — the idle gate', () => {
         window.dispatchEvent(new Event('scroll'))
         await vi.advanceTimersByTimeAsync(0)
       })
-      expect(askedInterval()).toBe(20_000)
+      expect(askedInterval()).toBe(60_000)
     }
     // Twelve minutes of reading, and not one forced refetch.
     expect(listMessagesInvalidate).not.toHaveBeenCalled()

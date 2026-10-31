@@ -55,6 +55,22 @@ function fakeAdapter(
 const noAdapter = async () => null
 
 describe('runPublishTick — due scan and dispatch', () => {
+  it('an idle tick makes ONE store read and nothing else', async () => {
+    const store = new MemoryVariantStore([])
+    const findWork = vi.spyOn(store, 'findWork')
+    const others = (
+      ['claim', 'transition', 'tagStates', 'optedOutBlueskyHandles'] as const
+    ).map((m) => vi.spyOn(store, m))
+    const resolveAdapter = vi.fn(noAdapter)
+
+    const summary = await runPublishTick({ store, resolveAdapter, now: NOW })
+
+    expect(summary).toMatchObject({ due: 0, candidates: 0, errors: [] })
+    expect(findWork).toHaveBeenCalledTimes(1)
+    for (const spy of others) expect(spy).not.toHaveBeenCalled()
+    expect(resolveAdapter).not.toHaveBeenCalled()
+  })
+
   it('moves a due variant to awaiting-manual with an audit entry when no adapter is configured', async () => {
     const store = new MemoryVariantStore([makeVariant()])
 

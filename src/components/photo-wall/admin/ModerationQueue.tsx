@@ -35,7 +35,7 @@ import {
 
 /**
  * The moderation queue on `/admin/photo-wall` (Photo Wall spec §8, §10):
- * `photoWall.moderationQueue`, polled every 10 s while the page is visible
+ * `photoWall.moderationQueue`, polled every 30 s while the page is visible
  * and never stopped for idleness, in the tabs Pending, On the wall and Not
  * shown, with each card's actions and Approve all pending. After every
  * action the queue is read again, so the card moves to its new tab.
