@@ -28,16 +28,19 @@ describe('next.config rewrites', () => {
 })
 
 describe('next.config headers', () => {
-  it('sends Referrer-Policy: no-referrer on /f/<code>, and only there', async () => {
+  // Next applies every matching rule in order; for the same key the LAST one
+  // wins. So the /f/ rule must come after the site-wide default.
+  it('sends Referrer-Policy: no-referrer on /f/<code>, overriding the site default', async () => {
     const rules = (await config.headers?.()) ?? []
-    const feedback = rules.filter((r) =>
+    const withReferrer = rules.filter((r) =>
       r.headers.some((h) => h.key === 'Referrer-Policy'),
     )
-    expect(feedback).toEqual([
-      {
-        source: '/f/:path*',
-        headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
-      },
+    expect(withReferrer.map((r) => r.source)).toEqual(['/:path*', '/f/:path*'])
+    expect(withReferrer[1].headers).toEqual([
+      { key: 'Referrer-Policy', value: 'no-referrer' },
     ])
+    expect(
+      withReferrer[0].headers.find((h) => h.key === 'Referrer-Policy')?.value,
+    ).toBe('strict-origin-when-cross-origin')
   })
 })
