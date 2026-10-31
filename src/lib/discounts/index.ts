@@ -4,7 +4,6 @@
 export { calculateDiscountUsage, resolveRedemptionCount } from './usage'
 export {
   claimRefusal,
-  nameClaimants,
   normalizeDiscountCode,
   sponsorOwningCode,
   type SponsorCodeClaimant,

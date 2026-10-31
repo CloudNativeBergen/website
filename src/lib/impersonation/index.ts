@@ -1,8 +1,3 @@
-export {
-  addImpersonateParam,
-  getImpersonateQueryString,
-  buildUrlWithImpersonation,
-  type SessionWithImpersonation,
-} from './utils'
+export { addImpersonateParam, buildUrlWithImpersonation } from './utils'
 
 export { useImpersonateQueryString } from './hooks'

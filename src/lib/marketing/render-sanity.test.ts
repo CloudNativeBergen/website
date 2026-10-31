@@ -309,8 +309,9 @@ describe('studio scoped reads', () => {
     ]
     h.fetch
       .mockReset()
-      .mockImplementation(async (query: string, params: object) =>
-        (await evaluate(parse(query), { dataset, params })).get(),
+      .mockImplementation(
+        async (query: string, params: Record<string, unknown>) =>
+          (await evaluate(parse(query), { dataset, params })).get(),
       )
     expect((await getStudioTask('render', 'conf'))!.format).toBe('landscape')
     // Read as null, and so as square (`storedRenderFormat`).

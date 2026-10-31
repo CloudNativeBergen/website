@@ -1,6 +1,5 @@
 export { CampaignRecipesDialog } from './CampaignRecipesDialog'
 export {
-  anchorWords,
   countOf,
   missingBuiltins,
   windowWords,

@@ -19,13 +19,8 @@ import type {
   TitoEventRef,
 } from './types'
 
-export type {
-  TicketingProvider,
-  TicketingProviderCredentials,
-  EventRef,
-  CheckinEventRef,
-  TitoEventRef,
-}
+export type { TicketingProvider, TicketingProviderCredentials, EventRef }
+/** @public Mirrored by the Storybook tickets-provider mock. */
 export { ProviderUnsupportedError } from './types'
 /**
  * The PURE order-created discriminator. Exported here so the inbound webhook can
@@ -34,15 +29,7 @@ export { ProviderUnsupportedError } from './types'
  * empty-bag construction is not an acceptable substitute (#886).
  */
 export { parseCheckinOrderCreated }
-export type {
-  PublicEventInfo,
-  PublicTicketType,
-  TicketPrice,
-  WebhookVerifyResult,
-  CheckinWebhookPayload,
-  CheckinOrderCreatedData,
-  CheckinWebhookUser,
-} from './types'
+export type { PublicTicketType, CheckinWebhookPayload } from './types'
 
 /** Provider discriminator. Checkin.no is the default; Tito (this PR) is the
  * second provider — the proof the adapter generalizes. */

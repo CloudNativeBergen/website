@@ -18,11 +18,7 @@ import { FilterableCard } from './SettingsFilter'
  * `@/components/admin/FieldRow`, re-exported here for the settings callers.
  */
 
-export {
-  FieldRow,
-  type NamedItem,
-  type ArrayItem,
-} from '@/components/admin/FieldRow'
+export { FieldRow } from '@/components/admin/FieldRow'
 
 /** A deep-link to a dedicated management page (the in-app editor for this
  * card's data). Used where a full editor already lives elsewhere in /admin, so

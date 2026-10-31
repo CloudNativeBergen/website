@@ -57,4 +57,4 @@ class InMemoryEventBus {
 export const eventBus = new InMemoryEventBus()
 
 // Export types for use in other modules
-export type { EventHandlerFunction, DomainEvent }
+export type { EventHandlerFunction }

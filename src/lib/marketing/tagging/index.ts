@@ -5,19 +5,5 @@
  * pulls in the network resolver.
  */
 export { blueskyHandleFromLinks } from './handle'
-export {
-  resolveBlueskyHandle,
-  RESOLVE_TIMEOUT_MS,
-  type HandleResolution,
-} from './resolve'
-export {
-  BLUESKY_MAX_GRAPHEMES,
-  joinNames,
-  speakersList,
-  tagBlueskyBody,
-  tagsItsSubject,
-  type BlueskyTag,
-  type MentionRecord,
-  type TagPerson,
-} from './body'
-export { blueskyTagFor, ownBlueskyHandle, type TagSource } from './lookup'
+export { resolveBlueskyHandle, RESOLVE_TIMEOUT_MS } from './resolve'
+export { joinNames, speakersList, tagBlueskyBody } from './body'

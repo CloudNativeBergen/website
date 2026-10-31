@@ -6,7 +6,6 @@ import {
   type PushPreferences,
   type PushSubscriptionRecord,
   type SpeakerPushState,
-  DEFAULT_PUSH_PREFERENCES,
   normalizePushPreferences,
 } from './types'
 
@@ -251,5 +250,3 @@ export async function setPushPreferences(
     .commit()
   return normalized
 }
-
-export { DEFAULT_PUSH_PREFERENCES }

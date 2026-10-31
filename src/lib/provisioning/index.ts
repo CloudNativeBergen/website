@@ -15,9 +15,6 @@
 export {
   MAX_IDEMPOTENCY_KEY_LENGTH,
   MIN_IDEMPOTENCY_KEY_LENGTH,
-  PROVISIONING_RATE_LIMIT_TYPE,
-  PROVISIONING_REQUEST_TYPE,
-  PROVISIONING_TOKEN_ENV,
 } from './constants'
 export {
   chargeInvalidation,
@@ -27,4 +24,3 @@ export {
   deleteExpiredProvisioningRateLimits,
 } from './rateLimit'
 export { authenticateProvisioningRequest } from './token'
-export type { ProvisioningAuthResult } from './token'

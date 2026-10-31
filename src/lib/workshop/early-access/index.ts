@@ -21,7 +21,7 @@ export {
   expireEarlyAccessLinksIfTheyDisagree,
   resolveEarlyAccess,
 } from './links'
-export { earlyAccessCookie, earlyAccessTokenOf } from './cookie'
+export { earlyAccessTokenOf } from './cookie'
 export { registrationWindowFor } from './window'
 export { openEarlyAccessLink } from './open'
 export { earlyAccessPortalUrl } from './portal'

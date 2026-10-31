@@ -1,6 +1,2 @@
-export { StatusDot } from './StatusDot'
-export { ProbeCard } from './ProbeCard'
-export { SystemCheckRow } from './SystemCheckRow'
-export { SystemStatusCard } from './SystemStatusCard'
 export { SystemStatusSection } from './SystemStatusSection'
 export { SelfCheckPanel } from './SelfCheckPanel'

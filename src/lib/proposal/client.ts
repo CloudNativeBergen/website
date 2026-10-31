@@ -6,12 +6,9 @@ export * from './ui'
 export * from './business'
 
 export {
-  createTemplateProps,
   type BaseEmailTemplateProps,
   type ProposalAcceptTemplateProps,
   type ProposalRejectTemplateProps,
-  type NotificationEventData,
-  type NotificationParams,
 } from './email/types'
 
 export * from './utils'

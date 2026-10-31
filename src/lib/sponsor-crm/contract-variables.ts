@@ -1,7 +1,4 @@
-import {
-  processTemplateVariables,
-  processPortableTextVariables,
-} from '@/lib/sponsor/templates'
+import { processTemplateVariables } from '@/lib/sponsor/templates'
 import { formatDateLocalized, getCurrentDateTime } from '@/lib/time'
 import { formatOrgNumber, formatCurrency } from '@/lib/format'
 
@@ -166,4 +163,4 @@ export function buildContractVariables(
   return vars
 }
 
-export { processTemplateVariables, processPortableTextVariables }
+export { processTemplateVariables }

@@ -6,5 +6,3 @@ export {
   hasGalleryFilters,
   type GalleryFilterValues,
 } from './GalleryFilters'
-export { ImageHotspotEditor } from './ImageHotspotEditor'
-export { EditionSelect } from './EditionSelect'

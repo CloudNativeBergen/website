@@ -80,18 +80,6 @@ export const TravelExpenseInputSchema = z
     },
   )
 
-export const TravelSupportInputSchema = z.object({
-  speaker: z.object({
-    _ref: z.string(),
-    _type: z.literal('reference'),
-  }),
-  conference: z.object({
-    _ref: z.string(),
-    _type: z.literal('reference'),
-  }),
-  bankingDetails: BankingDetailsSchema,
-})
-
 export const TravelSupportClientInputSchema = z.object({
   speaker: z.object({
     _ref: z.string(),

@@ -1,4 +1,1 @@
-export {
-  ContentJudgementSettings,
-  type ContentJudgementSettingsProps,
-} from './ContentJudgementSettings'
+export { ContentJudgementSettings } from './ContentJudgementSettings'

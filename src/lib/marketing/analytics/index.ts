@@ -7,15 +7,10 @@ import {
 import type { MarketingAnalyticsProvider } from './types'
 
 export type {
-  BreakdownGrain,
-  CampaignBreakdownFailureKind,
-  CampaignBreakdownInput,
   CampaignBreakdownResult,
   CampaignBreakdownRow,
   MarketingAnalyticsProvider,
 } from './types'
-export { startOfTodayUtc, UNATTRIBUTED } from './types'
-export { PostHogAnalyticsProvider } from './posthog'
 
 /**
  * The factory (docs/INTEGRATION_ADAPTERS.md): one vendor today. `null` when
