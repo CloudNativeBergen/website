@@ -7,6 +7,7 @@ import {
   OG_DARKEST_CHIP_BACKGROUND,
   OG_MAX_BACKGROUND_LUMINANCE,
   OG_MAX_TEXT_LUMINANCE,
+  OG_SMALL_TEXT_SCRIM_ALPHA,
   ogBrandColors,
   relativeLuminance,
 } from './brand'
@@ -309,16 +310,43 @@ describe('background ceiling — what it does and does not guarantee', () => {
     expect(1.05 / (OG_MAX_BACKGROUND_LUMINANCE + 0.05)).toBeCloseTo(3, 6)
   })
 
-  it('does NOT give the 12–18px white labels 4.5:1 — a known, inherited gap', () => {
+  it('does NOT give the 12–16px white labels 4.5:1 on its own', () => {
     expect(1.05 / (OG_MAX_BACKGROUND_LUMINANCE + 0.05)).toBeLessThan(4.5)
-    // What the ceiling would have to be for those to pass.
-    expect(1.05 / 4.5 - 0.05).toBeCloseTo(0.18333, 5)
     // And the house palette is already worse than any themed tenant can be.
     expect(relativeLuminance(DEFAULT_ACCENT_COLOR)).toBeGreaterThan(
       OG_MAX_BACKGROUND_LUMINANCE,
     )
     expect(contrastRatio('#FFFFFF', DEFAULT_ACCENT_COLOR)).toBeLessThan(3)
   })
+})
+
+/** #714: the scrim, not the ceiling, is what carries small text to 4.5:1. */
+describe('OG_SMALL_TEXT_SCRIM', () => {
+  // Black at the scrim alpha over `behind`, floored like compositeWhiteOver.
+  const scrimOver = (behind: string) =>
+    '#' +
+    [1, 3, 5]
+      .map((i) =>
+        Math.floor(
+          parseInt(behind.slice(i, i + 2), 16) *
+            (1 - OG_SMALL_TEXT_SCRIM_ALPHA),
+        )
+          .toString(16)
+          .padStart(2, '0'),
+      )
+      .join('')
+
+  // The house cyan (brightest background shipped) and a themed background at
+  // the luminance ceiling. Scrimmed text is drawn at full opacity: an element
+  // opacity would fade the scrim along with the text.
+  it.each([DEFAULT_ACCENT_COLOR, '#959595'])(
+    'gives white text at least 4.5:1 over %s',
+    (bg) => {
+      expect(contrastRatio('#FFFFFF', scrimOver(bg))).toBeGreaterThanOrEqual(
+        4.5,
+      )
+    },
+  )
 })
 
 describe('HOUSE_OG_PAIR', () => {

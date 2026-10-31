@@ -44,7 +44,12 @@ const nextAuthMiddleware = auth((req) => {
   if (!req.auth) {
     const signInPage = '/api/auth/signin'
     const signInUrl = new URL(signInPage, req.nextUrl.origin)
-    signInUrl.searchParams.append('callbackUrl', req.url)
+    // A same-site path, not `req.url`: the email-link flow's
+    // `safeCallbackPath` collapses any absolute URL to `/` (#1071).
+    signInUrl.searchParams.append(
+      'callbackUrl',
+      req.nextUrl.pathname + req.nextUrl.search,
+    )
     return NextResponse.redirect(signInUrl)
   }
 

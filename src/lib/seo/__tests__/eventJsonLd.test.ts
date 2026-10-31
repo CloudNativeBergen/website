@@ -1,5 +1,6 @@
 import {
   buildEventJsonLd,
+  buildOrganizationJsonLd,
   performersFromSchedules,
   serializeJsonLd,
   type EventPerformer,
@@ -331,5 +332,29 @@ describe('buildEventJsonLd — lifecycle overrides', () => {
     expect(json.offers).toMatchObject({
       availability: 'https://schema.org/InStock',
     })
+  })
+})
+
+describe('buildOrganizationJsonLd', () => {
+  it('emits the organizer with sameAs and a logo on the canonical origin', () => {
+    const json = buildOrganizationJsonLd({
+      conference: makeConference(),
+      domain: 'cloudnativebergen.dev',
+    })
+    expect(json).toMatchObject({
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: 'Cloud Native Bergen',
+      sameAs: makeConference().socialLinks,
+    })
+    expect(json.logo).toBe(`${json.url}/pwa/icon/512`)
+  })
+
+  it('omits sameAs when there are no social links', () => {
+    const json = buildOrganizationJsonLd({
+      conference: makeConference({ socialLinks: [] }),
+      domain: 'cloudnativebergen.dev',
+    })
+    expect(json).not.toHaveProperty('sameAs')
   })
 })

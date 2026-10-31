@@ -279,7 +279,7 @@ function roundRobin<T>(
  *
  * Round-robin is fair within a tick, not across ticks: with more submitting
  * conferences than `submittedLimit`, lanes in document order hand the same
- * first N conferences a slot every minute and the rest none, until they time
+ * first N conferences a slot every tick and the rest none, until they time
  * out `ambiguous` without a single vendor read. A conference that was just
  * read has its head stamped, which sorts it to the back — the rotation the
  * lane order already gives submissions, applied to conferences. Stable, so
@@ -326,7 +326,7 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     const dueComment = groq`${dueOfConference.slice(0, -1)} && platform in $commentPlatforms]`
     // groq-global: the other half of one conference's due list.
     const dueOther = groq`${dueOfConference.slice(0, -1)} && !(platform in $commentPlatforms)]`
-    // groq-global: the per-minute publish cron sweeps EVERY tenant's due
+    // groq-global: the five-minute publish cron sweeps EVERY tenant's due
     // variants in one scan (#785). The scan is grouped by conference so the
     // fairness bound (at most N per conference, per window) is enforced in
     // the read — a tenant with a deep backlog cannot fill the window. The
@@ -345,7 +345,7 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     //
     // LEAST RECENTLY CHECKED first, not oldest-submitted: the slice is capped,
     // and the sweep skips a submission that is inside its backoff — so ordering
-    // by submit time would hand the same capped set back every minute while it
+    // by submit time would hand the same capped set back every tick while it
     // waited, and a newer submission behind it would never be read at all. A
     // submission just read sorts to the BACK, which rotates the queue.
     //
@@ -360,7 +360,7 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     // It rides in the SAME read as the two sweeps above rather than costing a
     // fourth query a minute.
     const submitted = groq`*[_type == "conference" && count(${submittedOfConference}) > 0][0...${bounds.maxConferences}]{ "submitted": ${submittedOfConference} | order(coalesce(submission.lastCheckedAt, submission.submittedAt) asc, _id asc)[0...${bounds.perConference}]${VARIANT_PROJECTION} }.submitted`
-    // All three sweeps in ONE round trip: the tick runs every minute.
+    // All three sweeps in ONE round trip: the tick runs every five minutes.
     const query = `{ "due": ${due}, "stale": ${stale}, "submitted": ${submitted} }`
     type RawDue = RawVariant & {
       postAttachments: RawPostAttachments

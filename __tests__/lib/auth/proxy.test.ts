@@ -127,7 +127,12 @@ describe('middleware — /workshop is not the proxy’s', () => {
 })
 
 describe('middleware — NextAuth gate (unauthenticated)', () => {
-  it.each(['/cfp/list', '/admin/sponsors', '/cli/token'])(
+  it.each([
+    '/cfp/list',
+    '/admin/sponsors',
+    '/cli/token',
+    '/cfp/proposal?utm_campaign=cfp',
+  ])(
     'redirects an unauthenticated request to %s to sign-in with callbackUrl',
     async (path) => {
       const res = (await middleware(req(path))) as Response
@@ -135,9 +140,8 @@ describe('middleware — NextAuth gate (unauthenticated)', () => {
       const location = res.headers.get('location')!
       const url = new URL(location)
       expect(url.pathname).toBe('/api/auth/signin')
-      expect(url.searchParams.get('callbackUrl')).toBe(
-        `http://localhost:3000${path}`,
-      )
+      // A relative path + query, the only shape safeCallbackPath keeps (#1071).
+      expect(url.searchParams.get('callbackUrl')).toBe(path)
     },
   )
 })

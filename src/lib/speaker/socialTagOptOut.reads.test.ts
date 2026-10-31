@@ -81,8 +81,8 @@ describe('reads that MUST carry the opt-out', () => {
     const { speaker, err } = await getSpeaker('spk-1')
 
     expect(err).toBeNull()
-    expect(speaker.socialTagOptOut).toBe(true)
-    expect(speaker.socialTagOptOutAt).toBe('2026-09-22T10:30:00.000Z')
+    expect(speaker?.socialTagOptOut).toBe(true)
+    expect(speaker?.socialTagOptOutAt).toBe('2026-09-22T10:30:00.000Z')
   })
 
   it('getSpeakers — the admin list the organizer one-way lock is computed from', async () => {

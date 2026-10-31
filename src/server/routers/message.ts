@@ -11,6 +11,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { runAfterResponse } from '@/server/runAfterResponse'
 import {
   ListConversationsSchema,
+  ViewCountsSchema,
   GetConversationSchema,
   ListMessagesSchema,
   SendMessageSchema,
@@ -187,6 +188,12 @@ export const messageRouter = router({
           message: `View '${view}' is not available`,
         })
       }
+      if (!isOrganizer && input.filters?.length) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Filters are not available',
+        })
+      }
       // The cursor is EITHER a plain ISO datetime (legacy) or `<iso>~<_id>`
       // (compound keyset); split it so exact-timestamp ties page correctly.
       const { before, beforeId } = parseMessageCursor(input.cursor)
@@ -197,6 +204,7 @@ export const messageRouter = router({
         before,
         beforeId,
         view,
+        filters: input.filters,
         // The authz waist ALREADY resolved the request's org from the domain
         // conference; passing it stops the organizer-id read resolving the same
         // conference a second time. `null` (unresolvable) keeps the fail-closed
@@ -212,16 +220,20 @@ export const messageRouter = router({
    * conversation set, reusing the same predicates the list views apply — meant to
    * accompany the first inbox page, not to be polled hot.
    */
-  viewCounts: organizerProcedure.query(async ({ ctx }) => {
-    const conferenceId = await resolveConferenceId()
-    return getConversationViewCounts({
-      speakerId: ctx.speaker._id,
-      isOrganizer: ctx.isOrgOrganizer,
-      conferenceId,
-      // Resolved by the waist for this request — see `listConversations`.
-      orgId: ctx.orgId,
-    })
-  }),
+  viewCounts: organizerProcedure
+    .input(ViewCountsSchema)
+    .query(async ({ ctx, input }) => {
+      const conferenceId = await resolveConferenceId()
+      return getConversationViewCounts({
+        speakerId: ctx.speaker._id,
+        isOrganizer: ctx.isOrgOrganizer,
+        conferenceId,
+        // Chips are organizer-only; a speaker's counts are never narrowed.
+        filters: ctx.isOrgOrganizer ? input?.filters : undefined,
+        // Resolved by the waist for this request — see `listConversations`.
+        orgId: ctx.orgId,
+      })
+    }),
 
   /**
    * The caller's TEAM LENS (TEAMS-3): every configured team's key + title, plus

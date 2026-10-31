@@ -34,10 +34,15 @@ import type {
   ConversationViewCounts,
   ConversationWithContext,
   EmailOverride,
+  InboxFilter,
   Message,
   MessageOrigin,
 } from './types'
-import { DEFAULT_CONVERSATION_PREFERENCE, ORGANIZERS_GROUP } from './types'
+import {
+  DEFAULT_CONVERSATION_PREFERENCE,
+  INBOX_FILTERS,
+  ORGANIZERS_GROUP,
+} from './types'
 import {
   proposalConversationId,
   sponsorConversationId,
@@ -200,6 +205,62 @@ export const SPEAKER_SCOPE_PREDICATE =
 // token-authed via the portal and never reaches a speaker inbox.
 
 /**
+ * The organizer inbox FILTER CHIPS (#916): the extra conjunct each chip adds on
+ * top of a status view (`active` / `resolved` / `archived`). The chip-named
+ * views of {@link rawViewPredicate} are exactly `active && <clause>`, so a chip
+ * and its legacy `?view=` share one predicate string.
+ */
+const INBOX_FILTER_CLAUSES: Record<
+  InboxFilter,
+  { predicate: string; needsOrganizerIds: boolean; needsMyTeamKeys?: boolean }
+> = {
+  'needs-reply': { predicate: NEEDS_REPLY, needsOrganizerIds: true },
+  // The thread's ROUTING team must be one of the caller's teams: a sponsor
+  // thread maps to `sponsors`, everything else to `cfp` (the TEAMS-2 map).
+  // INERT when the caller is on no team — `count($myTeamKeys) == 0` then
+  // matches every thread, so the lens is a soft filter that never hides a
+  // thread the caller would otherwise see. `$myTeamKeys` is bound by the caller.
+  'my-teams': {
+    predicate: `(count($myTeamKeys) == 0 || (conversationType == "sponsor" && "sponsors" in $myTeamKeys) || (conversationType != "sponsor" && "cfp" in $myTeamKeys))`,
+    needsOrganizerIds: false,
+    needsMyTeamKeys: true,
+  },
+  unassigned: { predicate: '!defined(assignedTo)', needsOrganizerIds: false },
+  mine: {
+    predicate: 'assignedTo._ref == $speakerId',
+    needsOrganizerIds: false,
+  },
+}
+
+/**
+ * {@link rawViewPredicate} for `view` AND every chip in `filters` (#916). The
+ * chips are organizer-only and ignored for a speaker; a chip equal to `view`
+ * is not applied twice.
+ */
+export function inboxPredicate(
+  view: ConversationView,
+  filters: readonly InboxFilter[],
+  isOrganizer: boolean,
+): {
+  predicate: string
+  needsOrganizerIds: boolean
+  needsMyTeamKeys?: boolean
+} {
+  const result = rawViewPredicate(view, isOrganizer)
+  if (!isOrganizer) return result
+  const parts = result.predicate ? [result.predicate] : []
+  let { needsOrganizerIds, needsMyTeamKeys = false } = result
+  for (const filter of new Set(filters)) {
+    if (filter === view) continue
+    const clause = INBOX_FILTER_CLAUSES[filter]
+    parts.push(clause.predicate)
+    needsOrganizerIds ||= clause.needsOrganizerIds
+    needsMyTeamKeys ||= clause.needsMyTeamKeys ?? false
+  }
+  return { predicate: parts.join(' && '), needsOrganizerIds, needsMyTeamKeys }
+}
+
+/**
  * The RAW GROQ predicate for an inbox `view` (no leading ` && `, empty for
  * `all`), plus whether it references `$organizerIds` (only `needs-reply` does).
  * This is the single home for every view's filter so the inbox list
@@ -234,32 +295,16 @@ export function rawViewPredicate(
   const active = `${STATUS_OPEN} && ${NOT_GLOBALLY_ARCHIVED} && ${NOT_USER_ARCHIVED}`
   switch (view) {
     case 'needs-reply':
-      return {
-        predicate: `${active} && ${NEEDS_REPLY}`,
-        needsOrganizerIds: true,
-      }
     case 'my-teams':
-      // The thread's ROUTING team must be one of the caller's teams: a sponsor
-      // thread maps to `sponsors`, everything else to `cfp` (the TEAMS-2 map).
-      // INERT when the caller is on no team — `count($myTeamKeys) == 0` then
-      // matches every active thread, so the lens is a soft filter that never
-      // hides a thread the caller would otherwise see. `$myTeamKeys` is bound by
-      // the caller (see needsMyTeamKeys).
-      return {
-        predicate: `${active} && (count($myTeamKeys) == 0 || (conversationType == "sponsor" && "sponsors" in $myTeamKeys) || (conversationType != "sponsor" && "cfp" in $myTeamKeys))`,
-        needsOrganizerIds: false,
-        needsMyTeamKeys: true,
-      }
     case 'unassigned':
+    case 'mine': {
+      const clause = INBOX_FILTER_CLAUSES[view]
       return {
-        predicate: `${active} && !defined(assignedTo)`,
-        needsOrganizerIds: false,
+        predicate: `${active} && ${clause.predicate}`,
+        needsOrganizerIds: clause.needsOrganizerIds,
+        needsMyTeamKeys: clause.needsMyTeamKeys,
       }
-    case 'mine':
-      return {
-        predicate: `${active} && assignedTo._ref == $speakerId`,
-        needsOrganizerIds: false,
-      }
+    }
     case 'resolved':
       return {
         predicate: `${STATUS_RESOLVED} && ${NOT_GLOBALLY_ARCHIVED} && ${NOT_USER_ARCHIVED}`,
@@ -280,18 +325,20 @@ export function rawViewPredicate(
 /**
  * Build the GROQ predicate FRAGMENT (leading ` && ...`, or empty for `all`) for
  * an inbox `view` — the inline form the list query ANDs into its base filter.
- * Thin wrapper over {@link rawViewPredicate}.
+ * Thin wrapper over {@link inboxPredicate}.
  */
 function buildViewPredicate(
   view: ConversationView,
+  filters: readonly InboxFilter[],
   isOrganizer: boolean,
 ): {
   predicate: string
   needsOrganizerIds: boolean
   needsMyTeamKeys?: boolean
 } {
-  const { predicate, needsOrganizerIds, needsMyTeamKeys } = rawViewPredicate(
+  const { predicate, needsOrganizerIds, needsMyTeamKeys } = inboxPredicate(
     view,
+    filters,
     isOrganizer,
   )
   return {
@@ -850,6 +897,7 @@ export async function listConversationsForSpeaker({
   before,
   beforeId,
   view = 'active',
+  filters = [],
   orgId,
 }: {
   speakerId: string
@@ -858,6 +906,8 @@ export async function listConversationsForSpeaker({
   before?: string
   beforeId?: string
   view?: ConversationView
+  /** Organizer filter chips ANDed onto `view` (#916); ignored for speakers. */
+  filters?: InboxFilter[]
   /**
    * The REQUEST's organization, when the caller already resolved it (the tRPC
    * waist stashes it as `ctx.orgId`). Passing it skips this function's own
@@ -905,7 +955,7 @@ export async function listConversationsForSpeaker({
     predicate: viewPredicate,
     needsOrganizerIds,
     needsMyTeamKeys,
-  } = buildViewPredicate(view, isOrganizer)
+  } = buildViewPredicate(view, filters, isOrganizer)
   if (needsOrganizerIds) {
     params.organizerIds = organizerIdsUpFront ?? []
   }
@@ -1128,7 +1178,7 @@ export async function listConversationsForSpeaker({
   // across page boundaries; a fully global grouping would need a second sort key
   // in the cursor. Accepted (maintainer): the first page — where it matters most
   // — is correctly grouped, and within-page recency is intact.
-  if (isOrganizer && view === 'active') {
+  if (isOrganizer && view === 'active' && filters.length === 0) {
     const directRows = items.filter((item) => item.direct)
     const rest = items.filter((item) => !item.direct)
     return [...directRows, ...rest]
@@ -1222,11 +1272,19 @@ export async function getConversationViewCounts({
   speakerId,
   isOrganizer,
   conferenceId,
+  filters = [],
   orgId,
 }: {
   speakerId: string
   isOrganizer: boolean
   conferenceId: string
+  /**
+   * The organizer's active filter chips (#916). Each CHIP count is narrowed by
+   * the other selected chips, so its badge matches the list it would show; the
+   * status counts (`active` / `resolved` / `archived`) stay unfiltered, since
+   * the chips only apply to open threads.
+   */
+  filters?: InboxFilter[]
   /** See {@link listConversationsForSpeaker}'s `orgId`. */
   orgId?: string | null
 }): Promise<ConversationViewCounts> {
@@ -1262,15 +1320,17 @@ export async function getConversationViewCounts({
 
   const fields: string[] = []
   for (const view of views) {
-    const { predicate, needsOrganizerIds, needsMyTeamKeys } = rawViewPredicate(
+    const isChip = (INBOX_FILTERS as readonly string[]).includes(view)
+    const { predicate, needsOrganizerIds, needsMyTeamKeys } = inboxPredicate(
       view,
+      isChip ? filters : [],
       isOrganizer,
     )
     if (needsOrganizerIds) {
-      params.organizerIds = await organizerIdsForRequest(orgId)
+      params.organizerIds ??= await organizerIdsForRequest(orgId)
     }
     if (needsMyTeamKeys) {
-      params.myTeamKeys = await getViewerTeamKeys(conferenceId, speakerId)
+      params.myTeamKeys ??= await getViewerTeamKeys(conferenceId, speakerId)
     }
     const filter = predicate ? ` && ${predicate}` : ''
     // groq-global-scoped: `base` opens the filter with `_type == "conversation"

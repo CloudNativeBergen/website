@@ -91,15 +91,6 @@ export default defineConfig({
         inline: ['@starefossen/sanity-plugin-inline-svg-input'],
       },
     },
-    // Vitest 5 flipped this default to `true`. Auto-clearing before every test
-    // wipes call state recorded at module IMPORT time, and several suites reach
-    // for exactly that: the `@sanity/image-url` alias mock hands out a chainable
-    // builder that `src/lib/sanity/client.ts` constructs once on import, and the
-    // tests recover it via `createImageUrlBuilder.mock.results[0]`. With
-    // auto-clear on, that result is gone before the first test body runs and the
-    // builder is unreachable. Suites that want a clean slate call `mockClear()`
-    // in their own `beforeEach`, as those two do.
-    clearMocks: false,
     coverage: {
       provider: 'v8',
       // SCOPED coverage gate: only the security-critical auth modules are

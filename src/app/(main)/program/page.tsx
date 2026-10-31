@@ -1,3 +1,4 @@
+import { resolvePageMetadata } from '@/lib/seo/brand'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
@@ -16,16 +17,38 @@ import { BreadcrumbJsonLd } from '@/components/seo/BreadcrumbJsonLd'
 import { performersFromSchedules } from '@/lib/seo/eventJsonLd'
 import { canonicalAlternates, canonicalUrl } from '@/lib/seo/canonical'
 import type { Metadata } from 'next'
+import type { ConferenceSchedule } from '@/lib/conference/types'
+import type { ConferenceSponsor } from '@/lib/sponsor/types'
+import { trackSponsorOf } from '@/lib/stream/track-sponsor'
 
 export async function generateMetadata(): Promise<Metadata> {
+  const { title, description } = await resolvePageMetadata(
+    'Program',
+    'Talks, workshops and schedule for',
+  )
   return {
-    title: 'Program',
-    description: 'Conference program and schedule',
+    title: { absolute: title },
+    description,
     alternates: await canonicalAlternates('/program'),
+    openGraph: { title, description },
     twitter: {
       card: 'summary_large_image',
     },
   }
+}
+
+/** Names each sponsored track's public sponsor for the track headers (#383). */
+function withTrackSponsorNames(
+  schedules: ConferenceSchedule[],
+  sponsors: ConferenceSponsor[],
+): ConferenceSchedule[] {
+  return schedules.map((schedule) => ({
+    ...schedule,
+    tracks: (schedule.tracks || []).map((track) => {
+      const name = trackSponsorOf(track, sponsors)?.sponsor.name
+      return name ? { ...track, sponsorName: name } : track
+    }),
+  }))
 }
 
 async function CachedProgramContent({ domain }: { domain: string }) {
@@ -123,7 +146,10 @@ async function CachedProgramContent({ domain }: { domain: string }) {
         </div>
 
         <ProgramClient
-          schedules={conference.schedules}
+          schedules={withTrackSponsorNames(
+            conference.schedules,
+            conference.sponsors || [],
+          )}
           conferenceTopics={conference.topics || []}
           conferenceStartDate={conference.startDate}
           conferenceEndDate={conference.endDate}

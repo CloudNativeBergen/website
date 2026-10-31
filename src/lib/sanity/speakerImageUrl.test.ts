@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createImageUrlBuilder } from '@sanity/image-url'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { builder as imageBuilder } from '../../../__tests__/mocks/sanity-image-url'
 
 import { speakerImageUrl } from './client'
 
@@ -7,10 +7,7 @@ import { speakerImageUrl } from './client'
 // `client.ts` builds one at import time, so every transform funnels through this
 // single instance and its calls are inspectable.
 function builder() {
-  return vi.mocked(createImageUrlBuilder).mock.results[0].value as Record<
-    string,
-    ReturnType<typeof vi.fn>
-  >
+  return imageBuilder
 }
 
 const SANITY_IMAGE = 'https://cdn.sanity.io/images/p/d/abc123-400x400.jpg'
@@ -54,5 +51,13 @@ describe('speakerImageUrl', () => {
 
     expect(speakerImageUrl(external)).toBe(external)
     expect(builder().auto).not.toHaveBeenCalled()
+  })
+  it('falls back to the original URL when the builder rejects it', () => {
+    const fileUrl = 'https://cdn.sanity.io/files/p/d/abc123.jpg'
+    builder().image.mockImplementationOnce(() => {
+      throw new Error('Malformed asset _ref')
+    })
+
+    expect(speakerImageUrl(fileUrl)).toBe(fileUrl)
   })
 })

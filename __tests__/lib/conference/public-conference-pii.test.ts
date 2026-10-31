@@ -26,6 +26,7 @@ import {
   CONFERENCE_QUERY_FULL,
 } from '@/lib/conference/query'
 import {
+  pickCfpConference,
   pickConferenceLogoProps,
   pickHeaderConference,
 } from '@/lib/conference/logo'
@@ -291,5 +292,26 @@ describe('client boundaries: whole conference objects never cross', () => {
     expect(Object.keys(pickHeaderConference(FULL_CONFERENCE)).sort()).toEqual(
       [...HEADER_KEYS].sort(),
     )
+  })
+})
+
+describe('CFP proposal pages — client-component boundary (#980)', () => {
+  it('pickCfpConference is an exact allowlist against a full document', () => {
+    const picked = pickCfpConference(FULL_CONFERENCE)
+    expect(Object.keys(picked).sort()).toEqual(
+      [
+        'cfpEmail',
+        'cfpEndDate',
+        'cfpNotifyDate',
+        'cfpStartDate',
+        'endDate',
+        'formats',
+        'startDate',
+        'topics',
+      ].sort(),
+    )
+    const serialized = JSON.stringify(picked)
+    expect(serialized).not.toContain('agentConfig')
+    expect(serialized).not.toContain('checkinCustomerId')
   })
 })

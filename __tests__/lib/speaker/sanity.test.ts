@@ -375,6 +375,15 @@ describe('isOrganizer computed from conference.organizers', () => {
     expect(speaker.isOrganizer).toBe(true)
   })
 
+  it('returns a null speaker, not an empty object, when the document is gone (#1644)', async () => {
+    mockFetch.mockResolvedValue(null)
+
+    const { speaker, err } = await getSpeaker('speaker-gone')
+
+    expect(err).toBeNull()
+    expect(speaker).toBeNull()
+  })
+
   it('should propagate isOrganizer: false from Sanity response through getOrCreateSpeaker', async () => {
     const regular = {
       ...baseSpeaker,
@@ -398,7 +407,7 @@ describe('isOrganizer computed from conference.organizers', () => {
     const { speaker, err } = await getSpeaker('speaker-1')
 
     expect(err).toBeNull()
-    expect(speaker.isOrganizer).toBe(true)
+    expect(speaker?.isOrganizer).toBe(true)
   })
 
   it('should handle undefined isOrganizer as falsy', async () => {
@@ -409,7 +418,7 @@ describe('isOrganizer computed from conference.organizers', () => {
     const { speaker, err } = await getSpeaker('speaker-1')
 
     expect(err).toBeNull()
-    expect(speaker.isOrganizer).toBeFalsy()
+    expect(speaker?.isOrganizer).toBeFalsy()
   })
 
   it('should include isOrganizer in GROQ query for findSpeakerByProvider', async () => {
