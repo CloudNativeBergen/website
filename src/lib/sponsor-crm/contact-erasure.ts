@@ -100,9 +100,10 @@ async function planAll(
   refusals: string[]
 }> {
   const all = await fetchSponsorRecipientDocs(emails)
-  const docs = organizationId
-    ? all.filter((doc) => doc.orgId === organizationId)
-    : all
+  const docs =
+    organizationId !== undefined
+      ? all.filter((doc) => doc.orgId === organizationId)
+      : all
   const refusals: string[] = []
   const patches: ErasureDocumentPatch[] = []
   for (const doc of docs) {
@@ -240,10 +241,10 @@ async function removeFromSponsorAudiences(
   const failures: string[] = []
   let conferences: Conference[] = []
   try {
-    if (organizationId) {
+    if (organizationId !== undefined) {
       conferences =
         (await clientReadUncached.fetch<Conference[]>(
-          `*[_type == "conference" && organization._ref == $orgId]{ _id, title, organization }`,
+          `*[_type == "conference" && organization._ref == $orgId && !(_id in path("drafts.**"))]{ _id, title, organization }`,
           { orgId: organizationId },
         )) ?? []
       return removeFromAudiences(conferences, emails, failures)

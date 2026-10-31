@@ -60,8 +60,9 @@ exactly as below. Then:
 1. Search by the person's email address. The page shows a dry run, grouped by
    kind, with counts: speaker profile, talks and co-speaker links, co-speaker
    invitations (also those with no speaker document), sponsor contacts, workshop
-   signups and the workshop login, and other references. It also lists what
-   remains and why.
+   signups and the workshop login, and other references. It shows nothing about
+   other organizations: "What remains" is always the one line "Data held by
+   other organizations is neither shown nor touched here".
 2. Type the email address to confirm, and erase. The server plans again from the
    address; it never uses the plan the page showed.
 3. File the verification it prints (`CLEAN`, or `RESIDUAL DATA FOUND`) with the
@@ -86,13 +87,30 @@ exactly as below. Then:
   A deleted signup frees the seat, but the waitlist is not promoted
   automatically: tell the workshop host.
 
+**What the preview still reveals.** Whether the speaker profile and the
+workshop login are kept or deleted. "Kept" tells the organizer that the person
+has data somewhere else, but not where or how much. That much is needed to
+answer the person honestly.
+
+**Sign-in tokens are global, on purpose.** A full speaker erasure deletes the
+person's `emailSignInToken` documents in every organization. They belong to the
+person's address, not to a tenant, and a live token is a way into their account.
+
+**Also on erase:** the address is removed from the speaker audiences (Resend)
+of this organization's conferences. The erase runs at
+`POST /api/admin/privacy/erase`, which has its own 300-second limit for the
+Session Feedback wait.
+
 **The page refuses**, and the operator uses the CLI, when the dry run has a
 refusal (for example the sole organizer of a conference), when a social handle
 of the person is also listed by another speaker (`--accept-shared-handles`), or
 when more than five speaker profiles match the address.
 
-The audit record is the `[privacy-erasure]` log line: organizer id,
-organization id and counts, no address. The `[speaker-erasure]` line is written
+The audit record is a `privacyErasureLog` document: organizer id,
+organization id, time, counts and outcome (`clean`, `residual` or `failed`).
+It holds no address and no subject id, and the `cleanup-notifications` cron
+deletes it after three years. The `[privacy-erasure] started` and `finished` (or
+`failed`) log lines carry the same ids and counts. The `[speaker-erasure]` line is written
 for each speaker as with the CLI.
 
 ### The CLI (platform operator)

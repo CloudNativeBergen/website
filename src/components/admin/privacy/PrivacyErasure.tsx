@@ -1,19 +1,35 @@
 'use client'
 
 import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { Button } from '@/components/Button'
 import { api } from '@/lib/trpc/client'
+import type { OrgErasureResult } from '@/lib/privacy/org-erasure'
 import { ErasurePreview } from './ErasurePreview'
 
-/** Search by email → preview → typed confirmation → erase → verification. */
+async function postErase(body: {
+  email: string
+  confirmEmail: string
+}): Promise<OrgErasureResult> {
+  const response = await fetch('/api/admin/privacy/erase', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.error ?? 'Erasure failed')
+  return data as OrgErasureResult
+}
+
+/**
+ * Search by email → preview → typed confirmation → erase → verification.
+ * Both steps POST, so the address never goes in a URL.
+ */
 export function PrivacyErasure() {
   const [input, setInput] = useState('')
-  const [email, setEmail] = useState<string | null>(null)
-  const preview = api.privacy.preview.useQuery(
-    { email: email ?? '' },
-    { enabled: email !== null, retry: false, refetchOnWindowFocus: false },
-  )
-  const erase = api.privacy.erase.useMutation()
+  const preview = api.privacy.preview.useMutation()
+  const erase = useMutation({ mutationFn: postErase })
+  const email = preview.variables?.email
 
   return (
     <div className="space-y-6">
@@ -22,7 +38,7 @@ export function PrivacyErasure() {
         onSubmit={(e) => {
           e.preventDefault()
           erase.reset()
-          setEmail(input.trim())
+          preview.mutate({ email: input.trim() })
         }}
       >
         <label htmlFor="erasure-email" className="sr-only">
@@ -37,18 +53,18 @@ export function PrivacyErasure() {
           onChange={(e) => setInput(e.target.value)}
           className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800"
         />
-        <Button type="submit" size="sm">
+        <Button type="submit" size="sm" disabled={preview.isPending}>
           Preview
         </Button>
       </form>
 
-      {preview.isFetching && <p className="text-sm">Checking…</p>}
+      {preview.isPending && <p className="text-sm">Checking…</p>}
       {preview.error && (
         <p role="alert" className="text-sm text-red-700">
           {preview.error.message}
         </p>
       )}
-      {preview.data && !preview.isFetching && email && (
+      {preview.data && !preview.isPending && email && (
         <ErasurePreview
           preview={preview.data}
           isErasing={erase.isPending}

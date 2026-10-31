@@ -38,6 +38,8 @@ import {
   type ErasureVerification,
 } from '@/lib/speaker/erasure'
 import { eraseSponsorContactSendRecords } from '@/lib/sponsor-crm/contact-erasure'
+import { writePrivacyErasureLog } from './erasure-log'
+import { removeFromSpeakerAudiences } from '@/lib/speaker/audience-erasure'
 import { workshopWorkOS } from '@/lib/workshop/central-sign-in/workos'
 import { requireSpeakerInCurrentOrg } from '@/server/tenancy'
 
@@ -99,10 +101,6 @@ interface Scope {
   orgId: string
 }
 
-function stripVersion(id: string): string {
-  return id.replace(/^(drafts\.|versions\.[^.]+\.)/, '')
-}
-
 async function findSpeakers({ email, orgId }: Scope) {
   return (
     (await clientReadUncached.fetch<{ _id: string; name?: string }[]>(
@@ -128,29 +126,36 @@ async function sharedReason(
   }
   const ids = [
     ...new Set(
-      [...plan.documentPatches, ...plan.documentDeletes].map((d) =>
-        stripVersion(d.id),
-      ),
+      [...plan.documentPatches, ...plan.documentDeletes].map((d) => d.id),
     ),
   ]
   if (ids.length === 0) return null
   const owners =
     (await clientReadUncached.fetch<
-      { owner?: string | null; members?: (string | null)[] | null }[]
+      {
+        _id: string
+        owner?: string | null
+        members?: (string | null)[] | null
+      }[]
     >(
       // groq-global: an ownership probe over the ids the erasure would write,
       // to REFUSE a write into another organization's documents.
-      groq`*[_id in $ids]{ "owner": coalesce(organization._ref, conference->organization._ref, sponsorForConference->conference->organization._ref, proposal->conference->organization._ref), "members": organizations[]._ref }`,
+      groq`*[_id in $ids]{ _id, "owner": coalesce(organization._ref, conference->organization._ref, sponsorForConference->conference->organization._ref, proposal->conference->organization._ref), "members": organizations[]._ref }`,
       { ids },
       { cache: 'no-store' },
     )) ?? []
-  const foreign = owners.filter(
-    (o) =>
-      (o.owner && o.owner !== orgId) ||
-      (o.members ?? []).some((m) => m && m !== orgId),
-  ).length
+  // Raw ids, drafts and release versions included. A row the probe cannot
+  // read is not proven ours, so it counts as foreign and the erase is refused.
+  const seen = new Set(owners.map((o) => o._id))
+  const foreign =
+    ids.filter((id) => !seen.has(id)).length +
+    owners.filter(
+      (o) =>
+        (o.owner && o.owner !== orgId) ||
+        (o.members ?? []).some((m) => m && m !== orgId),
+    ).length
   return foreign > 0
-    ? `Erasing this speaker would change ${foreign} document(s) that belong to another organization.`
+    ? 'Erasing this speaker would change documents this organization does not own.'
     : null
 }
 
@@ -161,17 +166,12 @@ async function workosUserIds(email: string): Promise<string[]> {
 
 async function orgRecords({ email, orgId }: Scope, workosIds: string[]) {
   const params = { email, orgId, workosIds }
-  const count = async (query: string) =>
-    (await clientReadUncached.fetch<number>(query, params, {
-      cache: 'no-store',
-    })) ?? 0
-  const [mine, foreignInvitations, foreignSignups, foreignSpeakers] =
-    await Promise.all([
-      clientReadUncached.fetch<{
-        invitations: ErasureItem[]
-        signups: (ErasureItem & { workosId?: string | null })[]
-      }>(
-        groq`{
+  return (
+    (await clientReadUncached.fetch<{
+      invitations: ErasureItem[]
+      signups: (ErasureItem & { workosId?: string | null })[]
+    }>(
+      groq`{
         "invitations": *[_type == "coSpeakerInvitation" && lower(invitedEmail) == $email && conference->organization._ref == $orgId]{
           "id": _id, "label": coalesce(proposal->title, "Invitation") + " (" + coalesce(status, "unknown") + ")"
         },
@@ -179,31 +179,30 @@ async function orgRecords({ email, orgId }: Scope, workosIds: string[]) {
           "id": _id, "label": coalesce(workshop->title, "Workshop") + " (" + coalesce(conference->title, "") + ")", "workosId": userWorkOSId
         }
       }`,
-        params,
-        { cache: 'no-store' },
-      ),
-      count(
-        // groq-global: COUNTS ONLY of this address at OTHER organizations, so
-        // the preview can say what remains. Nothing is returned or written.
-        groq`count(*[_type == "coSpeakerInvitation" && lower(invitedEmail) == $email && coalesce(conference->organization._ref, "") != $orgId])`,
-      ),
-      count(
-        // groq-global: other organizations' signups; decides whether the
-        // SHARED workshop login may be deleted (#1310).
-        groq`count(*[_type == "workshopSignup" && (lower(userEmail) == $email || userWorkOSId in $workosIds) && coalesce(conference->organization._ref, "") != $orgId])`,
-      ),
-      count(
-        // groq-global: every speaker profile with this address, counted only;
-        // the caller subtracts the ones this org has standing over.
-        groq`count(*[_type == "speaker" && (lower(email) == $email || count(knownEmails[lower(@) == $email]) > 0)])`,
-      ),
-    ])
-  return {
-    ...mine,
-    foreignInvitations,
-    foreignSignups,
-    speakersWithAddress: foreignSpeakers,
-  }
+      params,
+      { cache: 'no-store' },
+    )) ?? { invitations: [], signups: [] }
+  )
+}
+
+/**
+ * Workshop signups at OTHER organizations for the address or any of the
+ * login ids. Server-side only: decides whether the shared login may go, and
+ * is never sent to the page. An unreadable answer counts as "in use".
+ */
+async function foreignSignupCount(
+  { email, orgId }: Scope,
+  workosIds: string[],
+): Promise<number> {
+  return (
+    (await clientReadUncached.fetch<number>(
+      // groq-global: a COUNT of other organizations' signups, to decide
+      // whether the SHARED workshop login may be deleted (#1310).
+      groq`count(*[_type == "workshopSignup" && (lower(userEmail) == $email || userWorkOSId in $workosIds) && coalesce(conference->organization._ref, "") != $orgId])`,
+      { email, orgId, workosIds },
+      { cache: 'no-store' },
+    )) ?? 1
+  )
 }
 
 async function talksOf(speakerIds: string[], orgId: string) {
@@ -277,7 +276,22 @@ export async function planOrgErasure(
     })
   }
 
-  const records = await orgRecords(scope, workosIds)
+  const listed = await orgRecords(scope, workosIds)
+  // This org's own signups name login ids too: collect them, then read again
+  // with the union, so a signup keyed only by one of those ids is found.
+  const allWorkosIds = [
+    ...new Set([
+      ...workosIds,
+      ...listed.signups
+        .map((s) => s.workosId)
+        .filter((id): id is string => !!id),
+    ]),
+  ]
+  const records =
+    allWorkosIds.length > workosIds.length
+      ? await orgRecords(scope, allWorkosIds)
+      : listed
+  const foreignSignups = await foreignSignupCount(scope, allWorkosIds)
   const talks = await talksOf(
     speakers.map((s) => s.id),
     orgId,
@@ -301,7 +315,7 @@ export async function planOrgErasure(
       action: kept.length > 0 ? 'keep' : 'erase',
       note:
         kept.length > 0
-          ? 'Shared with another organization, so it is NOT erased here.'
+          ? 'Not erased here: the profile is not this organization’s alone. The platform operator can erase it with `pnpm erase-speaker`.'
           : 'Anonymised in place: name becomes "Deleted speaker", email, photo, bio, links and logins are removed.',
       items: speakers.map((s) => ({
         id: s.id,
@@ -342,7 +356,7 @@ export async function planOrgErasure(
   const invitations = [
     ...records.invitations,
     ...(byKind.get('invitations') ?? []).filter(
-      (i) => !invitationIds.has(stripVersion(i.id)),
+      (i) => !invitationIds.has(i.id),
     ),
   ]
   if (invitations.length > 0) {
@@ -378,24 +392,14 @@ export async function planOrgErasure(
     })
   }
 
-  const allWorkosIds = [
-    ...new Set([
-      ...workosIds,
-      ...records.signups
-        .map((s) => s.workosId)
-        .filter((id): id is string => !!id),
-    ]),
-  ]
   const deleteLogin =
-    workosError === null &&
-    records.foreignSignups === 0 &&
-    allWorkosIds.length > 0
+    workosError === null && foreignSignups === 0 && allWorkosIds.length > 0
   if (workosError) {
     groups.push({
       kind: 'login',
       title: 'Workshop login (WorkOS)',
       action: 'keep',
-      note: `Could not check WorkOS (${workosError}). The login is not deleted; try again later.`,
+      note: 'Could not check WorkOS. The login is not deleted; try again later.',
       items: [],
     })
   } else if (allWorkosIds.length > 0) {
@@ -404,9 +408,9 @@ export async function planOrgErasure(
       title: 'Workshop login (WorkOS)',
       action: deleteLogin ? 'erase' : 'keep',
       note: deleteLogin
-        ? 'Deleted. The login is shared by every conference on the platform, and they have no workshop signups elsewhere.'
-        : 'Kept: they also have workshop signups at another organization’s conference. Only this organization’s signups are deleted.',
-      items: allWorkosIds.map((id) => ({ id, label: id })),
+        ? 'Deleted. The login is shared by every conference on the platform.'
+        : 'Kept: the login is shared by every conference on the platform and is still in use. Only this organization’s signups are deleted.',
+      items: [],
     })
   }
 
@@ -421,34 +425,10 @@ export async function planOrgErasure(
     })
   }
 
-  if (kept.length > 0) {
-    remains.push(
-      'The speaker profile, and the talks that point at it, stay: the person also has data at another organization. That organization, or the platform operator with `pnpm erase-speaker`, has to erase the profile.',
-    )
-  }
-  const foreignSpeakers = records.speakersWithAddress - found.length
-  if (foreignSpeakers > 0) {
-    remains.push(
-      `${foreignSpeakers} speaker profile(s) with this address belong only to other organizations. They are not shown or touched here.`,
-    )
-  }
-  if (records.foreignInvitations > 0) {
-    remains.push(
-      `${records.foreignInvitations} co-speaker invitation(s) at other organizations’ conferences stay.`,
-    )
-  }
-  if (sponsor.foreign > 0) {
-    remains.push(
-      `${sponsor.foreign} sponsor email record(s) of other organizations stay.`,
-    )
-  }
-  if (records.foreignSignups > 0) {
-    remains.push(
-      `${records.foreignSignups} workshop signup(s) at other organizations’ conferences stay, and so does the shared workshop login.`,
-    )
-  }
+  // One fixed line: the page must not reveal whether other organizations
+  // hold anything about the person.
   remains.push(
-    'Never erased by this tool: free text (abstracts, review comments, message bodies), badges, paid travel records, Sanity revision history. See the runbook.',
+    'Data held by other organizations is neither shown nor touched here.',
   )
 
   return {
@@ -498,11 +478,47 @@ export async function runOrgErasure(
   revalidate?: EraseSpeakerOptions['revalidate'],
 ): Promise<OrgErasureResult> {
   const plan = await planOrgErasure(rawEmail, orgId)
-  const { email, refusals } = plan.preview
+  const { refusals } = plan.preview
   if (refusals.length > 0) {
     throw new Error(`Refused: ${refusals.join('; ')}`)
   }
 
+  const planned = {
+    speakers: plan.fullSpeakerIds.length,
+    groups: Object.fromEntries(
+      plan.preview.groups.map((g) => [g.kind, g.items.length]),
+    ),
+    deleteLogin: plan.deleteLogin,
+  }
+  // Before the first write, so a run killed half-way still left a trace.
+  console.info('[privacy-erasure] started', { actor, orgId, ...planned })
+  try {
+    const result = await runPlannedErasure(plan, orgId, actor, revalidate)
+    await writePrivacyErasureLog(
+      orgId,
+      actor,
+      result.clean ? 'clean' : 'residual',
+      result.counts,
+    )
+    return result
+  } catch (error) {
+    console.error('[privacy-erasure] failed', {
+      actor,
+      orgId,
+      error: error instanceof Error ? error.name : 'unknown',
+    })
+    await writePrivacyErasureLog(orgId, actor, 'failed', {})
+    throw error
+  }
+}
+
+async function runPlannedErasure(
+  plan: OrgErasurePlan,
+  orgId: string,
+  actor: string,
+  revalidate?: EraseSpeakerOptions['revalidate'],
+): Promise<OrgErasureResult> {
+  const { email } = plan.preview
   const verification: string[] = []
   let clean = true
   const counts: Record<string, number> = {
@@ -527,6 +543,10 @@ export async function runOrgErasure(
       throw result.err
     }
     counts.speakers++
+    // The speaker audience of this org's conferences on Resend. Best effort.
+    for (const failure of await removeFromSpeakerAudiences(email, orgId)) {
+      verification.push(`Speaker audience NOT updated: ${failure}`)
+    }
     verification.push(verificationLine(speakerId, result.verification))
     if (!result.verification?.clean) clean = false
   }
@@ -566,7 +586,15 @@ export async function runOrgErasure(
   )
   if (sponsor.residual !== 0) clean = false
 
-  if (plan.deleteLogin) {
+  // Count again right before the delete: a signup made at another
+  // organization since the plan keeps the login.
+  const deleteLogin =
+    plan.deleteLogin &&
+    (await foreignSignupCount({ email, orgId }, plan.workosIds)) === 0
+  if (plan.deleteLogin && !deleteLogin) {
+    verification.push('Workshop login: kept (now in use at another conference)')
+  }
+  if (deleteLogin) {
     for (const id of plan.workosIds) {
       try {
         await workshopWorkOS().userManagement.deleteUser(id)
@@ -589,7 +617,7 @@ export async function runOrgErasure(
       'Workshop login: NOT CHECKED (WorkOS could not be reached)',
     )
     clean = false
-  } else if (plan.deleteLogin) {
+  } else if (deleteLogin) {
     const still = await workosUserIds(email)
     verification.push(
       `Workshop login: ${still.length === 0 ? 'CLEAN' : `RESIDUAL DATA FOUND (${still.length})`}`,
@@ -598,7 +626,7 @@ export async function runOrgErasure(
   }
 
   // Ids and counts only, like the speaker-erasure audit line: no address.
-  console.info('[privacy-erasure] organizer erasure', {
+  console.info('[privacy-erasure] finished', {
     actor,
     orgId,
     clean,

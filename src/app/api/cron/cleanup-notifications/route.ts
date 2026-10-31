@@ -9,6 +9,7 @@ import { deleteExpiredEmailSignInRateLimits } from '@/lib/auth/email-link/rateLi
 import { deleteExpiredProvisioningReceipts } from '@/lib/onboarding/provision'
 import { deleteExpiredProvisioningRateLimits } from '@/lib/provisioning'
 import { deleteExpiredMarketingRateLimits } from '@/lib/marketing/snapshots'
+import { deleteExpiredPrivacyErasureLogs } from '@/lib/privacy/erasure-log'
 import { unstable_noStore as noStore } from 'next/cache'
 
 /**
@@ -183,6 +184,13 @@ export async function GET(request: NextRequest) {
         ` | marketing rateLimits=${marketingRateLimits.deleted}`,
     )
 
+    // Admin Privacy page audit records (#1045), kept three years.
+    const privacyErasureLogs = await pass(
+      'privacyErasureLogs',
+      deleteExpiredPrivacyErasureLogs,
+      none,
+    )
+
     if (failures.length > 0) {
       return NextResponse.json(
         {
@@ -213,6 +221,7 @@ export async function GET(request: NextRequest) {
       // GDPR commitment made on `/privacy`, so whatever watches the cron
       // response has to be able to see it running.
       organizerInvitations: organizerInvites.deleted,
+      privacyErasureLogs: privacyErasureLogs.deleted,
     })
   } catch (error) {
     console.error('Error in cleanup notifications cron job:', error)
