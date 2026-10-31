@@ -15,11 +15,8 @@ vi.mock('./provider', () => ({
     resolveTicketingProviderMock(...a),
 }))
 
-import {
-  getPublicTicketTypes,
-  getTicketAvailability,
-  resolveDisplayTickets,
-} from './public'
+import { getTicketAvailability, resolveDisplayTickets } from './public'
+import { getPublicTicketTypes } from './public-read'
 import type { PublicTicketType } from './provider/types'
 
 const CONF = {

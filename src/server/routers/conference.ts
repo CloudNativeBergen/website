@@ -20,11 +20,11 @@ import {
   getConferenceForDomain,
 } from '@/lib/conference/sanity'
 import {
-  getPublicTicketTypes,
   getLowestTicketPrice,
   getTicketAvailability,
   type TicketAvailability,
 } from '@/lib/tickets/public'
+import { getPublicTicketTypes } from '@/lib/tickets/public-read'
 import { hasTicketingBinding, ticketingBinding } from '@/lib/tickets/provider'
 import {
   ensureArrayKeys,

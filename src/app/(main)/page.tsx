@@ -2,12 +2,12 @@ import type { Metadata } from 'next'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
 import {
-  getPublicTicketTypes,
   getLowestTicketPrice,
   getTicketAvailability,
   type LowestTicketPrice,
   type TicketAvailability,
 } from '@/lib/tickets/public'
+import { getPublicTicketTypes } from '@/lib/tickets/public-read'
 import { hasTicketingBinding, ticketingBinding } from '@/lib/tickets/provider'
 import { formatDatesSafe } from '@/lib/time'
 import { cacheLife, cacheTag } from 'next/cache'
