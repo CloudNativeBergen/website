@@ -136,7 +136,7 @@ export default async function SpeakerDashboard() {
   const conferenceDataPromises = conferences.map(async (conference) => {
     try {
       const [
-        { proposals },
+        { proposals, proposalsError },
         galleryImages,
         workshopStats,
         { travelSupport },
@@ -235,9 +235,17 @@ export default async function SpeakerDashboard() {
         fetchDinnerChoice: (id) => getDinnerChoice(id, speakerId),
       })
 
+      if (proposalsError) {
+        console.error(
+          `Error fetching proposals for conference ${conference._id}:`,
+          proposalsError,
+        )
+      }
+
       return {
         conference,
         proposals: proposals || [],
+        proposalsFailed: Boolean(proposalsError),
         feedbackChips,
         // The section a chip links to opens only on the talk's own host (spec
         // §5): this host for this edition, the edition's own domain otherwise.
@@ -262,6 +270,7 @@ export default async function SpeakerDashboard() {
       return {
         conference,
         proposals: [],
+        proposalsFailed: true,
         galleryImages: [],
         workshopStats: [],
         travelSupport: null,
@@ -273,6 +282,8 @@ export default async function SpeakerDashboard() {
   })
 
   const conferencesWithData = await Promise.all(conferenceDataPromises)
+  // A failed proposals read must not look like "no proposals" (#848).
+  const proposalsFailed = conferencesWithData.some((c) => c.proposalsFailed)
 
   // Filter out conferences with no activity
   const activeConferencesRaw = conferencesWithData.filter(
@@ -357,6 +368,23 @@ export default async function SpeakerDashboard() {
     : undefined
   const badgeEventName = badgeConference?.title || PLATFORM_NAME
 
+  const proposalsErrorBanner = proposalsFailed ? (
+    <div
+      role="alert"
+      className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950"
+    >
+      <p className="text-sm text-red-800 dark:text-red-300">
+        We could not load all of your proposals. Some may be missing below.
+      </p>
+      <a
+        href="/cfp/list"
+        className="mt-2 inline-block text-sm font-semibold text-red-800 underline dark:text-red-300"
+      >
+        Try again
+      </a>
+    </div>
+  ) : null
+
   if (activeConferences.length === 0) {
     return (
       <div className="mx-auto max-w-7xl">
@@ -369,15 +397,17 @@ export default async function SpeakerDashboard() {
           </p>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <p className="text-base text-gray-600 dark:text-gray-400">
-            You haven&apos;t submitted any proposals yet.
-          </p>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-500">
-            Check back after submitting a proposal or when you&apos;re tagged in
-            conference photos.
-          </p>
-        </div>
+        {proposalsErrorBanner ?? (
+          <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <p className="text-base text-gray-600 dark:text-gray-400">
+              You haven&apos;t submitted any proposals yet.
+            </p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-500">
+              Check back after submitting a proposal or when you&apos;re tagged
+              in conference photos.
+            </p>
+          </div>
+        )}
 
         <div className="mt-6">
           <MessagesIntroCard />
@@ -409,6 +439,8 @@ export default async function SpeakerDashboard() {
           {activeConferences.length === 1 ? 'conference' : 'conferences'}
         </p>
       </div>
+
+      {proposalsErrorBanner}
 
       <div className="flex flex-col gap-6 lg:flex-row">
         {/* Main Content */}

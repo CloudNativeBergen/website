@@ -46,6 +46,8 @@ function isAllowedImageTarget(url: URL): boolean {
 
 export async function GET(request: NextRequest) {
   noStore()
+  // Cleared in `finally` so a failed fetch does not leave the timer running.
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
   try {
     const session = await auth()
     if (!session?.user || !session?.speaker) {
@@ -82,7 +84,7 @@ export async function GET(request: NextRequest) {
     }
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000)
+    timeoutId = setTimeout(() => controller.abort(), 10000)
 
     // Fetch the PARSED url, not the raw string, so the request target is
     // provably the one that passed `isAllowedImageTarget`.
@@ -100,8 +102,6 @@ export async function GET(request: NextRequest) {
       // (status 0), so check for both.
       redirect: 'manual',
     })
-
-    clearTimeout(timeoutId)
 
     if (
       response.type === 'opaqueredirect' ||
@@ -157,5 +157,7 @@ export async function GET(request: NextRequest) {
     }
 
     return new NextResponse('Internal server error', { status: 500 })
+  } finally {
+    clearTimeout(timeoutId)
   }
 }

@@ -105,6 +105,7 @@ export const Organizer: Story = {
     picture: 'https://placehold.co/40x40/16a34a/fff/png?text=AO',
     speaker: { ...baseSpeaker, name: 'Ada Organizer', isOrganizer: true },
     account: linkedinAccount,
+    enabledFeatures: ['ticketing'],
   },
   parameters: {
     docs: {
@@ -128,6 +129,27 @@ export const Organizer: Story = {
       '/admin/messages',
     )
     await expect(screen.getByText('Signed in with LinkedIn')).toBeVisible()
+    await expect(screen.getByText('Tickets')).toBeVisible()
+  },
+}
+
+export const OrganizerWithoutTicketing: Story = {
+  args: {
+    ...Organizer.args,
+    enabledFeatures: [],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'An organizer whose organization does not have ticketing: the Tickets link is left out, as in the admin sidebar and ⌘K.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await openMenu(canvasElement)
+    await expect(screen.getByText('Admin Dashboard')).toBeVisible()
+    await expect(screen.queryByText('Tickets')).toBeNull()
   },
 }
 

@@ -50,6 +50,7 @@ export function SponsorPortal({ token }: { token: string }) {
     data: sponsor,
     isLoading,
     error: fetchError,
+    refetch,
   } = api.registration.validate.useQuery({ token })
 
   const [contacts, setContacts] = useState<ContactPersonForm[]>([
@@ -142,6 +143,27 @@ export function SponsorPortal({ token }: { token: string }) {
             Loading sponsor portal&hellip;
           </p>
         </div>
+      </div>
+    )
+  }
+
+  if (fetchError && fetchError.data?.code !== 'NOT_FOUND') {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-8 text-center dark:border-red-800 dark:bg-red-950">
+        <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-red-400" />
+        <h2 className="mt-4 text-xl font-semibold text-red-800 dark:text-red-300">
+          Could not load the sponsor portal
+        </h2>
+        <p className="mt-2 text-red-600 dark:text-red-400">
+          Something went wrong on our side. Your link may still be valid.
+        </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="mt-4 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500"
+        >
+          Try again
+        </button>
       </div>
     )
   }

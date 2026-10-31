@@ -61,7 +61,27 @@ export default async function InvitationResponsePage({
     )
   }
 
-  const invitation = await getInvitationByToken(token)
+  let invitation: Awaited<ReturnType<typeof getInvitationByToken>>
+  try {
+    invitation = await getInvitationByToken(token)
+  } catch (error) {
+    console.error('Error fetching invitation by token:', error)
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="w-full max-w-md p-6">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+            <h2 className="mb-2 text-lg font-semibold text-red-800">
+              Could not load your invitation
+            </h2>
+            <p className="text-red-600">
+              Something went wrong on our side. Your invitation may still be
+              valid. Please reload the page in a moment.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (!invitation) {
     return (

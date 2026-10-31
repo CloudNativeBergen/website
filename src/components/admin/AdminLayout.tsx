@@ -67,6 +67,7 @@ export function AdminLayout({
         navigation={navigation}
         title="Admin Dashboard"
         conferenceLogos={conferenceLogos}
+        enabledFeatures={enabledFeatures}
         onSearch={() => setPaletteOpen(true)}
         searchComponent={
           <CommandPalette

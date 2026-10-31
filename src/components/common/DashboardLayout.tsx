@@ -1,5 +1,6 @@
 'use client'
 
+import type { FeatureId } from '@/lib/features/registry'
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
@@ -112,6 +113,8 @@ interface DashboardLayoutProps {
   conferenceLogos?: ConferenceLogos
   onSearch?: () => void
   searchComponent?: React.ReactNode
+  /** Passed to the user menu so it hides admin links the org lacks. */
+  enabledFeatures?: readonly FeatureId[]
 }
 
 interface ColorScheme {
@@ -172,6 +175,7 @@ export function DashboardLayout({
   conferenceLogos,
   onSearch,
   searchComponent,
+  enabledFeatures,
 }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
@@ -510,6 +514,7 @@ export function DashboardLayout({
               picture={getAvatarUrl()}
               speaker={session?.speaker}
               account={session?.account}
+              enabledFeatures={enabledFeatures}
             />
           </div>
         </div>
@@ -556,6 +561,7 @@ export function DashboardLayout({
                 picture={getAvatarUrl()}
                 speaker={session?.speaker}
                 account={session?.account}
+                enabledFeatures={enabledFeatures}
               />
             </div>
           </div>

@@ -65,6 +65,8 @@ export interface ConferenceWithSpeakerData {
   badges: BadgeRecord[]
   isOver: boolean
   canEditProposals: boolean
+  /** The proposals read failed, so `proposals` may be incomplete (#848). */
+  proposalsFailed?: boolean
   /** Photos of your talks (talk photos spec §7.3): own talks, with photos only. */
   talkPhotos?: SpeakerTalkPhotos[]
   /** Session Feedback chip per confirmed talk (speaker feedback spec §9.4). */
