@@ -328,6 +328,8 @@ export function formatConferenceDate(
     day: 'numeric',
   },
 ): string {
+  // Fresh tenants have no dates yet; same fallback as `formatDateLocalized`.
+  if (!dateString) return 'TBD'
   // Anchor bare YYYY-MM-DD at 12:00 UTC so the calendar day is stable in every
   // viewer timezone, then render in the conference timezone (Europe/Oslo).
   return toOsloAnchoredDate(dateString).toLocaleDateString(HOUSE_LOCALE, {

@@ -29,6 +29,8 @@ const SOURCE: SourceConference = {
   venueName: 'Grieghallen',
   logoBright: '<svg id="bright" />',
   logoDark: '<svg id="dark" />',
+  theme: { primaryColor: '#1D4ED8', accentColor: '#06B6D4' },
+  backgroundPattern: 'subtle',
   topics: [
     { _type: 'reference', _ref: 'topic-a', _key: 'k1' },
     { _type: 'reference', _ref: 'topic-b', _key: 'k2' },
@@ -43,6 +45,7 @@ const SOURCE: SourceConference = {
   cfpEmail: 'cfp@cnb.no',
   sponsorEmail: 'sales@cnb.no',
   salesNotificationChannel: '#sales',
+  speakerSlackChannel: '#speakers',
   socialLinks: ['https://x.com/cnb'],
   cfpSubmissionGoal: 100,
   sponsorRevenueGoal: 500000,
@@ -61,6 +64,7 @@ const SOURCE_TIERS: SourceSponsorTier[] = [
     tierType: 'standard',
     price: [{ amount: 50000, currency: 'NOK' }],
     perks: [{ label: 'Booth' }],
+    ticketEntitlement: 4,
   },
   { _id: 'tier-media', title: 'Media', tierType: 'special' },
 ]
@@ -168,6 +172,8 @@ describe('buildEditionDocuments — always-applied invariants', () => {
     )
     expect(conference.city).toBe('Bergen')
     expect(conference.logoBright).toBe('<svg id="bright" />')
+    expect(conference.theme).toEqual(SOURCE.theme)
+    expect(conference.backgroundPattern).toBe('subtle')
     expect(conference.domains).toEqual(['2026.cnb.no', 'alt.example.com'])
   })
 
@@ -325,5 +331,14 @@ describe('cloned tier soldOut policy (SE-5 badge)', () => {
     const tier = docs.sponsorTiers[0]
     expect(tier).toBeDefined()
     expect(tier).not.toHaveProperty('soldOut')
+  })
+})
+
+describe('cloned settings that belong to the ongoing setup', () => {
+  it('copies the speaker Slack channel with emails & channels', () => {
+    expect(build(makeInput()).conference.speakerSlackChannel).toBe('#speakers')
+  })
+  it('copies a tier ticket entitlement', () => {
+    expect(build(makeInput()).sponsorTiers[0].ticketEntitlement).toBe(4)
   })
 })

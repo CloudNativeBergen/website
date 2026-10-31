@@ -114,7 +114,11 @@ export default async function AdminSettings() {
 
   const session = await getAuthSession()
 
+  // READ LIVE (#1345, as on the workshops page): this page reloads straight
+  // after a save, and the cached read serves the old values once
+  // (`revalidateTag(tag, 'default')` is stale-while-revalidate).
   const { conference, domain, error } = await getConferenceForCurrentDomain({
+    uncached: true,
     organizers: true,
     schedule: true,
     topics: true,

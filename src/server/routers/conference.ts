@@ -1004,11 +1004,36 @@ export const conferenceRouter = router({
         includeOrganizerStanding: true,
       })
       const conferenceId = await resolveConferenceId()
-      return applyConferencePatch(conferenceId, {
+      // Drop removed organizers from team members too: the teams editor only
+      // lists current organizers, so a stale member could never be unticked
+      // and every later team save would be refused.
+      const keep = new Set(input.organizers)
+      const teams =
+        (await clientReadUncached.fetch<
+          { members?: { _ref: string }[] }[] | null
+        >(
+          // groq-global-scoped: reads THIS request's own conference by its
+          // server-resolved id, like `updateTeams` below.
+          `*[_type == "conference" && _id == $id][0].teams`,
+          { id: conferenceId },
+        )) ?? []
+      const prunedTeams = teams.map((team) => ({
+        ...team,
+        members: (team.members ?? []).filter((m) => keep.has(m._ref)),
+      }))
+      // Pruning can leave a team with `members: []`; routing tolerates an
+      // empty team, and the editor asks for a member on the next save.
+      const teamsChanged = prunedTeams.some(
+        (team, i) => team.members.length !== (teams[i].members ?? []).length,
+      )
+      const result = await applyConferencePatch(conferenceId, {
         organizers: input.organizers.map((id) =>
           createReferenceWithKey(id, 'organizer'),
         ),
+        ...(teamsChanged ? { teams: prunedTeams } : {}),
       })
+      if (teamsChanged) clearConferenceTeamsCache()
+      return result
     }),
 
   updateTopics: adminProcedure
@@ -1025,7 +1050,7 @@ export const conferenceRouter = router({
       // the whole editor refuse every save.
       const currentTopicIds = new Set(
         (await clientReadUncached.fetch<string[] | null>(
-          // groq-global: reads THIS request's own conference by its
+          // groq-global-scoped: reads THIS request's own conference by its
           // server-resolved id (never a client id) — the same shape as
           // `updateTeams`' organizer-set read directly below.
           `*[_type == "conference" && _id == $id][0].topics[]._ref`,

@@ -404,3 +404,9 @@ describe('Oslo day boundaries used by admin badges and domain cards', () => {
     )
   })
 })
+
+describe('formatConferenceDate with no date', () => {
+  it('returns TBD instead of throwing on an unset date', () => {
+    expect(formatConferenceDateLong(undefined as unknown as string)).toBe('TBD')
+  })
+})
