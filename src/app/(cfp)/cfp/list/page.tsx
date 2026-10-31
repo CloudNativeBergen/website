@@ -30,8 +30,11 @@ import {
 } from '@/lib/speaker/dashboardBriefing'
 import { getDinnerChoice } from '@/lib/speaker/dinnerChoice-sanity'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
-import type { Conference } from '@/lib/conference/types'
-import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
+import {
+  CFP_DASHBOARD_CONFERENCE_FIELDS,
+  type CfpDashboardConference,
+  type ConferenceWithSpeakerData,
+} from '@/lib/dashboard/types'
 import type { BadgeRecord } from '@/lib/badge/types'
 
 export default async function SpeakerDashboard() {
@@ -113,38 +116,12 @@ export default async function SpeakerDashboard() {
       _id == $currentConferenceId ||
       count(*[_type in ["talk", "imageGallery", "travelSupport", "speakerBadge"] && conference->organization._ref == $orgId && conference._ref == ^._id && references($speakerId)]) > 0
     )] | order(startDate desc) {
-      _id,
-      title,
-      organization,
-      organizer,
-      city,
-      country,
-      venueName,
-      venueAddress,
-      tagline,
-      description,
-      startDate,
-      endDate,
-      cfpStartDate,
-      cfpEndDate,
-      cfpNotifyDate,
-      cfpEmail,
-      programDate,
-      registrationLink,
-      registrationEnabled,
-      workshopRegistrationStart,
-      workshopRegistrationEnd,
-      contactEmail,
-      domains,
-      formats,
-      features,
-      socialHashtag,
-      socialLinks
+      ${CFP_DASHBOARD_CONFERENCE_FIELDS.join(',\n      ')}
     }
   `
 
   const conferences = orgRef
-    ? await clientReadCached.fetch<Conference[]>(
+    ? await clientReadCached.fetch<CfpDashboardConference[]>(
         conferencesQuery,
         {
           orgId: orgRef,

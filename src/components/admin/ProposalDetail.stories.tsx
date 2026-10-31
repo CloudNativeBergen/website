@@ -316,3 +316,57 @@ export const WithAttachments: Story = {
     },
   },
 }
+
+const inDays = (days: number) =>
+  new Date(Date.now() + days * 86_400_000).toISOString()
+
+export const WithCoSpeakerInvitations: Story = {
+  args: {
+    proposal: createMockProposal({
+      coSpeakerInvitations: [
+        {
+          _id: 'inv-pending',
+          invitedEmail: 'bob@example.com',
+          invitedName: 'Bob Smith',
+          status: 'pending',
+          expiresAt: inDays(5),
+        },
+        {
+          _id: 'inv-accepted',
+          invitedEmail: 'carol@example.com',
+          invitedName: 'Carol Lee',
+          status: 'accepted',
+          expiresAt: inDays(10),
+          respondedAt: '2025-11-03T09:00:00Z',
+        },
+        {
+          _id: 'inv-declined',
+          invitedEmail: 'dave@example.com',
+          status: 'declined',
+          expiresAt: inDays(8),
+          respondedAt: '2025-11-04T09:00:00Z',
+        },
+        {
+          _id: 'inv-expired',
+          invitedEmail: 'erin@example.com',
+          status: 'expired',
+          expiresAt: '2025-10-20T09:00:00Z',
+        },
+        {
+          _id: 'inv-canceled',
+          invitedEmail: 'frank@example.com',
+          status: 'canceled',
+          expiresAt: inDays(3),
+        },
+      ],
+    }),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Co-speaker invitation status for reviewers: pending, accepted, declined and expired. Canceled invitations are not shown.',
+      },
+    },
+  },
+}

@@ -20,8 +20,6 @@ import type {
 } from './types'
 
 export type { TicketingProvider, TicketingProviderCredentials, EventRef }
-/** @public Mirrored by the Storybook tickets-provider mock. */
-export { ProviderUnsupportedError } from './types'
 /**
  * The PURE order-created discriminator. Exported here so the inbound webhook can
  * read a payload's shape before it has a tenant — and therefore before it has

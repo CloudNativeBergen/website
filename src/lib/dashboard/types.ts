@@ -24,8 +24,40 @@ export interface BaseWidgetProps<TConfig = Record<string, unknown>> {
   className?: string
 }
 
+/**
+ * The conference fields the speaker dashboard (`/cfp/list`) reads, server and
+ * client side (#980, #1795). `CompactConferenceCard` and
+ * `ProposalConfirmationHandler` are client components, so everything here is
+ * serialized into the page: keep it to what they render.
+ */
+export const CFP_DASHBOARD_CONFERENCE_FIELDS = [
+  '_id',
+  'title',
+  // A reference, read server side by the briefing's organizer check.
+  'organization',
+  'city',
+  'country',
+  'venueName',
+  'venueAddress',
+  'startDate',
+  'endDate',
+  'cfpStartDate',
+  'cfpEndDate',
+  'cfpNotifyDate',
+  'cfpEmail',
+  'contactEmail',
+  'domains',
+  'socialHashtag',
+  'socialLinks',
+] as const satisfies readonly (keyof Conference)[]
+
+export type CfpDashboardConference = Pick<
+  Conference,
+  (typeof CFP_DASHBOARD_CONFERENCE_FIELDS)[number]
+>
+
 export interface ConferenceWithSpeakerData {
-  conference: Conference
+  conference: CfpDashboardConference
   proposals: ProposalExisting[]
   galleryImages: GalleryImageWithSpeakers[]
   workshopStats: WorkshopStats[]

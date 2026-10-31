@@ -33,6 +33,12 @@ import { portableTextComponents } from '@/lib/portabletext/components'
 import { iconForLink } from '@/components/SocialIcons'
 import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
 import { SpeakerImageModal } from '@/components/admin'
+import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
+import type {
+  CoSpeakerInvitationMinimal,
+  InvitationStatus,
+} from '@/lib/cospeaker/types'
+import { daysUntilExpiry } from '@/lib/cospeaker/constants'
 
 interface ProposalDetailProps {
   proposal: ProposalExisting
@@ -62,6 +68,92 @@ function isTopicObject(topic: unknown): topic is Topic {
     typeof topic === 'object' &&
     '_id' in topic &&
     'title' in topic
+  )
+}
+
+const INVITATION_BADGE: Record<
+  Exclude<InvitationStatus, 'canceled'>,
+  { label: string; color: BadgeColor }
+> = {
+  pending: { label: 'Pending', color: 'blue' },
+  accepted: { label: 'Accepted', color: 'green' },
+  declined: { label: 'Declined', color: 'red' },
+  expired: { label: 'Expired', color: 'orange' },
+}
+
+/**
+ * Read-only co-speaker invitation status for reviewers (#942). Statuses arrive
+ * with expiry already applied (`withEffectiveInvitationStatus`); canceled
+ * invitations have no ongoing meaning and are left out.
+ */
+export function CoSpeakerInvitationList({
+  invitations,
+  now = new Date(),
+}: {
+  invitations?: CoSpeakerInvitationMinimal[]
+  now?: Date
+}) {
+  const shown = (invitations ?? []).filter((inv) => inv.status !== 'canceled')
+  if (shown.length === 0) return null
+  return (
+    <section
+      aria-labelledby="cospeaker-invitations-heading"
+      className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800"
+    >
+      <h2
+        id="cospeaker-invitations-heading"
+        className="mb-3 text-sm font-medium text-gray-900 dark:text-white"
+      >
+        Co-speaker invitations
+      </h2>
+      <ul className="space-y-2">
+        {shown.map((inv) => {
+          const badge =
+            INVITATION_BADGE[inv.status as keyof typeof INVITATION_BADGE]
+          const days =
+            inv.status === 'pending' ? daysUntilExpiry(inv.expiresAt, now) : 0
+          const detail =
+            inv.status === 'pending'
+              ? days <= 0
+                ? 'expires today'
+                : days === 1
+                  ? 'expires tomorrow'
+                  : `${days} days left`
+              : inv.status === 'expired'
+                ? `on ${formatDateSafe(inv.expiresAt)}`
+                : inv.respondedAt
+                  ? formatDateSafe(inv.respondedAt)
+                  : null
+          return (
+            <li
+              key={inv._id}
+              className="flex flex-wrap items-center justify-between gap-2 text-sm"
+            >
+              <span className="min-w-0 break-words text-gray-900 dark:text-gray-100">
+                {inv.invitedName ? (
+                  <>
+                    {inv.invitedName}{' '}
+                    <span className="text-gray-500 dark:text-gray-400">
+                      &lt;{inv.invitedEmail}&gt;
+                    </span>
+                  </>
+                ) : (
+                  inv.invitedEmail
+                )}
+              </span>
+              <span className="flex items-center gap-2">
+                <StatusBadge label={badge.label} color={badge.color} />
+                {detail && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {detail}
+                  </span>
+                )}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
   )
 }
 
@@ -471,6 +563,10 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                 </p>
               </div>
             )}
+
+            <CoSpeakerInvitationList
+              invitations={proposal.coSpeakerInvitations}
+            />
 
             <ProposalAttachmentsPanel
               proposalId={proposal._id}
