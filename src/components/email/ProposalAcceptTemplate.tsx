@@ -69,6 +69,13 @@ export function ProposalAcceptTemplate({
 
       <EmailButton href={confirmUrl}>Confirm Your Participation</EmailButton>
 
+      {/* The share card only appears on /cfp/list once the talk is confirmed (#84). */}
+      <EmailText>
+        Once you confirm, your speaker dashboard has a ready-made image you can
+        share on social media to tell your network you&apos;re speaking at{' '}
+        {eventName}.
+      </EmailText>
+
       <p
         style={{
           fontSize: '16px',

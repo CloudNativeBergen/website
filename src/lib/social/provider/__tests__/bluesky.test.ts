@@ -17,6 +17,7 @@ import {
   OG_IMAGE_URL,
   PAGE_URL,
   pds,
+  PDS,
   pngBytes,
   POST_CID,
   POST_URI,
@@ -33,6 +34,7 @@ function adapter(
   options: { budgetMs?: number; callTimeoutMs?: number } = {},
 ) {
   return new BlueskyPublishAdapter(CREDENTIALS, {
+    service: PDS,
     now: () => NOW,
     linkCardHosts,
     resolveHost: async () => ['93.184.216.34'],
@@ -750,6 +752,7 @@ describe('BlueskyPublishAdapter — login and outcome mapping', () => {
   it('after a 401 on the create the library refreshes and replays the create once — still one login, one post', async () => {
     const recorded = pds({ create: 'expired-once', refresh: 'ok' })
     const outcome = await new BlueskyPublishAdapter(CREDENTIALS, {
+      service: PDS,
       now: () => NOW,
       fetch: bufferedFetch,
     }).publish({ text: 'Hi', media: [] })

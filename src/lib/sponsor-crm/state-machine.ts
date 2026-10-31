@@ -230,11 +230,24 @@ const RESTING_STATE_ALIAS: Partial<
   invoice: { paid: 'sent', overdue: 'sent' },
 }
 
+/**
+ * The state whose invariants a record resting in `state` must hold. Exported
+ * for the health audit (#1097), which REPORTS a paid invoice on an unsigned
+ * contract. `checkState` itself stays unaliased, so recording a payment is
+ * never refused because the paperwork is behind.
+ */
+export function guardedRestingState(
+  axis: TransitionAxis,
+  state: string,
+): string {
+  return RESTING_STATE_ALIAS[axis]?.[state] ?? state
+}
+
 function restingState(axis: TransitionAxis, sponsor: SponsorState): string {
   const raw =
     (sponsor[AXIS_FIELD[axis]] as string | undefined) ||
     AXIS_DEFAULT_STATE[axis]
-  return RESTING_STATE_ALIAS[axis]?.[raw] ?? raw
+  return guardedRestingState(axis, raw)
 }
 
 /** Names the axis state that a move would strand, for the block message. */

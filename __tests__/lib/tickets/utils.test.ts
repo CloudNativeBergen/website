@@ -47,7 +47,7 @@ describe('Ticket Utils', () => {
       expect(result.averageTicketPrice).toBe(150)
     })
 
-    it('should filter out free tickets (sum === "0")', () => {
+    it('counts a zero-priced sale as sold: the caller decided it is a sale (#1103)', () => {
       const tickets = [
         createMockTicket({ order_id: 1, sum: '100' }),
         createMockTicket({ order_id: 2, sum: '0' }),
@@ -56,10 +56,21 @@ describe('Ticket Utils', () => {
 
       const result = calculateTicketStatistics(tickets)
 
-      expect(result.totalPaidTickets).toBe(2)
+      expect(result.totalPaidTickets).toBe(3)
       expect(result.totalRevenue).toBe(300)
-      expect(result.totalOrders).toBe(2)
-      expect(result.averageTicketPrice).toBe(150)
+      expect(result.totalOrders).toBe(3)
+      expect(result.averageTicketPrice).toBe(100)
+    })
+
+    it('reports a free-to-attend event as sold, not as zero sales (#1103)', () => {
+      const result = calculateTicketStatistics([
+        createMockTicket({ order_id: 1, sum: '0' }),
+        createMockTicket({ order_id: 2, sum: '0' }),
+      ])
+
+      expect(result.totalPaidTickets).toBe(2)
+      expect(result.totalRevenue).toBe(0)
+      expect(result.averageTicketPrice).toBe(0)
     })
 
     it('should handle multiple tickets in same order', () => {
@@ -97,10 +108,11 @@ describe('Ticket Utils', () => {
 
       const result = calculateTicketStatistics(tickets)
 
-      expect(result.totalPaidTickets).toBe(1)
+      // Every ticket counts; an unreadable amount adds no revenue.
+      expect(result.totalPaidTickets).toBe(3)
       expect(result.totalRevenue).toBe(100)
-      expect(result.totalOrders).toBe(1)
-      expect(result.averageTicketPrice).toBe(100)
+      expect(result.totalOrders).toBe(3)
+      expect(isNaN(result.averageTicketPrice)).toBe(false)
     })
 
     it('should handle negative values', () => {
@@ -111,8 +123,8 @@ describe('Ticket Utils', () => {
 
       const result = calculateTicketStatistics(tickets)
 
-      expect(result.totalPaidTickets).toBe(1)
-      expect(result.totalRevenue).toBe(100)
+      expect(result.totalPaidTickets).toBe(2)
+      expect(result.totalRevenue).toBe(50)
     })
 
     it('should handle decimal values', () => {
@@ -351,7 +363,7 @@ describe('Ticket Utils', () => {
 
       const result = calculateTicketStatistics(tickets)
 
-      expect(result.totalPaidTickets).toBe(2)
+      expect(result.totalPaidTickets).toBe(5)
       expect(result.totalRevenue).toBe(300)
       expect(isNaN(result.totalRevenue)).toBe(false)
     })
@@ -494,7 +506,7 @@ describe('Ticket Utils', () => {
 
       const result = createDefaultAnalysis(tickets, 100)
 
-      expect(result.statistics.totalPaidTickets).toBe(2)
+      expect(result.statistics.totalPaidTickets).toBe(3)
       expect(result.statistics.totalRevenue).toBe(300)
       expect(result.capacity).toBe(100)
     })

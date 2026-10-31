@@ -317,6 +317,17 @@ describe('VolunteerAdminPage', () => {
     expect(screen.getByText('Rita')).toBeTruthy()
   })
 
+  it('clears filters back to the default that hides rejected', () => {
+    listState.data = volunteers.filter(
+      (v) => v.status === VolunteerStatus.REJECTED,
+    )
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Show Rejected' }))
+    expect(screen.getByText('Rita')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Clear all/ }))
+    expect(screen.queryByText('Rita')).toBeNull()
+  })
+
   it('shows capitalized status labels in badges', () => {
     renderPage()
     expect(screen.getAllByText('Pending').length).toBeGreaterThan(0)
