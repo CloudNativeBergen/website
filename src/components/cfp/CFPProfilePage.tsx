@@ -185,9 +185,9 @@ export function CFPProfilePage({
               />
             </div>
             <div className="ml-4">
-              <h3 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
+              <h2 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
                 Loading Error: Profile Error
-              </h3>
+              </h2>
               <div className="font-inter mt-2 text-red-700 dark:text-red-300">
                 <p>{profileError?.message || 'Failed to load profile'}</p>
               </div>
@@ -292,9 +292,9 @@ export function CFPProfilePage({
                   />
                 </div>
                 <div className="ml-3">
-                  <h3 className="font-space-grotesk text-sm font-medium text-red-800 dark:text-red-200">
+                  <h2 className="font-space-grotesk text-sm font-medium text-red-800 dark:text-red-200">
                     Please fix the following errors:
-                  </h3>
+                  </h2>
                   <div className="mt-2 text-sm text-red-700 dark:text-red-300">
                     <ul className="font-inter list-disc space-y-1 pl-5">
                       {submitError.map((error, index) => (

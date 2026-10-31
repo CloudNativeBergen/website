@@ -131,6 +131,10 @@ export function ProposalReviewForm({
                     <button
                       key={star}
                       type="button"
+                      aria-label={`Rate ${label} ${star} of 5`}
+                      aria-pressed={
+                        ratings[key as keyof typeof ratings] === star
+                      }
                       className={clsx(
                         'rounded p-0.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none',
                         (hovered[key as keyof typeof hovered] ||

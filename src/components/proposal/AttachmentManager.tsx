@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import {
   ArrowUpTrayIcon,
   XMarkIcon,
@@ -56,6 +56,7 @@ export function AttachmentManager({
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const fieldId = useId()
   const [attachmentType, setAttachmentType] = useState<AttachmentType>('slides')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -399,6 +400,7 @@ export function AttachmentManager({
             <button
               type="button"
               onClick={resetForm}
+              aria-label="Close upload form"
               className="text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
             >
               <XMarkIcon className="h-5 w-5" />
@@ -452,10 +454,14 @@ export function AttachmentManager({
           />
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-900 dark:text-white">
+            <label
+              htmlFor={`${fieldId}-description`}
+              className="mb-1 block text-sm font-medium text-gray-900 dark:text-white"
+            >
               Description (optional)
             </label>
             <textarea
+              id={`${fieldId}-description`}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
@@ -467,10 +473,14 @@ export function AttachmentManager({
           {addType === 'file' && (
             <>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-900 dark:text-white">
+                <label
+                  htmlFor={`${fieldId}-file`}
+                  className="mb-1 block text-sm font-medium text-gray-900 dark:text-white"
+                >
                   Select File
                 </label>
                 <input
+                  id={`${fieldId}-file`}
                   type="file"
                   onChange={handleFileSelect}
                   accept=".pdf,.pptx,.ppt,.odp,.key"
@@ -513,7 +523,10 @@ export function AttachmentManager({
           )}
 
           {error && (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
+            <div
+              role="alert"
+              className="rounded-lg bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200"
+            >
               {error}
             </div>
           )}

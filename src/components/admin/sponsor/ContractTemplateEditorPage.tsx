@@ -410,7 +410,10 @@ export function ContractTemplateEditorPage({
               />
             </div>
             <div>
-              <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
+              <label
+                htmlFor="default-currency"
+                className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+              >
                 Default Currency
               </label>
               <div className="mt-2">
@@ -581,6 +584,7 @@ export function ContractTemplateEditorPage({
                     <button
                       type="button"
                       onClick={() => moveSection(index, 'up')}
+                      aria-label={`Move section ${index + 1} up`}
                       disabled={index === 0}
                       className="rounded p-1 text-gray-400 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-700"
                     >
@@ -589,6 +593,7 @@ export function ContractTemplateEditorPage({
                     <button
                       type="button"
                       onClick={() => moveSection(index, 'down')}
+                      aria-label={`Move section ${index + 1} down`}
                       disabled={index === sections.length - 1}
                       className="rounded p-1 text-gray-400 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-700"
                     >
@@ -597,6 +602,7 @@ export function ContractTemplateEditorPage({
                     <button
                       type="button"
                       onClick={() => removeSection(index)}
+                      aria-label={`Remove section ${index + 1}`}
                       disabled={sections.length <= 1}
                       className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                     >

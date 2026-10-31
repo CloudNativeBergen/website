@@ -237,6 +237,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
                 <div className="mt-2 grid grid-cols-1">
                   <select
                     value={filters.selectedDay}
+                    aria-label="Filter by day"
                     onChange={handleDayChange}
                     className={DEFAULT_SELECT_CLASSES}
                   >
@@ -264,6 +265,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
                 <div className="mt-2 grid grid-cols-1">
                   <select
                     value={filters.selectedTrack}
+                    aria-label="Filter by track"
                     onChange={handleTrackChange}
                     className={DEFAULT_SELECT_CLASSES}
                   >
@@ -291,6 +293,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
                 <div className="mt-2 grid grid-cols-1">
                   <select
                     value={filters.selectedFormat}
+                    aria-label="Filter by format"
                     onChange={handleFormatChange}
                     className={DEFAULT_SELECT_CLASSES}
                   >
@@ -318,6 +321,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
                 <div className="mt-2 grid grid-cols-1">
                   <select
                     value={filters.selectedLevel}
+                    aria-label="Filter by level"
                     onChange={handleLevelChange}
                     className={DEFAULT_SELECT_CLASSES}
                   >
@@ -345,6 +349,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
                 <div className="mt-2 grid grid-cols-1">
                   <select
                     value={filters.selectedAudience}
+                    aria-label="Filter by audience"
                     onChange={handleAudienceChange}
                     className={DEFAULT_SELECT_CLASSES}
                   >
@@ -372,6 +377,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
                 <div className="mt-2 grid grid-cols-1">
                   <select
                     value={filters.selectedTopic}
+                    aria-label="Filter by topic"
                     onChange={handleTopicChange}
                     className={DEFAULT_SELECT_CLASSES}
                   >

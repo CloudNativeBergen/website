@@ -21,6 +21,7 @@ export function CurrencySelect({
       value={value}
       setValue={setValue}
       disabled={disabled}
+      ariaLabel="Currency"
     />
   )
 }

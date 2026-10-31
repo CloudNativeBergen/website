@@ -31,6 +31,7 @@ function actionClasses(variant: ActionItem['variant'] = 'primary') {
 export function AdminHeaderActions({ items }: AdminHeaderActionsProps) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (!open) return
@@ -39,8 +40,20 @@ export function AdminHeaderActions({ items }: AdminHeaderActionsProps) {
         setOpen(false)
       }
     }
+    // Custom render() items can hold arbitrary controls, so this stays a
+    // disclosure rather than a Headless UI Menu; Escape closes it.
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
     document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
   }, [open])
 
   return (
@@ -91,8 +104,10 @@ export function AdminHeaderActions({ items }: AdminHeaderActionsProps) {
       {/* Mobile: dropdown menu */}
       <div className="relative lg:hidden" ref={menuRef}>
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => setOpen(!open)}
+          aria-expanded={open}
           className="rounded-lg border border-gray-300 bg-white p-2 text-gray-500 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
           aria-label="Actions menu"
         >

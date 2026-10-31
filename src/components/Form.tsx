@@ -86,6 +86,7 @@ export function LinkInput({
         type="button"
         className="flex shrink-0 items-center gap-x-1.5 bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus:relative focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-white/10 dark:focus:outline-indigo-500"
         onClick={() => remove(index)}
+        aria-label={`Remove link ${index + 1}`}
       >
         <MinusCircleIcon
           className="h-5 w-5 text-gray-400 dark:text-gray-500"
@@ -96,6 +97,7 @@ export function LinkInput({
         type="button"
         className="flex shrink-0 items-center gap-x-1.5 rounded-r-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus:relative focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-white/10 dark:focus:outline-indigo-500"
         onClick={() => add(index)}
+        aria-label="Add another link"
       >
         <PlusCircleIcon
           className="h-5 w-5 text-gray-400 dark:text-gray-500"
@@ -172,6 +174,7 @@ export function Dropdown({
   disabled,
   required,
   clearable = false,
+  ariaLabel,
 }: {
   name: string
   label?: string
@@ -182,6 +185,7 @@ export function Dropdown({
   disabled?: boolean
   required?: boolean
   clearable?: boolean
+  ariaLabel?: string
 }) {
   return (
     <>
@@ -197,6 +201,7 @@ export function Dropdown({
         <select
           id={name}
           name={name}
+          aria-label={label ? undefined : ariaLabel}
           autoComplete={name}
           value={value}
           onChange={(e) => setValue(e.target.value)}

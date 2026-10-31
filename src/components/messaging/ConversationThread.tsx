@@ -963,7 +963,7 @@ export function ConversationThreadView({
               className="block w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-cloud-blue focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
             />
             <div className="mt-2 flex items-center justify-between">
-              <span className="text-xs text-gray-400 dark:text-gray-500">
+              <span className="text-xs text-gray-600 dark:text-gray-400">
                 {draft.length}/{MAX_BODY} · ⌘/Ctrl+Enter to send
               </span>
               <button

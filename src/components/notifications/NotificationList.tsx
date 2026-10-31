@@ -284,7 +284,7 @@ export function NotificationList({
           {readOnly ? (
             <span
               title="Viewing as speaker — read state is left untouched"
-              className="ml-2 shrink-0 text-xs font-medium whitespace-nowrap text-gray-400 dark:text-gray-500"
+              className="ml-2 shrink-0 text-xs font-medium whitespace-nowrap text-gray-600 dark:text-gray-400"
             >
               Speaker view · read-only
             </span>
