@@ -42,10 +42,16 @@ function computeAverageRating(
   talkData: Record<string, unknown>,
 ): { reviewCount: number; averageRating: number } | null {
   const reviewCount = (talkData.reviewCount as number) || 0
-  const reviewScores = talkData.reviewScores as { total: number }[] | undefined
+  // A folded summary arrives as one row carrying the deleted reviews' count.
+  const reviewScores = talkData.reviewScores as
+    { total: number; weight?: number }[] | undefined
   if (!reviewCount || !reviewScores || reviewScores.length === 0) return null
-  const totalScore = reviewScores.reduce((sum, r) => sum + (r.total || 0), 0)
-  const maxPossible = reviewScores.length * 15
+  const weight = (r: { weight?: number }) => r.weight ?? 1
+  const totalScore = reviewScores.reduce(
+    (sum, r) => sum + (r.total || 0) * weight(r),
+    0,
+  )
+  const maxPossible = reviewScores.reduce((sum, r) => sum + weight(r), 0) * 15
   const rating = maxPossible > 0 ? (totalScore / maxPossible) * 5 : 0
   return { reviewCount, averageRating: rating }
 }

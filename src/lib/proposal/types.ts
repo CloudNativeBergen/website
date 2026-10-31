@@ -1,4 +1,5 @@
 import { Speaker } from '@/lib/speaker/types'
+import type { ReviewSummary } from '@/lib/review/summary'
 import { Conference } from '@/lib/conference/types'
 import { Topic } from '@/lib/topic/types'
 import { PortableTextBlock, Reference } from 'sanity'
@@ -188,6 +189,8 @@ export interface ProposalExisting extends Proposal {
    */
   _organizationId?: string | null
   reviews?: Review[]
+  /** Aggregates of deleted reviews (`src/lib/review/summary.ts`). */
+  reviewSummary?: ReviewSummary | null
   coSpeakerInvitations?: CoSpeakerInvitationMinimal[]
   /**
    * Whether the talk holds a Feedback Code, projected by the programme read

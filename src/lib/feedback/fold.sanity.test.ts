@@ -980,9 +980,13 @@ describe('foldCutoff', () => {
   it.each([
     ['2026-10-21T04:40:00.000Z', '2024-10-21'],
     ['2026-01-01T00:00:00.000Z', '2024-01-01'],
-    ['2026-12-31T23:59:59.999Z', '2024-12-31'],
+    // Already 1 January 2027 in Oslo.
+    ['2026-12-31T23:59:59.999Z', '2025-01-01'],
+    ['2026-12-31T22:00:00.000Z', '2024-12-31'],
     ['2026-03-31T12:00:00.000Z', '2024-03-31'],
-  ])('24 calendar months before %s is %s', (now, cutoff) => {
+    // A leap day clamps to the shorter February.
+    ['2028-02-29T12:00:00.000Z', '2026-02-28'],
+  ])('24 calendar months before %s (Oslo day) is %s', (now, cutoff) => {
     expect(foldCutoff(new Date(now))).toBe(cutoff)
   })
 })

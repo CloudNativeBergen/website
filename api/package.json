@@ -1,0 +1,20 @@
+{
+  "name": "@runkonf/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "test": "vitest run --root .. api/src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pothos/core": "^4.16.0",
+    "graphql": "^17.0.2",
+    "graphql-yoga": "^6.0.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261031.1",
+    "wrangler": "^4.156.0"
+  }
+}

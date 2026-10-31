@@ -27,6 +27,19 @@ vi.mock('@/lib/messaging/autoClose', () => ({
   autoCloseStaleConversations: (...args: unknown[]) => mockAutoClose(...args),
 }))
 
+vi.mock('@/lib/retention/purge', () => ({
+  deleteExpiredReminderLogs: async () => ({ deleted: 0 }),
+  deleteExpiredMarketingSnapshots: async () => ({ deleted: 0 }),
+}))
+
+vi.mock('@/lib/review/retention', () => ({
+  foldExpiredReviews: async () => ({ talks: 0, deleted: 0 }),
+}))
+
+vi.mock('@/lib/privacy/erasure-log', () => ({
+  deleteExpiredPrivacyErasureLogs: async () => ({ deleted: 0 }),
+}))
+
 vi.mock('next/cache', () => ({
   unstable_noStore: vi.fn(),
 }))

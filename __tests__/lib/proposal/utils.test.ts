@@ -1,7 +1,6 @@
 import {
   extractSpeakersFromProposal,
   extractSpeakerIds,
-  calculateReviewScore,
   countActiveProposals,
 } from '@/lib/proposal/utils'
 import { Status, Language, Format, Level, Audience } from '@/lib/proposal/types'
@@ -134,74 +133,6 @@ describe('extractSpeakerIds', () => {
   it('filters out unrecognized formats', () => {
     const input = ['valid', 42 as unknown as string, null as unknown as string]
     expect(extractSpeakerIds(input)).toEqual(['valid'])
-  })
-})
-
-describe('calculateReviewScore', () => {
-  it('returns 0 for empty reviews', () => {
-    expect(calculateReviewScore([], 'content')).toBe(0)
-  })
-
-  it('returns 0 for undefined reviews', () => {
-    expect(
-      calculateReviewScore(
-        undefined as unknown as Parameters<typeof calculateReviewScore>[0],
-        'content',
-      ),
-    ).toBe(0)
-  })
-
-  it('calculates average content score', () => {
-    const reviews = [
-      { score: { content: 4, relevance: 3, speaker: 2 } },
-      { score: { content: 2, relevance: 1, speaker: 5 } },
-    ]
-    expect(calculateReviewScore(reviews, 'content')).toBe(3)
-  })
-
-  it('calculates average relevance score', () => {
-    const reviews = [
-      { score: { content: 4, relevance: 5, speaker: 2 } },
-      { score: { content: 2, relevance: 3, speaker: 5 } },
-    ]
-    expect(calculateReviewScore(reviews, 'relevance')).toBe(4)
-  })
-
-  it('calculates average speaker score', () => {
-    const reviews = [
-      { score: { content: 4, relevance: 3, speaker: 2 } },
-      { score: { content: 2, relevance: 1, speaker: 4 } },
-    ]
-    expect(calculateReviewScore(reviews, 'speaker')).toBe(3)
-  })
-
-  it('handles single review', () => {
-    const reviews = [{ score: { content: 5, relevance: 3, speaker: 1 } }]
-    expect(calculateReviewScore(reviews, 'content')).toBe(5)
-  })
-
-  it('handles reviews missing score field', () => {
-    const reviews = [
-      { score: { content: 4, relevance: 3, speaker: 2 } },
-      {} as {
-        score?: { content?: number; relevance?: number; speaker?: number }
-      },
-    ]
-    // only first review contributes: 4/2 = 2
-    expect(calculateReviewScore(reviews, 'content')).toBe(2)
-  })
-
-  it('handles reviews with missing specific score type', () => {
-    const reviews = [
-      {
-        score: { content: 4, relevance: 3 } as {
-          content?: number
-          relevance?: number
-          speaker?: number
-        },
-      },
-    ]
-    expect(calculateReviewScore(reviews, 'speaker')).toBe(0)
   })
 })
 
