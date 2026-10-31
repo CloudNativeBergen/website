@@ -1160,7 +1160,7 @@ describe('findWork — the composed due/stale scan', () => {
   it('rotates WHICH CONFERENCES get confirm slots across ticks when there are more than the cap', async () => {
     // Round-robin is fair within a tick only. Six conferences with one
     // submission each against a cap of five: in document order the same five
-    // would be read every minute and the sixth never — until it timed out
+    // would be read every tick and the sixth never — until it timed out
     // `ambiguous` without a single vendor read. Lanes are ordered by their
     // head's confirm key, so a conference just read sorts to the back.
     const ids = ['a', 'b', 'c', 'd', 'e', 'f']

@@ -48,7 +48,7 @@ path, and a spike before any tag goes through Buffer.
 
 ## 3. Publishing
 
-- **We own the schedule.** The per-minute cron posts with `mode: shareNow`; Buffer's queue is never
+- **We own the schedule.** The five-minute cron posts with `mode: shareNow`; Buffer's queue is never
   used, so its 10-queued-posts limit on Free does not apply.
 - Media: Sanity CDN rendition URLs with `altText`. Buffer has no upload endpoint; it fetched the
   rendition, crop parameters included, at create time.

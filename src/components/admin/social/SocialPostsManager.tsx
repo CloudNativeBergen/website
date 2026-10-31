@@ -325,7 +325,7 @@ export function SocialPostsManager({
     <div className="space-y-6">
       <AdminPageHeader
         title="Social posts"
-        description="Schedule per-platform variants; the publish cron picks them up every minute."
+        description="Schedule per-platform variants; the publish cron picks them up every five minutes."
         icon={<MegaphoneIcon className="size-6" />}
         backLink={{ href: '/admin/marketing', label: 'Marketing' }}
         actions={
