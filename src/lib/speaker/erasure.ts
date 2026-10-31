@@ -78,7 +78,9 @@
  *
  * TENANCY. Erasure is GLOBAL by design: a speaker is a cross-org person
  * document and the right belongs to the person, not to any organizer. Every
- * read here is deliberately unscoped and annotated `groq-global:`.
+ * read here is deliberately unscoped and annotated `groq-global:`. The admin
+ * Privacy page calls this too, but only for a speaker exclusive to the
+ * organizer's organization: `src/lib/privacy/org-erasure.ts` draws that line.
  */
 
 import {

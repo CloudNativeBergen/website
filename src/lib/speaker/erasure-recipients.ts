@@ -66,6 +66,8 @@ export interface SponsorActivityRecipientDoc {
   /** The provider's message for a failed send; may quote the address. */
   error?: string
   recipients?: SponsorActivityRecipientEntry[]
+  /** The owning organization, so an org-scoped caller can keep to its own. */
+  orgId?: string | null
 }
 
 /**
@@ -225,7 +227,8 @@ export async function fetchSponsorRecipientDocs(
       // right belongs to the person, who may be a contact for sponsors of
       // several organizations, so this is not scoped to a tenant.
       groq`*[_type == "sponsorActivity" && count(recipients[lower(email) in $emails]) > 0]{
-        _id, _rev, description, error, recipients
+        _id, _rev, description, error, recipients,
+        "orgId": coalesce(organization._ref, sponsorForConference->conference->organization._ref)
       }`,
       { emails },
       { cache: 'no-store', perspective: 'raw' },

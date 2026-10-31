@@ -39,6 +39,12 @@ export interface EraseSponsorContactOptions {
   actor: string
   /** Compute and return the plan WITHOUT writing anything. */
   dryRun?: boolean
+  /**
+   * Keep to ONE organization's records and sponsor audiences (the admin
+   * Privacy page). Records of other organizations are left and counted in
+   * `foreign`. Omitted by the CLI, which acts for the person everywhere.
+   */
+  organizationId?: string
 }
 
 export interface EraseSponsorContactResult {
@@ -46,6 +52,8 @@ export interface EraseSponsorContactResult {
   emails: string[]
   /** Send records found carrying one of the addresses. */
   matched: number
+  /** Records left alone because another organization owns them. */
+  foreign: number
   /** The redactions that would be (or were) staged, one per record. */
   patches: ErasureDocumentPatch[]
   /** Entries that could not be addressed safely; nothing is written if any. */
@@ -82,12 +90,20 @@ export function sponsorContactMatchSet(emails: readonly string[]): string[] {
   )
 }
 
-async function planAll(emails: string[]): Promise<{
+async function planAll(
+  emails: string[],
+  organizationId?: string,
+): Promise<{
   matched: number
+  foreign: number
   patches: ErasureDocumentPatch[]
   refusals: string[]
 }> {
-  const docs = await fetchSponsorRecipientDocs(emails)
+  const all = await fetchSponsorRecipientDocs(emails)
+  const docs =
+    organizationId !== undefined
+      ? all.filter((doc) => doc.orgId === organizationId)
+      : all
   const refusals: string[] = []
   const patches: ErasureDocumentPatch[] = []
   for (const doc of docs) {
@@ -99,8 +115,14 @@ async function planAll(emails: string[]): Promise<{
     )
     if (patch) patches.push(patch)
   }
-  patches.push(...(await planSignerRedaction(emails)))
-  return { matched: docs.length, patches, refusals }
+  const signers = await planSignerRedaction(emails, organizationId)
+  patches.push(...signers.patches)
+  return {
+    matched: docs.length,
+    foreign: all.length - docs.length + signers.foreign,
+    patches,
+    refusals,
+  }
 }
 
 /**
@@ -111,18 +133,31 @@ async function planAll(emails: string[]): Promise<{
  */
 async function planSignerRedaction(
   emails: string[],
-): Promise<ErasureDocumentPatch[]> {
-  const docs =
+  organizationId?: string,
+): Promise<{ patches: ErasureDocumentPatch[]; foreign: number }> {
+  const all =
     (await clientReadUncached
       .withConfig({ apiVersion: COUNT_API_VERSION })
-      .fetch<Array<{ _id: string; _rev: string; signerEmail?: string }>>(
+      .fetch<
+        Array<{
+          _id: string
+          _rev: string
+          signerEmail?: string
+          orgId?: string | null
+        }>
+      >(
         // groq-global: the right is the person's, and the same address can
         // sign for sponsors in several organizations, like the read above.
-        `*[_type == "sponsorForConference" && lower(signerEmail) in $emails]{ _id, _rev, signerEmail }`,
+        `*[_type == "sponsorForConference" && lower(signerEmail) in $emails]{ _id, _rev, signerEmail, "orgId": conference->organization._ref }`,
         { emails },
         { cache: 'no-store', perspective: 'raw' },
       )) ?? []
-  return docs
+  // The admin Privacy page keeps to its own organization's sponsors.
+  const docs =
+    organizationId !== undefined
+      ? all.filter((doc) => doc.orgId === organizationId)
+      : all
+  const patches = docs
     .filter((doc) => emails.includes(canonicalEmail(doc.signerEmail ?? '')))
     .map((doc) => ({
       id: doc._id,
@@ -131,6 +166,7 @@ async function planSignerRedaction(
       unset: ['signerEmail', 'signerName'],
       reason: 'erased contact is the stored agreement signer',
     }))
+  return { patches, foreign: all.length - docs.length }
 }
 
 /**
@@ -147,6 +183,7 @@ export async function eraseSponsorContactSendRecords(
   const base = {
     emails,
     matched: 0,
+    foreign: 0,
     patches: [] as ErasureDocumentPatch[],
     refusals: [] as string[],
     committed: false,
@@ -173,7 +210,7 @@ export async function eraseSponsorContactSendRecords(
   }
 
   try {
-    const plan = await planAll(emails)
+    const plan = await planAll(emails, options.organizationId)
     const result = { ...base, ...plan }
     if (plan.refusals.length > 0) {
       return {
@@ -204,9 +241,12 @@ export async function eraseSponsorContactSendRecords(
 
     // The commit is done: a failure from here on must not hide it, or the
     // operator reads "nothing written" over a record that was.
-    const audienceFailures = await removeFromSponsorAudiences(emails)
+    const audienceFailures = await removeFromSponsorAudiences(
+      emails,
+      options.organizationId,
+    )
     try {
-      const after = await planAll(emails)
+      const after = await planAll(emails, options.organizationId)
       return {
         ...result,
         audienceFailures,
@@ -242,10 +282,21 @@ export async function eraseSponsorContactSendRecords(
  * ponytail: resolving an audience creates it when a conference has none yet
  * (an empty audience, harmless); add a find-only resolver if that matters.
  */
-async function removeFromSponsorAudiences(emails: string[]): Promise<string[]> {
+async function removeFromSponsorAudiences(
+  emails: string[],
+  organizationId?: string,
+): Promise<string[]> {
   const failures: string[] = []
   let conferences: Conference[] = []
   try {
+    if (organizationId !== undefined) {
+      conferences =
+        (await clientReadUncached.fetch<Conference[]>(
+          `*[_type == "conference" && organization._ref == $orgId && !(_id in path("drafts.**"))]{ _id, title, organization }`,
+          { orgId: organizationId },
+        )) ?? []
+      return removeFromAudiences(conferences, emails, failures)
+    }
     const ids = await clientReadUncached.fetch<string[]>(
       // groq-global: erasure is the person's right across every tenant, like
       // the send-record read in `erasure-recipients.ts`.
@@ -261,6 +312,14 @@ async function removeFromSponsorAudiences(emails: string[]): Promise<string[]> {
     console.warn('[contact-erasure] listing conferences failed:', error)
     return ['*: could not list conferences']
   }
+  return removeFromAudiences(conferences, emails, failures)
+}
+
+async function removeFromAudiences(
+  conferences: Conference[],
+  emails: string[],
+  failures: string[],
+): Promise<string[]> {
   for (const conference of conferences) {
     try {
       const { audienceId, client, error } =

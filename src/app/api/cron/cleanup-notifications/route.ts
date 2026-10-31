@@ -14,6 +14,7 @@ import {
   deleteExpiredReminderLogs,
 } from '@/lib/retention/purge'
 import { foldExpiredReviews } from '@/lib/review/retention'
+import { deleteExpiredPrivacyErasureLogs } from '@/lib/privacy/erasure-log'
 import {
   NOTIFICATION_RETENTION_DAYS,
   SHORT_NOTIFICATION_RETENTION_DAYS,
@@ -59,25 +60,33 @@ export async function GET(request: NextRequest) {
     }
     const none = { deleted: 0 }
     // `?dryRun=1` only counts what the 30-day notification, reminder-log,
-    // snapshot and review passes would delete, and runs no other pass.
+    // snapshot, review and 3-year privacy erasure log passes would delete,
+    // and runs no other pass.
     const dryRun = request.nextUrl.searchParams.get('dryRun') === '1'
     if (dryRun) {
-      const [shortNotifications, reminderLogs, snapshots, reviews] =
-        await Promise.all([
-          deleteNotificationsOlderThan(
-            SHORT_NOTIFICATION_RETENTION_DAYS,
-            SHORT_RETENTION_NOTIFICATION_TYPES,
-            true,
-          ),
-          deleteExpiredReminderLogs(true),
-          deleteExpiredMarketingSnapshots(true),
-          foldExpiredReviews(true),
-        ])
+      const [
+        shortNotifications,
+        reminderLogs,
+        snapshots,
+        reviews,
+        privacyErasureLogs,
+      ] = await Promise.all([
+        deleteNotificationsOlderThan(
+          SHORT_NOTIFICATION_RETENTION_DAYS,
+          SHORT_RETENTION_NOTIFICATION_TYPES,
+          true,
+        ),
+        deleteExpiredReminderLogs(true),
+        deleteExpiredMarketingSnapshots(true),
+        foldExpiredReviews(true),
+        deleteExpiredPrivacyErasureLogs(true),
+      ])
       console.log(
         `[dry-run] would delete shortNotifications=${shortNotifications.deleted}` +
           ` reminderLogs=${reminderLogs.deleted}` +
           ` marketingSnapshots=${snapshots.deleted}` +
-          ` reviews=${reviews.deleted} (folded into ${reviews.talks} talks)`,
+          ` reviews=${reviews.deleted} (folded into ${reviews.talks} talks)` +
+          ` privacyErasureLogs=${privacyErasureLogs.deleted}`,
       )
       return NextResponse.json({
         dryRun: true,
@@ -85,6 +94,7 @@ export async function GET(request: NextRequest) {
         reminderLogs: reminderLogs.deleted,
         marketingSnapshots: snapshots.deleted,
         reviews,
+        privacyErasureLogs: privacyErasureLogs.deleted,
       })
     }
 
@@ -254,6 +264,13 @@ export async function GET(request: NextRequest) {
         ` | marketing rateLimits=${marketingRateLimits.deleted}`,
     )
 
+    // Admin Privacy page audit records (#1045), kept three years.
+    const privacyErasureLogs = await pass(
+      'privacyErasureLogs',
+      () => deleteExpiredPrivacyErasureLogs(),
+      none,
+    )
+
     if (failures.length > 0) {
       return NextResponse.json(
         {
@@ -288,6 +305,7 @@ export async function GET(request: NextRequest) {
       // GDPR commitment made on `/privacy`, so whatever watches the cron
       // response has to be able to see it running.
       organizerInvitations: organizerInvites.deleted,
+      privacyErasureLogs: privacyErasureLogs.deleted,
     })
   } catch (error) {
     console.error('Error in cleanup notifications cron job:', error)
