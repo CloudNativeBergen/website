@@ -24,8 +24,8 @@ importers:
   .:
     dependencies:
       '@atproto/api':
-        specifier: 0.29.6
-        version: 0.29.6
+        specifier: 0.30.0
+        version: 0.30.0
       '@digitalbazaar/data-integrity':
         specifier: ^2.5.0
         version: 2.5.0
@@ -144,8 +144,8 @@ importers:
         specifier: ^2.0.0
         version: 2.0.0(next@16.4.3(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)
       '@workos-inc/node':
-        specifier: ^12.0.0
-        version: 12.0.0
+        specifier: ^12.1.0
+        version: 12.1.0
       '@xmldom/xmldom':
         specifier: ^0.9.12
         version: 0.9.12
@@ -177,8 +177,8 @@ importers:
         specifier: ^11.6.0
         version: 11.6.0
       mediabunny:
-        specifier: 1.64.0
-        version: 1.64.0
+        specifier: 1.65.0
+        version: 1.65.0
       nanoid:
         specifier: ^6.0.2
         version: 6.0.2
@@ -198,8 +198,8 @@ importers:
         specifier: ^1.17.1
         version: 1.17.1
       posthog-js:
-        specifier: ^1.443.0
-        version: 1.443.0(@types/react@19.2.15)(preact-render-to-string@6.5.11)(react@19.2.6)
+        specifier: ^1.444.0
+        version: 1.444.0(@types/react@19.2.15)(preact-render-to-string@6.5.11)(react@19.2.6)
       qr-code-styling:
         specifier: ^1.9.2
         version: 1.9.2
@@ -219,8 +219,8 @@ importers:
         specifier: ^20.1.4
         version: 20.1.4(@types/react@19.2.15)(react@19.2.6)
       resend:
-        specifier: ^6.35.0
-        version: 6.35.0(@react-email/render@2.2.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6))
+        specifier: ^6.37.0
+        version: 6.37.0(@react-email/render@2.2.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6))
       sanity:
         specifier: ^6.21.0
         version: 6.21.0(@babel/core@7.29.7)(@babel/runtime@7.29.10)(@noble/hashes@2.2.0)(@rolldown/plugin-babel@0.2.4(@babel/core@7.29.7)(@babel/runtime@7.29.10)(rolldown@1.2.16)(vite@8.3.5(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.1)))(@types/node@26.4.1)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(esbuild@0.28.2)(jiti@2.7.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(rolldown@1.2.16)(styled-components@6.6.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(tsx@4.23.13)(typescript@6.0.3)(vitest@5.0.0)
@@ -454,8 +454,8 @@ packages:
   '@asamuzakjp/nwsapi@2.3.9':
     resolution: {integrity: sha512-n8GuYSrI9bF7FFZ/SjhwevlHc8xaVlb/7HmHelnc/PZXBD2ZR49NnN9sMMuDdEGPeeRQ5d0hqlSlEpgCX3Wl0Q==}
 
-  '@atproto/api@0.29.6':
-    resolution: {integrity: sha512-mwrRXL8ery37aHn413DjozRN801QrRaqghz/OYvpZiiTl2Ro2SsMOGvlSTINx67/5QMH6FqKwOoTrJuuuCL6HQ==}
+  '@atproto/api@0.30.0':
+    resolution: {integrity: sha512-OMDouol2f0vGur07LywJ3MhLhsZ2YZu1Kn76zBnPLqzh/PWlVqZyrRQl++BkA1PXwXhTsbLQLKPHT52wlaMicA==}
     engines: {node: '>=22'}
 
   '@atproto/common-web@0.5.15':
@@ -3566,8 +3566,8 @@ packages:
   '@posthog/core@1.62.0':
     resolution: {integrity: sha512-KjNwGC7s0141wnWWHubNMdg1lOhZjqKRw2OTNstuzdVvNDfvv2RbFJQSSvvABmbCmTXwlMpdnbb/M/aAigDnNQ==}
 
-  '@posthog/types@1.418.0':
-    resolution: {integrity: sha512-WqDXUWH1R8OilBp2PfDpQIRZSCs3QyOnw7H3YK7lvZLCMIsOqSZAKJrrqYWt4f7FvnVCACRuNGCC0HKh3J/HWw==}
+  '@posthog/types@1.419.0':
+    resolution: {integrity: sha512-XX7zRYt/vK8AzaD6V+oDquAzacZf5exJv971dja9En8Qf6g84Qvc3rpT0w6hDYYLWrjaSSkdjFfvvoXI0ouJDg==}
 
   '@react-aria/focus@3.22.1':
     resolution: {integrity: sha512-CPxtkyrBi/HYY5P3lE/57sQ6qfa0lN8E55TOm89H0kNGv0lKt+/0zP7lWERzBjRr5IxBVrQX4gFEowBN52LPaA==}
@@ -5338,8 +5338,8 @@ packages:
   '@webcontainer/env@1.1.1':
     resolution: {integrity: sha512-6aN99yL695Hi9SuIk1oC88l9o0gmxL1nGWWQ/kNy81HigJ0FoaoTXpytCj6ItzgyCEwA9kF1wixsTuv5cjsgng==}
 
-  '@workos-inc/node@12.0.0':
-    resolution: {integrity: sha512-ujB+xdaOHUrfHe5oMnNOrHV/g+AzZ+5VPCGayDLC4mHWTBHCZg6U5e9X8EDCmKSir8pSXAmJaJylTJNRZ+BSew==}
+  '@workos-inc/node@12.1.0':
+    resolution: {integrity: sha512-qT/RpDHti/MDR1r5Jkngg6gS7cpwzrRTB0DA4H/5UMD27t8qOcLqOkIrxVX4AOIzUQ0oJXn7l+c0kZZC/mrGiQ==}
     engines: {node: '>=22.11.0'}
 
   '@xmldom/xmldom@0.9.12':
@@ -8244,8 +8244,8 @@ packages:
   media-tracks@0.3.5:
     resolution: {integrity: sha512-l54rkKXlLBt3ob3zOLWHcnjvwUmX5bNEZ70igyapOZZC9imzqBmq1oz8p2roiV04KhjblFIi2hetLPF1oYVLRA==}
 
-  mediabunny@1.64.0:
-    resolution: {integrity: sha512-ILat5qSwfmZjnYhk7Dc8uEvEQNtzXNxUVyfxR9Fp6JRa8Axsg5xE1EXwCTOzXJHhH/a2eyk6sZ1ffivCk4rIXg==}
+  mediabunny@1.65.0:
+    resolution: {integrity: sha512-TNnDNOmD5Fme4rwMGWuNv485a9iQwd9lgw88PI9zQ0FMnzEUoo6EJpG7ZhdJ2iwZFWo8AzNkP1KPq5IAHaktKw==}
 
   mendoza@3.0.8:
     resolution: {integrity: sha512-iwxgEpSOx9BDLJMD0JAzNicqo9xdrvzt6w/aVwBKMndlA6z/DH41+o60H2uHB0vCR1Xr37UOgu9xFWJHvYsuKw==}
@@ -8894,8 +8894,8 @@ packages:
     resolution: {integrity: sha512-LJlKCCAUFKOuZxipUdYw1NzIITEsPcgyOG9LkvRJvuKj/bRzbuRY0ARXvL0pWGpsZvn8jku+LMep2eU0seHp8g==}
     engines: {node: ^10 || ^12 || >=14}
 
-  posthog-js@1.443.0:
-    resolution: {integrity: sha512-PpfvtZ4cj5uDhXrILlfoV8/Qva+ZBntp75Px+HR7kcKHMSdHIsBVpj5rdMLLgH94APsoP13ZMz8bXO4kwrrZ+Q==}
+  posthog-js@1.444.0:
+    resolution: {integrity: sha512-4m+QsAFi1h5Zt8eFq6ciJGD8bcLMt1P/O1cLlo26RrX5F4oMOIKZsNIlf1SIMZWlRNNCFemSpzn6HhwtkZMrnA==}
     peerDependencies:
       '@types/react': '>=16.8.0'
       react: '>=16.8.0'
@@ -9323,8 +9323,8 @@ packages:
   reselect@5.3.0:
     resolution: {integrity: sha512-XGoLeRAVzUTcJ1qkxPQhDJyIZ5d6zzZD9nT7AEZOaaU9UbWclhycElmhO+VD5bFeLuzhPBaOV2oXC8uG35ZSpg==}
 
-  resend@6.35.0:
-    resolution: {integrity: sha512-sScNQHunU2Np7oICQ/44GXif8cQ0lp2WPEo9nDtTnM1koPvgJwH/SEee8mJwYRwyIfi+uj7IetKiYspfyYBYaA==}
+  resend@6.37.0:
+    resolution: {integrity: sha512-iYNhmhfXVomZr+TMIxf6oqj7kTeGqPDE+wGcYw1H4g8WMBR59NsbShnUz43dSYpStW16iEA6dZs+egqQmdm0zA==}
     engines: {node: '>=20'}
     peerDependencies:
       '@react-email/render': '*'
@@ -10049,6 +10049,9 @@ packages:
 
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
+
+  tslib@2.9.1:
+    resolution: {integrity: sha512-a4Ux9VKuIMHsOS7ENbEq6hK2ZGYIT27Rtl0E4eD9KqwxhKiQeMZE/9xb3IdYwWaSOyIBQLExhQgXDTYoiCxnWA==}
 
   tsx@4.23.13:
     resolution: {integrity: sha512-BL5MGkRln6aDYhb0xbQlEAGw743BaZYWdbWtdJOBriYJboKgUUYCadFp2/FpBBZquBC/ezNBn7wMMPx7FDZUDw==}
@@ -10832,7 +10835,7 @@ snapshots:
 
   '@asamuzakjp/nwsapi@2.3.9': {}
 
-  '@atproto/api@0.29.6':
+  '@atproto/api@0.30.0':
     dependencies:
       '@atproto/common-web': 0.5.15
       '@atproto/lexicon': 0.7.17
@@ -10853,13 +10856,13 @@ snapshots:
   '@atproto/lex-data@0.1.8':
     dependencies:
       multiformats: 13.4.2
-      tslib: 2.8.1
+      tslib: 2.9.1
       unicode-segmenter: 0.14.5
 
   '@atproto/lex-json@0.1.7':
     dependencies:
       '@atproto/lex-data': 0.1.8
-      tslib: 2.8.1
+      tslib: 2.9.1
 
   '@atproto/lexicon@0.7.17':
     dependencies:
@@ -10871,7 +10874,7 @@ snapshots:
   '@atproto/syntax@0.7.7':
     dependencies:
       iso-datestring-validator: 2.2.2
-      tslib: 2.8.1
+      tslib: 2.9.1
 
   '@atproto/xrpc@0.8.16':
     dependencies:
@@ -12006,60 +12009,60 @@ snapshots:
   '@emnapi/core@1.10.0':
     dependencies:
       '@emnapi/wasi-threads': 1.2.1
-      tslib: 2.8.1
+      tslib: 2.9.1
     optional: true
 
   '@emnapi/core@1.11.0':
     dependencies:
       '@emnapi/wasi-threads': 1.2.2
-      tslib: 2.8.1
+      tslib: 2.9.1
     optional: true
 
   '@emnapi/core@1.11.1':
     dependencies:
       '@emnapi/wasi-threads': 1.2.2
-      tslib: 2.8.1
+      tslib: 2.9.1
     optional: true
 
   '@emnapi/core@1.9.2':
     dependencies:
       '@emnapi/wasi-threads': 1.2.1
-      tslib: 2.8.1
+      tslib: 2.9.1
     optional: true
 
   '@emnapi/runtime@1.10.0':
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     optional: true
 
   '@emnapi/runtime@1.11.0':
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     optional: true
 
   '@emnapi/runtime@1.11.1':
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     optional: true
 
   '@emnapi/runtime@1.11.3':
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     optional: true
 
   '@emnapi/runtime@1.9.2':
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     optional: true
 
   '@emnapi/wasi-threads@1.2.1':
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     optional: true
 
   '@emnapi/wasi-threads@1.2.2':
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     optional: true
 
   '@emotion/is-prop-valid@1.4.0':
@@ -13947,16 +13950,16 @@ snapshots:
   '@posthog/browser-common@0.10.2(preact-render-to-string@6.5.11)':
     dependencies:
       '@posthog/core': 1.62.0
-      '@posthog/types': 1.418.0
+      '@posthog/types': 1.419.0
       preact: 10.29.8(preact-render-to-string@6.5.11)
     transitivePeerDependencies:
       - preact-render-to-string
 
   '@posthog/core@1.62.0':
     dependencies:
-      '@posthog/types': 1.418.0
+      '@posthog/types': 1.419.0
 
-  '@posthog/types@1.418.0': {}
+  '@posthog/types@1.419.0': {}
 
   '@react-aria/focus@3.22.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
     dependencies:
@@ -15788,7 +15791,7 @@ snapshots:
 
   '@tybys/wasm-util@0.10.3':
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     optional: true
 
   '@types/aria-query@5.0.4': {}
@@ -16223,7 +16226,7 @@ snapshots:
 
   '@webcontainer/env@1.1.1': {}
 
-  '@workos-inc/node@12.0.0': {}
+  '@workos-inc/node@12.1.0': {}
 
   '@xmldom/xmldom@0.9.12': {}
 
@@ -16351,7 +16354,7 @@ snapshots:
 
   aria-hidden@1.2.6:
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
 
   aria-query@5.3.0:
     dependencies:
@@ -17878,7 +17881,7 @@ snapshots:
 
   focus-lock@1.3.6:
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
 
   follow-redirects@1.16.0: {}
 
@@ -17935,7 +17938,7 @@ snapshots:
     dependencies:
       motion-dom: 14.9.0
       motion-utils: 14.7.0
-      tslib: 2.8.1
+      tslib: 2.9.1
     optionalDependencies:
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
@@ -19599,7 +19602,7 @@ snapshots:
 
   media-tracks@0.3.5: {}
 
-  mediabunny@1.64.0:
+  mediabunny@1.65.0:
     dependencies:
       '@types/dom-mediacapture-transform': 0.1.12
       '@types/dom-webcodecs': 0.1.13
@@ -20315,11 +20318,11 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.2
 
-  posthog-js@1.443.0(@types/react@19.2.15)(preact-render-to-string@6.5.11)(react@19.2.6):
+  posthog-js@1.444.0(@types/react@19.2.15)(preact-render-to-string@6.5.11)(react@19.2.6):
     dependencies:
       '@posthog/browser-common': 0.10.2(preact-render-to-string@6.5.11)
       '@posthog/core': 1.62.0
-      '@posthog/types': 1.418.0
+      '@posthog/types': 1.419.0
       core-js: 3.51.0
       dompurify: 3.4.17
       fflate: 0.4.9
@@ -20731,7 +20734,7 @@ snapshots:
 
   reselect@5.3.0: {}
 
-  resend@6.35.0(@react-email/render@2.2.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)):
+  resend@6.37.0(@react-email/render@2.2.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)):
     dependencies:
       postal-mime: 2.7.6
       standardwebhooks: 1.1.1
@@ -21679,6 +21682,8 @@ snapshots:
 
   tslib@2.8.1: {}
 
+  tslib@2.9.1: {}
+
   tsx@4.23.13:
     dependencies:
       esbuild: 0.28.2
@@ -21895,7 +21900,7 @@ snapshots:
   use-callback-ref@1.3.3(@types/react@19.2.15)(react@19.2.6):
     dependencies:
       react: 19.2.6
-      tslib: 2.8.1
+      tslib: 2.9.1
     optionalDependencies:
       '@types/react': 19.2.15
 
@@ -21921,7 +21926,7 @@ snapshots:
     dependencies:
       detect-node-es: 1.1.0
       react: 19.2.6
-      tslib: 2.8.1
+      tslib: 2.9.1
     optionalDependencies:
       '@types/react': 19.2.15
 
