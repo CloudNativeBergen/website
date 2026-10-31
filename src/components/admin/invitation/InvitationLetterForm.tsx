@@ -78,9 +78,7 @@ const ROLES: Array<{ value: ParticipantRole; label: string }> = [
  *
  * Every part of this is load-bearing, because nothing styles form controls for
  * us: Tailwind v4's preflight resets *every* element to `border: 0 solid`, and
- * `@tailwindcss/forms` is not actually in the build (it is listed in
- * `tailwind.config.ts`, but the CSS-first config in `src/styles/tailwind.css`
- * never pulls that file in with `@config`, and v4 does not auto-load it). So a
+ * `@tailwindcss/forms` is not part of the build. So a
  * control given only a border COLOUR renders with no border, and one given no
  * padding renders one line tall with its text flush against the edge. Border
  * width, padding and the focus ring width are all spelled out here, matching
