@@ -1,7 +1,4 @@
 import {
-  BankingDetailsSchema,
-  TravelExpenseInputSchema,
-  TravelSupportInputSchema,
   TravelSupportClientInputSchema,
   UpdateBankingDetailsSchema,
   AddExpenseSchema,
@@ -15,9 +12,6 @@ import {
 } from '@/lib/travel-support/validation'
 
 export {
-  BankingDetailsSchema,
-  TravelExpenseInputSchema,
-  TravelSupportInputSchema,
   TravelSupportClientInputSchema,
   UpdateBankingDetailsSchema,
   AddExpenseSchema,

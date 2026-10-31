@@ -2,11 +2,6 @@ import type { ContractSigningProvider } from './types'
 import { SelfHostedSigningProvider } from './self-hosted'
 
 export type { ContractSigningProvider } from './types'
-export type {
-  SendForSigningResult,
-  SigningStatusResult,
-  SigningProviderStatus,
-} from './types'
 
 /**
  * The only supported signing provider. Historically this was a union that also

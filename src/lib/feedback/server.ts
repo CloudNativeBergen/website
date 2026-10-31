@@ -1,15 +1,11 @@
 export {
   MintTooSlowError,
   ensureFeedbackCode,
-  type EnsureFeedbackCodeResult,
   readFeedbackCode,
   rotateFeedbackCode,
-  type FeedbackCodeActor,
-  type ReadFeedbackCodeResult,
-  type RotateFeedbackCodeResult,
 } from './code'
 export { expireFeedbackCodeIndex } from './cache'
-export { conferenceFeedbackCodes, getFeedbackSlots } from './sanity'
+
 export {
   countTalksWithoutCode,
   mintConferenceFeedbackCodes,
@@ -19,7 +15,6 @@ export {
   feedbackCodeForTalk,
   feedbackCodesForTalks,
   type FeedbackConference,
-  type FeedbackPage,
   type PublicFeedbackTalk,
 } from './attendee'
 export {
@@ -33,22 +28,11 @@ export {
   type FeedbackChip,
   type FeedbackChips,
 } from './chips'
-export {
-  readSpeakerResults,
-  type SpeakerComment,
-  type SpeakerResults,
-} from './results'
+export { readSpeakerResults } from './results'
 export { deleteFeedback } from './delete'
-export { flagResponse, type FlagResult } from './flag'
-export { deliverFeedbackSummaries, type SummaryReport } from './summary'
-export {
-  FoldError,
-  foldExpiredFeedback,
-  foldTalkFeedback,
-  sweepUnsetFeedbackCode,
-  type FoldOutcome,
-  type FoldReport,
-} from './fold'
+export { flagResponse } from './flag'
+export { deliverFeedbackSummaries } from './summary'
+export { foldExpiredFeedback } from './fold'
 export { deviceCookie, type DeviceCookie } from './device'
 export {
   countFlaggedComments,
@@ -58,11 +42,4 @@ export {
   readTalkFeedback,
   removeResponses,
   unhideResponses,
-  REMOVE_CHUNK_SIZE,
-  type AdminFeedbackComment,
-  type AdminFeedbackOverview,
-  type AdminFeedbackSession,
-  type AdminTalkFeedback,
-  type ModerationResult,
-  type RemoveResult,
 } from './admin'

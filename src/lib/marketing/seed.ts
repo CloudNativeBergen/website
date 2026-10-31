@@ -36,12 +36,7 @@ import type { PlanTemplate, TaskRecipe } from './template/types'
 import { withCurrentSkeletons } from './template/legacy-skeletons'
 import type { CampaignTrigger, Outcome } from './types'
 
-export {
-  addDaysToDate,
-  type SeedPost,
-  type SeedTask,
-  type SeedVariant,
-} from './materialize'
+export { type SeedPost, type SeedTask, type SeedVariant } from './materialize'
 
 /** The slice of a conference seeding reads. */
 export interface SeedConference extends MilestoneSource {

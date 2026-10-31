@@ -8,10 +8,7 @@ import {
   type TicketTypeRole,
   workshopAccessOf,
 } from '@/lib/tickets/classification'
-export {
-  workshopAccessOf,
-  type WorkshopAccess,
-} from '@/lib/tickets/classification'
+export { workshopAccessOf } from '@/lib/tickets/classification'
 import { platformFallbackContact } from '@/lib/email/from'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { reportNotSetTicketTypes } from './not-set-notice'

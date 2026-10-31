@@ -1267,8 +1267,6 @@ export async function addSocialPostAttachment(
   return { key }
 }
 
-export type { VariantTransition }
-
 /**
  * Fill an empty post and select its render on the Task's variant atomically.
  * Both revisions protect the empty check and the variant against concurrent

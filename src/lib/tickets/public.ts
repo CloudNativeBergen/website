@@ -11,11 +11,7 @@ import { stripHtml } from '@/lib/html/text'
 // Public ticket-type shapes now live with the provider contract (they are
 // Checkin-shaped — see docs/INTEGRATION_ADAPTERS.md). Re-exported here so
 // existing importers of `@/lib/tickets/public` are unaffected.
-export type {
-  TicketPrice,
-  PublicTicketType,
-  PublicEventInfo,
-} from './provider/types'
+export type { PublicTicketType, PublicEventInfo } from './provider/types'
 
 import type {
   PublicTicketType,

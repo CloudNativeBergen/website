@@ -10,24 +10,16 @@ import { getPlatformConstraints } from './constraints'
 import type { SocialEngagementProvider, SocialPublishAdapter } from './types'
 
 export type {
-  PlatformConstraints,
   PublishInput,
-  PublishMedia,
-  PublishOutcome,
   SocialPublishAdapter,
   ValidationIssue,
 } from './types'
 export type {
-  EngagementFailureKind,
   EngagementResult,
   PostEngagement,
   SocialEngagementProvider,
 } from './types'
 export { totalEngagement } from './types'
-export {
-  BLUESKY_APPVIEW_HOST,
-  BLUESKY_GET_POSTS_BATCH,
-} from './bluesky-engagement'
 
 /** Opaque credential bag a platform adapter is constructed with. */
 export type AdapterCredentials = Record<string, string>

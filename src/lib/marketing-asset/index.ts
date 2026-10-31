@@ -3,17 +3,12 @@
 // `./channel-format` is client-safe but also imported by path: it pulls in
 // the social platform rules (and their domain parser), which most of this
 // barrel's importers never need.
-export {
-  MARKETING_ASSET_BLOB_PREFIX,
-  marketingAssetPathname,
-  marketingAssetPrefix,
-} from './blob-url'
+export { marketingAssetPathname } from './blob-url'
 export {
   MARKETING_ASSET_IMAGE_TYPES,
   MARKETING_ASSET_MAX_IMAGE_BYTES,
   MARKETING_ASSET_MAX_IMAGE_LABEL,
   MARKETING_ASSET_SIZE_REFUSAL,
-  MARKETING_ASSET_TYPE_REFUSAL,
   SOFT_ON_SOCIAL_SHORT_SIDE,
   isSoftOnSocial,
 } from './image-type'
@@ -25,26 +20,18 @@ export {
 export {
   MARKETING_ASSET_AUDIO_LENGTH_REFUSAL,
   MARKETING_ASSET_AUDIO_SIZE_REFUSAL,
-  MARKETING_ASSET_AUDIO_TYPE_REFUSAL,
   MARKETING_ASSET_AUDIO_TYPES,
   MARKETING_ASSET_MAX_AUDIO_BYTES,
   MARKETING_ASSET_MAX_AUDIO_LABEL,
   MARKETING_ASSET_MAX_AUDIO_SECONDS,
-  MARKETING_ASSET_RIGHTS_REFUSAL,
   MARKETING_ASSET_RIGHTS_STATEMENT,
-  MARKETING_ASSET_WAV_FORMAT_REFUSAL,
   audioTypeForFile,
   formatTrackLength,
 } from './audio-type'
-export {
-  MARKETING_ASSET_SUBJECT_TYPES,
-  isPostedByHand,
-  kindHasAlt,
-} from './types'
+export { isPostedByHand, kindHasAlt } from './types'
 export {
   MARKETING_ASSET_GIF_SIZE_REFUSAL,
   MARKETING_ASSET_GIF_TYPE,
-  MARKETING_ASSET_GIF_TYPE_REFUSAL,
   MARKETING_ASSET_MAX_GIF_BYTES,
   MARKETING_ASSET_MAX_GIF_LABEL,
   MARKETING_ASSET_MAX_VIDEO_BYTES,
@@ -58,7 +45,7 @@ export {
   isQuickTimeFile,
   motionKindForFile,
 } from './motion-type'
-export type { MotionKind } from './motion-type'
+
 export {
   DEFAULT_STUDIO_FORMAT,
   STUDIO_FORMATS,
@@ -67,31 +54,23 @@ export {
   studioFormatLabel,
   studioFormatSchema,
 } from './format'
-export type { StudioFormat, StudioFormatSize } from './format'
-export { NOT_ATTACHABLE_YET, isAttachableToPost } from './post-attach'
+export type { StudioFormat } from './format'
+export { NOT_ATTACHABLE_YET } from './post-attach'
 export {
-  STUDIO_TABS,
   openInStudioHref,
   opensTheCard,
   projectDeleted,
   taskRenderCardSchema,
 } from './studio'
-export type {
-  ExportSourceInput,
-  MarketingAssetStudioOrigin,
-  StudioTab,
-  TaskRenderCard,
-} from './studio'
-export { PNG_SIZE_BYTES, pngSize } from './png-size'
+export type { ExportSourceInput, StudioTab, TaskRenderCard } from './studio'
+
 export type {
   MarketingAssetDetails,
   MarketingAssetEditionChoice,
   MarketingAssetFacets,
   MarketingAssetFilter,
   MarketingAssetKind,
-  MarketingAssetRights,
   MarketingAssetRow,
-  MarketingAssetScope,
   MarketingAssetSubject,
   MarketingAssetSubjectType,
 } from './types'

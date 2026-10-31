@@ -25,12 +25,9 @@
   ],
   "ignore": [
     "sanity/**",
-    "migrations/**",
-    "src/lib/empty-module.ts",
     "src/lib/conference/contract.ts",
     "src/components/admin/dashboard/widgets/__matrix__/mock-admin-actions.ts",
-    "src/components/admin/dashboard/widgets/__matrix__/mock-use-widget-data.ts",
-    ".storybook/mocks/tickets-provider.ts"
+    "src/components/admin/dashboard/widgets/__matrix__/mock-use-widget-data.ts"
   ],
   "ignoreDependencies": [
     "eslint-config-next",
@@ -38,6 +35,5 @@
     "@fontsource/.+",
     "@fontsource-variable/.+"
   ],
-  "ignoreExportsUsedInFile": true,
-  "includeEntryExports": true
+  "ignoreExportsUsedInFile": true
 }

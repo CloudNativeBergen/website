@@ -9,15 +9,11 @@ import { ProposalExisting } from '@/lib/proposal/types'
 // here so existing importers (`@/lib/schedule/types`) keep working while the
 // module is split up.
 export {
-  toMinutes,
-  toHHMM,
-  addMinutes,
   durationBetween,
   calculateEndTime,
   timesOverlap,
   generateTimeSlots,
   getProposalDurationMinutes,
-  endsWithinScheduleDay,
   type TimeSlot,
 } from './time'
 export {
@@ -25,7 +21,6 @@ export {
   canSwapTalks,
   canPlaceDisplacedBack,
   isTrackIntervalFree,
-  fitsInTrack,
   matchTalk,
   matchService,
 } from './rules'
