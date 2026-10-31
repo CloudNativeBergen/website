@@ -10,3 +10,4 @@ node_modules
 cli
 .env*
 .env*
+src/lib/openbadges/spec/
