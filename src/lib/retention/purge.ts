@@ -8,6 +8,10 @@ import {
   REMINDER_LOG_RETENTION_DAYS,
 } from './cutoffs'
 
+// groq-global-scoped: parent-keyed — `conference._ref == ^._id` bounds the
+// count to the ENCLOSING conference.
+const HAS_DOCS = `count(*[_type == $type && conference._ref == ^._id]) > 0`
+
 /** Most documents one purge deletes per run; the next daily run continues. */
 const MAX_DELETES_PER_RUN = 200
 
@@ -25,10 +29,10 @@ async function deleteForEndedConferences(
   const conferences =
     (await clientReadUncached.fetch<{ _id: string }[]>(
       // groq-global: platform RETENTION CRON — enumerates every tenant's
-      // conferences past the horizon by design; each deletion below is scoped
+      // conferences past the horizon that still hold `type` documents; each deletion below is scoped
       // to that one conference.
-      `*[_type == "conference" && defined(endDate) && endDate < $cutoff]{ _id }`,
-      { cutoff },
+      `*[_type == "conference" && defined(endDate) && endDate < $cutoff && ${HAS_DOCS}]{ _id }`,
+      { cutoff, type },
       { cache: 'no-store' },
     )) ?? []
 

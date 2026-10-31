@@ -1,10 +1,14 @@
 import { defineMigration, at, patch, set } from 'sanity/migrate'
 import { summarizeReviews } from '../../src/lib/review/summary'
-import { osloTodayDateString } from '../../src/lib/time'
+import {
+  osloMonthsCutoff,
+  REVIEW_RETENTION_MONTHS,
+} from '../../src/lib/retention/cutoffs'
 
 /**
- * Writes `talk.reviewSummary` for every talk of a conference that has ended,
- * from its current reviews. Deletes nothing.
+ * Writes `talk.reviewSummary` for every talk of a conference that ended more
+ * than 24 months ago (the cron's cutoff), from its current published reviews.
+ * Draft reviews are not counted. Deletes nothing.
  *
  * The summary has no `foldedAt`, so readers keep using the live reviews and
  * never count them twice. The daily cleanup cron sets `foldedAt` when it
@@ -29,21 +33,26 @@ interface Doc {
 export default defineMigration({
   title: 'Backfill talk review summaries',
   description:
-    'Stores review count and averages on talks of ended conferences. Deletes nothing.',
+    'Stores review count and averages on talks of conferences past the 24-month cutoff. Deletes nothing.',
   documentTypes: ['conference', 'talk', 'review'],
 
   async *migrate(documents) {
-    const today = osloTodayDateString()
+    const cutoff = osloMonthsCutoff(REVIEW_RETENTION_MONTHS)
     const ended = new Set<string>()
     const talks: Doc[] = []
     const reviews = new Map<string, Doc[]>()
     for await (const raw of documents()) {
       const doc = raw as unknown as Doc
-      if (doc._type === 'conference' && doc.endDate && doc.endDate < today)
+      if (doc._type === 'conference' && doc.endDate && doc.endDate < cutoff)
         ended.add(doc._id)
       if (doc._type === 'talk' && !doc._id.startsWith('drafts.'))
         talks.push(doc)
-      if (doc._type === 'review' && doc.proposal?._ref) {
+      if (
+        doc._type === 'review' &&
+        doc.proposal?._ref &&
+        !doc._id.startsWith('drafts.') &&
+        !doc._id.startsWith('versions.')
+      ) {
         const own = reviews.get(doc.proposal._ref) ?? []
         own.push(doc)
         reviews.set(doc.proposal._ref, own)

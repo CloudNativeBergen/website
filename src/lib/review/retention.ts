@@ -1,7 +1,12 @@
 import 'server-only'
-import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { lockRevision } from '@/lib/feedback/talk-versions'
+import { PUBLISHED_ONLY, versionsClient } from '@/lib/feedback/sanity'
+import {
+  lockRevision,
+  readTalkVersions,
+  type TalkDoc as VersionedTalk,
+} from '@/lib/feedback/talk-versions'
 import {
   osloMonthsCutoff,
   REVIEW_RETENTION_MONTHS,
@@ -13,70 +18,71 @@ import { summarizeReviews, type ReviewSummary } from './summary'
  * {@link REVIEW_RETENTION_MONTHS} months ago (Oslo date) into
  * `talk.reviewSummary`, then deletes them.
  *
- * Per conference, ONE transaction: set the summary on the talk (published and
- * draft, each guarded by `ifRevisionId`), guard every review by its revision,
- * then delete the reviews. A concurrent edit fails the guard and the whole
- * transaction, so a review is never deleted without being counted, and is
- * never counted twice: the summary is absolute (folded base + these reviews).
+ * Per conference, ONE transaction: set the summary on the published talk and
+ * every writable version (draft, active releases), each guarded by
+ * `ifRevisionId`; guard every review by its revision; then delete the
+ * reviews. A concurrent edit fails the guard and the whole transaction, so a
+ * review is never deleted without being counted, and never counted twice: the
+ * summary is absolute (folded base + these reviews). A talk with a locked
+ * release version, or whose releases cannot be listed, is skipped until a
+ * later run, as in `src/lib/feedback/fold.ts`.
  *
- * Bounded to about {@link MAX_REVIEWS_PER_RUN} reviews per run (whole talks
- * only). A failing conference is logged and skipped.
+ * Draft reviews are deleted with the rest but are not counted.
  *
- * ponytail: talks in a Content Release version are not patched; publishing
- * such a version would drop the summary. Add versions here (as
- * `src/lib/feedback/fold.ts` does) if releases ever carry old talks.
+ * At most about {@link MAX_REVIEWS_PER_RUN} reviews per run (whole talks
+ * only), so the one transaction stays the size of a feedback-fold chunk. A
+ * failing conference is logged and skipped.
  */
-const MAX_REVIEWS_PER_RUN = 200
+const MAX_REVIEWS_PER_RUN = 100
 
-interface TalkDoc {
-  _id: string
-  _rev: string
-  reviewSummary?: ReviewSummary | null
-}
+// groq-global-scoped: parent-keyed — `proposal->conference._ref == ^._id`
+// bounds the count to reviews of the ENCLOSING conference's talks.
+const HAS_REVIEWS = `count(*[_type == "review" && proposal->conference._ref == ^._id]) > 0`
 
-interface ReviewDoc {
+type TalkDoc = VersionedTalk & { reviewSummary?: ReviewSummary | null }
+
+export interface ReviewDoc {
   _id: string
   _rev: string
   talk: string
   score?: { content: number; relevance: number; speaker: number } | null
 }
 
-export interface FoldPlan {
-  talks: { docs: TalkDoc[]; summary: ReviewSummary }[]
-  reviews: ReviewDoc[]
-}
+const isDraftReview = (r: ReviewDoc) =>
+  r._id.startsWith('drafts.') || r._id.startsWith('versions.')
 
-/**
- * Pure: which talks fold, with what summary, and which reviews go, within
- * `budget` reviews (always at least one whole talk).
- */
-export function planReviewFold(
-  talkDocs: TalkDoc[],
+/** Pure: reviews grouped by talk, whole talks only, within `budget`. */
+export function pickReviewBatch(
   reviews: ReviewDoc[],
   budget: number,
-  now: Date,
-): FoldPlan {
+): Map<string, ReviewDoc[]> {
   const byTalk = new Map<string, ReviewDoc[]>()
   for (const r of reviews) {
     byTalk.set(r.talk, [...(byTalk.get(r.talk) ?? []), r])
   }
-  const plan: FoldPlan = { talks: [], reviews: [] }
+  const batch = new Map<string, ReviewDoc[]>()
+  let size = 0
   for (const [talkId, own] of byTalk) {
-    const published = talkDocs.find((t) => t._id === talkId)
-    if (!published) continue // no published talk to keep the summary on
-    if (plan.reviews.length > 0 && plan.reviews.length + own.length > budget)
-      break
-    const draft = talkDocs.find((t) => t._id === `drafts.${talkId}`)
-    plan.talks.push({
-      docs: draft ? [published, draft] : [published],
-      summary: {
-        ...summarizeReviews(own, published.reviewSummary),
-        foldedAt: now.toISOString(),
-      },
-    })
-    plan.reviews.push(...own)
+    if (size > 0 && size + own.length > budget) break
+    batch.set(talkId, own)
+    size += own.length
   }
-  return plan
+  return batch
+}
+
+/** Pure: the summary to store, counting published reviews only. */
+export function foldSummary(
+  published: TalkDoc,
+  reviews: ReviewDoc[],
+  now: Date,
+): ReviewSummary {
+  return {
+    ...summarizeReviews(
+      reviews.filter((r) => !isDraftReview(r)),
+      published.reviewSummary,
+    ),
+    foldedAt: now.toISOString(),
+  }
 }
 
 export async function foldExpiredReviews(
@@ -86,30 +92,27 @@ export async function foldExpiredReviews(
   const conferences =
     (await clientReadUncached.fetch<{ _id: string }[]>(
       // groq-global: platform RETENTION CRON — enumerates every tenant's
-      // conferences past the review horizon by design; each fold below is
-      // scoped to that one conference.
-      `*[_type == "conference" && defined(endDate) && endDate < $cutoff]{ _id }`,
+      // conferences past the review horizon that still have reviews; each
+      // fold below is scoped to that one conference.
+      `*[_type == "conference" && defined(endDate) && endDate < $cutoff && ${HAS_REVIEWS}]{ _id }`,
       { cutoff },
       { cache: 'no-store' },
     )) ?? []
 
+  const client = versionsClient()
   const result = { talks: 0, deleted: 0 }
   for (const { _id: conferenceId } of conferences) {
     const budget = MAX_REVIEWS_PER_RUN - result.deleted
     if (budget <= 0) break
     try {
-      // Published and draft talks of this conference.
-      const talkDocs =
-        (await scopedFetch<TalkDoc[]>(
+      const talkIds =
+        (await scopedFetch<string[]>(
           clientReadUncached,
           { conferenceId },
-          `*[_type == "talk"]{ _id, _rev, reviewSummary }`,
+          `*[_type == "talk" && ${PUBLISHED_ONLY}]._id`,
           {},
           { cache: 'no-store' },
         )) ?? []
-      const talkIds = talkDocs
-        .map((t) => t._id)
-        .filter((id) => !id.startsWith('drafts.'))
       if (talkIds.length === 0) continue
       const reviews =
         (await clientReadUncached.fetch<ReviewDoc[]>(
@@ -117,27 +120,39 @@ export async function foldExpiredReviews(
           // talks, read via the scopedFetch above.
           `*[_type == "review" && proposal._ref in $talkIds]{ _id, _rev, "talk": proposal._ref, score }`,
           { talkIds },
-          { cache: 'no-store' },
+          { cache: 'no-store', perspective: 'raw' },
         )) ?? []
-      const plan = planReviewFold(talkDocs, reviews, budget, new Date())
-      if (plan.reviews.length === 0) continue
-      if (!dryRun) {
-        const tx = clientWrite.transaction()
-        for (const { docs, summary } of plan.talks) {
-          for (const doc of docs) {
-            tx.patch(doc._id, (p) =>
-              p.ifRevisionId(doc._rev).set({ reviewSummary: summary }),
-            )
-          }
+
+      const now = new Date()
+      const tx = client.transaction()
+      let talks = 0
+      let deleted = 0
+      for (const [talkId, own] of pickReviewBatch(reviews, budget)) {
+        const { published, versions, locked, releasesListed } =
+          await readTalkVersions(client, talkId)
+        if (!published || !releasesListed || locked.length > 0) {
+          console.error(
+            `Review retention: ${talkId} waits (missing, or a locked release version)`,
+          )
+          continue
         }
-        for (const r of plan.reviews) {
+        const summary = foldSummary(published as TalkDoc, own, now)
+        for (const doc of [published, ...versions]) {
+          tx.patch(doc._id, (p) =>
+            p.ifRevisionId(doc._rev).set({ reviewSummary: summary }),
+          )
+        }
+        for (const r of own) {
           tx.patch(r._id, (p) => lockRevision(p, r._rev))
           tx.delete(r._id)
         }
-        await tx.commit()
+        talks++
+        deleted += own.length
       }
-      result.talks += plan.talks.length
-      result.deleted += plan.reviews.length
+      if (deleted === 0) continue
+      if (!dryRun) await tx.commit()
+      result.talks += talks
+      result.deleted += deleted
     } catch (error) {
       console.error(
         `Review retention: failed for conference ${conferenceId}:`,
