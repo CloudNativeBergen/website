@@ -1,34 +1,39 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": [
-    "src/app/**/page.{ts,tsx}",
-    "src/app/**/layout.{ts,tsx}",
-    "src/app/**/route.{ts,tsx}",
-    "src/app/**/loading.{ts,tsx}",
-    "src/app/**/not-found.{ts,tsx}",
-    "src/proxy.{ts,tsx}",
-    "src/server/routers/**/*.ts",
-    "sanity/actions/**/*.js",
-    "scripts/**/*.ts",
-    "evals/content-judgement/run.ts",
-    "migrations/**/index.ts",
-    "src/**/*.stories.{ts,tsx}",
-    "src/docs/**/*.{ts,tsx}",
-    ".storybook/**/*.{ts,tsx}"
-  ],
-  "project": [
-    "src/**/*.{ts,tsx,js,jsx}",
-    "sanity/**/*.{ts,tsx,js,jsx}",
-    ".storybook/**/*.{ts,tsx,js,jsx}",
-    "!src/**/*.test.{ts,tsx}",
-    "!**/__tests__/**"
-  ],
-  "ignore": [
-    "sanity/**",
-    "src/lib/conference/contract.ts",
-    "src/components/admin/dashboard/widgets/__matrix__/mock-admin-actions.ts",
-    "src/components/admin/dashboard/widgets/__matrix__/mock-use-widget-data.ts"
-  ],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "src/app/**/page.{ts,tsx}",
+        "src/app/**/layout.{ts,tsx}",
+        "src/app/**/route.{ts,tsx}",
+        "src/app/**/loading.{ts,tsx}",
+        "src/app/**/not-found.{ts,tsx}",
+        "src/proxy.{ts,tsx}",
+        "src/server/routers/**/*.ts",
+        "sanity/actions/**/*.js",
+        "scripts/**/*.ts",
+        "evals/content-judgement/run.ts",
+        "migrations/**/index.ts",
+        "src/**/*.stories.{ts,tsx}",
+        "src/docs/**/*.{ts,tsx}",
+        ".storybook/**/*.{ts,tsx}"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx,js,jsx}",
+        "sanity/**/*.{ts,tsx,js,jsx}",
+        ".storybook/**/*.{ts,tsx,js,jsx}",
+        "!src/**/*.test.{ts,tsx}",
+        "!**/__tests__/**"
+      ],
+      "ignore": [
+        "sanity/**",
+        "src/lib/conference/contract.ts",
+        "src/components/admin/dashboard/widgets/__matrix__/mock-admin-actions.ts",
+        "src/components/admin/dashboard/widgets/__matrix__/mock-use-widget-data.ts"
+      ]
+    },
+    "api": {}
+  },
   "ignoreDependencies": [
     "eslint-config-next",
     "@fontsource/.+",

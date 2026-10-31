@@ -1,5 +1,30 @@
 import { describe, expect, it } from 'vitest'
-import { osloDateCutoff, reminderLogsExpired } from './cutoffs'
+import {
+  osloDateCutoff,
+  osloMonthsCutoff,
+  reminderLogsExpired,
+} from './cutoffs'
+
+describe('osloMonthsCutoff', () => {
+  it('steps back whole calendar months on the Oslo day', () => {
+    // 23:30 UTC on Oct 31 is already Nov 1 in Oslo.
+    expect(osloMonthsCutoff(24, new Date('2026-10-31T23:30:00Z'))).toBe(
+      '2024-11-01',
+    )
+    expect(osloMonthsCutoff(24, new Date('2026-10-31T12:00:00Z'))).toBe(
+      '2024-10-31',
+    )
+  })
+
+  it('clamps to the end of a shorter month', () => {
+    expect(osloMonthsCutoff(1, new Date('2026-03-31T12:00:00Z'))).toBe(
+      '2026-02-28',
+    )
+    expect(osloMonthsCutoff(24, new Date('2026-02-28T12:00:00Z'))).toBe(
+      '2024-02-28',
+    )
+  })
+})
 
 describe('retention cutoffs', () => {
   it('expires reminder logs only after more than 60 days', () => {

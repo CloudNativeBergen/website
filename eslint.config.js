@@ -113,8 +113,13 @@ const eslintConfig = [
   // the ratchet as `.ts` shipped silently as `.js`. The same holds for `.mjs`
   // and `.cjs` (webpack resolves them) and `.mts`/`.cts` (tsc compiles them).
   // Nothing mechanical stops someone adding one.
+  // `api/**` is the api.konf.app Worker (#1772): it reads the same Sanity
+  // dataset, so the same tenancy rule applies.
   {
-    files: ['src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'],
+    files: [
+      'src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+      'api/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+    ],
     plugins: {
       tenancy: { rules: { 'no-unscoped-groq': noUnscopedGroq } },
     },

@@ -24,7 +24,10 @@ vi.mock('@/lib/sanity/client', () => {
   }
 })
 
-import { deleteExpiredReminderLogs } from './retention'
+import {
+  deleteExpiredMarketingSnapshots,
+  deleteExpiredReminderLogs,
+} from './purge'
 
 beforeEach(() => {
   h.fetch.mockReset()
@@ -47,12 +50,24 @@ describe('deleteExpiredReminderLogs', () => {
     const [query, params] = h.fetch.mock.calls[1]
     expect(query).toContain('conference._ref == $conferenceId')
     expect(query).toContain('[0...200]')
-    expect(params).toMatchObject({ conferenceId: 'c1' })
+    expect(params).toMatchObject({
+      conferenceId: 'c1',
+      type: 'scheduledReminderLog',
+    })
   })
 
   it('writes nothing on a dry run', async () => {
     h.fetch.mockResolvedValueOnce([{ _id: 'c1' }]).mockResolvedValueOnce(['a'])
     expect(await deleteExpiredReminderLogs(true)).toEqual({ deleted: 1 })
     expect(h.commit).not.toHaveBeenCalled()
+  })
+
+  it('purges marketing snapshots the same way', async () => {
+    h.fetch.mockResolvedValueOnce([{ _id: 'c1' }]).mockResolvedValueOnce(['s'])
+    expect(await deleteExpiredMarketingSnapshots()).toEqual({ deleted: 1 })
+    expect(h.fetch.mock.calls[1][1]).toMatchObject({
+      type: 'marketingSnapshot',
+    })
+    expect(h.deleted).toEqual(['s'])
   })
 })

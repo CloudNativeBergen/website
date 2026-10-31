@@ -1,5 +1,6 @@
 packages:
   - '.'
+  - api
 
 onlyBuiltDependencies:
   - '@vercel/speed-insights'
