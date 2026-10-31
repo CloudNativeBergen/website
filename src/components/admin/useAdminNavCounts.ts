@@ -16,10 +16,11 @@ const SHELL_COUNT = { retry: false, refetchOnWindowFocus: true } as const
 
 /**
  * Wall Posts arrive from guests, not from organizer actions, so the pending
- * count is also polled every minute on every admin page. React Query skips
- * the interval while the tab is hidden.
+ * count is also polled every five minutes on every admin page. React Query
+ * skips the interval while the tab is hidden; returning to the tab reads it
+ * at once when stale.
  */
-const PENDING_POLL_MS = 60_000
+const PENDING_POLL_MS = 5 * 60_000
 
 /** The counts the admin nav shows (see `withNavBadges`). */
 export function useAdminNavCounts(): AdminNavCounts {

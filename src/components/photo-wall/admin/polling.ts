@@ -1,6 +1,6 @@
 /**
  * How `/admin/photo-wall` polls the moderation queue (Photo Wall spec §8):
- * every 10 s while the page is visible, and for as long as it is open.
+ * every 30 s while the page is visible, and for as long as it is open.
  *
  * NOT `useIdlePolling()`: that hook stops after five minutes without a
  * pointer, key or scroll event, and an organizer's phone in a pocket makes
@@ -11,7 +11,7 @@
  * neither.
  */
 
-export const MODERATION_POLL_MS = 10_000
+export const MODERATION_POLL_MS = 30_000
 
 /** React Query options for `api.photoWall.moderationQueue.useQuery`. */
 export const moderationQueuePolling = {
