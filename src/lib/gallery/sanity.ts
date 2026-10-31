@@ -4,6 +4,7 @@ import {
   clientReadCached,
   clientReadUncached,
 } from '@/lib/sanity/client'
+import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
 import { createReference } from '@/lib/sanity/helpers'
 import { logger } from '@/lib/logger'
 import { GALLERY_CONSTANTS } from './constants'
@@ -631,19 +632,9 @@ export async function deleteGalleryImage(
       return false
     }
 
-    if (data?.assetId) {
-      const stillUsed = await clientReadUncached.fetch(
-        // groq-global: dataset-wide refcount of the underlying image ASSET
-        // before destroying it — it must see EVERY tenant's references to fail
-        // safe (deleting an asset another document still uses breaks that doc).
-        groq`count(*[references($assetId)])`,
-        { assetId: data.assetId },
-      )
-
-      if (!stillUsed) {
-        await clientWrite.delete(data.assetId)
-      }
-    }
+    // The shared check (#1200): a failed count keeps the asset, and it never
+    // throws, so a gallery document already deleted still reports success.
+    await deleteImageAssetIfOrphaned(data.assetId ?? null)
 
     return true
   } catch (error) {
