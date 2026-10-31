@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MyPost } from '@/lib/photo-wall/my-posts'
 
 /** How often My posts is read while the page is visible (§8). */
-export const MY_POSTS_POLL_MS = 15_000
+export const MY_POSTS_POLL_MS = 30_000
 
 /**
  * My posts as the composer polls it (Photo Wall spec §8): `load` (the

@@ -117,7 +117,7 @@ const appQueryClient = () =>
     },
   })
 
-describe('polling (§8): every 10 s while visible, with no idle stop', () => {
+describe('polling (§8): every 30 s while visible, with no idle stop', () => {
   function Poller({ queryFn }: { queryFn: () => Promise<unknown> }) {
     useQuery({ queryKey: ['queue'], queryFn, ...moderationQueuePolling })
     return null
@@ -147,8 +147,8 @@ describe('polling (§8): every 10 s while visible, with no idle stop', () => {
     return queryFn
   }
 
-  it('is 10 s', () => {
-    expect(MODERATION_POLL_MS).toBe(10_000)
+  it('is 30 s', () => {
+    expect(MODERATION_POLL_MS).toBe(30_000)
   })
 
   it('still polls past five idle minutes: nobody touches a phone in a pocket', async () => {
@@ -157,7 +157,7 @@ describe('polling (§8): every 10 s while visible, with no idle stop', () => {
     expect(queryFn).toHaveBeenCalledTimes(1)
     // Not one pointer, key or scroll event in six minutes.
     await act(() => vi.advanceTimersByTimeAsync(6 * 60_000))
-    expect(queryFn.mock.calls.length).toBeGreaterThanOrEqual(1 + 36)
+    expect(queryFn.mock.calls.length).toBeGreaterThanOrEqual(1 + 12)
     // And the next tick still comes.
     const before = queryFn.mock.calls.length
     await act(() => vi.advanceTimersByTimeAsync(MODERATION_POLL_MS))
@@ -409,7 +409,7 @@ describe('ModerationQueueView (§10)', () => {
   it('says what an empty tab means', () => {
     render(<ModerationQueueView queue={{ posts: [] }} />)
     expect(screen.getByRole('tabpanel')).toHaveTextContent(
-      'Nothing waiting. New posts show up here within about 10 seconds of being posted.',
+      'Nothing waiting. New posts show up here within about 30 seconds of being posted.',
     )
     fireEvent.click(tab(/On the wall/))
     expect(screen.getByRole('tabpanel')).toHaveTextContent(

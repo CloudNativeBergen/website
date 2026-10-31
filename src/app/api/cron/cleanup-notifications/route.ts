@@ -10,14 +10,13 @@ import { deleteExpiredProvisioningReceipts } from '@/lib/onboarding/provision'
 import { deleteExpiredProvisioningRateLimits } from '@/lib/provisioning'
 import { deleteExpiredMarketingRateLimits } from '@/lib/marketing/snapshots'
 import { deleteExpiredPrivacyErasureLogs } from '@/lib/privacy/erasure-log'
+import { deleteExpiredReminderLogs } from '@/lib/reminders/retention'
+import {
+  NOTIFICATION_RETENTION_DAYS,
+  SHORT_NOTIFICATION_RETENTION_DAYS,
+  SHORT_RETENTION_NOTIFICATION_TYPES,
+} from '@/lib/retention/cutoffs'
 import { unstable_noStore as noStore } from 'next/cache'
-
-/**
- * Notification retention period in days before cleanup.
- * Notifications older than this are permanently deleted by the daily cron,
- * matching the 90-day retention stated in the privacy policy.
- */
-const NOTIFICATION_RETENTION_DAYS = 90
 
 export const maxDuration = 300
 
@@ -56,6 +55,33 @@ export async function GET(request: NextRequest) {
       }
     }
     const none = { deleted: 0 }
+    // `?dryRun=1` only counts what the 30-day notification and reminder-log
+    // passes and the 3-year privacy erasure log pass would delete, and
+    // returns without running any other pass.
+    const dryRun = request.nextUrl.searchParams.get('dryRun') === '1'
+    if (dryRun) {
+      const [shortNotifications, reminderLogs, privacyErasureLogs] =
+        await Promise.all([
+          deleteNotificationsOlderThan(
+            SHORT_NOTIFICATION_RETENTION_DAYS,
+            SHORT_RETENTION_NOTIFICATION_TYPES,
+            true,
+          ),
+          deleteExpiredReminderLogs(true),
+          deleteExpiredPrivacyErasureLogs(true),
+        ])
+      console.log(
+        `[dry-run] would delete shortNotifications=${shortNotifications.deleted}` +
+          ` reminderLogs=${reminderLogs.deleted}` +
+          ` privacyErasureLogs=${privacyErasureLogs.deleted}`,
+      )
+      return NextResponse.json({
+        dryRun: true,
+        shortNotifications: shortNotifications.deleted,
+        reminderLogs: reminderLogs.deleted,
+        privacyErasureLogs: privacyErasureLogs.deleted,
+      })
+    }
 
     const { deleted } = await pass(
       'notifications',
@@ -65,6 +91,29 @@ export async function GET(request: NextRequest) {
 
     console.log(
       `Deleted ${deleted} notifications older than ${NOTIFICATION_RETENTION_DAYS} days`,
+    )
+
+    // Low-value types (system notes, marketing nags, stale-thread nudges,
+    // workshop capacity) go after 30 days instead of 90.
+    const shortNotifications = await pass(
+      'shortNotifications',
+      () =>
+        deleteNotificationsOlderThan(
+          SHORT_NOTIFICATION_RETENTION_DAYS,
+          SHORT_RETENTION_NOTIFICATION_TYPES,
+        ),
+      none,
+    )
+    // Reminder dedup markers for editions that ended 60+ days ago.
+    const reminderLogs = await pass(
+      'reminderLogs',
+      deleteExpiredReminderLogs,
+      none,
+    )
+    console.log(
+      `Deleted shortNotifications=${shortNotifications.deleted}` +
+        ` (older than ${SHORT_NOTIFICATION_RETENTION_DAYS} days)` +
+        ` reminderLogs=${reminderLogs.deleted}`,
     )
 
     // Messaging retention runs on the SAME daily trigger, AFTER the notification
@@ -187,7 +236,7 @@ export async function GET(request: NextRequest) {
     // Admin Privacy page audit records (#1045), kept three years.
     const privacyErasureLogs = await pass(
       'privacyErasureLogs',
-      deleteExpiredPrivacyErasureLogs,
+      () => deleteExpiredPrivacyErasureLogs(),
       none,
     )
 
@@ -205,6 +254,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       deleted,
+      shortNotifications: shortNotifications.deleted,
+      reminderLogs: reminderLogs.deleted,
       messaging,
       staleNudge,
       autoClose,

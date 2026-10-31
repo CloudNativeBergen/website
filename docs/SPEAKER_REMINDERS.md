@@ -141,10 +141,14 @@ The `scheduledReminderLog` is **operational bookkeeping, not user content**: it
 stores only a **weak** speaker reference, a weak conference reference, a `count`
 and timestamps. The weak refs make speaker erasure (GDPR) non-blocking — a
 dangling reference is tolerated exactly as it is for the messaging documents. The
-marker's lifecycle is tied to the conference edition it belongs to (it ages out
-with the edition); it holds no free-text personal data. The reminder deliveries
-themselves are ordinary hub `notification` documents and inherit the hub's
-**90-day** retention (`deleteNotificationsOlderThan`). The privacy page lists the
+marker's lifecycle is tied to the conference edition it belongs to: the daily
+`/api/cron/cleanup-notifications` deletes an edition's markers once it ended more
+than **60 days** ago (Oslo date, `src/lib/reminders/retention.ts`). That cannot
+re-send anything, because the reminder cron only runs for editions whose
+`endDate` is today or later. It holds no free-text personal data. The reminder
+deliveries themselves are ordinary hub `notification` documents and inherit the
+hub's retention (`deleteNotificationsOlderThan`): 90 days, or 30 days for the
+`system` type several reminders use. The privacy page lists the
 reminder delivery log in its retention table.
 
 ## Related documents

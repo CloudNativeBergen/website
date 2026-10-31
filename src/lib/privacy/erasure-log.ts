@@ -37,8 +37,12 @@ export async function writePrivacyErasureLog(
   }
 }
 
-/** Delete audit records older than the retention period. For the daily cron. */
+/**
+ * Delete audit records older than the retention period. For the daily cron;
+ * `dryRun` only counts them.
+ */
 export async function deleteExpiredPrivacyErasureLogs(
+  dryRun = false,
   now: number = Date.now(),
 ): Promise<{ deleted: number }> {
   const before = new Date(
@@ -51,7 +55,7 @@ export async function deleteExpiredPrivacyErasureLogs(
       { before },
       { cache: 'no-store' },
     )) ?? []
-  if (ids.length > 0) {
+  if (!dryRun && ids.length > 0) {
     const tx = clientWrite.transaction()
     for (const id of ids) tx.delete(id)
     await tx.commit()

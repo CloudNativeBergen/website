@@ -1934,10 +1934,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              90 days after creation
+                              At most 90 days after creation
                               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                Except an unread new-message notification, which
-                                is kept until you read it
+                                System notices, task reminders, stale-thread
+                                nudges and workshop capacity alerts go after 30
+                                days. An unread new-message notification is kept
+                                until you read it
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
@@ -1957,9 +1959,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              Not deleted automatically
+                              60 days after the conference ends
                               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                Deleted with your profile if you ask for erasure
+                                Deleted earlier, with your profile, if you ask
+                                for erasure
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">

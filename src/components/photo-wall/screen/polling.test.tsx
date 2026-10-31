@@ -2,8 +2,8 @@
  * @vitest-environment jsdom
  *
  * Screen Mode's polling (Photo Wall spec §8, §9.3): every 5 s whatever
- * happens — past five idle minutes, hidden, and through failed polls, which
- * keep the last answer.
+ * happens — past five idle minutes and through failed polls, which
+ * keep the last answer. Not while hidden.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
@@ -93,7 +93,7 @@ describe('screenPolling (§8)', () => {
     expect(queryFn).toHaveBeenCalledTimes(1 + 72)
   })
 
-  it('keeps polling while the page is hidden', async () => {
+  it('stops polling while the page is hidden, and resumes when visible', async () => {
     const queryFn = mount()
     await act(() => vi.advanceTimersByTimeAsync(SCREEN_POLL_MS))
     expect(queryFn).toHaveBeenCalledTimes(1)
@@ -102,7 +102,13 @@ describe('screenPolling (§8)', () => {
       window.dispatchEvent(new Event('visibilitychange'))
     })
     await act(() => vi.advanceTimersByTimeAsync(10 * SCREEN_POLL_MS))
-    expect(queryFn).toHaveBeenCalledTimes(11)
+    expect(queryFn).toHaveBeenCalledTimes(1)
+    visibility = 'visible'
+    act(() => {
+      window.dispatchEvent(new Event('visibilitychange'))
+    })
+    await act(() => vi.advanceTimersByTimeAsync(SCREEN_POLL_MS))
+    expect(queryFn).toHaveBeenCalledTimes(2)
   })
 
   it('a failed poll keeps the last answer, counts once, and the next poll still comes (§9.3)', async () => {
