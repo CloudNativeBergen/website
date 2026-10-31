@@ -54,7 +54,7 @@ export async function loadDashboardBriefing({
   fetchDinnerChoice,
   now = new Date(),
 }: {
-  conference: Conference
+  conference: Pick<Conference, '_id' | 'startDate' | 'endDate' | 'organization'>
   currentConferenceId?: string
   isOver: boolean
   proposals: ProposalExisting[]
