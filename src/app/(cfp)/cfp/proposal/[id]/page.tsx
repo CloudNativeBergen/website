@@ -1,3 +1,4 @@
+import { pickCfpConference } from '@/lib/conference/logo'
 import { connection } from 'next/server'
 import { notFound, redirect } from 'next/navigation'
 import { headers } from 'next/headers'
@@ -251,7 +252,7 @@ export default async function ProposalViewPage({
                 initialSpeaker={speakerData}
                 proposalId={id}
                 userEmail={session.speaker.email}
-                conference={conference}
+                conference={pickCfpConference(conference)}
                 allowedFormats={conference.formats}
                 currentUserSpeaker={currentUserSpeaker}
                 initialStatus={proposal.status}
@@ -261,7 +262,9 @@ export default async function ProposalViewPage({
 
           <div className="w-full space-y-6 lg:w-80 lg:shrink-0">
             <div className="hidden lg:block">
-              <ProposalGuidanceSidebar conference={conference} />
+              <ProposalGuidanceSidebar
+                conference={pickCfpConference(conference)}
+              />
             </div>
             {speakerMaterials}
           </div>

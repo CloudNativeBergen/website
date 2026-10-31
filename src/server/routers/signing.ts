@@ -14,6 +14,7 @@ import {
 } from '@/lib/sponsor-crm/activity'
 import { sanitizeSponsorName } from '@/lib/sponsor-crm/utils'
 import { getCurrentDateTime } from '@/lib/time'
+import { runAfterResponse } from '@/server/runAfterResponse'
 import { publicProcedure, router } from '@/server/trpc'
 
 import { SigningTokenSchema, SubmitSignatureSchema } from '../schemas/signing'
@@ -27,12 +28,20 @@ function ensurePendingContract(doc: SigningContractData): void {
       message: 'This contract has already been signed.',
     })
   }
+  // A rejected or expired contract is refused exactly like an unknown token
+  // (#1111): this router is public, so its refusal vocabulary is its whole
+  // information boundary, and a token-holder must not learn that the token
+  // once matched a contract, nor which state it ended in.
   if (doc.signatureStatus === 'rejected' || doc.signatureStatus === 'expired') {
-    throw new TRPCError({
-      code: 'PRECONDITION_FAILED',
-      message: `This contract has been ${doc.signatureStatus}. Please contact the organizer.`,
-    })
+    throw contractNotFound()
   }
+}
+
+function contractNotFound(): TRPCError {
+  return new TRPCError({
+    code: 'NOT_FOUND',
+    message: 'Contract not found or link has expired.',
+  })
 }
 
 export const signingRouter = router({
@@ -42,10 +51,7 @@ export const signingRouter = router({
       const doc = await getSigningContract(input.token)
 
       if (!doc) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Contract not found or link has expired.',
-        })
+        throw contractNotFound()
       }
 
       if (doc.signatureStatus === 'signed') {
@@ -80,10 +86,7 @@ export const signingRouter = router({
       const doc = await getSigningContract(input.token)
 
       if (!doc) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Contract not found or link has expired.',
-        })
+        throw contractNotFound()
       }
 
       ensurePendingContract(doc)
@@ -262,105 +265,113 @@ export const signingRouter = router({
         )
       }
 
-      // Send Slack notification (best-effort, non-critical)
-      try {
-        if (doc.conference) {
-          const { notifySponsorContractSigned } =
-            await import('@/lib/slack/notify')
-          await notifySponsorContractSigned(
-            doc.sponsor?.name || 'Unknown Sponsor',
-            input.signerName,
-            doc.tier?.title || null,
-            doc.contractValue ?? null,
-            doc.contractCurrency ?? null,
-            doc.conference as Parameters<typeof notifySponsorContractSigned>[5],
-          )
-        }
-      } catch (slackError) {
-        console.error(
-          '[signing] Failed to send Slack notification:',
-          slackError,
-        )
-      }
-
-      // Send confirmation email (best-effort, non-critical)
-      try {
-        if (doc.conference?.sponsorEmail && doc.signerEmail) {
-          const { renderContractEmail, CONTRACT_EMAIL_SLUGS } =
-            await import('@/lib/email/contract-email')
-          const { resolveEmailSender, retryWithBackoff } =
-            await import('@/lib/email/config')
-
-          const { formatNumber } = await import('@/lib/format')
-          const contractValueStr = doc.contractValue
-            ? `${formatNumber(doc.contractValue)} ${doc.contractCurrency || 'NOK'}`
-            : undefined
-
-          const result = await renderContractEmail(
-            CONTRACT_EMAIL_SLUGS.SIGNED,
-            {
-              sponsorName: doc.sponsor?.name || 'Sponsor',
-              signerName: input.signerName,
-              tierName: doc.tier?.title,
-              contractValue: contractValueStr,
-              conference: {
-                title: doc.conference.title || PLATFORM_NAME,
-                city: doc.conference.city,
-                startDate: doc.conference.startDate,
-                domains: doc.conference.domains,
-                organizer: doc.conference.organizer,
-                sponsorEmail: doc.conference.sponsorEmail,
-                socialLinks: doc.conference.socialLinks,
-                theme: doc.conference.theme,
-              },
-            },
-          )
-
-          if (!result) {
-            console.error('[signing] Contract email template not found')
-          } else {
-            const fromEmail = doc.conference.sponsorEmail
-            const fromName = doc.conference.organizer || PLATFORM_NAME
-
-            // Public endpoint — no request org. The tenant comes off the
-            // contract's own conference, which projects `organization`.
-            const { client } = await resolveEmailSender(
-              doc.conference.organization?._ref,
-            )
-
-            await retryWithBackoff(async () => {
-              // Resend reports a rejected send as `{ error }`, not a throw.
-              const sent = await client.emails.send({
-                from: `${fromName} <${fromEmail}>`,
-                to: [doc.signerEmail],
-                subject: result.subject,
-                react: result.react,
-                attachments: [
-                  {
-                    filename,
-                    content: signedPdfBuffer,
-                  },
-                ],
-              })
-              if (sent.error) {
-                throw Object.assign(new Error(sent.error.message), {
-                  status: sent.error.statusCode,
-                })
-              }
-              return sent
-            })
-
-            console.log(
-              `[signing] Confirmation email sent to ${doc.signerEmail}`,
+      // DEFERRED past the response (#1112). Everything above is the outcome;
+      // the Slack post and the confirmation email cannot change it, so the
+      // signer does not wait on them. Both are already best-effort, each in its
+      // own try/catch, so the task is never-fail as `runAfterResponse` needs.
+      runAfterResponse(async () => {
+        // Send Slack notification (best-effort, non-critical)
+        try {
+          if (doc.conference) {
+            const { notifySponsorContractSigned } =
+              await import('@/lib/slack/notify')
+            await notifySponsorContractSigned(
+              doc.sponsor?.name || 'Unknown Sponsor',
+              input.signerName,
+              doc.tier?.title || null,
+              doc.contractValue ?? null,
+              doc.contractCurrency ?? null,
+              doc.conference as Parameters<
+                typeof notifySponsorContractSigned
+              >[5],
             )
           }
+        } catch (slackError) {
+          console.error(
+            '[signing] Failed to send Slack notification:',
+            slackError,
+          )
         }
-      } catch (emailError) {
-        console.error(
-          '[signing] Failed to send confirmation email:',
-          emailError,
-        )
-      }
+
+        // Send confirmation email (best-effort, non-critical)
+        try {
+          if (doc.conference?.sponsorEmail && doc.signerEmail) {
+            const { renderContractEmail, CONTRACT_EMAIL_SLUGS } =
+              await import('@/lib/email/contract-email')
+            const { resolveEmailSender, retryWithBackoff } =
+              await import('@/lib/email/config')
+
+            const { formatNumber } = await import('@/lib/format')
+            const contractValueStr = doc.contractValue
+              ? `${formatNumber(doc.contractValue)} ${doc.contractCurrency || 'NOK'}`
+              : undefined
+
+            const result = await renderContractEmail(
+              CONTRACT_EMAIL_SLUGS.SIGNED,
+              {
+                sponsorName: doc.sponsor?.name || 'Sponsor',
+                signerName: input.signerName,
+                tierName: doc.tier?.title,
+                contractValue: contractValueStr,
+                conference: {
+                  title: doc.conference.title || PLATFORM_NAME,
+                  city: doc.conference.city,
+                  startDate: doc.conference.startDate,
+                  domains: doc.conference.domains,
+                  organizer: doc.conference.organizer,
+                  sponsorEmail: doc.conference.sponsorEmail,
+                  socialLinks: doc.conference.socialLinks,
+                  theme: doc.conference.theme,
+                },
+              },
+            )
+
+            if (!result) {
+              console.error('[signing] Contract email template not found')
+            } else {
+              const fromEmail = doc.conference.sponsorEmail
+              const fromName = doc.conference.organizer || PLATFORM_NAME
+
+              // Public endpoint — no request org. The tenant comes off the
+              // contract's own conference, which projects `organization`.
+              const { client } = await resolveEmailSender(
+                doc.conference.organization?._ref,
+              )
+
+              await retryWithBackoff(async () => {
+                // Resend reports a rejected send as `{ error }`, not a throw.
+                const sent = await client.emails.send({
+                  from: `${fromName} <${fromEmail}>`,
+                  to: [doc.signerEmail],
+                  subject: result.subject,
+                  react: result.react,
+                  attachments: [
+                    {
+                      filename,
+                      content: signedPdfBuffer,
+                    },
+                  ],
+                })
+                if (sent.error) {
+                  throw Object.assign(new Error(sent.error.message), {
+                    status: sent.error.statusCode,
+                  })
+                }
+                return sent
+              })
+
+              console.log(
+                `[signing] Confirmation email sent to ${doc.signerEmail}`,
+              )
+            }
+          }
+        } catch (emailError) {
+          console.error(
+            '[signing] Failed to send confirmation email:',
+            emailError,
+          )
+        }
+      })
 
       return {
         success: true,

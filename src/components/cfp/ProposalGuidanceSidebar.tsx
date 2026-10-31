@@ -1,12 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { Conference } from '@/lib/conference/types'
+import type { CfpConference } from '@/lib/conference/logo'
 import { formats } from '@/lib/proposal/types'
 import { formatConferenceDateLong } from '@/lib/time'
 
 interface ProposalGuidanceSidebarProps {
-  conference: Conference
+  conference: CfpConference
 }
 
 export function ProposalGuidanceSidebar({

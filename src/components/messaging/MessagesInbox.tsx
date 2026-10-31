@@ -9,7 +9,9 @@ import type {
   ConversationListItem,
   ConversationView,
   ConversationViewCounts,
+  InboxFilter,
 } from '@/lib/messaging/types'
+import { FilterChip } from '@/components/admin/sponsor-crm/MobileFilterSheet'
 import { ConversationList } from './ConversationList'
 import { NewConversationForm } from './NewConversationForm'
 
@@ -21,43 +23,92 @@ const PANEL_ID = 'messages-conversation-panel'
 /** Deterministic per-tab id so the tabpanel can be `aria-labelledby` the tab. */
 const tabId = (view: ConversationView) => `messages-tab-${view}`
 
-/** Organizer inbox tabs. `all` is deliberately omitted from the UI (kept as a
- *  server capability). TRIAGE-FIRST ordering: `needs-reply` leads the bar and is
- *  the default landing view — the organizer inbox exists to answer people, so
- *  the queue of threads waiting on an organizer is what should greet them.
- *  `active` (every open thread) stays one tab away. */
-const ORGANIZER_TABS: { view: ConversationView; label: string }[] = [
-  { view: 'needs-reply', label: 'Needs reply' },
-  { view: 'active', label: 'Active' },
-  { view: 'my-teams', label: 'My teams' },
-  { view: 'unassigned', label: 'Unassigned' },
-  { view: 'mine', label: 'Mine' },
+type OrganizerStatus = 'active' | 'resolved' | 'archived'
+
+/**
+ * Organizer inbox (#916): ONE list, narrowed by a status (Open / Resolved /
+ * Archived) and, on open threads, by combinable filter chips. The seven old
+ * `?view=` tabs map onto this: `active` is Open with no chip, the four
+ * open-thread views are Open plus that one chip, `resolved` and `archived` are
+ * statuses. `all` stays a server capability with no UI.
+ */
+const ORGANIZER_STATUSES: { view: OrganizerStatus; label: string }[] = [
+  { view: 'active', label: 'Open' },
   { view: 'resolved', label: 'Resolved' },
   { view: 'archived', label: 'Archived' },
 ]
 
-/** Speakers get a subtle two-way toggle (Active / Archived), not a full tab bar
- *  — the organizer-only views carry no speaker meaning. */
+const FILTER_CHIPS: { filter: InboxFilter; label: string }[] = [
+  { filter: 'needs-reply', label: 'Needs reply' },
+  { filter: 'unassigned', label: 'Unassigned' },
+  { filter: 'mine', label: 'Mine' },
+  { filter: 'my-teams', label: 'My teams' },
+]
+
+/**
+ * TRIAGE FIRST: with no `?filter=` an organizer lands on open threads that need
+ * a reply. Turning every chip off is written as `?filter=none`, so "all open
+ * threads" has its own URL instead of colliding with the landing state.
+ */
+const DEFAULT_FILTERS: InboxFilter[] = ['needs-reply']
+const NO_FILTERS = 'none'
+
+/** Speakers get a subtle two-way toggle (Active / Archived) and no chips —
+ *  the organizer-only filters carry no speaker meaning. */
 const SPEAKER_TABS: { view: ConversationView; label: string }[] = [
   { view: 'active', label: 'Active' },
   { view: 'archived', label: 'Archived' },
 ]
 
 /**
- * The landing view per audience — the tab selected when no `?view=` is present,
- * AND the canonical no-param state written back to the URL. These two uses MUST
- * stay the same value: if the fallback and the "delete the param" branch ever
- * disagree, the URL and the tab bar describe different views.
- *
- * ORGANIZERS land on `needs-reply` (triage first); SPEAKERS land on `active`
- * (needs-reply is an organizer-only concept and is not even in their toggle).
+ * Read the organizer inbox state from the URL. A legacy `?view=` (bookmarks,
+ * the dashboard's My areas cards) is honoured when the new params are absent,
+ * so every old view URL lands on the matching status + chip. Unknown values
+ * fall back to the landing state.
  */
-const DEFAULT_VIEW: Record<'speaker' | 'organizer', ConversationView> = {
-  organizer: 'needs-reply',
-  speaker: 'active',
+export function parseOrganizerInboxParams(
+  params: URLSearchParams,
+  available: readonly InboxFilter[],
+): { status: OrganizerStatus; filters: InboxFilter[] } {
+  const isAvailable = (value: string): value is InboxFilter =>
+    (available as readonly string[]).includes(value)
+  const legacy = params.get('view')
+  if (legacy && !params.has('status') && !params.has('filter')) {
+    if (legacy === 'resolved' || legacy === 'archived') {
+      return { status: legacy, filters: [] }
+    }
+    if (legacy === 'active') return { status: 'active', filters: [] }
+    if (isAvailable(legacy)) return { status: 'active', filters: [legacy] }
+  }
+  const status = params.get('status')
+  if (status === 'resolved' || status === 'archived') {
+    return { status, filters: [] }
+  }
+  const filter = params.get('filter')
+  if (filter === null) return { status: 'active', filters: DEFAULT_FILTERS }
+  return {
+    status: 'active',
+    filters: [...new Set(filter.split(',').filter(isAvailable))],
+  }
 }
 
-/** The count-badge value for a tab (undefined ⇒ no badge; zero is omitted). */
+/** Write the organizer inbox state into `params`, dropping any legacy `view`. */
+function writeOrganizerInboxParams(
+  params: URLSearchParams,
+  status: OrganizerStatus,
+  filters: readonly InboxFilter[],
+) {
+  params.delete('view')
+  if (status === 'active') params.delete('status')
+  else params.set('status', status)
+  const isDefault =
+    filters.length === DEFAULT_FILTERS.length &&
+    DEFAULT_FILTERS.every((f) => filters.includes(f))
+  if (status !== 'active' || isDefault) params.delete('filter')
+  else params.set('filter', filters.length ? filters.join(',') : NO_FILTERS)
+}
+
+/** The count-badge value for a view or chip (undefined ⇒ no badge). */
 function countForView(
   view: ConversationView,
   counts: ConversationViewCounts | undefined,
@@ -105,29 +156,24 @@ export interface MessagesInboxProps {
   variant?: 'card' | 'rail'
   /**
    * Controlled composer. Supply BOTH to hoist the "new conversation" affordance
-   * out of the inbox: the inline trigger beside the view tabs is dropped and the
-   * caller owns the button, while the inbox still renders the form itself.
+   * out of the inbox: the inline trigger beside the view toggle is dropped and
+   * the caller owns the button, while the inbox still renders the form itself.
    *
    * `/admin/messages` uses this to put New in `AdminPageHeader`'s action slot —
-   * where every other admin page puts its primary CTA. Sharing the tab row with
-   * a pinned button was what truncated `Unassigned` to `Unassig` at 393px.
-   * Uncontrolled (the standalone `/cfp/messages` inbox) is unchanged.
+   * where every other admin page puts its primary CTA. Uncontrolled (the
+   * standalone `/cfp/messages` inbox) is unchanged.
    */
   showNew?: boolean
   onShowNewChange?: (show: boolean) => void
 }
 
-/** A small count badge shown after a tab label; omitted when the count is 0. */
-function TabCount({ count, active }: { count?: number; active: boolean }) {
+/** A small count badge shown after a label; omitted when the count is 0. */
+function TabCount({ count }: { count?: number }) {
   if (!count || count <= 0) return null
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold ${
-        active
-          ? 'bg-white/25 text-white'
-          : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
-      }`}
+      className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-gray-200 px-1 text-[10px] leading-none font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-300"
     >
       {count > 99 ? '99+' : count}
     </span>
@@ -135,65 +181,20 @@ function TabCount({ count, active }: { count?: number; active: boolean }) {
 }
 
 /**
- * Organizer view tabs: a horizontally scrollable row (no wrap, scrollbar hidden)
- * so the tabs never crowd or reflow at 393px. Each tab is a 44px target, exposes
- * its selected state via `aria-selected`, and carries a per-view count badge.
+ * View toggle: a subtle segmented control — the speaker's Active / Archived and
+ * the organizer's Open / Resolved / Archived status.
  */
-function OrganizerViewTabs({
+function ViewToggle<V extends ConversationView>({
   view,
-  counts,
   onChange,
   tabs,
+  counts,
 }: {
-  view: ConversationView
-  counts: ConversationViewCounts | undefined
-  onChange: (view: ConversationView) => void
-  /** The visible organizer tabs — `My teams` is dropped when no team is configured. */
-  tabs: { view: ConversationView; label: string }[]
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label="Filter conversations"
-      className="no-scrollbar flex flex-1 gap-1 overflow-x-auto"
-    >
-      {tabs.map((tab) => {
-        const active = tab.view === view
-        const count = countForView(tab.view, counts)
-        return (
-          <button
-            key={tab.view}
-            id={tabId(tab.view)}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            aria-controls={PANEL_ID}
-            onClick={() => onChange(tab.view)}
-            className={`inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium whitespace-nowrap transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue ${
-              active
-                ? 'bg-brand-cloud-blue text-white dark:bg-blue-600'
-                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
-            }`}
-          >
-            {tab.label}
-            <TabCount count={count} active={active} />
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-/**
- * Speaker view toggle: a subtle segmented control (Active / Archived). Presented
- * as a pill pair rather than a full tab bar to match the lighter speaker surface.
- */
-function SpeakerViewToggle({
-  view,
-  onChange,
-}: {
-  view: ConversationView
-  onChange: (view: ConversationView) => void
+  view: V
+  onChange: (view: V) => void
+  tabs: { view: V; label: string }[]
+  /** Per-view badges (organizer statuses); speakers pass none. */
+  counts?: ConversationViewCounts
 }) {
   return (
     <div
@@ -201,7 +202,7 @@ function SpeakerViewToggle({
       aria-label="Filter conversations"
       className="inline-flex rounded-lg bg-gray-100 p-0.5 dark:bg-gray-800"
     >
-      {SPEAKER_TABS.map((tab) => {
+      {tabs.map((tab) => {
         const active = tab.view === view
         return (
           <button
@@ -212,13 +213,14 @@ function SpeakerViewToggle({
             aria-selected={active}
             aria-controls={PANEL_ID}
             onClick={() => onChange(tab.view)}
-            className={`inline-flex min-h-[44px] items-center rounded-md px-4 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue ${
+            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-md px-3 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue sm:px-4 ${
               active
                 ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white'
                 : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
             }`}
           >
             {tab.label}
+            <TabCount count={countForView(tab.view, counts)} />
           </button>
         )
       })}
@@ -227,15 +229,69 @@ function SpeakerViewToggle({
 }
 
 /**
+ * Organizer filter chips: toggle buttons (`aria-pressed`) in the shared admin
+ * filter-chip style. The row WRAPS instead of scrolling, so no chip is clipped
+ * at 393px. Each chip's count already reflects the other selected chips.
+ */
+function OrganizerFilterChips({
+  chips,
+  selected,
+  counts,
+  onToggle,
+  onClear,
+}: {
+  chips: { filter: InboxFilter; label: string }[]
+  selected: readonly InboxFilter[]
+  counts: ConversationViewCounts | undefined
+  onToggle: (filter: InboxFilter) => void
+  onClear: () => void
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Filter open conversations"
+      className="flex flex-wrap items-center gap-1.5"
+    >
+      {chips.map(({ filter, label }) => (
+        <FilterChip
+          key={filter}
+          active={selected.includes(filter)}
+          onClick={() => onToggle(filter)}
+          label={
+            <span className="inline-flex items-center gap-1.5">
+              {label}
+              <TabCount count={countForView(filter, counts)} />
+            </span>
+          }
+        />
+      ))}
+      {selected.length > 0 && (
+        <button
+          type="button"
+          onClick={onClear}
+          className="min-h-11 rounded-lg px-2 text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:text-indigo-400 dark:hover:text-indigo-300"
+        >
+          Clear filters
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
  * Inbox container for both audiences: loads the caller's conversations and
- * renders {@link ConversationList}. A view tab bar (organizer) / toggle
- * (speaker) drives the `listConversations` `view` input — switching views swaps
- * the query key so each view fetches fresh. The selected view is persisted in
- * the `?view=` query string (V1i) so back-navigation restores it; the audience's
- * landing view ({@link DEFAULT_VIEW} — `needs-reply` for organizers, `active`
- * for speakers) omits the param. When `allowNew` is set a {@link NewConversationForm}
- * opens a general thread — speakers with the organizers; organizers with a
- * chosen recipient speaker.
+ * renders {@link ConversationList}.
+ *
+ * ORGANIZERS get one list with a status toggle (Open / Resolved / Archived) and,
+ * on Open, combinable filter chips (#916). State lives in `?status=` and
+ * `?filter=` (comma-separated); the landing state (Open + Needs reply) writes
+ * no params, and a legacy `?view=` still resolves (see
+ * {@link parseOrganizerInboxParams}).
+ *
+ * SPEAKERS keep the Active / Archived toggle persisted in `?view=`.
+ *
+ * When `allowNew` is set a {@link NewConversationForm} opens a general thread —
+ * speakers with the organizers; organizers with a chosen recipient speaker.
  */
 export function MessagesInbox({
   audience,
@@ -258,31 +314,22 @@ export function MessagesInbox({
     else setOwnShowNew(next)
   }
 
-  // The selected view is persisted in the URL (`?view=`) so it survives
-  // back/forward navigation. Local state drives the immediate switch; the URL is
-  // written alongside, and an effect syncs the state back when the URL changes
-  // out from under us (browser back/forward). Any value not valid for this
-  // audience falls back to the audience's landing view (DEFAULT_VIEW).
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
   // TEAMS-3 soft lens: the caller's teams + every configured team (key/title).
-  // Organizer-only — speakers never see the team surfaces. When NO team is
-  // configured conference-wide the `My teams` tab is an inert lens, so it (and
-  // the per-row team chips) are hidden entirely rather than cluttering the UI.
+  // Organizer-only. When NO team is configured conference-wide the `My teams`
+  // chip is an inert lens, so it (and the per-row team chips) are hidden.
   const { data: teamLens } = api.message.teamLens.useQuery(undefined, {
     staleTime: 5 * 60_000,
     enabled: isOrganizer,
   })
   const teamsConfigured = (teamLens?.teams.length ?? 0) > 0
-
-  // Drop the `My teams` tab when no team is configured (inert-lens hide). The
-  // same filtered list drives URL-view validation below, so a stale
-  // `?view=my-teams` correctly falls back to `active` on a team-less conference.
-  const organizerTabs = teamsConfigured
-    ? ORGANIZER_TABS
-    : ORGANIZER_TABS.filter((t) => t.view !== 'my-teams')
+  const chips = teamsConfigured
+    ? FILTER_CHIPS
+    : FILTER_CHIPS.filter((c) => c.filter !== 'my-teams')
+  const availableFilters = chips.map((c) => c.filter)
 
   // Routing-team TITLES for the per-row chips (L2): a sponsor thread → `sponsors`
   // team title, everything else → `cfp` team title. Undefined ⇒ no chips.
@@ -294,54 +341,69 @@ export function MessagesInbox({
         }
       : undefined
 
-  const tabs = isOrganizer ? organizerTabs : SPEAKER_TABS
-  const defaultView = DEFAULT_VIEW[audience]
-  const paramView = searchParams.get('view')
-  const urlView: ConversationView =
-    paramView && tabs.some((t) => t.view === paramView)
-      ? (paramView as ConversationView)
-      : defaultView
-  const [view, setLocalView] = useState<ConversationView>(urlView)
-
-  // Restore the view from the URL when it changes independently of a tab click
-  // (browser back/forward). Adjusting state DURING render — React's endorsed
-  // "you might not need an effect" pattern — keeps the switch in sync without an
-  // effect's extra commit; a tab click sets both local state and the URL, so the
-  // two agree and this branch is a no-op.
-  const [prevUrlView, setPrevUrlView] = useState<ConversationView>(urlView)
-  if (urlView !== prevUrlView) {
-    setPrevUrlView(urlView)
-    setLocalView(urlView)
+  // The URL is the source of truth; local state drives the immediate switch and
+  // re-syncs when the URL changes out from under us (browser back/forward).
+  const urlState = isOrganizer
+    ? parseOrganizerInboxParams(searchParams, availableFilters)
+    : {
+        status: (searchParams.get('view') === 'archived'
+          ? 'archived'
+          : 'active') as OrganizerStatus,
+        filters: [] as InboxFilter[],
+      }
+  const urlKey = `${urlState.status}|${urlState.filters.join(',')}`
+  const [state, setLocalState] = useState(urlState)
+  // Adjusting state DURING render ("you might not need an effect"): a click
+  // sets both local state and the URL, so this branch is then a no-op.
+  const [prevUrlKey, setPrevUrlKey] = useState(urlKey)
+  if (urlKey !== prevUrlKey) {
+    setPrevUrlKey(urlKey)
+    setLocalState(urlState)
   }
+  const { status, filters } = state
 
-  const setView = useCallback(
-    (next: ConversationView) => {
-      setLocalView(next)
+  const setInboxState = useCallback(
+    (next: { status: OrganizerStatus; filters: InboxFilter[] }) => {
+      setLocalState(next)
       const params = new URLSearchParams(searchParams.toString())
-      // The audience's landing view (DEFAULT_VIEW) is the canonical no-param
-      // state — it MUST be the same value the invalid-`?view=` fallback above
-      // resolves to, or the URL and the tab bar would disagree.
-      if (next === defaultView) params.delete('view')
-      else params.set('view', next)
+      if (isOrganizer) {
+        writeOrganizerInboxParams(params, next.status, next.filters)
+      } else if (next.status === 'active') {
+        // A speaker's landing view (Active) is the canonical no-param state.
+        params.delete('view')
+      } else {
+        params.set('view', next.status)
+      }
       const qs = params.toString()
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
     },
-    [router, pathname, searchParams, defaultView],
+    [router, pathname, searchParams, isOrganizer],
   )
+  const setStatus = (next: ConversationView) =>
+    setInboxState({
+      status: next as OrganizerStatus,
+      // Chips only narrow open threads; returning to Open starts unfiltered.
+      filters: [],
+    })
+  const toggleFilter = (filter: InboxFilter) =>
+    setInboxState({
+      status: 'active',
+      filters: filters.includes(filter)
+        ? filters.filter((f) => f !== filter)
+        : [...filters, filter],
+    })
 
   // The viewer's own speaker id drives the rows' "You: " snippet prefix.
   const { data: session } = useSession()
   const callerId = session?.speaker?._id
   const utils = api.useUtils()
 
-  // Per-view conversation counts for the tab badges (one bounded round trip,
-  // fetched alongside the first inbox page, not polled hot).
-  const { data: viewCounts } = api.message.viewCounts.useQuery(undefined, {
-    staleTime: 30_000,
-    // Only the organizer tab bar renders count badges — don't spend the query
-    // on speakers, whose Active/Archived toggle shows none.
-    enabled: audience === 'organizer',
-  })
+  // Count badges (organizer only, one bounded round trip, not polled hot). The
+  // chip counts are narrowed by the other selected chips so none of them lies.
+  const { data: viewCounts } = api.message.viewCounts.useQuery(
+    filters.length ? { filters } : undefined,
+    { staleTime: 30_000, enabled: isOrganizer },
+  )
 
   const {
     data,
@@ -351,7 +413,7 @@ export function MessagesInbox({
     hasNextPage,
     isFetchingNextPage,
   } = api.message.listConversations.useInfiniteQuery(
-    { view },
+    filters.length ? { view: status, filters } : { view: status },
     {
       staleTime: 10_000,
       getNextPageParam: (lastPage) => {
@@ -366,7 +428,11 @@ export function MessagesInbox({
   )
 
   const items = data?.pages.flat() ?? []
-  const isArchivedView = view === 'archived'
+  const isArchivedView = status === 'archived'
+  // ConversationList's per-row tweaks key on a single view: one chip behaves
+  // like its old view (e.g. no needs-reply dot inside Needs reply).
+  const listView: ConversationView =
+    status === 'active' && filters.length === 1 ? filters[0] : status
 
   // Un-archive a row from the Archived view. Organizers see BOTH globally- and
   // per-user-archived threads there, so lifting both guarantees the thread leaves
@@ -401,49 +467,57 @@ export function MessagesInbox({
           : 'space-y-4'
       }
     >
-      {/* SINGLE-ROW toolbar (V1b): the view tabs flex and scroll. When the
-          composer is hoisted (the admin workspace, which puts New in the page
-          header) the tabs get the whole row — nothing is pinned beside them to
-          eat the last tab's width. */}
       <div
-        className={`flex items-center gap-2 ${isRail ? 'shrink-0 px-2 pt-1' : ''}`}
+        className={`flex flex-col gap-2 ${isRail ? 'shrink-0 px-2 pt-1' : ''}`}
       >
-        {isOrganizer ? (
-          <OrganizerViewTabs
-            view={view}
-            counts={viewCounts}
-            onChange={setView}
-            tabs={organizerTabs}
-          />
-        ) : (
+        <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
-            <SpeakerViewToggle view={view} onChange={setView} />
-          </div>
-        )}
-        {allowNew && !composerIsHoisted && !showNew && (
-          <button
-            type="button"
-            onClick={() => setShowNew(true)}
-            title={isRail ? 'New conversation' : undefined}
-            className={`inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg bg-brand-cloud-blue py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cloud-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:bg-blue-600 dark:hover:bg-blue-500 ${
-              isRail ? 'px-3 lg:px-2.5' : 'px-3'
-            }`}
-          >
-            <PlusIcon className="h-4 w-4" aria-hidden="true" />
-            {isRail ? (
-              // The rail is full-width below `lg` (the workspace's list STEP),
-              // so it keeps the short label there. From `lg` up it is a ~288px
-              // column where a labelled button would leave room for barely two
-              // view tabs and scroll the rest under itself — so the label goes
-              // to assistive tech only.
-              <span className="lg:sr-only">New</span>
+            {isOrganizer ? (
+              <ViewToggle
+                view={status}
+                onChange={setStatus}
+                tabs={ORGANIZER_STATUSES}
+                counts={viewCounts}
+              />
             ) : (
-              <>
-                <span className="hidden sm:inline">New conversation</span>
-                <span className="sm:hidden">New</span>
-              </>
+              <ViewToggle
+                view={status as ConversationView}
+                onChange={setStatus}
+                tabs={SPEAKER_TABS}
+              />
             )}
-          </button>
+          </div>
+          {allowNew && !composerIsHoisted && !showNew && (
+            <button
+              type="button"
+              onClick={() => setShowNew(true)}
+              title={isRail ? 'New conversation' : undefined}
+              className={`inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg bg-brand-cloud-blue py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cloud-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:bg-blue-600 dark:hover:bg-blue-500 ${
+                isRail ? 'px-3 lg:px-2.5' : 'px-3'
+              }`}
+            >
+              <PlusIcon className="h-4 w-4" aria-hidden="true" />
+              {isRail ? (
+                // From `lg` up the rail is a ~288px column, so the label goes
+                // to assistive tech only there.
+                <span className="lg:sr-only">New</span>
+              ) : (
+                <>
+                  <span className="hidden sm:inline">New conversation</span>
+                  <span className="sm:hidden">New</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
+        {isOrganizer && status === 'active' && (
+          <OrganizerFilterChips
+            chips={chips}
+            selected={filters}
+            counts={viewCounts}
+            onToggle={toggleFilter}
+            onClear={() => setInboxState({ status: 'active', filters: [] })}
+          />
         )}
       </div>
 
@@ -462,7 +536,12 @@ export function MessagesInbox({
         items={items}
         isOrganizer={isOrganizer}
         callerId={callerId}
-        view={view}
+        view={listView}
+        emptyHeadline={
+          filters.length > 1
+            ? 'No open conversations match these filters'
+            : undefined
+        }
         routingTeamTitles={routingTeamTitles}
         isLoading={isLoading}
         isError={isError}
@@ -472,7 +551,7 @@ export function MessagesInbox({
         onUnarchive={isArchivedView ? handleUnarchive : undefined}
         onNewConversation={allowNew ? () => setShowNew(true) : undefined}
         panelId={PANEL_ID}
-        labelledById={tabId(view)}
+        labelledById={tabId(status)}
         hrefFor={hrefFor}
         selectedId={selectedId}
         variant={variant}

@@ -220,6 +220,30 @@ const eslintConfig = [
     },
   },
 
+  // A Sanity image field straight into <img src> serves the full-size original:
+  // 28 GB of one week's image bandwidth was 32-64 px avatars (#1637, #1638,
+  // #1639). Go through `speakerImageUrl` / `sanityImage` / `galleryImageSrc`.
+  {
+    files: ['src/**/*.{jsx,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "JSXOpeningElement[name.name='img'] > JSXAttribute[name.name='src'] > JSXExpressionContainer > MemberExpression[property.name=/^image(URL|Url)?$/]",
+          message:
+            'Raw Sanity image field in <img src> loads the full-size original. Wrap it in speakerImageUrl() or sanityImage().',
+        },
+        {
+          selector:
+            "JSXOpeningElement[name.name='img'] > JSXAttribute[name.name='src'] Literal[value=/cdn\\.sanity\\.io\\/images\\//]",
+          message:
+            'Raw cdn.sanity.io image URL in <img src>. Build it with sanityImage() so it is resized.',
+        },
+      ],
+    },
+  },
+
   // Special rules for Sanity schema files
   {
     files: ['sanity/schemaTypes/**/*.ts'],

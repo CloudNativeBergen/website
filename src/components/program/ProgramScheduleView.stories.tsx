@@ -374,6 +374,28 @@ export const CanceledSlot: Story = {
   },
 }
 
+export const SponsoredTrack: Story = {
+  args: {
+    data: {
+      ...twoTrackData,
+      schedules: twoTrackData.schedules.map((day) => ({
+        ...day,
+        tracks: day.tracks.map((track, i) =>
+          i === 0 ? { ...track, sponsorName: 'Acme Cloud' } : track,
+        ),
+      })),
+    },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The first track has a public track sponsor, named under its header (#383).',
+      },
+    },
+  },
+}
+
 export const MultiDay: Story = {
   args: {
     data: multiDayData,

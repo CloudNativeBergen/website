@@ -3,7 +3,7 @@ import { connection } from 'next/server'
 import { ImageResponse } from 'next/og'
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { STYLES, OG_IMAGE_SIZE } from '@/lib/og/styles'
-import { ogBrandColors } from '@/lib/og/brand'
+import { ogBrandColors, OG_SMALL_TEXT_SCRIM } from '@/lib/og/brand'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import {
   createSvgDataUrl,
@@ -454,9 +454,9 @@ export default async function Image({
           </div>
           <div
             style={{
+              ...OG_SMALL_TEXT_SCRIM,
               fontSize: '12px',
               fontWeight: '600',
-              opacity: 0.9,
               color: STYLES.colors.white,
               fontFamily: STYLES.fontFamily,
               textAlign: 'right',
@@ -602,10 +602,10 @@ export default async function Image({
         >
           <div
             style={{
+              ...OG_SMALL_TEXT_SCRIM,
               fontSize: '12px',
               fontWeight: '600',
               marginBottom: '10px',
-              opacity: 0.9,
               fontFamily: STYLES.fontFamily,
               color: STYLES.colors.white,
               textAlign: 'center',

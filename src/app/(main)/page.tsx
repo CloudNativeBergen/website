@@ -13,7 +13,7 @@ import { formatDatesSafe } from '@/lib/time'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
-import { EventJsonLd } from '@/components/seo/EventJsonLd'
+import { EventJsonLd, OrganizationJsonLd } from '@/components/seo/EventJsonLd'
 import { canonicalUrl } from '@/lib/seo/canonical'
 import { HomepageSectionRenderer } from '@/components/homepage/SectionRenderer'
 import { resolveHomepageSections } from '@/lib/homepage'
@@ -140,6 +140,7 @@ async function CachedHomeContent({ domain }: { domain: string }) {
 
   return (
     <>
+      <OrganizationJsonLd conference={conference} domain={domain} />
       <EventJsonLd
         conference={conference}
         domain={domain}

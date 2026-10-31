@@ -53,6 +53,8 @@ export interface ConversationListProps {
    * assignee badge in the Mine view (V1k). Defaults to `active`.
    */
   view?: ConversationView
+  /** Overrides the view-aware empty headline (combined inbox filters, #916). */
+  emptyHeadline?: string
   /**
    * When set (speaker inbox, Active view empty state), the adoption-pitch empty
    * state renders a "New conversation" CTA that invokes this (V1d rider).
@@ -116,7 +118,7 @@ function emptyStateFor(
         // rather than dead-ending on a congratulation.
         return {
           headline: 'Nothing needs a reply 🎉',
-          body: 'Every open thread already has an organizer reply as its latest message. Switch to Active to browse them all.',
+          body: 'Every open thread already has an organizer reply as its latest message. Turn off the Needs reply filter to browse them all.',
         }
       case 'my-teams':
         return { headline: 'Nothing active for your teams' }
@@ -233,6 +235,7 @@ export function ConversationList({
   isLoadingMore = false,
   onUnarchive,
   view = 'active',
+  emptyHeadline,
   onNewConversation,
   panelId,
   labelledById,
@@ -293,7 +296,9 @@ export function ConversationList({
         </div>
       ) : items.length === 0 ? (
         (() => {
-          const empty = emptyStateFor(view, isOrganizer)
+          const empty = emptyHeadline
+            ? { headline: emptyHeadline }
+            : emptyStateFor(view, isOrganizer)
           return (
             /* Empty state per `docs/ADMIN_SYSTEM.md` § Empty States: icon
                gray-400/500, headline `text-sm font-medium` gray-900/white,

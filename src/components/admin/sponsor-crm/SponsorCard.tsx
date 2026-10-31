@@ -3,6 +3,7 @@
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { SponsorLogo } from '@/components/SponsorLogo'
 import { formatNumber } from '@/lib/format'
+import { speakerImageUrl } from '@/lib/sanity/client'
 import {
   ExclamationTriangleIcon,
   EllipsisHorizontalIcon,
@@ -256,7 +257,7 @@ export function SponsorCard({
           {owner ? (
             owner.image ? (
               <img
-                src={owner.image}
+                src={speakerImageUrl(owner.image, { width: 40, height: 40 })}
                 alt={owner.name}
                 title={owner.name}
                 className="h-5 w-5 rounded-full object-cover"

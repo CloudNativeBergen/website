@@ -180,16 +180,16 @@ export const CONFIRM_READ_TIMEOUT_MS = 5_000
  * NOT put through `pickFairly`: `submittedLimit` is a flat limit on
  * `findWork`, so a single organization can occupy every slot in a tick.
  *
- * At 10 per tick and one tick a minute that is 150 reads per 15 minutes for
- * that organization — half again over its whole budget, before dispatch has
- * spent anything. At 5 it is at most 75, which leaves room for the publishes
- * the sweep shares the tick with.
+ * The cap was set when the cron ticked every minute: 10 per tick was 150
+ * reads per 15 minutes for one organization, half again over its whole
+ * budget; 5 was at most 75. Since #1634 the cron ticks every five minutes,
+ * so 5 per tick is at most 15 reads per 15 minutes.
  *
- * What 5 costs: with the backoff in `confirmIntervalMs` one submission takes
- * roughly 10 reads across the 15-minute window, so this services about seven
- * concurrent submissions per organization. Past that, submissions are read
- * less often and some may reach `CONFIRM_TIMEOUT_MINUTES` and settle
- * `ambiguous` — a real cost, and the reason not to cut it further.
+ * What the slower tick costs: the backoff in `confirmIntervalMs` asks for a
+ * read every 30–120 s, but a submission is now read at most once per tick,
+ * so about three times before `CONFIRM_TIMEOUT_MINUTES`. With 5 per tick,
+ * past five concurrent submissions per organization some are read less
+ * often and may settle `ambiguous`.
  *
  * NOT the final answer. Per-conference fairness for confirms, and a budget
  * shared with dispatch rather than two independent caps, belong with the

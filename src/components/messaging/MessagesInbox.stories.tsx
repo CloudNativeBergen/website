@@ -240,10 +240,9 @@ export const SpeakerPopulated: Story = {
   parameters: { msw: { handlers: conversationHandlers(makeItems) } },
 }
 
-/** Organizer inbox — the single-row toolbar (V1b): the full view tab bar
- *  (Needs reply / Active / Unassigned / Mine / Resolved / Archived) with per-tab
- *  count badges (V1c) scrolls beside the pinned compact New button. TRIAGE
- *  FIRST: "Needs reply" leads the bar and is the selected tab on load. */
+/** Organizer inbox (#916): one list with an Open / Resolved / Archived status
+ *  toggle and, on Open, combinable filter chips (Needs reply / Unassigned /
+ *  Mine) with count badges. TRIAGE FIRST: it lands on Open + Needs reply. */
 export const OrganizerPopulated: Story = {
   args: { audience: 'organizer', allowNew: true },
   parameters: {
@@ -264,9 +263,9 @@ export const OrganizerPopulatedDark: Story = {
 }
 
 /**
- * TEAMS-3 (L1 + L2): with a team lens configured, the organizer tab bar gains a
- * "My teams" tab (with its count) between "Active" and "Unassigned", and the
- * rows carry the indigo cfp-team chip ('Programme'). The tab is hidden entirely
+ * TEAMS-3 (L1 + L2): with a team lens configured, the organizer filter row gains
+ * a "My teams" chip (with its count), and the rows carry the indigo cfp-team
+ * chip ('Programme'). The chip is hidden entirely
  * when no team is configured (the other organizer stories, whose teamLens is
  * null).
  */
@@ -281,6 +280,34 @@ export const OrganizerWithTeams: Story = {
       ),
     },
   },
+}
+
+/** Two chips combined (`?filter=needs-reply,unassigned`) on a 393px phone: the
+ *  chip row wraps instead of clipping, and Clear filters resets it. */
+export const OrganizerCombinedFiltersMobile: Story = {
+  args: { audience: 'organizer', allowNew: true },
+  parameters: {
+    viewport: { defaultViewport: 'mobile1' },
+    nextjs: {
+      appDirectory: true,
+      navigation: {
+        pathname: '/admin/messages',
+        query: { filter: 'needs-reply,unassigned' },
+      },
+    },
+    msw: {
+      handlers: conversationHandlers(
+        makeOrganizerItems,
+        ORGANIZER_COUNTS,
+        TEAM_LENS,
+      ),
+    },
+  },
+}
+
+export const OrganizerCombinedFiltersMobileDark: Story = {
+  ...OrganizerCombinedFiltersMobile,
+  parameters: { ...OrganizerCombinedFiltersMobile.parameters, dark: true },
 }
 
 export const OrganizerWithTeamsDark: Story = {

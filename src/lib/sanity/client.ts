@@ -125,11 +125,18 @@ export function speakerImageUrl(
     return ''
   }
   if (image.startsWith(SANITY_CDN_PREFIX)) {
-    const builder = sanityImage(image)
-      .width(opts.width)
-      .height(opts.height)
-      .fit(opts.fit ?? 'crop')
-    return (opts.auto === false ? builder : builder.auto(AUTO_FORMAT)).url()
+    // A cdn.sanity.io URL without the `-WxH` suffix (a file URL, or one pasted
+    // by hand) makes the builder throw `Malformed asset _ref`. Serve it as is
+    // rather than crash every page that renders the speaker (#1640).
+    try {
+      const builder = sanityImage(image)
+        .width(opts.width)
+        .height(opts.height)
+        .fit(opts.fit ?? 'crop')
+      return (opts.auto === false ? builder : builder.auto(AUTO_FORMAT)).url()
+    } catch {
+      return image
+    }
   }
   return image
 }

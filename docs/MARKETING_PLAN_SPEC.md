@@ -32,7 +32,7 @@ The plan **layers on** the [Social media posting dashboard](https://github.com/C
 decisions, none of which are built yet. Slice 1 therefore begins by building the subset it needs
 (§9, steps 1–2): the `socialPost`/`socialPostVariant` documents and state machine, the
 `SocialPublishAdapter` contract with the Bluesky adapter and the assisted-manual path, the rendition
-function, the per-minute due-scan cron. Everything the dashboard map decided is an input here and is
+function, the five-minute due-scan cron. Everything the dashboard map decided is an input here and is
 not re-decided.
 
 ## 2. Domain model
@@ -229,7 +229,7 @@ prototype and a link to the settings field.
 
 ### 3.3 Reminders (from #992)
 
-Cron (daily, and the per-minute tick may piggyback) sends through the in-app notification hub with
+Cron (daily, and the five-minute tick may piggyback) sends through the in-app notification hub with
 web push, **to the assignee only**:
 
 - **Due**: when a Task becomes due (publishing: variant enters `awaiting-manual`; other kinds:
@@ -598,7 +598,7 @@ Variant editing goes through the posting dashboard's own `social.*` procedures (
 ## 9. Implementation order
 
 1. **Posting core, data**: `socialPost`, `socialPostVariant`, `socialConnection` schemas; variant
-   state machine with CAS claims; per-minute due-scan cron. (dashboard #786, #785)
+   state machine with CAS claims; five-minute due-scan cron. (dashboard #786, #785)
 2. **Posting core, adapters + editor**: `SocialPublishAdapter` types, `BlueskyPublishAdapter`,
    `ManualChannelProvider`, rendition function, assisted-manual state and notification, the
    single-variant editor component. `bluesky` secret family. (dashboard #788, #789; this #931)

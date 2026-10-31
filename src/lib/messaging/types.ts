@@ -60,6 +60,18 @@ export type ConversationView =
   | 'archived'
   | 'all'
 
+/**
+ * Organizer inbox filter chips (#916). Combinable, and ANDed onto the status
+ * view (`active` / `resolved` / `archived`) the inbox is showing.
+ */
+export const INBOX_FILTERS = [
+  'needs-reply',
+  'unassigned',
+  'mine',
+  'my-teams',
+] as const
+export type InboxFilter = (typeof INBOX_FILTERS)[number]
+
 /** The views a non-organizer (speaker) is allowed to request. */
 export const SPEAKER_ALLOWED_VIEWS: ConversationView[] = [
   'active',

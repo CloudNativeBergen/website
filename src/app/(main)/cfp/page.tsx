@@ -20,14 +20,18 @@ import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
-import { resolveMetadataBrand } from '@/lib/seo/brand'
+import { resolvePageMetadata } from '@/lib/seo/brand'
 
 export async function generateMetadata(): Promise<Metadata> {
-  const brand = await resolveMetadataBrand()
+  const { title, description } = await resolvePageMetadata(
+    'Call for Presentations',
+    'Submit a talk proposal to',
+  )
   return {
-    title: { absolute: `Call for Presentations - ${brand}` },
-    description: `Submit your talk proposal for ${brand} conference`,
+    title: { absolute: title },
+    description,
     alternates: await canonicalAlternates('/cfp'),
+    openGraph: { title, description },
     twitter: {
       card: 'summary_large_image',
     },

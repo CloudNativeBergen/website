@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { INBOX_FILTERS } from '@/lib/messaging/types'
 
 /**
  * Zod schemas for the `message` tRPC router (messaging M1).
@@ -64,7 +65,18 @@ export const ListConversationsSchema = z.object({
       'all',
     ])
     .optional(),
+  // Organizer filter chips (#916), ANDed onto `view`. Organizer-only.
+  filters: z.array(z.enum(INBOX_FILTERS)).max(INBOX_FILTERS.length).optional(),
 })
+
+export const ViewCountsSchema = z
+  .object({
+    filters: z
+      .array(z.enum(INBOX_FILTERS))
+      .max(INBOX_FILTERS.length)
+      .optional(),
+  })
+  .optional()
 
 export const GetConversationSchema = z.object({
   id: z.string().min(1).max(200),

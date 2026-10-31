@@ -1,3 +1,4 @@
+import { pickCfpConference } from '@/lib/conference/logo'
 import { connection } from 'next/server'
 import { XCircleIcon } from '@heroicons/react/24/solid'
 import Link from 'next/link'
@@ -216,7 +217,7 @@ export default async function NewProposalPage({
                 initialProposal={proposal}
                 initialSpeaker={speaker}
                 userEmail={session.speaker.email}
-                conference={conference}
+                conference={pickCfpConference(conference)}
                 allowedFormats={conference.formats}
                 currentUserSpeaker={currentUserSpeaker}
                 landingUtm={landingUtm}
@@ -225,7 +226,9 @@ export default async function NewProposalPage({
           </div>
 
           <div className="hidden w-80 shrink-0 lg:block">
-            <ProposalGuidanceSidebar conference={conference} />
+            <ProposalGuidanceSidebar
+              conference={pickCfpConference(conference)}
+            />
           </div>
         </div>
       )}

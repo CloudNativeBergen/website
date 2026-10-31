@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import { SpeakerImageModal } from './SpeakerImageModal'
 import { withPortalTheme } from '@/lib/storybook'
+import { speakerImageUrl } from '@/lib/sanity/client'
 
 // Inline SVG portrait so the story renders deterministically without any
 // network request (speakerImageUrl returns non-Sanity URLs untouched).
@@ -88,7 +89,10 @@ export const Interactive: Story = {
             className="block h-16 w-16 overflow-hidden rounded-full transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <img
-              src={args.speaker.image}
+              src={speakerImageUrl(args.speaker.image, {
+                width: 128,
+                height: 128,
+              })}
               alt={args.speaker.name}
               className="h-full w-full object-cover"
             />

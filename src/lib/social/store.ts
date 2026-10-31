@@ -89,8 +89,8 @@ export interface TickWork {
   /**
    * Variants an asynchronous vendor accepted and has not settled (#1128),
    * oldest submission first, bounded. Read HERE rather than in a query of
-   * their own: the tick runs every minute and each extra read costs ~43k
-   * live-API requests a month.
+   * their own: the tick runs every five minutes and each extra read costs
+   * ~8.6k live-API requests a month.
    */
   submitted: SocialPostVariant[]
 }
@@ -104,8 +104,8 @@ export interface TickWorkBounds {
 
 export interface SocialVariantStore {
   /**
-   * Everything one tick needs, in ONE read: the cron runs every minute, so
-   * each extra query here costs ~43k live-API requests a month.
+   * Everything one tick needs, in ONE read: the cron runs every five minutes,
+   * so each extra query here costs ~8.6k live-API requests a month.
    */
   findWork(
     now: Date,

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  *
  * Container tests for the T2a/T2e MessagesInbox additions:
- * - the view tab bar drives the `listConversations` `view` input (organizer);
+ * - the status toggle and filter chips drive `listConversations` (organizer, #916);
  * - the speaker toggle exposes only Active / Archived;
  * - the Archived view wires Unarchive to the un-archive mutations.
  */
@@ -24,7 +24,7 @@ vi.mock('next/navigation', () => ({
 }))
 
 // Capture every `view` the inbox query is called with, plus the mutation calls.
-const listInputs: Array<{ view: string }> = []
+const listInputs: Array<{ view: string; filters?: string[] }> = []
 const setArchivedMutate = vi.fn()
 const setPreferenceMutate = vi.fn()
 const listInvalidate = vi.fn()
@@ -44,7 +44,7 @@ vi.mock('@/lib/trpc/client', () => ({
         useQuery: () => ({ data: undefined }),
       },
       listConversations: {
-        useInfiniteQuery: (input: { view: string }) => {
+        useInfiniteQuery: (input: { view: string; filters?: string[] }) => {
           listInputs.push(input)
           return infiniteResult
         },
@@ -99,97 +99,88 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
-describe('MessagesInbox — view tabs (T2a)', () => {
-  it('defaults an ORGANIZER to the needs-reply view and switches the query input on tab click', () => {
+describe('MessagesInbox — organizer status + filter chips (#916)', () => {
+  const chip = (name: string) => screen.getByRole('button', { name })
+
+  it('lands an ORGANIZER on Open + Needs reply and drives the query from status and chips', () => {
     render(<MessagesInbox audience="organizer" />)
-    // Initial render queried the organizer landing view: triage first.
-    expect(listInputs[0]).toEqual({ view: 'needs-reply' })
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Active' }))
-    expect(listInputs.at(-1)).toEqual({ view: 'active' })
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Unassigned' }))
-    expect(listInputs.at(-1)).toEqual({ view: 'unassigned' })
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Mine' }))
-    expect(listInputs.at(-1)).toEqual({ view: 'mine' })
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Resolved' }))
-    expect(listInputs.at(-1)).toEqual({ view: 'resolved' })
-  })
-
-  it('renders "Needs reply" FIRST in the organizer tab bar, and it is the selected tab on load', () => {
-    render(<MessagesInbox audience="organizer" />)
-    const labels = screen
-      .getAllByRole('tab')
-      .map((tab) => tab.textContent?.trim())
-    expect(labels[0]).toBe('Needs reply')
-    expect(screen.getByRole('tab', { name: 'Needs reply' })).toHaveAttribute(
+    expect(listInputs[0]).toEqual({ view: 'active', filters: ['needs-reply'] })
+    expect(chip('Needs reply')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('tab', { name: 'Open' })).toHaveAttribute(
       'aria-selected',
       'true',
     )
-    expect(screen.getByRole('tab', { name: 'Active' })).toHaveAttribute(
-      'aria-selected',
-      'false',
-    )
-  })
 
-  it('persists the selected view in the URL query string (V1i)', () => {
-    render(<MessagesInbox audience="organizer" />)
-    fireEvent.click(screen.getByRole('tab', { name: 'Active' }))
+    // Chips COMBINE.
+    fireEvent.click(chip('Unassigned'))
+    expect(listInputs.at(-1)).toEqual({
+      view: 'active',
+      filters: ['needs-reply', 'unassigned'],
+    })
     expect(routerReplace).toHaveBeenLastCalledWith(
-      '/admin/messages?view=active',
+      '/admin/messages?filter=needs-reply%2Cunassigned',
       expect.objectContaining({ scroll: false }),
     )
-    // Returning to the LANDING view drops the param entirely — the canonical
-    // no-param state must be the same view the fallback resolves to, or the URL
-    // and the tab bar would describe different things.
-    fireEvent.click(screen.getByRole('tab', { name: 'Needs reply' }))
+
+    // Clearing every chip is its own URL: all open threads.
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(listInputs.at(-1)).toEqual({ view: 'active' })
+    expect(routerReplace).toHaveBeenLastCalledWith(
+      '/admin/messages?filter=none',
+      expect.objectContaining({ scroll: false }),
+    )
+
+    // Back to the landing state writes no params.
+    fireEvent.click(chip('Needs reply'))
     expect(routerReplace).toHaveBeenLastCalledWith(
       '/admin/messages',
       expect.objectContaining({ scroll: false }),
     )
-  })
 
-  it('an unknown ?view= falls back to the SAME view the no-param write clears to', () => {
-    searchParams = new URLSearchParams('view=not-a-view')
-    render(<MessagesInbox audience="organizer" />)
-    expect(listInputs[0]).toEqual({ view: 'needs-reply' })
-    expect(screen.getByRole('tab', { name: 'Needs reply' })).toHaveAttribute(
-      'aria-selected',
-      'true',
+    // Statuses drop the chips (they only narrow open threads).
+    fireEvent.click(screen.getByRole('tab', { name: 'Resolved' }))
+    expect(listInputs.at(-1)).toEqual({ view: 'resolved' })
+    expect(
+      screen.queryByRole('button', { name: 'Needs reply' }),
+    ).not.toBeInTheDocument()
+    expect(routerReplace).toHaveBeenLastCalledWith(
+      '/admin/messages?status=resolved',
+      expect.objectContaining({ scroll: false }),
     )
   })
 
-  it('keeps the existing ?view=needs-reply / ?view=unassigned deep links working (admin My areas cards)', () => {
-    searchParams = new URLSearchParams('view=needs-reply')
+  it.each([
+    ['needs-reply', { view: 'active', filters: ['needs-reply'] }],
+    ['active', { view: 'active' }],
+    ['unassigned', { view: 'active', filters: ['unassigned'] }],
+    ['mine', { view: 'active', filters: ['mine'] }],
+    ['resolved', { view: 'resolved' }],
+    ['archived', { view: 'archived' }],
+    ['not-a-view', { view: 'active', filters: ['needs-reply'] }],
+  ])('keeps the legacy ?view=%s URL working', (view, expected) => {
+    searchParams = new URLSearchParams(`view=${view}`)
     render(<MessagesInbox audience="organizer" />)
-    expect(listInputs.at(-1)).toEqual({ view: 'needs-reply' })
-    cleanup()
+    expect(listInputs.at(-1)).toEqual(expected)
+  })
 
-    listInputs.length = 0
+  it('drops a legacy ?view= from the URL on the first change', () => {
     searchParams = new URLSearchParams('view=unassigned')
     render(<MessagesInbox audience="organizer" />)
-    expect(listInputs.at(-1)).toEqual({ view: 'unassigned' })
-    expect(screen.getByRole('tab', { name: 'Unassigned' })).toHaveAttribute(
-      'aria-selected',
-      'true',
+    expect(chip('Unassigned')).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(chip('Mine'))
+    expect(routerReplace).toHaveBeenLastCalledWith(
+      '/admin/messages?filter=unassigned%2Cmine',
+      expect.objectContaining({ scroll: false }),
     )
   })
 
-  it('organizers get the full tab bar; the "All" view is omitted from the UI', () => {
+  it('hides My teams when no team is configured, and ignores it in the URL', () => {
+    searchParams = new URLSearchParams('filter=my-teams,mine')
     render(<MessagesInbox audience="organizer" />)
-    for (const label of [
-      'Active',
-      'Needs reply',
-      'Unassigned',
-      'Mine',
-      'Resolved',
-      'Archived',
-    ]) {
-      expect(screen.getByRole('tab', { name: label })).toBeInTheDocument()
-    }
-    expect(screen.queryByRole('tab', { name: 'All' })).not.toBeInTheDocument()
+    expect(listInputs.at(-1)).toEqual({ view: 'active', filters: ['mine'] })
+    expect(
+      screen.queryByRole('button', { name: 'My teams' }),
+    ).not.toBeInTheDocument()
   })
 
   it('speakers get only Active / Archived, and still LAND on Active', () => {
@@ -204,6 +195,9 @@ describe('MessagesInbox — view tabs (T2a)', () => {
       screen.queryByRole('tab', { name: 'Needs reply' }),
     ).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Mine' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Needs reply' }),
+    ).not.toBeInTheDocument()
   })
 
   it('a speaker switching to Archived and back clears the param at ACTIVE (not the organizer landing view)', () => {

@@ -63,13 +63,18 @@ const CONFERENCE_CACHE_LIFE = {
  * of the cache key and part of the GROQ parameters. `domainTag` and
  * `conferenceTag` both stay on the entry so an invalidation can reach it by
  * either identity.
+ *
+ * `'use cache: remote'`, not plain `'use cache'` (#1642): plain is per-instance
+ * memory, so every cold or scaled-out Vercel instance re-ran this large query
+ * against Sanity. The trade is a cache-handler lookup on each read, in return
+ * for one shared entry per tenant.
  */
 async function fetchConferenceData(
   domain: string,
   wildcardSubdomain: string,
   query: string,
 ): Promise<RawConferenceRead | null> {
-  'use cache'
+  'use cache: remote'
   cacheLife(CONFERENCE_CACHE_LIFE)
   cacheTag('content:conferences')
   cacheTag(domainTag(domain))

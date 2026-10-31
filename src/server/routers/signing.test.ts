@@ -37,10 +37,17 @@ const h = vi.hoisted(() => ({
   publishSponsorStatusChange: vi.fn(),
   notifySponsorContractSigned: vi.fn(),
   emailSend: vi.fn(),
+  // Tasks handed to runAfterResponse, run only when a test flushes them.
+  deferred: [] as Array<() => Promise<void>>,
 }))
 
 vi.mock('@/lib/signing/sanity', () => ({
   getSigningContract: h.getSigningContract,
+}))
+vi.mock('@/server/runAfterResponse', () => ({
+  runAfterResponse: (task: () => Promise<void>) => {
+    h.deferred.push(task)
+  },
 }))
 vi.mock('@/lib/pdf', () => ({ embedSignatureInPdf: h.embedSignatureInPdf }))
 vi.mock('@/lib/sanity/client', () => ({
@@ -161,8 +168,14 @@ async function expectRefusal(
   }).toEqual({ code, message })
 }
 
+/** Run what the router deferred past its response. */
+async function flushDeferred() {
+  for (const task of h.deferred.splice(0)) await task()
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
+  h.deferred.length = 0
   h.commit.mockResolvedValue({})
   h.ifRevisionId.mockReturnValue({ set: () => ({ commit: h.commit }) })
   h.patch.mockReturnValue({
@@ -239,14 +252,14 @@ describe('signing.getContract — token is the whole authorization', () => {
   })
 
   it.each(['rejected', 'expired'] as const)(
-    'refuses a %s contract with its own message',
+    'refuses a %s contract exactly like an unknown token (#1111)',
     async (signatureStatus) => {
       h.getSigningContract.mockResolvedValue(contract({ signatureStatus }))
 
       await expectRefusal(
         caller.getContract({ token: TOKEN }),
-        'PRECONDITION_FAILED',
-        `This contract has been ${signatureStatus}. Please contact the organizer.`,
+        'NOT_FOUND',
+        'Contract not found or link has expired.',
       )
     },
   )
@@ -257,6 +270,10 @@ describe('signing.submitSignature — refusals fire no effects', () => {
     h.getSigningContract.mockResolvedValue(contract())
 
     const result = await caller.submitSignature(submitInput)
+
+    // The Slack post waits for the response (#1112).
+    expect(h.notifySponsorContractSigned).not.toHaveBeenCalled()
+    await flushDeferred()
 
     expect(result).toMatchObject({
       success: true,
@@ -301,8 +318,8 @@ describe('signing.submitSignature — refusals fire no effects', () => {
 
       await expectRefusal(
         caller.submitSignature(submitInput),
-        'PRECONDITION_FAILED',
-        `This contract has been ${signatureStatus}. Please contact the organizer.`,
+        'NOT_FOUND',
+        'Contract not found or link has expired.',
       )
       expect(effectCallCounts()).toEqual(NO_EFFECTS)
     },
@@ -404,6 +421,7 @@ describe('signing.submitSignature — the double-sign race', () => {
     })
 
     // ONE signature, ONE promotion, ONE notification — the race's whole point.
+    await flushDeferred()
     expect(h.promoteToClosedWonOnContract).toHaveBeenCalledTimes(1)
     expect(h.publishSponsorStatusChange).toHaveBeenCalledTimes(1)
     expect(h.notifySponsorContractSigned).toHaveBeenCalledTimes(1)
@@ -533,6 +551,8 @@ describe('signing.submitSignature — confirmation email', () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const result = await caller.submitSignature(submitInput)
+    expect(h.emailSend).not.toHaveBeenCalled()
+    await flushDeferred()
 
     expect(result.success).toBe(true)
     expect(h.emailSend).toHaveBeenCalledOnce()

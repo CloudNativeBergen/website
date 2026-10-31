@@ -54,7 +54,7 @@ import { conferenceTag } from '@/lib/cache/tags'
 import type { ElementType } from 'react'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
-import { resolveMetadataBrand } from '@/lib/seo/brand'
+import { resolvePageMetadata } from '@/lib/seo/brand'
 
 const INCLUSION_ICONS: Record<string, ElementType> = {
   MicrophoneIcon,
@@ -89,11 +89,15 @@ const INCLUSION_ICONS: Record<string, ElementType> = {
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const brand = await resolveMetadataBrand()
+  const { title, description } = await resolvePageMetadata(
+    'Tickets',
+    'Tickets for',
+  )
   return {
-    title: { absolute: `Tickets - ${brand}` },
-    description: `Get your tickets for ${brand} conference`,
+    title: { absolute: title },
+    description,
     alternates: await canonicalAlternates('/tickets'),
+    openGraph: { title, description },
     twitter: {
       card: 'summary_large_image',
     },

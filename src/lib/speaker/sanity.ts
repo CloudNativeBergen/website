@@ -1014,8 +1014,10 @@ export async function attachProviderToSpeaker(
 
 export async function getSpeaker(
   speakerId: string,
-): Promise<{ speaker: Speaker; err: Error | null }> {
-  let speaker: Speaker = {} as Speaker
+): Promise<{ speaker: Speaker | null; err: Error | null }> {
+  // `null` when the document is gone: GROQ `[0]` yields null, and callers
+  // must handle it rather than read through it (#1644).
+  let speaker: Speaker | null = null
   let err = null
 
   try {
@@ -1028,7 +1030,7 @@ export async function getSpeaker(
     //  2. It is READ-AFTER-WRITE. `speaker.admin.create` re-reads the document
     //     it has just created through this function, and the CFP profile page
     //     re-reads the profile the speaker has just saved.
-    speaker = await clientReadUncached.fetch(
+    speaker = await clientReadUncached.fetch<Speaker | null>(
       `*[ _type == "speaker" && _id == $speakerId][0]{
       ...,
       ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
@@ -1331,6 +1333,9 @@ export async function updateSpeaker(
       await getSpeaker(speakerId)
     if (fetchErr) {
       throw fetchErr
+    }
+    if (!fetchedSpeaker) {
+      throw new Error(`Speaker ${speakerId} not found after update`)
     }
     updatedSpeaker = fetchedSpeaker
   } catch (error) {
