@@ -5,6 +5,7 @@ import { PresentationChartBarIcon } from '@heroicons/react/24/outline'
 import {
   ADMIN_DESTINATIONS,
   ADMIN_NAV_SECTIONS,
+  isAdminHrefVisible,
   scoreDestination,
   searchDestinations,
   visibleDestinations,
@@ -388,5 +389,17 @@ describe('Photo Wall nav badge (Photo Wall spec §10, P6)', () => {
         )?.badge,
       ).toBeUndefined()
     }
+  })
+})
+
+describe('isAdminHrefVisible (#829)', () => {
+  it('hides a feature-gated href from an org without the feature', () => {
+    expect(isAdminHrefVisible('/admin/tickets', [])).toBe(false)
+    expect(isAdminHrefVisible('/admin/tickets', ['ticketing'])).toBe(true)
+  })
+
+  it('keeps ungated and unknown hrefs', () => {
+    expect(isAdminHrefVisible('/admin/proposals', [])).toBe(true)
+    expect(isAdminHrefVisible('/admin/sponsors/crm', [])).toBe(true)
   })
 })

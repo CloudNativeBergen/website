@@ -131,6 +131,12 @@ vi.mock('@/lib/organization/sanity', async (importOriginal) => ({
   getOrganizationById: (...args: unknown[]) => mockGetOrganizationById(...args),
 }))
 
+// Quick actions hide feature-gated links (#829); these tests pin the phase
+// lists, so the org is entitled to everything.
+vi.mock('@/lib/features/enabled', () => ({
+  resolveEnabledFeaturesForConference: async () => ['ticketing', 'workshops'],
+}))
+
 // Time utilities
 vi.mock('@/lib/time', async (importOriginal) => ({
   ...(await importOriginal<object>()),

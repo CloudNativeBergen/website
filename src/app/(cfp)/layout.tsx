@@ -6,6 +6,7 @@ import { getAuthSession } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
+import { resolveEnabledFeaturesForConference } from '@/lib/features/enabled'
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -26,6 +27,11 @@ export default async function CFPGroupLayout({
   }
 
   const { conference } = await getConferenceForCurrentDomain({})
+  // Only organizers see the admin links these gate; a failed read hides the
+  // feature-gated ones rather than failing the portal.
+  const enabledFeatures = session.speaker.isOrganizer
+    ? await resolveEnabledFeaturesForConference(conference).catch(() => [])
+    : []
   const conferenceLogos = conference
     ? {
         logoBright: conference.logoBright,
@@ -49,7 +55,12 @@ export default async function CFPGroupLayout({
         />
       )}
       <NotificationProvider>
-        <CFPLayout conferenceLogos={conferenceLogos}>{children}</CFPLayout>
+        <CFPLayout
+          conferenceLogos={conferenceLogos}
+          enabledFeatures={enabledFeatures}
+        >
+          {children}
+        </CFPLayout>
       </NotificationProvider>
     </>
   )

@@ -38,6 +38,8 @@
 
 import type { Conference } from '@/lib/conference/types'
 import { getPhaseContext, getCurrentPhase } from '@/lib/conference/phase'
+import { isAdminHrefVisible } from '@/lib/admin/registry'
+import { resolveEnabledFeaturesForConference } from '@/lib/features/enabled'
 import { Status } from '@/lib/proposal/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
 import { calculateAverageRating } from '@/lib/proposal/business'
@@ -1221,9 +1223,14 @@ export async function loadDashboardWidgetData(
   add('cfp-health', () => shapeCFPHealth(ctx.conference, proposals))
   add('proposal-pipeline', () => shapeProposalPipeline(proposals))
   add('review-progress', () => shapeReviewProgress(proposals, reviews))
-  add('quick-actions', () =>
-    shapeQuickActions(ctx.conference, proposals, sponsors),
-  )
+  add('quick-actions', async () => {
+    const enabledFeatures = await resolveEnabledFeaturesForConference(
+      ctx.conference,
+    )
+    return shapeQuickActions(ctx.conference, proposals, sponsors).filter(
+      (action) => isAdminHrefVisible(action.link, enabledFeatures),
+    )
+  })
   add('schedule-builder', () => shapeScheduleStatus(ctx.conference, proposals))
   add('sponsor-pipeline', () =>
     shapeSponsorPipeline(ctx.conference, sponsors, activities),

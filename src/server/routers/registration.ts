@@ -23,7 +23,17 @@ export const registrationRouter = router({
   validate: publicProcedure
     .input(RegistrationTokenSchema)
     .query(async ({ input }) => {
-      const { sponsor, error } = await validateRegistrationToken(input.token)
+      const { sponsor, error, transient } = await validateRegistrationToken(
+        input.token,
+      )
+
+      if (transient) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Could not check the registration link. Please try again.',
+          cause: error,
+        })
+      }
 
       if (error || !sponsor) {
         throw new TRPCError({

@@ -1,5 +1,6 @@
 'use client'
 
+import type { FeatureId } from '@/lib/features/registry'
 import { useSession } from 'next-auth/react'
 import {
   UserIcon,
@@ -20,9 +21,14 @@ import { useImpersonateQueryString } from '@/lib/impersonation'
 interface CFPLayoutProps {
   children: React.ReactNode
   conferenceLogos?: ConferenceLogos
+  enabledFeatures?: readonly FeatureId[]
 }
 
-export function CFPLayout({ children, conferenceLogos }: CFPLayoutProps) {
+export function CFPLayout({
+  children,
+  conferenceLogos,
+  enabledFeatures,
+}: CFPLayoutProps) {
   const { data: session } = useSession()
   const impersonateQuery = useImpersonateQueryString()
 
@@ -73,6 +79,7 @@ export function CFPLayout({ children, conferenceLogos }: CFPLayoutProps) {
       navigation={navigation}
       title="Speaker Dashboard"
       conferenceLogos={conferenceLogos}
+      enabledFeatures={enabledFeatures}
     >
       {children}
     </DashboardLayout>
