@@ -126,6 +126,15 @@ entries in `challenges` with no TXT record to publish.
 
 Both **fail closed** in either direction, unlike the email sign-in limiter (which fails open on a read outage because locking everybody out of sign-in is worse than an absent cap). Here the guarded operation is a rare privileged write, so refusing it during an outage costs a retry and nothing else.
 
+**Edge rate limit (manual step, #776).** The per-IP `attempt` bucket costs one Sanity document per distinct `x-forwarded-for` value, and an unauthenticated caller picks that value. The app does not cap how many such documents a flood can create; the Vercel WAF does. Create this rule in the Vercel dashboard (Firewall → Rules → Rate limit):
+
+- Path: equals `/api/provisioning/organizations` (and a second rule, or a path prefix of `/api/provisioning/`, for cache invalidation)
+- Method: `POST`
+- Key: client IP (the edge-observed address, not `x-forwarded-for`)
+- Limit: 30 requests per 60 seconds, action `429`/deny
+
+The real caller is kontroll, which provisions a handful of tenants a day and invalidates on organizer edits, so 30/min per IP stays well clear of it.
+
 ## Idempotency
 
 `Idempotency-Key` is **required**. A machine caller that retries a timed-out request without one would create a second tenant — and the duplicate would already hold the domain claim.
@@ -142,7 +151,9 @@ Nothing about the caller's key is stored — only its salted hash, which is alre
 
 ## Residual risk
 
-Global slug and domain uniqueness are still enforced by a read-then-write check inside the transaction's preamble, not by a database constraint (Sanity has none). Two requests with **different** idempotency keys racing on the **same** slug can therefore both pass the check. The idempotency receipt does not close this — it is keyed on the request, not the slug. In practice the wizard and the control panel both preflight, and the window is milliseconds; closing it properly means deriving the organization's `_id` from its slug so Sanity's create-CAS enforces uniqueness, which is a follow-up.
+Slug uniqueness is a constraint: the organization's `_id` is `organization.<slug>`, so two requests with **different** idempotency keys racing on the same slug collide on Sanity's create-CAS and the loser gets `slug_taken` (#777). Organizations created before this keep their random ids; lookups go by slug, not id.
+
+Domain uniqueness is still a read-then-write check, not a constraint (Sanity has none). Two requests with different slugs racing on the **same custom domain** can both pass it. Minted platform hosts derive from the slug, so they are covered by the slug constraint; only caller-supplied domains remain exposed. The window is milliseconds and the only caller is kontroll.
 
 ---
 

@@ -72,7 +72,9 @@ const fetchMock = vi.fn(
       return [...docs.values()].filter(
         (d) =>
           d._type === 'organization' &&
-          (d.slug as { current?: string } | undefined)?.current === params.slug,
+          ((d.slug as { current?: string } | undefined)?.current ===
+            params.slug ||
+            d._id === params.id),
       ).length
     }
     // The real GROQ pre-narrows; the JS predicate is the authority, so the fake
@@ -595,6 +597,20 @@ describe('provisioning API — a replayed request never creates a second tenant'
     expect(new Set([a.status, b.status])).toEqual(new Set([201, 200]))
   })
 
+  it('creates ONE tenant when two DIFFERENT keys race for the same slug (#777)', async () => {
+    const [a, b] = await Promise.all([
+      POST(request()),
+      POST(request({ key: 'a-racing-second-key-0123456789' })),
+    ])
+
+    expect(ofType('organization')).toHaveLength(1)
+    expect(ofType('organization')[0]._id).toBe('organization.cloud-native-oslo')
+    expect(ofType('conference')).toHaveLength(1)
+    expect(new Set([a.status, b.status])).toEqual(new Set([201, 409]))
+    const loser = a.status === 409 ? a : b
+    await expect(loser.json()).resolves.toMatchObject({ code: 'slug_taken' })
+  })
+
   it('lets a DIFFERENT key through — idempotency must not become a global lock', async () => {
     await POST(request())
     const res = await POST(
@@ -801,6 +817,18 @@ describe('provisioning API — conflicts and limits', () => {
   it('refuses a slug another organization already holds, without writing a second one', async () => {
     await POST(request())
     const res = await POST(request({ key: 'another-key-0123456789' }))
+    expect(ofType('organization')).toHaveLength(1)
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({ code: 'slug_taken' })
+  })
+
+  it('refuses a slug whose derived id an organization renamed away still holds', async () => {
+    docs.set('organization.cloud-native-oslo', {
+      _id: 'organization.cloud-native-oslo',
+      _type: 'organization',
+      slug: { current: 'renamed-away' },
+    })
+    const res = await POST(request())
     expect(ofType('organization')).toHaveLength(1)
     expect(res.status).toBe(409)
     await expect(res.json()).resolves.toMatchObject({ code: 'slug_taken' })

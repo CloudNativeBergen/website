@@ -1,5 +1,6 @@
 import { clientReadUncached } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
+import { DISPLAY_EMAIL_MATCHABLE } from '@/lib/speaker/email'
 
 /**
  * TIER SELECTION for an email sign-in link.
@@ -28,8 +29,8 @@ export type EmailLinkTier = 'stateless' | 'stored'
  * over-inclusive, because the failure direction of over-inclusion is one extra
  * Sanity document.
  *
- * Matching uses the same verified-email match-set as login (`knownEmails` plus
- * the display `email`), so an organizer who signs in with a secondary verified
+ * Matching uses the same match-set as login (`knownEmails`, plus the display
+ * `email` only for a speaker with no `knownEmails` yet, #807), so an organizer who signs in with a secondary verified
  * address still gets the stored tier.
  */
 // NOTE on the annotations below: `no-unscoped-groq` only honours a
@@ -47,7 +48,7 @@ const ANY_ORGANIZER = groq`*[_type == "conference"].organizers[]._ref`
 // groq-global: cross-tenant identity join, same rule as findSpeakersByEmails
 const ORGANIZER_BY_EMAIL_QUERY = groq`count(*[
   _type == "speaker"
-  && (lower(email) == $email || count((knownEmails[])[lower(@) == $email]) > 0)
+  && (${DISPLAY_EMAIL_MATCHABLE} && lower(email) == $email || count((knownEmails[])[lower(@) == $email]) > 0)
   && _id in ${ANY_ORGANIZER}
 ]) > 0`
 

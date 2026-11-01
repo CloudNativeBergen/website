@@ -16,7 +16,12 @@ import { ProposalExisting, Status } from '../proposal/types'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { generateUniqueSpeakerSlug } from './slug'
-import { canonicalEmail, normalizeEmail, uniqueEmails } from './email'
+import {
+  canonicalEmail,
+  DISPLAY_EMAIL_MATCHABLE,
+  normalizeEmail,
+  uniqueEmails,
+} from './email'
 import type { DuplicateSpeakerInput } from './duplicates'
 import { verifiedEmails as fetchGithubVerifiedEmails } from '@/lib/profile/github'
 import { EXCLUDE_PRIVATE_SPEAKER_FIELDS } from '@/lib/sanity/helpers'
@@ -271,8 +276,8 @@ export async function buildOrganizerCreatedSpeaker(
  * stranded forever with the proposal pointing at a document nobody will ever
  * sign into. Refusing globally is the only answer the login path can honour.
  *
- * Matches the DISPLAY email and the verified `knownEmails` set — the two keys
- * the login path itself matches on.
+ * Matches the same keys the login path matches on: the verified `knownEmails`
+ * set, plus the DISPLAY email only for a speaker with no `knownEmails` (#807).
  *
  * WHAT MAY LEAVE THIS FUNCTION IS ONE BIT, plus a name only for a person the
  * caller can already see. The global reach makes this an existence oracle for
@@ -323,7 +328,7 @@ export async function findSpeakerByEmailForOrganizerCreate(
   // the foreign name is never returned by the query at all, let alone logged.
   // The JS strip below is defence in depth, not the control. Bounded to 5 rows,
   // as `findSpeakersByEmails` bounds the same join.
-  const query = groq`*[_type == "speaker" && (${trimmedLower('email')} == $email || count((knownEmails[])[${trimmedLower('@')} == $email]) > 0)][0...5]{
+  const query = groq`*[_type == "speaker" && (${DISPLAY_EMAIL_MATCHABLE} && ${trimmedLower('email')} == $email || count((knownEmails[])[${trimmedLower('@')} == $email]) > 0)][0...5]{
       "inCurrentOrg": ${SPEAKER_ORG_FILTER},
       "name": select(${SPEAKER_ORG_FILTER} => name)
     }`
@@ -379,7 +384,7 @@ async function findSpeakersByEmails(
     const speakers = (await clientReadUncached.fetch(
       // groq-global: cross-tenant identity join — a returning global person must
       // resolve regardless of which org they first belonged to (#615).
-      groq`*[_type == "speaker" && (lower(email) in $emails || count((knownEmails[])[lower(@) in $emails]) > 0)] | order(_createdAt asc) [0...5] ${LOGIN_SPEAKER_PROJECTION}`,
+      groq`*[_type == "speaker" && (${DISPLAY_EMAIL_MATCHABLE} && lower(email) in $emails || count((knownEmails[])[lower(@) in $emails]) > 0)] | order(_createdAt asc) [0...5] ${LOGIN_SPEAKER_PROJECTION}`,
       { emails },
     )) as Speaker[]
     return { speakers: speakers || [], err: null }
@@ -476,6 +481,32 @@ async function backfillSlugIfMissing(speaker: Speaker): Promise<Speaker> {
   }
 
   return speaker
+}
+
+/**
+ * Union freshly VERIFIED emails into a returning speaker's `knownEmails`,
+ * patching only when the set grows. Best-effort: a failed write never blocks
+ * sign-in. Mutates the passed speaker on success.
+ */
+async function accrueVerifiedEmails(
+  speaker: Speaker,
+  verifiedIncoming: string[],
+): Promise<void> {
+  const current = new Set(uniqueEmails(speaker.knownEmails || []))
+  const added = uniqueEmails(verifiedIncoming).filter((e) => !current.has(e))
+  if (added.length === 0) return
+  try {
+    // Append only the delta, so a concurrent write to the array is not
+    // overwritten by this login's stale copy.
+    await clientWrite
+      .patch(speaker._id)
+      .setIfMissing({ knownEmails: [] })
+      .append('knownEmails', added)
+      .commit()
+    speaker.knownEmails = [...current, ...added]
+  } catch (error) {
+    console.error('Failed to accrue verified emails', error)
+  }
 }
 
 /**
@@ -626,6 +657,13 @@ export async function getOrCreateSpeaker(
   if (providerResult.speaker?._id) {
     // Backfill a slug for pre-existing slugless speakers on login.
     await backfillSlugIfMissing(providerResult.speaker)
+    // Accrue newly VERIFIED emails into the match-set (#814), so a returning
+    // speaker's `knownEmails` keeps up with their provider and the display
+    // email stops being their only match key (#807).
+    await accrueVerifiedEmails(
+      providerResult.speaker,
+      await computeVerifiedEmails(user, account, profile),
+    )
     // Accrue current-org membership for this returning person (CaaS T1-1).
     await ensureSpeakerOrgMembership(providerResult.speaker._id)
     return { speaker: providerResult.speaker, err: null }
@@ -662,10 +700,10 @@ export async function getOrCreateSpeaker(
   //
   //    That endpoint is now scoped to speakers EXCLUSIVE to the organizer's own
   //    tenant (#742), so the primitive cannot cross a tenant boundary or reach
-  //    a person another org also holds. Both keys are kept on that basis.
-  //    Whether the display `email` should be a match key at all — and how to
-  //    stop being one without breaking the invitee-claim flow that depends on
-  //    it — is #807.
+  //    a person another org also holds. Since #807 the display `email` only
+  //    matches a speaker with NO `knownEmails` — the invited, never-signed-in
+  //    placeholder whose claim flow depends on it. Once a speaker has signed
+  //    in, only `knownEmails` matches.
   if (verifiedIncoming.length > 0) {
     const { speakers, err } = await findSpeakersByEmails(verifiedIncoming)
     if (err) {

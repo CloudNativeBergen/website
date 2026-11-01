@@ -12,6 +12,8 @@ export async function verifiedEmails(
         Authorization: `Bearer ${token}`,
         'X-GitHub-Api-Version': '2022-11-28',
       },
+      // Sign-in waits on this call; a hung GitHub must not hang the login.
+      signal: AbortSignal.timeout(5000),
     })
 
     if (!emailsRes.ok) {

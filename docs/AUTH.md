@@ -109,6 +109,13 @@ so a burst of 50 left a bucket believing one request happened and the caps never
 Read failures fail **open** (an abuse control must not take sign-in down); write failures fail
 **closed** (a bucket that is never persisted is not a limit, it is an unmetered mail cannon).
 
+**Edge rate limit (manual step, #776).** Each new address and each new client IP costs one
+bucket document, and an unauthenticated caller chooses both. The app does not bound how many a
+flood creates; the Vercel WAF does. Create a rate-limit rule in the Vercel dashboard (Firewall →
+Rules): path equals `/signin`, method `POST` (the sign-in server action), keyed on the client IP
+as seen by the edge, 20 requests per 60 seconds, action deny/429. That sits above one person
+retrying and well below a flood.
+
 **At rest, and what a burned link costs.** `emailSignInToken` stores only
 `sha256(raw + AUTH_SECRET)`, so nothing redeemable leaks — but `identifier` is **plaintext**.
 The type is hidden from the Studio's document lists and omnisearch, and `visionTool` can still
