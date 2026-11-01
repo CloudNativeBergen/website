@@ -39,6 +39,7 @@ import {
   getOrCreateSpeakerForVerifiedEmail,
 } from '@/lib/speaker/sanity'
 import { resolveEmailLinkTier } from '@/lib/auth/email-link/tier'
+import { findSpeakersByEmail } from '@/lib/onboarding/provision'
 
 const ORG = 'org-this'
 
@@ -72,7 +73,13 @@ const dataset: Record<string, unknown>[] = [
   },
 ]
 
-const patches: Array<{ id: string; set: Record<string, unknown> }> = []
+interface PatchEntry {
+  id: string
+  set: Record<string, unknown>
+  setIfMissing?: Record<string, unknown>
+  append?: { path: string; items: unknown[] }
+}
+const patches: PatchEntry[] = []
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -83,13 +90,20 @@ beforeEach(() => {
   )
   createMock.mockImplementation(async (doc: Record<string, unknown>) => doc)
   patchMock.mockImplementation((id: string) => {
-    const entry = { id, set: {} as Record<string, unknown> }
+    const entry: PatchEntry = { id, set: {} }
     const builder = {
       set(values: Record<string, unknown>) {
         entry.set = { ...entry.set, ...values }
         return builder
       },
-      setIfMissing: () => builder,
+      setIfMissing(values: Record<string, unknown>) {
+        entry.setIfMissing = values
+        return builder
+      },
+      append(path: string, items: unknown[]) {
+        entry.append = { path, items }
+        return builder
+      },
       insert: () => builder,
       async commit() {
         patches.push(entry)
@@ -146,6 +160,18 @@ describe('display email as a match key (#807)', () => {
   })
 })
 
+describe('provisioning organizer lookup follows the same rule', () => {
+  it('matches an invitee and a knownEmails entry, not a display email alone', async () => {
+    expect(await findSpeakersByEmail('invitee@example.com')).toEqual([
+      { _id: 'sp-invitee', name: 'Invitee' },
+    ])
+    expect(await findSpeakersByEmail('owner@example.com')).toEqual([
+      { _id: 'sp-signed-in', name: 'Signed In' },
+    ])
+    expect(await findSpeakersByEmail('unverified@example.com')).toEqual([])
+  })
+})
+
 describe('returning provider login accrues verified emails (#814)', () => {
   const user = { name: 'Signed In', email: 'owner@example.com' } as User
   const account = {
@@ -163,15 +189,18 @@ describe('returning provider login accrues verified emails (#814)', () => {
     const { speaker, err } = await getOrCreateSpeaker(user, account)
     expect(err).toBeNull()
     expect(speaker._id).toBe('sp-signed-in')
+    // Only the delta is appended; the existing array is never replaced.
     expect(patches).toContainEqual({
       id: 'sp-signed-in',
-      set: { knownEmails: ['owner@example.com', 'new@example.com'] },
+      set: {},
+      setIfMissing: { knownEmails: [] },
+      append: { path: 'knownEmails', items: ['new@example.com'] },
     })
   })
 
   it('writes nothing when no new address was verified', async () => {
     verifiedEmailsMock.mockResolvedValue({ emails: [], error: null })
     await getOrCreateSpeaker(user, account)
-    expect(patches.filter((p) => 'knownEmails' in p.set)).toHaveLength(0)
+    expect(patches.filter((p) => p.append)).toHaveLength(0)
   })
 })

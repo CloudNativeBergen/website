@@ -7,7 +7,7 @@
  * the real network, and per-case overrides via `server.use(...)` drive the
  * error/edge branches deterministically.
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import type { Account } from 'next-auth'
 import { server } from '../../mocks/msw/server'
@@ -45,6 +45,13 @@ describe('verifiedEmails — GitHub /user/emails via MSW', () => {
     )
     await verifiedEmails(account)
     expect(seenAuth).toBe('Bearer gho_test-token')
+  })
+
+  it('bounds the call with a 5-second timeout (#814)', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    await verifiedEmails(account)
+    expect(timeout).toHaveBeenCalledWith(5000)
+    timeout.mockRestore()
   })
 
   it('returns an error (no throw) on a non-OK response', async () => {

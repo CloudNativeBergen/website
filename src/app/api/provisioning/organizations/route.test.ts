@@ -72,7 +72,9 @@ const fetchMock = vi.fn(
       return [...docs.values()].filter(
         (d) =>
           d._type === 'organization' &&
-          (d.slug as { current?: string } | undefined)?.current === params.slug,
+          ((d.slug as { current?: string } | undefined)?.current ===
+            params.slug ||
+            d._id === params.id),
       ).length
     }
     // The real GROQ pre-narrows; the JS predicate is the authority, so the fake
@@ -820,6 +822,18 @@ describe('provisioning API — conflicts and limits', () => {
     await expect(res.json()).resolves.toMatchObject({ code: 'slug_taken' })
   })
 
+  it('refuses a slug whose derived id an organization renamed away still holds', async () => {
+    docs.set('organization.cloud-native-oslo', {
+      _id: 'organization.cloud-native-oslo',
+      _type: 'organization',
+      slug: { current: 'renamed-away' },
+    })
+    const res = await POST(request())
+    expect(ofType('organization')).toHaveLength(1)
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({ code: 'slug_taken' })
+  })
+
   it('refuses a domain an existing conference already claims', async () => {
     await POST(request())
     const res = await POST(
@@ -971,25 +985,5 @@ describe('provisioning API — the abuse control cannot be evaded or outaged awa
     expect(ofType('conference')).toHaveLength(5)
     expect(statuses.filter((s) => s === 201)).toHaveLength(5)
     expect(statuses.filter((s) => s === 429)).toHaveLength(3)
-  })
-  it('stops minting per-IP buckets once the GLOBAL attempt cap trips (#776)', async () => {
-    // Each spoofed `x-forwarded-for` value would otherwise cost one document.
-    const statuses: number[] = []
-    for (let i = 0; i < 40; i++) {
-      const res = await POST(
-        request({
-          ip: `10.${i >> 8}.${i & 255}.1`,
-          token: `bogus-flood-${i}-padded-out-abcdefghij`,
-        }),
-      )
-      statuses.push(res.status)
-    }
-
-    const buckets = ofType(RATE_LIMIT_TYPE)
-    // The global cap is 30/minute: 30 per-IP buckets, plus the one global.
-    expect(buckets.filter((d) => d.scope === 'attempt')).toHaveLength(30)
-    expect(buckets.filter((d) => d.scope === 'attempt-global')).toHaveLength(1)
-    expect(statuses.filter((s) => s === 429)).toHaveLength(10)
-    expect(statuses.filter((s) => s === 401)).toHaveLength(30)
   })
 })

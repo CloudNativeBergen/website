@@ -2,6 +2,7 @@ import { createHash } from 'crypto'
 import { revalidateTag } from 'next/cache'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { generateKey } from '@/lib/sanity/helpers'
+import { DISPLAY_EMAIL_MATCHABLE } from '@/lib/speaker/email'
 import {
   normalizeDomain,
   wildcardFormForHost,
@@ -213,12 +214,18 @@ export function planTenantDomains(
   }
 }
 
-/** Whether an organization already claims this slug. */
+/** The organization id derived from a slug (#777). */
+const orgIdForSlug = (slug: string) => `organization.${slug}`
+
+/**
+ * Whether an organization already claims this slug, or already holds the id
+ * derived from it (an organization renamed away from the slug keeps its id).
+ */
 export async function isOrgSlugTaken(slug: string): Promise<boolean> {
   const count = await clientReadUncached.fetch<number>(
     // groq-global: org slugs are a GLOBAL namespace (they identify tenants).
-    `count(*[_type == "organization" && slug.current == $slug])`,
-    { slug },
+    `count(*[_type == "organization" && (slug.current == $slug || _id == $id)])`,
+    { slug, id: orgIdForSlug(slug) },
   )
   return (count ?? 0) > 0
 }
@@ -229,9 +236,9 @@ export interface SpeakerMatch {
 }
 
 /**
- * Speakers whose stored VERIFIED match-set (display `email` or `knownEmails`,
- * both verified-owned — see `getOrCreateSpeaker`'s stored-side-verified
- * invariant) contains the given normalized email. Oldest-first, bounded, so the
+ * Speakers whose login match-set contains the given normalized email: their
+ * `knownEmails`, or the display `email` only for a speaker with no
+ * `knownEmails` yet (#807), the same rule as `getOrCreateSpeaker`. Oldest-first, bounded, so the
  * caller can deterministically pick a single match and detect duplicates.
  */
 export async function findSpeakersByEmail(
@@ -239,7 +246,7 @@ export async function findSpeakersByEmail(
 ): Promise<SpeakerMatch[]> {
   const speakers = await clientReadUncached.fetch<SpeakerMatch[] | null>(
     // groq-global: identity is a global person — the named organizer may already exist as a speaker of any tenant's conference (#615).
-    `*[_type == "speaker" && (lower(email) == $email || count((knownEmails[])[lower(@) == $email]) > 0)] | order(_createdAt asc) [0...5] { _id, name }`,
+    `*[_type == "speaker" && (${DISPLAY_EMAIL_MATCHABLE} && lower(email) == $email || count((knownEmails[])[lower(@) == $email]) > 0)] | order(_createdAt asc) [0...5] { _id, name }`,
     { email },
   )
   return speakers ?? []
@@ -478,7 +485,7 @@ export async function provisionOrganization(
       // slug under DIFFERENT idempotency keys collide on `create` and only one
       // commits (#777). Organizations created before this keep their random
       // ids; nothing looks an organization up by this id pattern.
-      organizationId: `organization.${input.organization.slug}`,
+      organizationId: orgIdForSlug(input.organization.slug),
       conferenceId: generateKey('conference'),
       speakerId: generateKey('speaker'),
       mintKey: () => generateKey('key'),
@@ -546,7 +553,8 @@ export async function provisionOrganization(
       }
     }
     // A concurrent provision under a different key took the same slug first:
-    // its organization now holds the id this transaction tried to create.
+    // its organization now holds the slug, or the id this transaction tried
+    // to create.
     if (await isOrgSlugTaken(input.organization.slug).catch(() => false)) {
       return {
         ok: false,

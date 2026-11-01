@@ -220,10 +220,7 @@ export function tokenKind(token: string): 'stateless' | 'stored' | 'unknown' {
  * Used as the Sanity document id, so no address or IP is ever stored in the
  * content lake.
  */
-export function rateLimitKey(
-  scope: 'email' | 'ip' | 'global',
-  subject: string,
-): string {
+export function rateLimitKey(scope: 'email' | 'ip', subject: string): string {
   const digest = createHash('sha256')
     .update(`konf.email-link.rate.v1|${scope}|${subject}|${requireSecret()}`)
     .digest('hex')

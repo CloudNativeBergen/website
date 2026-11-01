@@ -119,13 +119,21 @@ entries in `challenges` with no TXT record to publish.
 
 **Opacity is scoped to the unauthenticated.** Every authentication failure produces a byte-identical `401 {"error":"unauthorized"}`, so a prober cannot learn whether the endpoint is configured, whether their token shape was accepted, or whether a slug or domain exists. Once a caller has proven it holds the secret it is trusted platform infrastructure, and conflicts are named — the control panel legitimately has to render "that slug is taken".
 
-**Three rate limits**, all durable (Sanity-backed, revision-conditioned CAS — an in-process counter is not a limit in a serverless deployment):
+**Two rate limits**, both durable (Sanity-backed, revision-conditioned CAS — an in-process counter is not a limit in a serverless deployment):
 
-- `attempt-global`, a **single global** bucket charged **before** the per-IP one — 30/min, 300/hour. The per-IP bucket costs one document per distinct `x-forwarded-for` value, which the caller controls; once this cap trips, no further per-IP documents are created (#776).
 - `attempt`, bucketed by client IP, charged **before** the token is compared — 10/min, 60/hour, 300/day. This is the bound on brute-forcing the secret. A missing IP charges a shared `unknown` bucket rather than skipping the limit.
 - `create`, a **single global** bucket, charged after authentication and after validation — 5/min, 30/hour, 100/day. This is the bound on bulk tenant minting if the secret leaks, and it is deliberately not keyed on anything the caller can rotate.
 
-All **fail closed** in either direction, unlike the email sign-in limiter (which fails open on a read outage because locking everybody out of sign-in is worse than an absent cap). Here the guarded operation is a rare privileged write, so refusing it during an outage costs a retry and nothing else.
+Both **fail closed** in either direction, unlike the email sign-in limiter (which fails open on a read outage because locking everybody out of sign-in is worse than an absent cap). Here the guarded operation is a rare privileged write, so refusing it during an outage costs a retry and nothing else.
+
+**Edge rate limit (manual step, #776).** The per-IP `attempt` bucket costs one Sanity document per distinct `x-forwarded-for` value, and an unauthenticated caller picks that value. The app does not cap how many such documents a flood can create; the Vercel WAF does. Create this rule in the Vercel dashboard (Firewall → Rules → Rate limit):
+
+- Path: equals `/api/provisioning/organizations` (and a second rule, or a path prefix of `/api/provisioning/`, for cache invalidation)
+- Method: `POST`
+- Key: client IP (the edge-observed address, not `x-forwarded-for`)
+- Limit: 30 requests per 60 seconds, action `429`/deny
+
+The real caller is kontroll, which provisions a handful of tenants a day and invalidates on organizer edits, so 30/min per IP stays well clear of it.
 
 ## Idempotency
 

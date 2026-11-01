@@ -492,12 +492,18 @@ async function accrueVerifiedEmails(
   speaker: Speaker,
   verifiedIncoming: string[],
 ): Promise<void> {
-  const current = speaker.knownEmails || []
-  const knownEmails = uniqueEmails([...current, ...verifiedIncoming])
-  if (knownEmails.length === uniqueEmails(current).length) return
+  const current = new Set(uniqueEmails(speaker.knownEmails || []))
+  const added = uniqueEmails(verifiedIncoming).filter((e) => !current.has(e))
+  if (added.length === 0) return
   try {
-    await clientWrite.patch(speaker._id).set({ knownEmails }).commit()
-    speaker.knownEmails = knownEmails
+    // Append only the delta, so a concurrent write to the array is not
+    // overwritten by this login's stale copy.
+    await clientWrite
+      .patch(speaker._id)
+      .setIfMissing({ knownEmails: [] })
+      .append('knownEmails', added)
+      .commit()
+    speaker.knownEmails = [...current, ...added]
   } catch (error) {
     console.error('Failed to accrue verified emails', error)
   }

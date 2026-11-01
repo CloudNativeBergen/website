@@ -53,19 +53,6 @@ export const PROVISIONING_ATTEMPT_RULES: readonly RateLimitRule[] = [
 ]
 
 /**
- * GLOBAL pre-auth ATTEMPT limit: one fixed bucket for every caller, charged
- * BEFORE the per-IP bucket. The per-IP bucket costs one document per distinct
- * `x-forwarded-for` value, and that header is caller-controlled, so without this
- * cap an unauthenticated flood could mint documents without bound. Once it
- * trips, no further per-IP documents are created. Sized far above the real
- * machine caller, which provisions a handful of tenants a day.
- */
-export const PROVISIONING_GLOBAL_ATTEMPT_RULES: readonly RateLimitRule[] = [
-  { windowSeconds: 60, max: 30 },
-  { windowSeconds: 60 * 60, max: 300 },
-]
-
-/**
  * CREATION limit, charged only AFTER authentication, on a single GLOBAL bucket.
  *
  * Global — not per-IP — precisely because the IP is a spoofable header: if the
