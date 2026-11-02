@@ -3,18 +3,26 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "build": "wrangler deploy --dry-run --outdir dist",
+    "compose": "tsx scripts/compose.ts",
+    "dev": "pnpm compose && wrangler dev",
+    "build": "pnpm compose && wrangler deploy --dry-run --outdir dist",
     "test": "vitest run --root .. api/src/",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@pothos/core": "^4.16.0",
-    "graphql": "^17.0.2",
-    "graphql-yoga": "^6.0.1"
+    "@escape.tech/graphql-armor-max-aliases": "^2.6.2",
+    "@escape.tech/graphql-armor-max-depth": "^2.4.2",
+    "@graphql-hive/gateway-runtime": "^2.13.1",
+    "@graphql-mesh/transport-http": "^1.2.2",
+    "@runkonf/tenancy": "workspace:*",
+    "graphql": "16.14.2",
+    "jose": "^6.2.14"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261101.1",
+    "@graphql-tools/utils": "^13.2.1",
+    "@theguild/federation-composition": "^0.27.0",
+    "tsx": "^4.23.15",
     "wrangler": "^4.156.0"
   }
 }
