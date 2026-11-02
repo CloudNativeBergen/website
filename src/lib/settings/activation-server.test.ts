@@ -16,7 +16,7 @@ vi.mock('@/lib/features/ticketing', () => ({
 }))
 
 vi.mock('@/lib/system-status/checks', () => ({
-  collectStaticChecks: () => [],
+  collectOrgChecks: async () => [],
 }))
 
 const hasAnyOrganizerInvitation = vi.fn(async () => false)
