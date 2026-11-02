@@ -1,5 +1,5 @@
 import { test, expect } from 'playwright/test'
-import { e2eSpeaker } from './utils/session'
+import { e2eSpeaker, SESSION_COOKIE_NAME } from './utils/session'
 
 /**
  * Login / session e2e (#451). Uses a minted real session cookie (see
@@ -69,8 +69,19 @@ test.describe('authenticated (minted session cookie)', () => {
       .first()
       .click()
 
-    // After sign-out the session cookie is cleared; the protected route must
-    // now redirect back to sign-in.
+    // Wait for sign-out to blank the session cookie (Auth.js sets it to ''
+    // rather than deleting it): navigating while its
+    // redirect is in flight aborts the goto (net::ERR_ABORTED).
+    await expect
+      .poll(async () =>
+        (await page.context().cookies()).some(
+          (c) => c.name === SESSION_COOKIE_NAME && c.value !== '',
+        ),
+      )
+      .toBe(false)
+    await page.waitForLoadState()
+
+    // The protected route must now redirect back to sign-in.
     await page.goto(PROTECTED)
     await expect(page).toHaveURL(/signin/)
   })
