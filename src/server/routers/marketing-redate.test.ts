@@ -205,33 +205,6 @@ describe('milestone writes re-date the server-resolved marketing plan', () => {
       h.getPlan.mock.invocationCallOrder[0],
     )
   })
-
-  it('re-dates after updating targets directly', async () => {
-    const result = await ticketsRouter
-      .createCaller(context())
-      .admin.updateTargets({ targets })
-    expect(result).toMatchObject({ _id: CONF, marketingWarnings: [WARNING] })
-    expect(h.getPlan).toHaveBeenCalledWith(CONF)
-  })
-
-  it('re-dates when target tracking is disabled without changing salesStartDate', async () => {
-    storedTask.variant!.scheduledAt = storedTask.plannedAt =
-      '2027-03-01T07:00:00.000Z'
-    storedTask.provisional = false
-    const result = await ticketsRouter
-      .createCaller(context())
-      .admin.toggleTargetTracking({ enabled: false })
-    expect(storedTask).toMatchObject({
-      variant: { scheduledAt: '2027-03-18T07:00:00.000Z' },
-      provisional: true,
-    })
-    expect(result).toMatchObject({
-      _id: CONF,
-      ticketTargets: { ...targets, enabled: false },
-      marketingWarnings: [WARNING],
-    })
-    expect(h.getPlan).toHaveBeenCalledWith(CONF)
-  })
 })
 
 describe('marketing failures never undo a settings save', () => {

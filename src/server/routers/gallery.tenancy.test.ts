@@ -116,20 +116,6 @@ describe('gallery reads are scoped to the resolved tenant (#616)', () => {
     )
   })
 
-  it('listMine scopes to the resolved ORG, not to the speaker alone', async () => {
-    await caller().listMine()
-    expect(getGalleryImagesMock).toHaveBeenCalledWith(
-      expect.objectContaining({ orgId: ORG_ID, speakerId: SPEAKER_ID }),
-    )
-  })
-
-  it('countMine scopes to the resolved ORG', async () => {
-    await caller().countMine()
-    expect(getGalleryImageCountMock).toHaveBeenCalledWith(
-      expect.objectContaining({ orgId: ORG_ID, speakerId: SPEAKER_ID }),
-    )
-  })
-
   it('an UNKNOWN host reads nothing — every read path throws instead', async () => {
     unknownHost()
     await expect(
@@ -138,8 +124,6 @@ describe('gallery reads are scoped to the resolved tenant (#616)', () => {
     await expect(
       caller().admin.count({ limit: 50, offset: 0 }),
     ).rejects.toBeTruthy()
-    await expect(caller().listMine()).rejects.toBeTruthy()
-    await expect(caller().countMine()).rejects.toBeTruthy()
     expect(getGalleryImagesMock).not.toHaveBeenCalled()
     expect(getGalleryImageCountMock).not.toHaveBeenCalled()
   })

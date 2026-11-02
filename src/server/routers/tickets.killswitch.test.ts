@@ -158,26 +158,7 @@ function denyTicketing() {
 const PROCEDURES: Array<
   [string, (c: ReturnType<typeof tickets>) => Promise<unknown>]
 > = [
-  ['getSettings', (c) => c.admin.getSettings()],
   ['updateSettings', (c) => c.admin.updateSettings({ ticketCapacity: 500 })],
-  ['updateCapacity', (c) => c.admin.updateCapacity({ capacity: 500 })],
-  [
-    'updateTargets',
-    (c) =>
-      c.admin.updateTargets({
-        targets: {
-          enabled: true,
-          salesStartDate: '2026-01-01',
-          targetCurve: 'linear',
-          milestones: [],
-        },
-      }),
-  ],
-  [
-    'toggleTargetTracking',
-    (c) => c.admin.toggleTargetTracking({ enabled: true }),
-  ],
-  ['getTicketTypes', (c) => c.admin.getTicketTypes()],
   ['getDiscountCodes', (c) => c.admin.getDiscountCodes({ eventId: EVENT })],
   ['getDiscountCodesWithUsage', (c) => c.admin.getDiscountCodesWithUsage()],
   [
@@ -213,7 +194,6 @@ const PROCEDURES: Array<
   ['volunteerTicketStatus', (c) => c.admin.volunteerTicketStatus()],
   ['searchEventTickets', (c) => c.admin.searchEventTickets({ query: 'ada' })],
   ['getPaymentDetails', (c) => c.admin.getPaymentDetails({ orderId: 500 })],
-  ['getPageContent', (c) => c.admin.getPageContent()],
   [
     'updatePageContent',
     (c) =>

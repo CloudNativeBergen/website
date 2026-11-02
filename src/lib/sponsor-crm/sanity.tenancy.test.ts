@@ -8,9 +8,6 @@
  * hanging off that set. In a shared multi-tenant dataset that is one tenant's
  * entire historic sponsor roster — company names, and via the copy path their
  * contacts and billing details — offered inside another tenant's import flow.
- * `copySponsorsFromPreviousYear` was worse in kind: its `sourceConferenceId` is
- * CLIENT INPUT used directly as the scope key, so a foreign conference id was
- * accepted verbatim.
  *
  * WHY THIS SUITE RUNS A REAL GROQ ENGINE (the `tenancy.exploits.test.ts`
  * precedent). Asserting `expect(query).toContain('organization._ref == $orgId')`
@@ -51,10 +48,7 @@ vi.mock('@/lib/sanity/client', () => ({
   clientWrite: { fetch: h.fetch, create: h.create },
 }))
 
-import {
-  importAllHistoricSponsors,
-  copySponsorsFromPreviousYear,
-} from './sanity'
+import { importAllHistoricSponsors } from './sanity'
 
 const ORG_A = 'org-A'
 const ORG_B = 'org-B'
@@ -214,73 +208,6 @@ describe('importAllHistoricSponsors — historic import must not cross tenants',
     expect(result).toBeUndefined()
     expect(error?.message).toBe(
       'importAllHistoricSponsors: refusing to run without a resolved organization',
-    )
-    expect(h.fetch).not.toHaveBeenCalled()
-    expect(h.create).not.toHaveBeenCalled()
-  })
-})
-
-describe('copySponsorsFromPreviousYear — the SOURCE id is client input', () => {
-  it('copies from this organization’s own edition (the feature still works)', async () => {
-    const { result, error } = await copySponsorsFromPreviousYear({
-      sourceConferenceId: 'conf-a-2024',
-      targetConferenceId: 'conf-a-2025',
-      organizationId: ORG_A,
-    })
-
-    expect(error).toBeUndefined()
-    expect(result).toMatchObject({ created: 1, skipped: 0 })
-    expect(createdSponsorRefs()).toEqual(['sponsor-a1'])
-    // The copy carries contacts and billing — this is the payload that must not
-    // be reachable across a tenant boundary.
-    expect(createdDocs()[0]).toMatchObject({
-      billing: { email: 'billing@a.test' },
-    })
-  })
-
-  it('refuses a SOURCE conference belonging to another organization', async () => {
-    const { result, error } = await copySponsorsFromPreviousYear({
-      sourceConferenceId: 'conf-b-2024',
-      targetConferenceId: 'conf-a-2025',
-      organizationId: ORG_A,
-    })
-
-    expect(result).toBeUndefined()
-    expect(error?.message).toBe('Source conference not found')
-    expect(h.create).not.toHaveBeenCalled()
-  })
-
-  /**
-   * THE WRITE DIRECTION — the one that puts another tenant's sponsor PII into
-   * documents we own. The source MUST be a legitimately owned conference
-   * (`conf-a-2024`): naming a foreign source here would trip the source guard
-   * and return before the target read is ever reached, and the case would pass
-   * without exercising the guard it is named for. The message assertion pins
-   * WHICH guard refused, so that substitution can never go unnoticed again.
-   */
-  it('refuses a TARGET conference belonging to another organization', async () => {
-    const { result, error } = await copySponsorsFromPreviousYear({
-      sourceConferenceId: 'conf-a-2024',
-      targetConferenceId: 'conf-b-2024',
-      organizationId: ORG_A,
-    })
-
-    expect(result).toBeUndefined()
-    expect(error?.message).toBe('Target conference not found')
-    expect(h.create).not.toHaveBeenCalled()
-  })
-
-  /** Message pinned to THIS layer, not `scopedFetch`'s — see the import case. */
-  it('FAILS CLOSED on an unresolvable organization: no query, no write', async () => {
-    const { result, error } = await copySponsorsFromPreviousYear({
-      sourceConferenceId: 'conf-a-2024',
-      targetConferenceId: 'conf-a-2025',
-      organizationId: null,
-    })
-
-    expect(result).toBeUndefined()
-    expect(error?.message).toBe(
-      'copySponsorsFromPreviousYear: refusing to run without a resolved organization',
     )
     expect(h.fetch).not.toHaveBeenCalled()
     expect(h.create).not.toHaveBeenCalled()

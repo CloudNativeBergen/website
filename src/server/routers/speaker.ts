@@ -62,7 +62,6 @@ import { getFeaturedSpeakers } from '@/lib/featured/sanity'
 import { Status } from '@/lib/proposal/types'
 import type { Speaker, TicketEmailGrant } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
-import { sendMultiSpeakerEmail } from '@/lib/email/speaker'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
 import { syncConferenceAudience } from '@/lib/email/audience'
 import { removeFromSpeakerAudiences } from '@/lib/speaker/audience-erasure'
@@ -1591,33 +1590,6 @@ export const speakerRouter = router({
             await requireCurrentOrgId(),
           ),
         }
-      }),
-
-    sendEmail: adminProcedure
-      .input(
-        z.object({
-          proposalId: z.string().min(1),
-          speakerIds: z.array(z.string()).min(1).max(20),
-          subject: z.string().min(1).max(300),
-          message: z.string().min(1).max(100000),
-        }),
-      )
-      .mutation(async ({ input, ctx }) => {
-        const senderName = ctx.speaker.name || 'Conference Organizer'
-
-        const result = await sendMultiSpeakerEmail({
-          ...input,
-          senderName,
-        })
-
-        if (result.error) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: result.error.error,
-          })
-        }
-
-        return result.data!
       }),
 
     broadcastEmail: adminProcedure

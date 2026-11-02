@@ -181,9 +181,6 @@ describe('sponsor.update: the Bluesky handle', () => {
     expect(h.patches.at(-1)!.set.blueskyHandle).toBe('acme.example')
     expect(saved.blueskyHandle).toBe('acme.example')
     expect(saved.warnings).toEqual([])
-    // Reloads: the next read of the sponsor carries it.
-    const again = await sponsor().getById({ id: 'sp-A' })
-    expect(again.blueskyHandle).toBe('acme.example')
   })
 
   it('a bsky.app profile URL is taken as its handle', async () => {
@@ -294,9 +291,6 @@ describe('sponsor.update: the Bluesky handle', () => {
       data: { linkedinUrl: 'https://www.linkedin.com/company/acme' },
     })
     expect(h.stored!.linkedinUrl).toBe('https://www.linkedin.com/company/acme')
-    expect((await sponsor().getById({ id: 'sp-A' })).linkedinUrl).toBe(
-      'https://www.linkedin.com/company/acme',
-    )
     await sponsor().update({ id: 'sp-A', data: { linkedinUrl: '' } })
     expect(h.stored!.linkedinUrl).toBeUndefined()
   })

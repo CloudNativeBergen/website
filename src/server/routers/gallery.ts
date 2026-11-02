@@ -268,58 +268,6 @@ export const galleryRouter = router({
       }),
   }),
 
-  // A speaker's own photos, SCOPED TO THE CURRENT TENANT'S ORG (#616):
-  // previously this filtered on `speakerId` alone, so a speaker tagged in two
-  // orgs' galleries was served BOTH orgs' photos from either host. The scope is
-  // the ORG (not the single conference) so a speaker keeps seeing their photos
-  // from every edition of the same organizer — unchanged for the CND editions,
-  // which all belong to one org.
-  listMine: protectedProcedure.query(async ({ ctx }) => {
-    try {
-      const orgId = await requireCurrentOrgId()
-      const images = await getGalleryImages({
-        orgId,
-        speakerId: ctx.speaker._id,
-        limit: 50,
-        offset: 0,
-      })
-      return images
-    } catch (error) {
-      // requireCurrentOrgId throws NOT_FOUND on an unresolvable host — that is
-      // the fail-closed signal this PR introduces, and wrapping it as a 500
-      // would hide a tenancy failure behind a generic server error in the
-      // client AND in monitoring. Same rethrow the admin paths already use.
-      if (error instanceof TRPCError) throw error
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to fetch your photos',
-        cause: error,
-      })
-    }
-  }),
-
-  countMine: protectedProcedure.query(async ({ ctx }) => {
-    try {
-      const orgId = await requireCurrentOrgId()
-      const count = await getGalleryImageCount({
-        orgId,
-        speakerId: ctx.speaker._id,
-      })
-      return count
-    } catch (error) {
-      // requireCurrentOrgId throws NOT_FOUND on an unresolvable host — that is
-      // the fail-closed signal this PR introduces, and wrapping it as a 500
-      // would hide a tenancy failure behind a generic server error in the
-      // client AND in monitoring. Same rethrow the admin paths already use.
-      if (error instanceof TRPCError) throw error
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to count your photos',
-        cause: error,
-      })
-    }
-  }),
-
   untagSelf: protectedProcedure
     .input(galleryImageUntagSelfSchema)
     .mutation(async ({ ctx, input }) => {

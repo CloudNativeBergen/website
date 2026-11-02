@@ -19,9 +19,6 @@ import {
   DeleteDiscountCodeSchema,
   GetPaymentDetailsSchema,
   UpdateTicketPageContentSchema,
-  UpdateTicketCapacitySchema,
-  UpdateTicketTargetsSchema,
-  ToggleTargetTrackingSchema,
   SetTicketTypeRoleSchema,
   SetWorkshopAccessSchema,
   isPatchPathSafeName,
@@ -279,52 +276,6 @@ async function requireOrderInCurrentEvent(
     throw new TRPCError({
       code: 'NOT_FOUND',
       message: 'No order with that id for this conference',
-    })
-  }
-}
-
-async function updateTicketCapacity(conferenceId: string, capacity: number) {
-  try {
-    const result = await clientWrite
-      .patch(conferenceId)
-      .set({ ticketCapacity: capacity })
-      .commit()
-
-    return result
-  } catch (error) {
-    throw new TRPCError({
-      code: 'INTERNAL_SERVER_ERROR',
-      message: 'Failed to update ticket capacity',
-      cause: error,
-    })
-  }
-}
-
-async function updateTicketTargets(
-  conferenceId: string,
-  targets: {
-    enabled: boolean
-    salesStartDate: string
-    targetCurve: 'linear' | 'early_push' | 'late_push' | 's_curve'
-    milestones: Array<{
-      date: string
-      targetPercentage: number
-      label: string
-    }>
-  },
-) {
-  try {
-    const result = await clientWrite
-      .patch(conferenceId)
-      .set({ ticketTargets: targets })
-      .commit()
-
-    return result
-  } catch (error) {
-    throw new TRPCError({
-      code: 'INTERNAL_SERVER_ERROR',
-      message: 'Failed to update ticket targets',
-      cause: error,
     })
   }
 }
@@ -925,11 +876,6 @@ export const ticketsRouter = router({
         }
       }),
 
-    getSettings: ticketingAdminProcedure.query(async () => {
-      const conferenceId = await resolveConferenceId()
-      return getTicketSettings(conferenceId)
-    }),
-
     updateSettings: ticketingAdminProcedure
       .input(TicketSettingsUpdateSchema)
       .mutation(async ({ input }) => {
@@ -983,72 +929,6 @@ export const ticketsRouter = router({
             cause: error,
           })
         }
-      }),
-
-    updateCapacity: ticketingAdminProcedure
-      .input(UpdateTicketCapacitySchema)
-      .mutation(async ({ input }) => {
-        const conferenceId = await resolveConferenceId()
-        const { capacity } = input
-        const result = await updateTicketCapacity(conferenceId, capacity)
-
-        revalidateTag('admin:tickets', 'default')
-        // `ticketCapacity`/`ticketTargets` live on the CONFERENCE document, which
-        // the cached conference read serves through its `...` spread.
-        // `admin:tickets` never reaches that entry, so the public ticket surfaces
-        // kept serving the old numbers until it expired on its own.
-        revalidateTag(conferenceTag(conferenceId), 'default')
-
-        return result
-      }),
-
-    updateTargets: ticketingAdminProcedure
-      .input(UpdateTicketTargetsSchema)
-      .mutation(async ({ input }) => {
-        const conferenceId = await resolveConferenceId()
-        const { targets } = input
-        const result = await updateTicketTargets(conferenceId, targets)
-
-        revalidateTag('admin:tickets', 'default')
-        // `ticketCapacity`/`ticketTargets` live on the CONFERENCE document, which
-        // the cached conference read serves through its `...` spread.
-        // `admin:tickets` never reaches that entry, so the public ticket surfaces
-        // kept serving the old numbers until it expired on its own.
-        revalidateTag(conferenceTag(conferenceId), 'default')
-
-        const warnings = redateWarnings(
-          await redatePlanForConference(conferenceId),
-        )
-        return { ...result, marketingWarnings: warnings }
-      }),
-
-    toggleTargetTracking: ticketingAdminProcedure
-      .input(ToggleTargetTrackingSchema)
-      .mutation(async ({ input }) => {
-        const conferenceId = await resolveConferenceId()
-        const { enabled } = input
-
-        const conference = await getTicketSettings(conferenceId)
-        const currentTargets = conference.ticketTargets || {}
-
-        const updatedTargets = {
-          ...currentTargets,
-          enabled,
-        }
-
-        const result = await updateTicketTargets(conferenceId, updatedTargets)
-
-        revalidateTag('admin:tickets', 'default')
-        // `ticketCapacity`/`ticketTargets` live on the CONFERENCE document, which
-        // the cached conference read serves through its `...` spread.
-        // `admin:tickets` never reaches that entry, so the public ticket surfaces
-        // kept serving the old numbers until it expired on its own.
-        revalidateTag(conferenceTag(conferenceId), 'default')
-
-        const warnings = redateWarnings(
-          await redatePlanForConference(conferenceId),
-        )
-        return { ...result, marketingWarnings: warnings }
       }),
 
     /**
@@ -1107,40 +987,6 @@ export const ticketsRouter = router({
           basedOn: input.basedOn,
         })
       }),
-
-    getTicketTypes: ticketingAdminProcedure.query(async () => {
-      try {
-        const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain()
-
-        if (conferenceError || !conference.checkinEventId) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Conference checkin configuration not found',
-          })
-        }
-
-        const eventId = conference.checkinEventId
-        const { provider } = await checkin()
-        const eventData = await provider.listDiscounts(eventId)
-
-        return {
-          success: true,
-          ticketTypes: eventData.ticketTypes,
-          count: eventData.ticketTypes.length,
-          eventId,
-        }
-      } catch (error) {
-        if (error instanceof TRPCError) {
-          throw error
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch ticket types',
-          cause: error,
-        })
-      }
-    }),
 
     getDiscountCodes: ticketingAdminProcedure
       .input(GetDiscountsSchema)
@@ -1622,38 +1468,6 @@ export const ticketsRouter = router({
           })
         }
       }),
-
-    getPageContent: ticketingAdminProcedure.query(async () => {
-      const conferenceId = await resolveConferenceId()
-
-      try {
-        const query = `*[_type == "conference" && _id == $conferenceId][0]{
-          _id,
-          ticketCustomization,
-          ticketInclusions,
-          ticketFaqs,
-          vanityMetrics
-        }`
-
-        const conference = await clientWrite.fetch(query, { conferenceId })
-
-        if (!conference) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Conference not found',
-          })
-        }
-
-        return conference
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch ticket page content',
-          cause: error,
-        })
-      }
-    }),
 
     updatePageContent: ticketingAdminProcedure
       .input(UpdateTicketPageContentSchema)

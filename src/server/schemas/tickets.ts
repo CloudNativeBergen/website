@@ -94,18 +94,6 @@ export const GetPaymentDetailsSchema = z.object({
   orderId: z.number().min(1, 'Order ID is required'),
 })
 
-export const UpdateTicketCapacitySchema = z.object({
-  capacity: z.number().min(1, 'Capacity must be at least 1'),
-})
-
-export const UpdateTicketTargetsSchema = z.object({
-  targets: SalesTargetConfigSchema,
-})
-
-export const ToggleTargetTrackingSchema = z.object({
-  enabled: z.boolean(),
-})
-
 /**
  * Can this ticket-type name be carried in a Sanity patch PATH?
  *

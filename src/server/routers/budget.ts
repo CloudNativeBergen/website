@@ -3,7 +3,6 @@ import { TRPCError } from '@trpc/server'
 import {
   BudgetNotFoundError,
   createBudgetForConference,
-  getBudgetForConference,
   patchBudgetForConference,
 } from '@/lib/budget/sanity'
 import { ensureUniqueArrayKeys } from '@/lib/sanity/helpers'
@@ -42,15 +41,6 @@ function wrapUnknown(error: unknown, message: string): never {
 }
 
 export const budgetRouter = router({
-  get: adminProcedure.query(async () => {
-    const conferenceId = await resolveConferenceId()
-    try {
-      return { budget: await getBudgetForConference(conferenceId) }
-    } catch (error) {
-      wrapUnknown(error, 'Failed to load budget')
-    }
-  }),
-
   create: adminProcedure.mutation(async () => {
     const conferenceId = await resolveConferenceId()
     try {

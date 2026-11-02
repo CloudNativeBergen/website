@@ -223,30 +223,6 @@ describe('proposal router', () => {
     })
   })
 
-  describe('list', () => {
-    it('should reject unauthenticated requests', async () => {
-      const caller = createAnonymousCaller()
-      await expect(caller.proposal.list()).rejects.toMatchObject({
-        code: 'UNAUTHORIZED',
-      })
-    })
-
-    it('should return proposals for authenticated user', async () => {
-      vi.mocked(getProposals).mockResolvedValue({
-        proposals: [mockProposal] as any,
-        proposalsError: null,
-      })
-
-      const caller = createAuthenticatedCaller(regularSpeaker._id)
-      const result = await caller.proposal.list()
-      expect(result).toHaveLength(1)
-      expect(result[0]._id).toBe('proposal-1')
-      expect(getProposals).toHaveBeenCalledWith(
-        expect.objectContaining({ speakerId: regularSpeaker._id }),
-      )
-    })
-  })
-
   describe('getById', () => {
     it('should reject unauthenticated requests', async () => {
       const caller = createAnonymousCaller()

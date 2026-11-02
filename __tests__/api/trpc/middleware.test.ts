@@ -34,8 +34,8 @@ describe('tRPC middleware', () => {
     it('should reject unauthenticated requests', async () => {
       const caller = createAnonymousCaller()
 
-      await expect(caller.proposal.list()).rejects.toThrow(TRPCError)
-      await expect(caller.proposal.list()).rejects.toMatchObject({
+      await expect(caller.speaker.getCurrent()).rejects.toThrow(TRPCError)
+      await expect(caller.speaker.getCurrent()).rejects.toMatchObject({
         code: 'UNAUTHORIZED',
       })
     })
@@ -44,7 +44,7 @@ describe('tRPC middleware', () => {
       // This will fail because of missing mock data, but it should NOT throw UNAUTHORIZED
       const caller = createAuthenticatedCaller()
       try {
-        await caller.proposal.list()
+        await caller.speaker.getCurrent()
       } catch (error) {
         expect(error).toBeInstanceOf(TRPCError)
         expect((error as TRPCError).code).not.toBe('UNAUTHORIZED')
