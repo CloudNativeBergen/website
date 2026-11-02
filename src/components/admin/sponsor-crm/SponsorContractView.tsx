@@ -18,6 +18,7 @@ import {
   DocumentTextIcon,
   PaperAirplaneIcon,
   ArrowPathIcon,
+  ArrowDownTrayIcon,
   ArrowTopRightOnSquareIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
@@ -189,6 +190,14 @@ export function SponsorContractView({
             <CheckCircleIcon className="size-4" />
             Looks good, continue
           </button>
+          <a
+            href={`data:application/pdf;base64,${pdfData}`}
+            download={pdfFilename || 'contract.pdf'}
+            className="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-white/10"
+          >
+            <ArrowDownTrayIcon className="size-4" />
+            Download PDF
+          </a>
           <button
             type="button"
             onClick={() => {
