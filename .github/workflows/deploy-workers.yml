@@ -1,0 +1,104 @@
+name: Deploy Workers
+
+# Deploys the api.konf.app gateway (api/) and its subgraph Workers
+# (services/*) to Cloudflare (#1799, epic #1772).
+#
+# - Pull request: deploys to the `preview` env with the preview token.
+# - Push to main: deploys to the `production` env. The job runs in the GitHub
+#   environment `workers-production`, so its required reviewers approve every
+#   production deploy, D1 migrations included.
+#
+# Required configuration, per GitHub environment (`workers-preview`,
+# `workers-production`; `Preview`/`Production` belong to Vercel):
+#   secrets.CLOUDFLARE_API_TOKEN   - a separate token per environment; the
+#                                    preview token never sees production
+#   secrets.CLOUDFLARE_ACCOUNT_ID  - repository or environment secret
+
+on:
+  pull_request:
+    paths:
+      - 'api/**'
+      - 'services/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-workers.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - 'services/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-workers.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  # PLACEHOLDER until #1785 (Hive Gateway in api/) lands. #1799 wants this
+  # job to compose the full and @tag(public) supergraphs from every subgraph
+  # SDL, fail when they do not compose, diff the public contract against the
+  # last build, and fail when the public contract contains the internal
+  # provisioning mutations. There is no gateway or composition tooling in the
+  # repo yet, so there is nothing to compose against. Replace this step with
+  # the real check in the PR that adds the gateway; deploy keeps `needs` on it.
+  compose:
+    name: Compose supergraph (placeholder)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          echo "::notice::Supergraph composition and contract diff are not wired yet (needs #1785)."
+
+  deploy:
+    name: Deploy (${{ github.event_name == 'push' && 'production' || 'preview' }})
+    needs: compose
+    # Fork PRs get no secrets; skip them rather than fail.
+    # Dependabot PRs get no environment secrets either.
+    if: github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ github.event_name == 'push' && 'workers-production' || 'workers-preview' }}
+    concurrency:
+      group: deploy-workers-${{ github.event_name == 'push' && 'production' || 'preview' }}
+      cancel-in-progress: false
+    env:
+      DEPLOY_ENV: ${{ github.event_name == 'push' && 'production' || 'preview' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # ratchet:actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # ratchet:pnpm/action-setup@v6.1.0
+        with:
+          version: 10.24.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Fails the run before any deploy if the subgraphs do not compose.
+      - name: Compose supergraph
+        run: pnpm --filter @runkonf/api compose
+
+      # Order matters: tenant-directory binds identity, and the gateway will
+      # bind both, so a binding target is always deployed first.
+      - name: Migrate and deploy
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          for pkg in identity tenant-directory; do
+            echo "::group::$pkg ($DEPLOY_ENV)"
+            pnpm --filter "@runkonf/$pkg" exec wrangler d1 migrations apply DB --remote --env "$DEPLOY_ENV"
+            pnpm --filter "@runkonf/$pkg" exec wrangler deploy --env "$DEPLOY_ENV"
+            echo "::endgroup::"
+          done
+          pnpm --filter @runkonf/api exec wrangler deploy --env "$DEPLOY_ENV"

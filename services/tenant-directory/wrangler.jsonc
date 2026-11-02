@@ -24,6 +24,44 @@
       "migrations_dir": "migrations",
     },
   ],
+  "env": {
+    "preview": {
+      "name": "konf-tenant-directory-preview",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "konf-tenant-directory-preview",
+          "database_id": "82b1dd25-4dcd-4b18-b712-86eb02b5c0df",
+          "migrations_dir": "migrations",
+        },
+      ],
+      "services": [
+        {
+          "binding": "IDENTITY",
+          "entrypoint": "Organizations",
+          "service": "konf-identity-preview",
+        },
+      ],
+    },
+    "production": {
+      "name": "konf-tenant-directory",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "konf-tenant-directory",
+          "database_id": "73355a8e-33d8-4bf3-8115-013768c6520c",
+          "migrations_dir": "migrations",
+        },
+      ],
+      "services": [
+        {
+          "binding": "IDENTITY",
+          "service": "konf-identity",
+          "entrypoint": "Organizations",
+        },
+      ],
+    },
+  },
   "observability": {
     "enabled": true,
     "traces": {

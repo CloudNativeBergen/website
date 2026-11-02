@@ -23,6 +23,14 @@ package codegen
 	serviceBindings: *[] | [...{binding: string, service: string, entrypoint?: string}]
 	if tenancy {crons: []}
 
+	// D1 database ids per environment. The owner creates each database once
+	// (`wrangler d1 create konf-<name>[-preview]`) and commits the id in
+	// service.cue. CI dry-runs an environment while its id is TO_BE_CREATED.
+	d1: {
+		preview:    *"TO_BE_CREATED" | string
+		production: *"TO_BE_CREATED" | string
+	}
+
 	_workerName:       "konf-\(name)"
 	_scheduledImport:  *"" | string
 	_scheduledHandler: *"" | string
@@ -90,6 +98,40 @@ package codegen
 			}
 			if len(serviceBindings) > 0 {
 				"services": serviceBindings
+			}
+
+			// d1_databases and services are not inherited by wrangler envs, so
+			// each env repeats them. Preview binds preview Workers only: no
+			// production data or keys reach a preview (epic #1772, req. 8).
+			"env": {
+				"preview": {
+					"name": "\(_workerName)-preview"
+					"d1_databases": [{
+						"binding":        "DB"
+						"database_name":  "\(_workerName)-preview"
+						"database_id":    d1.preview
+						"migrations_dir": "migrations"
+					}]
+					if len(serviceBindings) > 0 {
+						"services": [for b in serviceBindings {
+							binding: b.binding
+							service: "\(b.service)-preview"
+							if b.entrypoint != _|_ {entrypoint: b.entrypoint}
+						}]
+					}
+				}
+				"production": {
+					"name": _workerName
+					"d1_databases": [{
+						"binding":        "DB"
+						"database_name":  _workerName
+						"database_id":    d1.production
+						"migrations_dir": "migrations"
+					}]
+					if len(serviceBindings) > 0 {
+						"services": serviceBindings
+					}
+				}
 			}
 
 			// OTLP export to Grafana Cloud. The destinations are configured
