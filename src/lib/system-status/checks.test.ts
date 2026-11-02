@@ -10,10 +10,26 @@ vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: (...args: unknown[]) => fetchMock(...args) },
 }))
 
+const isPlatformMock = vi.fn(async (orgId?: string | null) => Boolean(orgId))
+vi.mock('@/lib/features/platform', () => ({
+  isPlatformOrganization: (orgId?: string | null) => isPlatformMock(orgId),
+}))
+const resolveTicketingMock = vi.fn()
+vi.mock('@/lib/tickets/provider', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/tickets/provider')>()),
+  resolveTicketingCredentials: (...args: unknown[]) =>
+    resolveTicketingMock(...args),
+}))
+const slackTokenMock = vi.fn(async (): Promise<string | undefined> => undefined)
+vi.mock('@/lib/slack/token', () => ({
+  resolveConferenceSlackToken: () => slackTokenMock(),
+}))
+
 import { collectStaticChecks, buildSystemChecks } from './checks'
 
 const CONFERENCE = {
   _id: 'conf-1',
+  organization: { _ref: 'org-1' },
   organizer: 'Test Org',
   cfpEmail: 'cfp@example.com',
   salesNotificationChannel: '#updates',
@@ -527,5 +543,52 @@ describe('types helpers', () => {
     expect(
       worstStatus([{ id: 'x', group: 'push', label: 'X', status: 'off' }]),
     ).toBe('off')
+  })
+})
+
+describe('buildSystemChecks — per-organization rows (#822, #890)', () => {
+  beforeEach(() => {
+    fetchMock.mockResolvedValue(0)
+    isPlatformMock.mockResolvedValue(true)
+    resolveTicketingMock.mockResolvedValue(null)
+    slackTokenMock.mockResolvedValue(undefined)
+  })
+
+  it('shows a non-platform org only rows about its own configuration', async () => {
+    isPlatformMock.mockResolvedValue(false)
+    vi.stubEnv('SLACK_BOT_TOKEN', 'platform-slack-token')
+    vi.stubEnv('CHECKIN_WEBHOOK_SECRET', 'platform-webhook-secret')
+    slackTokenMock.mockResolvedValue('platform-slack-token')
+
+    const checks = await buildSystemChecks(CONFERENCE)
+    const groups = new Set<string>(checks.map((c) => c.group))
+    for (const g of ['build', 'sanity', 'auth', 'email', 'push', 'ops'])
+      expect(groups.has(g)).toBe(false)
+
+    // Slack via a mirror override: presence only, no platform fingerprint.
+    expect(byId(checks, 'slack.botToken').value).toBe('configured')
+    // Ticketing reflects the org's own (absent) credentials, not platform env.
+    expect(byId(checks, 'tickets.webhookSecret').status).toBe('off')
+    expect(byId(checks, 'tickets.apiCreds').status).toBe('off')
+    expect(checks.some((c) => FINGERPRINT_RE.test(c.value ?? ''))).toBe(false)
+  })
+
+  it('reports the tenant-resolved ticketing credentials', async () => {
+    isPlatformMock.mockResolvedValue(false)
+    resolveTicketingMock.mockResolvedValue({
+      apiKey: 'k',
+      apiSecret: 's',
+      webhookSecret: 'tenant-secret',
+    })
+    const checks = await buildSystemChecks(CONFERENCE)
+    expect(resolveTicketingMock).toHaveBeenCalledWith('org-1', 'checkin')
+    expect(byId(checks, 'tickets.apiCreds').status).toBe('ok')
+    expect(byId(checks, 'tickets.webhookSecret').value).toMatch(FINGERPRINT_RE)
+  })
+
+  it('keeps the full registry for the platform org', async () => {
+    const checks = await buildSystemChecks(CONFERENCE)
+    expect(byId(checks, 'auth.secret')).toBeDefined()
+    expect(byId(checks, 'sanity.readProbe')).toBeDefined()
   })
 })

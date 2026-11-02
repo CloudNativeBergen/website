@@ -12,7 +12,12 @@ import {
 import {
   getTicketingProvider,
   platformCheckinCredentials,
+  resolveTicketingCredentials,
+  conferenceProviderType,
+  ticketingCredentialsConfigured,
 } from '@/lib/tickets/provider'
+import { isPlatformOrganization } from '@/lib/features/platform'
+import { resolveConferenceSlackToken } from '@/lib/slack/token'
 import { providerMap } from '@/lib/auth'
 import { BADGE_GENERATOR_VERSION } from '@/lib/badge/version'
 import { listDomainVerificationViews } from '@/lib/domain-verification'
@@ -1042,28 +1047,113 @@ async function workshopSignInChecks(
 }
 
 /**
- * Full registry: synchronous env/file/conference checks PLUS the live Sanity
- * read probe and the push-subscription count. The live probes are appended into
- * their groups so the UI renders them alongside the static rows.
+ * Rows that describe the requesting organization's OWN configuration. Every
+ * other row reports platform env or cross-tenant state, so only the platform
+ * org sees it (#822).
+ */
+function isTenantRow(check: SystemCheck): boolean {
+  return (
+    check.group === 'conference' ||
+    check.group === 'tickets' ||
+    check.group === 'slack' ||
+    check.id === 'badges.outdated' ||
+    check.id.startsWith('auth.workshopSignIn')
+  )
+}
+
+/**
+ * Ticketing and Slack rows from the credentials THIS org would actually use
+ * (#890), not raw env. A non-platform org's ticketing credentials come only
+ * from its own per-org secrets, so their fingerprint is its own. A Slack token
+ * may be the platform bot (via a `slack-mirror` override), so non-platform
+ * orgs get presence only, never the fingerprint.
+ */
+async function tenantCredentialChecks(
+  conference: ConferenceForSystemChecks,
+  platform: boolean,
+): Promise<SystemCheck[]> {
+  const orgId = conference.organization?._ref
+  const providerType = conferenceProviderType(conference)
+  const [creds, slackToken] = await Promise.all([
+    resolveTicketingCredentials(orgId, providerType),
+    resolveConferenceSlackToken(conference),
+  ])
+  const apiOn = Boolean(
+    creds && ticketingCredentialsConfigured(providerType, creds),
+  )
+  const webhookSecret = creds?.webhookSecret
+  return [
+    {
+      id: 'tickets.apiCreds',
+      group: 'tickets',
+      label: 'Ticketing API credentials',
+      status: apiOn ? 'ok' : 'off',
+      value: apiOn ? 'configured' : 'not set',
+      detail: apiOn
+        ? undefined
+        : 'No ticketing API credentials for this organization',
+    },
+    webhookSecret
+      ? {
+          id: 'tickets.webhookSecret',
+          group: 'tickets',
+          label: 'Ticketing webhook secret',
+          status: 'ok',
+          value: fingerprint(webhookSecret),
+        }
+      : {
+          id: 'tickets.webhookSecret',
+          group: 'tickets',
+          label: 'Ticketing webhook secret',
+          status: 'off',
+          value: 'not set',
+          detail: 'Inbound ticket-sold webhooks cannot be verified',
+        },
+    slackToken
+      ? {
+          id: 'slack.botToken',
+          group: 'slack',
+          label: 'Slack bot token',
+          status: 'ok',
+          value: platform ? fingerprint(slackToken) : 'configured',
+          detail: 'Messages are posted to Slack',
+        }
+      : {
+          id: 'slack.botToken',
+          group: 'slack',
+          label: 'Slack bot token',
+          status: 'off',
+          value: 'not set',
+          detail: 'No Slack token for this organization; messages are skipped',
+        },
+  ]
+}
+
+/**
+ * Full registry: synchronous env/file/conference checks PLUS the live probes,
+ * appended into their groups so the UI renders them alongside the static rows.
+ * Ticketing and Slack rows are replaced by the org's resolved credentials, and
+ * a non-platform org sees only rows about its own configuration.
  */
 export async function buildSystemChecks(
   conference: ConferenceForSystemChecks,
 ): Promise<SystemCheck[]> {
-  const staticChecks = buildChecks(conference)
-  const [readProbe, pushCount, badgesOutdated, workshopSignIn] =
+  const platform = await isPlatformOrganization(conference.organization?._ref)
+  const [tenantCreds, badgesOutdated, workshopSignIn, platformProbes] =
     await Promise.all([
-      sanityReadProbe(),
-      pushSubscriptionCount(),
+      tenantCredentialChecks(conference, platform),
       badgesOutdatedProbe(conference._id),
       workshopSignInChecks(conference),
+      platform ? Promise.all([sanityReadProbe(), pushSubscriptionCount()]) : [],
     ])
-  return [
-    ...staticChecks,
-    readProbe,
-    pushCount,
+  const resolved = new Map(tenantCreds.map((c) => [c.id, c]))
+  const checks = [
+    ...buildChecks(conference).map((c) => resolved.get(c.id) ?? c),
+    ...platformProbes,
     badgesOutdated,
     ...workshopSignIn,
   ]
+  return platform ? checks : checks.filter(isTenantRow)
 }
 
 /** Exposed for unit tests: the synchronous, side-effect-light checks only. */
