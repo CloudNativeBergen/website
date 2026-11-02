@@ -31,6 +31,11 @@ class Conferences extends ScopedRepository {
     if (!row || (!row.published && !this.tenant.orgRole)) return null
     return row
   }
+
+  /** Entity resolution: an id other than the envelope's resolves to null. */
+  async byId(id: string): Promise<ConferenceRow | null> {
+    return id === this.columns.conference_id ? this.current() : null
+  }
 }
 
 export function createData(d1: D1Database, envelope: Envelope) {

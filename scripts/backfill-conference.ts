@@ -34,10 +34,10 @@ async function main() {
     "orgs": *[_type == "organization" && !(_id in path("drafts.**"))]{ _id, name, "slug": slug.current, plan },
     "verifications": *[_type == "domainVerification" && !(_id in path("drafts.**"))]{ hostname, "conferenceId": conference._ref, status },
     "docs": *[_type == "conference" && !(_id in path("drafts.**"))]{
-    _id, "orgId": organization._ref, title, tagline, description, city, country,
+    _id, "orgId": organization._ref, title, tagline, city, country,
     venueName, venueAddress, startDate, endDate, lifecycleStatus, domains, visibility,
     logoBright, logoDark, logomarkBright, logomarkDark, backgroundPattern, theme,
-    registrationLink, socialLinks, homepageSections
+    registrationLink, socialLinks
   }
   }`)
   const routable = new Set(

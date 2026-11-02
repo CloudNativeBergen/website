@@ -79,7 +79,7 @@ beforeEach(() => {
 
 const QUERY = '{ conference { id title socialLinks } }'
 
-async function gql(as?: Envelope | string) {
+async function gql(as?: Envelope | string, query = QUERY) {
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   if (as)
     headers[ENVELOPE_HEADER] =
@@ -88,7 +88,7 @@ async function gql(as?: Envelope | string) {
     new Request('http://conference/graphql', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ query: QUERY }),
+      body: JSON.stringify({ query }),
     }),
     env,
   )
@@ -114,6 +114,25 @@ describe('conference', () => {
     ]) {
       expect((await gql(as)).body.data.conference).toBeNull()
     }
+  })
+
+  it("resolves the Conference entity only for the envelope's own id", async () => {
+    const entity = async (id: string, as: Envelope) =>
+      (
+        await gql(
+          as,
+          `{ _entities(representations: [{ __typename: "Conference", id: "${id}" }]) { ... on Conference { id title } } }`,
+        )
+      ).body.data._entities[0]
+    expect(await entity('conf-a', tenant('org-a', 'conf-a'))).toEqual({
+      id: 'conf-a',
+      title: 'A 2026',
+    })
+    // Tenant B's id under A's envelope, member or not.
+    expect(await entity('conf-b', tenant('org-a', 'conf-a'))).toBeNull()
+    expect(
+      await entity('conf-b', tenant('org-a', 'conf-a', 'admin')),
+    ).toBeNull()
   })
 
   it('hides an unpublished Conference from anonymous callers only', async () => {

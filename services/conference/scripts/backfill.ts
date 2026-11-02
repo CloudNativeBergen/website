@@ -8,7 +8,6 @@ export interface SanityConference {
   orgId?: string | null
   title?: string | null
   tagline?: string | null
-  description?: string | null
   city?: string | null
   country?: string | null
   venueName?: string | null
@@ -25,7 +24,6 @@ export interface SanityConference {
   theme?: { primaryColor?: string | null; accentColor?: string | null } | null
   registrationLink?: string | null
   socialLinks?: string[] | null
-  homepageSections?: unknown[] | null
 }
 
 export interface Row {
@@ -34,7 +32,6 @@ export interface Row {
   published: 0 | 1
   title: string
   tagline: string | null
-  description: string | null
   city: string | null
   country: string | null
   venue_name: string | null
@@ -51,7 +48,6 @@ export interface Row {
   accent_color: string | null
   registration_link: string | null
   social_links: string
-  homepage_sections: string
 }
 
 const s = (v: string | null | undefined) => v?.trim() || null
@@ -81,7 +77,6 @@ export function mapBackfill(
         : 1,
       title: s(c.title) ?? c._id,
       tagline: s(c.tagline),
-      description: s(c.description),
       city: s(c.city),
       country: s(c.country),
       venue_name: s(c.venueName),
@@ -99,7 +94,6 @@ export function mapBackfill(
       accent_color: s(c.theme?.accentColor),
       registration_link: s(c.registrationLink),
       social_links: JSON.stringify(c.socialLinks ?? []),
-      homepage_sections: JSON.stringify(c.homepageSections ?? []),
     })
     if (!c.title?.trim()) anomalies.push(`conference ${c._id}: no title`)
   }

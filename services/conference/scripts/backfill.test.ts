@@ -12,7 +12,6 @@ const docs = [
     visibility: 'unlisted',
     theme: { primaryColor: '#123456' },
     socialLinks: ['https://x.example'],
-    homepageSections: [{ _type: 'homepageHero', _key: 'h' }],
   },
   { _id: 'conf-a', orgId: 'org-a', title: '' },
   { _id: 'conf-orphan', title: 'Orphan' },
@@ -44,7 +43,6 @@ describe('mapBackfill', () => {
       primary_color: '#123456',
       accent_color: null,
       social_links: '["https://x.example"]',
-      homepage_sections: '[{"_type":"homepageHero","_key":"h"}]',
     })
     expect(b.rows[0]).toMatchObject({
       title: 'conf-a',

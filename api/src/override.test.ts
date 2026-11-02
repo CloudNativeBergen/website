@@ -1,6 +1,8 @@
-// Strangler fig (#1835): services/conference takes Query.conference over from
-// services/content with @override(from: "content", label: "conference"), and
-// Hive Gateway routes it per request through `progressiveOverride`. The
+// #1835: Conference is one entity in content and conference. services/conference
+// takes Query.conference and the structured fields over from services/content
+// with @override(from: "content", label: "conference"), and Hive Gateway routes
+// them per request through `progressiveOverride`; editorial fields stay in
+// content. The
 // label is static in the schema; which tenants it is on for is a per-request
 // decision, so one label can roll a domain out tenant by tenant.
 import { describe, expect, it } from 'vitest'
@@ -36,6 +38,11 @@ describe('content in the supergraph', () => {
     expect(supergraph).toMatch(
       /override: "content", overrideLabel: "conference"/,
     )
+    // Editorial fields have no copy in the conference service.
+    const native = sdl(conference)
+    expect(native).toMatch(/type Conference @key\(fields: "id"/)
+    for (const f of ['description', 'homepageSections'])
+      expect(native).not.toMatch(new RegExp(`\\b${f}:`))
   })
 })
 

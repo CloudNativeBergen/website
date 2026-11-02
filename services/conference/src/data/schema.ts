@@ -7,7 +7,6 @@ export const conferences = sqliteTable('conferences', {
   published: integer('published', { mode: 'boolean' }).notNull(),
   title: text('title').notNull(),
   tagline: text('tagline'),
-  description: text('description'),
   city: text('city'),
   country: text('country'),
   venueName: text('venue_name'),
@@ -26,5 +25,4 @@ export const conferences = sqliteTable('conferences', {
   socialLinks: text('social_links', { mode: 'json' })
     .$type<string[]>()
     .notNull(),
-  homepageSections: text('homepage_sections').notNull(),
 })

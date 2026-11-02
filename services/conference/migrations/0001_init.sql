@@ -1,5 +1,6 @@
--- The public face of one Conference edition: what the public site reads for
--- the homepage, branding, venue, dates and links. One row per Conference;
+-- The structured public face of one Conference edition: branding, venue,
+-- dates and links. Editorial copy (description, homepage sections) stays in
+-- Sanity and is served by services/content. One row per Conference;
 -- conference_id is the Sanity _id, the same id tenant-directory uses.
 CREATE TABLE conferences (
   conference_id TEXT PRIMARY KEY,
@@ -8,7 +9,6 @@ CREATE TABLE conferences (
   published INTEGER NOT NULL DEFAULT 0 CHECK (published IN (0, 1)),
   title TEXT NOT NULL,
   tagline TEXT,
-  description TEXT,
   city TEXT,
   country TEXT,
   venue_name TEXT,
@@ -25,8 +25,6 @@ CREATE TABLE conferences (
   accent_color TEXT,
   registration_link TEXT,
   -- JSON array of URLs.
-  social_links TEXT NOT NULL DEFAULT '[]',
-  -- JSON: the Sanity homepageSections array, verbatim.
-  homepage_sections TEXT NOT NULL DEFAULT '[]'
+  social_links TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX conferences_tenant ON conferences (org_id, conference_id);
