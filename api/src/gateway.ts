@@ -57,11 +57,12 @@ const TENANT_QUERY =
 /** Identity JWT claim: the origin the session was handed off to (#1803). */
 export const SESSION_ORIGIN_CLAIM = 'origin'
 
-function sameHost(origin: unknown, host: string): boolean {
+/** The normalised host of an origin URL, or null. */
+function hostOf(origin: unknown): string | null {
   try {
-    return typeof origin === 'string' && new URL(origin).host === host
+    return typeof origin === 'string' ? new URL(origin).host || null : null
   } catch {
-    return false
+    return null
   }
 }
 
@@ -80,16 +81,10 @@ function reject(status: 401 | 429 | 503, code: string, message: string) {
  */
 // TODO: cache lookups (KV or per-isolate memory).
 async function resolveTenant(
-  origin: string | null,
+  host: string | null,
   env: Env,
 ): Promise<Tenant | null> {
-  if (!origin) return null
-  let host: string
-  try {
-    host = new URL(origin).host
-  } catch {
-    return null
-  }
+  if (!host) return null
   const res = await env.DIRECTORY.fetch(
     'https://tenant-directory.internal/graphql',
     {
@@ -193,12 +188,12 @@ export function createGateway(supergraph: string) {
         env.SITE_PUBLIC_KEYS,
       )
       forwarded.headers.delete(SITE_ASSERTION_HEADER)
+      const host = hostOf(
+        siteHost ? `https://${siteHost}` : request.headers.get('origin'),
+      )
       let tenant: Tenant | null
       try {
-        tenant = await resolveTenant(
-          siteHost ? `https://${siteHost}` : request.headers.get('origin'),
-          env,
-        )
+        tenant = await resolveTenant(host, env)
       } catch {
         return reject(503, 'UNAVAILABLE', 'tenant lookup unavailable')
       }
@@ -221,13 +216,11 @@ export function createGateway(supergraph: string) {
           if (!token) throw new Error('malformed authorization header')
           const payload = await verifyIdentity(token, env)
           userId = payload.sub!
-          // A server-lane call on behalf of a user: the asserted host must be
-          // the origin the session was handed off to.
-          // TODO(#1803): identity sets SESSION_ORIGIN_CLAIM at handoff; then
-          // refuse a server-lane user call that lacks it.
-          const origin = payload[SESSION_ORIGIN_CLAIM]
-          if (siteHost && origin !== undefined && !sameHost(origin, siteHost))
-            throw new Error('asserted host is not the session origin')
+          // In both lanes the resolved host must be the origin the session
+          // was handed off to; a token without that claim is refused.
+          const claimed = hostOf(payload[SESSION_ORIGIN_CLAIM])
+          if (!claimed || claimed !== host)
+            throw new Error('host is not the session origin')
         } catch {
           return reject(401, 'UNAUTHENTICATED', 'invalid identity token')
         }

@@ -20,6 +20,7 @@ async function siteAssertion(host: string, jwkJson: string): Promise<string> {
   return new SignJWT({ host })
     .setProtectedHeader({ alg: 'EdDSA', kid: jwk.kid })
     .setIssuer('konf-site')
+    .setAudience('konf-gateway')
     .setIssuedAt(now)
     .setExpirationTime(now + ASSERTION_SECONDS)
     .setJti(crypto.randomUUID())

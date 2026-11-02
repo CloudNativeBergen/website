@@ -111,7 +111,7 @@ const jwt = (
   } = {},
 ) => {
   const iat = opts.iat ?? Math.floor(Date.now() / 1000)
-  return new SignJWT(opts.claims ?? {})
+  return new SignJWT(opts.claims ?? { [SESSION_ORIGIN_CLAIM]: VERIFIED })
     .setProtectedHeader({ alg: 'EdDSA', kid: 'k1' })
     .setSubject('user_1')
     .setAudience(opts.aud ?? 'konf-gateway')
@@ -389,12 +389,20 @@ describe('gateway', () => {
 
   describe('site service identity', () => {
     const assertion = (
-      opts: { kid?: string; key?: CryptoKey; iat?: number; ttl?: number } = {},
+      opts: {
+        kid?: string
+        key?: CryptoKey
+        iat?: number
+        ttl?: number
+        aud?: string
+      } = {},
     ) => {
       const iat = opts.iat ?? Math.floor(Date.now() / 1000)
       return new SignJWT({ host: 'conf.example' })
         .setProtectedHeader({ alg: 'EdDSA', kid: opts.kid ?? 's1' })
         .setIssuer('konf-site')
+        .setAudience(opts.aud ?? 'konf-gateway')
+        .setJti(crypto.randomUUID())
         .setIssuedAt(iat)
         .setExpirationTime(iat + (opts.ttl ?? 60))
         .sign(opts.key ?? siteKeys[opts.kid ?? 's1'])
@@ -433,6 +441,7 @@ describe('gateway', () => {
       ],
       ['too long-lived', () => assertion({ ttl: 3600 })],
       ['unknown-kid', () => assertion({ kid: 'gone', key: siteKeys.s1 })],
+      ['wrong-audience', () => assertion({ aud: 'konf-subgraphs' })],
       ['garbage', async () => 'nope'],
     ])('ignores a %s assertion and falls back to Origin', async (_, token) => {
       const { env, envelopes } = makeEnv()
@@ -451,6 +460,56 @@ describe('gateway', () => {
         env,
       )
       expect(envelopes).toEqual([null])
+    })
+
+    it('ignores a replayed assertion', async () => {
+      const token = await assertion()
+      const first = makeEnv()
+      await gateway.fetch(
+        post(SUBGRAPH_QUERY, { [SITE_ASSERTION_HEADER]: token }),
+        first.env,
+      )
+      const again = makeEnv()
+      await gateway.fetch(
+        post(SUBGRAPH_QUERY, { [SITE_ASSERTION_HEADER]: token }),
+        again.env,
+      )
+      expect(await minted(first.envelopes)).toMatchObject(TENANT)
+      expect(again.envelopes).toEqual([null])
+    })
+
+    it.each([
+      [
+        'differs from Origin',
+        { [SESSION_ORIGIN_CLAIM]: 'https://other.example' },
+      ],
+      ['is missing', {}],
+    ])(
+      'refuses a browser-lane user whose session origin %s',
+      async (_, claims) => {
+        const { env, envelopes } = makeEnv()
+        const res = await gateway.fetch(
+          post(SUBGRAPH_QUERY, {
+            origin: VERIFIED,
+            authorization: `Bearer ${await jwt({ claims })}`,
+          }),
+          env,
+        )
+        expect(res.status).toBe(401)
+        expect(envelopes).toEqual([])
+      },
+    )
+
+    it('refuses a server-lane user without a session origin', async () => {
+      const { env } = makeEnv()
+      const res = await gateway.fetch(
+        post(SUBGRAPH_QUERY, {
+          [SITE_ASSERTION_HEADER]: await assertion(),
+          authorization: `Bearer ${await jwt({ claims: {} })}`,
+        }),
+        env,
+      )
+      expect(res.status).toBe(401)
     })
 
     it('refuses a user whose session origin differs from the asserted host', async () => {

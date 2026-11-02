@@ -55,12 +55,14 @@ Run `pnpm compose` first, then deploy with `npx wrangler deploy --env preview` o
 The site (Vercel, preview and production) holds the other halves:
 `KONF_SITE_SIGNING_KEY`, a private Ed25519 JWK with a `kid`, and the same
 `CLIENT_IP_SECRET`. With them the site's server lane sends `x-konf-service`, a
-60-second EdDSA JWT `{ iss: "konf-site", host, iat, exp, jti }`, and the
-signed visitor IP. The gateway resolves the tenant from the asserted host
-instead of `Origin` only when the assertion verifies against a key in
-`SITE_PUBLIC_KEYS`; a missing, forged or stale one is ignored. The assertion
-grants no role. With a user JWT as well, the JWT's `origin` claim (the
-handoff origin, #1803) must match the asserted host, or the call gets 401.
+60-second EdDSA JWT `{ iss: "konf-site", aud: "konf-gateway", host, iat, exp,
+jti }`, and the signed visitor IP. The gateway resolves the tenant from the
+asserted host instead of `Origin` only when the assertion verifies against a
+key in `SITE_PUBLIC_KEYS`; a missing, forged, stale or replayed (same `jti`,
+per isolate) one is ignored. The assertion grants no role.
+Every identity JWT, in both lanes, must carry an `origin` claim (the handoff
+origin, #1803) whose host equals the resolved host (asserted host, else
+`Origin`); a missing or different claim gets 401.
 Unset secrets leave the old behaviour: anonymous, tenant from `Origin`.
 
 To rotate, add the new kid to `SITE_PUBLIC_KEYS`, switch

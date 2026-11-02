@@ -5,7 +5,19 @@ import { importSPKI, jwtVerify, type JWTHeaderParameters } from 'jose'
 
 export const SITE_ASSERTION_HEADER = 'x-konf-service'
 const ISSUER = 'konf-site'
+const AUDIENCE = 'konf-gateway'
 const MAX_SECONDS = 60
+
+// ponytail: per-isolate replay set; a replay on another isolate within 60 s
+// gets through. Move to a Durable Object if that matters.
+const seen = new Map<string, number>()
+function replayed(jti: string, exp: number): boolean {
+  const now = Date.now() / 1000
+  for (const [k, e] of seen) if (e < now) seen.delete(k)
+  if (seen.has(jti)) return true
+  seen.set(jti, exp)
+  return false
+}
 
 type Keys = Map<string, ReturnType<typeof importSPKI>>
 const cache = new Map<string, Keys>()
@@ -40,13 +52,15 @@ export async function verifySiteAssertion(
       },
       {
         issuer: ISSUER,
+        audience: AUDIENCE,
         algorithms: ['EdDSA'],
-        requiredClaims: ['exp', 'iat'],
+        requiredClaims: ['exp', 'iat', 'jti'],
         maxTokenAge: MAX_SECONDS,
         clockTolerance: 5,
       },
     )
     if (payload.exp! - payload.iat! > MAX_SECONDS) return null
+    if (replayed(payload.jti!, payload.exp! + 5)) return null
     return typeof payload.host === 'string' && payload.host
       ? payload.host
       : null
