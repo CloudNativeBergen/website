@@ -6,14 +6,14 @@ vi.mock('html2canvas-pro', () => ({ default: h.render }))
 
 import { captureImage } from './capture'
 
-function card() {
+function card(src = 'https://cdn.sanity.io/images/p/d/speaker.png') {
   const element = document.createElement('div')
   Object.defineProperties(element, {
     offsetWidth: { value: 300, configurable: true },
     offsetHeight: { value: 200, configurable: true },
   })
   const image = document.createElement('img')
-  image.src = 'https://images.example.org/speaker.png'
+  image.src = src
   Object.defineProperties(image, {
     complete: { value: true, configurable: true },
     naturalWidth: { value: 300 },
@@ -75,7 +75,7 @@ describe('shared studio raster capture', () => {
     h.render.mockResolvedValue(canvas(png))
     const result = captureImage(element)
     await vi.advanceTimersByTimeAsync(300)
-    expect(image.src).toBe('https://images.example.org/speaker.png')
+    expect(image.src).toBe('https://cdn.sanity.io/images/p/d/speaker.png')
     image.dispatchEvent(new Event('load'))
     await vi.advanceTimersByTimeAsync(0)
     await vi.advanceTimersByTimeAsync(300)
@@ -83,6 +83,18 @@ describe('shared studio raster capture', () => {
     image.dispatchEvent(new Event('load'))
     await vi.advanceTimersByTimeAsync(300)
     expect(await result).toBe(png)
+    expect(h.render).toHaveBeenCalledOnce()
+  })
+
+  it('loads non-Sanity images directly instead of proxying them', async () => {
+    const { element, image } = card('https://placehold.co/100.png')
+    h.render.mockImplementation(async () => {
+      expect(image.getAttribute('src')).toBe('https://placehold.co/100.png')
+      return canvas(new Blob(['x'], { type: 'image/png' }))
+    })
+    const result = captureImage(element)
+    await vi.runAllTimersAsync()
+    await result
     expect(h.render).toHaveBeenCalledOnce()
   })
 

@@ -7,6 +7,7 @@ import { denyNonOrganizer } from '@/lib/authz/page-guard'
 import { headers } from 'next/headers'
 import { isTicketingEnabledForConference } from '@/lib/features/ticketing'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
+import { resolveEnabledFeaturesForConference } from '@/lib/features/enabled'
 
 // `?sponsor=<id>&view=<tab>` opens that sponsor in the shared record panel.
 export const metadata = { title: SPONSOR_PAGE_TITLES.tiers }
@@ -75,6 +76,7 @@ export default async function AdminSponsorTiers() {
       sponsorTiers={sponsorTiers}
       sponsorsByTier={sponsorsByTier}
       sortedTierNames={sortedTierNames}
+      enabledFeatures={await resolveEnabledFeaturesForConference(conference)}
     />
   )
 }

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { unstable_noStore as noStore } from 'next/cache'
 
@@ -35,7 +34,15 @@ const ALLOWED_IMAGE_HOST = 'cdn.sanity.io'
  *   would be forwarded as an `Authorization` header, so reject them outright.
  */
 function isAllowedImageTarget(url: URL): boolean {
+  // The route is unauthenticated (it only relays public CDN bytes), so it must
+  // not relay EVERY Sanity project's assets: only this app's project and
+  // dataset. Read per request so a missing env fails closed.
+  const projectId = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID
+  const dataset = process.env.NEXT_PUBLIC_SANITY_DATASET
   return (
+    !!projectId &&
+    !!dataset &&
+    url.pathname.startsWith(`/images/${projectId}/${dataset}/`) &&
     url.protocol === 'https:' &&
     url.hostname === ALLOWED_IMAGE_HOST &&
     url.port === '' &&
@@ -49,11 +56,6 @@ export async function GET(request: NextRequest) {
   // Cleared in `finally` so a failed fetch does not leave the timer running.
   let timeoutId: ReturnType<typeof setTimeout> | undefined
   try {
-    const session = await auth()
-    if (!session?.user || !session?.speaker) {
-      return new NextResponse('Authentication required', { status: 401 })
-    }
-
     const { searchParams } = new URL(request.url)
     const imageUrl = searchParams.get('url')
 
