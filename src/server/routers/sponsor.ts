@@ -662,6 +662,7 @@ async function sendContractSignedSlackNotification(
   try {
     const salesChannel = sfc.conference?._id
       ? await clientReadUncached.fetch<string | null>(
+          // groq-global-scoped: point read of the sponsor's own conference.
           `*[_type == "conference" && _id == $id][0].salesNotificationChannel`,
           { id: sfc.conference._id },
         )
@@ -1896,8 +1897,8 @@ export const sponsorRouter = router({
         // acceptable: the UI disables the button after first click, and a
         // duplicate would be immediately visible to the organizer to delete.
         const existingSponsorForConference = await clientReadUncached.fetch(
-          `*[_type == "sponsorForConference" && sponsor._ref == $sponsor && conference._ref == $conference][0]`,
-          { sponsor: data.sponsor, conference: data.conference },
+          `*[_type == "sponsorForConference" && sponsor._ref == $sponsor && conference._ref == $conferenceId][0]`,
+          { sponsor: data.sponsor, conferenceId: data.conference },
         )
 
         if (existingSponsorForConference) {
@@ -2296,6 +2297,8 @@ export const sponsorRouter = router({
 
           if (input.status === 'closed-won') {
             const tierlessIds = await clientReadUncached.fetch<string[]>(
+              // groq-global-scoped: requireDocumentsInCurrentConference(ids)
+              // ran above.
               `*[_type == "sponsorForConference" && _id in $ids && !defined(tier->_id)]._id`,
               { ids: input.ids },
             )
@@ -4424,6 +4427,7 @@ export const sponsorRouter = router({
         }
         const conferenceId = await resolveConferenceId()
         const conference = await clientReadUncached.fetch<Conference | null>(
+          // groq-global-scoped: point read of the request's own conference.
           `*[_type == "conference" && _id == $id][0]`,
           { id: conferenceId },
         )
