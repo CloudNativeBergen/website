@@ -16,6 +16,7 @@ import {
   type TenantEnvelope,
 } from '@runkonf/tenancy'
 import { clientIp } from './client-ip'
+import { SITE_ASSERTION_HEADER, verifySiteAssertion } from './site-identity'
 
 export interface Env {
   /** wrangler secret put ENVELOPE_PRIVATE_KEY (PKCS8 PEM, EdDSA, per env) */
@@ -32,6 +33,8 @@ export interface Env {
   API_IP_LIMITER: RateLimit
   /** wrangler secret put CLIENT_IP_SECRET: shared with the site to sign the client IP */
   CLIENT_IP_SECRET?: string
+  /** wrangler secret put SITE_PUBLIC_KEYS: JSON `{ kid: SPKI PEM }` of the site's server-lane keys */
+  SITE_PUBLIC_KEYS?: string
   /** konf-identity `Membership` entrypoint (RPC) */
   MEMBERSHIP: {
     principal(
@@ -50,6 +53,17 @@ const ENVELOPE_TTL_SECONDS = 60
 
 const TENANT_QUERY =
   'query($host: String!) { tenantByHost(host: $host) { orgId conferenceId } }'
+
+/** Identity JWT claim: the origin the session was handed off to (#1803). */
+export const SESSION_ORIGIN_CLAIM = 'origin'
+
+function sameHost(origin: unknown, host: string): boolean {
+  try {
+    return typeof origin === 'string' && new URL(origin).host === host
+  } catch {
+    return false
+  }
+}
 
 type Tenant = { orgId: string; conferenceId: string | null }
 
@@ -97,7 +111,7 @@ export function createGateway(supergraph: string) {
   let signer: Awaited<ReturnType<typeof createSigner>> | undefined
   let jwks: ReturnType<typeof createRemoteJWKSet> | undefined
 
-  async function verifyIdentity(token: string, env: Env): Promise<string> {
+  async function verifyIdentity(token: string, env: Env) {
     // jose caches the key set and refetches on an unknown kid (rotation).
     jwks ??= createRemoteJWKSet(
       new URL('https://identity.internal/api/auth/jwks'),
@@ -115,7 +129,7 @@ export function createGateway(supergraph: string) {
     if (payload.exp! - payload.iat! > JWT_MAX_SECONDS) {
       throw new Error('identity token lifetime exceeds the maximum')
     }
-    return payload.sub!
+    return payload
   }
 
   const runtime = createGatewayRuntime<{ env: Env }>({
@@ -172,10 +186,19 @@ export function createGateway(supergraph: string) {
       if (!(await env.API_IP_LIMITER.limit({ key: `ip:${ip}` })).success)
         return reject(429, 'RATE_LIMITED', 'too many requests')
 
-      // 2. Tenant from Origin, never from a header or argument.
+      // 2. Tenant from Origin, never from an argument. The site's server lane
+      // asserts its host instead; that wins only when the assertion verifies.
+      const siteHost = await verifySiteAssertion(
+        request.headers.get(SITE_ASSERTION_HEADER),
+        env.SITE_PUBLIC_KEYS,
+      )
+      forwarded.headers.delete(SITE_ASSERTION_HEADER)
       let tenant: Tenant | null
       try {
-        tenant = await resolveTenant(request.headers.get('origin'), env)
+        tenant = await resolveTenant(
+          siteHost ? `https://${siteHost}` : request.headers.get('origin'),
+          env,
+        )
       } catch {
         return reject(503, 'UNAVAILABLE', 'tenant lookup unavailable')
       }
@@ -196,7 +219,15 @@ export function createGateway(supergraph: string) {
         const token = /^Bearer +(\S+)$/i.exec(auth.trim())?.[1]
         try {
           if (!token) throw new Error('malformed authorization header')
-          userId = await verifyIdentity(token, env)
+          const payload = await verifyIdentity(token, env)
+          userId = payload.sub!
+          // A server-lane call on behalf of a user: the asserted host must be
+          // the origin the session was handed off to.
+          // TODO(#1803): identity sets SESSION_ORIGIN_CLAIM at handoff; then
+          // refuse a server-lane user call that lacks it.
+          const origin = payload[SESSION_ORIGIN_CLAIM]
+          if (siteHost && origin !== undefined && !sameHost(origin, siteHost))
+            throw new Error('asserted host is not the session origin')
         } catch {
           return reject(401, 'UNAUTHENTICATED', 'invalid identity token')
         }

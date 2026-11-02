@@ -1,12 +1,13 @@
 import 'server-only'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag, domainTag } from '@/lib/cache/tags'
+import { konfApiHeaders } from '@/lib/konf-api/client'
 import { CONFERENCE_CACHE_LIFE } from './cache-life'
 import type { Conference } from './types'
 
 // Spike for #1772 (#1833): read core conference fields from the Konf GraphQL
-// gateway. The gateway resolves the tenant from Origin; anonymous is enough
-// for public fields.
+// gateway. The gateway resolves the tenant from the signed site assertion
+// (else Origin); anonymous is enough for public fields.
 const KONF_API_URL = 'https://api.konf.app/graphql'
 const TIMEOUT_MS = 2000
 
@@ -53,10 +54,8 @@ export async function fetchKonfApiConference(
   cacheTag(conferenceTag(conferenceId))
   const res = await fetch(KONF_API_URL, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      origin: `https://${host}`,
-    },
+    // Cached across visitors, so no client IP (see konfApiHeaders).
+    headers: await konfApiHeaders(host),
     body: JSON.stringify({ query: QUERY }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
     cache: 'no-store',

@@ -1,11 +1,18 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { SignJWT, exportJWK, generateKeyPair, type CryptoKey } from 'jose'
+import {
+  SignJWT,
+  exportJWK,
+  exportSPKI,
+  generateKeyPair,
+  type CryptoKey,
+} from 'jose'
 import {
   ENVELOPE_HEADER,
   generateEnvelopeKeyPair,
   verifyEnvelope,
 } from '@runkonf/tenancy'
-import { createGateway, type Env } from './gateway'
+import { createGateway, SESSION_ORIGIN_CLAIM, type Env } from './gateway'
+import { SITE_ASSERTION_HEADER } from './site-identity'
 import { compose } from './supergraph'
 import { SIGNED_IP_HEADER, signClientIp } from './client-ip'
 
@@ -24,6 +31,9 @@ const TENANT = { orgId: 'org_a', conferenceId: 'conf_a' }
 let envelopeKeys: { privatePem: string; publicPem: string }
 let identityKey: CryptoKey
 let jwks: unknown
+const siteKeys: Record<string, CryptoKey> = {}
+let sitePublicKeys: string
+let strangerKey: CryptoKey
 const gateway = createGateway(compose())
 
 beforeAll(async () => {
@@ -31,6 +41,14 @@ beforeAll(async () => {
   const pair = await generateKeyPair('EdDSA', { extractable: true })
   identityKey = pair.privateKey
   jwks = { keys: [{ ...(await exportJWK(pair.publicKey)), kid: 'k1' }] }
+  const spki: Record<string, string> = {}
+  for (const kid of ['s1', 's2']) {
+    const p = await generateKeyPair('EdDSA', { extractable: true })
+    siteKeys[kid] = p.privateKey
+    spki[kid] = await exportSPKI(p.publicKey)
+  }
+  sitePublicKeys = JSON.stringify(spki)
+  strangerKey = (await generateKeyPair('EdDSA')).privateKey
 })
 
 /**
@@ -66,6 +84,7 @@ function makeEnv(
     API_LIMITER: { limit: vi.fn(async () => ({ success: allow })) },
     API_IP_LIMITER: { limit: vi.fn(async () => ({ success: ipAllow })) },
     CLIENT_IP_SECRET: 'ip-secret',
+    SITE_PUBLIC_KEYS: sitePublicKeys,
     MEMBERSHIP: {
       principal: vi.fn(async () => ({ ...role, platformOperator: false })),
     },
@@ -83,10 +102,16 @@ const post = (body: unknown, headers: Record<string, string> = {}): Request =>
 const SUBGRAPH_QUERY = { query: '{ tenantByHost(host: "q") { orgId } }' }
 
 const jwt = (
-  opts: { aud?: string; iss?: string; ttl?: number; iat?: number } = {},
+  opts: {
+    aud?: string
+    iss?: string
+    ttl?: number
+    iat?: number
+    claims?: Record<string, unknown>
+  } = {},
 ) => {
   const iat = opts.iat ?? Math.floor(Date.now() / 1000)
-  return new SignJWT({})
+  return new SignJWT(opts.claims ?? {})
     .setProtectedHeader({ alg: 'EdDSA', kid: 'k1' })
     .setSubject('user_1')
     .setAudience(opts.aud ?? 'konf-gateway')
@@ -359,6 +384,99 @@ describe('gateway', () => {
       )
       expect(res.status).toBe(429)
       expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('site service identity', () => {
+    const assertion = (
+      opts: { kid?: string; key?: CryptoKey; iat?: number; ttl?: number } = {},
+    ) => {
+      const iat = opts.iat ?? Math.floor(Date.now() / 1000)
+      return new SignJWT({ host: 'conf.example' })
+        .setProtectedHeader({ alg: 'EdDSA', kid: opts.kid ?? 's1' })
+        .setIssuer('konf-site')
+        .setIssuedAt(iat)
+        .setExpirationTime(iat + (opts.ttl ?? 60))
+        .sign(opts.key ?? siteKeys[opts.kid ?? 's1'])
+    }
+    const minted = async (envelopes: (string | null)[]) =>
+      envelopes[0] && verifyEnvelope(envelopes[0], envelopeKeys.publicPem)
+
+    it.each(['s1', 's2'])(
+      'trusts the asserted host over Origin (kid %s)',
+      async (kid) => {
+        const { env, envelopes, forwarded } = makeEnv()
+        await gateway.fetch(
+          post(SUBGRAPH_QUERY, {
+            origin: 'https://unverified.example',
+            [SITE_ASSERTION_HEADER]: await assertion({ kid }),
+          }),
+          env,
+        )
+        // Anonymous: the assertion grants no role.
+        expect(await minted(envelopes)).toEqual({
+          typ: 'tenant',
+          ...TENANT,
+          userId: null,
+          orgRole: null,
+          scopes: [],
+        })
+        expect(forwarded[0].get(SITE_ASSERTION_HEADER)).toBeNull()
+      },
+    )
+
+    it.each([
+      ['forged', () => assertion({ key: strangerKey })],
+      [
+        'expired',
+        () => assertion({ iat: Math.floor(Date.now() / 1000) - 120 }),
+      ],
+      ['too long-lived', () => assertion({ ttl: 3600 })],
+      ['unknown-kid', () => assertion({ kid: 'gone', key: siteKeys.s1 })],
+      ['garbage', async () => 'nope'],
+    ])('ignores a %s assertion and falls back to Origin', async (_, token) => {
+      const { env, envelopes } = makeEnv()
+      await gateway.fetch(
+        post(SUBGRAPH_QUERY, { [SITE_ASSERTION_HEADER]: await token() }),
+        env,
+      )
+      expect(envelopes).toEqual([null])
+    })
+
+    it('ignores every assertion when SITE_PUBLIC_KEYS is unset', async () => {
+      const { env, envelopes } = makeEnv()
+      delete (env as { SITE_PUBLIC_KEYS?: string }).SITE_PUBLIC_KEYS
+      await gateway.fetch(
+        post(SUBGRAPH_QUERY, { [SITE_ASSERTION_HEADER]: await assertion() }),
+        env,
+      )
+      expect(envelopes).toEqual([null])
+    })
+
+    it('refuses a user whose session origin differs from the asserted host', async () => {
+      const { env, envelopes } = makeEnv()
+      const res = await gateway.fetch(
+        post(SUBGRAPH_QUERY, {
+          [SITE_ASSERTION_HEADER]: await assertion(),
+          authorization: `Bearer ${await jwt({ claims: { [SESSION_ORIGIN_CLAIM]: 'https://other.example' } })}`,
+        }),
+        env,
+      )
+      expect(res.status).toBe(401)
+      expect(envelopes).toEqual([])
+    })
+
+    it('accepts a user whose session origin is the asserted host', async () => {
+      const { env, envelopes } = makeEnv()
+      const res = await gateway.fetch(
+        post(SUBGRAPH_QUERY, {
+          [SITE_ASSERTION_HEADER]: await assertion(),
+          authorization: `Bearer ${await jwt({ claims: { [SESSION_ORIGIN_CLAIM]: VERIFIED } })}`,
+        }),
+        env,
+      )
+      expect(res.status).toBe(200)
+      expect(await minted(envelopes)).toMatchObject({ userId: 'user_1' })
     })
   })
 })

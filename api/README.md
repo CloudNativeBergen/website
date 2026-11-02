@@ -46,9 +46,29 @@ Run `pnpm compose` first, then deploy with `npx wrangler deploy --env preview` o
 
 ## Secrets
 
-| Secret                 | Envs                | What                                   |
-| ---------------------- | ------------------- | -------------------------------------- |
-| `ENVELOPE_PRIVATE_KEY` | preview, production | PKCS8 PEM (EdDSA) that signs envelopes |
+| Secret                 | Envs                | What                                                            |
+| ---------------------- | ------------------- | --------------------------------------------------------------- |
+| `ENVELOPE_PRIVATE_KEY` | preview, production | PKCS8 PEM (EdDSA) that signs envelopes                          |
+| `SITE_PUBLIC_KEYS`     | preview, production | JSON `{ "<kid>": "<SPKI PEM>" }` of the site's server-lane keys |
+| `CLIENT_IP_SECRET`     | preview, production | HMAC secret shared with the site for `x-konf-client-ip`         |
+
+The site (Vercel, preview and production) holds the other halves:
+`KONF_SITE_SIGNING_KEY`, a private Ed25519 JWK with a `kid`, and the same
+`CLIENT_IP_SECRET`. With them the site's server lane sends `x-konf-service`, a
+60-second EdDSA JWT `{ iss: "konf-site", host, iat, exp, jti }`, and the
+signed visitor IP. The gateway resolves the tenant from the asserted host
+instead of `Origin` only when the assertion verifies against a key in
+`SITE_PUBLIC_KEYS`; a missing, forged or stale one is ignored. The assertion
+grants no role. With a user JWT as well, the JWT's `origin` claim (the
+handoff origin, #1803) must match the asserted host, or the call gets 401.
+Unset secrets leave the old behaviour: anonymous, tenant from `Origin`.
+
+To rotate, add the new kid to `SITE_PUBLIC_KEYS`, switch
+`KONF_SITE_SIGNING_KEY`, then drop the old kid. A key pair:
+
+```sh
+node -e 'const {generateKeyPairSync:g}=require("crypto");const k=g("ed25519");console.log(JSON.stringify({...k.privateKey.export({format:"jwk"}),kid:"site-1"}));console.log(k.publicKey.export({type:"spki",format:"pem"}))'
+```
 
 Subgraphs get the matching public key as `GATEWAY_PUBLIC_KEY`. The var
 `IDENTITY_ISSUER` (in `wrangler.jsonc`, per env) is the identity JWT `iss`.
