@@ -11,6 +11,11 @@ are reached over service bindings, never HTTP.
   `Membership`), and mints one 60-second envelope for the subgraphs. Masked
   errors, no HTTP batching, depth and alias limits at validation, and a cost
   limit on each subgraph request.
+  Rate limit (`API_LIMITER`, 300 requests a minute) per caller: `user:<sub>`
+  from the verified JWT, else `anon:<orgId>:<ip>`, checked before identity and
+  `Membership` work. 429 `RATE_LIMITED` when spent.
+- `src/client-ip.ts`: the client IP, from the site's HMAC-signed
+  `x-konf-client-ip` header (`CLIENT_IP_SECRET`) or `CF-Connecting-IP`
 - `src/supergraph.ts`: composes the public contract of the subgraph schemas
   (no `@tag(internal)`, no unreachable types); `pnpm compose` writes
   `supergraph.graphql` (not committed; `dev` and `build` run it)

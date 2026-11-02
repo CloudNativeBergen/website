@@ -7,6 +7,7 @@ import {
 } from '@runkonf/tenancy'
 import { createGateway, type Env } from './gateway'
 import { compose } from './supergraph'
+import { SIGNED_IP_HEADER, signClientIp } from './client-ip'
 
 // vitest.config.ts aliases `jose` to a key-ignoring stub; load the real one so
 // signatures, audiences and expiry are actually checked.
@@ -36,7 +37,10 @@ beforeAll(async () => {
  * Fake tenant-directory: knows only conf.example, and records the envelope
  * header of every subgraph call (the gateway's own lookup sends none).
  */
-function makeEnv(role: { orgRole: string | null } = { orgRole: 'admin' }) {
+function makeEnv(
+  role: { orgRole: string | null } = { orgRole: 'admin' },
+  allow = true,
+) {
   const envelopes: (string | null)[] = []
   const forwarded: Headers[] = []
   const env = {
@@ -58,6 +62,8 @@ function makeEnv(role: { orgRole: string | null } = { orgRole: 'admin' }) {
       },
     },
     IDENTITY: { fetch: async () => Response.json(jwks) },
+    API_LIMITER: { limit: vi.fn(async () => ({ success: allow })) },
+    CLIENT_IP_SECRET: 'ip-secret',
     MEMBERSHIP: {
       principal: vi.fn(async () => ({ ...role, platformOperator: false })),
     },
@@ -268,5 +274,72 @@ describe('gateway', () => {
     }
     const res = await gateway.fetch(post(SUBGRAPH_QUERY), env)
     expect(await res.text()).not.toContain('secret detail')
+  })
+
+  describe('rate limiting', () => {
+    const keys = (env: Env) =>
+      vi.mocked(env.API_LIMITER.limit).mock.calls.map(([o]) => o.key)
+
+    it('keys anonymous callers on tenant and the signed client IP', async () => {
+      const { env } = makeEnv()
+      const signed = await signClientIp('203.0.113.7', 'ip-secret')
+      await gateway.fetch(
+        post(SUBGRAPH_QUERY, {
+          origin: VERIFIED,
+          'cf-connecting-ip': '10.0.0.1',
+          [SIGNED_IP_HEADER]: signed,
+        }),
+        env,
+      )
+      await gateway.fetch(
+        post(SUBGRAPH_QUERY, {
+          'cf-connecting-ip': '10.0.0.1',
+          [SIGNED_IP_HEADER]: signed.replace('.7.', '.8.'),
+        }),
+        env,
+      )
+      expect(keys(env)).toEqual([
+        'anon:org_a:203.0.113.7',
+        'anon:null:10.0.0.1',
+      ])
+    })
+
+    it('keys signed-in callers on the verified sub', async () => {
+      const { env } = makeEnv()
+      await gateway.fetch(
+        post(SUBGRAPH_QUERY, {
+          origin: VERIFIED,
+          authorization: `Bearer ${await jwt()}`,
+        }),
+        env,
+      )
+      expect(keys(env)).toEqual(['user:user_1'])
+    })
+
+    it('answers 429 before any identity or Membership work', async () => {
+      const { env } = makeEnv(undefined, false)
+      const res = await gateway.fetch(
+        post(SUBGRAPH_QUERY, { origin: VERIFIED }),
+        env,
+      )
+      expect(res.status).toBe(429)
+      expect(await res.json()).toMatchObject({
+        errors: [{ extensions: { code: 'RATE_LIMITED' } }],
+      })
+      expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+    })
+
+    it('answers 429 to a signed-in caller before Membership', async () => {
+      const { env } = makeEnv(undefined, false)
+      const res = await gateway.fetch(
+        post(SUBGRAPH_QUERY, {
+          origin: VERIFIED,
+          authorization: `Bearer ${await jwt()}`,
+        }),
+        env,
+      )
+      expect(res.status).toBe(429)
+      expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+    })
   })
 })

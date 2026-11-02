@@ -15,6 +15,7 @@ import {
   ENVELOPE_HEADER,
   type TenantEnvelope,
 } from '@runkonf/tenancy'
+import { clientIp } from './client-ip'
 
 export interface Env {
   /** wrangler secret put ENVELOPE_PRIVATE_KEY (PKCS8 PEM, EdDSA, per env) */
@@ -25,6 +26,10 @@ export interface Env {
   DIRECTORY: Fetcher
   /** konf-identity default entrypoint: only /api/auth/* (JWKS) answers */
   IDENTITY: Fetcher
+  /** Per-request limit (Workers Rate Limiting), keyed per caller (#1790) */
+  API_LIMITER: RateLimit
+  /** wrangler secret put CLIENT_IP_SECRET: shared with the site to sign the client IP */
+  CLIENT_IP_SECRET?: string
   /** konf-identity `Membership` entrypoint (RPC) */
   MEMBERSHIP: {
     principal(
@@ -46,7 +51,7 @@ const TENANT_QUERY =
 
 type Tenant = { orgId: string; conferenceId: string | null }
 
-function reject(status: 401 | 503, code: string, message: string) {
+function reject(status: 401 | 429 | 503, code: string, message: string) {
   return Response.json(
     { errors: [{ message, extensions: { code } }] },
     { status },
@@ -168,10 +173,20 @@ export function createGateway(supergraph: string) {
         return reject(503, 'UNAVAILABLE', 'tenant lookup unavailable')
       }
 
-      // 3. Identity: optional, but a header that is present must verify.
+      // 3. Rate limit (#1790) before the identity and Membership work for
+      // anonymous callers; signed-in callers are keyed on the verified sub.
+      const limited = async (key: string) =>
+        !(await env.API_LIMITER.limit({ key })).success
+      const tooMany = () => reject(429, 'RATE_LIMITED', 'too many requests')
+
+      // 4. Identity: optional, but a header that is present must verify.
       let userId: string | null = null
       const auth = request.headers.get('authorization')
-      if (auth !== null) {
+      if (auth === null) {
+        const ip = await clientIp(request, env.CLIENT_IP_SECRET)
+        if (await limited(`anon:${tenant?.orgId ?? null}:${ip}`))
+          return tooMany()
+      } else {
         const token = /^Bearer +(\S+)$/i.exec(auth.trim())?.[1]
         try {
           if (!token) throw new Error('malformed authorization header')
@@ -179,9 +194,10 @@ export function createGateway(supergraph: string) {
         } catch {
           return reject(401, 'UNAUTHENTICATED', 'invalid identity token')
         }
+        if (await limited(`user:${userId}`)) return tooMany()
       }
 
-      // 4 + 5. With a tenant: live orgRole, then one short-lived envelope.
+      // 5 + 6. With a tenant: live orgRole, then one short-lived envelope.
       // Without one, subgraphs see an anonymous request with no envelope.
       // TODO: platform context for operators flagged in identity.
       if (tenant) {
