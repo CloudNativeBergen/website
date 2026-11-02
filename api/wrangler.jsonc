@@ -45,7 +45,10 @@
       "name": "konf-api-preview",
       "workers_dev": true,
       // Placeholder until identity's preview host exists.
-      "vars": {        "IDENTITY_ISSUER": "https://id-preview.konf.app",        "OVERRIDE_TENANTS": {},      },
+      "vars": {
+        "IDENTITY_ISSUER": "https://id-preview.konf.app",
+        "OVERRIDE_TENANTS": {},
+      },
       "ratelimits": [
         {
           "name": "API_LIMITER",
@@ -74,7 +77,10 @@
       "name": "konf-api",
       "routes": [{ "pattern": "api.konf.app", "custom_domain": true }],
       // Identity has its own host: auth.konf.app is the NextAuth site today.
-      "vars": {        "IDENTITY_ISSUER": "https://id.konf.app",        "OVERRIDE_TENANTS": {},      },
+      "vars": {
+        "IDENTITY_ISSUER": "https://id.konf.app",
+        "OVERRIDE_TENANTS": {},
+      },
       "ratelimits": [
         {
           "name": "API_LIMITER",
