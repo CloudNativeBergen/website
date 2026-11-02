@@ -16,7 +16,7 @@ import {
   conferenceProviderType,
   ticketingCredentialsConfigured,
 } from '@/lib/tickets/provider'
-import { isPlatformOrganization } from '@/lib/features/platform'
+import { envCredentialsBelongToOrg } from '@/lib/secrets/store'
 import { resolveConferenceSlackToken } from '@/lib/slack/token'
 import { providerMap } from '@/lib/auth'
 import { BADGE_GENERATOR_VERSION } from '@/lib/badge/version'
@@ -222,7 +222,14 @@ function plainCheck(
  * consulted precisely when something is already wrong. The worst verdict wins
  * and the offending address is always named.
  */
-function senderPolicyCheck(conference: ConferenceForSystemChecks): SystemCheck {
+/**
+ * `platform` false: the tenant still learns its mail is rejected/rewritten,
+ * but not the platform's sending domains or env var names.
+ */
+function senderPolicyCheck(
+  conference: ConferenceForSystemChecks,
+  platform = true,
+): SystemCheck {
   const meta = {
     id: 'email.senderPolicy',
     group: 'email' as const,
@@ -265,13 +272,14 @@ function senderPolicyCheck(conference: ConferenceForSystemChecks): SystemCheck {
       ...meta,
       status: 'error',
       value: `REJECTED: ${name(rejected).join(', ')}`,
-      detail:
-        `Resend will reject mail from ${name(rejected).join(', ')} — the platform account can only send from [${domains}], ` +
-        'and EMAIL_FALLBACK_FROM is unset so there is nothing deliverable to send as instead. ' +
-        'Set EMAIL_FALLBACK_FROM to an address on a verified domain, or verify these domains and add them to EMAIL_SENDING_DOMAINS.' +
-        (verified.length > 0
-          ? ` Unaffected: ${name(verified).join(', ')} — so some mail still sends and its success proves nothing about the above.`
-          : ''),
+      detail: !platform
+        ? `Mail from ${name(rejected).join(', ')} cannot be delivered: the domain is not verified for sending. Contact the platform operator.`
+        : `Resend will reject mail from ${name(rejected).join(', ')} — the platform account can only send from [${domains}], ` +
+          'and EMAIL_FALLBACK_FROM is unset so there is nothing deliverable to send as instead. ' +
+          'Set EMAIL_FALLBACK_FROM to an address on a verified domain, or verify these domains and add them to EMAIL_SENDING_DOMAINS.' +
+          (verified.length > 0
+            ? ` Unaffected: ${name(verified).join(', ')} — so some mail still sends and its success proves nothing about the above.`
+            : ''),
     }
   }
 
@@ -280,13 +288,14 @@ function senderPolicyCheck(conference: ConferenceForSystemChecks): SystemCheck {
       ...meta,
       status: 'warn',
       value: `Sent as ${evaluated[0].policy.from} — rewritten for ${name(rewritten).join(', ')}`,
-      detail:
-        `${name(rewritten).join(', ')} ${rewritten.length === 1 ? 'is' : 'are'} not verified on the platform Resend account [${domains}], ` +
-        'so that mail is sent from the platform sender with the conference name and the original address as Reply-To. ' +
-        'Verify the domain in Resend and add it to EMAIL_SENDING_DOMAINS to send as itself.' +
-        (verified.length > 0
-          ? ` Sending as itself: ${name(verified).join(', ')}.`
-          : ''),
+      detail: !platform
+        ? `${name(rewritten).join(', ')} ${rewritten.length === 1 ? 'is' : 'are'} not verified for sending, so that mail is sent from the platform sender with the original address as Reply-To.`
+        : `${name(rewritten).join(', ')} ${rewritten.length === 1 ? 'is' : 'are'} not verified on the platform Resend account [${domains}], ` +
+          'so that mail is sent from the platform sender with the conference name and the original address as Reply-To. ' +
+          'Verify the domain in Resend and add it to EMAIL_SENDING_DOMAINS to send as itself.' +
+          (verified.length > 0
+            ? ` Sending as itself: ${name(verified).join(', ')}.`
+            : ''),
     }
   }
 
@@ -294,7 +303,9 @@ function senderPolicyCheck(conference: ConferenceForSystemChecks): SystemCheck {
     ...meta,
     status: 'ok',
     value: `${name(verified).join(', ')} — all verified`,
-    detail: `Every sender is on a domain verified on the sending account [${domains}]`,
+    detail: platform
+      ? `Every sender is on a domain verified on the sending account [${domains}]`
+      : 'Every sender is on a verified domain',
   }
 }
 
@@ -1056,6 +1067,7 @@ function isTenantRow(check: SystemCheck): boolean {
     check.group === 'conference' ||
     check.group === 'tickets' ||
     check.group === 'slack' ||
+    check.id === 'email.senderPolicy' ||
     check.id === 'badges.outdated' ||
     check.id.startsWith('auth.workshopSignIn')
   )
@@ -1130,30 +1142,52 @@ async function tenantCredentialChecks(
 }
 
 /**
- * Full registry: synchronous env/file/conference checks PLUS the live probes,
- * appended into their groups so the UI renders them alongside the static rows.
- * Ticketing and Slack rows are replaced by the org's resolved credentials, and
- * a non-platform org sees only rows about its own configuration.
+ * Platform standing for the status page: the same rule the secrets chain uses
+ * to hand out env credentials, so a single-tenant deploy (no `PLATFORM_ORG_ID`)
+ * keeps the full registry.
+ */
+function seesPlatformRows(conference: ConferenceForSystemChecks): boolean {
+  return envCredentialsBelongToOrg(conference.organization?._ref)
+}
+
+/**
+ * The static registry as THIS org should see it: ticketing and Slack rows from
+ * its resolved credentials, and only its own rows unless it is the platform
+ * org. No live probes, so the activation checklist can use it cheaply and
+ * agree with the settings page by construction.
+ */
+export async function collectOrgChecks(
+  conference: ConferenceForSystemChecks,
+): Promise<SystemCheck[]> {
+  const platform = seesPlatformRows(conference)
+  const resolved = new Map(
+    (await tenantCredentialChecks(conference, platform)).map((c) => [c.id, c]),
+  )
+  const checks = buildChecks(conference).map((c) =>
+    c.id === 'email.senderPolicy'
+      ? senderPolicyCheck(conference, platform)
+      : (resolved.get(c.id) ?? c),
+  )
+  return platform ? checks : checks.filter(isTenantRow)
+}
+
+/**
+ * Full registry: {@link collectOrgChecks} PLUS the live probes, appended into
+ * their groups so the UI renders them alongside the static rows. The
+ * cross-tenant probes run for the platform org only.
  */
 export async function buildSystemChecks(
   conference: ConferenceForSystemChecks,
 ): Promise<SystemCheck[]> {
-  const platform = await isPlatformOrganization(conference.organization?._ref)
-  const [tenantCreds, badgesOutdated, workshopSignIn, platformProbes] =
+  const platform = seesPlatformRows(conference)
+  const [orgChecks, badgesOutdated, workshopSignIn, platformProbes] =
     await Promise.all([
-      tenantCredentialChecks(conference, platform),
+      collectOrgChecks(conference),
       badgesOutdatedProbe(conference._id),
       workshopSignInChecks(conference),
       platform ? Promise.all([sanityReadProbe(), pushSubscriptionCount()]) : [],
     ])
-  const resolved = new Map(tenantCreds.map((c) => [c.id, c]))
-  const checks = [
-    ...buildChecks(conference).map((c) => resolved.get(c.id) ?? c),
-    ...platformProbes,
-    badgesOutdated,
-    ...workshopSignIn,
-  ]
-  return platform ? checks : checks.filter(isTenantRow)
+  return [...orgChecks, ...platformProbes, badgesOutdated, ...workshopSignIn]
 }
 
 /** Exposed for unit tests: the synchronous, side-effect-light checks only. */

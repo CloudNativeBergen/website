@@ -1,5 +1,5 @@
 import 'server-only'
-import { collectStaticChecks } from '@/lib/system-status/checks'
+import { collectOrgChecks } from '@/lib/system-status/checks'
 import type { SystemCheck } from '@/lib/system-status/types'
 import type { ConferenceForSystemChecks } from '@/lib/system-status/types'
 import { resolvePlatformOrgId } from '@/lib/authz/platform'
@@ -195,8 +195,8 @@ async function resolveEventPrepFacts(
  * @param checks     an ALREADY-built `SystemCheck[]` when the caller has one
  *                   (the settings page builds the full set for its own status
  *                   section). Omitted, the static checks are collected here —
- *                   the two ids the checklist reads (`email.resendKey`,
- *                   `slack.botToken`) are both static, so the two paths agree
+ *                   the org-scoped static set (`collectOrgChecks`) that `buildSystemChecks`
+ *                   also builds on, so the two paths agree
  *                   by construction rather than by a second env derivation
  *                   that could drift from the check registry.
  */
@@ -225,7 +225,7 @@ export async function resolveActivationChecklist(
 
   return buildActivationChecklist(
     conference,
-    checks ?? collectStaticChecks(conference),
+    checks ?? (await collectOrgChecks(conference)),
     {
       ticketingAvailable,
       emailDeliveryManagedByPlatform,
