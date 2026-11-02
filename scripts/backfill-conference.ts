@@ -18,13 +18,14 @@
 import { config } from 'dotenv'
 import { writeFileSync } from 'fs'
 import { join, resolve } from 'path'
+import { pathToFileURL } from 'url'
 config({ path: resolve(process.cwd(), '.env') })
 config({ path: resolve(process.cwd(), '.env.local'), override: true })
 
-async function main() {
-  const args = process.argv.slice(2)
+/** Sanity, mapped exactly as the backfill writes it. Also used by parity. */
+export async function loadBackfill() {
   const { clientReadUncached } = await import('../src/lib/sanity/client')
-  const { mapBackfill, toSql } =
+  const { mapBackfill } =
     await import('../services/conference/scripts/backfill')
   const directory =
     await import('../services/tenant-directory/scripts/backfill')
@@ -40,12 +41,15 @@ async function main() {
     registrationLink, socialLinks
   }
   }`)
-  const routable = new Set(
-    directory
-      .mapBackfill(orgs, docs, verifications)
-      .conferences.map((c) => c.id),
-  )
-  const b = mapBackfill(docs, routable)
+  const dir = directory.mapBackfill(orgs, docs, verifications)
+  const routable = new Set(dir.conferences.map((c) => c.id))
+  return { ...mapBackfill(docs, routable), domains: dir.domains }
+}
+
+async function main() {
+  const args = process.argv.slice(2)
+  const b = await loadBackfill()
+  const { toSql } = await import('../services/conference/scripts/backfill')
 
   console.log(`conferences ${b.rows.length}, anomalies ${b.anomalies.length}`)
   for (const a of b.anomalies) console.log(`  ${a}`)
@@ -57,7 +61,8 @@ async function main() {
   console.log(`wrote ${file}`)
 }
 
-main().catch((error) => {
-  console.error(error)
-  process.exit(1)
-})
+if (import.meta.url === pathToFileURL(process.argv[1]).href)
+  main().catch((error) => {
+    console.error(error)
+    process.exit(1)
+  })
