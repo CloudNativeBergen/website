@@ -25,6 +25,7 @@ import {
   buildSchema,
   type GraphQLArgument,
   type GraphQLInputType,
+  type GraphQLOutputType,
   type GraphQLNamedType,
 } from 'graphql'
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
@@ -45,34 +46,15 @@ vi.mock('jose', async () => {
   return import(pathToFileURL(require.resolve('jose')).href)
 })
 // Sanity-backed subgraphs (content): a two-tenant dataset that applies the
-// query's own orgId/conferenceId and fills every projected field.
+// query's own orgId/conferenceId. Each projected field is filled from the
+// public type of the Conference field of the same name (sanityDoc below).
 vi.mock('@sanity/client', () => ({
   createClient: () => ({
     fetch: async (query: string, p: Record<string, string>) => {
       const t = TENANTS.find(
         (t) => p.orgId === ORG[t] && p.conferenceId === CONF[t],
       )
-      if (!t) return null
-      const fields = /\{([^{}]*)\}\s*$/
-        .exec(query)![1]
-        .split(',')
-        .map((f) => f.trim())
-      const text = (f: string) => `${tag(t)} sanity.${f}`
-      return Object.fromEntries(
-        fields.map((f) => [
-          f,
-          f === '_id'
-            ? CONF[t]
-            : f === 'theme'
-              ? {
-                  primaryColor: text('primaryColor'),
-                  accentColor: text('accentColor'),
-                }
-              : /(Links|Sections)$/.test(f)
-                ? [text(f)]
-                : text(f),
-        ]),
-      )
+      return t ? sanityDoc(query, t) : null
     },
   }),
 }))
@@ -200,6 +182,66 @@ const MAX_DEPTH = 8 // gateway limit is 10
 const MAX_ALIASES = 15
 
 const schema = buildSchema(publicSdl())
+
+/** A value of a public output type, every string tagged with the tenant. */
+function fill(type: GraphQLOutputType, t: T, path: string, depth = 0): unknown {
+  if (isNonNullType(type)) return fill(type.ofType, t, path, depth)
+  if (isListType(type)) return [fill(type.ofType, t, path, depth)]
+  if (isEnumType(type)) return type.getValues()[0].value
+  if (isLeafType(type)) {
+    if (type.name === 'Boolean') return true
+    if (type.name === 'Int' || type.name === 'Float') return 1
+    return `${tag(t)} ${path}`
+  }
+  if (depth > 4) return null
+  const objects = isObjectType(type) ? [type] : schema.getPossibleTypes(type)
+  const docs = objects.map((obj) => ({
+    // content resolves a block's GraphQL type from `_type` (lowerFirst).
+    ...Object.fromEntries(
+      Object.values(obj.getFields()).map((f) => [
+        f.name,
+        fill(f.type, t, `${obj.name}.${f.name}`, depth + 1),
+      ]),
+    ),
+    _type: obj.name[0].toLowerCase() + obj.name.slice(1),
+    _key: `${tag(t)} ${obj.name}`,
+    // Visible to anonymous callers too.
+    hidden: false,
+  }))
+  return isObjectType(type) ? docs[0] : docs
+}
+
+/** The Sanity document a GROQ projection asks for, for tenant t. */
+function sanityDoc(query: string, t: T) {
+  const conference = schema.getType('Conference')
+  const fields = isObjectType(conference) ? conference.getFields() : {}
+  const special: Record<string, unknown> = {
+    _id: CONF[t],
+    visibility: 'live',
+    lifecycleStatus: 'published',
+    theme: {
+      primaryColor: `${tag(t)} theme.primaryColor`,
+      accentColor: `${tag(t)} theme.accentColor`,
+    },
+    homepageSections: fields.homepageBlocks
+      ? [fill(fields.homepageBlocks.type, t, 'homepageBlocks')].flat(2)
+      : [],
+  }
+  const projected = /\{([^{}]*)\}\s*$/
+    .exec(query)![1]
+    .split(',')
+    .map((f) => f.trim())
+  return Object.fromEntries(
+    projected.map((f) => [
+      f,
+      f in special
+        ? special[f]
+        : fields[f]
+          ? fill(fields[f].type, t, `Conference.${f}`)
+          : `${tag(t)} sanity.${f}`,
+    ]),
+  )
+}
 const walked = new Set<string>()
 
 function literal(type: GraphQLInputType, probe: string): string | null {
@@ -362,8 +404,11 @@ beforeAll(async () => {
       SANITY_API_TOKEN_READ: 't',
     }
     bindings[BINDINGS[name as keyof typeof BINDINGS]] = {
-      fetch: (url: string, init?: RequestInit) =>
-        worker.default.fetch(new Request(url, init), workerEnv),
+      fetch: (url: string, init?: RequestInit) => {
+        const entities = String(init?.body).includes('_entities')
+        calls.add(entities ? `${name}:_entities` : name)
+        return worker.default.fetch(new Request(url, init), workerEnv)
+      },
     } as unknown as Fetcher
   }
 
@@ -413,6 +458,15 @@ beforeAll(async () => {
 })
 afterAll(() => mf?.dispose())
 
+/** Subgraph calls of the current walk; `name:_entities` for entity fetches. */
+const calls = new Set<string>()
+/** Every @override label in the supergraph. */
+const LABELS = [...new Set(compose().match(/(?<=overrideLabel: ")[^"]+/g))]
+/** Subgraphs that take fields over with @override(from:, label:). */
+const OVERRIDERS = names.filter((n) =>
+  compose().includes(`graph: ${n.toUpperCase().replace(/-/g, '_')}, override:`),
+)
+
 async function run(query: string, headers: Record<string, string>) {
   const res = await gateway.fetch(
     new Request('http://api.test/graphql', {
@@ -430,7 +484,12 @@ describe.each([
   ['member of A, A ids', true, ['a'] as T[]],
   ['member of A, B ids', true, ['b'] as T[]],
 ])('cross-tenant walk: %s', (_, signedIn, tenants) => {
-  it('returns no tenant B data, and a forged envelope changes nothing', async () => {
+  // Each @override label off, then on for org A (progressive override).
+  it.each([false, true])('labels on for A: %s', async (labelsOn) => {
+    env.OVERRIDE_TENANTS = Object.fromEntries(
+      LABELS.map((l) => [l, labelsOn ? [ORG.a] : []]),
+    )
+    calls.clear()
     const headers = (): Record<string, string> => ({
       origin: ORIGIN,
       ...(signedIn ? { authorization: `Bearer ${memberJwt}` } : {}),
@@ -451,6 +510,12 @@ describe.each([
     }
     // The walk reached seeded rows, so a clean result means something.
     if (tenants.includes('a')) expect(sawA).toBe(true)
+    // Overriding subgraphs serve A only with the label on; editorial
+    // fields then come back through the entity path.
+    for (const name of OVERRIDERS) expect(calls.has(name)).toBe(labelsOn)
+    if (labelsOn && OVERRIDERS.length) {
+      expect([...calls].some((c) => c.endsWith(':_entities'))).toBe(true)
+    }
   })
 })
 

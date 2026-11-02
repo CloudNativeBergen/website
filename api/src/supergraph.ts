@@ -21,7 +21,11 @@ import { schema as tenantDirectory } from '../../services/tenant-directory/src/s
  * supergraph, which the gateway maps to a service binding (see BINDINGS in
  * gateway.ts). Identity has no public subgraph.
  */
-export const SUBGRAPHS = { 'tenant-directory': tenantDirectory, content, conference }
+export const SUBGRAPHS = {
+  'tenant-directory': tenantDirectory,
+  content,
+  conference,
+}
 
 /** Drops @tag(internal) types, fields, args and enum values, then prunes. */
 export function publicContract(schema: GraphQLSchema): GraphQLSchema {
