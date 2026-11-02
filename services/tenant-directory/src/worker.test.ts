@@ -292,3 +292,50 @@ describe('custom domains', () => {
     ).toBeUndefined()
   })
 })
+
+describe('reserved slugs', () => {
+  it.each(['auth', 'www', 'api'])('refuses org slug %s', async (org) => {
+    const { body } = await gql(PROVISION, { key: org, org }, operator)
+    expect(body.errors[0]).toMatchObject({
+      message: expect.stringContaining('reserved'),
+      extensions: { code: 'BAD_USER_INPUT' },
+    })
+  })
+})
+
+describe('cron', () => {
+  const tick = () => worker.scheduled!({} as ScheduledController, env)
+
+  it('mirrors Cloudflare status for pending custom domains only', async () => {
+    const org = await provision()
+    const add = `mutation($c: ID!, $h: String!) { addCustomDomain(conferenceId: $c, hostname: $h) { hostname } }`
+    const c = conferenceOf(org.id)
+    hostnames.create.mockResolvedValueOnce({
+      id: 'cf1',
+      verification: 'pending',
+    })
+    await gql(add, { c, h: 'a.example.org' }, operator)
+    hostnames.create.mockResolvedValueOnce({
+      id: 'cf2',
+      verification: 'pending',
+    })
+    await gql(add, { c, h: 'b.example.org' }, operator)
+    hostnames.get.mockImplementation(async (id) => {
+      if (id === 'cf2') throw new Error('cloudflare down')
+      return 'verified'
+    })
+
+    await tick()
+    expect(hostnames.get).toHaveBeenCalledTimes(2)
+    const resolve = async (host: string) =>
+      (await gql(RESOLVE, { host })).body.data.tenantByHost
+    expect(await resolve('a.example.org')).toMatchObject({ orgId: org.id })
+    expect(await resolve('b.example.org')).toBeNull()
+
+    // Platform hosts and verified domains are never polled; failures retry.
+    hostnames.get.mockReset()
+    hostnames.get.mockResolvedValue('verified')
+    await tick()
+    expect(hostnames.get.mock.calls).toEqual([['cf2']])
+  })
+})

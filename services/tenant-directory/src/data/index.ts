@@ -2,7 +2,7 @@
 // tenancy: false: the directory is the registry every tenant is resolved
 // from, so its reads span Organizations. Who may call what is decided in
 // the resolvers (src/subgraph.ts).
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNotNull } from 'drizzle-orm'
 import { createGraphQLError } from 'graphql-yoga'
 import { rawDb } from './db'
 import {
@@ -29,6 +29,27 @@ const editionHost = (org: string, conf: string) =>
 const aliasHost = (org: string) => `${org}.${PLATFORM_DOMAIN}`
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/
+// Org slugs become `<slug>.konf.run`; these names belong to the platform.
+const RESERVED_SLUGS = new Set([
+  'admin',
+  'api',
+  'app',
+  'auth',
+  'cdn',
+  'dashboard',
+  'docs',
+  'gateway',
+  'help',
+  'kontroll',
+  'login',
+  'mail',
+  'my',
+  'smtp',
+  'static',
+  'status',
+  'support',
+  'www',
+])
 
 const fail = (code: string, message: string) =>
   createGraphQLError(message, { extensions: { code } })
@@ -110,6 +131,12 @@ export function createData(
       }
       if (!SLUG.test(input.orgSlug) || !SLUG.test(input.conferenceSlug)) {
         throw fail('BAD_USER_INPUT', 'slugs are lowercase a-z, 0-9 and -')
+      }
+      if (RESERVED_SLUGS.has(input.orgSlug)) {
+        throw fail(
+          'BAD_USER_INPUT',
+          `"${input.orgSlug}" is reserved for a platform host`,
+        )
       }
       const earlier = async () => {
         const req = await db.query.provisioningRequests.findFirst({
@@ -246,5 +273,28 @@ export function createData(
         .returning()
       return updated
     },
+
+    /** Pending custom domains that Cloudflare knows about. */
+    async pendingCustomDomains() {
+      const rows = await db
+        .select({ hostname: domains.hostname })
+        .from(domains)
+        .where(
+          and(
+            eq(domains.kind, 'custom'),
+            eq(domains.verification, 'pending'),
+            isNotNull(domains.cfCustomHostnameId),
+          ),
+        )
+      return rows.map((r) => r.hostname)
+    },
+  }
+}
+
+/** Cron Trigger: mirror Cloudflare status for every pending custom domain. */
+export async function scheduled(data: ReturnType<typeof createData>) {
+  for (const hostname of await data.pendingCustomDomains()) {
+    // One failing hostname must not stop the rest; the next run retries it.
+    await data.refreshCustomDomain(hostname).catch(console.error)
   }
 }
