@@ -6,14 +6,46 @@
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
+  // supergraph.graphql (pnpm compose) is bundled as a string.
+  "rules": [{ "type": "Text", "globs": ["**/*.graphql"], "fallthrough": true }],
+  // Bindings do not inherit into envs, so each env lists its own.
+  // Secret per env: ENVELOPE_PRIVATE_KEY.
+  "services": [
+    { "binding": "DIRECTORY", "service": "konf-tenant-directory" },
+    { "binding": "IDENTITY", "service": "konf-identity" },
+    {
+      "binding": "MEMBERSHIP",
+      "service": "konf-identity",
+      "entrypoint": "Membership",
+    },
+  ],
   "env": {
     "preview": {
       "name": "konf-api-preview",
       "workers_dev": true,
+      // Security requirement 8: preview never binds production services.
+      "services": [
+        { "binding": "DIRECTORY", "service": "konf-tenant-directory-preview" },
+        { "binding": "IDENTITY", "service": "konf-identity-preview" },
+        {
+          "binding": "MEMBERSHIP",
+          "service": "konf-identity-preview",
+          "entrypoint": "Membership",
+        },
+      ],
     },
     "production": {
       "name": "konf-api",
       "routes": [{ "pattern": "api.konf.app", "custom_domain": true }],
+      "services": [
+        { "binding": "DIRECTORY", "service": "konf-tenant-directory" },
+        { "binding": "IDENTITY", "service": "konf-identity" },
+        {
+          "binding": "MEMBERSHIP",
+          "service": "konf-identity",
+          "entrypoint": "Membership",
+        },
+      ],
     },
   },
 }
