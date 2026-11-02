@@ -20,7 +20,8 @@ const QUERY = `{ conference {
 type ApiConference = Record<string, unknown> & {
   primaryColor?: string | null
   accentColor?: string | null
-  homepageSections?: string | null
+  /** A JSON string from the API, an array once fetchKonfApiConference returns. */
+  homepageSections?: string | unknown[] | null
 }
 
 /** `KONF_API_TENANTS`: comma-separated conference ids or organization ids. Empty = off. */
@@ -72,6 +73,13 @@ export async function fetchKonfApiConference(
   if (api.id !== conferenceId) {
     throw new Error(`conference id mismatch: ${String(api.id)}`)
   }
+  // Parsed here too, so malformed section JSON is never stored.
+  if (typeof api.homepageSections === 'string') {
+    const sections: unknown = JSON.parse(api.homepageSections)
+    if (!Array.isArray(sections))
+      throw new Error('homepageSections is not an array')
+    api.homepageSections = sections
+  }
   return api
 }
 
@@ -97,10 +105,8 @@ export async function mergeKonfApiConference(
         ...(accentColor != null && { accentColor }),
       }
     }
-    if (homepageSections) {
-      const sections = JSON.parse(homepageSections)
-      if (Array.isArray(sections)) merged.homepageSections = sections
-    }
+    if (Array.isArray(homepageSections))
+      merged.homepageSections = homepageSections
     return merged as unknown as Conference
   } catch (err) {
     console.warn(

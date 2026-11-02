@@ -216,6 +216,17 @@ describe('fetchKonfApiConference caching', () => {
     expect(entries.size).toBe(0)
   })
 
+  it.each(['[{"_type":', '{"_type":"homepageHero"}'])(
+    'malformed homepageSections %s throws inside the cached body',
+    async (homepageSections) => {
+      apiReply({ homepageSections })
+      await expect(
+        cachedApiRead('2026.example.com', 'conf-1'),
+      ).rejects.toThrow()
+      expect(entries.size).toBe(0)
+    },
+  )
+
   it('a null conference throws too', async () => {
     apiReply(null)
     await expect(
