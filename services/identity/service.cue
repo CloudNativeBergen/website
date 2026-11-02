@@ -20,7 +20,7 @@ service: #PlatformService & {
 			}
 		}
 		// src/index.ts serves Better Auth and the gateway's RPC entrypoint,
-		// and delegates the rest to the generated src/worker.ts.
+		// and 404s everything else.
 		"wrangler.jsonc": main: "src/index.ts"
 	}
 }

@@ -2,7 +2,13 @@
 // Mirrors migrations/0001_init.sql. Identity is tenancy-exempt: a user,
 // session or membership is not owned by one Organization.
 import { sql } from 'drizzle-orm'
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import {
+  index,
+  integer,
+  uniqueIndex,
+  sqliteTable,
+  text,
+} from 'drizzle-orm/sqlite-core'
 
 const now = () =>
   integer({ mode: 'timestamp_ms' })
@@ -109,7 +115,7 @@ export const member = sqliteTable(
     role: text().notNull(),
     createdAt: now(),
   },
-  (t) => [index('member_user_org_idx').on(t.userId, t.organizationId)],
+  (t) => [uniqueIndex('member_user_org_idx').on(t.userId, t.organizationId)],
 )
 
 export const invitation = sqliteTable(

@@ -35,7 +35,7 @@
     "api": {},
     "packages/tenancy": { "entry": ["src/index.ts", "src/*.typecheck.ts"] },
     "services/identity": {
-      "entry": ["src/data/schema.ts"],
+      "entry": ["src/data/schema.ts", "src/worker.ts"],
       "ignoreDependencies": ["cloudflare"]
     }
   },

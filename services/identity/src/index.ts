@@ -1,8 +1,8 @@
 // Identity entry: Better Auth under /api/auth, the gateway's RPC entrypoint,
-// everything else to the generated subgraph worker.
+// 404 for everything else.
 import { WorkerEntrypoint } from 'cloudflare:workers'
 import { createAuth, createData, type AuthEnv } from './data'
-import subgraph, { type WorkerEnv } from './worker'
+import type { WorkerEnv } from './worker'
 
 type Env = WorkerEnv & AuthEnv
 
@@ -31,6 +31,8 @@ export default {
     if (new URL(request.url).pathname.startsWith('/api/auth/')) {
       return createAuth(env.DB, env).handler(request)
     }
-    return subgraph.fetch(request, env)
+    // Only Better Auth is public. The gateway and tenant-directory use the
+    // RPC entrypoints above.
+    return new Response('Not found', { status: 404 })
   },
 } satisfies ExportedHandler<Env>

@@ -78,7 +78,7 @@ CREATE TABLE member (
   role TEXT NOT NULL,
   createdAt INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
 );
-CREATE INDEX member_user_org_idx ON member (userId, organizationId);
+CREATE UNIQUE INDEX member_user_org_idx ON member (userId, organizationId);
 
 CREATE TABLE invitation (
   id TEXT PRIMARY KEY NOT NULL,

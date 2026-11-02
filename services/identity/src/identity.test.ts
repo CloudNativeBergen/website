@@ -159,10 +159,11 @@ describe('account linking (#807)', () => {
     email: string,
     emailVerified: boolean,
     accountId: string,
+    providerId = 'linkedin',
   ) =>
     handleOAuthUserInfo({ context: await auth.$context } as never, {
       userInfo: { id: accountId, email, name: 'Test', emailVerified },
-      account: { providerId: 'linkedin', accountId },
+      account: { providerId, accountId },
       callbackURL: '/',
     })
 
@@ -184,19 +185,55 @@ describe('account linking (#807)', () => {
     })
   })
 
-  it('links on a verified email and audits ids only', async () => {
-    const u = await newUser('owner@example.com', true)
-    const result = await signIn('owner@example.com', true, 'li-real')
-    expect(result.error).toBeFalsy()
+  it('audits sign-up as created, a second provider as linked, ids only', async () => {
+    const first = await signIn('owner@example.com', true, 'gh-real', 'github')
+    expect(first.error).toBeFalsy()
+    const second = await signIn('owner@example.com', true, 'li-real')
+    expect(second.error).toBeFalsy()
+    const userId = first.data!.user.id
+    expect(second.data!.user.id).toBe(userId)
     const { results } = await d1
       .prepare(
-        "SELECT * FROM audit_event WHERE action = 'account.linked' AND userId = ?",
+        "SELECT action, userId, providerId FROM audit_event WHERE action LIKE 'account.%' AND userId = ? ORDER BY id",
       )
-      .bind(u.id)
+      .bind(userId)
       .all()
     expect(results).toEqual([
-      expect.objectContaining({ userId: u.id, providerId: 'linkedin' }),
+      { action: 'account.created', userId, providerId: 'github' },
+      { action: 'account.linked', userId, providerId: 'linkedin' },
     ])
     expect(JSON.stringify(results)).not.toContain('@')
+  })
+})
+
+describe('organization updates', () => {
+  it('refuses slug and name changes, allows the rest', async () => {
+    const u = await newUser('orgowner@example.com', true)
+    await createData(d1).ensureOrganization('org-u', 'u')
+    await d1
+      .prepare(
+        "INSERT INTO member (id, organizationId, userId, role) VALUES ('m-u', 'org-u', ?, 'owner')",
+      )
+      .bind(u.id)
+      .run()
+    const update = async (data: Record<string, string>) =>
+      auth.handler(
+        new Request(`${BASE}/api/auth/organization/update`, {
+          method: 'POST',
+          headers: {
+            cookie: await sessionCookie(u.id),
+            origin: BASE,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ organizationId: 'org-u', data }),
+        }),
+      )
+    expect((await update({ slug: 'stolen' })).status).toBe(403)
+    expect((await update({ name: 'Renamed' })).status).toBe(403)
+    expect((await update({ logo: 'https://x.test/l.png' })).status).toBe(200)
+    const { results } = await d1
+      .prepare("SELECT slug, name FROM organization WHERE id = 'org-u'")
+      .all()
+    expect(results).toEqual([{ slug: 'u', name: 'u' }])
   })
 })

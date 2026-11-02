@@ -1,8 +1,10 @@
 // The Better Auth instance. Lives in the data layer because it holds the raw
 // D1 handle; nothing outside src/data/ gets that handle back.
 import { betterAuth } from 'better-auth'
+import { APIError } from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { jwt, oneTimeToken, organization } from 'better-auth/plugins'
+import { count, eq } from 'drizzle-orm'
 import { rawDb } from './db'
 import * as schema from './schema'
 
@@ -66,7 +68,13 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
       account: {
         create: {
           after: async (a) => {
-            await audit('account.linked', a.userId, a.providerId)
+            // First account of a user is a sign-up; any later one is a link.
+            const [{ n }] = await db
+              .select({ n: count() })
+              .from(schema.account)
+              .where(eq(schema.account.userId, a.userId))
+            const action = n > 1 ? 'account.linked' : 'account.created'
+            await audit(action, a.userId, a.providerId)
           },
         },
       },
@@ -94,9 +102,24 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
       organization({
         allowUserToCreateOrganization: false,
         requireEmailVerificationOnInvitation: true,
+        disableOrganizationDeletion: true,
+        organizationHooks: {
+          // Slug and name mirror tenant-directory, which owns them.
+          beforeUpdateOrganization: async ({ organization: o }) => {
+            if (o.slug !== undefined || o.name !== undefined) {
+              throw new APIError('FORBIDDEN', {
+                message: 'Slug and name are managed by tenant-directory',
+              })
+            }
+          },
+        },
       }),
       // Login handoff (#1803 wires it up): single use, one minute, hashed.
-      oneTimeToken({ expiresIn: 1, storeToken: 'hashed' }),
+      oneTimeToken({
+        expiresIn: 1,
+        storeToken: 'hashed',
+        disableClientRequest: true,
+      }),
     ],
   })
 }
