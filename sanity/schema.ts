@@ -29,6 +29,7 @@ import organization from './schemaTypes/organization'
 import organizerInvitation from './schemaTypes/organizerInvitation'
 import provisioningRateLimit from './schemaTypes/provisioningRateLimit'
 import provisioningRequest from './schemaTypes/provisioningRequest'
+import provisioningDomainLock from './schemaTypes/provisioningDomainLock'
 import review from './schemaTypes/review'
 import schedule from './schemaTypes/schedule'
 import scheduledReminderLog from './schemaTypes/scheduledReminderLog'
@@ -158,6 +159,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     // and documentation only, hidden from the Studio structure.
     provisioningRequest,
     provisioningRateLimit,
+    provisioningDomainLock,
 
     // Platform-internal marketing abuse counters (#1018). Same rule again.
     marketingRateLimit,
@@ -182,6 +184,7 @@ export const STUDIO_HIDDEN_TYPES: readonly string[] = [
   'emailSignInRateLimit',
   'provisioningRequest',
   'provisioningRateLimit',
+  'provisioningDomainLock',
   'marketingRateLimit',
   'planTemplateName',
   'marketingAssetCleanup',

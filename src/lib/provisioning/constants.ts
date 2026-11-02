@@ -27,6 +27,7 @@ export const MIN_PROVISIONING_TOKEN_LENGTH = 32
 /** Sanity document types owned by this feature. */
 export const PROVISIONING_REQUEST_TYPE = 'provisioningRequest'
 export const PROVISIONING_RATE_LIMIT_TYPE = 'provisioningRateLimit'
+export const PROVISIONING_DOMAIN_LOCK_TYPE = 'provisioningDomainLock'
 
 /**
  * How long a completed request's idempotency receipt is honoured. Well past any

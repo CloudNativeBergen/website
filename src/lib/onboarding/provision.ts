@@ -17,6 +17,7 @@ import {
   type PlatformHostRefusal,
 } from '@/lib/domain-verification'
 import {
+  PROVISIONING_DOMAIN_LOCK_TYPE,
   PROVISIONING_RECEIPT_RETENTION_DAYS,
   PROVISIONING_REQUEST_TYPE,
 } from '@/lib/provisioning/constants'
@@ -213,6 +214,41 @@ export function planTenantDomains(
     refusal: null,
   }
 }
+
+/**
+ * Reported ahead of an ordinary domain conflict, and separately: the caller
+ * never asked for the platform hosts, so "already claimed" would be baffling.
+ * The actionable remedy is a different org slug. Note this is NOT a transfer
+ * opportunity — a claim on the org's own labels held by anyone else is a
+ * collision, and stealing it is exactly what must not happen.
+ */
+function rejectTakenDomains(
+  taken: string[],
+  platformHosts: string[],
+  slug: string,
+): ProvisionRejection | null {
+  const host = platformHosts.find((h) => taken.includes(h))
+  if (host !== undefined) return { code: 'platform_host_taken', host, slug }
+  if (taken.length > 0) return { code: 'domain_claimed', domains: taken }
+  return null
+}
+
+/**
+ * DOMAIN LOCK (#777): one short-lived `provisioningDomainLock` per claimed
+ * entry, created in the tenant transaction. Two provisions racing on the same
+ * domain under different slugs collide on this `create`, so only one commits.
+ * It only has to outlive the race: once the winner commits, its conference
+ * claims the domain and the ordinary read check sees it. So it is never
+ * released by hand, and no other path (domain edits, new editions, org
+ * erasure) has to know it exists. Expired locks are cleared before each
+ * provision and by the daily cleanup cron. Keyed by a hash because a hostname
+ * can exceed Sanity's id length and charset.
+ */
+const DOMAIN_LOCK_TTL_MS = 10 * 60 * 1000
+const domainLockId = (domain: string) =>
+  `${PROVISIONING_DOMAIN_LOCK_TYPE}.${createHash('sha256')
+    .update(normalizeDomain(domain))
+    .digest('hex')}`
 
 /** The organization id derived from a slug (#777). */
 const orgIdForSlug = (slug: string) => `organization.${slug}`
@@ -454,25 +490,12 @@ export async function provisionOrganization(
       rejection: { code: 'slug_taken', slug: input.organization.slug },
     }
   }
-  // Reported ahead of an ordinary domain conflict, and separately: the caller
-  // never asked for these hosts, so "already claimed" would be baffling. The
-  // actionable remedy is a different org slug. Note this is NOT a transfer
-  // opportunity — a claim on the org's own labels held by anyone else is a
-  // collision, and stealing it is exactly what must not happen.
-  const takenPlatformHost = platformHosts.find((host) => taken.includes(host))
-  if (takenPlatformHost !== undefined) {
-    return {
-      ok: false,
-      rejection: {
-        code: 'platform_host_taken',
-        host: takenPlatformHost,
-        slug: input.organization.slug,
-      },
-    }
-  }
-  if (taken.length > 0) {
-    return { ok: false, rejection: { code: 'domain_claimed', domains: taken } }
-  }
+  const domainRejection = rejectTakenDomains(
+    taken,
+    platformHosts,
+    input.organization.slug,
+  )
+  if (domainRejection) return { ok: false, rejection: domainRejection }
   if (speakerMatches.length > 1) {
     return { ok: false, rejection: { code: 'ambiguous_organizer' } }
   }
@@ -495,7 +518,30 @@ export async function provisionOrganization(
   const speakerId = speaker?._id ?? existingSpeaker!._id
 
   try {
+    // Clear OUR domains' expired locks so a domain released since its last
+    // provision can be claimed again; a fresh lock is left alone and fails the
+    // create below.
+    await clientWrite.delete({
+      // groq-global: platform-internal provisioning lock, keyed by hostname, not tenant-scoped.
+      query: `*[_type == $type && _id in $ids && expiresAt < $now]`,
+      params: {
+        type: PROVISIONING_DOMAIN_LOCK_TYPE,
+        ids: domains.map(domainLockId),
+        now: new Date().toISOString(),
+      },
+    })
     let tx = clientWrite.transaction().create(organization).create(conference)
+    const lockExpiresAt = new Date(
+      Date.now() + DOMAIN_LOCK_TTL_MS,
+    ).toISOString()
+    for (const domain of domains) {
+      tx = tx.create({
+        _id: domainLockId(domain),
+        _type: PROVISIONING_DOMAIN_LOCK_TYPE,
+        domain,
+        expiresAt: lockExpiresAt,
+      })
+    }
     if (speaker) {
       tx = tx.create(speaker)
     } else if (existingSpeaker) {
@@ -561,6 +607,14 @@ export async function provisionOrganization(
         rejection: { code: 'slug_taken', slug: input.organization.slug },
       }
     }
+    // Or one under a different slug took one of our domains: its lock beat
+    // ours, and its conference (same transaction) now claims the domain.
+    const lost = rejectTakenDomains(
+      await findConflictingDomains(domains).catch(() => []),
+      platformHosts,
+      input.organization.slug,
+    )
+    if (lost) return { ok: false, rejection: lost }
     return { ok: false, rejection: { code: 'commit_failed', cause: error } }
   }
 
@@ -582,16 +636,16 @@ export async function provisionOrganization(
   }
 }
 
-/** Delete provisioning receipts whose retention window has elapsed. */
+/** Delete provisioning receipts and domain locks that have expired. */
 export async function deleteExpiredProvisioningReceipts(
   now: number = Date.now(),
 ): Promise<{ deleted: number }> {
   try {
     const result = await clientWrite.delete({
       // groq-global: platform-internal provisioning receipt, deliberately not tenant-scoped.
-      query: `*[_type == $type && expiresAt < $now]`,
+      query: `*[_type in $types && expiresAt < $now]`,
       params: {
-        type: PROVISIONING_REQUEST_TYPE,
+        types: [PROVISIONING_REQUEST_TYPE, PROVISIONING_DOMAIN_LOCK_TYPE],
         now: new Date(now).toISOString(),
       },
     })

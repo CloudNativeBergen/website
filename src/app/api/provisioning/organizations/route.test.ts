@@ -611,6 +611,33 @@ describe('provisioning API — a replayed request never creates a second tenant'
     await expect(loser.json()).resolves.toMatchObject({ code: 'slug_taken' })
   })
 
+  it('creates ONE tenant when two DIFFERENT slugs race for the same custom domain (#777)', async () => {
+    const [a, b] = await Promise.all([
+      POST(request()),
+      POST(
+        request({
+          key: 'a-racing-second-key-0123456789',
+          payload: body({
+            organization: {
+              name: 'Other',
+              slug: 'other-org',
+              contactEmail: 'a@b.no',
+            },
+          }),
+        }),
+      ),
+    ])
+
+    expect(ofType('organization')).toHaveLength(1)
+    expect(ofType('conference')).toHaveLength(1)
+    expect(new Set([a.status, b.status])).toEqual(new Set([201, 409]))
+    const loser = a.status === 409 ? a : b
+    await expect(loser.json()).resolves.toMatchObject({
+      code: 'domain_claimed',
+      domains: ['oslo.cloudnativedays.no'],
+    })
+  })
+
   it('lets a DIFFERENT key through — idempotency must not become a global lock', async () => {
     await POST(request())
     const res = await POST(
