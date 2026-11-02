@@ -34,6 +34,8 @@ const h = vi.hoisted(() => ({
   claimDuringSend: false,
   /** The claim LANDS but its answer is lost. */
   claimAnswerLost: false,
+  /** Another sweep claims between the release's read and its patch. */
+  claimBeforeRelease: false,
   /** Boundary events in order: claim / send / release. */
   sequence: [] as string[],
 }))
@@ -62,7 +64,10 @@ vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string) => {
     h.fetches.push(query)
     if (query.includes('_type == "sponsorForConference"')) {
-      if (h.sendReadThrows) throw new Error('sanity read failed')
+      // The primitive's read, not the claim's own fresh read.
+      if (h.sendReadThrows && !query.includes('{ _rev, reminderClaims }')) {
+        throw new Error('sanity read failed')
+      }
       if (h.contactEmailAtSend && h.sfc) {
         return {
           ...h.sfc,
@@ -152,6 +157,19 @@ vi.mock('@/lib/sanity/client', () => {
           (sets.reminderCount as number) <
             ((h.sfc?.reminderCount as number | undefined) ?? 0)
         if (h.releaseThrows && isRelease) throw new Error('sanity down')
+        if (h.claimBeforeRelease && isRelease && h.sfc) {
+          // Another sweep's claim lands first: the revision moves.
+          h.claimBeforeRelease = false
+          h.sfc.reminderCount = (h.sfc.reminderCount as number) + 1
+          h.sfc.reminderClaims = [
+            ...((h.sfc.reminderClaims as string[] | undefined) ?? []),
+            'claim-B',
+          ]
+          h.sfc._rev = 'rev-conflict'
+          throw new Error(
+            'Mutation(s) failed with 1 error(s): revision mismatch',
+          )
+        }
         const isClaim =
           'reminderCount' in sets &&
           id === h.sfc?._id &&
@@ -257,6 +275,7 @@ beforeEach(() => {
   h.claimInterposedOnLostRelease = false
   h.claimDuringSend = false
   h.claimAnswerLost = false
+  h.claimBeforeRelease = false
   h.sequence = []
   h.patches = []
   h.incs = []
@@ -609,6 +628,25 @@ describe('sendContractReminderBySystem', () => {
     expect(outcome).toMatchObject({ ok: false, reason: 'send-failed' })
     // 1 → A claims 2 → A releases 1 (answer lost) → B claims 2 → A's retry
     // finds no claim of its own: B's slot stands.
+    expect(h.sfc!.reminderCount).toBe(2)
+    expect(h.sfc!.reminderClaims).toEqual(['claim-B'])
+  })
+
+  it('re-reads on a revision conflict and releases only its own claim (#1280)', async () => {
+    h.send.mockResolvedValue({
+      data: null,
+      error: { message: 'boom', statusCode: 422 },
+    })
+    h.claimBeforeRelease = true
+    const outcome = await sendContractReminderBySystem('sfc-1', {
+      maxReminders: 2,
+    })
+    expect(outcome).toMatchObject({ ok: false, reason: 'send-failed' })
+    expect((outcome as { message?: string }).message).not.toMatch(
+      /could not be released/,
+    )
+    // 1 → A claims 2 → B claims 3 (A's patch conflicts) → A re-reads and
+    // releases on the new revision: 2, B's claim stands.
     expect(h.sfc!.reminderCount).toBe(2)
     expect(h.sfc!.reminderClaims).toEqual(['claim-B'])
   })
