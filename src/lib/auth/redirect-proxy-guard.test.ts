@@ -155,6 +155,100 @@ describe('guardRedirectProxyBounce', () => {
   })
 })
 
+const mint = (origin: string, secret = SECRET) =>
+  encode({ secret, salt: ENCODED_STATE_SALT, token: { origin, random: 'r' } })
+const at = (query: string, init: RequestInit = {}, host = 'auth.konf.app') =>
+  new Request(
+    `https://auth.konf.app/api/auth/callback/github?code=c&${query}`,
+    {
+      ...init,
+      headers: { host, ...(init.headers as Record<string, string>) },
+    },
+  )
+
+describe('state candidates and secrets', () => {
+  beforeEach(() => {
+    vi.spyOn(logger, 'warn').mockImplementation(() => {})
+  })
+  const report = {
+    ...env,
+    AUTH_REDIRECT_GUARD_MODE: undefined,
+  } as NodeJS.ProcessEnv
+
+  it.each([
+    ['benign first', true],
+    ['evil first', false],
+  ])(
+    'refuses duplicate state params (%s) in both modes',
+    async (_l, benignFirst) => {
+      const good = await mint(cb('https://2026.cloudnativedays.no'))
+      const evil = await mint(cb('https://evil.example'))
+      const q = benignFirst
+        ? `state=${good}&state=${evil}`
+        : `state=${evil}&state=${good}`
+      expect((await guardRedirectProxyBounce(at(q), env))?.status).toBe(403)
+      expect((await guardRedirectProxyBounce(at(q), report))?.status).toBe(403)
+    },
+  )
+
+  it('refuses a query/form-body state mismatch', async () => {
+    const good = await mint(cb('https://2026.cloudnativedays.no'))
+    const evil = await mint(cb('https://evil.example'))
+    const req = at(`state=${good}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: `state=${evil}`,
+    })
+    expect((await guardRedirectProxyBounce(req, env))?.status).toBe(403)
+  })
+
+  it('checks a JSON body state', async () => {
+    const evil = await mint(cb('https://evil.example'))
+    const req = at('', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ state: evil }),
+    })
+    expect((await guardRedirectProxyBounce(req, env))?.status).toBe(403)
+  })
+
+  it('decodes with a rotated AUTH_SECRET_1', async () => {
+    const rotated = {
+      ...env,
+      AUTH_SECRET_1: 'old-secret-old-secret-old-secret!!',
+    } as NodeJS.ProcessEnv
+    const evil = await mint(
+      cb('https://evil.example'),
+      'old-secret-old-secret-old-secret!!',
+    )
+    expect(
+      (await guardRedirectProxyBounce(at(`state=${evil}`), rotated))?.status,
+    ).toBe(403)
+  })
+
+  it('refuses undecodable state in enforce, reports it in report mode', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    expect(
+      (await guardRedirectProxyBounce(at('state=garbage'), env))?.status,
+    ).toBe(403)
+    expect(
+      await guardRedirectProxyBounce(at('state=garbage'), report),
+    ).toBeNull()
+    expect(warn.mock.calls.at(-1)?.[1]).toMatchObject({ reason: 'undecodable' })
+  })
+
+  it.each(['AUTH.konf.app', 'auth.konf.app:443'])(
+    'normalises request host %s',
+    async (host) => {
+      const evil = await mint(cb('https://evil.example'))
+      expect(
+        (await guardRedirectProxyBounce(at(`state=${evil}`, {}, host), env))
+          ?.status,
+      ).toBe(403)
+    },
+  )
+})
+
 describe('report mode (default)', () => {
   const report = {
     ...env,

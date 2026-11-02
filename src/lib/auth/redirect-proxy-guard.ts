@@ -62,6 +62,9 @@ async function bounceRefusal(
       : 'not-https'
   }
   if (url.protocol !== 'https:') return 'not-https'
+  // Trusts the WHOLE platform zone: any subdomain of PLATFORM_DOMAIN_SUFFIX
+  // passes without a lookup. Safe only while that zone's DNS stays under
+  // platform control; a delegated or dangling subdomain would receive codes.
   if (!url.port && isPlatformZoneHost(url.hostname, env)) return null
   try {
     return (await isVerifiedRedirectOrigin(url.origin)) ? null : 'unverified'
@@ -88,22 +91,99 @@ function hostOf(target: unknown): string | null {
   }
 }
 
-async function stateOf(req: Request): Promise<string | null> {
-  const query = new URL(req.url).searchParams.get('state')
-  if (query) return query
-  if (req.method !== 'POST') return null
+/**
+ * Every `state` value @auth/core could read. It builds its query with
+ * `Object.fromEntries` (last duplicate wins) and reads JSON or form bodies on
+ * POST (`lib/utils/web.js`), so all of them are collected, not just the first.
+ */
+async function stateCandidates(req: Request): Promise<string[]> {
+  const values = new URL(req.url).searchParams.getAll('state')
+  if (req.method === 'POST') {
+    const type = req.headers.get('content-type') ?? ''
+    try {
+      if (type.includes('application/json')) {
+        const body: unknown = await req.clone().json()
+        const value = (body as { state?: unknown } | null)?.state
+        if (value !== undefined) values.push(String(value))
+      } else if (type.includes('application/x-www-form-urlencoded')) {
+        values.push(
+          ...new URLSearchParams(await req.clone().text()).getAll('state'),
+        )
+      }
+    } catch {
+      // An unreadable body fails in @auth/core too.
+    }
+  }
+  return values.filter(Boolean)
+}
+
+/** The secrets @auth/core may decode with (`lib/utils/env.js`). */
+function secretsOf(env: NodeJS.ProcessEnv): string[] {
+  return [
+    env.AUTH_SECRET_1,
+    env.AUTH_SECRET_2,
+    env.AUTH_SECRET_3,
+    env.AUTH_SECRET,
+  ]
+    .map((s) => s?.trim())
+    .filter((s): s is string => Boolean(s))
+}
+
+/** Normalised `host[:port]` (lowercase, default port dropped), or `null`. */
+function normaliseHost(host: string | null): string | null {
+  if (!host) return null
   try {
-    const form = await req.clone().formData()
-    const value = form.get('state')
-    return typeof value === 'string' ? value : null
+    return new URL(`https://${host}`).host
   } catch {
     return null
   }
 }
 
+type Verdict =
+  | { kind: 'pass' }
+  | { kind: 'refuse-always' }
+  | { kind: 'report'; reason: string; target?: unknown }
+
+async function judgeState(
+  state: string,
+  secrets: string[],
+  proxyOrigin: URL,
+  env: NodeJS.ProcessEnv,
+): Promise<Verdict> {
+  let origin: unknown
+  try {
+    const payload = await decode({
+      token: state,
+      secret: secrets,
+      salt: ENCODED_STATE_SALT,
+    })
+    if (!payload) return { kind: 'report', reason: 'undecodable' }
+    origin = payload.origin
+  } catch {
+    return { kind: 'report', reason: 'undecodable' }
+  }
+  if (origin === undefined) return { kind: 'pass' } // No origin: no bounce.
+  if (typeof origin === 'string') {
+    try {
+      // Same comparison @auth/core uses to decide not to bounce.
+      if (new URL(origin).origin === proxyOrigin.origin) return { kind: 'pass' }
+    } catch {
+      return { kind: 'refuse-always' } // @auth/core throws on this too.
+    }
+  }
+  const reason = await bounceRefusal(origin, env)
+  return reason === null
+    ? { kind: 'pass' }
+    : { kind: 'report', reason, target: origin }
+}
+
 /**
  * `null` to let the request through, or the refusal response. Only acts on a
  * provider callback arriving at the proxy host; everything else passes.
+ *
+ * Refused in BOTH modes, because no legitimate sign-in produces them and
+ * @auth/core cannot complete them either: an unparseable proxy URL, no
+ * secret, more than one distinct `state`, and an unparseable `state.origin`.
  */
 export async function guardRedirectProxyBounce(
   req: Request,
@@ -115,50 +195,38 @@ export async function guardRedirectProxyBounce(
   try {
     proxyOrigin = new URL(proxy)
   } catch {
-    return refuse() // @auth/core throws on this too; refuse rather than guess.
-    // (Refused in both modes: @auth/core cannot complete these either.)
+    return refuse()
   }
-  if (sessionCookieRequestHost(req.headers) !== proxyOrigin.host) return null
+  if (normaliseHost(sessionCookieRequestHost(req.headers)) !== proxyOrigin.host)
+    return null
   const { pathname } = new URL(req.url)
   if (!pathname.startsWith('/api/auth/callback/')) return null
+  const provider = pathname.slice('/api/auth/callback/'.length)
 
-  const state = await stateOf(req)
-  if (!state) return null // No state: @auth/core does not bounce.
-  const secret = env.AUTH_SECRET
-  if (!secret) return refuse()
-
-  let origin: unknown
-  try {
-    const payload = await decode({
-      token: state,
-      secret,
-      salt: ENCODED_STATE_SALT,
+  const states = [...new Set(await stateCandidates(req))]
+  if (states.length === 0) return null // No state: @auth/core does not bounce.
+  if (states.length > 1) {
+    logger.warn('[auth] Refused OAuth proxy callback with conflicting state', {
+      reason: 'ambiguous-state',
+      provider,
     })
-    origin = payload?.origin
-  } catch {
-    // @auth/core fails the same decode and stops with an error; no bounce.
-    return null
+    return refuse()
   }
-  if (origin === undefined) return null
-  if (typeof origin === 'string') {
-    try {
-      // Same comparison @auth/core uses to decide not to bounce.
-      if (new URL(origin).origin === proxyOrigin.origin) return null
-    } catch {
-      return refuse()
-    }
-  }
-  const reason = await bounceRefusal(origin, env)
-  if (reason === null) return null
+  const secrets = secretsOf(env)
+  if (secrets.length === 0) return refuse()
+
+  const verdict = await judgeState(states[0], secrets, proxyOrigin, env)
+  if (verdict.kind === 'pass') return null
+  if (verdict.kind === 'refuse-always') return refuse()
   const enforcing = isEnforcing(env)
   logger.warn(
     enforcing
       ? '[auth] Refused OAuth proxy bounce'
       : '[auth] Would refuse OAuth proxy bounce (report mode)',
     {
-      host: hostOf(origin),
-      reason,
-      provider: pathname.slice('/api/auth/callback/'.length),
+      host: hostOf(verdict.target),
+      reason: verdict.reason,
+      provider,
       mode: enforcing ? 'enforce' : 'report',
     },
   )
