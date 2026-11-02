@@ -12,7 +12,7 @@ type Env = WorkerEnv & AuthEnv
  */
 export class Membership extends WorkerEntrypoint<Env> {
   principal(userId: string, orgId: string) {
-    return createData(this.env.DB).principal(userId, orgId)
+    return createData(this.env).principal(userId, orgId)
   }
 }
 
@@ -22,7 +22,7 @@ export class Membership extends WorkerEntrypoint<Env> {
  */
 export class Organizations extends WorkerEntrypoint<Env> {
   ensure(id: string, slug: string) {
-    return createData(this.env.DB).ensureOrganization(id, slug)
+    return createData(this.env).ensureOrganization(id, slug)
   }
 }
 

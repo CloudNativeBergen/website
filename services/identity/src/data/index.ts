@@ -13,8 +13,12 @@ export interface Principal {
   platformOperator: boolean
 }
 
-export function createData(d1: D1Database) {
-  const db = rawDb(d1)
+export interface DataEnv {
+  DB: D1Database
+}
+
+export function createData(env: DataEnv) {
+  const db = rawDb(env.DB)
   return {
     /**
      * Tenant-directory owns org ids. Idempotent on id; a slug taken by

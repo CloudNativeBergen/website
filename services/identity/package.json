@@ -8,6 +8,7 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
+    "@runkonf/tenancy": "workspace:*",
     "@apollo/subgraph": "~2.14.3",
     "@pothos/core": "^4",
     "@pothos/plugin-directives": "^4",

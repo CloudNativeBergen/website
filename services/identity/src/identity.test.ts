@@ -124,7 +124,7 @@ describe('principal lookup', () => {
       .bind(other.id)
       .run()
 
-    const data = createData(d1)
+    const data = createData({ DB: d1 })
     expect(await data.principal(u.id, 'org-a')).toEqual({
       orgRole: 'admin',
       platformOperator: false,
@@ -143,7 +143,7 @@ describe('principal lookup', () => {
 
 describe('ensureOrganization', () => {
   it('creates the directory-owned id once; a repeat is a no-op', async () => {
-    const data = createData(d1)
+    const data = createData({ DB: d1 })
     await data.ensureOrganization('org-dir', 'dir')
     await data.ensureOrganization('org-dir', 'dir')
     const { results } = await d1
@@ -209,7 +209,7 @@ describe('account linking (#807)', () => {
 describe('organization updates', () => {
   it('refuses slug and name changes, allows the rest', async () => {
     const u = await newUser('orgowner@example.com', true)
-    await createData(d1).ensureOrganization('org-u', 'u')
+    await createData({ DB: d1 }).ensureOrganization('org-u', 'u')
     await d1
       .prepare(
         "INSERT INTO member (id, organizationId, userId, role) VALUES ('m-u', 'org-u', ?, 'owner')",
