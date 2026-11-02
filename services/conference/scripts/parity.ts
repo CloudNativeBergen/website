@@ -4,12 +4,15 @@ import type { Row } from './backfill'
 
 export type ApiConference = Record<string, unknown> | null
 
-/** The fields `Query.conference` exposes, in API names. */
+/**
+ * The structured fields services/conference owns, in API names. Editorial
+ * fields (description, homepage blocks) stay in services/content and are not
+ * part of the D1 parity.
+ */
 export const FIELDS = [
   'id',
   'title',
   'tagline',
-  'description',
   'city',
   'country',
   'venueName',
@@ -26,7 +29,6 @@ export const FIELDS = [
   'accentColor',
   'registrationLink',
   'socialLinks',
-  'homepageSections',
 ] as const
 
 /** What the API should return for this row. Unpublished rows read as null. */
@@ -36,7 +38,6 @@ export function expected(row: Row | undefined): ApiConference {
     id: row.conference_id,
     title: row.title,
     tagline: row.tagline,
-    description: row.description,
     city: row.city,
     country: row.country,
     venueName: row.venue_name,
@@ -53,22 +54,15 @@ export function expected(row: Row | undefined): ApiConference {
     accentColor: row.accent_color,
     registrationLink: row.registration_link,
     socialLinks: JSON.parse(row.social_links),
-    homepageSections: row.homepage_sections,
   }
 }
 
-// Trimmed, and '' / null / undefined are one value. JSON strings compare by
-// content, so key order and spacing do not count.
+// Trimmed, and '' / null / undefined are one value.
 function norm(v: unknown): string {
   if (v === null || v === undefined) return 'null'
   if (typeof v === 'string') {
     const t = v.trim()
-    if (!t) return 'null'
-    try {
-      const j = JSON.parse(t)
-      if (j && typeof j === 'object') return canon(j)
-    } catch {}
-    return JSON.stringify(t)
+    return t ? JSON.stringify(t) : 'null'
   }
   return canon(v)
 }

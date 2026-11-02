@@ -10,7 +10,6 @@ const row = mapBackfill(
       title: 'Konf',
       city: 'Bergen',
       socialLinks: ['https://x.test'],
-      homepageSections: [{ _type: 'hero', b: 1, a: 2 }],
     },
   ],
   new Set(['c1']),
@@ -43,8 +42,13 @@ describe('diffConference', () => {
         title: '  Konf ',
         tagline: '',
         country: undefined,
-        homepageSections: '[{"a":2,"b":1,"_type":"hero"}]',
       }),
+    ).toEqual([])
+  })
+
+  it('leaves editorial fields to content', () => {
+    expect(
+      diffConference(expected(row), { ...api(), description: 'Sanity copy' }),
     ).toEqual([])
   })
 
