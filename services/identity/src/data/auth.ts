@@ -11,6 +11,11 @@ import * as schema from './schema'
 /** Per environment (`wrangler secret put`); preview never gets production values. */
 export interface AuthEnv {
   BETTER_AUTH_URL: string
+  /**
+   * The identity JWT `iss`. Must equal the gateway's IDENTITY_ISSUER
+   * (api/wrangler.jsonc): https://id.konf.app in production.
+   */
+  IDENTITY_ISSUER: string
   BETTER_AUTH_SECRET: string
   GITHUB_CLIENT_ID: string
   GITHUB_CLIENT_SECRET: string
@@ -90,6 +95,7 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
       jwt({
         jwks: { keyPairConfig: { alg: 'EdDSA', crv: 'Ed25519' } },
         jwt: {
+          issuer: env.IDENTITY_ISSUER,
           audience: JWT_AUDIENCE,
           expirationTime: `${JWT_TTL_SECONDS}s`,
           // sub (the user id) only. orgRole and the operator flag come from

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@escape.tech/graphql-armor-max-aliases": "^2.6.2",
     "@escape.tech/graphql-armor-max-depth": "^2.4.2",
     "@graphql-hive/gateway-runtime": "^2.13.1",
     "@graphql-mesh/transport-http": "^1.2.2",

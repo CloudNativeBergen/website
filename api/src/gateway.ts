@@ -7,6 +7,7 @@ import {
   useCustomFetch as subgraphFetch,
 } from '@graphql-hive/gateway-runtime'
 import httpTransport from '@graphql-mesh/transport-http'
+import { maxAliasesPlugin } from '@escape.tech/graphql-armor-max-aliases'
 import { maxDepthPlugin } from '@escape.tech/graphql-armor-max-depth'
 import { createRemoteJWKSet, customFetch, jwtVerify } from 'jose'
 import {
@@ -45,7 +46,7 @@ const TENANT_QUERY =
 
 type Tenant = { orgId: string; conferenceId: string | null }
 
-function reject(status: 401, code: string, message: string) {
+function reject(status: 401 | 503, code: string, message: string) {
   return Response.json(
     { errors: [{ message, extensions: { code } }] },
     { status },
@@ -77,10 +78,12 @@ async function resolveTenant(
     },
   )
   if (!res.ok) throw new Error(`tenant lookup failed: ${res.status}`)
-  const { data } = (await res.json()) as {
+  const { data, errors } = (await res.json()) as {
     data?: { tenantByHost: Tenant | null }
+    errors?: unknown[]
   }
-  return data?.tenantByHost ?? null
+  if (errors?.length || !data) throw new Error('tenant lookup failed')
+  return data.tenantByHost
 }
 
 export function createGateway(supergraph: string) {
@@ -99,6 +102,7 @@ export function createGateway(supergraph: string) {
       algorithms: ['EdDSA'],
       requiredClaims: ['sub', 'exp', 'iat'],
       maxTokenAge: JWT_MAX_SECONDS,
+      clockTolerance: 5,
     })
     // maxTokenAge bounds age, not lifetime: refuse a token minted to outlive it.
     if (payload.exp! - payload.iat! > JWT_MAX_SECONDS) {
@@ -115,7 +119,8 @@ export function createGateway(supergraph: string) {
     maskedErrors: true,
     // One operation per request, so per-operation limits hold.
     batching: false,
-    // Cost ceiling, checked before execution. ponytail: flat defaults, tune
+    // Cost ceiling, checked per subgraph request (Hive demand control).
+    // Depth and alias limits below run at validation. ponytail: flat defaults, tune
     // with @cost/@listSize in the subgraphs once real queries exist.
     demandControl: { maxCost: 1000, listSize: 20 },
     transports: { http: httpTransport },
@@ -123,7 +128,8 @@ export function createGateway(supergraph: string) {
     additionalTypeDefs: 'extend type Query { health: String! }',
     additionalResolvers: { Query: { health: () => 'ok' } },
     plugins: () => [
-      maxDepthPlugin({ n: 10 }),
+      maxDepthPlugin({ n: 10, ignoreIntrospection: false }),
+      maxAliasesPlugin({ n: 15 }),
       // TODO(#1772 req. 5): persisted queries from a build-time manifest.
       subgraphFetch((url, options, context) => {
         const name = new URL(url).host.replace(/\.internal$/, '')
@@ -151,15 +157,25 @@ export function createGateway(supergraph: string) {
       const forwarded = new Request(request)
       forwarded.headers.delete(ENVELOPE_HEADER)
 
-      // 2. Tenant from Origin, never from a header or argument.
-      const tenant = await resolveTenant(request.headers.get('origin'), env)
+      // Subgraphs trust the envelope, never the caller's token.
+      forwarded.headers.delete('authorization')
 
-      // 3. Identity: optional, but a token that is present must verify.
+      // 2. Tenant from Origin, never from a header or argument.
+      let tenant: Tenant | null
+      try {
+        tenant = await resolveTenant(request.headers.get('origin'), env)
+      } catch {
+        return reject(503, 'UNAVAILABLE', 'tenant lookup unavailable')
+      }
+
+      // 3. Identity: optional, but a header that is present must verify.
       let userId: string | null = null
       const auth = request.headers.get('authorization')
-      if (auth?.startsWith('Bearer ')) {
+      if (auth !== null) {
+        const token = /^Bearer +(\S+)$/i.exec(auth.trim())?.[1]
         try {
-          userId = await verifyIdentity(auth.slice(7), env)
+          if (!token) throw new Error('malformed authorization header')
+          userId = await verifyIdentity(token, env)
         } catch {
           return reject(401, 'UNAUTHENTICATED', 'invalid identity token')
         }

@@ -1,11 +1,17 @@
 // Build-time composition: prints each subgraph's schema and composes the
 // supergraph the gateway serves. `pnpm compose` writes it to
 // api/supergraph.graphql; tests call compose() directly. This is the public
-// contract: @tag(internal) fields are cut before composition, so platform
-// operations never reach the public gateway.
-import { printSchemaWithDirectives } from '@graphql-tools/utils'
+// contract: anything tagged @tag(internal) is cut before composition, and so
+// is every type no longer reachable, so platform operations never reach the
+// public gateway.
+import {
+  filterSchema,
+  getDirective,
+  printSchemaWithDirectives,
+  pruneSchema,
+} from '@graphql-tools/utils'
 import { composeServices } from '@theguild/federation-composition'
-import { Kind, parse, visit, type DocumentNode } from 'graphql'
+import { parse, type GraphQLSchema } from 'graphql'
 import { schema as tenantDirectory } from '../../services/tenant-directory/src/subgraph'
 
 /**
@@ -15,52 +21,30 @@ import { schema as tenantDirectory } from '../../services/tenant-directory/src/s
  */
 const SUBGRAPHS = { 'tenant-directory': tenantDirectory }
 
-const isInternal = (node: { directives?: readonly unknown[] }) =>
-  (
-    node.directives as
-      | {
-          name: { value: string }
-          arguments?: { value: { value?: string } }[]
-        }[]
-      | undefined
-  )?.some(
-    (d) =>
-      d.name.value === 'tag' && d.arguments?.[0]?.value.value === 'internal',
+/** Drops @tag(internal) types, fields, args and enum values, then prunes. */
+export function publicContract(schema: GraphQLSchema): GraphQLSchema {
+  const keep = (node: object | undefined) =>
+    !node ||
+    !getDirective(schema, node as never, 'tag')?.some(
+      (t) => t.name === 'internal',
+    )
+  return pruneSchema(
+    filterSchema({
+      schema,
+      typeFilter: (_, type) => keep(type),
+      rootFieldFilter: (_, __, config) => keep(config),
+      fieldFilter: (_, __, config) => keep(config),
+      argumentFilter: (_, __, ___, config) => keep(config),
+      enumValueFilter: (_, __, config) => keep(config),
+    }),
   )
-
-/** Drops @tag(internal) fields, then types and root operations left empty. */
-function publicContract(doc: DocumentNode): DocumentNode {
-  const emptied = new Set<string>()
-  const pruned = visit(doc, {
-    FieldDefinition: (node) => (isInternal(node) ? null : undefined),
-    ObjectTypeDefinition: {
-      leave: (node) => {
-        if (node.fields?.length) return undefined
-        emptied.add(node.name.value)
-        return null
-      },
-    },
-  })
-  return visit(pruned, {
-    OperationTypeDefinition: (node) =>
-      emptied.has(node.type.name.value) ? null : undefined,
-    [Kind.SCHEMA_DEFINITION]: {
-      leave: (node) => (node.operationTypes.length ? undefined : null),
-    },
-    [Kind.SCHEMA_EXTENSION]: {
-      leave: (node) =>
-        node.operationTypes?.length || node.directives?.length
-          ? undefined
-          : null,
-    },
-  })
 }
 
 export function compose(): string {
   const result = composeServices(
     Object.entries(SUBGRAPHS).map(([name, schema]) => ({
       name,
-      typeDefs: publicContract(parse(printSchemaWithDirectives(schema))),
+      typeDefs: parse(printSchemaWithDirectives(publicContract(schema))),
       url: `https://${name}.internal/graphql`,
     })),
   )

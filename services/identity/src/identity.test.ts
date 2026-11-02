@@ -21,6 +21,7 @@ vi.mock('jose', async () => {
 const BASE = 'http://identity.test'
 const env: AuthEnv = {
   BETTER_AUTH_URL: BASE,
+  IDENTITY_ISSUER: 'https://id.test',
   BETTER_AUTH_SECRET: 'test-secret-that-is-at-least-32-characters',
   GITHUB_CLIENT_ID: 'gh',
   GITHUB_CLIENT_SECRET: 'gh',
@@ -94,7 +95,7 @@ describe('identity JWT', () => {
       token,
       createLocalJWKSet(jwks as never),
       {
-        issuer: BASE,
+        issuer: 'https://id.test',
         audience: JWT_AUDIENCE,
       },
     )

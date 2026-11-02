@@ -38,6 +38,7 @@ beforeAll(async () => {
  */
 function makeEnv(role: { orgRole: string | null } = { orgRole: 'admin' }) {
   const envelopes: (string | null)[] = []
+  const forwarded: Headers[] = []
   const env = {
     ENVELOPE_PRIVATE_KEY: envelopeKeys.privatePem,
     IDENTITY_ISSUER: 'https://id.test',
@@ -51,7 +52,8 @@ function makeEnv(role: { orgRole: string | null } = { orgRole: 'admin' }) {
             data: { tenantByHost: known ? TENANT : null },
           })
         }
-        envelopes.push(new Headers(init.headers).get(ENVELOPE_HEADER))
+        forwarded.push(new Headers(init.headers))
+        envelopes.push(forwarded.at(-1)!.get(ENVELOPE_HEADER))
         return Response.json({ data: { tenantByHost: null } })
       },
     },
@@ -60,7 +62,7 @@ function makeEnv(role: { orgRole: string | null } = { orgRole: 'admin' }) {
       principal: vi.fn(async () => ({ ...role, platformOperator: false })),
     },
   }
-  return { env: env as unknown as Env, envelopes, role }
+  return { env: env as unknown as Env, envelopes, forwarded, role }
 }
 
 const post = (body: unknown, headers: Record<string, string> = {}): Request =>
@@ -96,7 +98,7 @@ describe('gateway', () => {
     expect(await res.json()).toEqual({
       data: { __schema: { mutationType: null } },
     })
-    expect(compose()).not.toMatch(/provision|internal"\)/i)
+    expect(compose()).not.toMatch(/provision|internal"\)|type Organization/)
   })
 
   it('answers the health query', async () => {
@@ -192,6 +194,65 @@ describe('gateway', () => {
     const body = (await res.json()) as { errors: unknown[] }
     expect(JSON.stringify(body.errors)).toMatch(/depth limit/i)
     expect(envelopes).toEqual([])
+  })
+
+  it('rejects a deep __schema query', async () => {
+    const { env } = makeEnv()
+    const deep = `{ __schema { types { fields { type { ${'ofType { '.repeat(10)}name${' }'.repeat(10)} } } } } }`
+    const res = await gateway.fetch(post({ query: deep }), env)
+    expect(JSON.stringify(await res.json())).toMatch(/depth limit/i)
+  })
+
+  it('rejects 300 aliased __schema fields', async () => {
+    const { env } = makeEnv()
+    const aliases = Array.from(
+      { length: 300 },
+      (_, i) => `a${i}: __schema { queryType { name } }`,
+    ).join(' ')
+    const res = await gateway.fetch(post({ query: `{ ${aliases} }` }), env)
+    expect(JSON.stringify(await res.json())).toMatch(/aliases limit/i)
+  })
+
+  it('accepts a lowercase bearer scheme and never forwards the token', async () => {
+    const { env, envelopes, forwarded } = makeEnv()
+    const res = await gateway.fetch(
+      post(SUBGRAPH_QUERY, {
+        origin: VERIFIED,
+        authorization: `bearer ${await jwt()}`,
+      }),
+      env,
+    )
+    expect(res.status).toBe(200)
+    expect(
+      await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem),
+    ).toMatchObject({ userId: 'user_1' })
+    expect(forwarded[0].get('authorization')).toBeNull()
+  })
+
+  it.each(['Basic abc', 'Bearer', 'Bearer a b', 'nonsense'])(
+    'rejects a malformed Authorization header %j',
+    async (authorization) => {
+      const { env, envelopes } = makeEnv()
+      const res = await gateway.fetch(
+        post(SUBGRAPH_QUERY, { origin: VERIFIED, authorization }),
+        env,
+      )
+      expect(res.status).toBe(401)
+      expect(envelopes).toEqual([])
+    },
+  )
+
+  it('answers 503 without detail when tenant-directory fails', async () => {
+    const { env } = makeEnv()
+    ;(env.DIRECTORY as unknown as { fetch: unknown }).fetch = async () => {
+      throw new Error('secret detail')
+    }
+    const res = await gateway.fetch(
+      post(SUBGRAPH_QUERY, { origin: VERIFIED }),
+      env,
+    )
+    expect(res.status).toBe(503)
+    expect(await res.text()).not.toContain('secret detail')
   })
 
   it('masks unexpected subgraph failures', async () => {

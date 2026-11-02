@@ -9,8 +9,10 @@ are reached over service bindings, never HTTP.
   from `Origin` (tenant-directory, anonymous rules), verifies the bearer
   identity JWT against identity's JWKS, looks up `orgRole` live (identity
   `Membership`), and mints one 60-second envelope for the subgraphs. Masked
-  errors, no HTTP batching, depth and cost limits.
-- `src/supergraph.ts`: composes the subgraph schemas; `pnpm compose` writes
+  errors, no HTTP batching, depth and alias limits at validation, and a cost
+  limit on each subgraph request.
+- `src/supergraph.ts`: composes the public contract of the subgraph schemas
+  (no `@tag(internal)`, no unreachable types); `pnpm compose` writes
   `supergraph.graphql` (not committed; `dev` and `build` run it)
 
 Domain code comes from the website's `src/lib` through the `@/*` path alias
@@ -44,6 +46,8 @@ Run `pnpm compose` first, then deploy with `npx wrangler deploy --env preview` o
 
 Subgraphs get the matching public key as `GATEWAY_PUBLIC_KEY`. The var
 `IDENTITY_ISSUER` (in `wrangler.jsonc`, per env) is the identity JWT `iss`.
+Identity signs with the same value, from its own `IDENTITY_ISSUER`; keep the
+two equal per environment.
 Secrets are never committed. Set
 them per environment with `npx wrangler secret put <NAME> --env <env>`, and
 never reuse a production value in `preview`. List each new secret here, with

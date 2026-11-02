@@ -381,6 +381,9 @@ importers:
 
   api:
     dependencies:
+      '@escape.tech/graphql-armor-max-aliases':
+        specifier: ^2.6.2
+        version: 2.6.2
       '@escape.tech/graphql-armor-max-depth':
         specifier: ^2.4.2
         version: 2.4.2
@@ -1877,6 +1880,10 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@escape.tech/graphql-armor-max-aliases@2.6.2':
+    resolution: {integrity: sha512-SDk7pAzY6gutsdZ3NlyY55RrytrCPxJJxSN/DBfIGKphTrfBvKQWTnioQ9OlLP9kPjCE6XM5UWwGt7uqbpKSYA==}
+    engines: {node: '>=18.0.0'}
 
   '@escape.tech/graphql-armor-max-depth@2.4.2':
     resolution: {integrity: sha512-J9fbW1+W4u3GAcf19wwS0zrNGICCbWn/glvopCoC11Ga0reXvGwgr8EcyuHjTFLL7+pPvWAeVhP4qo6hybcB9w==}
@@ -13013,6 +13020,13 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.2':
     optional: true
+
+  '@escape.tech/graphql-armor-max-aliases@2.6.2':
+    dependencies:
+      graphql: 16.14.2
+    optionalDependencies:
+      '@envelop/core': 5.6.1
+      '@escape.tech/graphql-armor-types': 0.7.0
 
   '@escape.tech/graphql-armor-max-depth@2.4.2':
     dependencies:
