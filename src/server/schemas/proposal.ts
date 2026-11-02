@@ -271,6 +271,8 @@ const ProposalDraftSchema = ProposalInputBaseSchema.omit({ speakers: true })
 export const CreateProposalSchema = z.object({
   data: ProposalDraftSchema,
   status: z.enum([Status.draft, Status.submitted]).default(Status.submitted),
+  // Organizer-issued late link (#249), verified in `assertMayBecomeSubmitted`.
+  lateSubmissionToken: z.string().max(1000).optional(),
 })
 
 // Proposal update schema — uses relaxed validation; strict checks enforced
@@ -325,6 +327,8 @@ export const ProposalActionSchema = z.object({
   revokeTicket: z.boolean().optional().default(false),
   comment: z.string().nullable().optional().transform(nullToUndefined),
   reason: z.string().nullable().optional().transform(nullToUndefined),
+  // Late link (#249) for a draft submitted after the CFP closed.
+  lateSubmissionToken: z.string().max(1000).optional(),
 })
 
 /**

@@ -5,13 +5,18 @@ import { redirect } from 'next/navigation'
 export default async function Submit({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>
+  searchParams: Promise<{ id?: string; token?: string }>
 }) {
-  const { id: proposalId } = (await searchParams) || {}
+  const { id: proposalId, token } = (await searchParams) || {}
 
   if (proposalId) {
     redirect(`/cfp/proposal/${proposalId}`)
   }
 
-  redirect('/cfp/proposal')
+  // Late-submission links (#249) land here; the token rides along to the form.
+  redirect(
+    token
+      ? `/cfp/proposal?token=${encodeURIComponent(token)}`
+      : '/cfp/proposal',
+  )
 }

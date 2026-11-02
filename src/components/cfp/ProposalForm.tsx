@@ -46,6 +46,7 @@ export function ProposalForm({
   mode = 'user',
   initialStatus,
   landingUtm,
+  lateSubmissionToken,
 }: {
   initialProposal: ProposalInput
   initialSpeaker: SpeakerInput
@@ -64,6 +65,8 @@ export function ProposalForm({
    * instead. Sent on CREATE only; the server refuses them on every update.
    */
   landingUtm?: ProposalUtmTags | null
+  /** Organizer-issued late link (#249), sent with every submit. */
+  lateSubmissionToken?: string
 }) {
   const [proposal, setProposal] = useState(initialProposal)
   const [speaker, setSpeaker] = useState(initialSpeaker)
@@ -391,6 +394,7 @@ export function ProposalForm({
         await actionMutation.mutateAsync({
           id: currentProposalId,
           action: Action.submit,
+          lateSubmissionToken,
         })
       } catch {
         window.scrollTo(0, 0)
@@ -400,6 +404,7 @@ export function ProposalForm({
       createProposalMutation.mutate({
         data: { ...proposalData, ...(utm ? { utm } : {}) },
         status: Status.submitted,
+        lateSubmissionToken,
       })
     }
   }
