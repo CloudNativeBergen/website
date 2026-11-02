@@ -32,6 +32,9 @@ export interface BankingDetails {
   iban?: string
   accountNumber?: string
   swiftCode: string
+  streetAddress?: string
+  postalCode?: string
+  city?: string
   country: string
   preferredCurrency: SupportedCurrency
 }

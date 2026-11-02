@@ -16,6 +16,9 @@ export const BankingDetailsSchema = z
       .string()
       .min(8, 'SWIFT code must be at least 8 characters')
       .max(11),
+    streetAddress: z.string().max(200).optional(),
+    postalCode: z.string().max(20).optional(),
+    city: z.string().max(100).optional(),
     country: z.string().min(1, 'Country is required').max(50),
     preferredCurrency: z.enum(SUPPORTED_CURRENCIES),
   })
@@ -30,6 +33,9 @@ export const OptionalBankingDetailsSchema = z.object({
   iban: z.string().optional(),
   accountNumber: z.string().optional(),
   swiftCode: z.string().max(11).optional().default(''),
+  streetAddress: z.string().max(200).optional(),
+  postalCode: z.string().max(20).optional(),
+  city: z.string().max(100).optional(),
   country: z.string().max(50).optional().default(''),
   preferredCurrency: z.enum(SUPPORTED_CURRENCIES).default('NOK'),
 })

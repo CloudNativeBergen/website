@@ -602,7 +602,13 @@ describe('the unpaid-only banking condition', () => {
       _rev: 'r1',
       speaker: ref(SPEAKER),
       status,
-      bankingDetails: { beneficiaryName: 'x', swiftCode: 'y' },
+      bankingDetails: {
+        beneficiaryName: 'x',
+        swiftCode: 'y',
+        streetAddress: 'Storgata 1',
+        postalCode: '5003',
+        city: 'Bergen',
+      },
       ...extra,
     }
   }

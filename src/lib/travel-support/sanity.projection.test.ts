@@ -50,6 +50,9 @@ const BANKING_FIELDS = [
   'iban',
   'accountNumber',
   'swiftCode',
+  'streetAddress',
+  'postalCode',
+  'city',
   'country',
   'preferredCurrency',
 ]
