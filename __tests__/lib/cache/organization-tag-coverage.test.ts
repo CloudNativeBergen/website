@@ -29,6 +29,19 @@
  *     class of bug and neither can a rendering test, because a missing cache
  *     tag changes nothing about the output — only about how long the output
  *     survives.
+ *
+ * KNOWN EVASIONS of layer 2 — it is a net, not a proof (same lesson as
+ * `no-unscoped-groq`, #792):
+ *  - a registered reader reached under a name that never spells it
+ *    (`legal['resolve' + 'LegalConfig']`, or an alias passed on as a value
+ *    from a module that does not import it);
+ *  - a dynamic `import()` or `require()` whose specifier is not a string
+ *    literal, or a specifier outside `@/…` and `./…` (a package alias);
+ *  - an org read the registry does not list and whose query text does not
+ *    say `organization` (see UNTAGGED_ORG_READERS).
+ * Namespace imports, dynamic imports with a literal specifier, `export … from`
+ * barrels and import statements of any length ARE followed (#805), and each
+ * shape has a self-test below.
  */
 
 // `vi.hoisted`, because the page modules below are imported STATICALLY: the
@@ -65,6 +78,7 @@ vi.mock('next/headers', () => ({
 }))
 
 import { readdirSync, readFileSync, statSync } from 'fs'
+import ts from 'typescript'
 import { join, dirname, resolve } from 'path'
 import * as privacyPage from '@/app/(main)/privacy/page'
 import * as termsPage from '@/app/(main)/terms/page'
@@ -201,6 +215,20 @@ const INLINE_ORG_READ =
 const CACHED_SCOPE = /'use cache'/
 const TAGS_ORGANIZATION = /cacheTag\(\s*organizationTag\(/
 
+/**
+ * Does this module read org fields directly: inline, or through a registered
+ * reader named ANYWHERE in it — an `import { … }`, a namespace member
+ * (`legal.resolveLegalConfig`), a re-export, or its own definition.
+ */
+function readsOrgFields(source: string): boolean {
+  return (
+    INLINE_ORG_READ.test(source) ||
+    UNTAGGED_ORG_READERS.some((symbol) =>
+      new RegExp(`\\b${symbol}\\b`).test(source),
+    )
+  )
+}
+
 /** Does this module DEFINE (and export) one of the registered readers? */
 function definesReader(source: string, symbol: string): boolean {
   return new RegExp(`export\\s+(async\\s+)?function\\s+${symbol}\\b`).test(
@@ -209,28 +237,67 @@ function definesReader(source: string, symbol: string): boolean {
 }
 
 /**
- * The modules this one imports AT RUNTIME, resolved to absolute paths.
+ * The modules this one imports AT RUNTIME, resolved to absolute paths: static
+ * imports (named, default, namespace, side-effect), `export … from` (a barrel
+ * passes its modules' debt on) and `import('…')` with a literal specifier.
+ * Parsed with the TypeScript compiler, so statement length does not matter.
  *
- * `import type` is excluded, and that exclusion is load-bearing rather than
- * tidiness: every client component that touches tRPC does
- * `import type { AppRouter } from '@/server/_app'`, which reaches the whole
- * router tree — including the mutation that derefs `organization->slug`. Follow
- * type imports and half the public pages inherit a debt for code that never
- * runs in them, and the scan's verdict stops meaning anything.
+ * Type-only imports and re-exports are excluded, and that exclusion is
+ * load-bearing rather than tidiness: every client component that touches tRPC
+ * does `import type { AppRouter } from '@/server/_app'`, which reaches the
+ * whole router tree — including the mutation that derefs
+ * `organization->slug`. Follow type imports and half the public pages inherit
+ * a debt for code that never runs in them, and the scan's verdict stops
+ * meaning anything.
  */
 function importedFiles(file: string, source: string): string[] {
-  const out: string[] = []
-  const specifiers = /from\s+['"]([^'"]+)['"]/g
-  let match: RegExpExecArray | null
-  while ((match = specifiers.exec(source)) !== null) {
-    const spec = match[1]
-    // Walk back to the keyword that opened this statement; `import type …` and
-    // `export … from` carry no runtime read into this module.
-    const preceding = source.slice(Math.max(0, match.index - 600), match.index)
-    const keywords = [...preceding.matchAll(/\b(import|export)\s+(type\s+)?/g)]
-    const opener = keywords[keywords.length - 1]
-    if (!opener || opener[1] !== 'import' || opener[2]) continue
+  const specs: string[] = []
+  const typeOnly = (
+    names: ts.NamedImportBindings | ts.NamedExportBindings | undefined,
+  ) =>
+    !!names &&
+    (ts.isNamedImports(names) || ts.isNamedExports(names)) &&
+    names.elements.length > 0 &&
+    names.elements.every((e) => e.isTypeOnly)
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      const clause = node.importClause
+      const erased =
+        clause &&
+        (clause.isTypeOnly || (!clause.name && typeOnly(clause.namedBindings)))
+      if (!erased) specs.push(node.moduleSpecifier.text)
+    } else if (
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      if (!node.isTypeOnly && !typeOnly(node.exportClause))
+        specs.push(node.moduleSpecifier.text)
+    } else if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments[0] &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      specs.push(node.arguments[0].text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(
+    ts.createSourceFile(
+      file,
+      source,
+      ts.ScriptTarget.Latest,
+      false,
+      file.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    ),
+  )
 
+  const out: string[] = []
+  for (const spec of specs) {
     const base = spec.startsWith('@/')
       ? join(SRC, spec.slice(2))
       : spec.startsWith('.')
@@ -256,11 +323,53 @@ function importedFiles(file: string, source: string): string[] {
   return out
 }
 
+describe('the import scanner follows every runtime import shape (#805)', () => {
+  const file = join(SRC, 'app/(main)/fake/page.tsx')
+  const LEGAL = 'lib/legal/index.ts'
+  const scan = (source: string) =>
+    importedFiles(file, source).map((f) => f.replace(SRC + '/', ''))
+
+  it.each([
+    ['a named import', `import { resolveLegalConfig } from '@/lib/legal'`],
+    ['a namespace import', `import * as legal from '@/lib/legal'`],
+    ['a default import', `import legal from '@/lib/legal'`],
+    ['a side-effect import', `import '@/lib/legal'`],
+    [
+      'a dynamic import',
+      `export async function f() { return (await import('@/lib/legal')).x }`,
+    ],
+    ['a barrel re-export', `export { resolveLegalConfig } from '@/lib/legal'`],
+    ['a star re-export', `export * from '@/lib/legal'`],
+    [
+      'an import statement longer than any fixed lookback',
+      `import {\n${Array.from({ length: 80 }, (_, i) => `  name${i},`).join('\n')}\n} from '@/lib/legal'`,
+    ],
+  ])('follows %s', (_shape, source) => {
+    expect(scan(source)).toEqual([LEGAL])
+  })
+
+  it.each([
+    ['import type', `import type { LegalConfig } from '@/lib/legal'`],
+    ['inline type names', `import { type LegalConfig } from '@/lib/legal'`],
+    ['export type', `export type { LegalConfig } from '@/lib/legal'`],
+  ])('skips %s — erased at runtime', (_shape, source) => {
+    expect(scan(source)).toEqual([])
+  })
+
+  it('seeds on a registered reader however it is named in the source', () => {
+    expect(readsOrgFields(`legal.resolveLegalConfig(conference)`)).toBe(true)
+    expect(
+      readsOrgFields(`export { resolveLegalConfig } from './resolve'`),
+    ).toBe(true)
+    expect(readsOrgFields(`resolveLegalConfigLater()`)).toBe(false)
+  })
+})
+
 describe('every cached scope that reads organization fields tags it', () => {
   const files = sourceFiles(SRC)
-  const sources = new Map(
-    files.map((f) => [f, stripComments(readFileSync(f, 'utf8'))]),
-  )
+  const raw = new Map(files.map((f) => [f, readFileSync(f, 'utf8')]))
+  const sources = new Map(files.map((f) => [f, stripComments(raw.get(f)!)]))
+  const imports = new Map(files.map((f) => [f, importedFiles(f, raw.get(f)!)]))
 
   /**
    * Modules carrying UNSETTLED org-field tag debt.
@@ -274,14 +383,7 @@ describe('every cached scope that reads organization fields tags it', () => {
    */
   const owesTag = new Set<string>()
   for (const [file, source] of sources) {
-    const usesAnUntaggedReader = UNTAGGED_ORG_READERS.some(
-      (symbol) =>
-        new RegExp(`import[^;]*\\b${symbol}\\b[^;]*from`).test(source) ||
-        definesReader(source, symbol),
-    )
-    if (INLINE_ORG_READ.test(source) || usesAnUntaggedReader) {
-      owesTag.add(file)
-    }
+    if (readsOrgFields(source)) owesTag.add(file)
   }
   const settles = (file: string) =>
     CACHED_SCOPE.test(sources.get(file) ?? '') &&
@@ -289,11 +391,9 @@ describe('every cached scope that reads organization fields tags it', () => {
 
   for (let changed = true; changed;) {
     changed = false
-    for (const [file, source] of sources) {
+    for (const file of files) {
       if (owesTag.has(file)) continue
-      if (
-        importedFiles(file, source).some((i) => owesTag.has(i) && !settles(i))
-      ) {
+      if (imports.get(file)!.some((i) => owesTag.has(i) && !settles(i))) {
         owesTag.add(file)
         changed = true
       }
@@ -305,9 +405,7 @@ describe('every cached scope that reads organization fields tags it', () => {
     // specifier parser that quietly matched nothing would leave every module
     // an island, and the sweep below would then pass by reaching nothing.
     const privacy = join(SRC, 'app/(main)/privacy/page.tsx')
-    const resolved = importedFiles(privacy, sources.get(privacy)!).map((f) =>
-      f.replace(SRC + '/', ''),
-    )
+    const resolved = imports.get(privacy)!.map((f) => f.replace(SRC + '/', ''))
     expect(resolved).toContain('lib/legal/index.ts')
     expect(resolved).toContain('lib/cache/tags.ts')
     expect(resolved).toContain('components/Container.tsx')
