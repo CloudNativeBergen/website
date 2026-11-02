@@ -59,9 +59,13 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-const apiReply = (conference: unknown) =>
+const apiReply = (conference: Record<string, unknown> | null) =>
   fetchMock.mockResolvedValue(
-    new Response(JSON.stringify({ data: { conference } })),
+    new Response(
+      JSON.stringify({
+        data: { conference: conference && { id: 'conf-1', ...conference } },
+      }),
+    ),
   )
 
 describe('KONF_API_TENANTS', () => {
@@ -70,6 +74,32 @@ describe('KONF_API_TENANTS', () => {
     const { conference } = await getConferenceForDomain('2026.example.com')
     expect(fetchMock).not.toHaveBeenCalled()
     expect(conference.title).toBe('Sanity title')
+  })
+
+  it('uncached (admin) reads stay on Sanity', async () => {
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    apiReply({ title: 'API title' })
+    const { conference } = await getConferenceForDomain('2026.example.com', {
+      uncached: true,
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(conference.title).toBe('Sanity title')
+  })
+
+  it('a title equal to the id is not merged', async () => {
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    apiReply({ title: 'conf-1', city: 'Oslo' })
+    const { conference } = await getConferenceForDomain('2026.example.com')
+    expect(conference.title).toBe('Sanity title')
+    expect(conference.city).toBe('Oslo')
+  })
+
+  it('an id mismatch falls back to Sanity', async () => {
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    apiReply({ id: 'conf-other', title: 'API title' })
+    const { conference } = await getConferenceForDomain('2026.example.com')
+    expect(conference.title).toBe('Sanity title')
+    expect(console.warn).toHaveBeenCalled()
   })
 
   it('other tenant listed: no fetch', async () => {
@@ -172,9 +202,18 @@ describe('fetchKonfApiConference caching', () => {
     await expect(cachedApiRead('2026.example.com', 'conf-1')).rejects.toThrow()
     apiReply({ title: 'API title' })
     await expect(cachedApiRead('2026.example.com', 'conf-1')).resolves.toEqual({
+      id: 'conf-1',
       title: 'API title',
     })
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('an id mismatch throws inside the cached body, so it is not stored', async () => {
+    apiReply({ id: 'conf-other' })
+    await expect(cachedApiRead('2026.example.com', 'conf-1')).rejects.toThrow(
+      'id mismatch',
+    )
+    expect(entries.size).toBe(0)
   })
 
   it('a null conference throws too', async () => {

@@ -331,7 +331,7 @@ export async function getConferenceForDomain(
         confirmedTalksOnly,
       })
       // Spike (#1833): flagged tenants read core fields from the Konf API.
-      if (isKonfApiTenant(conference)) {
+      if (!uncached && isKonfApiTenant(conference)) {
         conference = await mergeKonfApiConference(host, conference)
       }
       status = 'resolved'

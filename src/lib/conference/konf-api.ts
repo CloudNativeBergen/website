@@ -11,7 +11,7 @@ const KONF_API_URL = 'https://api.konf.app/graphql'
 const TIMEOUT_MS = 2000
 
 const QUERY = `{ conference {
-  title tagline description city country venueName venueAddress startDate endDate
+  id title tagline description city country venueName venueAddress startDate endDate
   visibility logoBright logoDark logomarkBright logomarkDark backgroundPattern
   primaryColor accentColor registrationLink socialLinks homepageSections
 } }`
@@ -69,6 +69,10 @@ export async function fetchKonfApiConference(
   if (json.errors?.length) throw new Error(JSON.stringify(json.errors))
   const api = json.data?.conference
   if (!api) throw new Error('conference is null')
+  // Thrown inside the cached body so a wrong-tenant answer is never stored.
+  if (api.id !== conferenceId) {
+    throw new Error(`conference id mismatch: ${String(api.id)}`)
+  }
   return api
 }
 
@@ -82,7 +86,9 @@ export async function mergeKonfApiConference(
 ): Promise<Conference> {
   try {
     const api = await fetchKonfApiConference(host, conference._id)
-    const { primaryColor, accentColor, homepageSections, ...rest } = api
+    const { id, primaryColor, accentColor, homepageSections, ...rest } = api
+    // Legacy rows fall back to the id for a blank title; keep Sanity's then.
+    if (rest.title === id) delete rest.title
     const merged = { ...conference } as Record<string, unknown>
     for (const [k, v] of Object.entries(rest)) if (v != null) merged[k] = v
     if (primaryColor != null || accentColor != null) {
