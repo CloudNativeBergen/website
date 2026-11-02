@@ -100,7 +100,7 @@ export const speakerRouter = router({
 | `update`         | `proposal.update`               | Update existing entity        |
 | `delete`         | `sponsor.tiers.delete`          | Delete entity                 |
 | `search`         | `proposal.admin.search`         | Search/filter operations      |
-| `sendEmail`      | `speaker.admin.sendEmail`       | Action-oriented operations    |
+| `sendEmail`      | `volunteer.admin.sendEmail`     | Action-oriented operations    |
 | `broadcastEmail` | `sponsor.crm.broadcastEmail`    | Specific action variant       |
 | `syncAudience`   | `sponsor.crm.syncAudience`      | Synchronization operations    |
 | `submitReview`   | `proposal.admin.submitReview`   | Domain-specific actions       |
@@ -414,7 +414,7 @@ Stories mock tRPC via MSW with the tRPC response envelope format:
 import { http, HttpResponse } from 'msw'
 
 // Success — wrap in { result: { data } }
-http.post('/api/trpc/speaker.admin.sendEmail', () => {
+http.post('/api/trpc/volunteer.admin.sendEmail', () => {
   return HttpResponse.json({
     result: { data: { success: true, sentCount: 5 } },
   })
