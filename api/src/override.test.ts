@@ -18,6 +18,8 @@ const legacySdl = printSchemaWithDirectives(publicContract(legacy))
 const native = legacySdl
   .replace('federation/v2.6"', 'federation/v2.7"')
   .replace('import: [', 'import: ["@override", ')
+  // #1829 keeps title non-null; composition merges it as nullable.
+  .replace(/\btitle: String\b/, 'title: String!')
   .replace(
     /conference: Conference/,
     '$& @override(from: "legacy", label: "conference")',

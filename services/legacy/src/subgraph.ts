@@ -10,7 +10,7 @@ const Conference = builder.objectRef<Row>('Conference').implement({
   shareable: true,
   fields: (t) => ({
     id: t.exposeID('conferenceId'),
-    title: t.exposeString('title'),
+    title: t.exposeString('title', { nullable: true }),
     tagline: t.exposeString('tagline', { nullable: true }),
     description: t.exposeString('description', { nullable: true }),
     city: t.exposeString('city', { nullable: true }),

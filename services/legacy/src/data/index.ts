@@ -37,7 +37,8 @@ const s = (v: unknown) => (typeof v === 'string' && v.trim()) || null
 function toConference(c: Doc) {
   return {
     conferenceId: c._id,
-    title: s(c.title) ?? c._id,
+    // Blank stays null: the id is not a title.
+    title: s(c.title),
     tagline: s(c.tagline),
     description: s(c.description),
     city: s(c.city),
