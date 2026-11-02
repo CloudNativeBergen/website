@@ -8,11 +8,6 @@ name: Deploy Workers
 #   environment `workers-production`, so its required reviewers approve every
 #   production deploy, D1 migrations included.
 #
-# A service whose D1 id for the env is still TO_BE_CREATED (see
-# services/platform-service.cue) gets `wrangler deploy --dry-run` instead:
-# the config and bundle are checked, nothing is created or uploaded. It
-# switches to a real deploy once the owner commits the id.
-#
 # Required configuration, per GitHub environment (`workers-preview`,
 # `workers-production`; `Preview`/`Production` belong to Vercel):
 #   secrets.CLOUDFLARE_API_TOKEN   - a separate token per environment; the
@@ -59,7 +54,8 @@ jobs:
     name: Deploy (${{ github.event_name == 'push' && 'production' || 'preview' }})
     needs: compose
     # Fork PRs get no secrets; skip them rather than fail.
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    # Dependabot PRs get no environment secrets either.
+    if: github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: ${{ github.event_name == 'push' && 'workers-production' || 'workers-preview' }}
@@ -68,8 +64,6 @@ jobs:
       cancel-in-progress: false
     env:
       DEPLOY_ENV: ${{ github.event_name == 'push' && 'production' || 'preview' }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
     steps:
       - name: Checkout code
@@ -88,30 +82,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Gateway composition from #1785; skipped until api/src/supergraph.ts lands.
+      - name: Compose supergraph
+        if: hashFiles('api/src/supergraph.ts') != ''
+        run: pnpm --filter @runkonf/api compose
+
       # Order matters: tenant-directory binds identity, and the gateway will
       # bind both, so a binding target is always deployed first.
       - name: Migrate and deploy
         shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          for dir in services/identity services/tenant-directory api; do
+          for dir in services/identity services/tenant-directory; do
             echo "::group::$dir ($DEPLOY_ENV)"
-            # The generated wrangler.jsonc has trailing commas but no comments.
-            # shellcheck disable=SC2016 # $1 is a JS regex backreference
-            db_id=$(node -e '
-              const fs = require("fs")
-              const c = JSON.parse(fs.readFileSync(process.argv[1], "utf8").replace(/,(\s*[}\]])/g, "$1"))
-              const d = c.env?.[process.argv[2]]?.d1_databases?.[0]
-              console.log(d ? d.database_id : "none")
-            ' "$dir/wrangler.jsonc" "$DEPLOY_ENV")
-            if [ "$db_id" = "TO_BE_CREATED" ]; then
-              echo "::warning::$dir has no $DEPLOY_ENV D1 database yet; dry-run only."
-              (cd "$dir" && pnpm exec wrangler deploy --dry-run --env "$DEPLOY_ENV" --outdir "$RUNNER_TEMP/$(basename "$dir")")
-            else
-              if [ "$db_id" != "none" ]; then
-                (cd "$dir" && pnpm exec wrangler d1 migrations apply DB --remote --env "$DEPLOY_ENV")
-              fi
-              (cd "$dir" && pnpm exec wrangler deploy --env "$DEPLOY_ENV")
-            fi
+            (cd "$dir" && pnpm exec wrangler d1 migrations apply DB --remote --env "$DEPLOY_ENV")
+            (cd "$dir" && pnpm exec wrangler deploy --env "$DEPLOY_ENV")
             echo "::endgroup::"
           done
+          cd api && pnpm exec wrangler deploy --env "$DEPLOY_ENV"
