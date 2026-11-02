@@ -15,7 +15,8 @@ export interface DataEnv {
   SANITY_API_TOKEN_READ: string
 }
 
-// The projection scripts/backfill-conference.ts reads (#1829).
+// The structured fields scripts/backfill-conference.ts also reads (#1829),
+// plus the editorial fields only content serves.
 const CONFERENCE = `*[_type == "conference" && _id == $conferenceId && organization._ref == $orgId][0]{
   _id, title, tagline, description, city, country, venueName, venueAddress,
   startDate, endDate, lifecycleStatus, visibility, logoBright, logoDark,

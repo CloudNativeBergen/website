@@ -97,7 +97,8 @@ for (const [type, keys] of Object.entries(blocks))
   })
 
 // Structured fields (title to socialLinks) are the ones services/conference
-// (#1829) overrides; homepageSections and description stay here.
+// (#1829) overrides. The rest is content-only and nullable, so a Conference
+// content cannot resolve degrades to null fields, not a null `conference`.
 const Conference = builder.objectRef<Row>('Conference').implement({
   fields: (t) => ({
     id: t.exposeID('conferenceId'),
@@ -125,14 +126,17 @@ const Conference = builder.objectRef<Row>('Conference').implement({
     registrationLink: t.exposeString('registrationLink', { nullable: true }),
     socialLinks: t.exposeStringList('socialLinks'),
     homepageSections: t.exposeString('homepageSections', {
+      nullable: true,
       description: 'The homepage section list as JSON (Sanity shape).',
       deprecationReason: 'Use homepageBlocks.',
     }),
     homepageBlocks: t.field({
+      nullable: true,
       type: [HomepageSection],
       description:
         'The homepage sections in order. Hidden ones only for org members.',
-      resolve: (c) => c.homepageBlocks.filter((b) => b._type in blocks),
+      resolve: (c) =>
+        c.homepageBlocks.filter((b) => Object.hasOwn(blocks, b._type)),
     }),
     announcement: t.exposeString('announcement', {
       nullable: true,
@@ -176,22 +180,30 @@ const Conference = builder.objectRef<Row>('Conference').implement({
       nullable: true,
       description: 'Org members only.',
     }),
-    registrationEnabled: t.exposeBoolean('registrationEnabled'),
+    registrationEnabled: t.exposeBoolean('registrationEnabled', {
+      nullable: true,
+    }),
     ticketCustomization: t.field({
       type: TicketCustomization,
       nullable: true,
       resolve: (c) => c.ticketCustomization,
     }),
     ticketInclusions: t.field({
+      nullable: true,
       type: [TicketInclusion],
       resolve: (c) => c.ticketInclusions,
     }),
-    ticketFaqs: t.field({ type: [Faq], resolve: (c) => c.ticketFaqs }),
+    ticketFaqs: t.field({
+      type: [Faq],
+      nullable: true,
+      resolve: (c) => c.ticketFaqs,
+    }),
     vanityMetrics: t.field({
+      nullable: true,
       type: [VanityMetric],
       resolve: (c) => c.vanityMetrics,
     }),
-    formats: t.exposeStringList('formats'),
+    formats: t.exposeStringList('formats', { nullable: true }),
   }),
 })
 
