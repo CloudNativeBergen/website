@@ -20,6 +20,7 @@ import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isConferenceUnavailable } from '@/lib/conference/guard'
 import { landingUtmFrom } from '@/lib/marketing/landing-utm'
+import { isLateSubmissionAllowed } from '@/lib/proposal/late-submission-token'
 
 export default async function NewProposalPage({
   searchParams,
@@ -42,13 +43,19 @@ export default async function NewProposalPage({
   // drop the query — is covered by what `LandingUtmCapture` remembered, which
   // the form falls back to.
   const landingUtm = landingUtmFrom(params)
+  const lateToken = typeof params.token === 'string' ? params.token : undefined
 
   const headersList = await headers()
   const fullUrl = headersList.get('x-url') || ''
   const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
-    return redirect('/api/auth/signin?callbackUrl=/cfp/proposal')
+    const callbackUrl = lateToken
+      ? `/cfp/proposal?token=${encodeURIComponent(lateToken)}`
+      : '/cfp/proposal'
+    return redirect(
+      `/api/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+    )
   }
 
   const proposal: ProposalInput = {
@@ -93,11 +100,22 @@ export default async function NewProposalPage({
   // a failed read yields a truthy `{} as Conference` (#848). The CFP verdict
   // below therefore ran on an EMPTY conference and OVERWROTE the error above
   // with "CFP Closed". Only reason about the CFP when we actually have one.
+  // An organizer-issued late link (#249) lifts the CFP window for this
+  // speaker; the server checks the same token again on submit.
+  const lateSubmissionToken =
+    !loadingError &&
+    isLateSubmissionAllowed(lateToken, {
+      conferenceId: conference._id,
+      email: session.speaker.email,
+    })
+      ? lateToken
+      : undefined
+
   if (!loadingError) {
     const { isCfpOpen, canAcceptProposals } =
       await import('@/lib/conference/state')
     const contactEmail = conference.cfpEmail || conference.contactEmail
-    if (!isCfpOpen(conference)) {
+    if (!isCfpOpen(conference) && !lateSubmissionToken) {
       loadingError = {
         type: 'CFP Closed',
         message: contactEmail
@@ -221,6 +239,7 @@ export default async function NewProposalPage({
                 allowedFormats={conference.formats}
                 currentUserSpeaker={currentUserSpeaker}
                 landingUtm={landingUtm}
+                lateSubmissionToken={lateSubmissionToken}
               />
             </div>
           </div>

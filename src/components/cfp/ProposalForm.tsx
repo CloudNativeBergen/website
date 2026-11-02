@@ -46,6 +46,7 @@ export function ProposalForm({
   mode = 'user',
   initialStatus,
   landingUtm,
+  lateSubmissionToken,
 }: {
   initialProposal: ProposalInput
   initialSpeaker: SpeakerInput
@@ -64,6 +65,8 @@ export function ProposalForm({
    * instead. Sent on CREATE only; the server refuses them on every update.
    */
   landingUtm?: ProposalUtmTags | null
+  /** Organizer-issued late link (#249), sent with every submit. */
+  lateSubmissionToken?: string
 }) {
   const [proposal, setProposal] = useState(initialProposal)
   const [speaker, setSpeaker] = useState(initialSpeaker)
@@ -124,7 +127,14 @@ export function ProposalForm({
       if (lastAction === 'draft') {
         setCurrentProposalId(data._id)
         setSavedAsDraft(true)
-        window.history.replaceState(null, '', `/cfp/proposal/${data._id}`)
+        // Keep a late link (#249) in the URL so a reload can still submit.
+        window.history.replaceState(
+          null,
+          '',
+          lateSubmissionToken
+            ? `/cfp/proposal/${data._id}?token=${encodeURIComponent(lateSubmissionToken)}`
+            : `/cfp/proposal/${data._id}`,
+        )
         showDraftSaved()
       } else {
         router.push('/cfp/list?success=true')
@@ -391,6 +401,7 @@ export function ProposalForm({
         await actionMutation.mutateAsync({
           id: currentProposalId,
           action: Action.submit,
+          lateSubmissionToken,
         })
       } catch {
         window.scrollTo(0, 0)
@@ -400,6 +411,7 @@ export function ProposalForm({
       createProposalMutation.mutate({
         data: { ...proposalData, ...(utm ? { utm } : {}) },
         status: Status.submitted,
+        lateSubmissionToken,
       })
     }
   }

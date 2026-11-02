@@ -4,6 +4,8 @@ import { ErrorDisplay } from '@/components/admin'
 import { ProposalsPageClient } from '@/components/admin/ProposalsPageClient'
 import { InviteReviewersPrompt } from '@/components/admin/InviteReviewersPrompt'
 import { getAuthSession } from '@/lib/auth'
+import { LateSubmissionLink } from '@/components/admin/LateSubmissionLink'
+import { isCfpOpen } from '@/lib/conference/state'
 
 export default async function AdminProposals() {
   const session = await getAuthSession()
@@ -46,6 +48,7 @@ export default async function AdminProposals() {
         organizerCount={conference.organizers?.length ?? 0}
         proposalCount={proposals.length}
       />
+      {!isCfpOpen(conference) && <LateSubmissionLink />}
       <ProposalsPageClient
         proposals={proposals}
         currentUserId={session?.speaker?._id}
