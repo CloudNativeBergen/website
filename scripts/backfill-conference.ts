@@ -5,6 +5,7 @@
  * Sanity and writes one local SQL file. It lives here, not in
  * services/conference/, because services may not import Sanity (eslint,
  * #1800); the mapping itself is services/conference/scripts/backfill.ts.
+ * It writes rows only for conferences the tenant-directory backfill routes.
  *
  * Usage:
  *   pnpm tsx scripts/backfill-conference.ts --dry-run
@@ -25,16 +26,26 @@ async function main() {
   const { clientReadUncached } = await import('../src/lib/sanity/client')
   const { mapBackfill, toSql } =
     await import('../services/conference/scripts/backfill')
+  const directory =
+    await import('../services/tenant-directory/scripts/backfill')
 
   // groq-global: a platform-wide migration reads every tenant by design.
-  const docs =
-    await clientReadUncached.fetch(`*[_type == "conference" && !(_id in path("drafts.**"))]{
+  const { orgs, verifications, docs } = await clientReadUncached.fetch(`{
+    "orgs": *[_type == "organization" && !(_id in path("drafts.**"))]{ _id, name, "slug": slug.current, plan },
+    "verifications": *[_type == "domainVerification" && !(_id in path("drafts.**"))]{ hostname, "conferenceId": conference._ref, status },
+    "docs": *[_type == "conference" && !(_id in path("drafts.**"))]{
     _id, "orgId": organization._ref, title, tagline, description, city, country,
-    venueName, venueAddress, startDate, endDate, visibility,
+    venueName, venueAddress, startDate, endDate, lifecycleStatus, domains, visibility,
     logoBright, logoDark, logomarkBright, logomarkDark, backgroundPattern, theme,
     registrationLink, socialLinks, homepageSections
+  }
   }`)
-  const b = mapBackfill(docs)
+  const routable = new Set(
+    directory
+      .mapBackfill(orgs, docs, verifications)
+      .conferences.map((c) => c.id),
+  )
+  const b = mapBackfill(docs, routable)
 
   console.log(`conferences ${b.rows.length}, anomalies ${b.anomalies.length}`)
   for (const a of b.anomalies) console.log(`  ${a}`)

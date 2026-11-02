@@ -16,13 +16,26 @@ const docs = [
   },
   { _id: 'conf-a', orgId: 'org-a', title: '' },
   { _id: 'conf-orphan', title: 'Orphan' },
+  { _id: 'conf-unrouted', orgId: 'org-a', title: 'Unrouted' },
+  {
+    _id: 'conf-c',
+    orgId: 'org-a',
+    title: 'Cancelled',
+    lifecycleStatus: 'cancelled',
+  },
 ]
+const routable = new Set(['conf-a', 'conf-b', 'conf-c', 'conf-orphan'])
 
 describe('mapBackfill', () => {
-  const b = mapBackfill(docs)
+  const b = mapBackfill(docs, routable)
 
   it('maps public fields under the Sanity ids', () => {
-    expect(b.rows.map((r) => r.conference_id)).toEqual(['conf-a', 'conf-b'])
+    expect(b.rows.map((r) => r.conference_id)).toEqual([
+      'conf-a',
+      'conf-b',
+      'conf-c',
+    ])
+    expect(b.rows[2].published).toBe(0)
     expect(b.rows[1]).toMatchObject({
       org_id: 'org-a',
       published: 1,
@@ -43,7 +56,8 @@ describe('mapBackfill', () => {
   it('reports the anomalies', () => {
     expect(b.anomalies).toEqual([
       'conference conf-a: no title',
-      'conference conf-orphan: no organization; skipped',
+      'conference conf-orphan: not in tenant-directory; skipped',
+      'conference conf-unrouted: not in tenant-directory; skipped',
     ])
   })
 
@@ -62,7 +76,7 @@ describe('mapBackfill', () => {
     db.exec(sql)
     db.exec(sql)
     expect(db.prepare('SELECT count(*) AS n FROM conferences').get()).toEqual({
-      n: 2,
+      n: 3,
     })
     // A row owned by another org is left alone on rerun.
     db.exec(

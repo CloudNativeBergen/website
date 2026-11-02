@@ -15,6 +15,7 @@ export interface SanityConference {
   venueAddress?: string | null
   startDate?: string | null
   endDate?: string | null
+  lifecycleStatus?: string | null
   visibility?: string | null
   logoBright?: string | null
   logoDark?: string | null
@@ -55,19 +56,29 @@ export interface Row {
 
 const s = (v: string | null | undefined) => v?.trim() || null
 
-/** Drafts are never passed in, so every row is a published Sanity document. */
-export function mapBackfill(docs: SanityConference[]) {
+/**
+ * Drafts are never passed in. `routable` is the set of conference ids the
+ * tenant-directory backfill writes: a row for any other id could never be
+ * reached, so it is skipped.
+ */
+export function mapBackfill(
+  docs: SanityConference[],
+  routable: ReadonlySet<string>,
+) {
   const rows: Row[] = []
   const anomalies: string[] = []
   for (const c of [...docs].sort((a, b) => a._id.localeCompare(b._id))) {
-    if (!c.orgId) {
-      anomalies.push(`conference ${c._id}: no organization; skipped`)
+    if (!c.orgId || !routable.has(c._id)) {
+      anomalies.push(`conference ${c._id}: not in tenant-directory; skipped`)
       continue
     }
     rows.push({
       conference_id: c._id,
       org_id: c.orgId,
-      published: 1,
+      // Cancelled and archived editions are not public; unlisted ones are.
+      published: ['cancelled', 'archived'].includes(c.lifecycleStatus ?? '')
+        ? 0
+        : 1,
       title: s(c.title) ?? c._id,
       tagline: s(c.tagline),
       description: s(c.description),
