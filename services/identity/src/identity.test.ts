@@ -141,6 +141,19 @@ describe('principal lookup', () => {
   })
 })
 
+describe('ensureOrganization', () => {
+  it('creates the directory-owned id once; a repeat is a no-op', async () => {
+    const data = createData(d1)
+    await data.ensureOrganization('org-dir', 'dir')
+    await data.ensureOrganization('org-dir', 'dir')
+    const { results } = await d1
+      .prepare("SELECT id, slug FROM organization WHERE id = 'org-dir'")
+      .all()
+    expect(results).toEqual([{ id: 'org-dir', slug: 'dir' }])
+    await expect(data.ensureOrganization('org-other', 'dir')).rejects.toThrow()
+  })
+})
+
 describe('account linking (#807)', () => {
   const signIn = async (
     email: string,

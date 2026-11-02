@@ -16,6 +16,16 @@ export class Membership extends WorkerEntrypoint<Env> {
   }
 }
 
+/**
+ * RPC for tenant-directory (`"entrypoint": "Organizations"`), which owns org
+ * ids. No HTTP route.
+ */
+export class Organizations extends WorkerEntrypoint<Env> {
+  ensure(id: string, slug: string) {
+    return createData(this.env.DB).ensureOrganization(id, slug)
+  }
+}
+
 export default {
   fetch(request: Request, env: Env) {
     if (new URL(request.url).pathname.startsWith('/api/auth/')) {
