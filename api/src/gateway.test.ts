@@ -109,6 +109,21 @@ describe('gateway', () => {
     expect(compose()).not.toMatch(/provision|internal"\)|type Organization/)
   })
 
+  it('exposes no conference(id:) field', async () => {
+    const { env } = makeEnv()
+    const res = await gateway.fetch(
+      post({ query: '{ __schema { queryType { fields { name } } } }' }),
+      env,
+    )
+    const { data } = (await res.json()) as {
+      data: { __schema: { queryType: { fields: { name: string }[] } } }
+    }
+    expect(data.__schema.queryType.fields.map((f) => f.name)).not.toContain(
+      'conference',
+    )
+    expect(compose()).not.toMatch(/conference\(id:/)
+  })
+
   it('answers the health query', async () => {
     const { env } = makeEnv()
     const res = await gateway.fetch(post({ query: '{ health }' }), env)
