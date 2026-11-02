@@ -6,6 +6,25 @@ const storybookPlugin = require('eslint-plugin-storybook')
 const noUnscopedGroq = require('./eslint-rules/no-unscoped-groq')
 const noBareAmountParse = require('./eslint-rules/no-bare-amount-parse')
 
+function rawDbPatterns() {
+  return [
+    {
+      regex: '(^|/)data/db(\\.[cm]?[jt]s)?$|^drizzle-orm/d1$',
+      message:
+        'The raw D1 client stays inside src/data/. Use a Scoped repository.',
+    },
+  ]
+}
+function sanityPatterns() {
+  return [
+    {
+      regex:
+        '^@/lib/sanity(/|$)|(^|/)src/lib/sanity(/|$)|^(next-sanity|@sanity/client)$',
+      message: 'Services do not read Sanity; they own their data in D1.',
+    },
+  ]
+}
+
 const eslintConfig = [
   // Global ignores - these apply to all configurations
   {
@@ -196,6 +215,29 @@ const eslintConfig = [
           ],
         },
       ],
+    },
+  },
+
+  // Subgraph services (#1800). Outside its data layer a service reaches the
+  // database only through Scoped repositories, never the raw D1 handle
+  // (`src/data/db.ts`) or Drizzle's D1 driver. No service file reaches
+  // Sanity. `__tests__/services/import-boundaries.test.ts` proves both blocks against
+  // this config. A later block replaces the rule's options rather than
+  // merging, so each block lists every pattern it needs.
+  {
+    files: ['services/**/*.ts'],
+    ignores: ['services/*/src/data/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: [...rawDbPatterns(), ...sanityPatterns()] },
+      ],
+    },
+  },
+  {
+    files: ['services/*/src/data/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: sanityPatterns() }],
     },
   },
 

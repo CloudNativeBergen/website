@@ -27,7 +27,7 @@
     "test:badges": "vitest run __tests__/lib/badge/",
     "format:check": "prettier --cache --check .",
     "format": "prettier --cache --write --list-different .",
-    "typecheck": "tsc --noEmit && pnpm --filter @runkonf/api typecheck",
+    "typecheck": "tsc --noEmit && pnpm --filter @runkonf/api --filter @runkonf/tenancy typecheck",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "msw init public --save=false && storybook build",
     "build-storybook:test": "msw init public --save=false && storybook build --test",
@@ -42,7 +42,8 @@
     "erase-sponsor-contact": "tsx --conditions=react-server scripts/erase-sponsor-contact.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "shoot": "node scripts/shoot-story.mjs"
+    "shoot": "node scripts/shoot-story.mjs",
+    "scaffold:service": "tsx scripts/scaffold-service.ts"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {
