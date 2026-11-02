@@ -1,9 +1,13 @@
 // conference: the public read of the envelope's Conference edition (#1788).
 // No argument picks the Conference: it comes from the envelope only.
+// Strangler fig (#1835): it takes Query.conference over from services/legacy
+// per tenant, through the `conference` override label (OVERRIDE_TENANTS).
+// Both serve the same Conference type, so it is @shareable.
 import { builder } from './builder'
 import type { ConferenceRow } from './data'
 
 const Conference = builder.objectRef<ConferenceRow>('Conference').implement({
+  shareable: true,
   fields: (t) => ({
     id: t.exposeID('conferenceId'),
     title: t.exposeString('title'),
@@ -40,6 +44,7 @@ builder.queryType({
     conference: t.field({
       type: Conference,
       nullable: true,
+      override: { from: 'legacy', label: 'conference' },
       description:
         "The request's Conference. Null when the request has none, or it is unpublished and the caller is not an org member.",
       resolve: (_, __, ctx) => ctx.data.conferences().current(),
@@ -48,5 +53,5 @@ builder.queryType({
 })
 
 export const schema = builder.toSubGraphSchema({
-  linkUrl: 'https://specs.apollo.dev/federation/v2.6',
+  linkUrl: 'https://specs.apollo.dev/federation/v2.7',
 })

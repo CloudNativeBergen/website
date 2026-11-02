@@ -608,6 +608,8 @@ describe('conference subgraph', () => {
 
   it('reaches konf-conference over its binding with the minted envelope', async () => {
     const { env, conference } = makeEnv()
+    // org_a has the `conference` override label on (#1835).
+    env.OVERRIDE_TENANTS = { conference: [TENANT.orgId] }
     const res = await gateway.fetch(
       post({ query: '{ conference { id } }' }, { origin: VERIFIED }),
       env,

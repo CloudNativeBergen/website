@@ -1,5 +1,6 @@
-// #1835: @override(from: "content", label:) composes, and Hive Gateway
-// routes the overridden field per request through `progressiveOverride`. The
+// Strangler fig (#1835): services/conference takes Query.conference over from
+// services/content with @override(from: "content", label: "conference"), and
+// Hive Gateway routes it per request through `progressiveOverride`. The
 // label is static in the schema; which tenants it is on for is a per-request
 // decision, so one label can roll a domain out tenant by tenant.
 import { describe, expect, it } from 'vitest'
@@ -8,26 +9,15 @@ import httpTransport from '@graphql-mesh/transport-http'
 import { printSchemaWithDirectives } from '@graphql-tools/utils'
 import { composeServices } from '@theguild/federation-composition'
 import { parse } from 'graphql'
+import { schema as conference } from '../../services/conference/src/subgraph'
 import { schema as content } from '../../services/content/src/subgraph'
 import { progressiveOverride } from './gateway'
 import { compose, publicContract } from './supergraph'
 
-const contentSdl = printSchemaWithDirectives(publicContract(content))
-// services/conference (#1829) as it takes Conference over: the same entity,
-// the root and a structured field overridden. Labels need federation v2.7.
-const native = `
-  extend schema @link(url: "https://specs.apollo.dev/federation/v2.7", import: ["@key", "@override"])
-  type Conference @key(fields: "id") {
-    id: ID!
-    title: String! @override(from: "content", label: "conference")
-  }
-  type Query {
-    conference: Conference @override(from: "content", label: "conference")
-  }
-`
-
+const sdl = (s: Parameters<typeof publicContract>[0]) =>
+  printSchemaWithDirectives(publicContract(s))
 const { supergraphSdl: supergraph, errors } = composeServices(
-  Object.entries({ content: contentSdl, conference: native }).map(
+  Object.entries({ content: sdl(content), conference: sdl(conference) }).map(
     ([name, sdl]) => ({
       name,
       url: `https://${name}.internal/graphql`,
@@ -41,7 +31,7 @@ describe('content in the supergraph', () => {
     expect(compose()).toMatch(/conference: Conference/)
   })
 
-  it('composes with a native service that overrides it', () => {
+  it('composes with services/conference overriding it', () => {
     expect(errors ?? []).toEqual([])
     expect(supergraph).toMatch(
       /override: "content", overrideLabel: "conference"/,
