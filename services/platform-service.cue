@@ -22,6 +22,21 @@ package codegen
 	// Worker service bindings (RPC). The service types them in its DataEnv.
 	serviceBindings: *[] | [...{binding: string, service: string, entrypoint?: string}]
 	if tenancy {crons: []}
+	// Custom-domain routes per environment, for a service with its own
+	// public surface (identity). Subgraphs keep none (epic #1772, req. 8).
+	routes: {
+		preview:    *[] | [...string]
+		production: *[] | [...string]
+	}
+	if tenancy {routes: {preview: [], production: []}}
+	// Workers Rate Limiting bindings. The namespace ids are per environment
+	// (account-wide integers the owner picks once); not inherited by envs.
+	rateLimits: *[] | [...{
+		name: string
+		namespaceId: {preview: string, production: string}
+		limit:  int
+		period: 10 | 60
+	}]
 	// Extra tsconfig include globs, e.g. a service's scripts/.
 	tsInclude: *[] | [...string]
 
@@ -108,6 +123,16 @@ package codegen
 			"env": {
 				"preview": {
 					"name": "\(_workerName)-preview"
+					if len(rateLimits) > 0 {
+						"ratelimits": [for r in rateLimits {
+							name:         r.name
+							namespace_id: r.namespaceId.preview
+							simple: {limit: r.limit, period: r.period}
+						}]
+					}
+					if len(routes.preview) > 0 {
+						"routes": [for r in routes.preview {pattern: r, custom_domain: true}]
+					}
 					"d1_databases": [{
 						"binding":        "DB"
 						"database_name":  "\(_workerName)-preview"
@@ -124,6 +149,16 @@ package codegen
 				}
 				"production": {
 					"name": _workerName
+					if len(rateLimits) > 0 {
+						"ratelimits": [for r in rateLimits {
+							name:         r.name
+							namespace_id: r.namespaceId.production
+							simple: {limit: r.limit, period: r.period}
+						}]
+					}
+					if len(routes.production) > 0 {
+						"routes": [for r in routes.production {pattern: r, custom_domain: true}]
+					}
 					"d1_databases": [{
 						"binding":        "DB"
 						"database_name":  _workerName

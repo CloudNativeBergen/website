@@ -1,12 +1,12 @@
 // Runs Better Auth against a real D1 (Miniflare) with the shipped migration.
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeSignature } from 'better-auth/crypto'
 import { handleOAuthUserInfo } from 'better-auth/oauth2'
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from 'jose'
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { createAuth, createData, type AuthEnv } from './data'
+import { createAuth, createData, type AuthEnv, type DataEnv } from './data'
 import { JWT_AUDIENCE, JWT_TTL_SECONDS } from './data/auth'
 
 // vitest.config.ts aliases `jose` to a key-ignoring stub; load the real one
@@ -43,10 +43,11 @@ beforeAll(async () => {
     }),
   )
   d1 = (await mf.getD1Database('DB')) as unknown as D1Database
-  const sql = readFileSync(
-    join(import.meta.dirname, '../migrations/0001_init.sql'),
-    'utf8',
-  )
+  const dir = join(import.meta.dirname, '../migrations')
+  const sql = readdirSync(dir)
+    .sort()
+    .map((f) => readFileSync(join(dir, f), 'utf8'))
+    .join(';\n')
   for (const stmt of sql
     .split(/;\s*\n/)
     .map((s) => s.replace(/^--.*$/gm, '').trim())) {
@@ -125,7 +126,7 @@ describe('principal lookup', () => {
       .bind(other.id)
       .run()
 
-    const data = createData({ DB: d1 })
+    const data = createData({ DB: d1 } as DataEnv)
     expect(await data.principal(u.id, 'org-a')).toEqual({
       orgRole: 'admin',
       platformOperator: false,
@@ -144,7 +145,7 @@ describe('principal lookup', () => {
 
 describe('ensureOrganization', () => {
   it('creates the directory-owned id once; a repeat is a no-op', async () => {
-    const data = createData({ DB: d1 })
+    const data = createData({ DB: d1 } as DataEnv)
     await data.ensureOrganization('org-dir', 'dir')
     await data.ensureOrganization('org-dir', 'dir')
     const { results } = await d1
@@ -210,7 +211,7 @@ describe('account linking (#807)', () => {
 describe('organization updates', () => {
   it('refuses slug and name changes, allows the rest', async () => {
     const u = await newUser('orgowner@example.com', true)
-    await createData({ DB: d1 }).ensureOrganization('org-u', 'u')
+    await createData({ DB: d1 } as DataEnv).ensureOrganization('org-u', 'u')
     await d1
       .prepare(
         "INSERT INTO member (id, organizationId, userId, role) VALUES ('m-u', 'org-u', ?, 'owner')",
