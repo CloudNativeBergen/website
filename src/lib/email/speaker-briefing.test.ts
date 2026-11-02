@@ -145,6 +145,33 @@ describe('sendSpeakerBriefings', () => {
     )
   })
 
+  it('leaves the version unchanged without a speaker Slack invite (#164)', () => {
+    // Pinned: the hash before #164 added the field. An unset (or blank)
+    // invite must not mark every briefed speaker out of date.
+    expect(VERSION).toBe('3faed1d162019533')
+    expect(
+      briefingVersion({ ...conference, speakerSlackInviteUrl: '  ' }),
+    ).toBe(VERSION)
+    expect(
+      briefingVersion({
+        ...conference,
+        speakerSlackInviteUrl: 'https://join.slack.com/t/a/shared_invite/x',
+      }),
+    ).not.toBe(VERSION)
+  })
+
+  it('links the speaker Slack invite in the email when set (#164)', async () => {
+    const url = 'https://join.slack.com/t/a/shared_invite/x'
+    const without = await renderSpeakerBriefing(conference, speaker('sp-1'))
+    expect(without).not.toContain('Speaker Slack')
+    const html = await renderSpeakerBriefing(
+      { ...conference, speakerSlackInviteUrl: url },
+      speaker('sp-1'),
+    )
+    expect(html).toContain('Speaker Slack')
+    expect(html).toContain(`href="${url}"`)
+  })
+
   it('skips speakers who already have the current version', async () => {
     h.existing = [
       { _id: briefingLogId('conf-A', 'sp-1', VERSION), speakerId: 'sp-1' },

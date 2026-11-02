@@ -233,6 +233,12 @@ export const UpdateCommunicationSchema = z.object({
     .refine(isAbsoluteHttpsUrl, 'Enter an absolute https:// URL')
     .nullable()
     .optional(),
+  speakerSlackInviteUrl: z
+    .string()
+    .trim()
+    .refine(isAbsoluteHttpsUrl, 'Enter an absolute https:// URL')
+    .nullable()
+    .optional(),
 })
 
 const optionalClearableHttpsUrl = z

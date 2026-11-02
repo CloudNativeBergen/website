@@ -1138,6 +1138,20 @@ export default defineType({
         'Private invitation link for volunteers to join the conference Slack workspace or channel.',
     }),
     defineField({
+      name: 'speakerSlackInviteUrl',
+      title: 'Speaker Slack Invite Link',
+      type: 'string',
+      fieldset: 'communication',
+      validation: (Rule) =>
+        Rule.custom((val) =>
+          !val || (typeof val === 'string' && val.startsWith('https://'))
+            ? true
+            : 'Must be an absolute https:// URL',
+        ),
+      description:
+        'Private invitation link for speakers to join the conference Slack workspace or channel. Included in the speaker briefing email.',
+    }),
+    defineField({
       name: 'socialLinks',
       title: 'Social Links',
       type: 'array',

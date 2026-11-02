@@ -55,6 +55,7 @@ describe('/admin event facts opt-in', () => {
     expect(getConference).toHaveBeenLastCalledWith({
       topics: true,
       schedule: true,
+      includeSpeakerRegistrationLink: true,
     })
   })
 })

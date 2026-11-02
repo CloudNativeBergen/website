@@ -55,6 +55,7 @@ export type BriefingConference = Pick<
   | 'venueName'
   | 'venueAddress'
   | 'venueTravelInfo'
+  | 'speakerSlackInviteUrl'
 >
 
 export interface BriefingSpeaker {
