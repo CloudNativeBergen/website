@@ -57,6 +57,7 @@ const CONFERENCE = {
   speakerRegistrationLink: SPEAKER_LINK,
   volunteerRegistrationLink: VOLUNTEER_LINK,
   volunteerSlackInviteUrl: VOLUNTEER_SLACK_LINK,
+  speakerSlackInviteUrl: 'https://join.slack.com/t/speakers/shared_invite/s',
 }
 
 // A FRESH object per fetch: the redaction deletes the key off the result, so a
@@ -102,6 +103,7 @@ describe('speakerRegistrationLink redaction', () => {
     const { conference } = await getConferenceForCurrentDomain()
 
     expect(conference.speakerRegistrationLink).toBeUndefined()
+    expect(conference.speakerSlackInviteUrl).toBeUndefined()
     expect(conference.registrationLink).toBe('https://event.checkin.no/999999')
   })
 
@@ -114,6 +116,9 @@ describe('speakerRegistrationLink redaction', () => {
     })
 
     expect(conference.speakerRegistrationLink).toBe(SPEAKER_LINK)
+    expect(conference.speakerSlackInviteUrl).toBe(
+      'https://join.slack.com/t/speakers/shared_invite/s',
+    )
     expect(conference.sponsorRegistrationLink).toBeUndefined()
     expect(conference.volunteerRegistrationLink).toBeUndefined()
     expect(conference.volunteerSlackInviteUrl).toBeUndefined()

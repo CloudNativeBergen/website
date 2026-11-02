@@ -288,6 +288,11 @@ export interface Conference {
   /** Where `postBriefingToSlack` posts the shared speaker info (#1592). */
   speakerSlackChannel?: string
   volunteerSlackInviteUrl?: string
+  /**
+   * Private Slack invite for speakers (#164), sent in the briefing email.
+   * Redacted unless `includeSpeakerRegistrationLink` is set.
+   */
+  speakerSlackInviteUrl?: string
   volunteerRegistrationLink?: string
   socialLinks?: string[]
   /**

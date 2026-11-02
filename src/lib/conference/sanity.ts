@@ -443,6 +443,9 @@ export async function getConferenceForDomain(
   ) {
     delete conference.volunteerRegistrationLink
   }
+  if (!includeSpeakerRegistrationLink && conference?.speakerSlackInviteUrl) {
+    delete conference.speakerSlackInviteUrl
+  }
   if (
     !includeVolunteerRegistrationLink &&
     conference?.volunteerSlackInviteUrl

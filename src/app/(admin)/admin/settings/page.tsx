@@ -880,6 +880,7 @@ export default async function AdminSettings() {
                     cfpNotificationChannel: conference.cfpNotificationChannel,
                     speakerSlackChannel: conference.speakerSlackChannel,
                     volunteerSlackInviteUrl: conference.volunteerSlackInviteUrl,
+                    speakerSlackInviteUrl: conference.speakerSlackInviteUrl,
                   }}
                 />
               }
@@ -902,6 +903,11 @@ export default async function AdminSettings() {
               <FieldRow
                 label="Volunteer Slack Invite Link"
                 value={conference.volunteerSlackInviteUrl}
+                type="url"
+              />
+              <FieldRow
+                label="Speaker Slack Invite Link"
+                value={conference.speakerSlackInviteUrl}
                 type="url"
               />
               <FieldRow

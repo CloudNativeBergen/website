@@ -302,6 +302,16 @@ export function SpeakerBriefingTemplate({
         <React.Fragment key={key}>{sections[key]}</React.Fragment>
       ))}
 
+      {b.slackInviteUrl && (
+        <div style={sectionStyle}>
+          <EmailSectionHeader>Speaker Slack</EmailSectionHeader>
+          <EmailText>
+            Join the speaker channel to meet the organizers and other speakers:{' '}
+            <A href={b.slackInviteUrl}>join on Slack</A>
+          </EmailText>
+        </div>
+      )}
+
       <EmailText>Changed your plans? Reply to this email.</EmailText>
       <div style={{ marginTop: '24px', marginBottom: '24px' }}>
         <EmailButton href={`${origin}/cfp/list`}>

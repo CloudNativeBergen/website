@@ -477,6 +477,14 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         description:
           'Private invitation link for volunteers to join the conference Slack workspace/channel.',
       },
+      {
+        name: 'speakerSlackInviteUrl',
+        label: 'Speaker Slack Invite Link',
+        type: 'url',
+        nullableWhenEmpty: true,
+        description:
+          'Private invitation link for speakers to join the conference Slack workspace/channel. Sent in the speaker briefing email.',
+      },
     ],
   },
   ticketingIds: {
