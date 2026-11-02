@@ -37,6 +37,8 @@ export async function readReminderLogs(
 ): Promise<Map<string, ReminderLog>> {
   if (ids.length === 0) return new Map()
   const rows = await clientReadUncached.fetch<ReminderLog[]>(
+    // groq-global-scoped: deterministic marker ids that embed the conference
+    // id (`reminder.<key>.<conferenceId>.…`).
     `*[_type == "scheduledReminderLog" && _id in $ids]{ _id, count, lastSentAt }`,
     { ids },
     { cache: 'no-store' },

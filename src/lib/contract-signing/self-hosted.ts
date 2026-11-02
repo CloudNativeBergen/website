@@ -12,9 +12,12 @@ import type {
 
 const PROVIDER_NAME = 'Verified Document Signing'
 
+// groq-global-scoped: keyed by an agreement id the caller read off a
+// sponsorForConference it already scoped to the current conference.
 const STATUS_QUERY = `*[_type == "sponsorForConference" && signatureId == $id][0]{ signatureStatus }`
 // Only a live, still-pending agreement: a contract signed in the meantime
 // must not be overwritten as rejected.
+// groq-global-scoped: same agreement-id key as STATUS_QUERY.
 const ID_QUERY = `*[_type == "sponsorForConference" && signatureId == $id && signatureStatus == "pending" && !(_id in path("drafts.**"))][0]{ _id }`
 
 /**

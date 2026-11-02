@@ -48,6 +48,8 @@ export async function getConferenceTeams(
     return cached.teams
   }
   const teams = await clientReadUncached.fetch<OrganizerTeam[] | null>(
+    // groq-global-scoped: the conference document itself, by the id the caller
+    // resolved for this request.
     `*[_type == "conference" && _id == $conferenceId][0].teams[0...${TEAMS_FETCH_LIMIT}]{
       _key,
       key,
