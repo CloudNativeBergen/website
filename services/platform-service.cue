@@ -23,11 +23,11 @@ package codegen
 	serviceBindings: *[] | [...{binding: string, service: string, entrypoint?: string}]
 	if tenancy {crons: []}
 
-	_workerName: "konf-\(name)"
-	_scheduledImport: *"" | string
+	_workerName:       "konf-\(name)"
+	_scheduledImport:  *"" | string
 	_scheduledHandler: *"" | string
 	if len(crons) > 0 {
-		_scheduledImport: ", scheduled"
+		_scheduledImport:  ", scheduled"
 		_scheduledHandler: "\n  scheduled: (_controller: ScheduledController, env: WorkerEnv) =>\n    scheduled(createData(env)),"
 	}
 
@@ -55,16 +55,24 @@ package codegen
 				// What @apollo/subgraph and Hive Gateway expect. Exact pin.
 				"graphql":      "16.14.2"
 				"graphql-yoga": "^5"
-				"drizzle-orm":  "^0.44"
+				// better-auth's drizzle adapter needs ^0.45.2.
+				"drizzle-orm": "^0.45.2"
+				// A service adds its own dependencies in service.cue.
+				...
 			}
 			"devDependencies": {
 				"@cloudflare/workers-types": "^5.20261101.1"
 				"wrangler":                  "^4.156.0"
+				...
 			}
 		}
 		"wrangler.jsonc": {
-			"name":               _workerName
-			"main":               "src/worker.ts"
+			"name": _workerName
+			// Every service deploys to the RunKonf account.
+			"account_id": "eefa2cb5c8528a07d7bf8b00a6606dcd"
+			// A service with its own HTTP surface (identity) points main at
+			// its own entry; src/worker.ts stays generated.
+			"main":               *"src/worker.ts" | string
 			"compatibility_date": "2026-08-01"
 			"compatibility_flags": ["nodejs_compat"]
 			// Subgraphs have no public routes; the gateway reaches them by
@@ -83,6 +91,7 @@ package codegen
 			if len(serviceBindings) > 0 {
 				"services": serviceBindings
 			}
+
 			// OTLP export to Grafana Cloud. The destinations are configured
 			// once per account in the Cloudflare dashboard.
 			"observability": {
@@ -98,10 +107,10 @@ package codegen
 				"moduleResolution": "bundler"
 				"lib": ["es2022"]
 				"types": ["@cloudflare/workers-types", "node"]
-				"strict":           true
-				"noEmit":           true
-				"skipLibCheck":     true
-				"isolatedModules":  true
+				"strict":          true
+				"noEmit":          true
+				"skipLibCheck":    true
+				"isolatedModules": true
 			}
 			"include": ["src/**/*.ts"]
 		}

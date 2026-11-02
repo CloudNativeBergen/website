@@ -33,7 +33,11 @@
       ]
     },
     "api": {},
-    "packages/tenancy": { "entry": ["src/index.ts", "src/*.typecheck.ts"] }
+    "packages/tenancy": { "entry": ["src/index.ts", "src/*.typecheck.ts"] },
+    "services/identity": {
+      "entry": ["src/data/schema.ts"],
+      "ignoreDependencies": ["cloudflare"]
+    }
   },
   "ignoreDependencies": [
     "eslint-config-next",
