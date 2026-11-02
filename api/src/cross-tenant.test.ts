@@ -12,7 +12,7 @@
  * Subgraphs come from SUBGRAPHS and BINDINGS: a new one is seeded and walked
  * here without a change to this file.
  */
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { makeSignature } from 'better-auth/crypto'
 import {
   getNamedType,
@@ -44,6 +44,38 @@ vi.mock('jose', async () => {
   const require = createRequire(import.meta.url)
   return import(pathToFileURL(require.resolve('jose')).href)
 })
+// Sanity-backed subgraphs (content): a two-tenant dataset that applies the
+// query's own orgId/conferenceId and fills every projected field.
+vi.mock('@sanity/client', () => ({
+  createClient: () => ({
+    fetch: async (query: string, p: Record<string, string>) => {
+      const t = TENANTS.find(
+        (t) => p.orgId === ORG[t] && p.conferenceId === CONF[t],
+      )
+      if (!t) return null
+      const fields = /\{([^{}]*)\}\s*$/
+        .exec(query)![1]
+        .split(',')
+        .map((f) => f.trim())
+      const text = (f: string) => `${tag(t)} sanity.${f}`
+      return Object.fromEntries(
+        fields.map((f) => [
+          f,
+          f === '_id'
+            ? CONF[t]
+            : f === 'theme'
+              ? {
+                  primaryColor: text('primaryColor'),
+                  accentColor: text('accentColor'),
+                }
+              : /(Links|Sections)$/.test(f)
+                ? [text(f)]
+                : text(f),
+        ]),
+      )
+    },
+  }),
+}))
 vi.mock('cloudflare:workers', () => ({
   WorkerEntrypoint: class {
     constructor(
@@ -251,20 +283,6 @@ function queries(tenants: T[]) {
   return out
 }
 
-/**
- * Query fields known to return tenant B data under A's origin, each with
- * its tracking issue. A hit on any other field fails. Remove an entry when
- * its fix lands; never add one without an issue.
- */
-const KNOWN_CROSS_TENANT: Record<string, string> = {
-  // tenant-directory `conference(id:)` answers any live conference by id.
-  // PR #1829 (#1788) tags it internal; drop this entry when it merges.
-  conference: '#1788',
-  // tenant-directory `tenantByHost(host:)` resolves any verified hostname:
-  // the routing registry, public like DNS. Needs a decision under #1772.
-  tenantByHost: '#1787',
-}
-
 // --- Wiring ----------------------------------------------------------------
 
 const IDENTITY_ENV = {
@@ -281,6 +299,7 @@ const names = Object.keys(SUBGRAPHS)
 let mf: Miniflare
 let env: Env
 let memberJwt: string
+let identityData: { isVerifiedOrigin(origin: string): Promise<boolean> }
 let forgedB: string
 const gateway = createGateway(compose())
 
@@ -304,18 +323,31 @@ beforeAll(async () => {
   // Better Auth signs with the first jwks row; let it make a real key.
   await identityDb.prepare('DELETE FROM jwks').run()
   const identity = await import('../../services/identity/src/index')
-  const { createAuth } = await import('../../services/identity/src/data')
+  const { createAuth, createData } =
+    await import('../../services/identity/src/data')
+  const bindings: Record<string, Fetcher> = {}
+  // identity checks handoff origins over DIRECTORY, filled in below.
   const identityEnv = {
     ...IDENTITY_ENV,
     DB: identityDb,
     GATEWAY_PUBLIC_KEY: keys.publicPem,
+    // Handoff routes are not walked here; JWKS ignores these.
+    IDENTITY_EXCHANGE_SECRET: 'unused',
+    IDENTITY_UPGRADE_SECRET: 'unused',
+    HANDOFF_SITE_LIMIT: { limit: async () => ({ success: true }) },
+    HANDOFF_IP_LIMIT: { limit: async () => ({ success: true }) },
+    get DIRECTORY() {
+      return bindings.DIRECTORY
+    },
   }
 
-  const bindings: Record<string, unknown> = {}
   for (const [i, name] of names.entries()) {
     const db = (await mf.getD1Database(`DB${i}`)) as unknown as D1Database
-    await migrate(db, new URL(`${name}/migrations/`, services))
-    await seed(db)
+    const migrations = new URL(`${name}/migrations/`, services)
+    if (existsSync(migrations)) {
+      await migrate(db, migrations)
+      await seed(db)
+    }
     const worker = (await import(
       /* @vite-ignore */ new URL(`${name}/src/worker.ts`, services).pathname
     )) as { default: { fetch(r: Request, e: unknown): Promise<Response> } }
@@ -325,17 +357,23 @@ beforeAll(async () => {
       CF_API_TOKEN: 'unused',
       CF_ZONE_ID: 'unused',
       IDENTITY: { ensure: async () => undefined },
+      SANITY_PROJECT_ID: 'p',
+      SANITY_DATASET: 'd',
+      SANITY_API_TOKEN_READ: 't',
     }
     bindings[BINDINGS[name as keyof typeof BINDINGS]] = {
       fetch: (url: string, init?: RequestInit) =>
         worker.default.fetch(new Request(url, init), workerEnv),
-    }
+    } as unknown as Fetcher
   }
 
   env = {
     ENVELOPE_PRIVATE_KEY: keys.privatePem,
     IDENTITY_ISSUER: IDENTITY_ENV.IDENTITY_ISSUER,
     ...bindings,
+    API_LIMITER: { limit: async () => ({ success: true }) },
+    API_IP_LIMITER: { limit: async () => ({ success: true }) },
+    CLIENT_IP_SECRET: 'ip-secret',
     IDENTITY: {
       fetch: (url: string, init?: RequestInit) =>
         identity.default.fetch(new Request(url, init), identityEnv),
@@ -343,16 +381,19 @@ beforeAll(async () => {
     MEMBERSHIP: new identity.Membership({} as never, identityEnv as never),
   } as unknown as Env
 
-  // A real identity JWT for A's member, through Better Auth's /token.
+  // A real identity JWT for A's member, handed off to A's origin.
   const auth = createAuth(identityDb, IDENTITY_ENV)
   const ctx = await auth.$context
-  const { token } = await ctx.internalAdapter.createSession(USER.a, false)
+  const { token } = await ctx.internalAdapter.createSession(USER.a, false, {
+    origin: ORIGIN,
+  })
   const cookie = `${ctx.authCookies.sessionToken.name}=${token}.${await makeSignature(token, ctx.secret)}`
   const res = await auth.handler(
     new Request(`${IDENTITY_ENV.BETTER_AUTH_URL}/api/auth/token`, {
       headers: { cookie },
     }),
   )
+  identityData = createData(identityEnv)
   memberJwt = ((await res.json()) as { token: string }).token
 
   // Worst case for a forged header: a genuinely signed envelope for B.
@@ -395,22 +436,9 @@ describe.each([
       ...(signedIn ? { authorization: `Bearer ${memberJwt}` } : {}),
     })
     let sawA = false
-    const known = new Set<string>()
-    for (const { query, roots } of queries(tenants)) {
+    for (const { query } of queries(tenants)) {
       const body = await run(query, headers())
-      const { data, errors } = JSON.parse(body) as {
-        data?: Record<string, unknown>
-        errors?: unknown
-      }
-      expect(JSON.stringify(errors ?? null), query).not.toMatch(MARKER)
-      for (const [alias, value] of Object.entries(data ?? {})) {
-        if (!MARKER.test(JSON.stringify(value))) continue
-        expect(
-          KNOWN_CROSS_TENANT,
-          `B data from ${alias} in ${query}`,
-        ).toHaveProperty([roots[alias]])
-        known.add(roots[alias])
-      }
+      expect(body, query).not.toMatch(MARKER)
       expect(body, query).not.toMatch(
         /depth limit|aliases limit|UNAUTHENTICATED/i,
       )
@@ -423,7 +451,6 @@ describe.each([
     }
     // The walk reached seeded rows, so a clean result means something.
     if (tenants.includes('a')) expect(sawA).toBe(true)
-    if (known.size) console.warn('known cross-tenant reads:', [...known])
   })
 })
 
@@ -436,4 +463,16 @@ it('walks every public field reachable from Query', () => {
       : [],
   )
   expect([...walked].sort()).toEqual(reachable.sort())
+})
+
+it('tenant lookups over DIRECTORY still resolve with tenantByHost internal', async () => {
+  expect(publicSdl()).not.toMatch(/tenantByHost/)
+  // identity's handoff check calls the directory over its binding.
+  expect(await identityData.isVerifiedOrigin(ORIGIN)).toBe(true)
+  expect(await identityData.isVerifiedOrigin('https://unknown.example')).toBe(
+    false,
+  )
+  // The gateway's own lookup: A's origin gets A's Conference.
+  const body = await run('{ conference { id } }', { origin: ORIGIN })
+  expect(JSON.parse(body)).toEqual({ data: { conference: { id: CONF.a } } })
 })
