@@ -84,6 +84,12 @@ const fetchMock = vi.fn(
         .filter((d) => d._type === 'conference')
         .flatMap((d) => (d.domains as string[] | undefined) ?? [])
     }
+    if (query.includes('_id in $ids].domain')) {
+      return (params.ids as string[])
+        .map((id) => docs.get(id))
+        .filter((d) => d?._type === params.type)
+        .map((d) => d!.domain)
+    }
     if (query.includes('_type == "speaker"')) {
       return [...docs.values()]
         .filter(
@@ -609,6 +615,59 @@ describe('provisioning API — a replayed request never creates a second tenant'
     expect(new Set([a.status, b.status])).toEqual(new Set([201, 409]))
     const loser = a.status === 409 ? a : b
     await expect(loser.json()).resolves.toMatchObject({ code: 'slug_taken' })
+  })
+
+  it('creates ONE tenant when two DIFFERENT slugs race for the same custom domain (#777)', async () => {
+    const [a, b] = await Promise.all([
+      POST(request()),
+      POST(
+        request({
+          key: 'a-racing-second-key-0123456789',
+          payload: body({
+            organization: {
+              name: 'Other',
+              slug: 'other-org',
+              contactEmail: 'a@b.no',
+            },
+          }),
+        }),
+      ),
+    ])
+
+    expect(ofType('organization')).toHaveLength(1)
+    expect(ofType('conference')).toHaveLength(1)
+    expect(new Set([a.status, b.status])).toEqual(new Set([201, 409]))
+    const loser = a.status === 409 ? a : b
+    await expect(loser.json()).resolves.toMatchObject({
+      code: 'domain_claimed',
+      domains: ['oslo.cloudnativedays.no'],
+    })
+  })
+
+  it('reports a live domain lock whose conference is gone as domain_claimed, not a 500 (#777)', async () => {
+    await POST(request())
+    for (const d of ofType('conference')) docs.delete(d._id)
+    for (const d of ofType('organization')) docs.delete(d._id)
+
+    const res = await POST(
+      request({
+        key: 'a-later-second-key-0123456789',
+        payload: body({
+          organization: {
+            name: 'Other',
+            slug: 'other-org',
+            contactEmail: 'a@b.no',
+          },
+        }),
+      }),
+    )
+
+    expect(ofType('organization')).toHaveLength(0)
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({
+      code: 'domain_claimed',
+      domains: ['oslo.cloudnativedays.no'],
+    })
   })
 
   it('lets a DIFFERENT key through — idempotency must not become a global lock', async () => {

@@ -74,7 +74,10 @@ function makeTransaction() {
 }
 
 vi.mock('@/lib/sanity/client', () => ({
-  clientWrite: { transaction: () => makeTransaction() },
+  clientWrite: {
+    transaction: () => makeTransaction(),
+    delete: async () => ({ results: [] }),
+  },
   clientReadUncached: {
     fetch: (...args: unknown[]) => fetchMock(args[0] as string),
   },
@@ -314,7 +317,8 @@ describe('createOrganization — atomic transaction', () => {
     const result = await makeCaller(operator).createOrganization(input())
 
     expect(commitMock).toHaveBeenCalledTimes(1)
-    expect(createSpy).toHaveBeenCalledTimes(3)
+    // org + conference + speaker + one domain lock (#777)
+    expect(createSpy).toHaveBeenCalledTimes(4)
     expect(patchSpy).not.toHaveBeenCalled()
 
     const docs = createSpy.mock.calls.map((c) => c[0])
@@ -353,7 +357,7 @@ describe('createOrganization — atomic transaction', () => {
     const result = await makeCaller(operator).createOrganization(input())
 
     expect(commitMock).toHaveBeenCalledTimes(1)
-    expect(createSpy).toHaveBeenCalledTimes(2) // org + conference only
+    expect(createSpy).toHaveBeenCalledTimes(3) // org + conference + domain lock
     expect(patchSpy).toHaveBeenCalledTimes(1)
 
     const [patchedId, ops] = patchSpy.mock.calls[0]

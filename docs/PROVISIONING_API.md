@@ -153,7 +153,14 @@ Nothing about the caller's key is stored — only its salted hash, which is alre
 
 Slug uniqueness is a constraint: the organization's `_id` is `organization.<slug>`, so two requests with **different** idempotency keys racing on the same slug collide on Sanity's create-CAS and the loser gets `slug_taken` (#777). Organizations created before this keep their random ids; lookups go by slug, not id.
 
-Domain uniqueness is still a read-then-write check, not a constraint (Sanity has none). Two requests with different slugs racing on the **same custom domain** can both pass it. Minted platform hosts derive from the slug, so they are covered by the slug constraint; only caller-supplied domains remain exposed. The window is milliseconds and the only caller is kontroll.
+Exact domain uniqueness between provisions is also a constraint. The transaction creates a `provisioningDomainLock` at `provisioningDomainLock.<sha256(domain)>` for every domain it claims, so two requests with different slugs racing on the **same domain** collide and the loser gets `domain_claimed` (or `platform_host_taken`) (#777). The lock expires after ten minutes. By then the winner's conference holds the domain and the read check covers it, so no other path (domain edits, new editions, org erasure) has to release it. Expired locks are cleared before each provision and by the daily cleanup cron. Existing domains need no lock.
+
+Still a read-then-write check:
+
+- **Wildcard overlap.** A provision claiming `*.example.com` racing one claiming `sub.example.com` takes two different locks.
+- **Other claim paths.** A provision racing an organizer adding the same domain in conference settings, or a new edition, is not locked. Those paths do not take the lock.
+
+Both windows are milliseconds, and the only caller is kontroll.
 
 ---
 
