@@ -17,6 +17,8 @@ export const ENVELOPE_HEADER = 'x-konf-envelope'
 const ISSUER = 'konf-gateway'
 const AUDIENCE = 'konf-subgraphs'
 const ALG = 'EdDSA'
+const MAX_TTL_SECONDS = 300
+const CLOCK_TOLERANCE_SECONDS = 5
 
 /** One Organization, optionally narrowed to one Conference. */
 export interface TenantEnvelope {
@@ -76,7 +78,15 @@ export async function verifyEnvelope(
     audience: AUDIENCE,
     algorithms: [ALG],
     requiredClaims: ['exp', 'iat'],
+    // Also refuses an `iat` in the future (beyond the tolerance).
+    maxTokenAge: MAX_TTL_SECONDS,
+    clockTolerance: CLOCK_TOLERANCE_SECONDS,
   })
+  // maxTokenAge bounds age, not lifetime: a fresh token minted with a
+  // ten-year exp would pass it. Bound the lifetime the signer asked for.
+  if ((p.exp as number) - (p.iat as number) > MAX_TTL_SECONDS) {
+    throw new Error('envelope lifetime exceeds the maximum')
+  }
   if (
     p.typ === 'tenant' &&
     isString(p.orgId) &&
@@ -139,9 +149,11 @@ function reject(status: 401 | 403, message: string): Response {
 
 /**
  * Base for every service's data layer. The constructor refuses a
- * PlatformContext, and `assertTenant` refuses ids that belong to another
- * tenant. Call it on caller-supplied ids BEFORE touching the database, so a
- * foreign id and a missing one look the same.
+ * PlatformContext. Repositories write and filter on `this.columns`, which
+ * come from the envelope, never from the caller. `assertTenant` is for ids a
+ * caller supplied anyway (an entity reference): run it BEFORE the query, so a
+ * foreign id and a missing one look the same. Both ids are required: leaving
+ * out the conference never widens the check to the whole org.
  */
 export abstract class ScopedRepository {
   protected readonly tenant: TenantEnvelope
@@ -150,12 +162,20 @@ export abstract class ScopedRepository {
     this.tenant = requireTenant(envelope)
   }
 
-  protected assertTenant(ids: { orgId: string; conferenceId?: string }): void {
-    if (ids.orgId !== this.tenant.orgId) {
-      throw new Error('cross-tenant access refused')
+  /** Tenant column values for every row this repository reads or writes. */
+  protected get columns(): { org_id: string; conference_id: string | null } {
+    return {
+      org_id: this.tenant.orgId,
+      conference_id: this.tenant.conferenceId,
     }
+  }
+
+  protected assertTenant(ids: {
+    orgId: string
+    conferenceId: string | null
+  }): void {
     if (
-      ids.conferenceId !== undefined &&
+      ids.orgId !== this.tenant.orgId ||
       ids.conferenceId !== this.tenant.conferenceId
     ) {
       throw new Error('cross-tenant access refused')
@@ -193,21 +213,40 @@ export class AttemptLimitError extends Error {
 /**
  * Counts one attempt at a guessable code (invite, discount, voucher) against
  * the service's own Workers rate-limit binding. Call it per resolver call,
- * before the lookup. The key carries the tenant, so one tenant's traffic never
+ * before the lookup. The counter is keyed on the CALLER, never on the guessed
+ * value, so trying many codes spends one budget: the signed-in user from the
+ * envelope, else `clientIp` for anonymous callers. With neither, the attempt
+ * is refused. The key also carries the tenant, so one tenant's traffic never
  * spends another's budget.
  */
 export async function countAttempt(
   limiter: RateLimit,
   envelope: Envelope,
   scope: string,
-  subject: string,
+  clientIp: string | null,
 ): Promise<void> {
   const tenant = requireTenant(envelope)
-  const key = [tenant.orgId, tenant.conferenceId ?? '-', scope, subject].join(
+  const caller = tenant.userId
+    ? `user:${tenant.userId}`
+    : clientIp
+      ? `ip:${clientIp}`
+      : null
+  if (!caller) throw new Error('countAttempt needs a user or a client IP')
+  const key = [tenant.orgId, tenant.conferenceId ?? '-', scope, caller].join(
     '|',
   )
   const { success } = await limiter.limit({ key })
   if (!success) throw new AttemptLimitError()
+}
+
+/**
+ * The context every resolver gets: the envelope and the service's data layer
+ * (Scoped repositories), and nothing else. The D1 binding and the rest of the
+ * Worker env stay in `fetch`, so a resolver has no path to the raw client.
+ */
+export interface SubgraphContext<Data> {
+  envelope: Envelope
+  data: Data
 }
 
 /** Key generation helper for provisioning and tests. */

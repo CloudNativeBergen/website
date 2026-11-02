@@ -86,6 +86,27 @@ describe('envelope verification', () => {
     await expect(verifyEnvelope(token, keys.publicPem)).rejects.toThrow(/exp/)
   })
 
+  it('rejects an envelope with a ten-year lifetime', async () => {
+    const signer = await createSigner(keys.privatePem)
+    const token = await signer.sign(tenant, 10 * 365 * 24 * 3600)
+    await expect(verifyEnvelope(token, keys.publicPem)).rejects.toThrow(
+      /lifetime/,
+    )
+  })
+
+  it('rejects an envelope issued in the future', async () => {
+    const key = await importPKCS8(keys.privatePem, 'EdDSA')
+    const now = Math.floor(Date.now() / 1000)
+    const token = await new SignJWT({ ...tenant })
+      .setProtectedHeader({ alg: 'EdDSA' })
+      .setIssuer('konf-gateway')
+      .setAudience('konf-subgraphs')
+      .setIssuedAt(now + 120)
+      .setExpirationTime(now + 180)
+      .sign(key)
+    await expect(verifyEnvelope(token, keys.publicPem)).rejects.toThrow(/iat/)
+  })
+
   it('rejects a signed envelope of unknown shape', async () => {
     const signer = await createSigner(keys.privatePem)
     const token = await signer.sign({
@@ -102,49 +123,99 @@ describe('envelope verification', () => {
   })
 })
 
+type Where = { org_id: string; conference_id: string | null }
+
 class TalksRepo extends ScopedRepository {
   constructor(
     envelope: Envelope,
-    readonly db: { get: (id: string) => string },
+    readonly db: { query: (where: Where, id?: string) => string },
   ) {
     super(envelope)
   }
-  get(orgId: string, conferenceId: string, id: string) {
-    this.assertTenant({ orgId, conferenceId })
-    return this.db.get(id)
+  /** Tenant columns come from the envelope; the caller gives none. */
+  list() {
+    return this.db.query(this.columns)
+  }
+  /** An entity reference that arrived with ids attached. */
+  resolveReference(ref: {
+    orgId: string
+    conferenceId: string | null
+    id: string
+  }) {
+    this.assertTenant(ref)
+    return this.db.query(this.columns, ref.id)
   }
 }
 
 describe('ScopedRepository', () => {
   it('refuses a PlatformContext', () => {
-    expect(() => new TalksRepo(platform, { get: vi.fn() })).toThrow(
+    expect(() => new TalksRepo(platform, { query: vi.fn() })).toThrow(
       /PlatformContext/,
     )
   })
 
-  it('serves its own tenant', () => {
-    const repo = new TalksRepo(tenant, { get: () => 'talk' })
-    expect(repo.get('org_a', 'conf_a', 't1')).toBe('talk')
+  it('filters on the envelope tenant, not on caller input', () => {
+    const query = vi.fn(() => 'talks')
+    new TalksRepo(tenant, { query }).list()
+    expect(query).toHaveBeenCalledWith({
+      org_id: 'org_a',
+      conference_id: 'conf_a',
+    })
+  })
+
+  it('keeps conference_id null (not absent) under an org-level envelope', () => {
+    const query = vi.fn(() => 'talks')
+    new TalksRepo({ ...tenant, conferenceId: null }, { query }).list()
+    expect(query).toHaveBeenCalledWith({ org_id: 'org_a', conference_id: null })
+  })
+
+  it('serves a reference to its own tenant', () => {
+    const repo = new TalksRepo(tenant, { query: () => 'talk' })
+    expect(
+      repo.resolveReference({
+        orgId: 'org_a',
+        conferenceId: 'conf_a',
+        id: 't',
+      }),
+    ).toBe('talk')
   })
 
   it.each([
     ['org_b', 'conf_a'],
     ['org_a', 'conf_b'],
+    ['org_a', null],
   ])(
     'refuses foreign ids (%s/%s) before touching the db',
     (orgId, conferenceId) => {
-      const get = vi.fn(() => 'talk')
-      const repo = new TalksRepo(tenant, { get })
-      expect(() => repo.get(orgId, conferenceId, 't1')).toThrow(/cross-tenant/)
-      expect(get).not.toHaveBeenCalled()
+      const query = vi.fn(() => 'talk')
+      const repo = new TalksRepo(tenant, { query })
+      expect(() =>
+        repo.resolveReference({ orgId, conferenceId, id: 't' }),
+      ).toThrow(/cross-tenant/)
+      expect(query).not.toHaveBeenCalled()
     },
   )
 
+  it('does not widen to the org when conferenceId is left out', () => {
+    const query = vi.fn(() => 'talk')
+    const repo = new TalksRepo(tenant, { query })
+    expect(() =>
+      repo.resolveReference({ orgId: 'org_a', id: 't' } as never),
+    ).toThrow(/cross-tenant/)
+    expect(query).not.toHaveBeenCalled()
+  })
+
   it('refuses a conference id under an org-level envelope', () => {
-    const get = vi.fn(() => 'talk')
-    const repo = new TalksRepo({ ...tenant, conferenceId: null }, { get })
-    expect(() => repo.get('org_a', 'conf_a', 't1')).toThrow(/cross-tenant/)
-    expect(get).not.toHaveBeenCalled()
+    const query = vi.fn(() => 'talk')
+    const repo = new TalksRepo({ ...tenant, conferenceId: null }, { query })
+    expect(() =>
+      repo.resolveReference({
+        orgId: 'org_a',
+        conferenceId: 'conf_a',
+        id: 't',
+      }),
+    ).toThrow(/cross-tenant/)
+    expect(query).not.toHaveBeenCalled()
   })
 })
 
@@ -174,16 +245,60 @@ describe('countAttempt', () => {
   const limiter = (success: boolean) => ({
     limit: vi.fn(async () => ({ success })),
   })
+  /** A real counter: `max` attempts per key, then no. */
+  const counting = (max: number) => {
+    const seen = new Map<string, number>()
+    return {
+      limit: vi.fn(async ({ key }: { key: string }) => {
+        seen.set(key, (seen.get(key) ?? 0) + 1)
+        return { success: seen.get(key)! <= max }
+      }),
+    }
+  }
+  const anon = { ...tenant, userId: null }
 
-  it('keys the attempt on tenant, scope and subject', async () => {
+  it('keys a signed-in caller on the user id', async () => {
     const l = limiter(true)
-    await countAttempt(l, tenant, 'invite', 'user_1')
-    expect(l.limit).toHaveBeenCalledWith({ key: 'org_a|conf_a|invite|user_1' })
+    await countAttempt(l, tenant, 'invite', '203.0.113.9')
+    expect(l.limit).toHaveBeenCalledWith({
+      key: 'org_a|conf_a|invite|user:user_1',
+    })
+  })
+
+  it('keys an anonymous caller on the client IP', async () => {
+    const l = limiter(true)
+    await countAttempt(l, anon, 'invite', '203.0.113.9')
+    expect(l.limit).toHaveBeenCalledWith({
+      key: 'org_a|conf_a|invite|ip:203.0.113.9',
+    })
+  })
+
+  it('refuses a caller with neither user nor IP, spending nothing', async () => {
+    const l = limiter(true)
+    await expect(countAttempt(l, anon, 'invite', null)).rejects.toThrow(
+      /user or a client IP/,
+    )
+    expect(l.limit).not.toHaveBeenCalled()
+  })
+
+  it('makes different guessed codes from one caller share one counter', async () => {
+    const l = counting(2)
+    const redeem = async (code: string) => {
+      await countAttempt(l, anon, 'invite', '203.0.113.9')
+      return code
+    }
+    await redeem('AAAA')
+    await redeem('BBBB')
+    await expect(redeem('CCCC')).rejects.toBeInstanceOf(AttemptLimitError)
+    // A different caller still has its own budget.
+    await expect(
+      countAttempt(l, anon, 'invite', '198.51.100.1'),
+    ).resolves.toBeUndefined()
   })
 
   it('throws once the limiter says no', async () => {
     await expect(
-      countAttempt(limiter(false), tenant, 'invite', 'user_1'),
+      countAttempt(limiter(false), tenant, 'invite', null),
     ).rejects.toBeInstanceOf(AttemptLimitError)
   })
 

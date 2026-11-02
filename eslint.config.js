@@ -6,24 +6,54 @@ const storybookPlugin = require('eslint-plugin-storybook')
 const noUnscopedGroq = require('./eslint-rules/no-unscoped-groq')
 const noBareAmountParse = require('./eslint-rules/no-bare-amount-parse')
 
-function rawDbPatterns() {
+// Import boundaries for subgraph services and the gateway (#1800). Each entry
+// feeds both `no-restricted-imports` (static import/export-from) and
+// `no-restricted-syntax` (literal `import()` and `require()`).
+const RAW_DB = {
+  regex:
+    '(^|/)data(/+\\.?)*/+db(/+index)?(\\.[cm]?[jt]sx?)?(\\?.*)?$|^drizzle-orm/d1(/|$)',
+  message: 'The raw D1 client stays inside src/data/. Use a Scoped repository.',
+}
+const SANITY = {
+  regex:
+    '^@/lib/sanity(/|$)|(^|/)src/lib/sanity(/|$)|^(sanity|next-sanity|@sanity/[^/]+)(/|$)',
+  message: 'Services and the gateway do not read Sanity.',
+}
+// Inside src/data/, `./db` is importable but never re-exported.
+const DB_REEXPORT = {
+  regex: '(^|/)db(/+index)?(\\.[cm]?[jt]sx?)?(\\?.*)?$',
+  message: 'Do not re-export the raw D1 client from the data layer.',
+}
+
+/** esquery selectors for literal dynamic loads of a restricted specifier. */
+function dynamicLoads({ regex, message }) {
+  const re = `/${regex.replace(/\//g, '\\/')}/`
   return [
+    { selector: `ImportExpression[source.value=${re}]`, message },
     {
-      regex: '(^|/)data/db(\\.[cm]?[jt]s)?$|^drizzle-orm/d1$',
-      message:
-        'The raw D1 client stays inside src/data/. Use a Scoped repository.',
+      selector: `CallExpression[callee.name='require'][arguments.0.value=${re}]`,
+      message,
     },
   ]
 }
-function sanityPatterns() {
+function boundary(...entries) {
+  return {
+    'no-restricted-imports': [
+      'error',
+      { patterns: entries.map(({ regex, message }) => ({ regex, message })) },
+    ],
+    'no-restricted-syntax': ['error', ...entries.flatMap(dynamicLoads)],
+  }
+}
+const reexports = ({ regex, message }) => {
+  const re = `/${regex.replace(/\//g, '\\/')}/`
   return [
-    {
-      regex:
-        '^@/lib/sanity(/|$)|(^|/)src/lib/sanity(/|$)|^(next-sanity|@sanity/client)$',
-      message: 'Services do not read Sanity; they own their data in D1.',
-    },
+    { selector: `ExportNamedDeclaration[source.value=${re}]`, message },
+    { selector: `ExportAllDeclaration[source.value=${re}]`, message },
   ]
 }
+const SERVICE_FILES = 'services/**/*.{ts,mts,cts,tsx,js,mjs}'
+const DATA_FILES = 'services/*/src/data/**/*.{ts,mts,cts,tsx,js,mjs}'
 
 const eslintConfig = [
   // Global ignores - these apply to all configurations
@@ -221,24 +251,27 @@ const eslintConfig = [
   // Subgraph services (#1800). Outside its data layer a service reaches the
   // database only through Scoped repositories, never the raw D1 handle
   // (`src/data/db.ts`) or Drizzle's D1 driver. No service file reaches
-  // Sanity. `__tests__/services/import-boundaries.test.ts` proves both blocks against
-  // this config. A later block replaces the rule's options rather than
-  // merging, so each block lists every pattern it needs.
+  // Sanity, and neither does the gateway (api/).
+  // `__tests__/services/import-boundaries.test.ts` proves these blocks against
+  // this config. A later block replaces a rule's options rather than merging,
+  // so each block lists every pattern it needs. Non-literal `import(x)` is not
+  // caught; resolvers never see the D1 binding anyway (SubgraphContext).
   {
-    files: ['services/**/*.ts'],
-    ignores: ['services/*/src/data/**'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        { patterns: [...rawDbPatterns(), ...sanityPatterns()] },
-      ],
-    },
+    files: [SERVICE_FILES],
+    ignores: [DATA_FILES],
+    rules: boundary(RAW_DB, SANITY),
   },
   {
-    files: ['services/*/src/data/**/*.ts'],
-    rules: {
-      'no-restricted-imports': ['error', { patterns: sanityPatterns() }],
-    },
+    files: [DATA_FILES],
+    rules: (() => {
+      const rules = boundary(SANITY)
+      rules['no-restricted-syntax'].push(...reexports(DB_REEXPORT))
+      return rules
+    })(),
+  },
+  {
+    files: ['api/**/*.{ts,mts,cts,tsx,js,mjs}'],
+    rules: boundary(SANITY),
   },
 
   // A Wall Post photo is a plain `<img>` of its Sanity URL (Photo Wall spec

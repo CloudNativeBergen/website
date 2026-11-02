@@ -33,7 +33,7 @@
       ]
     },
     "api": {},
-    "packages/tenancy": {}
+    "packages/tenancy": { "entry": ["src/index.ts", "src/*.typecheck.ts"] }
   },
   "ignoreDependencies": [
     "eslint-config-next",
