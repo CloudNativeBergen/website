@@ -546,7 +546,38 @@ ruleTester.run('no-unscoped-groq', asRule, {
 // diagnostic is the correct answer for every one.
 // ---------------------------------------------------------------------------
 ruleTester.run('no-unscoped-groq (#792: previously invisible shapes)', asRule, {
-  valid: [],
+  // The same shapes carrying a tenant predicate: detection must not turn into
+  // a false positive on correctly scoped queries.
+  valid: [
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'const q = `*[defined(foo) && _type == "talk" && conference._ref == $conferenceId]`',
+    },
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'const q = `*["talk" == _type && conference._ref == $conferenceId]`',
+    },
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'const q = `*[_type match "talk*" && conference._ref == $conferenceId]`',
+    },
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'const q = `*[_id in $ids && conference._ref == $conferenceId]`',
+    },
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'const q = `*[references($speakerId) && conference._ref == $conferenceId]`',
+    },
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'const q = `*[slug.current == $slug && organization._ref == $orgId]`',
+    },
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'const q = `*[_type == "talk" && conference._ref == $conferenceId]{ "n": count(*[_type == "photo" && conference._ref == $conferenceId]) }`',
+    },
+  ],
   invalid: [
     // `_type` is not the first token.
     {
