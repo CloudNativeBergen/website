@@ -36,6 +36,7 @@ import {
   type ConferenceWithSpeakerData,
 } from '@/lib/dashboard/types'
 import type { BadgeRecord } from '@/lib/badge/types'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 export default async function SpeakerDashboard() {
   await connection()
@@ -84,7 +85,7 @@ export default async function SpeakerDashboard() {
       providers,
       title,
       talkPhotosOptOut,
-      "image": coalesce(image.asset->url, imageURL)
+      "image": ${SPEAKER_IMAGE_URL}
     }`,
     { id: speakerId },
   )

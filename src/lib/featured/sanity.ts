@@ -5,6 +5,7 @@ import {
   createReferenceWithKey,
   prepareReferenceArray,
 } from '@/lib/sanity/helpers'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 export interface FeaturedSpeaker extends Speaker {
   talks?: ProposalExisting[]
@@ -32,7 +33,7 @@ export async function getFeaturedSpeakers(
         title,
         bio,
         "slug": slug.current,
-        "image": coalesce(image.asset->url, imageURL),
+        "image": ${SPEAKER_IMAGE_URL},
         "talks": *[_type == "talk" && references(^._id) && conference._ref == $conferenceId && status in ["confirmed", "accepted"]] {
           _id,
           title,
@@ -80,7 +81,7 @@ export async function getFeaturedTalks(
           name,
           title,
           "slug": slug.current,
-          "image": coalesce(image.asset->url, imageURL)
+          "image": ${SPEAKER_IMAGE_URL}
         }
       }`,
       { conferenceId },

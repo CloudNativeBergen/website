@@ -40,6 +40,7 @@ import {
 import { DataTable, type Column } from '@/components/DataTable'
 import type { Speaker } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
+import { speakerImageUrl } from '@/lib/sanity/client'
 
 type SpeakerWithProposals = Speaker & { proposals?: ProposalExisting[] }
 
@@ -435,7 +436,7 @@ export function BadgeManagementClient({
             />
             {speaker.image && (
               <img
-                src={`${speaker.image}?w=80&h=80&q=85&auto=format&fit=crop`}
+                src={speakerImageUrl(speaker.image, { width: 80, height: 80 })}
                 alt={speaker.name}
                 className="h-10 w-10 rounded-full object-cover"
               />

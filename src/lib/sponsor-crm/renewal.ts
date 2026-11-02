@@ -3,6 +3,7 @@ import { scopedFetch } from '@/lib/sanity/scoped'
 import { findOutboundOrigin } from '@/lib/conference/baseUrl'
 import { osloTodayDateString } from '@/lib/time'
 import { createSponsorActivity } from './activity'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 /**
  * Renewal (R1/R2, #1687). Every edition is its own conference on its own
@@ -255,7 +256,7 @@ export const PREVIOUS_EDITION_RENEWALS_ROOT = `*[_type == "conference" && organi
   _id, title, domains, endDate,
   "candidates": *[_type == "sponsorForConference" && conference._ref == ^._id && conference->organization._ref == $orgId && status == "closed-won"
     && !(sponsor._ref in *[_type == "sponsorForConference" && conference._ref == $conferenceId].sponsor._ref)]{
-    _id, "name": sponsor->name, "tierTitle": tier->title, assignedTo->{ _id, name, "image": coalesce(image.asset->url, imageURL) }
+    _id, "name": sponsor->name, "tierTitle": tier->title, assignedTo->{ _id, name, "image": ${SPEAKER_IMAGE_URL} }
   }
 }`
 

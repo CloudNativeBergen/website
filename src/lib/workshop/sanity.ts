@@ -10,6 +10,7 @@ import { EARLY_ACCESS_OF_SIGNUP } from './early-access/signups'
 import { freeSeat } from './seats'
 import { isCanceledWorkshop, isListedWorkshop } from './listed'
 import type { HolderSignup } from './holders'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 export async function getWorkshopSignups(
   userWorkOSId: string,
@@ -176,7 +177,7 @@ export async function getWorkshopById(
         "slug": slug.current,
         title,
         bio,
-        "image": coalesce(image.asset->url, imageURL)
+        "image": ${SPEAKER_IMAGE_URL}
       },
       "signupCount": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"])
     }

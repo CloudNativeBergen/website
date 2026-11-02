@@ -36,6 +36,7 @@ vi.mock('@/lib/teams', () => ({
 
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { getOrganizerSpeakerIds } from '@/lib/notification/sanity'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 import {
   listConversationsForSpeaker,
   setConversationStatus,
@@ -448,7 +449,7 @@ describe('derived archived — global vs per-user, resurface-on-new-message', ()
     const [query] = readMock.fetch.mock.calls[0]
     expect(query).toContain('"status": coalesce(status, \'open\')')
     expect(query).toContain(
-      '"assignedTo": assignedTo->{ _id, name, "image": coalesce(image.asset->url, imageURL) }',
+      `"assignedTo": assignedTo->{ _id, name, "image": ${SPEAKER_IMAGE_URL} }`,
     )
   })
 })

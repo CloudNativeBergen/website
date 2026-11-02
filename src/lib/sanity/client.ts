@@ -101,6 +101,34 @@ const SANITY_CDN_PREFIX = 'https://cdn.sanity.io/'
 const AUTO_FORMAT = 'format' as const
 
 /**
+ * Turns the `rect` / `fp-x` / `fp-y` that `SPEAKER_IMAGE_URL` puts on a speaker
+ * image URL (#76) back into the crop and hotspot the builder understands, so a
+ * resize keeps the Studio crop and centres on the hotspot. The asset size comes
+ * from the `-WxH` in the file name. A URL without them is returned unchanged.
+ */
+function withCropAndHotspot(url: string): SanityImageSource {
+  const u = new URL(url)
+  const rect = u.searchParams.get('rect')?.split(',').map(Number)
+  const size = u.pathname.match(/-(\d+)x(\d+)\.\w+$/)
+  if (!rect || rect.length !== 4 || rect.some(isNaN) || !size) return url
+  const [w, h] = [Number(size[1]), Number(size[2])]
+  const [x, y, rw, rh] = rect
+  const fp = (k: string) => Number(u.searchParams.get(k) ?? 0.5)
+  const hotspot = { x: fp('fp-x'), y: fp('fp-y'), width: 1, height: 1 }
+  u.search = ''
+  return {
+    asset: { url: u.toString() },
+    crop: {
+      left: x / w,
+      top: y / h,
+      right: (w - x - rw) / w,
+      bottom: (h - y - rh) / h,
+    },
+    hotspot,
+  }
+}
+
+/**
  * Resolves a speaker image URL for display. Handles both Sanity CDN URLs
  * (from uploaded images) and external URLs (from OAuth providers like GitHub/LinkedIn).
  * Only Sanity URLs are passed through the image builder for transforms.
@@ -129,7 +157,7 @@ export function speakerImageUrl(
     // by hand) makes the builder throw `Malformed asset _ref`. Serve it as is
     // rather than crash every page that renders the speaker (#1640).
     try {
-      const builder = sanityImage(image)
+      const builder = sanityImage(withCropAndHotspot(image))
         .width(opts.width)
         .height(opts.height)
         .fit(opts.fit ?? 'crop')

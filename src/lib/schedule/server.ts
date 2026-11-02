@@ -12,6 +12,7 @@ import {
 import { Status } from '@/lib/proposal/types'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 export interface ScheduleData {
   officialSchedules: EditorSchedule[]
@@ -123,7 +124,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
                 name,
                 "slug": slug.current,
                 title,
-                "image": coalesce(image.asset->url, imageURL)
+                "image": ${SPEAKER_IMAGE_URL}
               }
             }
           }
