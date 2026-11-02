@@ -49,6 +49,10 @@ const DOCS = [
     formats: ['lightning_10'],
     organizer: 'Org B AS',
     organizerAddress: 'Street 1',
+    speakerInfo: { travelPolicy: 'Covered' },
+    sponsorshipCustomization: { heroHeadline: 'Sponsor us' },
+    lifecycleHeadline: ' Moved ',
+    lifecycleMessage: '',
     homepageSections: [
       {
         _type: 'homepageHero',
@@ -238,6 +242,19 @@ describe('content subgraph', () => {
       formats: ['lightning_10'],
       organizer: 'Org B AS',
       organizerAddress: 'Street 1',
+    })
+  })
+
+  it('serves speaker, sponsorship and lifecycle copy', async () => {
+    expect(
+      await field(
+        'speakerInfo sponsorshipCustomization lifecycleHeadline lifecycleMessage',
+      ),
+    ).toEqual({
+      speakerInfo: '{"travelPolicy":"Covered"}',
+      sponsorshipCustomization: '{"heroHeadline":"Sponsor us"}',
+      lifecycleHeadline: 'Moved',
+      lifecycleMessage: null,
     })
   })
 

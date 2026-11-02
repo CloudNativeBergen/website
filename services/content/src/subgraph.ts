@@ -18,14 +18,12 @@ const strings = (t: any, keys: string[]) =>
   )
 const obj = (name: string, keys: string[]) =>
   builder.objectRef<Obj>(name).implement({
-    shareable: true,
     fields: (t) => strings(t, keys),
   })
 
 const TicketCustomization = builder
   .objectRef<Obj>('TicketCustomization')
   .implement({
-    shareable: true,
     fields: (t) => ({
       ...strings(t, [
         'heroHeadline',
@@ -73,7 +71,6 @@ const blocks: Record<string, string[]> = {
 const list = (v: unknown) => (Array.isArray(v) ? (v as Obj[]) : [])
 for (const [type, keys] of Object.entries(blocks))
   builder.objectRef<Block>(type[0].toUpperCase() + type.slice(1)).implement({
-    shareable: true,
     interfaces: [HomepageSection],
     fields: (t) => ({
       ...strings(t, keys),
@@ -141,6 +138,16 @@ const Conference = builder.objectRef<Row>('Conference').implement({
       nullable: true,
       description: 'Portable Text as JSON (Sanity shape).',
     }),
+    speakerInfo: t.exposeString('speakerInfo', {
+      nullable: true,
+      description: 'The speaker information object as JSON (Sanity shape).',
+    }),
+    sponsorshipCustomization: t.exposeString('sponsorshipCustomization', {
+      nullable: true,
+      description: 'The sponsorship page copy as JSON (Sanity shape).',
+    }),
+    lifecycleHeadline: t.exposeString('lifecycleHeadline', { nullable: true }),
+    lifecycleMessage: t.exposeString('lifecycleMessage', { nullable: true }),
     ...Object.fromEntries(
       (
         [

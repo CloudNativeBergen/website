@@ -26,7 +26,8 @@ const CONFERENCE = `*[_type == "conference" && _id == $conferenceId && organizat
   speakerRegistrationLink, volunteerRegistrationLink, registrationEnabled,
   ticketCustomization, ticketInclusions, ticketFaqs, vanityMetrics,
   socialHashtag, venueTravelInfo, localRecommendations, formats, organizer,
-  organizerAddress
+  organizerAddress, speakerInfo, sponsorshipCustomization, lifecycleHeadline,
+  lifecycleMessage
 }`
 
 type Doc = Record<string, unknown> & {
@@ -83,6 +84,12 @@ function toConference(c: Doc, member: boolean) {
     homepageBlocks: blocks,
     // Portable Text, as Sanity stores it; the site renders it with PortableText.
     announcement: c.announcement ? JSON.stringify(c.announcement) : null,
+    speakerInfo: c.speakerInfo ? JSON.stringify(c.speakerInfo) : null,
+    sponsorshipCustomization: c.sponsorshipCustomization
+      ? JSON.stringify(c.sponsorshipCustomization)
+      : null,
+    lifecycleHeadline: s(c.lifecycleHeadline),
+    lifecycleMessage: s(c.lifecycleMessage),
     cfpStartDate: s(c.cfpStartDate),
     cfpEndDate: s(c.cfpEndDate),
     cfpNotifyDate: s(c.cfpNotifyDate),
