@@ -1,3 +1,4 @@
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 // Granular GROQ queries for the decoupled Sponsor CRM dashboard
 
 export const SPONSOR_OVERVIEW_FIELDS = `
@@ -46,7 +47,7 @@ export const SPONSOR_OVERVIEW_FIELDS = `
     name,
     email,
     // A Sanity image object, not a URL: resolve it like every speaker read.
-    "image": coalesce(image.asset->url, imageURL)
+    "image": ${SPEAKER_IMAGE_URL}
   },
   contractValue,
   contractCurrency,

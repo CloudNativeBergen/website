@@ -36,6 +36,7 @@ import {
   type SpeakerOptOutField,
   type SpeakerUpdateActor,
 } from './socialTag'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 // Computed field: speaker is an organizer if referenced in any conference's organizers array
 const IS_ORGANIZER_FIELD =
@@ -89,7 +90,7 @@ const LOGIN_SPEAKER_PROJECTION = `{
     knownEmails,
     "organizations": organizations[]._ref,
     "slug": slug.current,
-    "image": coalesce(image.asset->url, imageURL),
+    "image": ${SPEAKER_IMAGE_URL},
     ${IS_ORGANIZER_FIELD},
     ${ORGANIZER_ORG_IDS_FIELD}
   }`
@@ -1073,7 +1074,7 @@ export async function getSpeaker(
       ...,
       ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
       "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL),
+      "image": ${SPEAKER_IMAGE_URL},
       ${IS_ORGANIZER_FIELD},
       ${ORGANIZER_ORG_IDS_FIELD}
     }`,
@@ -1151,7 +1152,7 @@ export async function getSpeakerAdminDetail(
       socialTagOptOut,
       talkPhotosOptOut,
       "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL)
+      "image": ${SPEAKER_IMAGE_URL}
     }`,
       { speakerId, orgId },
       { cache: 'no-store' },
@@ -1173,7 +1174,7 @@ export async function getPublicSpeaker(
   try {
     data = await clientReadCached.fetch(
       `*[ _type == "speaker" && slug.current == $speakerSlug && count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]) > 0][0]{
-        name, title, bio, links, flags, "image": coalesce(image.asset->url, imageURL),
+        name, title, bio, links, flags, "image": ${SPEAKER_IMAGE_URL},
         "talks": *[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]{
           _id, title, description, language, level, format, audiences, video,
           attachments[]{
@@ -1183,7 +1184,7 @@ export async function getPublicSpeaker(
             }
           },
           speakers[]-> {
-            _id, name, title, "slug": slug.current, "image": coalesce(image.asset->url, imageURL)
+            _id, name, title, "slug": slug.current, "image": ${SPEAKER_IMAGE_URL}
           },
           topics[]-> {
             _id, title, "slug": slug.current
@@ -1441,7 +1442,7 @@ async function querySpeakers(
       ...,
       ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
       "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL),
+      "image": ${SPEAKER_IMAGE_URL},
       "proposals": *[_type == "talk" && references(^._id) && status in [${statusFilter}] ${proposalsConferenceFilter}] {
         _id,
         title,
@@ -1581,7 +1582,7 @@ export async function getOrgSpeakerDirectory(
       "name": coalesce(name, ""),
       "title": coalesce(title, ""),
       "email": coalesce(email, ""),
-      "image": coalesce(image.asset->url, imageURL),
+      "image": ${SPEAKER_IMAGE_URL},
       "slug": slug.current
     } | order(name asc)`
 
@@ -1818,7 +1819,7 @@ export async function getOrganizers(orgId: string | null | undefined): Promise<{
       ...,
       ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
       "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL),
+      "image": ${SPEAKER_IMAGE_URL},
       "isOrganizer": true
     } | order(name asc)`
 
@@ -1854,7 +1855,7 @@ export async function getOrganizersByConference(conferenceId: string): Promise<{
       ...,
       ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
       "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL)
+      "image": ${SPEAKER_IMAGE_URL}
     } | order(name asc)`
 
     // API-CDN (#918). Read four times over from `sponsor.ts` to populate

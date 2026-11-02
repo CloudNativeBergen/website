@@ -32,7 +32,7 @@ const code = source.replace(/^\s*\/\/.*$/gm, '')
 
 describe('/cfp/list speaker share card fields', () => {
   it('re-reads the image with the shared coalesce read model', () => {
-    expect(code).toContain('"image": coalesce(image.asset->url, imageURL)')
+    expect(code).toContain('"image": ${SPEAKER_IMAGE_URL}')
   })
 
   it('re-reads the job title the token never carries', () => {

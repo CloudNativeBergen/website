@@ -3,6 +3,7 @@ import {
   clientWrite,
 } from '@/lib/sanity/client'
 import type { BadgeRecord, BadgeType } from './types'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 const BADGE_FIELDS = `
   _id,
@@ -14,7 +15,7 @@ const BADGE_FIELDS = `
     _id,
     name,
     email,
-    "image": coalesce(image.asset->url, imageURL),
+    "image": ${SPEAKER_IMAGE_URL},
     title,
     "slug": slug.current,
     talks[]->{

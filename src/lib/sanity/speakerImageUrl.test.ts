@@ -60,4 +60,21 @@ describe('speakerImageUrl', () => {
 
     expect(speakerImageUrl(fileUrl)).toBe(fileUrl)
   })
+
+  it('hands the builder the crop and hotspot carried on the URL (#76)', () => {
+    const base = 'https://cdn.sanity.io/images/p/d/abc-1000x500.jpg'
+    speakerImageUrl(`${base}?rect=100,0,700,250&fp-x=0.3&fp-y=0.25`)
+
+    expect(builder().image).toHaveBeenCalledWith({
+      asset: { url: base },
+      crop: { left: 0.1, top: 0, right: 0.2, bottom: 0.5 },
+      hotspot: { x: 0.3, y: 0.25, width: 1, height: 1 },
+    })
+  })
+
+  it('passes a plain URL through unchanged', () => {
+    speakerImageUrl(SANITY_IMAGE)
+
+    expect(builder().image).toHaveBeenCalledWith(SANITY_IMAGE)
+  })
 })

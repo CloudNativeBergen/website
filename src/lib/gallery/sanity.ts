@@ -17,6 +17,7 @@ import type {
   GalleryImageResponse,
   Uploadable,
 } from './types'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 /**
  * Wrapper function for API parity - accepts file and data separately
@@ -342,7 +343,7 @@ export async function getGalleryImage(
           _id,
           name,
           "slug": slug.current,
-          "image": coalesce(image.asset->url, imageURL)
+          "image": ${SPEAKER_IMAGE_URL}
         }
       }
     `
@@ -530,7 +531,7 @@ export async function getGalleryImages(
           _id,
           name,
           "slug": slug.current,
-          "image": coalesce(image.asset->url, imageURL)
+          "image": ${SPEAKER_IMAGE_URL}
         }
       }
     `

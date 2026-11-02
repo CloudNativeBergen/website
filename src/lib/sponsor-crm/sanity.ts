@@ -24,6 +24,7 @@ import type {
   SponsorStatus,
   SponsorTag,
 } from './types'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 /**
  * How many early sign-ups were made through this sponsor's workshop
@@ -142,7 +143,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     _id,
     name,
     email,
-    "image": coalesce(image.asset->url, imageURL)
+    "image": ${SPEAKER_IMAGE_URL}
   },
   contactInitiatedAt,
   contractSignedAt,

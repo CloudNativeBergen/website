@@ -16,7 +16,7 @@ import {
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '../NotificationProvider'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
-import { sanityImage } from '@/lib/sanity/client'
+import { sanityImage, speakerImageUrl } from '@/lib/sanity/client'
 import { ImageHotspotEditor } from './ImageHotspotEditor'
 import { Input } from '@/components/Form'
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -490,7 +490,10 @@ export function ImageMetadataModal({
                               {speaker.image ? (
                                 <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                                   <img
-                                    src={`${speaker.image}?w=64&h=64&q=85&auto=format&fit=crop`}
+                                    src={speakerImageUrl(speaker.image, {
+                                      width: 64,
+                                      height: 64,
+                                    })}
                                     alt={speaker.name}
                                     className="h-full w-full object-cover"
                                   />
@@ -553,7 +556,10 @@ export function ImageMetadataModal({
                       {speaker.image ? (
                         <div className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                           <img
-                            src={`${speaker.image}?w=40&h=40&q=85&auto=format&fit=crop`}
+                            src={speakerImageUrl(speaker.image, {
+                              width: 40,
+                              height: 40,
+                            })}
                             alt={speaker.name}
                             className="h-full w-full object-cover"
                           />

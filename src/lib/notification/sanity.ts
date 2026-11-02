@@ -27,6 +27,7 @@ import type {
   NotificationItem,
   OnceNotificationInput,
 } from './types'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 /** The stored `notification` document for one input. */
 function notificationDocument(
@@ -450,7 +451,7 @@ export async function getNotificationsForSpeaker({
       actor->{
         _id,
         name,
-        "image": coalesce(image.asset->url, imageURL)
+        "image": ${SPEAKER_IMAGE_URL}
       }
     }`,
     params,

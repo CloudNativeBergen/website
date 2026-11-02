@@ -50,6 +50,7 @@ import {
   truncateToGraphemeBoundary,
   ORGANIZERS_LABEL,
 } from './links'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 // Re-export the client-safe pure helpers so existing server importers keep
 // their `./sanity` import surface (the definitions live in `./links`).
@@ -832,7 +833,7 @@ export async function getConversationParticipants(
     `*[_type == "speaker" && _id in $ids]{
       _id,
       name,
-      "image": coalesce(image.asset->url, imageURL)
+      "image": ${SPEAKER_IMAGE_URL}
     }`,
     { ids },
   )
@@ -986,7 +987,7 @@ export async function listConversationsForSpeaker({
     createdAt,
     lastMessageAt,
     "status": coalesce(status, 'open'),
-    "assignedTo": assignedTo->{ _id, name, "image": coalesce(image.asset->url, imageURL) },
+    "assignedTo": assignedTo->{ _id, name, "image": ${SPEAKER_IMAGE_URL} },
     archivedAt,
     "lastMessage": ${LAST_MESSAGE_SUBQUERY},
     "speakerSideName": select(
