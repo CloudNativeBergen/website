@@ -118,6 +118,8 @@ export interface EditFieldDef {
   positive?: boolean
   /** Optional helper text rendered under the control. */
   description?: string
+  /** Text/number field shown but not editable; its value is still submitted. */
+  readOnly?: boolean
   /** Options for a scalar `select` field (value stored, title shown). */
   options?: readonly { value: string; title: string }[]
   // --- list options (`string-list` / `object-list`) ---
@@ -900,6 +902,12 @@ export interface EditConferenceCardProps {
   currentDomain?: string
   /** Fields of the fieldset to leave out of the form; they are not saved. */
   hiddenFields?: string[]
+  /**
+   * Fields shown read-only, with `readOnlyNote` as their helper text. Their
+   * stored value is submitted unchanged, so cross-field validation still holds.
+   */
+  readOnlyFields?: string[]
+  readOnlyNote?: string
 }
 
 /**
@@ -914,11 +922,17 @@ export function EditConferenceCard({
   defaultOpen = false,
   currentDomain,
   hiddenFields,
+  readOnlyFields,
+  readOnlyNote,
 }: EditConferenceCardProps) {
   const def = FIELDSET_DEFS[fieldset]
-  const fields = hiddenFields
-    ? def.fields.filter((f) => !hiddenFields.includes(f.name))
-    : def.fields
+  const fields = def.fields
+    .filter((f) => !hiddenFields?.includes(f.name))
+    .map((f) =>
+      readOnlyFields?.includes(f.name)
+        ? { ...f, readOnly: true, description: readOnlyNote ?? f.description }
+        : f,
+    )
   const router = useRouter()
   const utils = api.useUtils()
   const { showNotification } = useNotification()
@@ -1457,9 +1471,10 @@ function EditField({
           }
           value={stringValue}
           onChange={(e) => onChange(e.target.value)}
+          readOnly={field.readOnly}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
-          className={inputClass}
+          className={`${inputClass} read-only:cursor-not-allowed read-only:bg-gray-100 dark:read-only:bg-gray-800`}
         />
       )}
       {error ? (

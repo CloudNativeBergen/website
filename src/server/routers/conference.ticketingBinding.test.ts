@@ -145,7 +145,27 @@ describe('the ticketing event binding is platform-set only (#745)', () => {
     expect(h.commit).not.toHaveBeenCalled()
   })
 
-  it('lets a tenant admin re-save the stored binding alongside other fields', async () => {
+  // The settings form's save path for a tenant admin: the binding fields are
+  // read-only and submit their stored values; provider and customer id change.
+  it('lets a tenant admin change the customer id on a Checkin conference', async () => {
+    h.uncachedFetch.mockImplementation(async (query: string) =>
+      query.startsWith('count(')
+        ? 0
+        : { checkinEventId: 4242, titoAccountSlug: null, titoEventSlug: null },
+    )
+    await expect(
+      tenantAdmin().updateTicketingIds({
+        ticketingProvider: 'checkin',
+        checkinCustomerId: 8,
+        checkinEventId: 4242,
+        titoAccountSlug: null,
+        titoEventSlug: null,
+      }),
+    ).resolves.toBeDefined()
+    expect(h.commit).toHaveBeenCalled()
+  })
+
+  it('lets a tenant admin save a Tito conference with the stored slugs', async () => {
     await expect(
       tenantAdmin().updateTicketingIds({
         ticketingProvider: 'tito',

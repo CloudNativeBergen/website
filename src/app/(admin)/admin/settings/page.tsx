@@ -38,6 +38,15 @@ import { effectivePlan } from '@/lib/features/registry'
 import { listEntitledFeatures } from '@/lib/features/entitlements'
 import { isPlatformOrgRequest } from '@/lib/features/platform'
 import { isPlatformOperator } from '@/lib/authz/platform'
+
+// #745: the event binding is platform-set only.
+const TICKETING_BINDING_FIELDS = [
+  'checkinEventId',
+  'titoAccountSlug',
+  'titoEventSlug',
+]
+const TICKETING_BINDING_NOTE =
+  'The platform team sets the ticketing event. Contact them to connect or change it.'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { PlanFeaturesCard } from './PlanFeaturesCard'
 import { applyWorkshopGate } from './planFeatureRows'
@@ -663,18 +672,22 @@ export default async function AdminSettings() {
               icon={LinkIcon}
               editUrl={editUrl}
               action={
-                canEditTicketingBinding && (
-                  <EditConferenceCard
-                    fieldset="ticketingIds"
-                    initialValues={{
-                      ticketingProvider: conference.ticketingProvider,
-                      checkinCustomerId: conference.checkinCustomerId,
-                      checkinEventId: conference.checkinEventId,
-                      titoAccountSlug: conference.titoAccountSlug,
-                      titoEventSlug: conference.titoEventSlug,
-                    }}
-                  />
-                )
+                <EditConferenceCard
+                  fieldset="ticketingIds"
+                  readOnlyFields={
+                    canEditTicketingBinding
+                      ? undefined
+                      : TICKETING_BINDING_FIELDS
+                  }
+                  readOnlyNote={TICKETING_BINDING_NOTE}
+                  initialValues={{
+                    ticketingProvider: conference.ticketingProvider,
+                    checkinCustomerId: conference.checkinCustomerId,
+                    checkinEventId: conference.checkinEventId,
+                    titoAccountSlug: conference.titoAccountSlug,
+                    titoEventSlug: conference.titoEventSlug,
+                  }}
+                />
               }
             >
               <FieldRow
@@ -683,8 +696,7 @@ export default async function AdminSettings() {
               />
               {!canEditTicketingBinding && (
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  The platform team sets up ticketing. Contact them to connect
-                  or change it.
+                  {TICKETING_BINDING_NOTE}
                 </p>
               )}
               {conference.ticketingProvider === 'tito' ? (
