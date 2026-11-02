@@ -22,6 +22,8 @@ package codegen
 	// Worker service bindings (RPC). The service types them in its DataEnv.
 	serviceBindings: *[] | [...{binding: string, service: string, entrypoint?: string}]
 	if tenancy {crons: []}
+	// Extra tsconfig include globs, e.g. a service's scripts/.
+	tsInclude: *[] | [...string]
 
 	// D1 database ids per environment. The owner creates each database once
 	// (`wrangler d1 create konf-<name>[-preview]`) and commits the id in
@@ -154,7 +156,7 @@ package codegen
 				"skipLibCheck":    true
 				"isolatedModules": true
 			}
-			"include": ["src/**/*.ts"]
+			"include": ["src/**/*.ts", for g in tsInclude {g}]
 		}
 	}
 

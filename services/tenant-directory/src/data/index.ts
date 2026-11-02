@@ -16,6 +16,16 @@ import {
   organizations,
   provisioningRequests,
 } from './schema'
+import {
+  PLATFORM_DOMAIN,
+  RESERVED_SLUGS,
+  SLUG,
+  aliasHost,
+  editionHost,
+  normalizeHost,
+} from './naming'
+
+export { PLATFORM_DOMAIN, normalizeHost }
 
 /** Bindings the data layer needs; the generated WorkerEnv extends it. */
 export interface DataEnv extends CloudflareEnv {
@@ -27,49 +37,8 @@ export interface DataEnv extends CloudflareEnv {
 /** How often a verified custom domain is re-checked with Cloudflare. */
 const RECHECK_VERIFIED_MS = 60 * 60 * 1000
 
-/** The platform-host naming convention, owned here. */
-export const PLATFORM_DOMAIN = 'konf.run'
-const editionHost = (org: string, conf: string) =>
-  `${org}-${conf}.${PLATFORM_DOMAIN}`
-const aliasHost = (org: string) => `${org}.${PLATFORM_DOMAIN}`
-
-const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/
-// Org slugs become `<slug>.konf.run`; these names belong to the platform.
-const RESERVED_SLUGS = new Set([
-  'admin',
-  'api',
-  'app',
-  'auth',
-  'cdn',
-  'dashboard',
-  'docs',
-  'gateway',
-  'help',
-  'kontroll',
-  'login',
-  'mail',
-  'my',
-  'smtp',
-  'static',
-  'status',
-  'support',
-  'www',
-])
-
 const fail = (code: string, message: string) =>
   createGraphQLError(message, { extensions: { code } })
-
-/** Accepts an Origin (`https://host:port`) or a bare hostname. */
-export function normalizeHost(input: string): string | null {
-  const s = input.trim().toLowerCase()
-  if (!s) return null
-  try {
-    const host = new URL(s.includes('://') ? s : `https://${s}`).hostname
-    return host.replace(/\.$/, '') || null
-  } catch {
-    return null
-  }
-}
 
 export interface ProvisionInput {
   idempotencyKey: string

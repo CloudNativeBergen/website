@@ -28,6 +28,7 @@ const hostnames = {
   create: vi.fn<CustomHostnames['create']>(),
   get: vi.fn<CustomHostnames['get']>(),
   delete: vi.fn<CustomHostnames['delete']>(),
+  find: vi.fn<CustomHostnames['find']>(),
 }
 const identity = { ensure: vi.fn(async () => undefined) }
 vi.mock('./data/cloudflare', () => ({ cloudflareHostnames: () => hostnames }))
