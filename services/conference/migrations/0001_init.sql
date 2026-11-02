@@ -7,7 +7,8 @@ CREATE TABLE conferences (
   org_id TEXT NOT NULL,
   -- Anonymous callers see the row only when this is 1 (epic #1772, req. 2).
   published INTEGER NOT NULL DEFAULT 0 CHECK (published IN (0, 1)),
-  title TEXT NOT NULL,
+  -- Null when Sanity has no title, as in services/content.
+  title TEXT,
   tagline TEXT,
   city TEXT,
   country TEXT,

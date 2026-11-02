@@ -14,7 +14,7 @@ const moved = { override: { from: 'content', label: 'conference' } } as const
 const Conference = builder.objectRef<ConferenceRow>('Conference').implement({
   fields: (t) => ({
     id: t.exposeID('conferenceId'),
-    title: t.exposeString('title', moved),
+    title: t.exposeString('title', { nullable: true, ...moved }),
     ...Object.fromEntries(
       (
         [

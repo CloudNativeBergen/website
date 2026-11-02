@@ -95,7 +95,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          for pkg in identity tenant-directory content; do
+          for pkg in identity tenant-directory content conference; do
             echo "::group::$pkg ($DEPLOY_ENV)"
             # `db: false` services (content) have no D1 and no migrations.
             if [ -d "services/$pkg/migrations" ]; then

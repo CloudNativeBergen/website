@@ -45,7 +45,7 @@ describe('mapBackfill', () => {
       social_links: '["https://x.example"]',
     })
     expect(b.rows[0]).toMatchObject({
-      title: 'conf-a',
+      title: null,
       visibility: 'live',
       social_links: '[]',
     })

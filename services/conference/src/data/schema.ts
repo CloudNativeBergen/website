@@ -5,7 +5,7 @@ export const conferences = sqliteTable('conferences', {
   conferenceId: text('conference_id').primaryKey(),
   orgId: text('org_id').notNull(),
   published: integer('published', { mode: 'boolean' }).notNull(),
-  title: text('title').notNull(),
+  title: text('title'),
   tagline: text('tagline'),
   city: text('city'),
   country: text('country'),

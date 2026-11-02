@@ -30,7 +30,7 @@ export interface Row {
   conference_id: string
   org_id: string
   published: 0 | 1
-  title: string
+  title: string | null
   tagline: string | null
   city: string | null
   country: string | null
@@ -75,7 +75,7 @@ export function mapBackfill(
       published: ['cancelled', 'archived'].includes(c.lifecycleStatus ?? '')
         ? 0
         : 1,
-      title: s(c.title) ?? c._id,
+      title: s(c.title),
       tagline: s(c.tagline),
       city: s(c.city),
       country: s(c.country),

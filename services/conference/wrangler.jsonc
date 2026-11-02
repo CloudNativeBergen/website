@@ -20,7 +20,7 @@
         {
           "binding": "DB",
           "database_name": "konf-conference-preview",
-          "database_id": "TO_BE_CREATED",
+          "database_id": "f6e9d558-db2e-4200-8afc-c1f95655bf5e",
           "migrations_dir": "migrations",
         },
       ],
@@ -31,7 +31,7 @@
         {
           "binding": "DB",
           "database_name": "konf-conference",
-          "database_id": "TO_BE_CREATED",
+          "database_id": "245b474a-5dfe-410f-98fa-97cc13813869",
           "migrations_dir": "migrations",
         },
       ],
