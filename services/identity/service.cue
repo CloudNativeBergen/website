@@ -6,6 +6,10 @@ service: #PlatformService & {
 	name: "identity"
 	d1: {preview: "2192470e-1f18-40cc-813f-c18883237c78", production: "20c89ee4-f729-483b-8a0f-8fba00d4f411"}
 	tenancy: false
+	// The public host for sign-in and the login handoff (#1803).
+	routes: {preview: ["id-preview.konf.app"], production: ["id.konf.app"]}
+	// Verified origins for the login handoff (#688).
+	serviceBindings: [{binding: "DIRECTORY", service: "konf-tenant-directory"}]
 	files: {
 		"package.json": {
 			dependencies: {

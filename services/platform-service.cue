@@ -22,6 +22,13 @@ package codegen
 	// Worker service bindings (RPC). The service types them in its DataEnv.
 	serviceBindings: *[] | [...{binding: string, service: string, entrypoint?: string}]
 	if tenancy {crons: []}
+	// Custom-domain routes per environment, for a service with its own
+	// public surface (identity). Subgraphs keep none (epic #1772, req. 8).
+	routes: {
+		preview:    *[] | [...string]
+		production: *[] | [...string]
+	}
+	if tenancy {routes: {preview: [], production: []}}
 	// Extra tsconfig include globs, e.g. a service's scripts/.
 	tsInclude: *[] | [...string]
 
@@ -108,6 +115,9 @@ package codegen
 			"env": {
 				"preview": {
 					"name": "\(_workerName)-preview"
+					if len(routes.preview) > 0 {
+						"routes": [for r in routes.preview {pattern: r, custom_domain: true}]
+					}
 					"d1_databases": [{
 						"binding":        "DB"
 						"database_name":  "\(_workerName)-preview"
@@ -124,6 +134,9 @@ package codegen
 				}
 				"production": {
 					"name": _workerName
+					if len(routes.production) > 0 {
+						"routes": [for r in routes.production {pattern: r, custom_domain: true}]
+					}
 					"d1_databases": [{
 						"binding":        "DB"
 						"database_name":  _workerName

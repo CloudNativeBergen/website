@@ -229,6 +229,28 @@ describe('gateway', () => {
     expect(forwarded[0].get('authorization')).toBeNull()
   })
 
+  it('never accepts a NextAuth session cookie (#1803)', async () => {
+    const { env, envelopes, forwarded } = makeEnv()
+    const cookie =
+      '__Secure-authjs.session-token=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0.x; authjs.session-token=y'
+    await gateway.fetch(post(SUBGRAPH_QUERY, { origin: VERIFIED, cookie }), env)
+    expect(
+      await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem),
+    ).toMatchObject({ userId: null })
+    expect(forwarded[0].get('cookie')).toBeNull()
+    expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+
+    // Nor the same value presented as a bearer token.
+    const res = await gateway.fetch(
+      post(SUBGRAPH_QUERY, {
+        origin: VERIFIED,
+        authorization: 'Bearer eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0.x',
+      }),
+      env,
+    )
+    expect(res.status).toBe(401)
+  })
+
   it.each(['Basic abc', 'Bearer', 'Bearer a b', 'nonsense'])(
     'rejects a malformed Authorization header %j',
     async (authorization) => {

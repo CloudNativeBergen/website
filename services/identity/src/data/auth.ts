@@ -3,7 +3,7 @@
 import { betterAuth } from 'better-auth'
 import { APIError } from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
-import { jwt, oneTimeToken, organization } from 'better-auth/plugins'
+import { bearer, jwt, organization } from 'better-auth/plugins'
 import { count, eq } from 'drizzle-orm'
 import { rawDb } from './db'
 import * as schema from './schema'
@@ -120,12 +120,9 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
           },
         },
       }),
-      // Login handoff (#1803 wires it up): single use, one minute, hashed.
-      oneTimeToken({
-        expiresIn: 1,
-        storeToken: 'hashed',
-        disableClientRequest: true,
-      }),
+      // The tenant site's server presents the session it got from the
+      // handoff (src/handoff.ts) as a signed bearer token, never a cookie.
+      bearer({ requireSignature: true }),
     ],
   })
 }

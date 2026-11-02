@@ -1,10 +1,11 @@
-// Identity entry: Better Auth under /api/auth, the gateway's RPC entrypoint,
-// 404 for everything else.
+// Identity entry: Better Auth under /api/auth, the login handoff under
+// /handoff, the RPC entrypoints, and 404 for everything else.
 import { WorkerEntrypoint } from 'cloudflare:workers'
-import { createAuth, createData, type AuthEnv } from './data'
+import { createAuth, createData } from './data'
+import { handoff, type HandoffEnv } from './handoff'
 import type { WorkerEnv } from './worker'
 
-type Env = WorkerEnv & AuthEnv
+type Env = WorkerEnv & HandoffEnv
 
 /**
  * RPC for the gateway, reachable only over a service binding with
@@ -28,10 +29,14 @@ export class Organizations extends WorkerEntrypoint<Env> {
 
 export default {
   fetch(request: Request, env: Env) {
-    if (new URL(request.url).pathname.startsWith('/api/auth/')) {
+    const { pathname } = new URL(request.url)
+    if (pathname.startsWith('/api/auth/')) {
       return createAuth(env.DB, env).handler(request)
     }
-    // Only Better Auth is public. The gateway and tenant-directory use the
+    if (pathname === '/handoff' || pathname.startsWith('/handoff/')) {
+      return handoff(request, env)
+    }
+    // Only Better Auth and the login handoff are public. The gateway and tenant-directory use the
     // RPC entrypoints above.
     return new Response('Not found', { status: 404 })
   },

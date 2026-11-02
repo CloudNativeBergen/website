@@ -4,6 +4,12 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
+  "services": [
+    {
+      "binding": "DIRECTORY",
+      "service": "konf-tenant-directory",
+    },
+  ],
   "workers_dev": false,
   "preview_urls": false,
   "d1_databases": [
@@ -25,6 +31,18 @@
           "migrations_dir": "migrations",
         },
       ],
+      "routes": [
+        {
+          "pattern": "id-preview.konf.app",
+          "custom_domain": true,
+        },
+      ],
+      "services": [
+        {
+          "binding": "DIRECTORY",
+          "service": "konf-tenant-directory-preview",
+        },
+      ],
     },
     "production": {
       "name": "konf-identity",
@@ -34,6 +52,18 @@
           "database_name": "konf-identity",
           "database_id": "20c89ee4-f729-483b-8a0f-8fba00d4f411",
           "migrations_dir": "migrations",
+        },
+      ],
+      "routes": [
+        {
+          "pattern": "id.konf.app",
+          "custom_domain": true,
+        },
+      ],
+      "services": [
+        {
+          "binding": "DIRECTORY",
+          "service": "konf-tenant-directory",
         },
       ],
     },
