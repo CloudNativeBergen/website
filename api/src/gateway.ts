@@ -51,7 +51,7 @@ export interface Env {
 }
 
 /** Supergraph subgraph name (URL host) -> service binding. */
-const BINDINGS = {
+export const BINDINGS = {
   'tenant-directory': 'DIRECTORY',
   content: 'CONTENT',
   conference: 'CONFERENCE',

@@ -98,6 +98,7 @@ const DOCS = [
 const fetch = vi.fn(
   async (query: string, p: { orgId: string; conferenceId: string }) => {
     expect(query).toContain('organization._ref == $orgId')
+    expect(query).toContain('_id == $conferenceId')
     const d = DOCS.find((d) => d._id === p.conferenceId && d.org === p.orgId)
     return d ? { ...d, org: undefined } : null
   },
