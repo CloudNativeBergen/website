@@ -29,6 +29,8 @@ export interface Env {
   DIRECTORY: Fetcher
   /** konf-content: Sanity-backed editorial data (#1835) */
   CONTENT: Fetcher
+  /** konf-conference: its subgraph */
+  CONFERENCE: Fetcher
   /** konf-identity default entrypoint: only /api/auth/* (JWKS) answers */
   IDENTITY: Fetcher
   /** Per-request limit (Workers Rate Limiting), keyed per caller (#1790) */
@@ -52,6 +54,7 @@ export interface Env {
 const BINDINGS = {
   'tenant-directory': 'DIRECTORY',
   content: 'CONTENT',
+  conference: 'CONFERENCE',
 } as const
 
 const JWT_AUDIENCE = 'konf-gateway'
