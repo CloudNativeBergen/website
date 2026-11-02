@@ -739,6 +739,8 @@ export default async function AdminSettings() {
                     venueTravelInfo: conference.venueTravelInfo,
                     speakerDinnerInfo: conference.speakerDinnerInfo,
                     localRecommendations: conference.localRecommendations,
+                    cateringInfo: conference.cateringInfo,
+                    afterpartyInfo: conference.afterpartyInfo,
                     socialHashtag: conference.socialHashtag,
                   }}
                 />
@@ -764,6 +766,14 @@ export default async function AdminSettings() {
               <FieldRow
                 label="Local recommendations"
                 value={conference.localRecommendations}
+              />
+              <FieldRow
+                label="Food and drinks"
+                value={conference.cateringInfo}
+              />
+              <FieldRow
+                label="After the conference"
+                value={conference.afterpartyInfo}
               />
               <FieldRow
                 label="Event hashtag"

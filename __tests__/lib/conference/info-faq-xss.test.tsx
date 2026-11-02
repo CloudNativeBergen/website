@@ -12,7 +12,7 @@
  * of the HTML, because correctly escaped output still CONTAINS the harmless
  * text "onerror=" and "script".
  */
-import { render } from '@testing-library/react'
+import { cleanup, render } from '@testing-library/react'
 import { buildInfoFaqs, getScheduleDayInfo } from '@/lib/conference/info-faq'
 import { InfoContent } from '@/components/info/InfoContent'
 import { createMockConference } from '../../testdata/conference'
@@ -94,6 +94,9 @@ describe('/info FAQ escapes tenant-supplied conference fields', () => {
     ['venueTravelInfo', { venueTravelInfo: PAYLOAD }],
     ['speakerDinnerInfo', { speakerDinnerInfo: PAYLOAD }],
     ['localRecommendations', { localRecommendations: PAYLOAD }],
+    // #831
+    ['cateringInfo', { cateringInfo: PAYLOAD }],
+    ['afterpartyInfo', { afterpartyInfo: PAYLOAD }],
   ])('neutralises a payload stored in %s', (_field, overrides) => {
     const { container } = renderInfo(overrides)
 
@@ -329,6 +332,23 @@ describe('/info speaker briefing', () => {
     expect(
       container.querySelector('a[href="https://maps.example/x"]'),
     ).not.toBeNull()
+  })
+
+  it('asks about food and the afterparty only when the tenant answers (#831)', () => {
+    const empty = renderInfo({}).container.textContent ?? ''
+    expect(empty).not.toContain('Will food and drinks be served?')
+    expect(empty).not.toContain('What happens after the conference?')
+    cleanup()
+
+    const text =
+      renderInfo({
+        cateringInfo: 'Lunch is included.',
+        afterpartyInfo: 'Drinks at the venue from 18:00.',
+      }).container.textContent ?? ''
+    expect(text).toContain('Will food and drinks be served?')
+    expect(text).toContain('Lunch is included.')
+    expect(text).toContain('What happens after the conference?')
+    expect(text).toContain('Drinks at the venue from 18:00.')
   })
 
   it('falls back to the plain dinner text and the default laptop answer', () => {

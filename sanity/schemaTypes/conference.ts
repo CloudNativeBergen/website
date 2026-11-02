@@ -1453,6 +1453,26 @@ export default defineType({
       description:
         'What to see and do in the host city. Shown on /info under “For Speakers”. Leave blank to omit that question.',
     }),
+    // #831: tenant-authored replacements for the catering and afterparty
+    // promises /info used to make on every tenant's behalf.
+    defineField({
+      name: 'cateringInfo',
+      title: 'Food and Drinks',
+      type: 'text',
+      rows: 4,
+      fieldset: 'content',
+      description:
+        'What food and drinks you serve. Shown on /info as “Will food and drinks be served?”. Leave blank to omit that question.',
+    }),
+    defineField({
+      name: 'afterpartyInfo',
+      title: 'After the Conference',
+      type: 'text',
+      rows: 4,
+      fieldset: 'content',
+      description:
+        'The afterparty or other plans after the last talk. Shown on /info as “What happens after the conference?”. Leave blank to omit that question.',
+    }),
     // The event hashtag the live social wall (/stream) searches for. ABSENT
     // means the wall shows only the conference's own posts and mentions — it
     // must never fall back to another event's tag.

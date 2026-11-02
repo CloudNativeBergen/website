@@ -423,14 +423,19 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
               },
             ]
           : []),
+        // Tenant prose (#831), escaped whole like `venueTravelInfo`.
+        ...(conference.cateringInfo
+          ? [
+              {
+                question: 'Will food and drinks be served?',
+                answer: escapeHtml(conference.cateringInfo),
+              },
+            ]
+          : []),
         {
           question: 'What about allergies and dietary restrictions?',
-          // No longer opens with "We will serve food and drinks during the
-          // conference": nothing in the conference document says a tenant
-          // caters, and this page has no business promising lunch on their
-          // behalf. Asking about restrictions costs nothing and stays useful
-          // either way. A `cateringInfo` field would let organizers say it
-          // themselves — filed, not built here.
+          // Does not promise catering: that is `cateringInfo`'s job, above,
+          // and only when the tenant wrote one.
           answer:
             'If you have any allergies or dietary restrictions, please let us know in advance as a part of the ticket registration, and we will do our best to accommodate you.',
         },
@@ -473,13 +478,16 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
           question: 'What is the code of conduct?',
           answer: `We have a code of conduct that all attendees, speakers, and sponsors must follow. You can read the code of conduct on our website at <u><a href="/conduct">Code of Conduct</a></u>. If you have any questions or concerns, please contact us.`,
         },
-        // REMOVED: "What happens after the conference?" — an afterparty at the
-        // same venue, starting at 6 PM, food and drinks included in the ticket.
-        // Four separate commitments made on behalf of a tenant that never
-        // configured any of them, on the page a prospect reads first. There is
-        // no field to key it on, so it is omitted for everyone until one exists
-        // (an `afterpartyInfo` prose field, filed alongside `cateringInfo`),
-        // exactly as the travel and speaker-dinner answers already work.
+        // Once a hardcoded afterparty promise made for every tenant; now only
+        // the tenant's own escaped prose (#831), and no question without it.
+        ...(conference.afterpartyInfo
+          ? [
+              {
+                question: 'What happens after the conference?',
+                answer: escapeHtml(conference.afterpartyInfo),
+              },
+            ]
+          : []),
       ],
     },
     {
