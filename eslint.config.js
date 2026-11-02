@@ -163,11 +163,12 @@ const eslintConfig = [
   // and `.cjs` (webpack resolves them) and `.mts`/`.cts` (tsc compiles them).
   // Nothing mechanical stops someone adding one.
   // `api/**` is the api.konf.app Worker (#1772): it reads the same Sanity
-  // dataset, so the same tenancy rule applies.
+  // dataset, so the same tenancy rule applies, as does services/legacy (#1835).
   {
     files: [
       'src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
       'api/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+      'services/legacy/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
     ],
     plugins: {
       tenancy: { rules: { 'no-unscoped-groq': noUnscopedGroq } },
@@ -265,6 +266,25 @@ const eslintConfig = [
     files: [DATA_FILES],
     rules: (() => {
       const rules = boundary(SANITY)
+      rules['no-restricted-syntax'].push(...reexports(DB_REEXPORT))
+      return rules
+    })(),
+  },
+  // The one exception (#1835): services/legacy is the strangler-fig subgraph
+  // that serves today's Sanity data until native services take each field
+  // over with @override and legacy is deleted. Only its data layer, and only
+  // `@sanity/client`, the Worker-safe client; the site's src/lib/sanity
+  // (next-sanity, process.env) stays out. Its resolvers keep the rule above.
+  {
+    files: ['services/legacy/src/data/**/*.{ts,mts,cts,tsx,js,mjs}'],
+    rules: (() => {
+      const rules = boundary({
+        ...SANITY,
+        regex: SANITY.regex.replace(
+          '@sanity/[^/]+',
+          '@sanity/(?!client$)[^/]+',
+        ),
+      })
       rules['no-restricted-syntax'].push(...reexports(DB_REEXPORT))
       return rules
     })(),

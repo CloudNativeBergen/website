@@ -12,6 +12,7 @@ import {
 } from '@graphql-tools/utils'
 import { composeServices } from '@theguild/federation-composition'
 import { parse, type GraphQLSchema } from 'graphql'
+import { schema as legacy } from '../../services/legacy/src/subgraph'
 import { schema as tenantDirectory } from '../../services/tenant-directory/src/subgraph'
 
 /**
@@ -19,7 +20,7 @@ import { schema as tenantDirectory } from '../../services/tenant-directory/src/s
  * supergraph, which the gateway maps to a service binding (see BINDINGS in
  * gateway.ts). Identity has no public subgraph.
  */
-const SUBGRAPHS = { 'tenant-directory': tenantDirectory }
+const SUBGRAPHS = { 'tenant-directory': tenantDirectory, legacy }
 
 /** Drops @tag(internal) types, fields, args and enum values, then prunes. */
 export function publicContract(schema: GraphQLSchema): GraphQLSchema {

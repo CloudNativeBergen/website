@@ -1,4 +1,12 @@
 {
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "konf-tenant-directory",
+      "database_id": "TO_BE_CREATED",
+      "migrations_dir": "migrations",
+    },
+  ],
   "name": "konf-tenant-directory",
   "account_id": "eefa2cb5c8528a07d7bf8b00a6606dcd",
   "main": "src/worker.ts",
@@ -16,17 +24,8 @@
   },
   "workers_dev": false,
   "preview_urls": false,
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "konf-tenant-directory",
-      "database_id": "TO_BE_CREATED",
-      "migrations_dir": "migrations",
-    },
-  ],
   "env": {
     "preview": {
-      "name": "konf-tenant-directory-preview",
       "d1_databases": [
         {
           "binding": "DB",
@@ -35,6 +34,7 @@
           "migrations_dir": "migrations",
         },
       ],
+      "name": "konf-tenant-directory-preview",
       "services": [
         {
           "binding": "IDENTITY",
@@ -44,7 +44,6 @@
       ],
     },
     "production": {
-      "name": "konf-tenant-directory",
       "d1_databases": [
         {
           "binding": "DB",
@@ -53,6 +52,7 @@
           "migrations_dir": "migrations",
         },
       ],
+      "name": "konf-tenant-directory",
       "services": [
         {
           "binding": "IDENTITY",
