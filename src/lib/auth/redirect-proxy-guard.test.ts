@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { encode } from 'next-auth/jwt'
+import { logger } from '@/lib/logger'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -21,6 +22,7 @@ const env = {
   AUTH_SECRET: SECRET,
   AUTH_REDIRECT_PROXY_URL: 'https://auth.konf.app/api/auth',
   PLATFORM_DOMAIN_SUFFIX: 'konf.app',
+  AUTH_REDIRECT_GUARD_MODE: 'enforce',
 } as unknown as NodeJS.ProcessEnv
 
 const cb = (origin: string) => `${origin}/api/auth/callback/github`
@@ -81,7 +83,7 @@ describe('isAllowedBounceTarget', () => {
 
   it('fails closed on a lookup error', async () => {
     verified.mockRejectedValue(new Error('sanity down'))
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(logger, 'error').mockImplementation(() => {})
     expect(
       await isAllowedBounceTarget(cb('https://2026.cloudnativedays.no'), env),
     ).toBe(false)
@@ -109,7 +111,7 @@ async function callback(origin: string | undefined, host = 'auth.konf.app') {
 
 describe('guardRedirectProxyBounce', () => {
   beforeEach(() => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(logger, 'warn').mockImplementation(() => {})
   })
 
   it('passes a bounce to a verified origin', async () => {
@@ -127,7 +129,7 @@ describe('guardRedirectProxyBounce', () => {
 
   it('refuses when the lookup fails', async () => {
     verified.mockRejectedValue(new Error('down'))
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(logger, 'error').mockImplementation(() => {})
     const req = await callback(cb('https://2026.cloudnativedays.no'))
     expect((await guardRedirectProxyBounce(req, env))?.status).toBe(403)
   })
@@ -148,6 +150,54 @@ describe('guardRedirectProxyBounce', () => {
       await guardRedirectProxyBounce(
         await callback(cb('https://evil.example')),
         off,
+      ),
+    ).toBeNull()
+  })
+})
+
+describe('report mode (default)', () => {
+  const report = {
+    ...env,
+    AUTH_REDIRECT_GUARD_MODE: undefined,
+  } as NodeJS.ProcessEnv
+
+  it('lets an unverified bounce through and logs host, reason, provider only', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    const req = await callback(cb('https://evil.example'))
+    expect(await guardRedirectProxyBounce(req, report)).toBeNull()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('report mode'), {
+      host: 'evil.example',
+      reason: 'unverified',
+      provider: 'github',
+      mode: 'report',
+    })
+    expect(JSON.stringify(warn.mock.calls)).not.toMatch(/state=|code=/)
+  })
+
+  it('reports a lookup failure instead of refusing', async () => {
+    verified.mockRejectedValue(new Error('down'))
+    vi.spyOn(logger, 'error').mockImplementation(() => {})
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    const req = await callback(cb('https://2026.cloudnativedays.no'))
+    expect(await guardRedirectProxyBounce(req, report)).toBeNull()
+    expect(warn.mock.calls[0][1]).toMatchObject({ reason: 'lookup-failed' })
+  })
+
+  it('still refuses an unparseable origin, which @auth/core cannot bounce either', async () => {
+    const req = await callback('not a url')
+    expect((await guardRedirectProxyBounce(req, report))?.status).toBe(403)
+  })
+
+  it('treats an unknown mode value as report', async () => {
+    vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    const odd = {
+      ...env,
+      AUTH_REDIRECT_GUARD_MODE: 'Enforce!',
+    } as NodeJS.ProcessEnv
+    expect(
+      await guardRedirectProxyBounce(
+        await callback(cb('https://evil.example')),
+        odd,
       ),
     ).toBeNull()
   })

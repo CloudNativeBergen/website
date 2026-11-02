@@ -1,6 +1,7 @@
 import { decode } from 'next-auth/jwt'
 import { sessionCookieRequestHost } from '@/lib/auth-cookie-domain'
 import { isVerifiedRedirectOrigin } from '@/lib/domain-verification/allowlist'
+import { logger } from '@/lib/logger'
 import { isPlatformZoneHost } from '@/lib/domain-verification/platform'
 
 /**
@@ -14,7 +15,8 @@ import { isPlatformZoneHost } from '@/lib/domain-verification/platform'
  * handler on the proxy host and refuses the bounce unless the destination is
  * an EXACT https callback URL on a platform host or a verified domain.
  *
- * Fail closed: undecodable state with an origin we cannot read, a malformed
+ * Mode (`AUTH_REDIRECT_GUARD_MODE`): `report` (default) logs and lets the
+ * bounce through; `enforce` refuses with a 403. In enforce mode it fails closed: undecodable state with an origin we cannot read, a malformed
  * URL, an unknown or unverified host, or a lookup error all refuse.
  */
 
@@ -36,26 +38,53 @@ export async function isAllowedBounceTarget(
   target: unknown,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<boolean> {
-  if (typeof target !== 'string') return false
+  return (await bounceRefusal(target, env)) === null
+}
+
+/** Why `target` is refused, or `null` when the bounce may go there. */
+async function bounceRefusal(
+  target: unknown,
+  env: NodeJS.ProcessEnv,
+): Promise<string | null> {
+  if (typeof target !== 'string') return 'not-a-string'
   let url: URL
   try {
     url = new URL(target)
   } catch {
-    return false
+    return 'malformed'
   }
-  if (url.origin + url.pathname !== target) return false
-  if (!CALLBACK_PATH_RE.test(url.pathname)) return false
+  if (url.origin + url.pathname !== target) return 'not-exact'
+  if (!CALLBACK_PATH_RE.test(url.pathname)) return 'not-a-callback-path'
 
   if (env.NODE_ENV !== 'production' && DEV_HOSTS.has(url.hostname)) {
     return url.protocol === 'http:' || url.protocol === 'https:'
+      ? null
+      : 'not-https'
   }
-  if (url.protocol !== 'https:') return false
-  if (!url.port && isPlatformZoneHost(url.hostname, env)) return true
+  if (url.protocol !== 'https:') return 'not-https'
+  if (!url.port && isPlatformZoneHost(url.hostname, env)) return null
   try {
-    return await isVerifiedRedirectOrigin(url.origin)
+    return (await isVerifiedRedirectOrigin(url.origin)) ? null : 'unverified'
   } catch (error) {
-    console.error('[auth] Redirect-origin lookup failed; refusing', error)
-    return false
+    logger.error('[auth] Redirect-origin lookup failed', { error })
+    return 'lookup-failed'
+  }
+}
+
+/**
+ * `AUTH_REDIRECT_GUARD_MODE`: `enforce` refuses, anything else (default) only
+ * reports, so deploying the guard changes nothing for users until it is set.
+ */
+function isEnforcing(env: NodeJS.ProcessEnv): boolean {
+  return env.AUTH_REDIRECT_GUARD_MODE?.trim() === 'enforce'
+}
+
+/** Host of a refused target, for the log; never the code or the state. */
+function hostOf(target: unknown): string | null {
+  try {
+    return typeof target === 'string' ? new URL(target).host : null
+  } catch {
+    return null
   }
 }
 
@@ -87,9 +116,11 @@ export async function guardRedirectProxyBounce(
     proxyOrigin = new URL(proxy)
   } catch {
     return refuse() // @auth/core throws on this too; refuse rather than guess.
+    // (Refused in both modes: @auth/core cannot complete these either.)
   }
   if (sessionCookieRequestHost(req.headers) !== proxyOrigin.host) return null
-  if (!new URL(req.url).pathname.startsWith('/api/auth/callback/')) return null
+  const { pathname } = new URL(req.url)
+  if (!pathname.startsWith('/api/auth/callback/')) return null
 
   const state = await stateOf(req)
   if (!state) return null // No state: @auth/core does not bounce.
@@ -117,11 +148,21 @@ export async function guardRedirectProxyBounce(
       return refuse()
     }
   }
-  if (await isAllowedBounceTarget(origin, env)) return null
-  console.warn('[auth] Refused OAuth proxy bounce to unverified origin', {
-    origin: String(origin).slice(0, 200),
-  })
-  return refuse()
+  const reason = await bounceRefusal(origin, env)
+  if (reason === null) return null
+  const enforcing = isEnforcing(env)
+  logger.warn(
+    enforcing
+      ? '[auth] Refused OAuth proxy bounce'
+      : '[auth] Would refuse OAuth proxy bounce (report mode)',
+    {
+      host: hostOf(origin),
+      reason,
+      provider: pathname.slice('/api/auth/callback/'.length),
+      mode: enforcing ? 'enforce' : 'report',
+    },
+  )
+  return enforcing ? refuse() : null
 }
 
 function refuse(): Response {
