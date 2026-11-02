@@ -23,6 +23,7 @@ import {
 import { getPublicSponsorsForConference } from '@/lib/sponsor-crm/sanity'
 import { selectConferenceSections, type RawConferenceRead } from './sections'
 import { CONFERENCE_QUERY_CORE, CONFERENCE_QUERY_FULL } from './query'
+import { isKonfApiTenant, mergeKonfApiConference } from './konf-api'
 
 /**
  * How long a cached conference read may go without re-reading Sanity.
@@ -355,6 +356,10 @@ export async function getConferenceForDomain(
         schedule,
         confirmedTalksOnly,
       })
+      // Spike (#1833): flagged tenants read core fields from the Konf API.
+      if (isKonfApiTenant(conference)) {
+        conference = await mergeKonfApiConference(host, conference)
+      }
       status = 'resolved'
 
       if (sponsors && conference._id) {
