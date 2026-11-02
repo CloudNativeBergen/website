@@ -18,6 +18,7 @@ import {
   EMAIL_LINK_IDENTIFIER_CLAIM,
   emailLinkIdentifierOf,
 } from '@/lib/auth/email-link/identity'
+import { guardRedirectProxyBounce } from '@/lib/auth/redirect-proxy-guard'
 import type { Speaker } from '@/lib/speaker/types'
 import type { JWT } from 'next-auth/jwt'
 
@@ -723,6 +724,10 @@ function wrapAuthHandler(
   handler: (req: NextRequest) => Promise<Response> | Response,
 ): (req: NextRequest) => Promise<Response> {
   return async (req: NextRequest) => {
+    // #688: @auth/core bounces the OAuth code before any callback runs, so the
+    // verified-origin check has to sit in front of the handler.
+    const refused = await guardRedirectProxyBounce(req)
+    if (refused) return refused
     const res = await handler(req)
     // `applySessionCookieDomain` is a no-op for anything that is not a real
     // Response with Set-Cookie headers, so no null-guard is needed here.
