@@ -515,6 +515,21 @@ function RequestDetails({
           <div className="text-gray-900 dark:text-gray-100">
             <strong>SWIFT:</strong> {request.bankingDetails.swiftCode}
           </div>
+          {(request.bankingDetails.streetAddress ||
+            request.bankingDetails.postalCode ||
+            request.bankingDetails.city) && (
+            <div className="text-gray-900 dark:text-gray-100">
+              <strong>Address:</strong>{' '}
+              {[
+                request.bankingDetails.streetAddress,
+                [request.bankingDetails.postalCode, request.bankingDetails.city]
+                  .filter(Boolean)
+                  .join(' '),
+              ]
+                .filter(Boolean)
+                .join(', ')}
+            </div>
+          )}
           <div className="text-gray-900 dark:text-gray-100">
             <strong>Country:</strong> {request.bankingDetails.country}
           </div>

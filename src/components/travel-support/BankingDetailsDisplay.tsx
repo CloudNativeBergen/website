@@ -108,6 +108,15 @@ export function BankingDetailsDisplay({
             value={bankingDetails.swiftCode}
             isMonospace
           />
+          <BankingDetailField
+            label="Street Address"
+            value={bankingDetails.streetAddress}
+          />
+          <BankingDetailField
+            label="Postal Code"
+            value={bankingDetails.postalCode}
+          />
+          <BankingDetailField label="City" value={bankingDetails.city} />
           <BankingDetailField label="Country" value={bankingDetails.country} />
           <BankingDetailField
             label="Preferred Currency"

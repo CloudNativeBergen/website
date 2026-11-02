@@ -73,6 +73,23 @@ export default defineType({
           validation: (Rule) => Rule.required(),
         }),
         defineField({
+          name: 'streetAddress',
+          title: 'Street Address',
+          type: 'string',
+          description:
+            "Beneficiary's address. Some banks require it for international transfers",
+        }),
+        defineField({
+          name: 'postalCode',
+          title: 'Postal Code',
+          type: 'string',
+        }),
+        defineField({
+          name: 'city',
+          title: 'City',
+          type: 'string',
+        }),
+        defineField({
           name: 'country',
           title: 'Country',
           type: 'string',
