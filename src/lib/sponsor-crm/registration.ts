@@ -91,6 +91,9 @@ export async function generateRegistrationToken(
       registrationToken: string | null
       registrationComplete: boolean
     }>(
+      // groq-global-scoped: point read by id; both callers check the id belongs
+      // to the current conference first (registration.generateToken guards it,
+      // prepareRegistrationSend reads it with conference._ref == $conferenceId).
       `*[_type == "sponsorForConference" && _id == $id][0]{
         registrationToken, registrationComplete
       }`,
@@ -239,6 +242,9 @@ export async function validateRegistrationToken(token: string): Promise<{
         })
       | null
     >(
+      // groq-global: the registration token is an unguessable bearer
+      // capability for one sponsor deal and the only key the public portal
+      // has; the deal's own conference is resolved from the match.
       `*[_type == "sponsorForConference" && registrationToken == $registrationToken][0]{
         _id,
         "sponsorName": sponsor->name,
@@ -404,6 +410,7 @@ export async function completeRegistration(
     // Conditionally update the sponsor document if there are updates
     if (Object.keys(sponsorUpdates).length > 0) {
       const sfcDoc = await clientRead.fetch<{ sponsor: { _ref: string } }>(
+        // groq-global-scoped: point read of the deal the bearer token resolved.
         `*[_type == "sponsorForConference" && _id == $id][0]{ sponsor }`,
         { id: sponsor._id },
       )
@@ -446,6 +453,9 @@ export async function getSfcForNotification(
   sfcId: string,
 ): Promise<SfcNotificationData | null> {
   return clientRead.fetch<SfcNotificationData | null>(
+    // groq-global-scoped: point read by a server-resolved id (token-validated
+    // registration, or a cron sweep row); the alert goes to that deal's own
+    // conference channel.
     `*[_type == "sponsorForConference" && _id == $id][0]{
       _id,
       "sponsorName": sponsor->name,

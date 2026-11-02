@@ -18,6 +18,9 @@ export function tierExistenceQuery(ref: string): {
   params: { id: string }
 } {
   return {
+    // groq-global-scoped: existence check by id; the tRPC paths assert the tier
+    // with requireDocumentInCurrentConference before this, and Studio
+    // validation only reads a boolean.
     query: 'count(*[_type == "sponsorTier" && _id == $id]) > 0',
     params: { id: ref.replace(/^drafts\./, '') },
   }

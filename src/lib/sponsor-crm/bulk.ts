@@ -315,18 +315,18 @@ export async function bulkDeleteSponsors(
 
     if (candidateAssetIds.length > 0) {
       const unique = Array.from(new Set(candidateAssetIds.filter(Boolean)))
-      contractAssetIds = await clientWrite.fetch<string[]>(
-        // The inner "is anyone else still using it?" count MUST stay
-        // cross-tenant — scoping it to this conference would delete an asset
-        // another edition or another tenant still references. The candidate set
-        // is already restricted to assets reached from THIS conference's rows.
-        // groq-global: `sanity.fileAsset` carries no tenant key of any kind.
-        `*[
-          _type == "sanity.fileAsset" &&
-          _id in $assetIds &&
-          count(*[_type == "sponsorForConference" && contractDocument.asset._ref == ^._id && !(_id in $ids)]) == 0
-        ]._id`,
+      const stillUsed = await clientWrite.fetch<string[]>(
+        // groq-global: "is anyone else still using it?" MUST stay cross-tenant —
+        // scoping it to this conference would delete an asset another edition
+        // or another tenant still references. Only asset ids are returned, and
+        // the candidates were reached from THIS conference's rows.
+        `*[_type == "sponsorForConference" && contractDocument.asset._ref in $assetIds && !(_id in $ids)].contractDocument.asset._ref`,
         { assetIds: unique, ids: ownedIds },
+      )
+      contractAssetIds = await clientWrite.fetch<string[]>(
+        // groq-global: `sanity.fileAsset` carries no tenant key of any kind.
+        `*[_type == "sanity.fileAsset" && _id in $assetIds]._id`,
+        { assetIds: unique.filter((id) => !stillUsed.includes(id)) },
       )
     }
   }

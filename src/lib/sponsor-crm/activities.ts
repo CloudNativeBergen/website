@@ -57,6 +57,8 @@ export async function listActivitiesForSponsor(
   try {
     const limitClause = limit ? ` [0...${limit}]` : ''
     const activities = await clientRead.fetch<SponsorActivityExpanded[]>(
+      // groq-global-scoped: keyed by a sponsorForConference id the caller
+      // (`activities.list`) asserts with requireDocumentInCurrentConference.
       `*[_type == "sponsorActivity" && sponsorForConference._ref == $sponsorId] | order(createdAt desc)${limitClause}{${SPONSOR_ACTIVITY_FIELDS}}`,
       { sponsorId: sponsorForConferenceId },
     )

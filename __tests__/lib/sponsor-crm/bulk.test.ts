@@ -201,6 +201,7 @@ describe('Bulk Sponsor CRM Operations', () => {
         .mockResolvedValueOnce(['s1']) // ownership probe
         .mockResolvedValueOnce(['activity-1'])
         .mockResolvedValueOnce(['asset-pdf-1', 'asset-pdf-2'])
+        .mockResolvedValueOnce([]) // no other sponsor still uses them
         .mockResolvedValueOnce(['asset-pdf-1', 'asset-pdf-2'])
       const tx = createMockTransaction()
       ;(clientWrite.transaction as any).mockReturnValue(tx)
