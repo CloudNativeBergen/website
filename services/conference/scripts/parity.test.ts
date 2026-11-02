@@ -46,6 +46,15 @@ describe('diffConference', () => {
     ).toEqual([])
   })
 
+  it('expects a null title for a blank Sanity title', () => {
+    const blank = mapBackfill(
+      [{ _id: 'c1', orgId: 'o1', title: ' ' }],
+      new Set(['c1']),
+    ).rows[0]
+    expect(expected(blank)!.title).toBeNull()
+    expect(diffConference(expected(blank), { ...expected(blank)! })).toEqual([])
+  })
+
   it('leaves editorial fields to content', () => {
     expect(
       diffConference(expected(row), { ...api(), description: 'Sanity copy' }),
