@@ -5,7 +5,7 @@ name: Deploy Workers
 #
 # - Pull request: deploys to the `preview` env with the preview token.
 # - Push to main: deploys to the `production` env. The job runs in the GitHub
-#   environment `production`, so its required reviewers approve every
+#   environment `workers-production`, so its required reviewers approve every
 #   production deploy, D1 migrations included.
 #
 # A service whose D1 id for the env is still TO_BE_CREATED (see
@@ -13,7 +13,8 @@ name: Deploy Workers
 # the config and bundle are checked, nothing is created or uploaded. It
 # switches to a real deploy once the owner commits the id.
 #
-# Required configuration, per GitHub environment (`preview`, `production`):
+# Required configuration, per GitHub environment (`workers-preview`,
+# `workers-production`; `Preview`/`Production` belong to Vercel):
 #   secrets.CLOUDFLARE_API_TOKEN   - a separate token per environment; the
 #                                    preview token never sees production
 #   secrets.CLOUDFLARE_ACCOUNT_ID  - repository or environment secret
@@ -61,7 +62,7 @@ jobs:
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: ${{ github.event_name == 'push' && 'production' || 'preview' }}
+    environment: ${{ github.event_name == 'push' && 'workers-production' || 'workers-preview' }}
     concurrency:
       group: deploy-workers-${{ github.event_name == 'push' && 'production' || 'preview' }}
       cancel-in-progress: false
