@@ -37,6 +37,7 @@ import {
 import { effectivePlan } from '@/lib/features/registry'
 import { listEntitledFeatures } from '@/lib/features/entitlements'
 import { isPlatformOrgRequest } from '@/lib/features/platform'
+import { isPlatformOperator } from '@/lib/authz/platform'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { PlanFeaturesCard } from './PlanFeaturesCard'
 import { applyWorkshopGate } from './planFeatureRows'
@@ -113,6 +114,8 @@ export default async function AdminSettings() {
   if (denied) return denied
 
   const session = await getAuthSession()
+  // #745: only a platform operator may change the ticketing event binding.
+  const canEditTicketingBinding = await isPlatformOperator(session?.speaker)
 
   // READ LIVE (#1345, as on the workshops page): this page reloads straight
   // after a save, and the cached read serves the old values once
@@ -660,22 +663,30 @@ export default async function AdminSettings() {
               icon={LinkIcon}
               editUrl={editUrl}
               action={
-                <EditConferenceCard
-                  fieldset="ticketingIds"
-                  initialValues={{
-                    ticketingProvider: conference.ticketingProvider,
-                    checkinCustomerId: conference.checkinCustomerId,
-                    checkinEventId: conference.checkinEventId,
-                    titoAccountSlug: conference.titoAccountSlug,
-                    titoEventSlug: conference.titoEventSlug,
-                  }}
-                />
+                canEditTicketingBinding && (
+                  <EditConferenceCard
+                    fieldset="ticketingIds"
+                    initialValues={{
+                      ticketingProvider: conference.ticketingProvider,
+                      checkinCustomerId: conference.checkinCustomerId,
+                      checkinEventId: conference.checkinEventId,
+                      titoAccountSlug: conference.titoAccountSlug,
+                      titoEventSlug: conference.titoEventSlug,
+                    }}
+                  />
+                )
               }
             >
               <FieldRow
                 label="Ticketing Provider"
                 value={conference.ticketingProvider ?? 'checkin'}
               />
+              {!canEditTicketingBinding && (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  The platform team sets up ticketing. Contact them to connect
+                  or change it.
+                </p>
+              )}
               {conference.ticketingProvider === 'tito' ? (
                 <>
                   <FieldRow
