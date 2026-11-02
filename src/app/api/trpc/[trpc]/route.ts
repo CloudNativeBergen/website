@@ -1,6 +1,11 @@
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { appRouter } from '@/server/_app'
-import { createTRPCContext, isClientError } from '@/server/trpc'
+import {
+  createTRPCContext,
+  isClientError,
+  resolveLogTenant,
+} from '@/server/trpc'
+import { runAfterResponse } from '@/server/runAfterResponse'
 import { NextRequest } from 'next/server'
 
 const handler = (req: NextRequest) =>
@@ -11,7 +16,15 @@ const handler = (req: NextRequest) =>
     createContext: () => createTRPCContext({ req }),
     onError: ({ path, error }) => {
       if (isClientError(error.code)) return
-      console.error(`tRPC failed on ${path ?? '<no-path>'}:`, error)
+      // onError cannot await, and only failures pay for the tenant lookup,
+      // so the line is written once the ids are known.
+      runAfterResponse(async () => {
+        console.error(
+          `tRPC failed on ${path ?? '<no-path>'}:`,
+          await resolveLogTenant(),
+          error,
+        )
+      })
     },
   })
 

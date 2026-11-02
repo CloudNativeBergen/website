@@ -406,3 +406,26 @@ export async function resolveOrganizationId(): Promise<string | null> {
     return null
   }
 }
+
+/**
+ * The request's tenant ids for a log line (#1814): which org and conference a
+ * failure belonged to, from the same request-cached domain read as
+ * {@link resolveConferenceId}. Ids only, never names or contact details. An
+ * unresolvable host gives `{}`, and so does a failed read: logging must not
+ * fail or drop the line it annotates.
+ */
+export async function resolveLogTenant(): Promise<{
+  orgId?: string
+  conferenceId?: string
+}> {
+  try {
+    const { conference } = await getConferenceForCurrentDomain()
+    if (!conference?._id) return {}
+    return {
+      orgId: conference.organization?._ref,
+      conferenceId: conference._id,
+    }
+  } catch {
+    return {}
+  }
+}
