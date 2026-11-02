@@ -33,6 +33,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   ENVELOPE_HEADER,
   createSigner,
+  verifyEnvelope,
   generateEnvelopeKeyPair,
 } from '@runkonf/tenancy'
 import { BINDINGS, createGateway, type Env } from './gateway'
@@ -45,19 +46,25 @@ vi.mock('jose', async () => {
   const require = createRequire(import.meta.url)
   return import(pathToFileURL(require.resolve('jose')).href)
 })
-// Sanity-backed subgraphs (content): a two-tenant dataset that applies the
-// query's own orgId/conferenceId. Each projected field is filled from the
-// public type of the Conference field of the same name (sanityDoc below).
+// Sanity-backed subgraphs (content): the real GROQ is evaluated (groq-js)
+// over a two-tenant dataset, B's document first, so a missing or wrong
+// tenant predicate returns B. Fields come from the public schema (sanityDoc).
 vi.mock('@sanity/client', () => ({
   createClient: () => ({
-    fetch: async (query: string, p: Record<string, string>) => {
-      const t = TENANTS.find(
-        (t) => p.orgId === ORG[t] && p.conferenceId === CONF[t],
-      )
-      return t ? sanityDoc(query, t) : null
+    fetch: async (query: string, params: Record<string, unknown>) => {
+      const groq = rewriteGroq(query)
+      const dataset = (['b', 'a'] as T[]).map((t) => ({
+        ...sanityDoc(groq, t),
+        _type: 'conference',
+        organization: { _type: 'reference', _ref: ORG[t] },
+      }))
+      const { evaluate, parse } = await import('groq-js')
+      return (await evaluate(parse(groq), { dataset, params })).get()
     },
   }),
 }))
+/** Negative controls swap this to break the production query's scoping. */
+let rewriteGroq = (q: string) => q
 vi.mock('cloudflare:workers', () => ({
   WorkerEntrypoint: class {
     constructor(
@@ -227,10 +234,12 @@ function sanityDoc(query: string, t: T) {
       ? [fill(fields.homepageBlocks.type, t, 'homepageBlocks')].flat(2)
       : [],
   }
+  // Every name in the projection, so groq-js finds a value for each.
   const projected = /\{([^{}]*)\}\s*$/
     .exec(query)![1]
     .split(',')
     .map((f) => f.trim())
+    .filter(Boolean)
   return Object.fromEntries(
     projected.map((f) => [
       f,
@@ -295,7 +304,8 @@ function selection(
 }
 
 /**
- * Every Query field, once per probe id when it takes required args, split
+ * Every Query field, once per probe id when it or any field below it takes
+ * required args, split
  * into queries of at most MAX_ALIASES aliased roots. `roots` maps alias to
  * the Query field it calls.
  */
@@ -303,12 +313,13 @@ function queries(tenants: T[]) {
   const roots = Object.values(schema.getQueryType()!.getFields()).flatMap(
     (f) => {
       walked.add(`Query.${f.name}`)
-      const needsArgs = f.args.some((a) => isNonNullType(a.type))
-      const probes = needsArgs ? tenants.flatMap(PROBES) : ['']
-      return probes.map((p) => ({
-        field: f.name,
-        sel: `${f.name}${args(f.args, p)}${selection(getNamedType(f.type), 2, p)}`,
-      }))
+      const sel = (p: string) =>
+        `${f.name}${args(f.args, p)}${selection(getNamedType(f.type), 2, p)}`
+      // A probe shows up in the text only if some required arg took it.
+      const probes = sel('PROBE_SENTINEL').includes('PROBE_SENTINEL')
+        ? tenants.flatMap(PROBES)
+        : ['']
+      return probes.map((p) => ({ field: f.name, sel: sel(p) }))
     },
   )
   const out: { query: string; roots: Record<string, string> }[] = []
@@ -343,6 +354,9 @@ let env: Env
 let memberJwt: string
 let identityData: { isVerifiedOrigin(origin: string): Promise<boolean> }
 let forgedB: string
+let envelopePublicKey: string
+/** The envelope each subgraph binding last received. */
+const lastEnvelope: Record<string, string | null> = {}
 const gateway = createGateway(compose())
 
 beforeAll(async () => {
@@ -355,6 +369,7 @@ beforeAll(async () => {
     }),
   )
   const keys = await generateEnvelopeKeyPair()
+  envelopePublicKey = keys.publicPem
   const services = new URL('../../services/', import.meta.url)
 
   const identityDb = (await mf.getD1Database(
@@ -407,6 +422,7 @@ beforeAll(async () => {
       fetch: (url: string, init?: RequestInit) => {
         const entities = String(init?.body).includes('_entities')
         calls.add(entities ? `${name}:_entities` : name)
+        lastEnvelope[name] = new Headers(init?.headers).get(ENVELOPE_HEADER)
         return worker.default.fetch(new Request(url, init), workerEnv)
       },
     } as unknown as Fetcher
@@ -479,6 +495,13 @@ async function run(query: string, headers: Record<string, string>) {
   return res.text()
 }
 
+/**
+ * Error codes that are a correct refusal, not a broken walk. Empty: no public
+ * field refuses today. Add a code only for a deliberate cross-tenant or auth
+ * refusal (e.g. TENANT_MISMATCH), never for a validation or execution error.
+ */
+const EXPECTED_ERRORS = new Set<string>()
+
 describe.each([
   ['anonymous, A origin, A and B ids', false, TENANTS],
   ['member of A, A ids', true, ['a'] as T[]],
@@ -498,9 +521,14 @@ describe.each([
     for (const { query } of queries(tenants)) {
       const body = await run(query, headers())
       expect(body, query).not.toMatch(MARKER)
-      expect(body, query).not.toMatch(
-        /depth limit|aliases limit|UNAUTHENTICATED/i,
+      // A failed field would count as walked while proving nothing.
+      const { errors = [] } = JSON.parse(body) as {
+        errors?: { extensions?: { code?: string } }[]
+      }
+      const unexpected = errors.filter(
+        (e) => !EXPECTED_ERRORS.has(e.extensions?.code ?? ''),
       )
+      expect(unexpected, query).toEqual([])
       sawA ||= body.includes('TENANT_A')
       const forged = await run(query, {
         ...headers(),
@@ -530,14 +558,62 @@ it('walks every public field reachable from Query', () => {
   expect([...walked].sort()).toEqual(reachable.sort())
 })
 
-it('tenant lookups over DIRECTORY still resolve with tenantByHost internal', async () => {
+it('resolves each origin over DIRECTORY and forwards its envelope to CONTENT', async () => {
   expect(publicSdl()).not.toMatch(/tenantByHost/)
   // identity's handoff check calls the directory over its binding.
   expect(await identityData.isVerifiedOrigin(ORIGIN)).toBe(true)
   expect(await identityData.isVerifiedOrigin('https://unknown.example')).toBe(
     false,
   )
-  // The gateway's own lookup: A's origin gets A's Conference.
-  const body = await run('{ conference { id } }', { origin: ORIGIN })
-  expect(JSON.parse(body)).toEqual({ data: { conference: { id: CONF.a } } })
+  // The gateway's own lookup per origin, then content over CONTENT with the
+  // envelope the gateway minted for that tenant.
+  env.OVERRIDE_TENANTS = {}
+  for (const t of TENANTS) {
+    const body = await run('{ conference { id title } }', {
+      origin: `https://${HOST[t]}`,
+    })
+    expect(JSON.parse(body)).toEqual({
+      data: {
+        conference: { id: CONF[t], title: `${tag(t)} Conference.title` },
+      },
+    })
+    expect(
+      await verifyEnvelope(lastEnvelope.content!, envelopePublicKey),
+    ).toMatchObject({ typ: 'tenant', orgId: ORG[t], conferenceId: CONF[t] })
+  }
+})
+
+describe('negative control: the Sanity fixture follows the GROQ', () => {
+  const read = async (rewrite: (q: string) => string) => {
+    env.OVERRIDE_TENANTS = {}
+    rewriteGroq = rewrite
+    try {
+      return await run('{ conference { id description } }', { origin: ORIGIN })
+    } finally {
+      rewriteGroq = (q) => q
+    }
+  }
+
+  it('returns B when the tenant predicates are removed', async () => {
+    const body = await read((q) =>
+      q.replace(
+        /\s*&&\s*(_id == \$conferenceId|organization\._ref == \$orgId)/g,
+        '',
+      ),
+    )
+    expect(body).toMatch(MARKER)
+  })
+
+  it("returns B when the query pins B's ids under A's params", async () => {
+    const body = await read((q) =>
+      q
+        .replaceAll('$conferenceId', JSON.stringify(CONF.b))
+        .replaceAll('$orgId', JSON.stringify(ORG.b)),
+    )
+    expect(body).toMatch(MARKER)
+  })
+
+  it('returns A with the production query', async () => {
+    expect(await read((q) => q)).toMatch(/TENANT_A/)
+  })
 })
