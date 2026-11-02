@@ -52,6 +52,9 @@ const s = (v: unknown) => (typeof v === 'string' && v.trim()) || null
  * #1831 fields. `member`: the caller is in the conference's org.
  */
 function toConference(c: Doc, member: boolean) {
+  const blocks = list<Block>(c.homepageSections).filter(
+    (b) => member || !b.hidden,
+  )
   return {
     conferenceId: c._id,
     // Blank stays null: the id is not a title.
@@ -75,11 +78,9 @@ function toConference(c: Doc, member: boolean) {
     accentColor: s(c.theme?.accentColor),
     registrationLink: s(c.registrationLink),
     socialLinks: c.socialLinks ?? [],
-    homepageSections: JSON.stringify(c.homepageSections ?? []),
-    // Hidden blocks are drafts: org members only (#1830).
-    homepageBlocks: list<Block>(c.homepageSections).filter(
-      (b) => member || !b.hidden,
-    ),
+    // Hidden blocks are drafts: org members only (#1830), in both fields.
+    homepageSections: JSON.stringify(blocks),
+    homepageBlocks: blocks,
     // Portable Text, as Sanity stores it; the site renders it with PortableText.
     announcement: c.announcement ? JSON.stringify(c.announcement) : null,
     cfpStartDate: s(c.cfpStartDate),

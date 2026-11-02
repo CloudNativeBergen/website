@@ -349,4 +349,13 @@ describe('content subgraph', () => {
     )
     expect(body.data.conference).toBeNull()
   })
+
+  it('leaves hidden blocks out of the deprecated JSON for non-members', async () => {
+    const keys = async (role: string | null) =>
+      JSON.parse((await field('homepageSections', role)).homepageSections).map(
+        (b: { _key: string }) => b._key,
+      )
+    expect(await keys(null)).not.toContain('v')
+    expect(await keys('member')).toContain('v')
+  })
 })
