@@ -9,6 +9,7 @@ import { printSchemaWithDirectives } from '@graphql-tools/utils'
 import { composeServices } from '@theguild/federation-composition'
 import { parse } from 'graphql'
 import { schema as legacy } from '../../services/legacy/src/subgraph'
+import { progressiveOverride } from './gateway'
 import { compose, publicContract } from './supergraph'
 
 const legacySdl = printSchemaWithDirectives(publicContract(legacy))
@@ -46,13 +47,12 @@ describe('legacy in the supergraph', () => {
 })
 
 describe('progressive override (spike)', () => {
-  const runtime = createGatewayRuntime<{ orgId: string }>({
+  // The gateway's handler; the label is on for org_a only.
+  const env = { OVERRIDE_TENANTS: { conference: ['org_a'] } }
+  const runtime = createGatewayRuntime<{ env: typeof env; orgId: string }>({
     supergraph: supergraph!,
     transports: { http: httpTransport },
-    // Per tenant: the label is on for org_a only.
-    progressiveOverride: (label, ctx) =>
-      label === 'conference' &&
-      (ctx as unknown as { orgId: string }).orgId === 'org_a',
+    progressiveOverride: (label, ctx) => progressiveOverride(label, ctx),
     fetchAPI: {
       fetch: (async (url: string) =>
         Response.json({
@@ -71,7 +71,7 @@ describe('progressive override (spike)', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ query: '{ conference { title } }' }),
       },
-      { orgId },
+      { env, orgId },
     )
     return ((await res.json()) as { data: { conference: { title: string } } })
       .data.conference.title
@@ -80,5 +80,11 @@ describe('progressive override (spike)', () => {
   it('routes by label per tenant', async () => {
     expect(await titleFor('org_a')).toBe('conference')
     expect(await titleFor('org_b')).toBe('legacy')
+  })
+
+  it('keeps everyone on legacy while OVERRIDE_TENANTS is empty', () => {
+    const empty = { env: { OVERRIDE_TENANTS: {} }, orgId: 'org_a' }
+    expect(progressiveOverride('conference', empty)).toBe(false)
+    expect(progressiveOverride('conference', { env, orgId: null })).toBe(false)
   })
 })

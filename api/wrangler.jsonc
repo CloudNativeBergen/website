@@ -10,6 +10,7 @@
   "rules": [{ "type": "Text", "globs": ["**/*.graphql"], "fallthrough": true }],
   // Bindings do not inherit into envs, so each env lists its own.
   // Secrets per env: ENVELOPE_PRIVATE_KEY, CLIENT_IP_SECRET.
+  // OVERRIDE_TENANTS: @override label -> orgIds routed to the native subgraph.
   // API_LIMITER: per caller, 300 requests a minute (#1790);
   // API_IP_LIMITER: per IP, 1200 a minute, before the tenant lookup. namespace_id is
   // unique per account; the local default shares preview's.
@@ -25,7 +26,10 @@
       "simple": { "limit": 1200, "period": 60 },
     },
   ],
-  "vars": { "IDENTITY_ISSUER": "https://id-preview.konf.app" },
+  "vars": {
+    "IDENTITY_ISSUER": "https://id-preview.konf.app",
+    "OVERRIDE_TENANTS": {},
+  },
   "services": [
     { "binding": "DIRECTORY", "service": "konf-tenant-directory" },
     { "binding": "LEGACY", "service": "konf-legacy" },
@@ -41,7 +45,7 @@
       "name": "konf-api-preview",
       "workers_dev": true,
       // Placeholder until identity's preview host exists.
-      "vars": { "IDENTITY_ISSUER": "https://id-preview.konf.app" },
+      "vars": {        "IDENTITY_ISSUER": "https://id-preview.konf.app",        "OVERRIDE_TENANTS": {},      },
       "ratelimits": [
         {
           "name": "API_LIMITER",
@@ -70,7 +74,7 @@
       "name": "konf-api",
       "routes": [{ "pattern": "api.konf.app", "custom_domain": true }],
       // Identity has its own host: auth.konf.app is the NextAuth site today.
-      "vars": { "IDENTITY_ISSUER": "https://id.konf.app" },
+      "vars": {        "IDENTITY_ISSUER": "https://id.konf.app",        "OVERRIDE_TENANTS": {},      },
       "ratelimits": [
         {
           "name": "API_LIMITER",

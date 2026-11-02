@@ -86,8 +86,8 @@ jobs:
       - name: Compose supergraph
         run: pnpm --filter @runkonf/api compose
 
-      # Order matters: tenant-directory binds identity, and the gateway will
-      # bind both, so a binding target is always deployed first.
+      # Order matters: tenant-directory binds identity, and the gateway
+      # binds all of them, so a binding target is always deployed first.
       - name: Migrate and deploy
         shell: bash
         env:
@@ -95,9 +95,12 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          for pkg in identity tenant-directory; do
+          for pkg in identity tenant-directory legacy; do
             echo "::group::$pkg ($DEPLOY_ENV)"
-            pnpm --filter "@runkonf/$pkg" exec wrangler d1 migrations apply DB --remote --env "$DEPLOY_ENV"
+            # `db: false` services (legacy) have no D1 and no migrations.
+            if [ -d "services/$pkg/migrations" ]; then
+              pnpm --filter "@runkonf/$pkg" exec wrangler d1 migrations apply DB --remote --env "$DEPLOY_ENV"
+            fi
             pnpm --filter "@runkonf/$pkg" exec wrangler deploy --env "$DEPLOY_ENV"
             echo "::endgroup::"
           done
