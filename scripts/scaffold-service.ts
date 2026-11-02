@@ -50,5 +50,17 @@ for (const [path, source] of Object.entries(out.sources)) write(path, source)
 for (const [path, source] of Object.entries(out.stubs)) {
   if (!existsSync(join(serviceDir, path))) write(path, source)
 }
+// Generated files must pass `pnpm format:check` as written.
+execFileSync(
+  'pnpm',
+  [
+    'exec',
+    'prettier',
+    '--write',
+    ...Object.keys(out.files),
+    ...Object.keys(out.sources),
+  ],
+  { cwd: serviceDir, stdio: 'ignore' },
+)
 
 console.log(`scaffolded services/${name}`)
