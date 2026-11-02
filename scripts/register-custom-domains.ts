@@ -35,6 +35,9 @@ async function main() {
   const out = execFileSync(
     'pnpm',
     [
+      '--silent',
+      '--filter',
+      '@runkonf/tenant-directory',
       'exec',
       'wrangler',
       'd1',
@@ -45,7 +48,7 @@ async function main() {
       '--command',
       `SELECT d.hostname FROM domains d JOIN organizations o ON o.id = d.org_id WHERE o.slug = '${org}' AND d.kind = 'custom' AND d.cf_custom_hostname_id IS NULL ORDER BY d.hostname`,
     ],
-    { cwd: 'services/tenant-directory', encoding: 'utf8' },
+    { encoding: 'utf8' },
   )
   const rows: { hostname: string }[] = JSON.parse(out)[0].results
   console.log(`${org}: ${rows.length} unregistered custom domains`)
