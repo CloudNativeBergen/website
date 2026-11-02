@@ -653,6 +653,16 @@ describe('assertMergeable', () => {
     const loser = speaker({ _id: LOSER })
     expect(() => assertMergeable(survivor, loser)).toThrow(/draft/)
   })
+
+  it('rejects an erased speaker on either side', () => {
+    const erased = { erasedAt: '2026-01-01T00:00:00.000Z' }
+    expect(() =>
+      assertMergeable(speaker(erased), speaker({ _id: LOSER })),
+    ).toThrow(/erased speaker/)
+    expect(() =>
+      assertMergeable(speaker(), speaker({ _id: LOSER, ...erased })),
+    ).toThrow(/erased speaker/)
+  })
 })
 
 describe('buildMergePlan', () => {
