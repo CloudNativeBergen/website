@@ -1,0 +1,24 @@
+{
+  "name": "@runkonf/conference",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --root ../.. services/conference/",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@runkonf/tenancy": "workspace:*",
+    "@apollo/subgraph": "~2.14.3",
+    "@pothos/core": "^4",
+    "@pothos/plugin-directives": "^4",
+    "@pothos/plugin-federation": "^4",
+    "drizzle-orm": "^0.45.2",
+    "graphql": "16.14.2",
+    "graphql-yoga": "^5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261101.1",
+    "wrangler": "^4.156.0"
+  }
+}

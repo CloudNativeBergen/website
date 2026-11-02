@@ -33,6 +33,7 @@
   "services": [
     { "binding": "DIRECTORY", "service": "konf-tenant-directory" },
     { "binding": "CONTENT", "service": "konf-content" },
+    { "binding": "CONFERENCE", "service": "konf-conference" },
     { "binding": "IDENTITY", "service": "konf-identity" },
     {
       "binding": "MEMBERSHIP",
@@ -65,6 +66,7 @@
       "services": [
         { "binding": "DIRECTORY", "service": "konf-tenant-directory-preview" },
         { "binding": "CONTENT", "service": "konf-content-preview" },
+        { "binding": "CONFERENCE", "service": "konf-conference-preview" },
         { "binding": "IDENTITY", "service": "konf-identity-preview" },
         {
           "binding": "MEMBERSHIP",
@@ -96,6 +98,7 @@
       "services": [
         { "binding": "DIRECTORY", "service": "konf-tenant-directory" },
         { "binding": "CONTENT", "service": "konf-content" },
+        { "binding": "CONFERENCE", "service": "konf-conference" },
         { "binding": "IDENTITY", "service": "konf-identity" },
         {
           "binding": "MEMBERSHIP",

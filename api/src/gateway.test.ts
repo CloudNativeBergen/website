@@ -62,6 +62,7 @@ function makeEnv(
 ) {
   const envelopes: (string | null)[] = []
   const forwarded: Headers[] = []
+  const conference: (string | null)[] = []
   const env = {
     ENVELOPE_PRIVATE_KEY: envelopeKeys.privatePem,
     IDENTITY_ISSUER: 'https://id.test',
@@ -80,6 +81,12 @@ function makeEnv(
         return Response.json({ data: { tenantByHost: null } })
       },
     },
+    CONFERENCE: {
+      fetch: async (_url: string, init: RequestInit) => {
+        conference.push(new Headers(init.headers).get(ENVELOPE_HEADER))
+        return Response.json({ data: { conference: { id: 'conf_a' } } })
+      },
+    },
     IDENTITY: { fetch: async () => Response.json(jwks) },
     API_LIMITER: { limit: vi.fn(async () => ({ success: allow })) },
     API_IP_LIMITER: { limit: vi.fn(async () => ({ success: ipAllow })) },
@@ -89,7 +96,13 @@ function makeEnv(
       principal: vi.fn(async () => ({ ...role, platformOperator: false })),
     },
   }
-  return { env: env as unknown as Env, envelopes, forwarded, role }
+  return {
+    env: env as unknown as Env,
+    envelopes,
+    forwarded,
+    conference,
+    role,
+  }
 }
 
 const post = (body: unknown, headers: Record<string, string> = {}): Request =>
@@ -583,5 +596,30 @@ describe('gateway', () => {
       expect(res.status).toBe(200)
       expect(await minted(envelopes)).toMatchObject({ userId: 'user_1' })
     })
+  })
+})
+
+describe('conference subgraph', () => {
+  it('composes into the public contract without an id argument', () => {
+    const sdl = compose()
+    expect(sdl).toMatch(/conference: Conference/)
+    expect(sdl).not.toMatch(/conference\(id/)
+  })
+
+  it('reaches konf-conference over its binding with the minted envelope', async () => {
+    const { env, conference } = makeEnv()
+    // org_a has the `conference` override label on (#1835).
+    env.OVERRIDE_TENANTS = { conference: [TENANT.orgId] }
+    const res = await gateway.fetch(
+      post({ query: '{ conference { id } }' }, { origin: VERIFIED }),
+      env,
+    )
+    expect(await res.json()).toEqual({ data: { conference: { id: 'conf_a' } } })
+    expect(conference).toHaveLength(1)
+    const envelope = await verifyEnvelope(
+      conference[0]!,
+      envelopeKeys.publicPem,
+    )
+    expect(envelope).toMatchObject({ typ: 'tenant', ...TENANT, userId: null })
   })
 })
