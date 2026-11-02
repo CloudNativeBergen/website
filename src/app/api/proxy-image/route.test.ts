@@ -58,7 +58,9 @@ describe('/api/proxy-image — host allowlist', () => {
 
   it('proxies a Sanity URL that carries transform query params', async () => {
     const res = await GET(
-      requestFor('https://cdn.sanity.io/images/p/d/abc123-400x400?w=400&q=85'),
+      requestFor(
+        'https://cdn.sanity.io/images/p/d/abc123-400x400.jpg?w=400&q=85&fit=crop&auto=format',
+      ),
     )
 
     expect(res.status).toBe(200)
@@ -235,6 +237,57 @@ describe('/api/proxy-image — response hardening', () => {
     )
 
     expect(res.status).toBe(400)
+  })
+})
+
+describe('/api/proxy-image — cache-key surface', () => {
+  const base = 'https://cdn.sanity.io/images/p/d/abc123-400x400.jpg'
+
+  it.each([
+    'https://cdn.sanity.io/images/p/d/x.jpg',
+    'https://cdn.sanity.io/images/p/d/abc123-400x400',
+    'https://cdn.sanity.io/images/p/d/abc123-400x400?w=10',
+    'https://cdn.sanity.io/images/p/d/abc123-400x400.exe',
+    'https://cdn.sanity.io/images/p/d/sub/abc123-400x400.jpg.html',
+  ])('rejects the non-asset path %s', async (target) => {
+    const res = await GET(requestFor(target))
+
+    expect(res.status).toBe(400)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    '?bust=1',
+    '?w=400&cachebuster=2',
+    '?w=4001',
+    '?h=99999',
+    '?max-w=5000',
+    '?w=abc',
+    '?w=-1',
+  ])('rejects the query %s', async (query) => {
+    const res = await GET(requestFor(base + query))
+
+    expect(res.status).toBe(400)
+    expect(await res.text()).toBe('Invalid image parameters')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts the params backgroundRenditionUrl produces', async () => {
+    const res = await GET(
+      requestFor(`${base}?w=1188&h=1188&fit=crop&crop=center&fm=webp&q=90`),
+    )
+
+    expect(res.status).toBe(200)
+  })
+
+  it('accepts a hotspot-cropped builder URL', async () => {
+    const res = await GET(
+      requestFor(
+        `${base}?rect=0,0,400,400&fp-x=0.5&fp-y=0.5&w=4000&max-h=100&blur=20`,
+      ),
+    )
+
+    expect(res.status).toBe(200)
   })
 })
 

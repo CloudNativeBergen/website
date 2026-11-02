@@ -98,6 +98,19 @@ describe('shared studio raster capture', () => {
     expect(h.render).toHaveBeenCalledOnce()
   })
 
+  it('does not abort the capture on an unparsable image src', async () => {
+    const { element, image } = card()
+    Object.defineProperty(image, 'src', {
+      value: 'http://[',
+      configurable: true,
+    })
+    h.render.mockResolvedValue(canvas(new Blob(['x'], { type: 'image/png' })))
+    const result = captureImage(element)
+    await vi.runAllTimersAsync()
+    await result
+    expect(h.render).toHaveBeenCalledOnce()
+  })
+
   it('restores the original sources when canvas rendering fails', async () => {
     const { element, image } = card()
     const original = image.src

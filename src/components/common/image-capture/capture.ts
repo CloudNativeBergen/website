@@ -53,7 +53,10 @@ const updateImageSources = async (element: HTMLElement): Promise<void> => {
   // (GitHub, LinkedIn, placehold.co, Vercel Blob avatars) send
   // `Access-Control-Allow-Origin: *` and load directly via html2canvas `useCORS`.
   externalImages
-    .filter((img) => new URL(img.src).hostname === 'cdn.sanity.io')
+    .filter(
+      (img) =>
+        URL.canParse(img.src) && new URL(img.src).hostname === 'cdn.sanity.io',
+    )
     .forEach((img) => {
       const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(img.src)}`
       img.src = proxyUrl
