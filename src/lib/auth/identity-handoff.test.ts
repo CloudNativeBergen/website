@@ -17,7 +17,7 @@ vi.mock('@/lib/environment/config', () => ({
   },
 }))
 
-const { handoffGET, tokenPOST, IDENTITY_SESSION_COOKIE } =
+const { handoffGET, tokenPOST, IDENTITY_SESSION_COOKIE, HANDOFF_NONCE_COOKIE } =
   await import('./identity-handoff')
 
 const SITE = 'https://conf.example'
@@ -26,7 +26,8 @@ const fetchMock = vi.fn()
 beforeEach(() => {
   vi.stubEnv('KONF_IDENTITY_TENANTS', 'org-1')
   vi.stubEnv('IDENTITY_URL', 'https://id.test')
-  vi.stubEnv('IDENTITY_SITE_SECRET', 's3cret')
+  vi.stubEnv('IDENTITY_EXCHANGE_SECRET', 'x-secret')
+  vi.stubEnv('IDENTITY_UPGRADE_SECRET', 'u-secret')
   vi.stubGlobal('fetch', fetchMock)
   fetchMock.mockReset()
   getAuthSession.mockReset()
@@ -37,12 +38,14 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const get = (q: string) =>
+const get = (q: string, cookie = '') =>
   handoffGET(
     new NextRequest(`${SITE}/api/auth/handoff?${q}`, {
-      headers: { host: 'conf.example' },
+      headers: { host: 'conf.example', cookie },
     }),
   )
+const NONCE_COOKIE = `${HANDOFF_NONCE_COOKIE}=n0nce`
+const setCookies = (res: Response) => res.headers.getSetCookie().join('\n')
 
 const token = (headers: Record<string, string> = {}) =>
   tokenPOST(
@@ -79,16 +82,42 @@ describe('/api/auth/handoff', () => {
     const to = new URL(res.headers.get('location')!)
     expect(to.origin + to.pathname).toBe('https://id.test/handoff')
     expect(to.searchParams.get('origin')).toBe(SITE)
+    // state is the SHA-256 of the nonce kept in a host-only cookie.
+    const nonce = /__Host-konf\.handoff=([^;]+)/.exec(setCookies(res))![1]
+    const { createHash } = await import('node:crypto')
+    expect(to.searchParams.get('state')).toBe(
+      createHash('sha256').update(nonce).digest('hex'),
+    )
+    expect(setCookies(res)).toMatch(/HttpOnly/i)
+    expect(setCookies(res)).toMatch(/Secure/i)
+    expect(setCookies(res)).toMatch(/Max-Age=600/i)
+  })
+
+  it("refuses a forced session: a token without this browser's nonce", async () => {
+    const res = await get('token=planted')
+    expect(res.status).toBe(401)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(setCookies(res)).not.toContain(`${IDENTITY_SESSION_COOKIE}=`)
   })
 
   it('exchanges the token server side, bound to this origin, for a host-only cookie', async () => {
     fetchMock.mockResolvedValue(Response.json(SESSION))
-    const res = await get('token=abc')
+    const res = await get('token=abc', NONCE_COOKIE)
     const [url, init] = fetchMock.mock.calls[0]
     expect(String(url)).toBe('https://id.test/handoff/exchange')
-    expect(JSON.parse(init.body)).toEqual({ token: 'abc', origin: SITE })
-    expect(init.headers.authorization).toBe('Bearer s3cret')
-    const cookie = res.headers.get('set-cookie')!
+    expect(JSON.parse(init.body)).toEqual({
+      token: 'abc',
+      origin: SITE,
+      nonce: 'n0nce',
+    })
+    expect(init.headers.authorization).toBe('Bearer x-secret')
+    // The nonce cookie is cleared on exchange.
+    expect(setCookies(res)).toMatch(
+      /__Host-konf\.handoff=;.*Expires=Thu, 01 Jan 1970/i,
+    )
+    const cookie = res.headers
+      .getSetCookie()
+      .find((c) => c.startsWith(IDENTITY_SESSION_COOKIE))!
     expect(cookie).toContain(`${IDENTITY_SESSION_COOKIE}=tok.sig`)
     expect(cookie).toMatch(/HttpOnly/i)
     expect(cookie).toMatch(/Secure/i)
@@ -97,9 +126,10 @@ describe('/api/auth/handoff', () => {
 
   it('sets no cookie when identity refuses the token', async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 401 }))
-    const res = await get('token=spent')
+    const res = await get('token=spent', NONCE_COOKIE)
     expect(res.status).toBe(401)
-    expect(res.headers.get('set-cookie')).toBeNull()
+    expect(setCookies(res)).not.toContain(`${IDENTITY_SESSION_COOKIE}=`)
+    expect(setCookies(res)).toContain(`${HANDOFF_NONCE_COOKIE}=;`)
   })
 })
 
@@ -133,6 +163,9 @@ describe('/api/token', () => {
       .mockResolvedValueOnce(Response.json(SESSION))
       .mockResolvedValueOnce(Response.json({ token: 'jwt' }))
     const res = await token()
+    expect(fetchMock.mock.calls[0][1].headers.authorization).toBe(
+      'Bearer u-secret',
+    )
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
       origin: SITE,
       providerId: 'github',
@@ -182,8 +215,19 @@ describe('/api/token', () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 401 }))
     const res = await token({ cookie: `${IDENTITY_SESSION_COOKIE}=old` })
     expect(res.status).toBe(401)
-    expect(res.headers.get('set-cookie')).toContain(
-      `${IDENTITY_SESSION_COOKIE}=;`,
-    )
+    const cleared = res.headers.get('set-cookie')!
+    expect(cleared).toContain(`${IDENTITY_SESSION_COOKIE}=;`)
+    expect(cleared).toMatch(/Secure/i)
+    expect(cleared).toMatch(/HttpOnly/i)
+    expect(cleared).toMatch(/SameSite=lax/i)
+    expect(cleared).toMatch(/Path=\//)
+    expect(cleared).toMatch(/Expires=Thu, 01 Jan 1970/i)
+  })
+
+  it('keeps the session when identity fails for another reason', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 503 }))
+    const res = await token({ cookie: `${IDENTITY_SESSION_COOKIE}=live` })
+    expect(res.status).toBe(502)
+    expect(res.headers.get('set-cookie')).toBeNull()
   })
 })

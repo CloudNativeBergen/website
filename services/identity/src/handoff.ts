@@ -1,21 +1,29 @@
 // Login handoff (#1803, epic #1772 "First-party web", #688).
 //
-//   GET  /handoff?origin=&provider=  browser, on id.konf.app. Signs in if
-//        needed, then redirects to <origin>/api/auth/handoff?token=… with a
-//        single-use token bound to that origin, valid 60 s.
-//   POST /handoff/exchange           tenant site server: token -> session.
-//   POST /handoff/upgrade            tenant site server: NextAuth account
-//        -> session, matched on provider account id or a verified email (#807).
+//   GET  /handoff?origin=&provider=&state=  browser, on id.konf.app. Signs in
+//        if needed, then redirects to <origin>/api/auth/handoff?token=… with a
+//        single-use token bound to that origin and state, valid 60 s.
+//   POST /handoff/exchange  tenant site server: token + nonce -> session.
+//   POST /handoff/upgrade   tenant site server: NextAuth account -> session,
+//        matched on provider account id or a verified email (#807). Only
+//        until IDENTITY_UPGRADE_UNTIL.
 //
-// The two POSTs need the per-environment site secret, so a leaked token is
-// worthless without it, and the origin binding stops one site redeeming
-// another's token.
+// Each POST has its own secret and a per-origin rate limit. `state` is the
+// SHA-256 of a nonce in a cookie on the tenant site, so a token minted for an
+// attacker's login cannot be planted in a victim's browser (login CSRF).
 import { makeSignature } from 'better-auth/crypto'
 import { createAuth, createData, type AuthEnv, type DataEnv } from './data'
 
 export interface HandoffEnv extends AuthEnv, DataEnv {
-  /** wrangler secret put IDENTITY_SITE_SECRET; the site holds the same value. */
-  IDENTITY_SITE_SECRET: string
+  /** wrangler secret put; the site holds the same values. */
+  IDENTITY_EXCHANGE_SECRET: string
+  IDENTITY_UPGRADE_SECRET: string
+  /** ISO date; the NextAuth upgrade is refused after it, or when unset. */
+  IDENTITY_UPGRADE_UNTIL?: string
+  /** Per origin, on the two POSTs. */
+  HANDOFF_SITE_LIMIT: RateLimit
+  /** Per client IP, on GET /handoff. ponytail: coarse, one bucket per IP. */
+  HANDOFF_IP_LIMIT: RateLimit
 }
 
 export const HANDOFF_TTL_MS = 60_000
@@ -28,24 +36,34 @@ const noStore = {
 const fail = (status: number) =>
   new Response(null, { status, headers: noStore })
 
-async function sha256(s: string) {
-  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
-  return btoa(String.fromCharCode(...new Uint8Array(d)))
+async function digest(s: string) {
+  return new Uint8Array(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)),
+  )
 }
+const b64 = async (s: string) => btoa(String.fromCharCode(...(await digest(s))))
+/** Hex SHA-256: the site computes `state` the same way. */
+export const sha256hex = async (s: string) =>
+  [...(await digest(s))].map((b) => b.toString(16).padStart(2, '0')).join('')
 
-const handoffKey = async (token: string) => `handoff:${await sha256(token)}`
+const handoffKey = async (token: string) => `handoff:${await b64(token)}`
 
-async function siteAuthorized(request: Request, secret: string) {
+async function authorized(request: Request, secret: string) {
   if (!secret) return false
   const got = request.headers.get('authorization') ?? ''
   // Compare digests so the check does not leak the secret's length or prefix.
-  return (await sha256(got)) === (await sha256(`Bearer ${secret}`))
+  return (await b64(got)) === (await b64(`Bearer ${secret}`))
 }
 
 /** A fresh Better Auth session for the tenant site, as a signed token. */
-async function sessionFor(auth: ReturnType<typeof createAuth>, userId: string) {
+async function sessionFor(
+  auth: ReturnType<typeof createAuth>,
+  userId: string,
+  origin: string,
+) {
   const ctx = await auth.$context
-  const s = await ctx.internalAdapter.createSession(userId, false)
+  // `origin` becomes the JWT claim the gateway checks (#1844).
+  const s = await ctx.internalAdapter.createSession(userId, false, { origin })
   return Response.json(
     {
       session: `${s.token}.${await makeSignature(s.token, ctx.secret)}`,
@@ -61,7 +79,13 @@ export async function handoff(request: Request, env: HandoffEnv) {
   const data = createData(env)
 
   if (request.method === 'GET' && url.pathname === '/handoff') {
+    const ip = request.headers.get('cf-connecting-ip') ?? 'unknown'
+    if (!(await env.HANDOFF_IP_LIMIT.limit({ key: ip })).success) {
+      return fail(429)
+    }
     const origin = url.searchParams.get('origin') ?? ''
+    const state = url.searchParams.get('state') ?? ''
+    if (!/^[0-9a-f]{64}$/.test(state)) return fail(400)
     if (!(await data.isVerifiedOrigin(origin))) return fail(400)
 
     const session = await auth.api.getSession({ headers: request.headers })
@@ -95,7 +119,7 @@ export async function handoff(request: Request, env: HandoffEnv) {
       .replace(/=+$/, '')
     await data.putHandoff(
       await handoffKey(token),
-      JSON.stringify({ userId: session.user.id, origin }),
+      JSON.stringify({ userId: session.user.id, origin, state }),
       new Date(Date.now() + HANDOFF_TTL_MS),
     )
     const to = new URL('/api/auth/handoff', origin)
@@ -107,44 +131,61 @@ export async function handoff(request: Request, env: HandoffEnv) {
   }
 
   if (request.method !== 'POST') return fail(404)
-  if (!(await siteAuthorized(request, env.IDENTITY_SITE_SECRET))) {
-    return fail(401)
-  }
+  const secret =
+    url.pathname === '/handoff/exchange'
+      ? env.IDENTITY_EXCHANGE_SECRET
+      : url.pathname === '/handoff/upgrade'
+        ? env.IDENTITY_UPGRADE_SECRET
+        : ''
+  if (!secret) return fail(404)
+  if (!(await authorized(request, secret))) return fail(401)
   const body = (await request.json().catch(() => null)) as Record<
     string,
     unknown
   > | null
   const str = (k: string) => (typeof body?.[k] === 'string' ? body[k] : '')
+  const origin = str('origin')
+  if (!(await env.HANDOFF_SITE_LIMIT.limit({ key: origin })).success) {
+    return fail(429)
+  }
 
   if (url.pathname === '/handoff/exchange') {
     // Taken (deleted) before any check: a token is spent on first use.
     const row = await data.takeHandoff(await handoffKey(str('token')))
     if (!row || row.expiresAt.getTime() <= Date.now()) return fail(401)
-    const { userId, origin } = JSON.parse(row.value) as {
+    const stored = JSON.parse(row.value) as {
       userId: string
       origin: string
+      state: string
     }
-    if (origin !== str('origin')) return fail(401)
-    return sessionFor(auth, userId)
+    if (stored.origin !== origin) return fail(401)
+    // The nonce from the browser that started this login, and no other.
+    if (!str('nonce') || (await sha256hex(str('nonce'))) !== stored.state) {
+      return fail(401)
+    }
+    await data.audit('handoff.exchange', stored.userId, origin)
+    return sessionFor(auth, stored.userId, origin)
   }
 
-  if (url.pathname === '/handoff/upgrade') {
-    if (!(await data.isVerifiedOrigin(str('origin')))) return fail(400)
-    const ctx = await auth.$context
-    let userId: string | undefined
-    if (PROVIDERS.has(str('providerId')) && str('accountId')) {
-      userId = await data.userIdForAccount(str('providerId'), str('accountId'))
-    } else if (str('verifiedEmail')) {
-      // #807: only an address our record also holds as verified.
-      const found = await ctx.internalAdapter.findUserByEmail(
-        str('verifiedEmail').toLowerCase(),
-      )
-      if (found?.user.emailVerified) userId = found.user.id
-    }
-    // No match: the user signs in through the handoff instead.
-    if (!userId) return fail(404)
-    return sessionFor(auth, userId)
+  // /handoff/upgrade
+  const until = Date.parse(env.IDENTITY_UPGRADE_UNTIL ?? '')
+  if (!(until > Date.now())) return fail(410)
+  if (!(await data.isVerifiedOrigin(origin))) return fail(400)
+  let userId: string | undefined
+  let match = ''
+  if (PROVIDERS.has(str('providerId')) && str('accountId')) {
+    userId = await data.userIdForAccount(str('providerId'), str('accountId'))
+    match = 'account'
+  } else if (str('verifiedEmail')) {
+    // #807: only an address our record also holds as verified.
+    const found = await (
+      await auth.$context
+    ).internalAdapter.findUserByEmail(str('verifiedEmail').toLowerCase())
+    if (found?.user.emailVerified) userId = found.user.id
+    match = 'email'
   }
-
-  return fail(404)
+  // No match: the user signs in through the handoff instead.
+  if (!userId) return fail(404)
+  await data.audit('session.upgrade', userId, origin, match)
+  return sessionFor(auth, userId, origin)
 }

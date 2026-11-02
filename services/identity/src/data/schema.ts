@@ -42,6 +42,8 @@ export const session = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     activeOrganizationId: text(),
+    // The tenant origin the handoff issued this session for (#1803).
+    origin: text(),
     createdAt: now(),
     updatedAt: now(),
   },
@@ -146,4 +148,7 @@ export const auditEvent = sqliteTable('audit_event', {
   userId: text().notNull(),
   // The provider id for account.linked; null otherwise.
   providerId: text(),
+  // Handoff rows: the tenant origin and the upgrade match type.
+  origin: text(),
+  detail: text(),
 })

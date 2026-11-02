@@ -1,5 +1,5 @@
 // Login handoff security properties (#1803) against a real D1 (Miniflare).
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeSignature } from 'better-auth/crypto'
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
@@ -13,11 +13,14 @@ import {
   vi,
 } from 'vitest'
 import { createAuth } from './data'
-import { HANDOFF_TTL_MS, handoff, type HandoffEnv } from './handoff'
+import { HANDOFF_TTL_MS, handoff, sha256hex, type HandoffEnv } from './handoff'
 
 const BASE = 'http://identity.test'
 const SITE = 'https://conf.example'
-const SECRET = 'site-secret'
+const SECRET = { exchange: 'exchange-secret', upgrade: 'upgrade-secret' }
+const NONCE = 'browser-nonce'
+let STATE: string
+const allow = () => ({ limit: vi.fn(async () => ({ success: true })) })
 let env: HandoffEnv
 let mf: Miniflare
 
@@ -31,15 +34,17 @@ beforeAll(async () => {
     }),
   )
   const DB = (await mf.getD1Database('DB')) as unknown as D1Database
-  const sql = readFileSync(
-    join(import.meta.dirname, '../migrations/0001_init.sql'),
-    'utf8',
-  )
+  const dir = join(import.meta.dirname, '../migrations')
+  const sql = readdirSync(dir)
+    .sort()
+    .map((f) => readFileSync(join(dir, f), 'utf8'))
+    .join(';\n')
   for (const stmt of sql
     .split(/;\s*\n/)
     .map((s) => s.replace(/^--.*$/gm, '').trim())) {
     if (stmt) await DB.prepare(stmt).run()
   }
+  STATE = await sha256hex(NONCE)
   env = {
     DB,
     // Fake tenant-directory: only conf.example is verified.
@@ -56,7 +61,11 @@ beforeAll(async () => {
         })
       },
     } as unknown as Fetcher,
-    IDENTITY_SITE_SECRET: SECRET,
+    IDENTITY_EXCHANGE_SECRET: SECRET.exchange,
+    IDENTITY_UPGRADE_SECRET: SECRET.upgrade,
+    IDENTITY_UPGRADE_UNTIL: '2099-01-01',
+    HANDOFF_SITE_LIMIT: allow(),
+    HANDOFF_IP_LIMIT: allow(),
     BETTER_AUTH_URL: BASE,
     IDENTITY_ISSUER: 'https://id.test',
     BETTER_AUTH_SECRET: 'test-secret-that-is-at-least-32-characters',
@@ -84,16 +93,20 @@ async function cookieFor(userId: string) {
   return `${c.authCookies.sessionToken.name}=${token}.${await makeSignature(token, c.secret)}`
 }
 
-const start = (origin: string, cookie = '') =>
+const start = (origin: string, cookie = '', state = STATE) =>
   handoff(
     new Request(
-      `${BASE}/handoff?origin=${encodeURIComponent(origin)}&provider=github`,
+      `${BASE}/handoff?origin=${encodeURIComponent(origin)}&provider=github&state=${state}`,
       { headers: { cookie } },
     ),
     env,
   )
 
-const post = (path: string, body: unknown, secret = SECRET) =>
+const post = (
+  path: string,
+  body: object,
+  secret = path.endsWith('upgrade') ? SECRET.upgrade : SECRET.exchange,
+) =>
   handoff(
     new Request(`${BASE}${path}`, {
       method: 'POST',
@@ -130,6 +143,17 @@ describe('handoff start', () => {
     expect(res.headers.get('location')).toBeNull()
   })
 
+  it('refuses a missing or malformed state', async () => {
+    expect((await start(SITE, '', '')).status).toBe(400)
+    expect((await start(SITE, '', 'abc')).status).toBe(400)
+  })
+
+  it('rate-limits per client IP', async () => {
+    env.HANDOFF_IP_LIMIT.limit = vi.fn(async () => ({ success: false }))
+    expect((await start(SITE)).status).toBe(429)
+    env.HANDOFF_IP_LIMIT = allow()
+  })
+
   it('sends a signed-out user to the provider, back to /handoff', async () => {
     const res = await start(SITE)
     expect(res.status).toBe(302)
@@ -142,7 +166,11 @@ describe('handoff start', () => {
 describe('handoff exchange', () => {
   it('returns a session the token endpoint accepts as a bearer', async () => {
     const { user, token } = await tokenFor('ok@x.test')
-    const res = await post('/handoff/exchange', { token, origin: SITE })
+    const res = await post('/handoff/exchange', {
+      token,
+      origin: SITE,
+      nonce: NONCE,
+    })
     expect(res.status).toBe(200)
     const { session } = (await res.json()) as { session: string }
     const jwt = await createAuth(env.DB, env).handler(
@@ -152,18 +180,70 @@ describe('handoff exchange', () => {
     )
     expect(jwt.status).toBe(200)
     const { token: t } = (await jwt.json()) as { token: string }
-    expect(JSON.parse(atob(t.split('.')[1])).sub).toBe(user.id)
+    const claims = JSON.parse(atob(t.split('.')[1]))
+    expect(claims.sub).toBe(user.id)
+    // The gateway matches this against the request's tenant (#1844).
+    expect(claims.origin).toBe(SITE)
+    const { results } = await env.DB.prepare(
+      "SELECT userId, origin, detail FROM audit_event WHERE action = 'handoff.exchange' AND userId = ?",
+    )
+      .bind(user.id)
+      .all()
+    expect(results).toEqual([{ userId: user.id, origin: SITE, detail: null }])
+  })
+
+  it('refuses a forced session: a token without the starting browser nonce', async () => {
+    // An attacker signs in, gets a token for their own account and plants
+    // it in a victim's browser. The victim's site holds a different nonce.
+    const { token } = await tokenFor('attacker@x.test')
+    expect(
+      (
+        await post('/handoff/exchange', {
+          token,
+          origin: SITE,
+          nonce: 'victim',
+        })
+      ).status,
+    ).toBe(401)
+    const { token: t2 } = await tokenFor('attacker2@x.test')
+    expect(
+      (await post('/handoff/exchange', { token: t2, origin: SITE })).status,
+    ).toBe(401)
+  })
+
+  it('rate-limits per origin', async () => {
+    env.HANDOFF_SITE_LIMIT.limit = vi.fn(async () => ({ success: false }))
+    expect(
+      (await post('/handoff/exchange', { token: 'x', origin: SITE })).status,
+    ).toBe(429)
+    expect(env.HANDOFF_SITE_LIMIT.limit).toHaveBeenCalledWith({ key: SITE })
+    env.HANDOFF_SITE_LIMIT = allow()
+  })
+
+  it('purges expired handoff rows on the next put', async () => {
+    await tokenFor('stale@x.test')
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 3_600_000)
+    await env.DB.prepare(
+      "UPDATE verification SET expiresAt = 0 WHERE identifier LIKE 'handoff:%'",
+    ).run()
+    vi.restoreAllMocks()
+    await tokenFor('fresh@x.test')
+    const { results } = await env.DB.prepare(
+      "SELECT count(*) AS n FROM verification WHERE identifier LIKE 'handoff:%'",
+    ).all()
+    expect(results).toEqual([{ n: 1 }])
   })
 
   it('is single use', async () => {
     const { token } = await tokenFor('once@x.test')
     const [a, b] = await Promise.all([
-      post('/handoff/exchange', { token, origin: SITE }),
-      post('/handoff/exchange', { token, origin: SITE }),
+      post('/handoff/exchange', { token, origin: SITE, nonce: NONCE }),
+      post('/handoff/exchange', { token, origin: SITE, nonce: NONCE }),
     ])
     expect([a.status, b.status].sort()).toEqual([200, 401])
     expect(
-      (await post('/handoff/exchange', { token, origin: SITE })).status,
+      (await post('/handoff/exchange', { token, origin: SITE, nonce: NONCE }))
+        .status,
     ).toBe(401)
   })
 
@@ -172,7 +252,8 @@ describe('handoff exchange', () => {
     const now = Date.now()
     vi.spyOn(Date, 'now').mockReturnValue(now + HANDOFF_TTL_MS + 1)
     expect(
-      (await post('/handoff/exchange', { token, origin: SITE })).status,
+      (await post('/handoff/exchange', { token, origin: SITE, nonce: NONCE }))
+        .status,
     ).toBe(401)
   })
 
@@ -183,20 +264,29 @@ describe('handoff exchange', () => {
         await post('/handoff/exchange', {
           token,
           origin: 'https://other.example',
+          nonce: NONCE,
         })
       ).status,
     ).toBe(401)
     expect(
-      (await post('/handoff/exchange', { token, origin: SITE })).status,
+      (await post('/handoff/exchange', { token, origin: SITE, nonce: NONCE }))
+        .status,
     ).toBe(401)
   })
 
-  it('needs the site secret', async () => {
+  it('needs the exchange secret, not the upgrade one', async () => {
     const { token } = await tokenFor('secret@x.test')
-    expect(
-      (await post('/handoff/exchange', { token, origin: SITE }, 'wrong'))
-        .status,
-    ).toBe(401)
+    for (const secret of ['wrong', SECRET.upgrade]) {
+      expect(
+        (
+          await post(
+            '/handoff/exchange',
+            { token, origin: SITE, nonce: NONCE },
+            secret,
+          )
+        ).status,
+      ).toBe(401)
+    }
   })
 })
 
@@ -216,7 +306,27 @@ describe('session upgrade', () => {
       accountId: '4242',
     })
     expect(res.status).toBe(200)
+    const { results } = await env.DB.prepare(
+      "SELECT userId, origin, detail FROM audit_event WHERE action = 'session.upgrade' AND userId = ?",
+    )
+      .bind(u.id)
+      .all()
+    expect(results).toEqual([{ userId: u.id, origin: SITE, detail: 'account' }])
+    expect(JSON.stringify(results)).not.toContain('@')
   })
+
+  it.each([undefined, '', 'not-a-date', '2000-01-01'])(
+    'is off when IDENTITY_UPGRADE_UNTIL is %j',
+    async (until) => {
+      const saved = env.IDENTITY_UPGRADE_UNTIL
+      env.IDENTITY_UPGRADE_UNTIL = until
+      expect(
+        (await post('/handoff/upgrade', { origin: SITE, verifiedEmail: 'x' }))
+          .status,
+      ).toBe(410)
+      env.IDENTITY_UPGRADE_UNTIL = saved
+    },
+  )
 
   it('matches a verified email only when our record is verified too (#807)', async () => {
     await newUser('verified@x.test', true)
@@ -268,6 +378,10 @@ describe('session upgrade', () => {
     ).toBe(400)
     expect(
       (await post('/handoff/upgrade', { origin: SITE }, 'wrong')).status,
+    ).toBe(401)
+    expect(
+      (await post('/handoff/upgrade', { origin: SITE }, SECRET.exchange))
+        .status,
     ).toBe(401)
   })
 })

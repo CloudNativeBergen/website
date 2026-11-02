@@ -1,7 +1,14 @@
 // Public data layer. Exports functions and the auth instance, never the raw handle.
-import { and, eq } from 'drizzle-orm'
+import { and, eq, like, lt } from 'drizzle-orm'
 import { rawDb } from './db'
-import { account, member, organization, user, verification } from './schema'
+import {
+  account,
+  auditEvent,
+  member,
+  organization,
+  user,
+  verification,
+} from './schema'
 
 export { createAuth, type AuthEnv } from './auth'
 
@@ -71,9 +78,27 @@ export function createData(env: DataEnv) {
     },
     /** Stores a handoff record under a hashed key. */
     async putHandoff(key: string, value: string, expiresAt: Date) {
+      // Unredeemed handoffs would otherwise pile up.
+      await db
+        .delete(verification)
+        .where(
+          and(
+            like(verification.identifier, 'handoff:%'),
+            lt(verification.expiresAt, new Date()),
+          ),
+        )
       await db
         .insert(verification)
         .values({ id: crypto.randomUUID(), identifier: key, value, expiresAt })
+    },
+    /** Handoff audit row: ids, origin and match type only. */
+    async audit(
+      action: 'handoff.exchange' | 'session.upgrade',
+      userId: string,
+      origin: string,
+      detail?: string,
+    ) {
+      await db.insert(auditEvent).values({ action, userId, origin, detail })
     },
     /**
      * Deletes and returns in one statement, so two concurrent redemptions

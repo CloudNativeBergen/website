@@ -10,6 +10,11 @@ service: #PlatformService & {
 	routes: {preview: ["id-preview.konf.app"], production: ["id.konf.app"]}
 	// Verified origins for the login handoff (#688).
 	serviceBindings: [{binding: "DIRECTORY", service: "konf-tenant-directory"}]
+	// Handoff limits (src/handoff.ts): POSTs per tenant origin, GET per IP.
+	rateLimits: [
+		{name: "HANDOFF_SITE_LIMIT", namespaceId: {preview: "1803", production: "1813"}, limit: 60, period: 60},
+		{name: "HANDOFF_IP_LIMIT", namespaceId: {preview: "1804", production: "1814"}, limit: 20, period: 60},
+	]
 	files: {
 		"package.json": {
 			dependencies: {

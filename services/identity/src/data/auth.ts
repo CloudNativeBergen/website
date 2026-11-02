@@ -60,6 +60,12 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
         allowDifferentEmails: false,
       },
     },
+    session: {
+      additionalFields: {
+        // Set by the handoff only (src/handoff.ts), never by a client.
+        origin: { type: 'string', required: false, input: false },
+      },
+    },
     user: {
       additionalFields: {
         platformOperator: {
@@ -98,9 +104,10 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
           issuer: env.IDENTITY_ISSUER,
           audience: JWT_AUDIENCE,
           expirationTime: `${JWT_TTL_SECONDS}s`,
-          // sub (the user id) only. orgRole and the operator flag come from
-          // the live lookup on every request, never from a token claim.
-          definePayload: () => ({}),
+          // sub (the user id) and the handoff origin, which the gateway
+          // matches against the request's tenant (#1844). orgRole and the
+          // operator flag come from the live lookup, never from a claim.
+          definePayload: ({ session }) => ({ origin: session.origin }),
         },
       }),
       // Organizations are provisioned by operators through the directory,

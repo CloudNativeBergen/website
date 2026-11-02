@@ -1,5 +1,5 @@
 // Runs Better Auth against a real D1 (Miniflare) with the shipped migration.
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeSignature } from 'better-auth/crypto'
 import { handleOAuthUserInfo } from 'better-auth/oauth2'
@@ -43,10 +43,11 @@ beforeAll(async () => {
     }),
   )
   d1 = (await mf.getD1Database('DB')) as unknown as D1Database
-  const sql = readFileSync(
-    join(import.meta.dirname, '../migrations/0001_init.sql'),
-    'utf8',
-  )
+  const dir = join(import.meta.dirname, '../migrations')
+  const sql = readdirSync(dir)
+    .sort()
+    .map((f) => readFileSync(join(dir, f), 'utf8'))
+    .join(';\n')
   for (const stmt of sql
     .split(/;\s*\n/)
     .map((s) => s.replace(/^--.*$/gm, '').trim())) {
