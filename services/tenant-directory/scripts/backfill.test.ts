@@ -99,4 +99,70 @@ describe('mapBackfill', () => {
     expect(sql.identity.split('\n').filter(Boolean)).toHaveLength(3)
     expect(toSql(mapBackfill(orgs, confs, verifications))).toEqual(sql)
   })
+
+  it('skips every claimant of a hostname, platform hosts included', () => {
+    const r = mapBackfill(
+      [
+        { _id: 'org-foo', name: 'Foo', slug: 'foo' },
+        { _id: 'org-foo2025', name: 'Foo 2025', slug: 'foo-2025' },
+      ],
+      [
+        { _id: 'c-foo', orgId: 'org-foo', startDate: '2025-01-01' },
+        { _id: 'c-foo2025', orgId: 'org-foo2025', startDate: '2026-01-01' },
+      ],
+      [],
+    )
+    const hosts = r.domains.map((d) => d.hostname)
+    expect(hosts).not.toContain('foo-2025.konf.run')
+    expect(hosts).toEqual(
+      expect.arrayContaining(['foo.konf.run', 'foo-2025-2026.konf.run']),
+    )
+    expect(r.anomalies).toContain(
+      'domain foo-2025.konf.run: claimed by c-foo, c-foo2025; skipped',
+    )
+  })
+
+  it('points the alias at the newest live edition, else the newest archived', () => {
+    const r = mapBackfill(
+      [
+        { _id: 'org-a', slug: 'a' },
+        { _id: 'org-b', slug: 'b' },
+      ],
+      [
+        { _id: 'a-25', orgId: 'org-a', startDate: '2025-01-01' },
+        {
+          _id: 'a-26',
+          orgId: 'org-a',
+          startDate: '2026-01-01',
+          lifecycleStatus: 'cancelled',
+        },
+        {
+          _id: 'b-24',
+          orgId: 'org-b',
+          startDate: '2024-01-01',
+          lifecycleStatus: 'archived',
+        },
+        {
+          _id: 'b-25',
+          orgId: 'org-b',
+          startDate: '2025-01-01',
+          lifecycleStatus: 'archived',
+        },
+      ],
+      [],
+    )
+    const alias = (h: string) =>
+      r.domains.find((d) => d.hostname === h)?.conferenceId
+    expect(alias('a.konf.run')).toBe('a-25')
+    expect(alias('b.konf.run')).toBe('b-25')
+  })
+
+  it('never moves ownership or Cloudflare-registered domains on rerun', () => {
+    const sql = toSql(b).directory
+    expect(sql).toContain(
+      'WHERE domains.org_id = excluded.org_id AND domains.cf_custom_hostname_id IS NULL;',
+    )
+    const sets = sql.split('\n').map((l) => l.split(' WHERE ')[0])
+    expect(sets.join('\n')).not.toMatch(/\b(slug|org_id) = excluded/)
+  })
 })

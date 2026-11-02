@@ -31,6 +31,7 @@ export interface SanityVerification {
   status?: string | null
 }
 
+type Ed = { id: string; date: string }
 type Verification = 'pending' | 'verified' | 'failed'
 export interface Backfill {
   orgs: { id: string; slug: string; name: string; plan: string }[]
@@ -99,7 +100,9 @@ export function mapBackfill(
 
   // Custom hostnames, by claimant. A hostname with two claimants is skipped.
   const claims = new Map<string, Set<string>>()
-  const latest = new Map<string, { id: string; slug: string; date: string }>()
+  // Per org, the newest live edition and the newest archived one.
+  const latest = new Map<string, { live?: Ed; archived?: Ed }>()
+  const platform: Backfill['domains'] = []
   const confSlugs = new Set<string>()
   for (const c of [...sanityConfs].sort(byId)) {
     const org = c.orgId ? orgs.get(c.orgId) : undefined
@@ -127,16 +130,17 @@ export function mapBackfill(
       lifecycle: archived ? 'archived' : 'live',
     })
     if (platformOk.has(org.id)) {
-      out.domains.push({
+      platform.push({
         hostname: editionHost(org.slug, slug),
         orgId: org.id,
         conferenceId: c._id,
         kind: 'platform-edition',
         verification: 'verified',
       })
-      const prev = latest.get(org.id)
-      if (!prev || date > prev.date)
-        latest.set(org.id, { id: c._id, slug, date })
+      const eds = latest.get(org.id) ?? {}
+      const key = archived ? 'archived' : 'live'
+      if (!eds[key] || date > eds[key].date) eds[key] = { id: c._id, date }
+      latest.set(org.id, eds)
     }
     for (const entry of c.domains ?? []) {
       const host = normalizeHost(entry)
@@ -157,11 +161,11 @@ export function mapBackfill(
       claims.set(host, (claims.get(host) ?? new Set()).add(c._id))
     }
   }
-  for (const [orgId, conf] of latest) {
-    out.domains.push({
+  for (const [orgId, eds] of latest) {
+    platform.push({
       hostname: aliasHost(orgs.get(orgId)!.slug),
       orgId,
-      conferenceId: conf.id,
+      conferenceId: (eds.live ?? eds.archived)!.id,
       kind: 'platform-alias',
       verification: 'verified',
     })
@@ -171,27 +175,44 @@ export function mapBackfill(
     verifications.map((v) => [normalizeHost(v.hostname), v]),
   )
   const confOrg = new Map(out.conferences.map((c) => [c.id, c.orgId]))
+  const custom: Backfill['domains'] = []
   for (const [hostname, ids] of [...claims].sort(([a], [b]) =>
     a.localeCompare(b),
   )) {
-    if (ids.size > 1) {
-      flag(`domain ${hostname}: claimed by ${[...ids].join(', ')}; skipped`)
-      continue
+    for (const conferenceId of ids) {
+      const v = status.get(hostname)
+      const verification =
+        v && v.conferenceId === conferenceId
+          ? (VERIFICATION[v.status ?? ''] ?? 'pending')
+          : 'pending'
+      custom.push({
+        hostname,
+        orgId: confOrg.get(conferenceId)!,
+        conferenceId,
+        kind: 'custom',
+        verification,
+      })
     }
-    const [conferenceId] = ids
-    const v = status.get(hostname)
-    const verification =
-      v && v.conferenceId === conferenceId
-        ? (VERIFICATION[v.status ?? ''] ?? 'pending')
-        : 'pending'
-    if (verification !== 'verified') flag(`domain ${hostname}: ${verification}`)
-    out.domains.push({
-      hostname,
-      orgId: confOrg.get(conferenceId)!,
-      conferenceId,
-      kind: 'custom',
-      verification,
-    })
+  }
+
+  // Every emitted hostname, platform or custom, is one routing claim:
+  // `foo-2025` the org and `foo`'s 2025 edition collide. Skip all claimants.
+  const all = [...platform, ...custom]
+  const count = new Map<string, number>()
+  for (const d of all) count.set(d.hostname, (count.get(d.hostname) ?? 0) + 1)
+  const flagged = new Set<string>()
+  for (const d of all) {
+    if (count.get(d.hostname)! === 1) {
+      out.domains.push(d)
+      if (d.kind === 'custom' && d.verification !== 'verified')
+        flag(`domain ${d.hostname}: ${d.verification}`)
+    } else if (!flagged.has(d.hostname)) {
+      flagged.add(d.hostname)
+      const by = all.filter((x) => x.hostname === d.hostname)
+      flag(
+        `domain ${d.hostname}: claimed by ${by.map((x) => x.conferenceId).join(', ')}; skipped`,
+      )
+    }
   }
 
   const used = new Set(out.conferences.map((c) => c.orgId))
@@ -202,25 +223,29 @@ export function mapBackfill(
 
 const q = (s: string) => `'${s.replace(/'/g, "''")}'`
 
-/** Upserts for the tenant-directory D1 and the identity D1, in FK order. */
+/**
+ * Upserts for the tenant-directory D1 and the identity D1, in FK order. A
+ * rerun never moves ownership or slugs, and leaves a domain alone once it
+ * has a Cloudflare id or belongs to another org.
+ */
 export function toSql(b: Backfill) {
   const directory = [
     ...b.orgs.map(
       (o) =>
-        `INSERT INTO organizations (id, slug, name, plan) VALUES (${q(o.id)}, ${q(o.slug)}, ${q(o.name)}, ${q(o.plan)}) ON CONFLICT (id) DO UPDATE SET slug = excluded.slug, name = excluded.name, plan = excluded.plan;`,
+        `INSERT INTO organizations (id, slug, name, plan) VALUES (${q(o.id)}, ${q(o.slug)}, ${q(o.name)}, ${q(o.plan)}) ON CONFLICT (id) DO UPDATE SET name = excluded.name, plan = excluded.plan;`,
     ),
     ...b.conferences.map(
       (c) =>
-        `INSERT INTO conferences (id, org_id, slug, name, lifecycle) VALUES (${q(c.id)}, ${q(c.orgId)}, ${q(c.slug)}, ${q(c.name)}, ${q(c.lifecycle)}) ON CONFLICT (id) DO UPDATE SET org_id = excluded.org_id, slug = excluded.slug, name = excluded.name, lifecycle = excluded.lifecycle;`,
+        `INSERT INTO conferences (id, org_id, slug, name, lifecycle) VALUES (${q(c.id)}, ${q(c.orgId)}, ${q(c.slug)}, ${q(c.name)}, ${q(c.lifecycle)}) ON CONFLICT (id) DO UPDATE SET name = excluded.name, lifecycle = excluded.lifecycle;`,
     ),
     ...b.domains.map(
       (d) =>
-        `INSERT INTO domains (hostname, org_id, conference_id, kind, verification) VALUES (${q(d.hostname)}, ${q(d.orgId)}, ${q(d.conferenceId)}, ${q(d.kind)}, ${q(d.verification)}) ON CONFLICT (hostname) DO UPDATE SET org_id = excluded.org_id, conference_id = excluded.conference_id, kind = excluded.kind, verification = excluded.verification;`,
+        `INSERT INTO domains (hostname, org_id, conference_id, kind, verification) VALUES (${q(d.hostname)}, ${q(d.orgId)}, ${q(d.conferenceId)}, ${q(d.kind)}, ${q(d.verification)}) ON CONFLICT (hostname) DO UPDATE SET conference_id = excluded.conference_id, verification = excluded.verification WHERE domains.org_id = excluded.org_id AND domains.cf_custom_hostname_id IS NULL;`,
     ),
   ]
   const identity = b.orgs.map(
     (o) =>
-      `INSERT INTO organization (id, name, slug) VALUES (${q(o.id)}, ${q(o.name)}, ${q(o.slug)}) ON CONFLICT (id) DO UPDATE SET name = excluded.name, slug = excluded.slug;`,
+      `INSERT INTO organization (id, name, slug) VALUES (${q(o.id)}, ${q(o.name)}, ${q(o.slug)}) ON CONFLICT (id) DO UPDATE SET name = excluded.name;`,
   )
   return {
     directory: directory.join('\n') + '\n',

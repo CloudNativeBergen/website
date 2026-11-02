@@ -6,6 +6,10 @@ export interface CustomHostnames {
   create(hostname: string): Promise<{ id: string; verification: Verification }>
   get(id: string): Promise<Verification>
   delete(id: string): Promise<void>
+  /** An existing custom hostname for `hostname`, if Cloudflare has one. */
+  find(
+    hostname: string,
+  ): Promise<{ id: string; verification: Verification } | null>
 }
 
 export interface CloudflareEnv {
@@ -30,7 +34,10 @@ function verification(h: CfHostname): Verification {
 
 export function cloudflareHostnames(env: CloudflareEnv): CustomHostnames {
   const base = `https://api.cloudflare.com/client/v4/zones/${env.CF_ZONE_ID}/custom_hostnames`
-  async function call(url: string, init?: RequestInit): Promise<CfHostname> {
+  async function call<T = CfHostname>(
+    url: string,
+    init?: RequestInit,
+  ): Promise<T> {
     const res = await fetch(url, {
       ...init,
       headers: {
@@ -41,7 +48,7 @@ export function cloudflareHostnames(env: CloudflareEnv): CustomHostnames {
     // A non-JSON body (an HTML error page) still reports its HTTP status.
     const body = (await res.json().catch(() => null)) as {
       success?: boolean
-      result: CfHostname
+      result: T
     } | null
     if (!res.ok || !body?.success) {
       throw new Error(`cloudflare custom hostnames: HTTP ${res.status}`)
@@ -58,6 +65,12 @@ export function cloudflareHostnames(env: CloudflareEnv): CustomHostnames {
     },
     async get(id) {
       return verification(await call(`${base}/${id}`))
+    },
+    async find(hostname) {
+      const [h] = await call<CfHostname[]>(
+        `${base}?hostname=${encodeURIComponent(hostname)}`,
+      )
+      return h ? { id: h.id, verification: verification(h) } : null
     },
     async delete(id) {
       await call(`${base}/${id}`, { method: 'DELETE' })

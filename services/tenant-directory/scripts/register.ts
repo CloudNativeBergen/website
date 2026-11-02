@@ -20,7 +20,9 @@ export async function registerCustomDomains(
   for (const { hostname } of rows) {
     if (dryRun) continue
     try {
-      const { id, verification } = await hostnames.create(hostname)
+      // A rerun before the SQL was applied finds the hostname it made last time.
+      const { id, verification } =
+        (await hostnames.find(hostname)) ?? (await hostnames.create(hostname))
       sql.push(
         `UPDATE domains SET cf_custom_hostname_id = ${q(id)}, verification = ${q(verification)}, checked_at = ${now} WHERE hostname = ${q(hostname)} AND kind = 'custom' AND cf_custom_hostname_id IS NULL;`,
       )

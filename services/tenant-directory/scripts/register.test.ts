@@ -11,6 +11,11 @@ const fake: CustomHostnames = {
   },
   get: async () => 'pending',
   delete: async () => {},
+  // Cloudflare remembers what was created, as the real API does.
+  find: async (hostname) =>
+    created.includes(hostname)
+      ? { id: `cf-${hostname}`, verification: 'pending' }
+      : null,
 }
 const rows = [{ hostname: "o'k.example.com" }, { hostname: 'bad.example.com' }]
 
@@ -32,5 +37,13 @@ describe('registerCustomDomains', () => {
       "UPDATE domains SET cf_custom_hostname_id = 'cf-o''k.example.com', verification = 'pending', checked_at = 1 WHERE hostname = 'o''k.example.com' AND kind = 'custom' AND cf_custom_hostname_id IS NULL;\n",
     )
     expect(r.failed).toEqual(['bad.example.com: HTTP 409'])
+  })
+
+  it('a rerun reuses the hostname Cloudflare already has', async () => {
+    const first = await registerCustomDomains(rows, fake, false, 1)
+    const before = created.length
+    const again = await registerCustomDomains(rows, fake, false, 1)
+    expect(created).toHaveLength(before)
+    expect(again.sql).toBe(first.sql)
   })
 })
