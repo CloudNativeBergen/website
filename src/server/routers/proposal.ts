@@ -907,6 +907,12 @@ function expirePublicTalkReads(
   if (conferenceId) revalidateTag(conferenceTag(conferenceId), 'default')
 }
 
+/** A talk's conference as either a reference or a dereferenced document. */
+function proposalConferenceId(conference: unknown): string | undefined {
+  const c = conference as { _ref?: string; _id?: string } | null | undefined
+  return c?._ref ?? c?._id
+}
+
 export const proposalRouter = router({
   // List current user&apos;s proposals
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -1853,6 +1859,15 @@ export const proposalRouter = router({
         // submission is wrong whoever promotes it. (The 3-proposal cap below is
         // the opposite call — a per-speaker fairness rule organizers override.)
         if (proposal.status === Status.draft && status === Status.submitted) {
+          // The owner arm of the read returns the speaker's draft at ANY
+          // tenant, while the CFP window and late link are judged against the
+          // HOST conference. Submit only where the draft belongs.
+          if (proposalConferenceId(proposal.conference) !== conference._id) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'This proposal belongs to another conference',
+            })
+          }
           assertMayBecomeSubmitted({
             conference,
             content: proposal,
@@ -2160,7 +2175,7 @@ export const proposalRouter = router({
       .input(
         z.object({
           email: z.string().email().optional(),
-          expiresInDays: z.number().int().min(1).max(30).default(7),
+          expiresInDays: z.number().int().min(1).max(30).default(3),
         }),
       )
       .mutation(async ({ input }) => {

@@ -127,7 +127,14 @@ export function ProposalForm({
       if (lastAction === 'draft') {
         setCurrentProposalId(data._id)
         setSavedAsDraft(true)
-        window.history.replaceState(null, '', `/cfp/proposal/${data._id}`)
+        // Keep a late link (#249) in the URL so a reload can still submit.
+        window.history.replaceState(
+          null,
+          '',
+          lateSubmissionToken
+            ? `/cfp/proposal/${data._id}?token=${encodeURIComponent(lateSubmissionToken)}`
+            : `/cfp/proposal/${data._id}`,
+        )
         showDraftSaved()
       } else {
         router.push('/cfp/list?success=true')

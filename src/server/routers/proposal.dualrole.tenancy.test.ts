@@ -156,6 +156,15 @@ const DATASET = [
     speakers: [ref('sp-dual')],
     attachments: [RECORDING],
   },
+  // The caller's own DRAFT at tenant B (#249 follow-up).
+  {
+    _id: 'talk-B-draft',
+    _type: 'talk',
+    title: 'Own draft at tenant B',
+    status: 'draft',
+    conference: ref('conf-B'),
+    speakers: [ref('sp-dual')],
+  },
   {
     _id: 'rev-A',
     _type: 'review',
@@ -272,6 +281,22 @@ describe('dual-role organizer ∧ foreign-tenant speaker (owner arm ≠ organize
     expect(result.proposalStatus).toBe('withdrawn')
     expect(patchCalls.map((p) => p.id)).toEqual(['talk-B'])
     expect(patchCalls[0].fields).toMatchObject({ status: 'withdrawn' })
+  })
+
+  it('action refuses to submit their own draft at another tenant from this host', async () => {
+    // CFP window and late link are judged against the HOST conference, so a
+    // foreign draft must not be promoted here at all.
+    await expect(
+      caller().action({
+        id: 'talk-B-draft',
+        action: Action.submit,
+        notify: false,
+      }),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'This proposal belongs to another conference',
+    })
+    expect(patchCalls).toEqual([])
   })
 
   it('admin.submitReview refuses to write a review into the foreign tenant', async () => {

@@ -9,7 +9,7 @@ import { api } from '@/lib/trpc/client'
  */
 export function LateSubmissionLink() {
   const [email, setEmail] = useState('')
-  const [days, setDays] = useState(7)
+  const [days, setDays] = useState(3)
   const create = api.proposal.admin.createLateSubmissionLink.useMutation()
 
   return (

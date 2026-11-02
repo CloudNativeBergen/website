@@ -10,7 +10,11 @@ export default async function Submit({
   const { id: proposalId, token } = (await searchParams) || {}
 
   if (proposalId) {
-    redirect(`/cfp/proposal/${proposalId}`)
+    redirect(
+      token
+        ? `/cfp/proposal/${proposalId}?token=${encodeURIComponent(token)}`
+        : `/cfp/proposal/${proposalId}`,
+    )
   }
 
   // Late-submission links (#249) land here; the token rides along to the form.
