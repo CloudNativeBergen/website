@@ -5,6 +5,7 @@ export type Verification = 'pending' | 'verified' | 'failed'
 export interface CustomHostnames {
   create(hostname: string): Promise<{ id: string; verification: Verification }>
   get(id: string): Promise<Verification>
+  delete(id: string): Promise<void>
 }
 
 export interface CloudflareEnv {
@@ -37,8 +38,12 @@ export function cloudflareHostnames(env: CloudflareEnv): CustomHostnames {
         'content-type': 'application/json',
       },
     })
-    const body = (await res.json()) as { success: boolean; result: CfHostname }
-    if (!res.ok || !body.success) {
+    // A non-JSON body (an HTML error page) still reports its HTTP status.
+    const body = (await res.json().catch(() => null)) as {
+      success?: boolean
+      result: CfHostname
+    } | null
+    if (!res.ok || !body?.success) {
       throw new Error(`cloudflare custom hostnames: HTTP ${res.status}`)
     }
     return body.result
@@ -53,6 +58,9 @@ export function cloudflareHostnames(env: CloudflareEnv): CustomHostnames {
     },
     async get(id) {
       return verification(await call(`${base}/${id}`))
+    },
+    async delete(id) {
+      await call(`${base}/${id}`, { method: 'DELETE' })
     },
   }
 }

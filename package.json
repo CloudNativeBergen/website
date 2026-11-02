@@ -43,7 +43,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "shoot": "node scripts/shoot-story.mjs",
-    "scaffold:service": "tsx scripts/scaffold-service.ts"
+    "scaffold:service": "tsx scripts/scaffold-service.ts",
+    "scaffold:check": "for f in services/*/service.cue; do tsx scripts/scaffold-service.ts \"$(basename \"$(dirname \"$f\")\")\" || exit 1; done && git diff --exit-code -- services && test -z \"$(git status --porcelain -- services)\""
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {

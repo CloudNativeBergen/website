@@ -3,6 +3,13 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
+  "services": [
+    {
+      "binding": "IDENTITY",
+      "service": "konf-identity",
+      "entrypoint": "Organizations",
+    },
+  ],
   "triggers": {
     "crons": ["*/5 * * * *"],
   },

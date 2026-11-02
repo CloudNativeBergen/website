@@ -113,6 +113,15 @@ builder.mutationType({
         return ctx.data.addCustomDomain(String(conferenceId), hostname)
       },
     }),
+    removeCustomDomain: t.field({
+      type: Domain,
+      tag: 'internal',
+      args: { hostname: t.arg.string({ required: true }) },
+      resolve: (_, { hostname }, ctx) => {
+        requirePlatform(ctx)
+        return ctx.data.removeCustomDomain(hostname)
+      },
+    }),
     refreshCustomDomain: t.field({
       type: Domain,
       tag: 'internal',

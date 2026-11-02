@@ -25,7 +25,9 @@ CREATE TABLE domains (
   conference_id TEXT NOT NULL REFERENCES conferences(id),
   kind TEXT NOT NULL CHECK (kind IN ('platform-edition', 'platform-alias', 'custom')),
   verification TEXT NOT NULL CHECK (verification IN ('pending', 'verified', 'failed')),
-  cf_custom_hostname_id TEXT
+  cf_custom_hostname_id TEXT,
+  -- Last Cloudflare status check, epoch ms.
+  checked_at INTEGER
 );
 CREATE INDEX domains_org ON domains (org_id, conference_id);
 -- One latest-edition alias per Organization.

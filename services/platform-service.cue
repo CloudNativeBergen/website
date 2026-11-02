@@ -19,6 +19,8 @@ package codegen
 	// Cron Trigger schedules. Tenancy-off services only: a cron has no
 	// envelope. The service then exports `scheduled(data)` from src/data.
 	crons: *[] | [...string]
+	// Worker service bindings (RPC). The service types them in its DataEnv.
+	serviceBindings: *[] | [...{binding: string, service: string, entrypoint?: string}]
 	if tenancy {crons: []}
 
 	_workerName: "konf-\(name)"
@@ -75,11 +77,14 @@ package codegen
 				"database_id":    "TO_BE_CREATED"
 				"migrations_dir": "migrations"
 			}]
-			// OTLP export to Grafana Cloud. The destinations are configured
-			// once per account in the Cloudflare dashboard.
 			if len(crons) > 0 {
 				"triggers": {"crons": crons}
 			}
+			if len(serviceBindings) > 0 {
+				"services": serviceBindings
+			}
+			// OTLP export to Grafana Cloud. The destinations are configured
+			// once per account in the Cloudflare dashboard.
 			"observability": {
 				"enabled": true
 				"traces": {"enabled": true, "destinations": ["grafana-cloud-traces"]}

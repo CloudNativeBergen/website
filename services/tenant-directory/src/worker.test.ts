@@ -27,7 +27,9 @@ vi.mock('jose', async () => {
 const hostnames = {
   create: vi.fn<CustomHostnames['create']>(),
   get: vi.fn<CustomHostnames['get']>(),
+  delete: vi.fn<CustomHostnames['delete']>(),
 }
+const identity = { ensure: vi.fn(async () => undefined) }
 vi.mock('./data/cloudflare', () => ({ cloudflareHostnames: () => hostnames }))
 
 const { default: worker } = await import('./worker')
@@ -100,9 +102,12 @@ beforeEach(() => {
     GATEWAY_PUBLIC_KEY: keys.publicPem,
     CF_API_TOKEN: 'unused',
     CF_ZONE_ID: 'unused',
+    IDENTITY: identity,
   }
   hostnames.create.mockReset()
   hostnames.get.mockReset()
+  hostnames.delete.mockReset()
+  identity.ensure.mockReset()
 })
 
 async function gql(
@@ -132,9 +137,14 @@ const PROVISION = `mutation($key: String!, $org: String!) {
 }`
 const RESOLVE = `query($host: String!) { tenantByHost(host: $host) { orgId conferenceId kind } }`
 
+/** Provisions, then publishes the Conference (provisioning leaves a draft). */
 async function provision(org = 'acme', key = 'k1') {
   const { body } = await gql(PROVISION, { key, org }, operator)
-  return body.data.provisionOrganization as { id: string }
+  const created = body.data.provisionOrganization as { id: string }
+  sqlite
+    .prepare("UPDATE conferences SET lifecycle = 'live' WHERE org_id = ?")
+    .run(created.id)
+  return created
 }
 const conferenceOf = (orgId: string) =>
   (
@@ -148,7 +158,7 @@ describe('provisioning', () => {
     const { body } = await gql('{ _service { sdl } }')
     const mutation = /type Mutation[^}]*}/.exec(body.data._service.sdl)![0]
     const fields = mutation.split('\n').filter((l) => l.includes('('))
-    expect(fields).toHaveLength(4)
+    expect(fields).toHaveLength(5)
     for (const f of fields) expect(f).toContain('@tag(name: "internal")')
   })
 
@@ -164,6 +174,11 @@ describe('provisioning', () => {
     const a = await provision('acme', 'same')
     const b = await provision('acme', 'same')
     expect(b.id).toBe(a.id)
+    // identity's ensure runs on the retry too, so a failed one heals.
+    expect(identity.ensure.mock.calls).toEqual([
+      [a.id, 'acme'],
+      [a.id, 'acme'],
+    ])
     expect(
       sqlite.prepare('SELECT count(*) AS n FROM organizations').get(),
     ).toEqual({ n: 1 })
@@ -192,7 +207,7 @@ describe('provisioning', () => {
     const org = await provision()
     sqlite
       .prepare(
-        "INSERT INTO conferences (id, org_id, slug, name) VALUES ('c2', ?, '2027', 'Conf 2027')",
+        "INSERT INTO conferences (id, org_id, slug, name, lifecycle) VALUES ('c2', ?, '2027', 'Conf 2027', 'live')",
       )
       .run(org.id)
     await gql(
@@ -206,6 +221,24 @@ describe('provisioning', () => {
 })
 
 describe('anonymous resolution', () => {
+  it('hides a draft Conference and its hosts', async () => {
+    const org = await provision()
+    const confId = conferenceOf(org.id)
+    sqlite
+      .prepare("UPDATE conferences SET lifecycle = 'draft' WHERE id = ?")
+      .run(confId)
+    const conf = `query($id: ID!) { conference(id: $id) { id } }`
+    expect((await gql(conf, { id: confId })).body.data.conference).toBeNull()
+    const host = { host: 'acme-2026.konf.run' }
+    expect((await gql(RESOLVE, host)).body.data.tenantByHost).toBeNull()
+    expect(
+      (await gql(conf, { id: confId }, operator)).body.data.conference,
+    ).toEqual({ id: confId })
+    expect(
+      (await gql(RESOLVE, host, operator)).body.data.tenantByHost,
+    ).toMatchObject({ orgId: org.id })
+  })
+
   it('does not resolve an unverified custom domain', async () => {
     const org = await provision()
     hostnames.create.mockResolvedValue({ id: 'cf1', verification: 'pending' })
@@ -332,10 +365,61 @@ describe('cron', () => {
     expect(await resolve('a.example.org')).toMatchObject({ orgId: org.id })
     expect(await resolve('b.example.org')).toBeNull()
 
-    // Platform hosts and verified domains are never polled; failures retry.
+    // Platform hosts and freshly verified domains are not polled; failures retry.
     hostnames.get.mockReset()
     hostnames.get.mockResolvedValue('verified')
     await tick()
     expect(hostnames.get.mock.calls).toEqual([['cf2']])
+
+    // An hour later the verified one is re-checked, and a moved hostname
+    // stops resolving.
+    vi.useFakeTimers({ now: Date.now() + 61 * 60 * 1000, toFake: ['Date'] })
+    try {
+      hostnames.get.mockReset()
+      hostnames.get.mockResolvedValue('failed')
+      await tick()
+      expect(hostnames.get.mock.calls.flat().sort()).toEqual(['cf1', 'cf2'])
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(await resolve('a.example.org')).toBeNull()
+  })
+})
+
+describe('custom domain rollback and removal', () => {
+  const add = `mutation($c: ID!, $h: String!) { addCustomDomain(conferenceId: $c, hostname: $h) { hostname } }`
+
+  it('deletes the Cloudflare hostname when the D1 update fails, then retries cleanly', async () => {
+    const c = conferenceOf((await provision()).id)
+    hostnames.create.mockResolvedValue({ id: 'cf1', verification: 'pending' })
+    sqlite.exec(`CREATE TRIGGER fail_update BEFORE UPDATE ON domains
+      WHEN NEW.cf_custom_hostname_id IS NOT NULL
+      BEGIN SELECT RAISE(ABORT, 'd1 down'); END`)
+    expect(
+      (await gql(add, { c, h: 'conf.acme.org' }, operator)).body.errors,
+    ).toBeDefined()
+    expect(hostnames.delete).toHaveBeenCalledWith('cf1')
+
+    sqlite.exec('DROP TRIGGER fail_update')
+    expect(
+      (await gql(add, { c, h: 'conf.acme.org' }, operator)).body.errors,
+    ).toBeUndefined()
+  })
+
+  it('removeCustomDomain deletes both sides and needs a PlatformContext', async () => {
+    const c = conferenceOf((await provision()).id)
+    hostnames.create.mockResolvedValue({ id: 'cf1', verification: 'pending' })
+    await gql(add, { c, h: 'conf.acme.org' }, operator)
+    const remove = `mutation { removeCustomDomain(hostname: "conf.acme.org") { hostname } }`
+
+    expect(
+      (await gql(remove, {}, organizer)).body.errors[0].extensions.code,
+    ).toBe('FORBIDDEN')
+    expect((await gql(remove, {}, operator)).body.errors).toBeUndefined()
+    expect(hostnames.delete).toHaveBeenCalledWith('cf1')
+    expect(
+      (await gql(RESOLVE, { host: 'conf.acme.org' }, operator)).body.data
+        .tenantByHost,
+    ).toBeNull()
   })
 })

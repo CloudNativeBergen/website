@@ -1,5 +1,5 @@
 // Drizzle mirror of migrations/0001_init.sql.
-import { sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const organizations = sqliteTable('organizations', {
   id: text('id').primaryKey(),
@@ -30,6 +30,8 @@ export const domains = sqliteTable('domains', {
     enum: ['pending', 'verified', 'failed'],
   }).notNull(),
   cfCustomHostnameId: text('cf_custom_hostname_id'),
+  /** Last Cloudflare status check, epoch ms. */
+  checkedAt: integer('checked_at'),
 })
 
 export const provisioningRequests = sqliteTable('provisioning_requests', {

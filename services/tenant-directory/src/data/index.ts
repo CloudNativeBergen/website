@@ -2,7 +2,7 @@
 // tenancy: false: the directory is the registry every tenant is resolved
 // from, so its reads span Organizations. Who may call what is decided in
 // the resolvers (src/subgraph.ts).
-import { and, eq, isNotNull } from 'drizzle-orm'
+import { and, eq, isNotNull, isNull, lt, or } from 'drizzle-orm'
 import { createGraphQLError } from 'graphql-yoga'
 import { rawDb } from './db'
 import {
@@ -20,7 +20,12 @@ import {
 /** Bindings the data layer needs; the generated WorkerEnv extends it. */
 export interface DataEnv extends CloudflareEnv {
   DB: D1Database
+  /** identity's Organizations entrypoint: creates the org on its side. */
+  IDENTITY: { ensure(orgId: string, slug: string): Promise<unknown> }
 }
+
+/** How often a verified custom domain is re-checked with Cloudflare. */
+const RECHECK_VERIFIED_MS = 60 * 60 * 1000
 
 /** The platform-host naming convention, owned here. */
 export const PLATFORM_DOMAIN = 'konf.run'
@@ -90,7 +95,7 @@ export function createData(
 
     /**
      * `trusted` (a PlatformContext) sees every row. Everyone else only gets
-     * a verified hostname of an active Organization.
+     * a verified hostname of an active Organization's non-draft Conference.
      */
     async resolveHost(input: string, trusted: boolean) {
       const hostname = normalizeHost(input)
@@ -103,14 +108,18 @@ export function createData(
           orgId: domains.orgId,
           conferenceId: domains.conferenceId,
           orgStatus: organizations.status,
+          lifecycle: conferences.lifecycle,
         })
         .from(domains)
         .innerJoin(organizations, eq(organizations.id, domains.orgId))
+        .innerJoin(conferences, eq(conferences.id, domains.conferenceId))
         .where(eq(domains.hostname, hostname))
       if (!row) return null
       if (
         !trusted &&
-        (row.verification !== 'verified' || row.orgStatus !== 'active')
+        (row.verification !== 'verified' ||
+          row.orgStatus !== 'active' ||
+          row.lifecycle === 'draft')
       ) {
         return null
       }
@@ -120,11 +129,16 @@ export function createData(
     async conference(id: string, trusted: boolean) {
       const conf = await conference(id)
       if (!conf || trusted) return conf ?? null
+      if (conf.lifecycle === 'draft') return null
       const org = await organization(conf.orgId)
       return org?.status === 'active' ? conf : null
     },
 
-    /** Same key twice returns the first Organization; nothing is created twice. */
+    /**
+     * Same key twice returns the first Organization; nothing is created
+     * twice. identity's ensure runs on every call, so a retry heals a
+     * failed ensure.
+     */
     async provision(input: ProvisionInput) {
       if (!input.idempotencyKey.trim()) {
         throw fail('BAD_USER_INPUT', 'idempotencyKey is required')
@@ -144,8 +158,14 @@ export function createData(
         })
         return req ? organization(req.orgId) : undefined
       }
+      const ensured = async <T extends { id: string; slug: string }>(
+        org: T,
+      ) => {
+        await env.IDENTITY.ensure(org.id, org.slug)
+        return org
+      }
       const done = await earlier()
-      if (done) return done
+      if (done) return ensured(done)
 
       const orgId = crypto.randomUUID()
       const conferenceId = crypto.randomUUID()
@@ -191,11 +211,11 @@ export function createData(
       } catch (error) {
         // A concurrent request with the same key won the race.
         const raced = await earlier()
-        if (raced) return raced
+        if (raced) return ensured(raced)
         console.error(error)
         throw fail('CONFLICT', 'organization slug or platform host is taken')
       }
-      return (await organization(orgId))!
+      return ensured((await organization(orgId))!)
     },
 
     /** Points the Organization's latest-edition alias at this Conference. */
@@ -240,22 +260,45 @@ export function createData(
         .onConflictDoNothing()
         .returning()
       if (!claimed) throw fail('CONFLICT', 'hostname is already claimed')
+      let cfId: string | undefined
       try {
         const created = await hostnames.create(hostname)
+        cfId = created.id
         const [row] = await db
           .update(domains)
           .set({
             cfCustomHostnameId: created.id,
             verification: created.verification,
+            checkedAt: Date.now(),
           })
           .where(eq(domains.hostname, hostname))
           .returning()
         return row
       } catch (error) {
-        // Release the claim so the hostname can be retried.
+        // Undo both sides so the hostname can be retried.
+        if (cfId) {
+          try {
+            await hostnames.delete(cfId)
+          } catch (cleanup) {
+            // Orphaned on Cloudflare; the claim is still released below.
+            console.error(cleanup)
+          }
+        }
         await db.delete(domains).where(eq(domains.hostname, hostname))
         throw error
       }
+    },
+
+    /** Deletes the Cloudflare custom hostname, then the routing claim. */
+    async removeCustomDomain(input: string) {
+      const hostname = normalizeHost(input) ?? ''
+      const row = await db.query.domains.findFirst({
+        where: and(eq(domains.hostname, hostname), eq(domains.kind, 'custom')),
+      })
+      if (!row) throw fail('NOT_FOUND', 'no custom hostname')
+      if (row.cfCustomHostnameId) await hostnames.delete(row.cfCustomHostnameId)
+      await db.delete(domains).where(eq(domains.hostname, hostname))
+      return row
     },
 
     /** Mirrors Cloudflare's current status onto the domain row. */
@@ -268,22 +311,38 @@ export function createData(
         throw fail('NOT_FOUND', 'no custom hostname')
       const [updated] = await db
         .update(domains)
-        .set({ verification: await hostnames.get(row.cfCustomHostnameId) })
+        .set({
+          verification: await hostnames.get(row.cfCustomHostnameId),
+          checkedAt: Date.now(),
+        })
         .where(eq(domains.hostname, hostname))
         .returning()
       return updated
     },
 
-    /** Pending custom domains that Cloudflare knows about. */
-    async pendingCustomDomains() {
+    /**
+     * Custom domains due a status check: every pending one, and verified
+     * ones not checked in the last hour (a moved or deleted hostname must
+     * stop resolving).
+     */
+    async customDomainsToCheck(now = Date.now()) {
       const rows = await db
         .select({ hostname: domains.hostname })
         .from(domains)
         .where(
           and(
             eq(domains.kind, 'custom'),
-            eq(domains.verification, 'pending'),
             isNotNull(domains.cfCustomHostnameId),
+            or(
+              eq(domains.verification, 'pending'),
+              and(
+                eq(domains.verification, 'verified'),
+                or(
+                  isNull(domains.checkedAt),
+                  lt(domains.checkedAt, now - RECHECK_VERIFIED_MS),
+                ),
+              ),
+            ),
           ),
         )
       return rows.map((r) => r.hostname)
@@ -291,9 +350,9 @@ export function createData(
   }
 }
 
-/** Cron Trigger: mirror Cloudflare status for every pending custom domain. */
+/** Cron Trigger: mirror Cloudflare status onto custom domains due a check. */
 export async function scheduled(data: ReturnType<typeof createData>) {
-  for (const hostname of await data.pendingCustomDomains()) {
+  for (const hostname of await data.customDomainsToCheck()) {
     // One failing hostname must not stop the rest; the next run retries it.
     await data.refreshCustomDomain(hostname).catch(console.error)
   }
