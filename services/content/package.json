@@ -1,10 +1,10 @@
 {
-  "name": "@runkonf/legacy",
+  "name": "@runkonf/content",
   "private": true,
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --root ../.. services/legacy/",
+    "test": "vitest run --root ../.. services/content/",
     "deploy": "wrangler deploy"
   },
   "dependencies": {

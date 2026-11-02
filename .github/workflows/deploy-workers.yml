@@ -95,9 +95,9 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          for pkg in identity tenant-directory legacy; do
+          for pkg in identity tenant-directory content; do
             echo "::group::$pkg ($DEPLOY_ENV)"
-            # `db: false` services (legacy) have no D1 and no migrations.
+            # `db: false` services (content) have no D1 and no migrations.
             if [ -d "services/$pkg/migrations" ]; then
               pnpm --filter "@runkonf/$pkg" exec wrangler d1 migrations apply DB --remote --env "$DEPLOY_ENV"
             fi

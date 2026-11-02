@@ -91,6 +91,11 @@ class Conferences extends ScopedRepository {
     if (!published && !this.tenant.orgRole) return null
     return toConference(doc)
   }
+
+  /** Entity resolution: an id other than the envelope's resolves to null. */
+  async byId(id: string): Promise<Conference | null> {
+    return id === this.columns.conference_id ? this.current() : null
+  }
 }
 
 export function createData(env: DataEnv, envelope: Envelope) {
@@ -101,7 +106,7 @@ export function createData(env: DataEnv, envelope: Envelope) {
     useCdn: true,
     // The dataset is private: no token reads nothing (src/lib/sanity/client.ts).
     token: env.SANITY_API_TOKEN_READ,
-    requestTagPrefix: 'legacy.read',
+    requestTagPrefix: 'content.read',
   })
   // Built on first use: the constructor refuses a PlatformContext, and that
   // should fail the resolver, not the whole request.

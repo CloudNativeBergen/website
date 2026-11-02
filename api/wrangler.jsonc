@@ -32,7 +32,7 @@
   },
   "services": [
     { "binding": "DIRECTORY", "service": "konf-tenant-directory" },
-    { "binding": "LEGACY", "service": "konf-legacy" },
+    { "binding": "CONTENT", "service": "konf-content" },
     { "binding": "IDENTITY", "service": "konf-identity" },
     {
       "binding": "MEMBERSHIP",
@@ -61,7 +61,7 @@
       // Security requirement 8: preview never binds production services.
       "services": [
         { "binding": "DIRECTORY", "service": "konf-tenant-directory-preview" },
-        { "binding": "LEGACY", "service": "konf-legacy-preview" },
+        { "binding": "CONTENT", "service": "konf-content-preview" },
         { "binding": "IDENTITY", "service": "konf-identity-preview" },
         {
           "binding": "MEMBERSHIP",
@@ -89,7 +89,7 @@
       ],
       "services": [
         { "binding": "DIRECTORY", "service": "konf-tenant-directory" },
-        { "binding": "LEGACY", "service": "konf-legacy" },
+        { "binding": "CONTENT", "service": "konf-content" },
         { "binding": "IDENTITY", "service": "konf-identity" },
         {
           "binding": "MEMBERSHIP",

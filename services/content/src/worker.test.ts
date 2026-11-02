@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  *
- * legacy through its Worker fetch handler: real envelope crypto, Sanity
+ * content through its Worker fetch handler: real envelope crypto, Sanity
  * mocked as a two-tenant dataset that applies the query's own parameters.
  */
 import { describe, expect, it, vi } from 'vitest'
@@ -67,27 +67,33 @@ const tenant = (
   scopes: [],
 })
 
-async function conference(as?: Envelope | string) {
+async function post(query: string, as?: Envelope | string) {
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   if (as)
     headers[ENVELOPE_HEADER] =
       typeof as === 'string' ? as : await signer.sign(as)
   const res = await worker.fetch(
-    new Request('http://legacy/graphql', {
+    new Request('http://content/graphql', {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        query:
-          '{ conference { id title primaryColor socialLinks visibility } }',
-      }),
+      body: JSON.stringify({ query }),
     }),
     env,
   )
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- arbitrary GraphQL JSON
   return { status: res.status, body: (await res.json()) as any }
 }
+const conference = (as?: Envelope | string) =>
+  post('{ conference { id title primaryColor socialLinks visibility } }', as)
+const entity = async (id: string, as: Envelope) =>
+  (
+    await post(
+      `{ _entities(representations: [{ __typename: "Conference", id: "${id}" }]) { ... on Conference { id title } } }`,
+      as,
+    )
+  ).body.data._entities[0]
 
-describe('legacy subgraph', () => {
+describe('content subgraph', () => {
   it("serves the envelope's Conference with the backfill mapping", async () => {
     const { body } = await conference(tenant('org_a', 'conf_a'))
     expect(body.data.conference).toEqual({
@@ -108,6 +114,16 @@ describe('legacy subgraph', () => {
       (await conference(tenant('org_b', 'conf_b'))).body.data.conference.id,
     ).toBe('conf_b')
     for (const [, p] of fetch.mock.calls) expect(p.orgId).toMatch(/^org_/)
+  })
+
+  it("resolves the Conference entity only for the envelope's own id", async () => {
+    expect(await entity('conf_a', tenant('org_a', 'conf_a'))).toEqual({
+      id: 'conf_a',
+      title: 'Conf A',
+    })
+    // Tenant B's id under A's envelope, with or without a conference in it.
+    expect(await entity('conf_b', tenant('org_a', 'conf_a'))).toBeNull()
+    expect(await entity('conf_b', tenant('org_a', null))).toBeNull()
   })
 
   it('hides an unpublished Conference from non-members', async () => {

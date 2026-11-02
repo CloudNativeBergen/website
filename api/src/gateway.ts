@@ -27,8 +27,8 @@ export interface Env {
   OVERRIDE_TENANTS: Record<string, string[]>
   /** konf-tenant-directory: tenant lookup and its subgraph */
   DIRECTORY: Fetcher
-  /** konf-legacy: today's Sanity data (strangler fig, #1835) */
-  LEGACY: Fetcher
+  /** konf-content: Sanity-backed editorial data (#1835) */
+  CONTENT: Fetcher
   /** konf-identity default entrypoint: only /api/auth/* (JWKS) answers */
   IDENTITY: Fetcher
   /** Per-request limit (Workers Rate Limiting), keyed per caller (#1790) */
@@ -49,7 +49,10 @@ export interface Env {
 }
 
 /** Supergraph subgraph name (URL host) -> service binding. */
-const BINDINGS = { 'tenant-directory': 'DIRECTORY', legacy: 'LEGACY' } as const
+const BINDINGS = {
+  'tenant-directory': 'DIRECTORY',
+  content: 'CONTENT',
+} as const
 
 const JWT_AUDIENCE = 'konf-gateway'
 const JWT_MAX_SECONDS = 300

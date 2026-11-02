@@ -1,11 +1,11 @@
 package codegen
 
-// The strangler-fig subgraph (#1835): today's Sanity data, read-only and
-// tenant-scoped by the envelope. Native services take its fields over with
-// @override(from: "legacy"); it is deleted once it has none left.
+// The content subgraph (#1835): Sanity data, read-only and tenant-scoped by
+// the envelope. It is permanent: editorial data lives here, and native
+// services move only structured fields out with @override(from: "content").
 // Secret per env: SANITY_API_TOKEN_READ (the site's read token name).
 service: #PlatformService & {
-	name: "legacy"
+	name: "content"
 	db:   false
 	// Preview never reads production data (epic #1772, req. 8).
 	vars: {

@@ -39,7 +39,7 @@ package codegen
 	}]
 	// Extra tsconfig include globs, e.g. a service's scripts/.
 	tsInclude: *[] | [...string]
-	// `db: false`: no D1 (the legacy subgraph reads Sanity). Tenancy-on only:
+	// `db: false`: no D1 (the content subgraph reads Sanity). Tenancy-on only:
 	// createData then takes the service's DataEnv instead of the D1 handle.
 	db: *true | false
 	if !tenancy {db: true}

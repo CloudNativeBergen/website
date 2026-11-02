@@ -129,8 +129,8 @@ describe('services never import Sanity', () => {
     ])
   })
 
-  it('lets only the legacy data layer import @sanity/client (#1835)', async () => {
-    const data = 'services/legacy/src/data/index.ts'
+  it('lets only the content data layer import @sanity/client (#1835)', async () => {
+    const data = 'services/content/src/data/index.ts'
     expect(await restricted(data, imp('@sanity/client'))).toEqual([])
     expect(await restricted(data, dyn('@sanity/client'))).toEqual([])
     for (const [file, spec] of [
@@ -138,7 +138,7 @@ describe('services never import Sanity', () => {
       [data, 'next-sanity'],
       [data, '@sanity/client/stega'],
       [data, '@sanity/image-url'],
-      ['services/legacy/src/subgraph.ts', '@sanity/client'],
+      ['services/content/src/subgraph.ts', '@sanity/client'],
     ]) {
       expect(await restricted(file, imp(spec))).toEqual([
         expect.stringContaining('do not read Sanity'),

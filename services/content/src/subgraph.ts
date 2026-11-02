@@ -1,13 +1,14 @@
-// legacy: today's Sanity data behind the gateway (#1835, strangler fig).
-// Types and field names match the native service that takes them over with
-// @override(from: "legacy"), so they are @shareable. Nothing picks a tenant
-// by argument: it comes from the envelope only.
+// content: the permanent Sanity-backed subgraph (#1835). It keeps the
+// editorial data; native services move structured fields out with
+// @override(from: "content", label:). Conference is one entity keyed by id in
+// both: services/conference owns its structured fields, content the editorial
+// ones. Nothing picks a tenant by argument: it comes from the envelope only.
 import { builder } from './builder'
 import type { Conference as Row } from './data'
 
-// The same fields as services/conference (#1829).
+// Structured fields (title to socialLinks) are the ones services/conference
+// (#1829) overrides; homepageSections and description stay here.
 const Conference = builder.objectRef<Row>('Conference').implement({
-  shareable: true,
   fields: (t) => ({
     id: t.exposeID('conferenceId'),
     title: t.exposeString('title', { nullable: true }),
@@ -37,6 +38,12 @@ const Conference = builder.objectRef<Row>('Conference').implement({
       description: 'The homepage section list as JSON (Sanity shape).',
     }),
   }),
+})
+
+builder.asEntity(Conference, {
+  key: builder.selection<{ id: string }>('id'),
+  // Only the envelope's own Conference resolves, never an id a caller names.
+  resolveReference: ({ id }, ctx) => ctx.data.conferences().byId(id),
 })
 
 builder.queryType({

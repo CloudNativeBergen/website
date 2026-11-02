@@ -163,12 +163,12 @@ const eslintConfig = [
   // and `.cjs` (webpack resolves them) and `.mts`/`.cts` (tsc compiles them).
   // Nothing mechanical stops someone adding one.
   // `api/**` is the api.konf.app Worker (#1772): it reads the same Sanity
-  // dataset, so the same tenancy rule applies, as does services/legacy (#1835).
+  // dataset, so the same tenancy rule applies, as does services/content (#1835).
   {
     files: [
       'src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
       'api/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
-      'services/legacy/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+      'services/content/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
     ],
     plugins: {
       tenancy: { rules: { 'no-unscoped-groq': noUnscopedGroq } },
@@ -270,13 +270,13 @@ const eslintConfig = [
       return rules
     })(),
   },
-  // The one exception (#1835): services/legacy is the strangler-fig subgraph
-  // that serves today's Sanity data until native services take each field
-  // over with @override and legacy is deleted. Only its data layer, and only
+  // The one exception (#1835): services/content is the permanent Sanity-backed
+  // subgraph for editorial data; native services move structured fields out
+  // with @override. Only its data layer, and only
   // `@sanity/client`, the Worker-safe client; the site's src/lib/sanity
   // (next-sanity, process.env) stays out. Its resolvers keep the rule above.
   {
-    files: ['services/legacy/src/data/**/*.{ts,mts,cts,tsx,js,mjs}'],
+    files: ['services/content/src/data/**/*.{ts,mts,cts,tsx,js,mjs}'],
     rules: (() => {
       const rules = boundary({
         ...SANITY,
