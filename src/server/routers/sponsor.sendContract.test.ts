@@ -30,6 +30,8 @@ const h = vi.hoisted(() => ({
   sfc: null as Record<string, unknown> | null,
   /** A write lands between the reservation read and the reservation patch. */
   bumpRevAfterStateRead: false,
+  /** The sponsor signs between the release's read and its patch. */
+  signBeforeRelease: false,
   /** Revisions advance on every successful commit. */
   revCounter: 1,
   /** Unsets, recorded apart from sets. */
@@ -254,6 +256,16 @@ vi.mock('@/lib/sanity/client', () => {
       },
       commit: async () => {
         if (
+          h.signBeforeRelease &&
+          requiredRev &&
+          unsetFields.includes('signatureId') &&
+          h.sfc
+        ) {
+          h.signBeforeRelease = false
+          h.sfc.signatureStatus = 'signed'
+          h.sfc._rev = `rev-${++h.revCounter}`
+        }
+        if (
           requiredRev &&
           h.sfc &&
           id === h.sfc._id &&
@@ -414,6 +426,7 @@ beforeEach(() => {
   h.revAtFreshRead = null
   h.contactEmailAtSend = null
   h.bumpRevAfterStateRead = false
+  h.signBeforeRelease = false
   h.revCounter = 1
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
   h.tenantById = { 'tpl-A': { _type: 'contractTemplate', conferenceId: CONF } }
@@ -1437,6 +1450,21 @@ describe('first send', () => {
       code: 'INTERNAL_SERVER_ERROR',
     })
     expect(h.sfc!.signatureId).toBe('agr-later')
+  })
+
+  it('keeps a signature that lands while the release is in flight: the conflict re-reads and leaves it (#1280)', async () => {
+    h.send.mockResolvedValue({
+      data: null,
+      error: { message: 'boom', statusCode: 422 },
+    })
+    h.signBeforeRelease = true
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    })
+    // The release patched on its read's revision, and the signature beat it.
+    expect(h.signBeforeRelease).toBe(false)
+    expect(h.sfc!.signatureStatus).toBe('signed')
+    expect(h.sfc!.signatureId).toBeTruthy()
   })
 
   it('refuses — before mailing — when a write lands between the reservation read and the reservation patch', async () => {

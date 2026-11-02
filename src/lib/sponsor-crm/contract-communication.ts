@@ -751,41 +751,54 @@ export async function prepareContractSend(
   }
 
   const release = async () => {
-    try {
-      // Only this send's token, this attempt's reservation, and — for a
-      // fresh agreement — only while nothing happened to it since (a
-      // signature or a revocation through the link must stand). A REUSED
-      // agreement was already delivered by an earlier email, so it stays;
-      // only its in-flight marker goes back to what it was.
-      await clientWrite
-        .patch({
-          query: reserved
-            ? '*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId && signatureId == $ours && contractReservedAt == $reservedAt]'
-            : '*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId && signatureId == $ours && contractReservedAt == $reservedAt && signatureStatus == "not-started"]',
-          params: {
-            id: sfc._id,
-            conferenceId: conference._id,
-            ours: agreementId,
-            reservedAt: now,
-          },
-        })
-        .unset(
-          reserved
-            ? []
-            : Object.keys(priorAgreement).filter(
-                (k) => priorAgreement[k] == null,
-              ),
+    // Only this send's token, this attempt's reservation, and — for a fresh
+    // agreement — only while nothing happened to it since (a signature or a
+    // revocation through the link must stand). A REUSED agreement was already
+    // delivered by an earlier email, so it stays; only its in-flight marker
+    // goes back to what it was. Checked on a FRESH read and patched on that
+    // read's revision, not by a query selection: a selection may be resolved
+    // against a lagging index (#1280). A conflict re-reads.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const latest = await clientReadUncached.fetch<{
+          _rev: string
+          signatureId: string | null
+          signatureStatus: string | null
+          contractReservedAt: string | null
+        } | null>(
+          `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, signatureId, signatureStatus, contractReservedAt }`,
+          { id: sfc._id, conferenceId: conference._id },
         )
-        .set(
-          reserved
-            ? { contractReservedAt: priorReservedAt }
-            : Object.fromEntries(
-                Object.entries(priorAgreement).filter(([, v]) => v != null),
-              ),
-        )
-        .commit()
-    } catch (error) {
-      console.error('[contract-send] releasing the agreement failed:', error)
+        if (
+          !latest ||
+          latest.signatureId !== agreementId ||
+          latest.contractReservedAt !== now ||
+          (!reserved && latest.signatureStatus !== 'not-started')
+        ) {
+          return
+        }
+        await clientWrite
+          .patch(sfc._id)
+          .ifRevisionId(latest._rev)
+          .unset(
+            reserved
+              ? []
+              : Object.keys(priorAgreement).filter(
+                  (k) => priorAgreement[k] == null,
+                ),
+          )
+          .set(
+            reserved
+              ? { contractReservedAt: priorReservedAt }
+              : Object.fromEntries(
+                  Object.entries(priorAgreement).filter(([, v]) => v != null),
+                ),
+          )
+          .commit()
+        return
+      } catch (error) {
+        console.error('[contract-send] releasing the agreement failed:', error)
+      }
     }
   }
 
@@ -1065,37 +1078,42 @@ export async function sendContractReminderBySystem(
   // exactly this claim (never another sweep's) and only while it exists.
   const claimedCount = (sfc.reminderCount ?? 0) + 1
   const claimId = randomUUID()
-  const thisClaim = {
-    query:
-      '*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId && $claimId in reminderClaims]',
-    params: {
-      id: sfc._id,
-      conferenceId: sfc.conference._id,
-      claimId,
-    },
-  }
   const claimPath = `reminderClaims[@ == "${claimId}"]`
-  // Gives the claimed slot back; tried twice, and a slot that still could
-  // not be released is REPORTED (the sweep would otherwise skip this
-  // contract for a reminder that never went out).
-  // IDEMPOTENT: conditioned on this claim still being recorded, so a retry
-  // after a decrement whose answer was lost matches nothing instead of
-  // taking the slot below where it started — or another sweep's slot.
-  const releaseClaim = async (): Promise<string> => {
+  // Removes this claim (and, to RELEASE it, gives its slot back), tried
+  // twice. IDEMPOTENT: checked on a fresh read and patched on that read's
+  // revision, so a retry after a write whose answer was lost finds no claim
+  // and does nothing, never taking the count below where it started or
+  // another sweep's slot. Not a query selection: one may be resolved against
+  // a lagging index (#1280). A conflict (another sweep moved the record)
+  // re-reads.
+  const dropClaim = async (giveSlotBack: boolean): Promise<boolean> => {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        await clientWrite
-          .patch(thisClaim)
-          .inc({ reminderCount: -1 })
-          .unset([claimPath])
-          .commit()
-        return ''
+        const latest = await clientReadUncached.fetch<{
+          _rev: string
+          reminderClaims: string[] | null
+        } | null>(
+          `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, reminderClaims }`,
+          { id: sfc._id, conferenceId: sfc.conference._id },
+        )
+        if (!latest?.reminderClaims?.includes(claimId)) return true
+        const patch = clientWrite.patch(sfc._id).ifRevisionId(latest._rev)
+        if (giveSlotBack) patch.inc({ reminderCount: -1 })
+        await patch.unset([claimPath]).commit()
+        return true
       } catch (error) {
-        console.error('[contract-reminders] releasing the claim failed:', error)
+        console.error('[contract-reminders] updating the claim failed:', error)
       }
     }
-    return `; the reminder slot could not be released (reminderCount stays ${claimedCount}) — lower it by hand`
+    return false
   }
+  // Gives the claimed slot back; a slot that still could not be released is
+  // REPORTED (the sweep would otherwise skip this contract for a reminder
+  // that never went out).
+  const releaseClaim = async (): Promise<string> =>
+    (await dropClaim(true))
+      ? ''
+      : `; the reminder slot could not be released (reminderCount stays ${claimedCount}) — lower it by hand`
   try {
     await clientWrite
       .patch(sfc._id)
@@ -1161,11 +1179,7 @@ export async function sendContractReminderBySystem(
   }
   // The slot was claimed above; the plan's own count step is the organizer
   // path's, not this one's. The claim is settled: its id goes, the count stays.
-  try {
-    await clientWrite.patch(thisClaim).unset([claimPath]).commit()
-  } catch (error) {
-    console.error('[contract-reminders] settling the claim failed:', error)
-  }
+  await dropClaim(false)
   // The claim makes this count ours alone, so exactly one sweep sends the
   // last allowed reminder: the "reminders used up" alert fires once.
   return {
