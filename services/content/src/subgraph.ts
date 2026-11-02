@@ -144,7 +144,8 @@ const Conference = builder.objectRef<Row>('Conference').implement({
     }),
     speakerInfo: t.exposeString('speakerInfo', {
       nullable: true,
-      description: 'The speaker information object as JSON (Sanity shape).',
+      description:
+        'The speaker information object as JSON (Sanity shape). Non-members get what /info shows: no on-site phone, no dinner RSVP note.',
     }),
     sponsorshipCustomization: t.exposeString('sponsorshipCustomization', {
       nullable: true,

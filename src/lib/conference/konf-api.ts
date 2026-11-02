@@ -99,7 +99,9 @@ export async function mergeKonfApiConference(
     }
     if (homepageSections) {
       const sections = JSON.parse(homepageSections)
-      if (Array.isArray(sections)) merged.homepageSections = sections
+      // `[]` means no value: keep Sanity's composition, hidden flags and all.
+      if (Array.isArray(sections) && sections.length > 0)
+        merged.homepageSections = sections
     }
     return merged as unknown as Conference
   } catch (err) {

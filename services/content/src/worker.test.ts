@@ -26,6 +26,7 @@ const DOCS = [
     org: 'org_a',
     title: ' Conf A ',
     theme: { primaryColor: '#000' },
+    homepageSections: [{ _type: 'homepageHero', _key: 'h', hidden: true }],
   },
   {
     _id: 'conf_b',
@@ -49,7 +50,11 @@ const DOCS = [
     formats: ['lightning_10'],
     organizer: 'Org B AS',
     organizerAddress: 'Street 1',
-    speakerInfo: { travelPolicy: 'Covered' },
+    speakerInfo: {
+      travelPolicy: 'Covered',
+      onsiteContact: { name: 'Ada', phone: '+47 1', email: 'a@x' },
+      dinner: { venueName: 'Bryggen', rsvpNote: 'Reply by Friday' },
+    },
     sponsorshipCustomization: { heroHeadline: 'Sponsor us' },
     lifecycleHeadline: ' Moved ',
     lifecycleMessage: '',
@@ -251,11 +256,18 @@ describe('content subgraph', () => {
         'speakerInfo sponsorshipCustomization lifecycleHeadline lifecycleMessage',
       ),
     ).toEqual({
-      speakerInfo: '{"travelPolicy":"Covered"}',
+      speakerInfo: JSON.stringify({
+        travelPolicy: 'Covered',
+        onsiteContact: { name: 'Ada', email: 'a@x' },
+        dinner: { venueName: 'Bryggen' },
+      }),
       sponsorshipCustomization: '{"heroHeadline":"Sponsor us"}',
       lifecycleHeadline: 'Moved',
       lifecycleMessage: null,
     })
+    expect(
+      JSON.parse((await field('speakerInfo', 'member')).speakerInfo),
+    ).toEqual(DOCS[1].speakerInfo)
   })
 
   it('keeps ticket invite links for org members', async () => {
@@ -263,11 +275,12 @@ describe('content subgraph', () => {
       'registrationEnabled volunteerRegistrationLink sponsorRegistrationLink speakerRegistrationLink'
     expect(await field(q)).toEqual({
       registrationEnabled: true,
-      volunteerRegistrationLink: 'https://x/volunteer',
+      volunteerRegistrationLink: null,
       sponsorRegistrationLink: null,
       speakerRegistrationLink: null,
     })
     expect(await field(q, 'member')).toMatchObject({
+      volunteerRegistrationLink: 'https://x/volunteer',
       sponsorRegistrationLink: 'https://x/sponsor',
       speakerRegistrationLink: 'https://x/speaker',
     })
@@ -374,5 +387,13 @@ describe('content subgraph', () => {
       )
     expect(await keys(null)).not.toContain('v')
     expect(await keys('member')).toContain('v')
+  })
+
+  it('serves null, not [], when every block is hidden', async () => {
+    const q = '{ conference { homepageSections } }'
+    const anon = await conference(tenant('org_a', 'conf_a'), q)
+    expect(anon.body.data.conference.homepageSections).toBeNull()
+    const member = await conference(tenant('org_a', 'conf_a', 'member'), q)
+    expect(member.body.data.conference.homepageSections).toContain('"h"')
   })
 })
