@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { unstable_noStore as noStore } from 'next/cache'
 
@@ -8,10 +7,54 @@ import { unstable_noStore as noStore } from 'next/cache'
  * served from `cdn.sanity.io` — see `SANITY_CDN_PREFIX` in
  * `src/lib/sanity/client.ts` and the `remotePatterns` entry in `next.config.ts`
  * — so an exact host match covers every legitimate caller
- * (`DownloadableImage`, `SpeakerSharingActions`) while keeping the reachable
+ * (`common/image-capture/capture.ts`, `SpeakerSharingActions`,
+ * `lib/marketing-asset/background.ts`) while keeping the reachable
  * surface as small as it can be.
  */
 const ALLOWED_IMAGE_HOST = 'cdn.sanity.io'
+
+/**
+ * A Sanity image asset filename: `<sha1>-<W>x<H>.<ext>`. Anything else under
+ * the project path is not an image asset this app serves.
+ */
+const ASSET_FILENAME = /^[a-f0-9]+-\d+x\d+\.(jpe?g|png|webp|gif|svg)$/i
+
+/**
+ * The transform params our callers produce (`@sanity/image-url` builders and
+ * `backgroundRenditionUrl`). The route is unauthenticated and edge-cached per
+ * full URL, so an arbitrary query would mint a fresh cache key (and a fresh
+ * Sanity transform) per request; unknown keys are refused and sizes capped.
+ */
+const ALLOWED_PARAMS = new Set([
+  'w',
+  'h',
+  'max-w',
+  'max-h',
+  'fit',
+  'crop',
+  'fm',
+  'q',
+  'auto',
+  'rect',
+  'blur',
+  'fp-x',
+  'fp-y',
+])
+const SIZE_PARAMS = new Set(['w', 'h', 'max-w', 'max-h'])
+const MAX_DIMENSION = 4000
+
+function hasAllowedParams(params: URLSearchParams): boolean {
+  for (const [key, value] of params) {
+    if (!ALLOWED_PARAMS.has(key)) return false
+    if (
+      SIZE_PARAMS.has(key) &&
+      !(/^\d+$/.test(value) && Number(value) <= MAX_DIMENSION)
+    ) {
+      return false
+    }
+  }
+  return true
+}
 
 /**
  * Guards a server-side fetch primitive, so it must fail CLOSED.
@@ -35,7 +78,15 @@ const ALLOWED_IMAGE_HOST = 'cdn.sanity.io'
  *   would be forwarded as an `Authorization` header, so reject them outright.
  */
 function isAllowedImageTarget(url: URL): boolean {
+  // The route is unauthenticated (it only relays public CDN bytes), so it must
+  // not relay EVERY Sanity project's assets: only this app's project and
+  // dataset. Read per request so a missing env fails closed.
+  const projectId = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID
+  const dataset = process.env.NEXT_PUBLIC_SANITY_DATASET
   return (
+    !!projectId &&
+    !!dataset &&
+    url.pathname.startsWith(`/images/${projectId}/${dataset}/`) &&
     url.protocol === 'https:' &&
     url.hostname === ALLOWED_IMAGE_HOST &&
     url.port === '' &&
@@ -49,11 +100,6 @@ export async function GET(request: NextRequest) {
   // Cleared in `finally` so a failed fetch does not leave the timer running.
   let timeoutId: ReturnType<typeof setTimeout> | undefined
   try {
-    const session = await auth()
-    if (!session?.user || !session?.speaker) {
-      return new NextResponse('Authentication required', { status: 401 })
-    }
-
     const { searchParams } = new URL(request.url)
     const imageUrl = searchParams.get('url')
 
@@ -72,15 +118,13 @@ export async function GET(request: NextRequest) {
       return new NextResponse('Invalid image source', { status: 403 })
     }
 
-    const pathname = url.pathname.toLowerCase()
-    const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg']
-    const hasValidExtension = validExtensions.some((ext) =>
-      pathname.endsWith(ext),
-    )
-    const hasQueryParams = url.search.length > 0
-
-    if (!hasValidExtension && !hasQueryParams) {
+    const filename = url.pathname.split('/').pop() ?? ''
+    if (!ASSET_FILENAME.test(filename)) {
       return new NextResponse('Invalid image format', { status: 400 })
+    }
+
+    if (!hasAllowedParams(url.searchParams)) {
+      return new NextResponse('Invalid image parameters', { status: 400 })
     }
 
     const controller = new AbortController()

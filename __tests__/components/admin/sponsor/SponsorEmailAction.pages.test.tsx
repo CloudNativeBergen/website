@@ -30,6 +30,7 @@ vi.mock('@/components/admin/EditConferenceCard', () => ({
 }))
 
 import { SponsorContactActions } from '@/components/admin/sponsor/SponsorContactActions'
+import type { FeatureId } from '@/lib/features/registry'
 import { SponsorTiersPageClient } from '@/components/admin/sponsor/SponsorTiersPageClient'
 
 afterEach(cleanup)
@@ -55,10 +56,36 @@ describe('Email sponsors on every sponsor page that had a broadcast', () => {
         sponsorTiers={[]}
         sponsorsByTier={{}}
         sortedTierNames={[]}
+        enabledFeatures={[]}
       />,
     )
     expect(
       screen.getAllByRole('button', { name: 'Email sponsors' }),
     ).toHaveLength(1)
+  })
+})
+
+describe('Sponsor tiers quick actions', () => {
+  const renderTiers = (enabledFeatures: FeatureId[]) =>
+    render(
+      <SponsorTiersPageClient
+        conference={conference}
+        domain="example.test"
+        sponsors={[]}
+        sponsorTiers={[]}
+        sponsorsByTier={{}}
+        sortedTierNames={[]}
+        enabledFeatures={enabledFeatures}
+      />,
+    )
+
+  it('hides the discount-code link without ticketing (#829)', () => {
+    renderTiers([])
+    expect(screen.queryByText('Sponsor Discount Codes')).toBeNull()
+  })
+
+  it('shows the discount-code link with ticketing', () => {
+    renderTiers(['ticketing'])
+    expect(screen.getByText('Sponsor Discount Codes')).toBeTruthy()
   })
 })

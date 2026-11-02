@@ -1,11 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { NextRequest } from 'next/server'
 
-const authMock = vi.fn()
-vi.mock('@/lib/auth', () => ({
-  auth: () => authMock(),
-}))
-
 vi.mock('next/cache', () => ({
   unstable_noStore: () => {},
 }))
@@ -21,8 +16,11 @@ const requestFor = (target: string) =>
     url: `https://conference.example/api/proxy-image?url=${encodeURIComponent(target)}`,
   }) as unknown as NextRequest
 
-const imageResponse = (contentType = 'image/png') =>
-  new Response(new Uint8Array([1, 2, 3]), {
+const imageResponse = (
+  contentType = 'image/png',
+  body: BodyInit = new Uint8Array([1, 2, 3]),
+) =>
+  new Response(body, {
     status: 200,
     headers: { 'content-type': contentType },
   })
@@ -31,10 +29,8 @@ let fetchMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   vi.clearAllMocks()
-  authMock.mockResolvedValue({
-    user: { email: 'a@b.c' },
-    speaker: { _id: 's' },
-  })
+  vi.stubEnv('NEXT_PUBLIC_SANITY_PROJECT_ID', 'p')
+  vi.stubEnv('NEXT_PUBLIC_SANITY_DATASET', 'd')
   fetchMock = vi.fn().mockResolvedValue(imageResponse())
   vi.stubGlobal('fetch', fetchMock)
   vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -42,6 +38,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
   vi.restoreAllMocks()
 })
 
@@ -61,7 +58,9 @@ describe('/api/proxy-image — host allowlist', () => {
 
   it('proxies a Sanity URL that carries transform query params', async () => {
     const res = await GET(
-      requestFor('https://cdn.sanity.io/images/p/d/abc123-400x400?w=400&q=85'),
+      requestFor(
+        'https://cdn.sanity.io/images/p/d/abc123-400x400.jpg?w=400&q=85&fit=crop&auto=format',
+      ),
     )
 
     expect(res.status).toBe(200)
@@ -158,7 +157,9 @@ describe('/api/proxy-image — timeout', () => {
     const clearSpy = vi.spyOn(globalThis, 'clearTimeout')
     fetchMock.mockRejectedValue(new Error('network down'))
 
-    const res = await GET(requestFor('https://cdn.sanity.io/images/a-1x1.jpg'))
+    const res = await GET(
+      requestFor('https://cdn.sanity.io/images/p/d/a-1x1.jpg'),
+    )
 
     expect(res.status).toBe(500)
     expect(clearSpy).toHaveBeenCalled()
@@ -181,7 +182,9 @@ describe('/api/proxy-image — redirects', () => {
       }),
     )
 
-    const res = await GET(requestFor('https://cdn.sanity.io/images/a-1x1.jpg'))
+    const res = await GET(
+      requestFor('https://cdn.sanity.io/images/p/d/a-1x1.jpg'),
+    )
 
     expect(res.status).toBe(502)
     expect(await res.text()).toBe('Image source redirected')
@@ -196,7 +199,9 @@ describe('/api/proxy-image — redirects', () => {
       arrayBuffer: async () => new ArrayBuffer(0),
     })
 
-    const res = await GET(requestFor('https://cdn.sanity.io/images/a-1x1.jpg'))
+    const res = await GET(
+      requestFor('https://cdn.sanity.io/images/p/d/a-1x1.jpg'),
+    )
 
     expect(res.status).toBe(502)
   })
@@ -204,10 +209,15 @@ describe('/api/proxy-image — redirects', () => {
 
 describe('/api/proxy-image — response hardening', () => {
   it('serves proxied bytes with sniffing and scripting neutered', async () => {
-    fetchMock.mockResolvedValue(imageResponse('image/svg+xml'))
-    const res = await GET(requestFor('https://cdn.sanity.io/images/a-1x1.svg'))
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+    fetchMock.mockResolvedValue(imageResponse('image/svg+xml', svg))
+    const res = await GET(
+      requestFor('https://cdn.sanity.io/images/p/d/a-1x1.svg'),
+    )
 
     expect(res.headers.get('content-type')).toBe('image/svg+xml')
+    expect(await res.text()).toBe(svg)
     expect(res.headers.get('x-content-type-options')).toBe('nosniff')
     expect(res.headers.get('content-security-policy')).toBe(
       "default-src 'none'; sandbox",
@@ -222,21 +232,93 @@ describe('/api/proxy-image — response hardening', () => {
       }),
     )
 
-    const res = await GET(requestFor('https://cdn.sanity.io/images/a-1x1.jpg'))
+    const res = await GET(
+      requestFor('https://cdn.sanity.io/images/p/d/a-1x1.jpg'),
+    )
 
     expect(res.status).toBe(400)
   })
 })
 
-describe('/api/proxy-image — authentication', () => {
-  it('requires a signed-in speaker before touching the network', async () => {
-    authMock.mockResolvedValue(null)
+describe('/api/proxy-image — cache-key surface', () => {
+  const base = 'https://cdn.sanity.io/images/p/d/abc123-400x400.jpg'
 
+  it.each([
+    'https://cdn.sanity.io/images/p/d/x.jpg',
+    'https://cdn.sanity.io/images/p/d/abc123-400x400',
+    'https://cdn.sanity.io/images/p/d/abc123-400x400?w=10',
+    'https://cdn.sanity.io/images/p/d/abc123-400x400.exe',
+    'https://cdn.sanity.io/images/p/d/sub/abc123-400x400.jpg.html',
+  ])('rejects the non-asset path %s', async (target) => {
+    const res = await GET(requestFor(target))
+
+    expect(res.status).toBe(400)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    '?bust=1',
+    '?w=400&cachebuster=2',
+    '?w=4001',
+    '?h=99999',
+    '?max-w=5000',
+    '?w=abc',
+    '?w=-1',
+  ])('rejects the query %s', async (query) => {
+    const res = await GET(requestFor(base + query))
+
+    expect(res.status).toBe(400)
+    expect(await res.text()).toBe('Invalid image parameters')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts the params backgroundRenditionUrl produces', async () => {
     const res = await GET(
-      requestFor('https://sanity.io.attacker.example/x.jpg'),
+      requestFor(`${base}?w=1188&h=1188&fit=crop&crop=center&fm=webp&q=90`),
     )
 
-    expect(res.status).toBe(401)
+    expect(res.status).toBe(200)
+  })
+
+  it('accepts a hotspot-cropped builder URL', async () => {
+    const res = await GET(
+      requestFor(
+        `${base}?rect=0,0,400,400&fp-x=0.5&fp-y=0.5&w=4000&max-h=100&blur=20`,
+      ),
+    )
+
+    expect(res.status).toBe(200)
+  })
+})
+
+describe('/api/proxy-image — project scope', () => {
+  it('needs no session: the bytes are public CDN images', async () => {
+    const res = await GET(
+      requestFor('https://cdn.sanity.io/images/p/d/abc123-400x400.jpg'),
+    )
+
+    expect(res.status).toBe(200)
+  })
+
+  it.each([
+    'https://cdn.sanity.io/images/other/d/x.jpg',
+    'https://cdn.sanity.io/images/p/other/x.jpg',
+    'https://cdn.sanity.io/images/p/d/../../other/d/x.jpg',
+    'https://cdn.sanity.io/images/p/d/%2e%2e/%2e%2e/other/d/x.jpg',
+    'https://cdn.sanity.io/files/p/d/x.jpg',
+    'https://cdn.sanity.io/images/pp/d/x.jpg',
+  ])("rejects %s outside this app's project and dataset", async (target) => {
+    const res = await GET(requestFor(target))
+
+    expect(res.status).toBe(403)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when the project id is not configured', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SANITY_PROJECT_ID', '')
+    const res = await GET(requestFor('https://cdn.sanity.io/images/p/d/x.jpg'))
+
+    expect(res.status).toBe(403)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

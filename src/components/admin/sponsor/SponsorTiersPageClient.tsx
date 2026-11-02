@@ -21,6 +21,8 @@ import Link from 'next/link'
 import { ConferenceSponsor } from '@/lib/sponsor/types'
 import { Conference } from '@/lib/conference/types'
 import { SponsorTier } from '@/lib/sponsor/types'
+import { isAdminHrefVisible } from '@/lib/admin/registry'
+import type { FeatureId } from '@/lib/features/registry'
 
 interface SponsorTiersPageClientProps {
   conference: Conference
@@ -31,6 +33,7 @@ interface SponsorTiersPageClientProps {
   sponsorTiers: SponsorTier[]
   sponsorsByTier: Record<string, ConferenceSponsor[]>
   sortedTierNames: string[]
+  enabledFeatures: readonly FeatureId[]
 }
 
 export function SponsorTiersPageClient({
@@ -42,6 +45,7 @@ export function SponsorTiersPageClient({
   sponsorTiers,
   sponsorsByTier,
   sortedTierNames,
+  enabledFeatures,
 }: SponsorTiersPageClientProps) {
   return (
     <>
@@ -97,22 +101,24 @@ export function SponsorTiersPageClient({
               </div>
             </Link>
 
-            <Link
-              href="/admin/tickets/discount"
-              className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-700/50"
-            >
-              <div className="rounded-full bg-amber-100 p-3 dark:bg-amber-900/20">
-                <TicketIcon className="h-6 w-6 text-amber-600 dark:text-amber-400" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  Sponsor Discount Codes
-                </p>
-                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
-                  Manage ticket discount codes
-                </p>
-              </div>
-            </Link>
+            {isAdminHrefVisible('/admin/tickets/discount', enabledFeatures) && (
+              <Link
+                href="/admin/tickets/discount"
+                className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-700/50"
+              >
+                <div className="rounded-full bg-amber-100 p-3 dark:bg-amber-900/20">
+                  <TicketIcon className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    Sponsor Discount Codes
+                  </p>
+                  <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                    Manage ticket discount codes
+                  </p>
+                </div>
+              </Link>
+            )}
 
             <Link
               href="/sponsor"

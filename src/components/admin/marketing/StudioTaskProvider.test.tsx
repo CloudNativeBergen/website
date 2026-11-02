@@ -89,7 +89,7 @@ function setup() {
     offsetHeight: { value: 200 },
   })
   const image = document.createElement('img')
-  image.src = 'https://images.example.org/conference.png'
+  image.src = 'https://cdn.sanity.io/images/p/d/conference.png'
   Object.defineProperties(image, {
     complete: { value: true },
     naturalWidth: { value: 300 },

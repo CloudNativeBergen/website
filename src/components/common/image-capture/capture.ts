@@ -48,10 +48,19 @@ const updateImageSources = async (element: HTMLElement): Promise<void> => {
       !img.src.includes(window.location.hostname),
   )
 
-  externalImages.forEach((img) => {
-    const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(img.src)}`
-    img.src = proxyUrl
-  })
+  // Only Sanity CDN images need the proxy (the CDN sends CORS headers to the
+  // Studio only, and the proxy relays only this project's assets). Other hosts
+  // (GitHub, LinkedIn, placehold.co, Vercel Blob avatars) send
+  // `Access-Control-Allow-Origin: *` and load directly via html2canvas `useCORS`.
+  externalImages
+    .filter(
+      (img) =>
+        URL.canParse(img.src) && new URL(img.src).hostname === 'cdn.sanity.io',
+    )
+    .forEach((img) => {
+      const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(img.src)}`
+      img.src = proxyUrl
+    })
 
   if (externalImages.length > 0) {
     await waitForImages(element)
