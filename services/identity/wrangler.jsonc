@@ -14,6 +14,30 @@
       "migrations_dir": "migrations",
     },
   ],
+  "env": {
+    "preview": {
+      "name": "konf-identity-preview",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "konf-identity-preview",
+          "database_id": "TO_BE_CREATED",
+          "migrations_dir": "migrations",
+        },
+      ],
+    },
+    "production": {
+      "name": "konf-identity",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "konf-identity",
+          "database_id": "TO_BE_CREATED",
+          "migrations_dir": "migrations",
+        },
+      ],
+    },
+  },
   "observability": {
     "enabled": true,
     "traces": {
