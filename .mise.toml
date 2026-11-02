@@ -2,6 +2,7 @@
 node = "24"
 pnpm = "10"
 fnox = "latest"
+cue = "0.17"
 
 [tasks.all]
 description = "Run all checks, tests, and build sequentially"

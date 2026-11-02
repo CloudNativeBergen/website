@@ -32,7 +32,8 @@
         "src/components/admin/dashboard/widgets/__matrix__/mock-use-widget-data.ts"
       ]
     },
-    "api": {}
+    "api": {},
+    "packages/tenancy": { "entry": ["src/index.ts", "src/*.typecheck.ts"] }
   },
   "ignoreDependencies": [
     "eslint-config-next",
@@ -40,5 +41,6 @@
     "@fontsource-variable/.+",
     "tailwindcss"
   ],
+  "ignoreBinaries": ["cue"],
   "ignoreExportsUsedInFile": true
 }
