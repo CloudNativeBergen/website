@@ -4,10 +4,10 @@ Real-browser login / session tests for the Next.js app (#451). Distinct from the
 Storybook test-runner (which also uses Playwright). These drive the app's **real
 auth gate** using a minted session cookie rather than a live OAuth round-trip.
 
-> ⚠️ **Selectors are best-effort.** The suite has been run (4 pass); the two
-> avatar/user-menu assertions in `auth.spec.ts` need a **real seeded speaker**
-> in `E2E_SPEAKER_ID` to have anything to render. Adjust them the first time you
-> run against a dataset that has one.
+> The auth specs do not need a seeded speaker: the avatar and user menu render
+> from the minted session alone. The session's `picture` must use a host listed
+> under `images.remotePatterns` in `next.config.ts`, or `next/image` throws and
+> the menu never renders.
 
 ## One-time setup
 

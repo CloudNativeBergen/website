@@ -72,7 +72,7 @@ export async function mintSessionToken(
       sub: speaker.sub,
       name: speaker.name,
       email: speaker.email,
-      picture: 'https://example.com/avatar.png',
+      picture: 'https://placehold.co/64x64.png',
       speaker: {
         _id: speaker.speakerId,
         slug: speaker.slug,
