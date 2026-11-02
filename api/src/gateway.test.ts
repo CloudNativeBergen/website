@@ -135,17 +135,26 @@ describe('gateway', () => {
   })
 
   it('exposes no conference(id:) field', async () => {
+    // content's argument-free `conference` is public; tenant-directory's
+    // conference(id:) is internal.
     const { env } = makeEnv()
     const res = await gateway.fetch(
-      post({ query: '{ __schema { queryType { fields { name } } } }' }),
+      post({
+        query: '{ __schema { queryType { fields { name args { name } } } } }',
+      }),
       env,
     )
     const { data } = (await res.json()) as {
-      data: { __schema: { queryType: { fields: { name: string }[] } } }
+      data: {
+        __schema: {
+          queryType: { fields: { name: string; args: { name: string }[] }[] }
+        }
+      }
     }
-    expect(data.__schema.queryType.fields.map((f) => f.name)).not.toContain(
-      'conference',
+    const conference = data.__schema.queryType.fields.find(
+      (f) => f.name === 'conference',
     )
+    expect(conference?.args ?? []).toEqual([])
     expect(compose()).not.toMatch(/conference\(id:/)
   })
 

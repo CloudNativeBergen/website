@@ -23,8 +23,12 @@ export interface Env {
   ENVELOPE_PRIVATE_KEY: string
   /** identity's Better Auth base URL, the JWT `iss` (wrangler var, per env) */
   IDENTITY_ISSUER: string
+  /** @override label -> orgIds that get the native subgraph (wrangler var, per env) */
+  OVERRIDE_TENANTS: Record<string, string[]>
   /** konf-tenant-directory: tenant lookup and its subgraph */
   DIRECTORY: Fetcher
+  /** konf-content: Sanity-backed editorial data (#1835) */
+  CONTENT: Fetcher
   /** konf-identity default entrypoint: only /api/auth/* (JWKS) answers */
   IDENTITY: Fetcher
   /** Per-request limit (Workers Rate Limiting), keyed per caller (#1790) */
@@ -45,7 +49,10 @@ export interface Env {
 }
 
 /** Supergraph subgraph name (URL host) -> service binding. */
-const BINDINGS = { 'tenant-directory': 'DIRECTORY' } as const
+const BINDINGS = {
+  'tenant-directory': 'DIRECTORY',
+  content: 'CONTENT',
+} as const
 
 const JWT_AUDIENCE = 'konf-gateway'
 const JWT_MAX_SECONDS = 300
@@ -102,6 +109,15 @@ async function resolveTenant(
   return data.tenantByHost
 }
 
+/**
+ * Progressive override per tenant: an @override label is on for the orgIds
+ * OVERRIDE_TENANTS lists. The orgId is the one the envelope is minted for.
+ */
+export function progressiveOverride(label: string, context: unknown) {
+  const { env, orgId } = context as { env: Env; orgId: string | null }
+  return !!orgId && !!env.OVERRIDE_TENANTS?.[label]?.includes(orgId)
+}
+
 export function createGateway(supergraph: string) {
   let signer: Awaited<ReturnType<typeof createSigner>> | undefined
   let jwks: ReturnType<typeof createRemoteJWKSet> | undefined
@@ -127,7 +143,7 @@ export function createGateway(supergraph: string) {
     return payload
   }
 
-  const runtime = createGatewayRuntime<{ env: Env }>({
+  const runtime = createGatewayRuntime<{ env: Env; orgId: string | null }>({
     supergraph,
     graphqlEndpoint: '/graphql',
     landingPage: false,
@@ -140,6 +156,8 @@ export function createGateway(supergraph: string) {
     // with @cost/@listSize in the subgraphs once real queries exist.
     demandControl: { maxCost: 1000, listSize: 20 },
     transports: { http: httpTransport },
+    progressiveOverride: (label, context) =>
+      progressiveOverride(label, context),
     // Kept from the skeleton: `{ health }` answers without any subgraph.
     additionalTypeDefs: 'extend type Query { health: String! }',
     additionalResolvers: { Query: { health: () => 'ok' } },
@@ -254,7 +272,7 @@ export function createGateway(supergraph: string) {
         )
       }
 
-      return runtime(forwarded, { env, ctx })
+      return runtime(forwarded, { env, ctx, orgId: tenant?.orgId ?? null })
     },
   }
 }
