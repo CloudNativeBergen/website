@@ -82,9 +82,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Gateway composition from #1785; skipped until api/src/supergraph.ts lands.
+      # Fails the run before any deploy if the subgraphs do not compose.
       - name: Compose supergraph
-        if: hashFiles('api/src/supergraph.ts') != ''
         run: pnpm --filter @runkonf/api compose
 
       # Order matters: tenant-directory binds identity, and the gateway will
