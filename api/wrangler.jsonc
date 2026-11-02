@@ -10,6 +10,7 @@
   "rules": [{ "type": "Text", "globs": ["**/*.graphql"], "fallthrough": true }],
   // Bindings do not inherit into envs, so each env lists its own.
   // Secret per env: ENVELOPE_PRIVATE_KEY.
+  "vars": { "IDENTITY_ISSUER": "https://id-preview.konf.app" },
   "services": [
     { "binding": "DIRECTORY", "service": "konf-tenant-directory" },
     { "binding": "IDENTITY", "service": "konf-identity" },
@@ -23,6 +24,8 @@
     "preview": {
       "name": "konf-api-preview",
       "workers_dev": true,
+      // Placeholder until identity's preview host exists.
+      "vars": { "IDENTITY_ISSUER": "https://id-preview.konf.app" },
       // Security requirement 8: preview never binds production services.
       "services": [
         { "binding": "DIRECTORY", "service": "konf-tenant-directory-preview" },
@@ -37,6 +40,8 @@
     "production": {
       "name": "konf-api",
       "routes": [{ "pattern": "api.konf.app", "custom_domain": true }],
+      // Identity has its own host: auth.konf.app is the NextAuth site today.
+      "vars": { "IDENTITY_ISSUER": "https://id.konf.app" },
       "services": [
         { "binding": "DIRECTORY", "service": "konf-tenant-directory" },
         { "binding": "IDENTITY", "service": "konf-identity" },

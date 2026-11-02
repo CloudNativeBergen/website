@@ -40,6 +40,7 @@ function makeEnv(role: { orgRole: string | null } = { orgRole: 'admin' }) {
   const envelopes: (string | null)[] = []
   const env = {
     ENVELOPE_PRIVATE_KEY: envelopeKeys.privatePem,
+    IDENTITY_ISSUER: 'https://id.test',
     DIRECTORY: {
       fetch: async (_url: string, init: RequestInit) => {
         const body = JSON.parse(String(init.body))
@@ -71,18 +72,33 @@ const post = (body: unknown, headers: Record<string, string> = {}): Request =>
 
 const SUBGRAPH_QUERY = { query: '{ tenantByHost(host: "q") { orgId } }' }
 
-const jwt = (opts: { aud?: string; ttl?: number; iat?: number } = {}) => {
+const jwt = (
+  opts: { aud?: string; iss?: string; ttl?: number; iat?: number } = {},
+) => {
   const iat = opts.iat ?? Math.floor(Date.now() / 1000)
   return new SignJWT({})
     .setProtectedHeader({ alg: 'EdDSA', kid: 'k1' })
     .setSubject('user_1')
     .setAudience(opts.aud ?? 'konf-gateway')
+    .setIssuer(opts.iss ?? 'https://id.test')
     .setIssuedAt(iat)
     .setExpirationTime(iat + (opts.ttl ?? 300))
     .sign(identityKey)
 }
 
 describe('gateway', () => {
+  it('exposes no @tag(internal) provisioning fields', async () => {
+    const { env } = makeEnv()
+    const res = await gateway.fetch(
+      post({ query: '{ __schema { mutationType { name } } }' }),
+      env,
+    )
+    expect(await res.json()).toEqual({
+      data: { __schema: { mutationType: null } },
+    })
+    expect(compose()).not.toMatch(/provision|internal"\)/i)
+  })
+
   it('answers the health query', async () => {
     const { env } = makeEnv()
     const res = await gateway.fetch(post({ query: '{ health }' }), env)
@@ -143,6 +159,7 @@ describe('gateway', () => {
   it.each([
     ['expired', () => jwt({ iat: Math.floor(Date.now() / 1000) - 600 })],
     ['wrong audience', () => jwt({ aud: 'someone-else' })],
+    ['wrong issuer', () => jwt({ iss: 'https://auth.konf.app' })],
     ['too long-lived', () => jwt({ ttl: 3600 })],
     ['garbage', async () => 'not-a-jwt'],
   ])('rejects a %s identity token', async (_, token) => {

@@ -42,7 +42,9 @@ Run `pnpm compose` first, then deploy with `npx wrangler deploy --env preview` o
 | ---------------------- | ------------------- | -------------------------------------- |
 | `ENVELOPE_PRIVATE_KEY` | preview, production | PKCS8 PEM (EdDSA) that signs envelopes |
 
-Subgraphs get the matching public key as `GATEWAY_PUBLIC_KEY`. Secrets are never committed. Set
+Subgraphs get the matching public key as `GATEWAY_PUBLIC_KEY`. The var
+`IDENTITY_ISSUER` (in `wrangler.jsonc`, per env) is the identity JWT `iss`.
+Secrets are never committed. Set
 them per environment with `npx wrangler secret put <NAME> --env <env>`, and
 never reuse a production value in `preview`. List each new secret here, with
 the environments that need it, in the PR that adds it.

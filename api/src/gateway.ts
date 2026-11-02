@@ -18,6 +18,8 @@ import {
 export interface Env {
   /** wrangler secret put ENVELOPE_PRIVATE_KEY (PKCS8 PEM, EdDSA, per env) */
   ENVELOPE_PRIVATE_KEY: string
+  /** identity's Better Auth base URL, the JWT `iss` (wrangler var, per env) */
+  IDENTITY_ISSUER: string
   /** konf-tenant-directory: tenant lookup and its subgraph */
   DIRECTORY: Fetcher
   /** konf-identity default entrypoint: only /api/auth/* (JWKS) answers */
@@ -54,6 +56,7 @@ function reject(status: 401, code: string, message: string) {
  * Asks tenant-directory without an envelope, so it answers as for an
  * anonymous caller: only a verified domain of an active org resolves.
  */
+// TODO: cache lookups (KV or per-isolate memory).
 async function resolveTenant(
   origin: string | null,
   env: Env,
@@ -91,6 +94,7 @@ export function createGateway(supergraph: string) {
       { [customFetch]: (url, init) => env.IDENTITY.fetch(url, init) },
     )
     const { payload } = await jwtVerify(token, jwks, {
+      issuer: env.IDENTITY_ISSUER,
       audience: JWT_AUDIENCE,
       algorithms: ['EdDSA'],
       requiredClaims: ['sub', 'exp', 'iat'],
@@ -163,6 +167,7 @@ export function createGateway(supergraph: string) {
 
       // 4 + 5. With a tenant: live orgRole, then one short-lived envelope.
       // Without one, subgraphs see an anonymous request with no envelope.
+      // TODO: platform context for operators flagged in identity.
       if (tenant) {
         let orgRole: string | null = null
         if (userId) {
