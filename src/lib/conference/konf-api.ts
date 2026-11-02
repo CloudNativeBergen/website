@@ -1,4 +1,7 @@
 import 'server-only'
+import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag, domainTag } from '@/lib/cache/tags'
+import { CONFERENCE_CACHE_LIFE } from './cache-life'
 import type { Conference } from './types'
 
 // Spike for #1772 (#1833): read core conference fields from the Konf GraphQL
@@ -34,6 +37,42 @@ export function isKonfApiTenant(conference: Conference): boolean {
 }
 
 /**
+ * Cached on the same model and tags as the Sanity conference read
+ * (`fetchConferenceData`), so one revalidation reaches both. Throws on any
+ * failure: a `'use cache'` body that throws is not stored, so a fallback
+ * never sticks.
+ */
+export async function fetchKonfApiConference(
+  host: string,
+  conferenceId: string,
+): Promise<ApiConference> {
+  'use cache: remote'
+  cacheLife(CONFERENCE_CACHE_LIFE)
+  cacheTag('content:conferences')
+  cacheTag(domainTag(host))
+  cacheTag(conferenceTag(conferenceId))
+  const res = await fetch(KONF_API_URL, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      origin: `https://${host}`,
+    },
+    body: JSON.stringify({ query: QUERY }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const json = (await res.json()) as {
+    data?: { conference?: ApiConference | null }
+    errors?: unknown[]
+  }
+  if (json.errors?.length) throw new Error(JSON.stringify(json.errors))
+  const api = json.data?.conference
+  if (!api) throw new Error('conference is null')
+  return api
+}
+
+/**
  * Merge the API's fields over the Sanity conference. Returns the Sanity
  * conference untouched on any error, timeout or null.
  */
@@ -42,25 +81,7 @@ export async function mergeKonfApiConference(
   conference: Conference,
 ): Promise<Conference> {
   try {
-    const res = await fetch(KONF_API_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        origin: `https://${host}`,
-      },
-      body: JSON.stringify({ query: QUERY }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      cache: 'no-store',
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const json = (await res.json()) as {
-      data?: { conference?: ApiConference | null }
-      errors?: unknown[]
-    }
-    if (json.errors?.length) throw new Error(JSON.stringify(json.errors))
-    const api = json.data?.conference
-    if (!api) throw new Error('conference is null')
-
+    const api = await fetchKonfApiConference(host, conference._id)
     const { primaryColor, accentColor, homepageSections, ...rest } = api
     const merged = { ...conference } as Record<string, unknown>
     for (const [k, v] of Object.entries(rest)) if (v != null) merged[k] = v

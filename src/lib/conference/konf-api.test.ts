@@ -17,7 +17,24 @@ vi.mock('@/lib/sponsor-crm/sanity', () => ({
   getPublicSponsorsForConference: vi.fn(async () => []),
 }))
 
+import { cacheLife, cacheTag } from 'next/cache'
 import { getConferenceForDomain } from './sanity'
+import { fetchKonfApiConference } from './konf-api'
+
+/**
+ * `'use cache'` is a compiler directive that vitest does not transform, so the
+ * cache is emulated (as in provisioning/cache/invalidate/coherence.test.ts):
+ * memoize on the arguments, and store only when the body resolves. That is
+ * Next's contract for a throwing body, not something proved here.
+ */
+const entries = new Map<string, unknown>()
+async function cachedApiRead(host: string, id: string) {
+  const key = `${host}|${id}`
+  if (entries.has(key)) return entries.get(key)
+  const value = await fetchKonfApiConference(host, id)
+  entries.set(key, value)
+  return value
+}
 
 const sanityDoc = {
   _id: 'conf-1',
@@ -124,5 +141,46 @@ describe('KONF_API_TENANTS', () => {
     expect(timeout).toHaveBeenCalledWith(2000)
     expect(conference.title).toBe('Sanity title')
     expect(console.warn).toHaveBeenCalled()
+  })
+})
+
+describe('fetchKonfApiConference caching', () => {
+  beforeEach(() => entries.clear())
+
+  it('uses the same cacheLife and tags as the Sanity conference read', async () => {
+    await getConferenceForDomain('2026.example.com')
+    const sanityTags = vi.mocked(cacheTag).mock.calls.map((c) => c[0])
+    const sanityLife = vi.mocked(cacheLife).mock.calls[0][0]
+    vi.mocked(cacheTag).mockClear()
+    vi.mocked(cacheLife).mockClear()
+
+    apiReply({ title: 'API title' })
+    await fetchKonfApiConference('2026.example.com', 'conf-1')
+    expect(vi.mocked(cacheTag).mock.calls.map((c) => c[0])).toEqual(sanityTags)
+    expect(vi.mocked(cacheLife).mock.calls[0][0]).toBe(sanityLife)
+  })
+
+  it('a cached second read does not fetch', async () => {
+    apiReply({ title: 'API title' })
+    await cachedApiRead('2026.example.com', 'conf-1')
+    await cachedApiRead('2026.example.com', 'conf-1')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a failed read throws, so it is not cached and the next read fetches', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('boom', { status: 502 }))
+    await expect(cachedApiRead('2026.example.com', 'conf-1')).rejects.toThrow()
+    apiReply({ title: 'API title' })
+    await expect(cachedApiRead('2026.example.com', 'conf-1')).resolves.toEqual({
+      title: 'API title',
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('a null conference throws too', async () => {
+    apiReply(null)
+    await expect(
+      fetchKonfApiConference('2026.example.com', 'conf-1'),
+    ).rejects.toThrow('conference is null')
   })
 })
