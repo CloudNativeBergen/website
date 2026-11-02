@@ -21,7 +21,7 @@
         {
           "binding": "DB",
           "database_name": "konf-identity-preview",
-          "database_id": "TO_BE_CREATED",
+          "database_id": "2192470e-1f18-40cc-813f-c18883237c78",
           "migrations_dir": "migrations",
         },
       ],
@@ -32,7 +32,7 @@
         {
           "binding": "DB",
           "database_name": "konf-identity",
-          "database_id": "TO_BE_CREATED",
+          "database_id": "20c89ee4-f729-483b-8a0f-8fba00d4f411",
           "migrations_dir": "migrations",
         },
       ],

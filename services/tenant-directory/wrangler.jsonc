@@ -31,7 +31,7 @@
         {
           "binding": "DB",
           "database_name": "konf-tenant-directory-preview",
-          "database_id": "TO_BE_CREATED",
+          "database_id": "82b1dd25-4dcd-4b18-b712-86eb02b5c0df",
           "migrations_dir": "migrations",
         },
       ],
@@ -49,7 +49,7 @@
         {
           "binding": "DB",
           "database_name": "konf-tenant-directory",
-          "database_id": "TO_BE_CREATED",
+          "database_id": "73355a8e-33d8-4bf3-8115-013768c6520c",
           "migrations_dir": "migrations",
         },
       ],

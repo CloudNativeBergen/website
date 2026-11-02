@@ -3,7 +3,8 @@ package codegen
 // Identity is a platform service (SPEC: tenancy-exempt). Users, sessions and
 // memberships span Organizations, so no row carries a single tenant.
 service: #PlatformService & {
-	name:    "identity"
+	name: "identity"
+	d1: {preview: "2192470e-1f18-40cc-813f-c18883237c78", production: "20c89ee4-f729-483b-8a0f-8fba00d4f411"}
 	tenancy: false
 	files: {
 		"package.json": {
