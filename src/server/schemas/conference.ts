@@ -328,6 +328,8 @@ export const UpdateLocalInfoSchema = z.object({
   venueTravelInfo: z.string().trim().nullable().optional(),
   speakerDinnerInfo: z.string().trim().nullable().optional(),
   localRecommendations: z.string().trim().nullable().optional(),
+  cateringInfo: z.string().trim().nullable().optional(),
+  afterpartyInfo: z.string().trim().nullable().optional(),
   socialHashtag: z.string().trim().max(100).nullable().optional(),
 })
 

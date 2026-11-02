@@ -175,6 +175,10 @@ export interface Conference {
   venueTravelInfo?: string
   speakerDinnerInfo?: string
   localRecommendations?: string
+  /** #831: /info "Will food and drinks be served?"; absent = no question. */
+  cateringInfo?: string
+  /** #831: /info "What happens after the conference?"; absent = no question. */
+  afterpartyInfo?: string
   /**
    * Structured speaker briefing (#1592), edited at `/admin/speakers/info`.
    * Projected by the main conference projection's `...` spread. ABSENT/blank
