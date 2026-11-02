@@ -96,10 +96,10 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          for dir in services/identity services/tenant-directory; do
-            echo "::group::$dir ($DEPLOY_ENV)"
-            (cd "$dir" && pnpm exec wrangler d1 migrations apply DB --remote --env "$DEPLOY_ENV")
-            (cd "$dir" && pnpm exec wrangler deploy --env "$DEPLOY_ENV")
+          for pkg in identity tenant-directory; do
+            echo "::group::$pkg ($DEPLOY_ENV)"
+            pnpm --filter "@runkonf/$pkg" exec wrangler d1 migrations apply DB --remote --env "$DEPLOY_ENV"
+            pnpm --filter "@runkonf/$pkg" exec wrangler deploy --env "$DEPLOY_ENV"
             echo "::endgroup::"
           done
-          cd api && pnpm exec wrangler deploy --env "$DEPLOY_ENV"
+          pnpm --filter @runkonf/api exec wrangler deploy --env "$DEPLOY_ENV"
