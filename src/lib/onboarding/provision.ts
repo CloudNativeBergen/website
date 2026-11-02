@@ -615,6 +615,21 @@ export async function provisionOrganization(
       input.organization.slug,
     )
     if (lost) return { ok: false, rejection: lost }
+    // A live lock with no conference behind it: the holder's conference was
+    // deleted inside the lock window. Still a claim, not a server failure.
+    const locked = await clientReadUncached
+      .fetch<string[] | null>(
+        // groq-global: platform-internal provisioning lock, keyed by hostname, not tenant-scoped.
+        `*[_type == $type && _id in $ids].domain`,
+        { type: PROVISIONING_DOMAIN_LOCK_TYPE, ids: domains.map(domainLockId) },
+      )
+      .catch(() => null)
+    const lockRejection = rejectTakenDomains(
+      locked ?? [],
+      platformHosts,
+      input.organization.slug,
+    )
+    if (lockRejection) return { ok: false, rejection: lockRejection }
     return { ok: false, rejection: { code: 'commit_failed', cause: error } }
   }
 
