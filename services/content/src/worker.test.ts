@@ -27,7 +27,63 @@ const DOCS = [
     title: ' Conf A ',
     theme: { primaryColor: '#000' },
   },
-  { _id: 'conf_b', org: 'org_b', title: 'Conf B' },
+  {
+    _id: 'conf_b',
+    org: 'org_b',
+    title: 'Conf B',
+    announcement: [{ _type: 'block', children: [{ text: 'Hi' }] }],
+    cfpStartDate: '2026-01-01',
+    programDate: '2026-03-01',
+    recordingsLiveDate: '2026-12-01',
+    sponsorRegistrationLink: 'https://x/sponsor',
+    speakerRegistrationLink: 'https://x/speaker',
+    volunteerRegistrationLink: 'https://x/volunteer',
+    registrationEnabled: true,
+    ticketCustomization: { heroHeadline: 'Tickets', showVanityMetrics: true },
+    ticketInclusions: [{ title: 'Lunch' }],
+    ticketFaqs: [{ question: 'Q?', answer: 'A.' }],
+    vanityMetrics: [{ label: 'Talks', value: '40' }],
+    socialHashtag: '#cnb',
+    venueTravelInfo: 'Train',
+    localRecommendations: 'Fish',
+    formats: ['lightning_10'],
+    organizer: 'Org B AS',
+    organizerAddress: 'Street 1',
+    homepageSections: [
+      {
+        _type: 'homepageHero',
+        _key: 'h',
+        variant: 'split',
+        heroHeadline: 'Go',
+        ctaOverrides: [{ label: 'Buy', href: '/tickets' }],
+      },
+      { _type: 'homepageSaveTheDate', _key: 'sd', heading: 'Save' },
+      { _type: 'homepageFeaturedSpeakers', _key: 'fs', heading: 'Speakers' },
+      { _type: 'homepageProgramHighlights', _key: 'ph' },
+      { _type: 'homepageOrganizers', _key: 'o', heading: 'Team' },
+      { _type: 'homepageSponsors', _key: 's', showCta: false },
+      { _type: 'homepageGallery', _key: 'g', heading: 'Photos' },
+      { _type: 'homepageMetrics', _key: 'm', heading: 'Numbers' },
+      {
+        _type: 'homepageCtaBanner',
+        _key: 'c',
+        heading: 'Join',
+        body: 'Now',
+        buttonLabel: 'Go',
+        buttonHref: '/x',
+      },
+      { _type: 'homepageRichText', _key: 'r', content: [{ _type: 'block' }] },
+      {
+        _type: 'homepageFaq',
+        _key: 'f',
+        source: 'own',
+        items: [{ question: 'Q', answer: 'A' }],
+      },
+      { _type: 'homepageCountdown', _key: 'cd', liveMessage: 'Live' },
+      { _type: 'homepageVenue', _key: 'v', heading: 'Venue', hidden: true },
+      { _type: 'homepageUnknown', _key: 'u' },
+    ],
+  },
   {
     _id: 'conf_x',
     org: 'org_a',
@@ -83,8 +139,10 @@ async function post(query: string, as?: Envelope | string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- arbitrary GraphQL JSON
   return { status: res.status, body: (await res.json()) as any }
 }
-const conference = (as?: Envelope | string) =>
-  post('{ conference { id title primaryColor socialLinks visibility } }', as)
+const conference = (
+  as?: Envelope | string,
+  query = '{ conference { id title primaryColor socialLinks visibility } }',
+) => post(query, as)
 const entity = async (id: string, as: Envelope) =>
   (
     await post(
@@ -150,5 +208,145 @@ describe('content subgraph', () => {
       await createSigner((await generateEnvelopeKeyPair()).privatePem)
     ).sign(tenant('org_a', 'conf_a'))
     expect((await conference(forged)).status).toBe(403)
+  })
+
+  const field = async (q: string, role: string | null = null) => {
+    const { body } = await conference(
+      tenant('org_b', 'conf_b', role),
+      `{ conference { ${q} } }`,
+    )
+    expect(body.errors).toBeUndefined()
+    return body.data.conference
+  }
+
+  it('serves announcement, dates and plain-text info', async () => {
+    expect(
+      await field(
+        'announcement cfpStartDate cfpEndDate programDate recordingsLiveDate socialHashtag venueTravelInfo localRecommendations formats organizer organizerAddress',
+      ),
+    ).toEqual({
+      announcement: JSON.stringify([
+        { _type: 'block', children: [{ text: 'Hi' }] },
+      ]),
+      cfpStartDate: '2026-01-01',
+      cfpEndDate: null,
+      programDate: '2026-03-01',
+      recordingsLiveDate: '2026-12-01',
+      socialHashtag: '#cnb',
+      venueTravelInfo: 'Train',
+      localRecommendations: 'Fish',
+      formats: ['lightning_10'],
+      organizer: 'Org B AS',
+      organizerAddress: 'Street 1',
+    })
+  })
+
+  it('keeps ticket invite links for org members', async () => {
+    const q =
+      'registrationEnabled volunteerRegistrationLink sponsorRegistrationLink speakerRegistrationLink'
+    expect(await field(q)).toEqual({
+      registrationEnabled: true,
+      volunteerRegistrationLink: 'https://x/volunteer',
+      sponsorRegistrationLink: null,
+      speakerRegistrationLink: null,
+    })
+    expect(await field(q, 'member')).toMatchObject({
+      sponsorRegistrationLink: 'https://x/sponsor',
+      speakerRegistrationLink: 'https://x/speaker',
+    })
+  })
+
+  it('serves the ticket page content', async () => {
+    expect(
+      await field(
+        'ticketCustomization { heroHeadline groupDiscountInfo showVanityMetrics } ticketInclusions { title description } ticketFaqs { question answer } vanityMetrics { label value }',
+      ),
+    ).toEqual({
+      ticketCustomization: {
+        heroHeadline: 'Tickets',
+        groupDiscountInfo: null,
+        showVanityMetrics: true,
+      },
+      ticketInclusions: [{ title: 'Lunch', description: null }],
+      ticketFaqs: [{ question: 'Q?', answer: 'A.' }],
+      vanityMetrics: [{ label: 'Talks', value: '40' }],
+    })
+  })
+
+  const BLOCKS = `homepageBlocks { __typename key variant hidden
+    ... on HomepageHero { heroHeadline ctaOverrides { label href } }
+    ... on HomepageSaveTheDate { heading description }
+    ... on HomepageFeaturedSpeakers { heading }
+    ... on HomepageOrganizers { heading }
+    ... on HomepageSponsors { showCta ctaHeading }
+    ... on HomepageGallery { heading }
+    ... on HomepageMetrics { heading }
+    ... on HomepageCtaBanner { heading body buttonLabel buttonHref }
+    ... on HomepageRichText { content }
+    ... on HomepageFaq { source items { question answer } }
+    ... on HomepageCountdown { targetOverride liveMessage }
+    ... on HomepageVenue { heading } }`
+
+  it('types every homepage block and drops unknown ones', async () => {
+    const blocks = (await field(BLOCKS)).homepageBlocks
+    const by = Object.fromEntries(
+      blocks.map((b: { key: string }) => [b.key, b]),
+    )
+    expect(blocks.map((b: { __typename: string }) => b.__typename)).toEqual([
+      'HomepageHero',
+      'HomepageSaveTheDate',
+      'HomepageFeaturedSpeakers',
+      'HomepageProgramHighlights',
+      'HomepageOrganizers',
+      'HomepageSponsors',
+      'HomepageGallery',
+      'HomepageMetrics',
+      'HomepageCtaBanner',
+      'HomepageRichText',
+      'HomepageFaq',
+      'HomepageCountdown',
+    ])
+    expect(by.h).toMatchObject({
+      variant: 'split',
+      hidden: false,
+      heroHeadline: 'Go',
+      ctaOverrides: [{ label: 'Buy', href: '/tickets' }],
+    })
+    expect(by.sd).toMatchObject({ heading: 'Save', description: null })
+    expect(by.fs.heading).toBe('Speakers')
+    expect(by.ph.variant).toBeNull()
+    expect(by.o.heading).toBe('Team')
+    expect(by.s).toMatchObject({ showCta: false, ctaHeading: null })
+    expect(by.g.heading).toBe('Photos')
+    expect(by.m.heading).toBe('Numbers')
+    expect(by.c).toMatchObject({
+      heading: 'Join',
+      body: 'Now',
+      buttonLabel: 'Go',
+      buttonHref: '/x',
+    })
+    expect(JSON.parse(by.r.content)).toEqual([{ _type: 'block' }])
+    expect(by.f).toMatchObject({
+      source: 'own',
+      items: [{ question: 'Q', answer: 'A' }],
+    })
+    expect(by.cd).toMatchObject({ liveMessage: 'Live', targetOverride: null })
+  })
+
+  it('shows hidden blocks to org members only', async () => {
+    const blocks = (await field(BLOCKS, 'member')).homepageBlocks
+    expect(blocks.at(-1)).toMatchObject({
+      __typename: 'HomepageVenue',
+      hidden: true,
+      heading: 'Venue',
+    })
+  })
+
+  it("never returns another tenant's new fields", async () => {
+    const { body } = await conference(
+      tenant('org_a', 'conf_b', 'owner'),
+      '{ conference { organizer homepageBlocks { key } } }',
+    )
+    expect(body.data.conference).toBeNull()
   })
 })

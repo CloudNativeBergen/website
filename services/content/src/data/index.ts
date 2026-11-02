@@ -20,7 +20,13 @@ const CONFERENCE = `*[_type == "conference" && _id == $conferenceId && organizat
   _id, title, tagline, description, city, country, venueName, venueAddress,
   startDate, endDate, lifecycleStatus, visibility, logoBright, logoDark,
   logomarkBright, logomarkDark, backgroundPattern, theme, registrationLink,
-  socialLinks, homepageSections
+  socialLinks, homepageSections, announcement, cfpStartDate, cfpEndDate,
+  cfpNotifyDate, programDate, earlyBirdEndDate, registrationCloseDate,
+  speakersAnnouncedDate, recordingsLiveDate, sponsorRegistrationLink,
+  speakerRegistrationLink, volunteerRegistrationLink, registrationEnabled,
+  ticketCustomization, ticketInclusions, ticketFaqs, vanityMetrics,
+  socialHashtag, venueTravelInfo, localRecommendations, formats, organizer,
+  organizerAddress
 }`
 
 type Doc = Record<string, unknown> & {
@@ -28,13 +34,24 @@ type Doc = Record<string, unknown> & {
   lifecycleStatus?: string | null
   theme?: { primaryColor?: string | null; accentColor?: string | null } | null
   socialLinks?: string[] | null
-  homepageSections?: unknown[] | null
+  homepageSections?: Block[] | null
 }
+
+/** A homepage block as Sanity stores it; `_type` picks the GraphQL type. */
+export type Block = Record<string, unknown> & {
+  _type: string
+  hidden?: boolean
+}
+
+const list = <T>(v: unknown) => (Array.isArray(v) ? (v as T[]) : [])
 
 const s = (v: unknown) => (typeof v === 'string' && v.trim()) || null
 
-/** Same mapping as services/conference/scripts/backfill.ts (#1829). */
-function toConference(c: Doc) {
+/**
+ * Same mapping as services/conference/scripts/backfill.ts (#1829), plus the
+ * #1831 fields. `member`: the caller is in the conference's org.
+ */
+function toConference(c: Doc, member: boolean) {
   return {
     conferenceId: c._id,
     // Blank stays null: the id is not a title.
@@ -59,6 +76,38 @@ function toConference(c: Doc) {
     registrationLink: s(c.registrationLink),
     socialLinks: c.socialLinks ?? [],
     homepageSections: JSON.stringify(c.homepageSections ?? []),
+    // Hidden blocks are drafts: org members only (#1830).
+    homepageBlocks: list<Block>(c.homepageSections).filter(
+      (b) => member || !b.hidden,
+    ),
+    // Portable Text, as Sanity stores it; the site renders it with PortableText.
+    announcement: c.announcement ? JSON.stringify(c.announcement) : null,
+    cfpStartDate: s(c.cfpStartDate),
+    cfpEndDate: s(c.cfpEndDate),
+    cfpNotifyDate: s(c.cfpNotifyDate),
+    programDate: s(c.programDate),
+    earlyBirdEndDate: s(c.earlyBirdEndDate),
+    registrationCloseDate: s(c.registrationCloseDate),
+    speakersAnnouncedDate: s(c.speakersAnnouncedDate),
+    recordingsLiveDate: s(c.recordingsLiveDate),
+    // Invite links that hand out free tickets: never public (types.ts).
+    sponsorRegistrationLink: member ? s(c.sponsorRegistrationLink) : null,
+    speakerRegistrationLink: member ? s(c.speakerRegistrationLink) : null,
+    volunteerRegistrationLink: s(c.volunteerRegistrationLink),
+    registrationEnabled: c.registrationEnabled === true,
+    ticketCustomization: (c.ticketCustomization ?? null) as Record<
+      string,
+      unknown
+    > | null,
+    ticketInclusions: list<Record<string, unknown>>(c.ticketInclusions),
+    ticketFaqs: list<Record<string, unknown>>(c.ticketFaqs),
+    vanityMetrics: list<Record<string, unknown>>(c.vanityMetrics),
+    socialHashtag: s(c.socialHashtag),
+    venueTravelInfo: s(c.venueTravelInfo),
+    localRecommendations: s(c.localRecommendations),
+    formats: list<string>(c.formats),
+    organizer: s(c.organizer),
+    organizerAddress: s(c.organizerAddress),
   }
 }
 
@@ -89,7 +138,7 @@ class Conferences extends ScopedRepository {
       doc.lifecycleStatus ?? '',
     )
     if (!published && !this.tenant.orgRole) return null
-    return toConference(doc)
+    return toConference(doc, !!this.tenant.orgRole)
   }
 
   /** Entity resolution: an id other than the envelope's resolves to null. */
