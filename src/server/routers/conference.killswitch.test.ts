@@ -134,8 +134,11 @@ function denyTicketing() {
   })
 }
 
-/** A rebind of the provider event — the write under test. */
-const REBIND = { checkinEventId: 9999 }
+/**
+ * A ticketing write a tenant admin may still make. The event binding itself is
+ * platform-operator-only (#745), covered in `conference.ticketingBinding.test.ts`.
+ */
+const REBIND = { checkinCustomerId: 9999 }
 
 beforeEach(() => {
   vi.clearAllMocks()

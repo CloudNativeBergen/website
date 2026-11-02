@@ -13,6 +13,7 @@ import {
   requireSpeakersInCurrentOrg,
 } from '../tenancy'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import { isPlatformOperator } from '@/lib/authz/platform'
 import { getDinnerChoiceSummaryInputs } from '@/lib/speaker/dinnerChoice-sanity'
 import { summarizeDinnerChoices } from '@/lib/speaker/dinnerChoice'
 import {
@@ -221,9 +222,9 @@ export const TICKETING_BINDING_ALREADY_CLAIMED =
  * `drafts.` twin are dropped, so re-saving an unchanged binding still succeeds.
  *
  * This is a claim check, not proof of ownership at the provider — it stops one
- * tenant from taking another's *already-bound* event, which is the reachable
- * attack. Verifying an unclaimed event id against the account that owns it needs
- * a provider round-trip and is tracked separately.
+ * tenant from taking another's *already-bound* event. Unbound event ids are
+ * closed by letting only a platform operator change the binding (#745), see
+ * `updateTicketingIds`.
  */
 async function ticketingBindingIsClaimed(
   excludeConferenceId: string,
@@ -529,7 +530,7 @@ export const conferenceRouter = router({
   updateTicketingIds: adminProcedure
     .use(requireFeatureNotDenied('ticketing'))
     .input(UpdateTicketingIdsSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conferenceId = await resolveConferenceId()
       const current = await clientReadUncached.fetch<{
         checkinEventId?: number | null
@@ -554,6 +555,24 @@ export const conferenceRouter = router({
           'titoEventSlug' in input
             ? (input.titoEventSlug ?? null)
             : (current?.titoEventSlug ?? null),
+      }
+      // PLATFORM-SET ONLY (#745). Every tenant shares the platform's provider
+      // credentials, so nothing proves a tenant owns an unbound event id; a
+      // tenant admin could squat another org's event during its setup window.
+      // Only a platform operator may change the event binding. Re-sending the
+      // stored values is not a change, so existing bindings keep working and
+      // the provider and customer id stay writable through the API.
+      const bindingChanged =
+        effective.checkinEventId !== (current?.checkinEventId ?? null) ||
+        (effective.titoAccountSlug || null) !==
+          (current?.titoAccountSlug || null) ||
+        (effective.titoEventSlug || null) !== (current?.titoEventSlug || null)
+      if (bindingChanged && !(await isPlatformOperator(ctx.session?.speaker))) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message:
+            'Only a platform operator can change the ticketing event binding',
+        })
       }
       if (await ticketingBindingIsClaimed(conferenceId, effective)) {
         throw new TRPCError({

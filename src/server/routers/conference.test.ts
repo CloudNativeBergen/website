@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { Context } from '@/server/trpc'
 import { Format } from '@/lib/proposal/types'
 
@@ -127,19 +127,25 @@ const revalidateTagMock = revalidateTag as unknown as ReturnType<typeof vi.fn>
 const CONFERENCE_ID = 'conf-1'
 /** The org the domain-resolved conference belongs to; see `ORG_ID` use below. */
 const ORG_ID = 'org-test'
+const PLATFORM_ORG_ID = 'org-platform'
 
 /**
  * Org-scoped authz keys on `organizerOrgIds` ALONE (the global `isOrganizer`
  * bridge is gone), so an "organizer" caller must carry the SAME org the
  * request's domain conference resolves to — hence `ORG_ID` on both sides.
  */
-function makeCaller(opts: { isOrganizer?: boolean } | null) {
+function makeCaller(
+  opts: { isOrganizer?: boolean; platformOperator?: boolean } | null,
+) {
   const speaker = opts
     ? {
         _id: 'sp-1',
         name: 'Org',
         isOrganizer: opts.isOrganizer ?? false,
-        organizerOrgIds: opts.isOrganizer ? [ORG_ID] : [],
+        organizerOrgIds: [
+          ...(opts.isOrganizer ? [ORG_ID] : []),
+          ...(opts.platformOperator ? [PLATFORM_ORG_ID] : []),
+        ],
       }
     : undefined
   const ctx = {
@@ -923,11 +929,22 @@ describe('conference router — domains global uniqueness (#680)', () => {
  */
 describe('conference router — ticketing binding uniqueness (#731 F5)', () => {
   const OTHER_CONFERENCE = 'other-conf'
+  // The binding is platform-set only (#745); the operator path is the one the
+  // uniqueness check still guards. Tenant-admin refusal is covered in
+  // `conference.ticketingBinding.test.ts`.
+  const operator = () =>
+    makeCaller({ isOrganizer: true, platformOperator: true })
+  beforeEach(() => {
+    vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG_ID)
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
 
   it('refuses a Checkin event id another conference already claims', async () => {
     ticketingByConference[OTHER_CONFERENCE] = { checkinEventId: 4242 }
     await expect(
-      makeCaller({ isOrganizer: true }).updateTicketingIds({
+      operator().updateTicketingIds({
         checkinEventId: 4242,
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
@@ -941,7 +958,7 @@ describe('conference router — ticketing binding uniqueness (#731 F5)', () => {
       titoEventSlug: '2026',
     }
     await expect(
-      makeCaller({ isOrganizer: true }).updateTicketingIds({
+      operator().updateTicketingIds({
         ticketingProvider: 'tito',
         titoAccountSlug: 'other',
         titoEventSlug: '2026',
@@ -959,7 +976,7 @@ describe('conference router — ticketing binding uniqueness (#731 F5)', () => {
       titoEventSlug: '2026',
     }
     await expect(
-      makeCaller({ isOrganizer: true }).updateTicketingIds({
+      operator().updateTicketingIds({
         titoEventSlug: '2026',
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
@@ -975,7 +992,7 @@ describe('conference router — ticketing binding uniqueness (#731 F5)', () => {
     ticketingByConference[CONFERENCE_ID] = { checkinEventId: 4242 }
     ticketingByConference[OTHER_CONFERENCE] = { checkinEventId: 4242 }
     await expect(
-      makeCaller({ isOrganizer: true }).updateTicketingIds({
+      operator().updateTicketingIds({
         checkinCustomerId: 7,
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
@@ -984,7 +1001,7 @@ describe('conference router — ticketing binding uniqueness (#731 F5)', () => {
 
   it('SELF-EXCLUSION: re-saving its OWN unchanged binding succeeds', async () => {
     ticketingByConference[CONFERENCE_ID] = { checkinEventId: 4242 }
-    const result = await makeCaller({ isOrganizer: true }).updateTicketingIds({
+    const result = await operator().updateTicketingIds({
       checkinEventId: 4242,
     })
     expect(result.success).toBe(true)
@@ -993,7 +1010,7 @@ describe('conference router — ticketing binding uniqueness (#731 F5)', () => {
 
   it('an unclaimed id is accepted', async () => {
     ticketingByConference[OTHER_CONFERENCE] = { checkinEventId: 4242 }
-    const result = await makeCaller({ isOrganizer: true }).updateTicketingIds({
+    const result = await operator().updateTicketingIds({
       checkinEventId: 99,
       checkinCustomerId: 7,
     })
@@ -1004,7 +1021,7 @@ describe('conference router — ticketing binding uniqueness (#731 F5)', () => {
   it('clearing the binding is never a collision', async () => {
     ticketingByConference[CONFERENCE_ID] = { checkinEventId: 4242 }
     ticketingByConference[OTHER_CONFERENCE] = { checkinEventId: 4242 }
-    const result = await makeCaller({ isOrganizer: true }).updateTicketingIds({
+    const result = await operator().updateTicketingIds({
       checkinEventId: null,
     })
     expect(result.success).toBe(true)
@@ -1018,7 +1035,7 @@ describe('conference router — ticketing binding uniqueness (#731 F5)', () => {
       return null
     })
     await expect(
-      makeCaller({ isOrganizer: true }).updateTicketingIds({
+      operator().updateTicketingIds({
         checkinEventId: 4242,
       }),
     ).rejects.toBeTruthy()

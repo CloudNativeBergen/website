@@ -37,6 +37,16 @@ import {
 import { effectivePlan } from '@/lib/features/registry'
 import { listEntitledFeatures } from '@/lib/features/entitlements'
 import { isPlatformOrgRequest } from '@/lib/features/platform'
+import { isPlatformOperator } from '@/lib/authz/platform'
+
+// #745: the event binding is platform-set only.
+const TICKETING_BINDING_FIELDS = [
+  'checkinEventId',
+  'titoAccountSlug',
+  'titoEventSlug',
+]
+const TICKETING_BINDING_NOTE =
+  'The platform team sets the ticketing event. Contact them to connect or change it.'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { PlanFeaturesCard } from './PlanFeaturesCard'
 import { applyWorkshopGate } from './planFeatureRows'
@@ -113,6 +123,8 @@ export default async function AdminSettings() {
   if (denied) return denied
 
   const session = await getAuthSession()
+  // #745: only a platform operator may change the ticketing event binding.
+  const canEditTicketingBinding = await isPlatformOperator(session?.speaker)
 
   // READ LIVE (#1345, as on the workshops page): this page reloads straight
   // after a save, and the cached read serves the old values once
@@ -662,6 +674,12 @@ export default async function AdminSettings() {
               action={
                 <EditConferenceCard
                   fieldset="ticketingIds"
+                  readOnlyFields={
+                    canEditTicketingBinding
+                      ? undefined
+                      : TICKETING_BINDING_FIELDS
+                  }
+                  readOnlyNote={TICKETING_BINDING_NOTE}
                   initialValues={{
                     ticketingProvider: conference.ticketingProvider,
                     checkinCustomerId: conference.checkinCustomerId,
@@ -676,6 +694,11 @@ export default async function AdminSettings() {
                 label="Ticketing Provider"
                 value={conference.ticketingProvider ?? 'checkin'}
               />
+              {!canEditTicketingBinding && (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {TICKETING_BINDING_NOTE}
+                </p>
+              )}
               {conference.ticketingProvider === 'tito' ? (
                 <>
                   <FieldRow
