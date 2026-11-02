@@ -22,6 +22,8 @@ package codegen
 	// Worker service bindings (RPC). The service types them in its DataEnv.
 	serviceBindings: *[] | [...{binding: string, service: string, entrypoint?: string}]
 	if tenancy {crons: []}
+	// Extra tsconfig include globs, e.g. a service's scripts/.
+	tsInclude: *[] | [...string]
 
 	_workerName:       "konf-\(name)"
 	_scheduledImport:  *"" | string
@@ -112,7 +114,7 @@ package codegen
 				"skipLibCheck":    true
 				"isolatedModules": true
 			}
-			"include": ["src/**/*.ts"]
+			"include": ["src/**/*.ts", for g in tsInclude {g}]
 		}
 	}
 
