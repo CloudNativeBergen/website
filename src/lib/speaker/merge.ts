@@ -58,6 +58,7 @@ export interface MergeSpeakerDoc {
   _id: string
   _type: string
   _rev?: string
+  erasedAt?: string
   name?: string
   email?: string
   slug?: { _type?: string; current?: string } | string
@@ -1030,7 +1031,8 @@ export function computeSurvivorFieldMerge(
 
 /**
  * Reject merges that must never proceed: self-merge, missing documents, draft
- * documents, or non-speaker documents.
+ * documents, non-speaker documents, or an erased speaker on either side (a
+ * merge would partly restore an erased record, #1027).
  */
 export function assertMergeable(
   survivor: MergeSpeakerDoc | null | undefined,
@@ -1050,6 +1052,11 @@ export function assertMergeable(
   }
   if (survivor._type !== 'speaker' || loser._type !== 'speaker') {
     throw new MergeValidationError('Both documents must be speakers')
+  }
+  if (survivor.erasedAt || loser.erasedAt) {
+    throw new MergeValidationError(
+      'Cannot merge an erased speaker: the record was erased under GDPR',
+    )
   }
 }
 
