@@ -1,0 +1,37 @@
+{
+  "name": "konf-tenant-directory",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "services": [
+    {
+      "binding": "IDENTITY",
+      "service": "konf-identity",
+      "entrypoint": "Organizations",
+    },
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"],
+  },
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "konf-tenant-directory",
+      "database_id": "TO_BE_CREATED",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true,
+      "destinations": ["grafana-cloud-traces"],
+    },
+    "logs": {
+      "enabled": true,
+      "destinations": ["grafana-cloud-logs"],
+    },
+  },
+}

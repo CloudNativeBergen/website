@@ -27,7 +27,7 @@
     "test:badges": "vitest run __tests__/lib/badge/",
     "format:check": "prettier --cache --check .",
     "format": "prettier --cache --write --list-different .",
-    "typecheck": "tsc --noEmit && pnpm --filter @runkonf/api --filter @runkonf/tenancy typecheck",
+    "typecheck": "tsc --noEmit && pnpm --filter @runkonf/api --filter @runkonf/tenancy --filter './services/*' typecheck",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "msw init public --save=false && storybook build",
     "build-storybook:test": "msw init public --save=false && storybook build --test",
@@ -43,7 +43,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "shoot": "node scripts/shoot-story.mjs",
-    "scaffold:service": "tsx scripts/scaffold-service.ts"
+    "scaffold:service": "tsx scripts/scaffold-service.ts",
+    "scaffold:check": "bash scripts/scaffold-check.sh"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {
