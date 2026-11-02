@@ -13,7 +13,8 @@ are reached over service bindings, never HTTP.
   limit on each subgraph request.
   Rate limit (`API_LIMITER`, 300 requests a minute) per caller: `user:<sub>`
   from the verified JWT, else `anon:<orgId>:<ip>`, checked before identity and
-  `Membership` work. 429 `RATE_LIMITED` when spent.
+  `Membership` work, after a coarse `ip:<ip>` pre-check (`API_IP_LIMITER`,
+  1200 a minute) before the tenant lookup. 429 `RATE_LIMITED` when spent.
 - `src/client-ip.ts`: the client IP, from the site's HMAC-signed
   `x-konf-client-ip` header (`CLIENT_IP_SECRET`) or `CF-Connecting-IP`
 - `src/supergraph.ts`: composes the public contract of the subgraph schemas

@@ -28,6 +28,8 @@ export interface Env {
   IDENTITY: Fetcher
   /** Per-request limit (Workers Rate Limiting), keyed per caller (#1790) */
   API_LIMITER: RateLimit
+  /** Coarse per-IP limit, checked before the tenant lookup */
+  API_IP_LIMITER: RateLimit
   /** wrangler secret put CLIENT_IP_SECRET: shared with the site to sign the client IP */
   CLIENT_IP_SECRET?: string
   /** konf-identity `Membership` entrypoint (RPC) */
@@ -165,6 +167,11 @@ export function createGateway(supergraph: string) {
       // Subgraphs trust the envelope, never the caller's token.
       forwarded.headers.delete('authorization')
 
+      // Coarse per-IP pre-check, so a flood never reaches tenant-directory.
+      const ip = await clientIp(request, env.CLIENT_IP_SECRET)
+      if (!(await env.API_IP_LIMITER.limit({ key: `ip:${ip}` })).success)
+        return reject(429, 'RATE_LIMITED', 'too many requests')
+
       // 2. Tenant from Origin, never from a header or argument.
       let tenant: Tenant | null
       try {
@@ -183,7 +190,6 @@ export function createGateway(supergraph: string) {
       let userId: string | null = null
       const auth = request.headers.get('authorization')
       if (auth === null) {
-        const ip = await clientIp(request, env.CLIENT_IP_SECRET)
         if (await limited(`anon:${tenant?.orgId ?? null}:${ip}`))
           return tooMany()
       } else {

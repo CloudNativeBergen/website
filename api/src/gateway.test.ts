@@ -40,6 +40,7 @@ beforeAll(async () => {
 function makeEnv(
   role: { orgRole: string | null } = { orgRole: 'admin' },
   allow = true,
+  ipAllow = true,
 ) {
   const envelopes: (string | null)[] = []
   const forwarded: Headers[] = []
@@ -63,6 +64,7 @@ function makeEnv(
     },
     IDENTITY: { fetch: async () => Response.json(jwks) },
     API_LIMITER: { limit: vi.fn(async () => ({ success: allow })) },
+    API_IP_LIMITER: { limit: vi.fn(async () => ({ success: ipAllow })) },
     CLIENT_IP_SECRET: 'ip-secret',
     MEMBERSHIP: {
       principal: vi.fn(async () => ({ ...role, platformOperator: false })),
@@ -327,6 +329,23 @@ describe('gateway', () => {
         errors: [{ extensions: { code: 'RATE_LIMITED' } }],
       })
       expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+    })
+
+    it('answers 429 per IP before the tenant lookup', async () => {
+      const { env } = makeEnv(undefined, true, false)
+      const lookup = vi.spyOn(env.DIRECTORY, 'fetch')
+      const res = await gateway.fetch(
+        post(SUBGRAPH_QUERY, {
+          origin: VERIFIED,
+          'cf-connecting-ip': '10.0.0.1',
+        }),
+        env,
+      )
+      expect(res.status).toBe(429)
+      expect(lookup).not.toHaveBeenCalled()
+      expect(vi.mocked(env.API_IP_LIMITER.limit)).toHaveBeenCalledWith({
+        key: 'ip:10.0.0.1',
+      })
     })
 
     it('answers 429 to a signed-in caller before Membership', async () => {
