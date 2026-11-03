@@ -161,6 +161,31 @@ describe('handoff start', () => {
     expect(to.host).toBe('github.com')
     expect(res.headers.getSetCookie().length).toBeGreaterThan(0)
   })
+
+  it('sends a callback from another browser to /error with its origin (#1889)', async () => {
+    const res = await start(SITE)
+    const state = new URL(res.headers.get('location')!).searchParams.get(
+      'state',
+    )
+    // No state cookie: the OAuth return landed in another app or browser.
+    const cb = await createAuth(env.DB, env).handler(
+      new Request(`${BASE}/api/auth/callback/github?state=${state}&code=c`),
+    )
+    expect(cb.status).toBe(302)
+    const to = new URL(cb.headers.get('location')!)
+    expect(to.origin + to.pathname).toBe(`${BASE}/error`)
+    expect(to.searchParams.get('error')).toBe('state_mismatch')
+    expect(to.searchParams.get('origin')).toBe(SITE)
+  })
+
+  it('sends a callback with an unknown state to /error, without an origin', async () => {
+    const cb = await createAuth(env.DB, env).handler(
+      new Request(`${BASE}/api/auth/callback/github?state=unknown&code=c`),
+    )
+    const to = new URL(cb.headers.get('location')!)
+    expect(to.origin + to.pathname).toBe(`${BASE}/error`)
+    expect(to.searchParams.get('origin')).toBeNull()
+  })
 })
 
 describe('handoff exchange', () => {

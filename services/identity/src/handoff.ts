@@ -101,7 +101,13 @@ export async function handoff(request: Request, env: HandoffEnv) {
             origin: env.BETTER_AUTH_URL,
             cookie: request.headers.get('cookie') ?? '',
           },
-          body: JSON.stringify({ provider, callbackURL: url.href }),
+          body: JSON.stringify({
+            provider,
+            callbackURL: url.href,
+            // Kept in the OAuth state, so even a state_mismatch knows which
+            // site to offer a retry to (#1889).
+            errorCallbackURL: `${env.BETTER_AUTH_URL}/error?origin=${encodeURIComponent(origin)}`,
+          }),
         }),
       )
       if (!res.ok) return fail(502)

@@ -1,7 +1,8 @@
 // Identity entry: Better Auth under /api/auth, the login handoff under
-// /handoff, the RPC entrypoints, and 404 for everything else.
+// /handoff, its error page at /error, the RPC entrypoints, and 404 for everything else.
 import { WorkerEntrypoint } from 'cloudflare:workers'
 import { createAuth, createData } from './data'
+import { errorPage } from './error-page'
 import { handoff, type HandoffEnv } from './handoff'
 import type { WorkerEnv } from './worker'
 
@@ -36,7 +37,8 @@ export default {
     if (pathname === '/handoff' || pathname.startsWith('/handoff/')) {
       return handoff(request, env)
     }
-    // Only Better Auth and the login handoff are public. The gateway and tenant-directory use the
+    if (pathname === '/error') return errorPage(request, env)
+    // Only Better Auth, the login handoff and its error page are public. The gateway and tenant-directory use the
     // RPC entrypoints above.
     return new Response('Not found', { status: 404 })
   },
