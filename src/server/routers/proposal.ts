@@ -1480,7 +1480,6 @@ export const proposalRouter = router({
           })
         }
 
-
         // ANY UNRESOLVED INVITATION TO THIS ADDRESS IS NOW MOOT — the person is
         // a speaker, so there is nothing left to answer. Canceled in the SAME
         // transaction so the two states can never disagree, using the same

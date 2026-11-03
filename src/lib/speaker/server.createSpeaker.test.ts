@@ -16,21 +16,25 @@ vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 vi.mock('@/lib/proposal/server', () => ({ listPublicTalks: vi.fn() }))
 
 import { createSpeaker } from './server'
-import { buildOrganizerCreatedSpeaker } from './sanity'
+import {
+  buildOrganizerCreatedSpeaker,
+  type OrganizerCreatedSpeakerFields,
+} from './sanity'
+import { Flags } from './types'
 
 const NOW = '2026-11-03T12:00:00.000Z'
-const fields = {
+const fields: OrganizerCreatedSpeakerFields = {
   name: 'Ada Lovelace',
   email: '  Ada@Example.COM ',
   title: 'Engineer',
   bio: 'Bio',
   company: 'Analytical',
   links: ['https://ada.example'],
-  flags: ['first-time-speaker'],
+  flags: [Flags.firstTimeSpeaker],
   consent: undefined,
   image: 'image-abc-200x200-png',
   socialTagOptOut: true,
-} as Parameters<typeof buildOrganizerCreatedSpeaker>[0]
+}
 
 // The document the old router path wrote, spelled out so a change to the
 // builder cannot move both sides of the comparison at once.
@@ -43,7 +47,7 @@ const EXPECTED = {
   bio: 'Bio',
   company: 'Analytical',
   links: ['https://ada.example'],
-  flags: ['first-time-speaker'],
+  flags: ['first-time'],
   consent: undefined,
   image: {
     _type: 'image',
