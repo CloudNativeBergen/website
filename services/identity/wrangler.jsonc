@@ -22,6 +22,8 @@
   "preview_urls": false,
   "env": {
     "preview": {
+      // Last moment a NextAuth session may upgrade to an identity session (#1842).
+      "vars": { "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z" },
       "d1_databases": [
         {
           "binding": "DB",
@@ -63,6 +65,7 @@
       ],
     },
     "production": {
+      "vars": { "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z" },
       "d1_databases": [
         {
           "binding": "DB",
