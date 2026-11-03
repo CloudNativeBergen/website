@@ -244,7 +244,7 @@ export type EmailResult<T = EmailResponse> = {
 }
 
 // Usage
-const result = await sendSpeakerEmail(params)
+const result = await sendMultiSpeakerEmail(params)
 if (result.error) {
   // Handle error based on status code
   switch (result.error.status) {

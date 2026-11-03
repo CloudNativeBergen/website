@@ -352,9 +352,6 @@ export const Architecture: Story = {
               </h3>
               <ul className="font-inter space-y-1 text-xs text-brand-slate-gray dark:text-gray-400">
                 <li>
-                  <code>proposal.list</code> — list own proposals
-                </li>
-                <li>
                   <code>proposal.getById</code> — get single proposal
                 </li>
                 <li>
