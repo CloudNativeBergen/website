@@ -32,7 +32,11 @@ vi.mock('next-auth', () => ({
   default: () => ({
     auth: h.mockAuth,
     signIn: vi.fn(),
-    handlers: { GET: vi.fn(), POST: vi.fn() },
+    handlers: {
+      // /api/auth/session as NextAuth answers it: the cookie session or null.
+      GET: async () => Response.json(h.nextAuthSession.value),
+      POST: vi.fn(),
+    },
   }),
   AuthError: class AuthError extends Error {},
 }))
@@ -63,7 +67,7 @@ vi.mock('next/headers', () => ({
 }))
 
 import { NextRequest } from 'next/server'
-import { getAuthSession } from '@/lib/auth'
+import { getAuthSession, handlers } from '@/lib/auth'
 import middleware from '@/proxy'
 
 function adminRequest() {
@@ -204,6 +208,34 @@ describe('proxy with an identity session', () => {
     h.nextAuthSession.value = { expires: 'x', speaker: { _id: 'n' } }
     const res = await adminRequest()
     expect(res.headers.get('location')).toBeNull()
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('GET /api/auth/session with an identity session', () => {
+  function sessionRequest() {
+    const req = new NextRequest('https://conf.example/api/auth/session', {
+      headers: { host: h.host.value },
+    })
+    if (h.cookie.value) req.cookies.set('__Host-konf.session', h.cookie.value)
+    return handlers.GET(req)
+  }
+
+  it('answers with the identity session for a flagged tenant', async () => {
+    const body = await (await sessionRequest()).json()
+    expect(body?.speaker?._id).toBe('speaker-1')
+  })
+
+  it('answers null when the tenant is not flagged', async () => {
+    vi.stubEnv('KONF_IDENTITY_TENANTS', 'org-other')
+    expect(await (await sessionRequest()).json()).toBeNull()
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+
+  it('keeps the NextAuth session when there is one', async () => {
+    h.nextAuthSession.value = { expires: 'x', speaker: { _id: 'n' } }
+    const body = await (await sessionRequest()).json()
+    expect(body.speaker._id).toBe('n')
     expect(h.fetch).not.toHaveBeenCalled()
   })
 })

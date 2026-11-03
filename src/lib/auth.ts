@@ -19,6 +19,7 @@ import {
   emailLinkIdentifierOf,
 } from '@/lib/auth/email-link/identity'
 import { guardRedirectProxyBounce } from '@/lib/auth/redirect-proxy-guard'
+import { IDENTITY_SESSION_COOKIE } from '@/lib/auth/identity-cookie'
 import type { Speaker } from '@/lib/speaker/types'
 import type { JWT } from 'next-auth/jwt'
 
@@ -739,11 +740,41 @@ function wrapAuthHandler(
     // verified-origin check has to sit in front of the handler.
     const refused = await guardRedirectProxyBounce(req)
     if (refused) return refused
-    const res = await handler(req)
+    const res = await identitySessionResponse(req, await handler(req))
     // `applySessionCookieDomain` is a no-op for anything that is not a real
     // Response with Set-Cookie headers, so no null-guard is needed here.
     return applySessionCookieDomain(res, sessionCookieRequestHost(req.headers))
   }
+}
+
+/**
+ * GET /api/auth/session (what `useSession()` polls): with no NextAuth session,
+ * answer with the identity session for flagged tenants (#1892). Any other
+ * request, or no identity session, keeps NextAuth's response.
+ */
+async function identitySessionResponse(
+  req: NextRequest,
+  res: Response,
+): Promise<Response> {
+  if (
+    req.method !== 'GET' ||
+    !req.nextUrl?.pathname.endsWith('/api/auth/session') ||
+    !res.ok ||
+    !req.cookies?.get(IDENTITY_SESSION_COOKIE)
+  ) {
+    return res
+  }
+  const body = await res.clone().text()
+  if (body !== 'null' && body !== '{}' && body !== '') return res
+  const { identitySessionFor } = await import('@/lib/auth/identity-session')
+  const session = await identitySessionFor(
+    req.cookies.get(IDENTITY_SESSION_COOKIE)?.value,
+    sessionCookieRequestHost(req.headers),
+  )
+  if (!session) return res
+  const headers = new Headers(res.headers)
+  headers.delete('content-length')
+  return new Response(JSON.stringify(session), { status: 200, headers })
 }
 
 /**
