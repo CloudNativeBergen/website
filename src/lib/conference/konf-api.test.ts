@@ -217,6 +217,16 @@ describe('fetchKonfApiConference caching', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it('logs the real cause inside the cached body, before production redacts it', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('boom', { status: 401 }))
+    await expect(
+      fetchKonfApiConference('2026.example.com', 'conf-1'),
+    ).rejects.toThrow()
+    expect(console.warn).toHaveBeenCalledWith(
+      '[konf-api] read failed for 2026.example.com: Error: HTTP 401',
+    )
+  })
+
   it('an id mismatch throws inside the cached body, so it is not stored', async () => {
     apiReply({ id: 'conf-other' })
     await expect(cachedApiRead('2026.example.com', 'conf-1')).rejects.toThrow(
