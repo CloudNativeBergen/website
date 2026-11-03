@@ -71,7 +71,10 @@ class Conferences extends ScopedRepository {
     if (!row) throw fail('conference not found', 'NOT_FOUND')
     const start = 'startDate' in patch ? patch.startDate : row.startDate
     const end = 'endDate' in patch ? patch.endDate : row.endDate
-    if (start && end && end < start) {
+    // Only when the patch sets a date: stored legacy values never block an
+    // unrelated edit.
+    const touchesDates = 'startDate' in patch || 'endDate' in patch
+    if (touchesDates && start && end && end < start) {
       throw fail('endDate is before startDate', 'BAD_USER_INPUT')
     }
     const [updated] = await this.db

@@ -112,9 +112,6 @@ builder.mutationType({
     updateConference: t.field({
       type: Conference,
       nullable: false,
-      // Cut from the public contract until the gateway has a lane for
-      // service callers (#1881 phases 2 and 4). The authz guard holds either way.
-      tag: 'internal',
       description:
         "Patches the request's Conference. Requires an org owner or admin.",
       args: { input: t.arg({ type: ConferencePatchInput, required: true }) },

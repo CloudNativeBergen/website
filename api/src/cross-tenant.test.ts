@@ -8,6 +8,8 @@
  * Queries are generated from the public schema: every field reachable from
  * Query, with required arguments filled from A's ids and from B's ids (the
  * cross-tenant probe). Any B marker in a response fails the build.
+ * Every Mutation field runs too: only A's organizer on A's host may change
+ * any row, and then never a B row.
  *
  * Subgraphs come from SUBGRAPHS and BINDINGS: a new one is seeded and walked
  * here without a change to this file.
@@ -336,6 +338,14 @@ function queries(tenants: T[]) {
   return out
 }
 
+/** One document per Mutation field, required args filled, every field selected. */
+function mutations() {
+  return Object.values(schema.getMutationType()?.getFields() ?? {}).map((f) => {
+    walked.add(`Mutation.${f.name}`)
+    return `mutation { ${f.name}${args(f.args, '')}${selection(getNamedType(f.type), 2, '')} }`
+  })
+}
+
 // --- Wiring ----------------------------------------------------------------
 
 const IDENTITY_ENV = {
@@ -352,6 +362,8 @@ const names = Object.keys(SUBGRAPHS)
 let mf: Miniflare
 let env: Env
 let memberJwt: string
+/** Every seeded database, for the mutation walk's before/after snapshots. */
+const dbs: D1Database[] = []
 let identityData: { isVerifiedOrigin(origin: string): Promise<boolean> }
 let forgedB: string
 let envelopePublicKey: string
@@ -377,6 +389,7 @@ beforeAll(async () => {
   )) as unknown as D1Database
   await migrate(identityDb, new URL('identity/migrations/', services))
   await seed(identityDb)
+  dbs.push(identityDb)
   // Better Auth signs with the first jwks row; let it make a real key.
   await identityDb.prepare('DELETE FROM jwks').run()
   const identity = await import('../../services/identity/src/index')
@@ -404,6 +417,7 @@ beforeAll(async () => {
     if (existsSync(migrations)) {
       await migrate(db, migrations)
       await seed(db)
+      dbs.push(db)
     }
     const worker = (await import(
       /* @vite-ignore */ new URL(`${name}/src/worker.ts`, services).pathname
@@ -547,8 +561,9 @@ describe.each([
   })
 })
 
-it('walks every public field reachable from Query', () => {
+it('walks every public field reachable from Query and Mutation', () => {
   queries(TENANTS)
+  mutations()
   console.info(`cross-tenant walk: ${walked.size} fields`, [...walked].sort())
   const reachable = Object.values(schema.getTypeMap()).flatMap((t) =>
     isObjectType(t) && !t.name.startsWith('__')
@@ -581,6 +596,90 @@ it('resolves each origin over DIRECTORY and forwards its envelope to CONTENT', a
       await verifyEnvelope(lastEnvelope.content!, envelopePublicKey),
     ).toMatchObject({ typ: 'tenant', orgId: ORG[t], conferenceId: CONF[t] })
   }
+})
+
+describe('cross-tenant mutation walk', () => {
+  /** Every row of every table, serialised. */
+  const snapshot = async () => {
+    const rows: string[] = []
+    for (const db of dbs) {
+      const { results } = await db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'",
+        )
+        .all<{ name: string }>()
+      for (const { name } of results) {
+        const all = await db.prepare(`SELECT * FROM "${name}"`).all()
+        rows.push(...all.results.map((r) => `${name} ${JSON.stringify(r)}`))
+      }
+    }
+    return rows.sort()
+  }
+  const mutate = async (headers: Record<string, string>) => {
+    env.OVERRIDE_TENANTS = {}
+    const bodies: { data?: unknown; errors?: unknown[] }[] = []
+    for (const m of mutations()) bodies.push(JSON.parse(await run(m, headers)))
+    return bodies
+  }
+  const organizer = () => ({ authorization: `Bearer ${memberJwt}` })
+
+  it('has a mutation to walk', () => {
+    expect(mutations().length).toBeGreaterThan(0)
+  })
+
+  it.each([
+    ['anonymous on A', () => ({ origin: ORIGIN })],
+    [
+      "A's organizer on B's host",
+      () => ({ ...organizer(), origin: `https://${HOST.b}` }),
+    ],
+    [
+      "A's organizer with a forged B envelope on B's host",
+      () => ({
+        ...organizer(),
+        origin: `https://${HOST.b}`,
+        [ENVELOPE_HEADER]: forgedB,
+      }),
+    ],
+  ])('%s changes no row', async (_, headers) => {
+    const before = await snapshot()
+    for (const body of await mutate(headers())) {
+      expect(body.errors?.length ?? 0).toBeGreaterThan(0)
+    }
+    expect(await snapshot()).toEqual(before)
+  })
+
+  it('a member of A without a writing role changes no row', async () => {
+    const identityDb = dbs[0]
+    await identityDb
+      .prepare('UPDATE member SET role = ? WHERE userId = ?')
+      .bind('member', USER.a)
+      .run()
+    try {
+      const before = await snapshot()
+      for (const body of await mutate({ ...organizer(), origin: ORIGIN })) {
+        expect(body.errors?.length ?? 0).toBeGreaterThan(0)
+      }
+      expect(await snapshot()).toEqual(before)
+    } finally {
+      await identityDb
+        .prepare('UPDATE member SET role = ? WHERE userId = ?')
+        .bind('admin', USER.a)
+        .run()
+    }
+  })
+
+  it("A's organizer on A's host changes A's rows and never a B row", async () => {
+    const before = await snapshot()
+    for (const body of await mutate({ ...organizer(), origin: ORIGIN })) {
+      expect(body.errors).toBeUndefined()
+      expect(JSON.stringify(body)).not.toMatch(MARKER)
+    }
+    const after = await snapshot()
+    expect(after).not.toEqual(before)
+    const b = (rows: string[]) => rows.filter((r) => MARKER.test(r))
+    expect(b(after)).toEqual(b(before))
+  })
 })
 
 describe('negative control: the Sanity fixture follows the GROQ', () => {
