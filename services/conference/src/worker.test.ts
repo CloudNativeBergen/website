@@ -4,7 +4,7 @@
  * The conference subgraph through its Worker fetch handler: real envelope
  * crypto and the real migration on an in-memory SQLite standing in for D1.
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -62,12 +62,10 @@ let env: Parameters<typeof worker.fetch>[1]
 
 beforeEach(() => {
   sqlite = new DatabaseSync(':memory:')
-  sqlite.exec(
-    readFileSync(
-      new URL('../migrations/0001_init.sql', import.meta.url),
-      'utf8',
-    ),
-  )
+  const dir = new URL('../migrations/', import.meta.url)
+  for (const f of readdirSync(dir).sort()) {
+    sqlite.exec(readFileSync(new URL(f, dir), 'utf8'))
+  }
   const insert = sqlite.prepare(
     'INSERT INTO conferences (conference_id, org_id, published, title, social_links) VALUES (?, ?, ?, ?, ?)',
   )
@@ -79,7 +77,11 @@ beforeEach(() => {
 
 const QUERY = '{ conference { id title socialLinks } }'
 
-async function gql(as?: Envelope | string, query = QUERY) {
+async function gql(
+  as?: Envelope | string,
+  query = QUERY,
+  variables?: Record<string, unknown>,
+) {
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   if (as)
     headers[ENVELOPE_HEADER] =
@@ -88,7 +90,7 @@ async function gql(as?: Envelope | string, query = QUERY) {
     new Request('http://conference/graphql', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, variables }),
     }),
     env,
   )
@@ -162,5 +164,126 @@ describe('conference', () => {
     })
     expect(body.data.conference).toBeNull()
     expect(body.errors).toHaveLength(1)
+  })
+})
+
+describe('updateConference', () => {
+  const MUTATION =
+    'mutation($input: ConferencePatch!) { updateConference(input: $input) { id title tagline startDate endDate visibility socialLinks } }'
+  const update = (as: Envelope, input: Record<string, unknown>) =>
+    gql(as, MUTATION, { input })
+  const row = (id: string) =>
+    sqlite
+      .prepare('SELECT * FROM conferences WHERE conference_id = ?')
+      .get(id) as Record<string, unknown>
+
+  it("lets an owner or admin patch the envelope's Conference", async () => {
+    for (const role of ['owner', 'admin', 'member,admin']) {
+      const { body } = await update(tenant('org-a', 'conf-a', role), {
+        title: `by ${role}`,
+      })
+      expect(body.errors).toBeUndefined()
+      expect(body.data.updateConference).toMatchObject({
+        id: 'conf-a',
+        title: `by ${role}`,
+      })
+      expect(row('conf-a').title).toBe(`by ${role}`)
+      expect(row('conf-a').updated_at).toMatch(/^\d{4}-/)
+    }
+  })
+
+  it('refuses anonymous callers and members without a writing role', async () => {
+    const noUser: Envelope = {
+      ...tenant('org-a', 'conf-a', 'admin'),
+      userId: null,
+    } as Envelope
+    for (const as of [
+      tenant('org-a', 'conf-a'),
+      noUser,
+      tenant('org-a', 'conf-a', 'member'),
+      tenant('org-a', 'conf-a', 'administrator'),
+    ]) {
+      const { body } = await update(as, { title: 'pwned' })
+      expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
+      expect(row('conf-a').title).toBe('A 2026')
+    }
+  })
+
+  it('refuses before touching the database', async () => {
+    const prepare = vi.spyOn(env.DB, 'prepare')
+    await update(tenant('org-a', 'conf-a', 'member'), { title: 'x' })
+    expect(prepare).not.toHaveBeenCalled()
+  })
+
+  it("never writes another tenant's row", async () => {
+    // org-a's admin envelope naming org-b's conference id.
+    const { body } = await update(tenant('org-a', 'conf-b', 'admin'), {
+      title: 'pwned',
+    })
+    expect(body.errors[0].extensions.code).toBe('NOT_FOUND')
+    expect(row('conf-b').title).toBe('B 2026')
+    // An admin of A writes A only.
+    await update(tenant('org-a', 'conf-a', 'admin'), { title: 'A!' })
+    expect(row('conf-b').title).toBe('B 2026')
+    expect(row('conf-a-draft').title).toBe('A 2027')
+  })
+
+  it('leaves omitted fields alone and unsets explicit nulls', async () => {
+    sqlite.exec(
+      "UPDATE conferences SET tagline = 'tag' WHERE conference_id = 'conf-a'",
+    )
+    await update(tenant('org-a', 'conf-a', 'owner'), { city: 'Bergen' })
+    expect(row('conf-a')).toMatchObject({
+      title: 'A 2026',
+      tagline: 'tag',
+      city: 'Bergen',
+    })
+    await update(tenant('org-a', 'conf-a', 'owner'), { tagline: null })
+    expect(row('conf-a')).toMatchObject({
+      title: 'A 2026',
+      tagline: null,
+      city: 'Bergen',
+    })
+  })
+
+  it('rejects invalid input without writing', async () => {
+    sqlite.exec(
+      "UPDATE conferences SET start_date = '2026-06-10' WHERE conference_id = 'conf-a'",
+    )
+    for (const input of [
+      { startDate: '2026-13-01' },
+      { endDate: '10.06.2026' },
+      { endDate: '2026-02-30' },
+      { endDate: '2026-06-09' }, // before the stored startDate
+      { startDate: '2026-06-12', endDate: '2026-06-11' },
+      { primaryColor: 'red' },
+      { accentColor: '#12345' },
+      { visibility: 'secret' },
+      { visibility: null },
+      { socialLinks: null },
+      { socialLinks: ['javascript:alert(1)'] },
+      { registrationLink: 'not a url' },
+    ]) {
+      const { body } = await update(tenant('org-a', 'conf-a', 'admin'), input)
+      expect(body.errors[0].extensions.code, JSON.stringify(input)).toBe(
+        'BAD_USER_INPUT',
+      )
+    }
+    expect(row('conf-a')).toMatchObject({
+      start_date: '2026-06-10',
+      end_date: null,
+      updated_at: null,
+    })
+    const ok = await update(tenant('org-a', 'conf-a', 'admin'), {
+      endDate: '2026-06-11',
+      primaryColor: '#AbC',
+      visibility: 'unlisted',
+      socialLinks: ['https://x.example'],
+    })
+    expect(ok.body.data.updateConference).toMatchObject({
+      endDate: '2026-06-11',
+      visibility: 'unlisted',
+      socialLinks: ['https://x.example'],
+    })
   })
 })

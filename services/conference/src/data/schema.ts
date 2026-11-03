@@ -1,4 +1,4 @@
-// Drizzle mirror of migrations/0001_init.sql.
+// Drizzle mirror of migrations/ (0001-0003).
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const conferences = sqliteTable('conferences', {
@@ -21,4 +21,5 @@ export const conferences = sqliteTable('conferences', {
   socialLinks: text('social_links', { mode: 'json' })
     .$type<string[]>()
     .notNull(),
+  updatedAt: text('updated_at'),
 })
