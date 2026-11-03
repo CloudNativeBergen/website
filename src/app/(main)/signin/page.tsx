@@ -8,7 +8,6 @@ import { isIdentityTenant } from '@/lib/auth/identity-handoff'
 import { oauthSignInAction, requestEmailSignInLinkAction } from './actions'
 import { FullPageActionForm } from './FullPageActionForm'
 
-
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
