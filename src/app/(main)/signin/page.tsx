@@ -1,16 +1,13 @@
 import type { Metadata } from 'next'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
-import { signIn, providerMap } from '@/lib/auth'
+import { providerMap } from '@/lib/auth'
 import { SignInProviderButtons } from '@/components/SignInProviderButtons'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isIdentityTenant } from '@/lib/auth/identity-handoff'
-import { AuthError } from 'next-auth'
-import { redirect } from 'next/navigation'
-import { requestEmailSignInLinkAction } from './actions'
+import { oauthSignInAction, requestEmailSignInLinkAction } from './actions'
 import { FullPageActionForm } from './FullPageActionForm'
 
-const SIGNIN_ERROR_URL = '/error'
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -62,19 +59,10 @@ export default async function Signin(props: {
             <SignInProviderButtons
               providers={Object.values(providerMap)}
               handoff={handoff}
-              signInAction={async (providerId: string) => {
-                'use server'
-                try {
-                  await signIn(providerId, {
-                    redirectTo: searchParams.callbackUrl ?? '/',
-                  })
-                } catch (error) {
-                  if (error instanceof AuthError) {
-                    return redirect(`${SIGNIN_ERROR_URL}?error=${error.type}`)
-                  }
-                  throw error
-                }
-              }}
+              signInAction={oauthSignInAction.bind(
+                null,
+                searchParams.callbackUrl ?? '/',
+              )}
             />
 
             {/*
