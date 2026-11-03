@@ -1,4 +1,5 @@
 'use client'
+import type { OrganizerProposal } from '@/lib/proposal/organizer'
 
 import React, { useState, useMemo } from 'react'
 import { DialogTitle } from '@headlessui/react'
@@ -106,7 +107,7 @@ export function ProposalActionModal({
 }: {
   open: boolean
   close: () => void
-  proposal: ProposalExisting
+  proposal: ProposalExisting | OrganizerProposal
   action: Action
   adminUI?: boolean
   onAction: (id: string, status: Status) => void

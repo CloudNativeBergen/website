@@ -1,5 +1,7 @@
 'use client'
 
+import type { OrganizerProposal } from '@/lib/proposal/organizer'
+
 import { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import {
@@ -14,7 +16,6 @@ import {
   StarIcon as StarIconSolid,
 } from '@heroicons/react/24/solid'
 import {
-  ProposalExisting,
   levels,
   formats,
   languages,
@@ -36,7 +37,7 @@ import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
 import { formatDateSafe } from '@/lib/time'
 
 interface ProposalPreviewProps {
-  proposal: ProposalExisting
+  proposal: OrganizerProposal
   conference: Conference
   /** Omit when the preview is embedded in a surface that owns its own dismiss
    *  affordance — the close button is then not rendered at all, rather than
@@ -280,19 +281,9 @@ export function ProposalPreview({
                 Topics
               </h4>
               <div className="flex flex-wrap gap-2">
-                {proposal.topics?.map((topic, index) => {
-                  const topicTitle =
-                    typeof topic === 'object' && 'title' in topic
-                      ? topic.title
-                      : typeof topic === 'object' && '_ref' in topic
-                        ? 'Topic'
-                        : 'Unknown Topic'
-                  const topicId =
-                    typeof topic === 'object' && '_id' in topic
-                      ? topic._id
-                      : typeof topic === 'object' && '_ref' in topic
-                        ? topic._ref
-                        : `topic-${index}`
+                {proposal.topics?.map((topic) => {
+                  const topicTitle = topic.title
+                  const topicId = topic._id
 
                   return (
                     <span

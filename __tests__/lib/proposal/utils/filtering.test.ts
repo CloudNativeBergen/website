@@ -1,3 +1,4 @@
+import { toOrganizerProposal } from '@/lib/proposal/organizer'
 import { describe, expect, it } from 'vitest'
 import {
   filterProposals,
@@ -13,7 +14,7 @@ import {
 } from '@/lib/proposal/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 
-const mockProposal = (
+const mockProposalRaw = (
   overrides: Partial<ProposalExisting> = {},
 ): ProposalExisting => ({
   _id: '1',
@@ -35,6 +36,9 @@ const mockProposal = (
   conference: { _type: 'reference', _ref: 'conf-1' },
   ...overrides,
 })
+
+const mockProposal = (...args: Parameters<typeof mockProposalRaw>) =>
+  toOrganizerProposal(mockProposalRaw(...args))
 
 describe('filterProposals', () => {
   const proposals = [

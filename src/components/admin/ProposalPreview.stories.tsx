@@ -1,3 +1,4 @@
+import { toOrganizerProposal } from '@/lib/proposal/organizer'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ProposalPreview } from './ProposalPreview'
 import { Conference } from '@/lib/conference/types'
@@ -62,7 +63,7 @@ const mockTopics: Topic[] = [
   },
 ]
 
-const createMockProposal = (
+const createMockProposalRaw = (
   overrides: Partial<ProposalExisting> = {},
 ): ProposalExisting => ({
   _id: 'proposal-1',
@@ -99,6 +100,10 @@ const createMockProposal = (
   topics: mockTopics,
   ...overrides,
 })
+
+const createMockProposal = (
+  ...args: Parameters<typeof createMockProposalRaw>
+) => toOrganizerProposal(createMockProposalRaw(...args))
 
 const meta: Meta<typeof ProposalPreview> = {
   title: 'Systems/Proposals/Admin/ProposalPreview',
