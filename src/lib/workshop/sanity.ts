@@ -5,7 +5,7 @@ import type {
   WorkshopSignupExisting,
   WorkshopStatistics,
 } from './types'
-import { getWorkshops } from '@/lib/proposal/data/sanity'
+import { getWorkshops } from '@/lib/proposal/server'
 import { EARLY_ACCESS_OF_SIGNUP } from './early-access/signups'
 import { freeSeat } from './seats'
 import { isCanceledWorkshop, isListedWorkshop } from './listed'

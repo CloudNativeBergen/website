@@ -41,7 +41,7 @@ import {
 } from '@/lib/speaker/dinnerChoice-sanity'
 import { dinnerChoiceOptions } from '@/lib/speaker/dinnerChoice'
 import { generateKey } from '@/lib/sanity/helpers'
-import { getProposals } from '@/lib/proposal/data/sanity'
+import { getProposals } from '@/lib/proposal/server'
 import { handleSpeakerTicket } from '@/lib/events/handlers/speakerTicket'
 import { Action } from '@/lib/proposal/types'
 import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanity'

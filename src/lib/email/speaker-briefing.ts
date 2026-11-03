@@ -11,7 +11,7 @@ import { SpeakerBriefingTemplate } from '@/components/email/SpeakerBriefingTempl
 import { emailBrandColor } from '@/lib/branding/theme'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import type { Conference } from '@/lib/conference/types'
-import { getProposals } from '@/lib/proposal/data/sanity'
+import { getProposals } from '@/lib/proposal/server'
 import { Status, type ProposalExisting } from '@/lib/proposal/types'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'

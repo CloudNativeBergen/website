@@ -4,9 +4,11 @@ import { WorkerEntrypoint } from 'cloudflare:workers'
 import { createAuth, createData } from './data'
 import { errorPage } from './error-page'
 import { handoff, type HandoffEnv } from './handoff'
+import { loginTestPage } from './login-test'
 import type { WorkerEnv } from './worker'
 
-type Env = WorkerEnv & HandoffEnv
+/** LOGIN_TEST_PAGE: "1" on preview only (service.cue) serves GET /test. */
+type Env = WorkerEnv & HandoffEnv & { LOGIN_TEST_PAGE?: string }
 
 /**
  * RPC for the gateway, reachable only over a service binding with
@@ -38,7 +40,14 @@ export default {
       return handoff(request, env)
     }
     if (pathname === '/error') return errorPage(request, env)
-    // Only Better Auth, the login handoff and its error page are public. The gateway and tenant-directory use the
+    if (
+      pathname === '/test' &&
+      request.method === 'GET' &&
+      env.LOGIN_TEST_PAGE === '1'
+    ) {
+      return loginTestPage()
+    }
+    // Only Better Auth, the login handoff, its error page and the preview test page are public. The gateway and tenant-directory use the
     // RPC entrypoints above.
     return new Response('Not found', { status: 404 })
   },

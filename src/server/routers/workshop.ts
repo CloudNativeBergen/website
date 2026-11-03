@@ -57,7 +57,7 @@ import {
 import { deliverPromotionEmails } from '@/lib/workshop/promoted'
 import { moveSignups, readMove } from '@/lib/workshop/move'
 import { SEATS_BUSY } from '@/lib/workshop/seats-busy'
-import { getWorkshops } from '@/lib/proposal/data/sanity'
+import { getWorkshops } from '@/lib/proposal/server'
 import {
   sendBasicWorkshopConfirmation,
   sendWorkshopCanceledEmail,
