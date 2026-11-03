@@ -11,7 +11,13 @@ import {
   generateEnvelopeKeyPair,
   verifyEnvelope,
 } from '@runkonf/tenancy'
-import { createGateway, SESSION_ORIGIN_CLAIM, type Env } from './gateway'
+import { GraphQLError } from 'graphql'
+import {
+  createGateway,
+  maskError,
+  SESSION_ORIGIN_CLAIM,
+  type Env,
+} from './gateway'
 import { SITE_ASSERTION_HEADER } from './site-identity'
 import { compose } from './supergraph'
 import { SIGNED_IP_HEADER, signClientIp } from './client-ip'
@@ -387,6 +393,36 @@ describe('gateway', () => {
       'missing tenant envelope',
     )
     error.mockRestore()
+  })
+
+  it('masks a subgraph 5xx without its body, the request or serviceName', async () => {
+    const { env } = makeEnv()
+    ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+      new Response('upstream secret page', { status: 502 })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await gateway.fetch(post(SUBGRAPH_QUERY), env)
+    const text = await res.text()
+    expect(text).not.toContain('upstream secret')
+    expect(text).not.toContain('{conference{id}}')
+    expect(text).not.toContain('"request"')
+    expect(text).not.toContain('serviceName')
+    expect(text).not.toContain('Unexpected response')
+    expect(JSON.parse(text).errors[0]).toMatchObject({
+      message: 'Unexpected error.',
+      extensions: { code: 'INTERNAL_SERVER_ERROR' },
+    })
+  })
+
+  it('masks a GraphQLError chain that ends in a plain Error', () => {
+    const inner = new GraphQLError('inner', {
+      originalError: new Error('secret detail'),
+    })
+    const outer = new GraphQLError('secret detail', { originalError: inner })
+    const masked = maskError(outer, 'Unexpected error.')
+    expect(masked.message).toBe('Unexpected error.')
+    expect((masked as GraphQLError).extensions).toMatchObject({
+      unexpected: true,
+    })
   })
 
   it('replaces a subgraph code outside the safe list', async () => {

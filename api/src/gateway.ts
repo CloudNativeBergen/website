@@ -92,20 +92,24 @@ const SAFE_CODES = new Set(['UNAUTHENTICATED', 'FORBIDDEN', 'BAD_USER_INPUT'])
 const isGraphQLError = (e: unknown): e is GraphQLError =>
   e instanceof Error && e.name === 'GraphQLError'
 
+// Like yoga's isOriginalGraphQLError: every link of the originalError chain is a GraphQLError.
+const isOriginal = (e: unknown): boolean =>
+  isGraphQLError(e) && (e.originalError == null || isOriginal(e.originalError))
+
+// Yoga logs the original whenever this returns a new error.
 export function maskError(error: unknown, message: string): Error {
   const gql = isGraphQLError(error) ? error : null
   const fromSubgraph = gql?.extensions?.serviceName !== undefined
-  const unexpected = gql?.originalError && !isGraphQLError(gql.originalError)
-  if (gql && !fromSubgraph && !unexpected) return gql
-  console.error('masked graphql error', error)
+  if (gql && !fromSubgraph && isOriginal(gql)) return gql
   const code = gql?.extensions?.code
+  const safe = typeof code === 'string' && SAFE_CODES.has(code)
   return new GraphQLError(message, {
     path: gql?.path,
     extensions: {
-      code:
-        typeof code === 'string' && SAFE_CODES.has(code)
-          ? code
-          : 'INTERNAL_SERVER_ERROR',
+      code: safe ? code : 'INTERNAL_SERVER_ERROR',
+      // As yoga's default: unexpected answers 500, an http status is kept.
+      ...(safe ? {} : { unexpected: true }),
+      ...(gql?.extensions?.http ? { http: gql.extensions.http } : {}),
     },
   })
 }
