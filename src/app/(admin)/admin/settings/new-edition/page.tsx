@@ -38,8 +38,8 @@ export default async function NewEditionPage() {
 
   // A single count the normalized projection doesn't carry.
   const contractTemplateCount = await clientReadUncached.fetch<number>(
-    `count(*[_type == "contractTemplate" && conference._ref == $id])`,
-    { id: conference._id },
+    `count(*[_type == "contractTemplate" && conference._ref == $conferenceId])`,
+    { conferenceId: conference._id },
   )
 
   const numericGoals = [

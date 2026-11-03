@@ -660,10 +660,10 @@ export async function requireDocumentsInCurrentOrg(
   if (unique.length === 0) return orgId
   let owned = 0
   try {
-    // groq-global-scoped: the tenant predicate IS the `organization._ref` /
-    // `conference->organization._ref` disjunction below.
     owned =
       (await clientReadUncached.fetch<number>(
+        // groq-global-scoped: the tenant predicate IS the `organization._ref` /
+        // `conference->organization._ref` coalesce below.
         groq`count(*[_id in $ids && _type == $expectedType && coalesce(organization._ref, conference->organization._ref) == $orgId])`,
         { ids: unique, expectedType, orgId },
         { cache: 'no-store' },

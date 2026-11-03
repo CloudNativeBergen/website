@@ -348,9 +348,9 @@ describe('buildSystemChecks — live probes', () => {
 
   it('reports an ok Sanity read probe with latency', async () => {
     fetchMock.mockImplementation((query: string) => {
-      // The subscription stats query returns a {total, speakers} object.
-      if (query.includes('"total"'))
-        return Promise.resolve({ total: 5, speakers: 3 })
+      // Two subscription counts: subscriptions, then speakers holding them.
+      if (query.includes('pushSubscriptions[])')) return Promise.resolve(5)
+      if (query.includes('count(pushSubscriptions)')) return Promise.resolve(3)
       if (query.includes('count(')) return Promise.resolve(5)
       return Promise.resolve('conf-1')
     })
@@ -387,8 +387,7 @@ describe('buildSystemChecks — badges.outdated', () => {
           ? Promise.reject(outdated)
           : Promise.resolve(outdated)
       }
-      if (query.includes('"total"'))
-        return Promise.resolve({ total: 0, speakers: 0 })
+      if (query.includes('pushSubscriptions')) return Promise.resolve(0)
       return Promise.resolve('conf-1')
     })
   }

@@ -1142,6 +1142,8 @@ export const conferenceRouter = router({
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
       const organizerIds = await clientReadUncached.fetch<string[] | null>(
+        // groq-global-scoped: the conference document itself, by the id
+        // resolveConferenceId() resolved from the request domain.
         `*[_type == "conference" && _id == $id][0].organizers[]._ref`,
         { id: conferenceId },
       )
@@ -1468,16 +1470,18 @@ export const conferenceRouter = router({
       const [source, sourceTiers, sourceTemplates, claimedDomains, orgSlug] =
         await Promise.all([
           clientReadUncached.fetch<SourceConference | null>(
+            // groq-global-scoped: the source conference document itself, by
+            // the id resolveConferenceId() resolved from the request domain.
             `*[_type == "conference" && _id == $id][0]`,
             { id: sourceId },
           ),
           clientReadUncached.fetch<SourceSponsorTier[]>(
-            `*[_type == "sponsorTier" && conference._ref == $id]`,
-            { id: sourceId },
+            `*[_type == "sponsorTier" && conference._ref == $conferenceId]`,
+            { conferenceId: sourceId },
           ),
           clientReadUncached.fetch<SourceContractTemplate[]>(
-            `*[_type == "contractTemplate" && conference._ref == $id]`,
-            { id: sourceId },
+            `*[_type == "contractTemplate" && conference._ref == $conferenceId]`,
+            { conferenceId: sourceId },
           ),
           fetchClaimedDomains(),
           // The org slug is what the platform hosts are minted FROM. Read from

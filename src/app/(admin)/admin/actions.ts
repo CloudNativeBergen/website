@@ -362,6 +362,8 @@ export async function loadDashboardConfig(): Promise<
   const conferenceId = await resolveConferenceId()
 
   const personal = await clientWrite.fetch<DashboardConfigDocument | null>(
+    // groq-global-scoped: deterministic id built from the resolved
+    // conferenceId and the caller's own speakerId (personalDashboardConfigId).
     `*[_type == "dashboardConfig" && _id == $id][0]`,
     { id: personalDashboardConfigId(conferenceId, speakerId) },
   )

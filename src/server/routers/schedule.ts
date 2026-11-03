@@ -195,6 +195,8 @@ export const scheduleRouter = router({
         if (input.status) {
           predicates.push('status == $status')
         }
+        // groq-global-scoped: `predicates` always carries
+        // `conference._ref == $conferenceId`, bound from the domain conference.
         const query = `*[${predicates.join(' && ')}]`
 
         return await clientWrite.fetch(query, {

@@ -501,6 +501,8 @@ export async function getConferencesForWeeklyUpdate(): Promise<Conference[]> {
   // NOTE: an empty string passes defined() in GROQ — require a non-empty
   // channel so a blanked-out field doesn't qualify a conference for a post
   // that postSlackMessage would no-op anyway.
+  // groq-global: cron sweep over every tenant's active conferences; each
+  // weekly update posts to its own conference's channel.
   const query = `*[_type == "conference" && defined(endDate) && endDate >= $cutoff && defined(salesNotificationChannel) && salesNotificationChannel != ""] | order(startDate asc)[0...${MAX_WEEKLY_UPDATE_CONFERENCES}]{
     ...,
     teams[]{

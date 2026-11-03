@@ -2,7 +2,10 @@ import { connection } from 'next/server'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { getAuthSession } from '@/lib/auth'
-import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
+import {
+  isOrganizerForCurrentOrg,
+  resolveCurrentOrgId,
+} from '@/lib/authz/organizer'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
@@ -89,8 +92,16 @@ export default async function WorkshopDetailsPage({
     )
   }
 
-  const workshop = await clientReadUncached.fetch<WorkshopDetails | null>(
-    groq`*[_type == "talk" && _id == $workshopId && format in ["workshop_120", "workshop_240"]][0] {
+  // Tenant scope: any edition of the org this domain serves, matching the
+  // speaker dashboard (/cfp/list), which lists every edition of the org. A
+  // foreign org's workshop is not found. The impersonation check below is
+  // org-wide, so without this an organizer could open another tenant's
+  // workshop by id.
+  const orgId = await resolveCurrentOrgId()
+  const workshop = !orgId
+    ? null
+    : await clientReadUncached.fetch<WorkshopDetails | null>(
+        groq`*[_type == "talk" && _id == $workshopId && conference->organization._ref == $orgId && format in ["workshop_120", "workshop_240"]][0] {
       _id,
       title,
       format,
@@ -101,8 +112,8 @@ export default async function WorkshopDetailsPage({
       "speakers": speakers[]->{ _id, name, email, organization },
       "conferenceId": conference._ref
     }`,
-    { workshopId },
-  )
+        { workshopId, orgId },
+      )
 
   if (!workshop) {
     return (
@@ -179,7 +190,7 @@ export default async function WorkshopDetailsPage({
     : null
 
   const signups = await clientReadUncached.fetch<WorkshopSignupExisting[]>(
-    groq`*[_type == "workshopSignup" && workshop._ref == $workshopId && status in ["confirmed", "waitlist"]] | order(signedUpAt asc) {
+    groq`*[_type == "workshopSignup" && workshop._ref == $workshopId && conference._ref == $conferenceId && status in ["confirmed", "waitlist"]] | order(signedUpAt asc) {
       _id,
       userName,
       experienceLevel,
@@ -187,7 +198,8 @@ export default async function WorkshopDetailsPage({
       status,
       signedUpAt
     }`,
-    { workshopId },
+    // The workshop's own edition, which may differ from the domain's.
+    { workshopId, conferenceId: workshop.conferenceId },
   )
 
   const confirmedSignups = signups.filter(

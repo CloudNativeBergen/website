@@ -70,6 +70,8 @@ export async function getDiscoveryVisibilityForDomain(
       _id: string
       visibility?: string | null
     } | null>(
+      // groq-global: host-to-tenant resolution itself; there is no tenant yet
+      // to scope by. Returns only {_id, visibility}.
       `*[_type == "conference" && ($domain in domains || $wildcardSubdomain in domains) && !(_id in path("drafts.**"))][0]{ _id, visibility }`,
       {
         domain: normalizeDomain(host),
