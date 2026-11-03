@@ -65,15 +65,41 @@ const nextAuthMiddleware = auth(async (req) => {
   })
 })
 
-/** Identity session cookie, flagged tenants only (#1892). */
+/**
+ * Identity session cookie (#1892): a gate only. The proxy runs outside the
+ * React server layer, so it must not reach `'use cache'` reads, `server-only`
+ * modules or Sanity writes. It asks identity whether the session is live and
+ * bound to this origin; the page's getAuthSession then applies the tenant
+ * flag and maps the speaker, and redirects when either fails.
+ */
 async function identitySignedIn(req: NextRequest): Promise<boolean> {
   const token = req.cookies.get(IDENTITY_SESSION_COOKIE)?.value
-  if (!token) return false
-  const { identitySessionFor } = await import('@/lib/auth/identity-session')
-  return !!(await identitySessionFor(
-    token,
-    sessionCookieRequestHost(req.headers),
-  ))
+  const host = sessionCookieRequestHost(req.headers)
+  if (
+    !token ||
+    !host ||
+    !process.env.KONF_IDENTITY_TENANTS ||
+    !process.env.IDENTITY_URL
+  ) {
+    return false
+  }
+  try {
+    const res = await fetch(
+      new URL('/api/auth/get-session', process.env.IDENTITY_URL),
+      {
+        headers: { authorization: `Bearer ${token}` },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000),
+      },
+    )
+    if (!res.ok) return false
+    const got = (await res.json()) as { session?: { origin?: string } } | null
+    return got?.session?.origin === `https://${host}`
+  } catch (err) {
+    // Error class and message only: no token, no user.
+    console.error('[identity] proxy session check failed', String(err))
+    return false
+  }
 }
 
 /**

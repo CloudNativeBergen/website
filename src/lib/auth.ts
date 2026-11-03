@@ -740,11 +740,54 @@ function wrapAuthHandler(
     // verified-origin check has to sit in front of the handler.
     const refused = await guardRedirectProxyBounce(req)
     if (refused) return refused
-    const res = await identitySessionResponse(req, await handler(req))
+    const res = await identitySignOut(
+      req,
+      await identitySessionResponse(req, await handler(req)),
+    )
     // `applySessionCookieDomain` is a no-op for anything that is not a real
     // Response with Set-Cookie headers, so no null-guard is needed here.
     return applySessionCookieDomain(res, sessionCookieRequestHost(req.headers))
   }
+}
+
+/**
+ * POST /api/auth/signout with an identity session (#1892). @auth/core skips
+ * `events.signOut` when there is no NextAuth cookie, so signOutHandler never
+ * runs for an identity-only session. Revoke it at identity and clear the
+ * cookie here, whatever NextAuth did.
+ */
+async function identitySignOut(
+  req: NextRequest,
+  res: Response,
+): Promise<Response> {
+  const token = req.cookies?.get(IDENTITY_SESSION_COOKIE)?.value
+  if (
+    req.method !== 'POST' ||
+    !req.nextUrl?.pathname.endsWith('/api/auth/signout') ||
+    !token
+  ) {
+    return res
+  }
+  if (process.env.IDENTITY_URL) {
+    await fetch(new URL('/api/auth/sign-out', process.env.IDENTITY_URL), {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: '{}',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => undefined)
+  }
+  const { forgetIdentitySession } = await import('@/lib/auth/identity-session')
+  forgetIdentitySession(token)
+  const out = new Response(res.body, res)
+  out.headers.append(
+    'set-cookie',
+    `${IDENTITY_SESSION_COOKIE}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax`,
+  )
+  return out
 }
 
 /**

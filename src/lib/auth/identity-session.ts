@@ -25,6 +25,13 @@ const TTL_MS = 60_000
 // TTL_MS. Move to a shared cache if instances multiply.
 const memo = new Map<string, { at: number; session: Promise<Session | null> }>()
 
+/** Drop a signed-out session from the memo, on every host. */
+export function forgetIdentitySession(token: string): void {
+  for (const key of memo.keys()) {
+    if (key.endsWith(` ${token}`)) memo.delete(key)
+  }
+}
+
 /** The identity session for this request (RSC / route handlers). */
 export async function identitySession(): Promise<Session | null> {
   try {

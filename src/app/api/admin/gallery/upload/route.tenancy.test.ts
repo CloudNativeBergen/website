@@ -13,7 +13,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const authMock = vi.fn()
-vi.mock('@/lib/auth', () => ({ auth: () => authMock() }))
+vi.mock('@/lib/auth', () => ({ getAuthSession: () => authMock() }))
 
 const isOrganizerMock = vi.fn()
 vi.mock('@/lib/authz/organizer', () => ({

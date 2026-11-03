@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { signIn, providerMap } from '@/lib/auth'
+import { identitySession } from '@/lib/auth/identity-session'
+import { safeCallbackPath } from '@/lib/auth/email-link/origin'
 import { GitHubIcon, LinkedInIcon } from '@/components/SocialIcons'
 import { AuthError } from 'next-auth'
 import { redirect } from 'next/navigation'
@@ -18,6 +20,9 @@ export default async function Signin(props: {
   searchParams: Promise<{ callbackUrl?: string; error?: string }>
 }) {
   const searchParams = await props.searchParams
+  // Signed in through identity (#1892): nothing to choose here.
+  if (await identitySession())
+    redirect(safeCallbackPath(searchParams.callbackUrl))
   const error = searchParams.error
 
   return (

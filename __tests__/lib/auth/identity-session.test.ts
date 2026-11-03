@@ -19,6 +19,12 @@ const h = vi.hoisted(() => {
     }
   }
   return {
+    getConferenceForDomain: vi.fn(async () => ({
+      conference: { _id: 'conf-1', organization: { _ref: 'org-1' } },
+    })),
+    redirect: vi.fn((to: string) => {
+      throw new Error(`REDIRECT ${to}`)
+    }),
     nextAuthSession,
     mockAuth: vi.fn(authImpl),
     getOrCreateSpeaker: vi.fn(),
@@ -35,7 +41,7 @@ vi.mock('next-auth', () => ({
     handlers: {
       // /api/auth/session as NextAuth answers it: the cookie session or null.
       GET: async () => Response.json(h.nextAuthSession.value),
-      POST: vi.fn(),
+      POST: async () => Response.json({ url: '/' }),
     },
   }),
   AuthError: class AuthError extends Error {},
@@ -52,9 +58,7 @@ vi.mock('@/lib/speaker/sanity', () => ({
   getOrCreateSpeaker: h.getOrCreateSpeaker,
 }))
 vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForDomain: async () => ({
-    conference: { _id: 'conf-1', organization: { _ref: 'org-1' } },
-  }),
+  getConferenceForDomain: h.getConferenceForDomain,
 }))
 vi.mock('next/headers', () => ({
   cookies: async () => ({
@@ -66,7 +70,13 @@ vi.mock('next/headers', () => ({
   headers: async () => new Headers({ host: h.host.value }),
 }))
 
+vi.mock('next/navigation', () => ({ redirect: h.redirect }))
+vi.mock('@/app/(main)/signin/actions', () => ({
+  requestEmailSignInLinkAction: vi.fn(),
+}))
+
 import { NextRequest } from 'next/server'
+import Signin from '@/app/(main)/signin/page'
 import { getAuthSession, handlers } from '@/lib/auth'
 import middleware from '@/proxy'
 
@@ -191,14 +201,22 @@ describe('getAuthSession with an identity session', () => {
 })
 
 describe('proxy with an identity session', () => {
-  it('lets a flagged identity session into /admin', async () => {
+  it('lets an identity session bound to this origin into /admin', async () => {
     const res = await adminRequest()
     expect(res.headers.get('location')).toBeNull()
-    expect(h.getOrCreateSpeaker).toHaveBeenCalledTimes(1)
+    // The proxy stays out of 'use cache' reads and Sanity writes.
+    expect(h.getConferenceForDomain).not.toHaveBeenCalled()
+    expect(h.getOrCreateSpeaker).not.toHaveBeenCalled()
   })
 
-  it('redirects to sign-in when the tenant is not flagged', async () => {
-    vi.stubEnv('KONF_IDENTITY_TENANTS', 'org-other')
+  it('redirects to sign-in for a session bound to another origin', async () => {
+    identityReplies('https://other.example')
+    const res = await adminRequest()
+    expect(res.headers.get('location')).toContain('/api/auth/signin')
+  })
+
+  it('redirects to sign-in when the flag is unset', async () => {
+    vi.stubEnv('KONF_IDENTITY_TENANTS', '')
     const res = await adminRequest()
     expect(res.headers.get('location')).toContain('/api/auth/signin')
     expect(h.fetch).not.toHaveBeenCalled()
@@ -209,6 +227,55 @@ describe('proxy with an identity session', () => {
     const res = await adminRequest()
     expect(res.headers.get('location')).toBeNull()
     expect(h.fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('sign-out with an identity session', () => {
+  function signOutRequest() {
+    const req = new NextRequest('https://conf.example/api/auth/signout', {
+      method: 'POST',
+      headers: { host: h.host.value },
+    })
+    if (h.cookie.value) req.cookies.set('__Host-konf.session', h.cookie.value)
+    return handlers.POST(req)
+  }
+
+  it('clears the cookie and revokes the session at identity', async () => {
+    const res = await signOutRequest()
+    const cleared = res.headers.get('set-cookie') ?? ''
+    expect(cleared).toMatch(/__Host-konf\.session=;/)
+    expect(cleared).toMatch(/Path=\//)
+    expect(cleared).toMatch(/Secure/)
+    expect(cleared).not.toMatch(/Domain=/i)
+    const call = h.fetch.mock.calls.find(
+      ([u]) => String(u) === 'https://id.test/api/auth/sign-out',
+    )
+    expect(call?.[1].headers.authorization).toBe(`Bearer ${h.cookie.value}`)
+  })
+
+  it('leaves the response alone without an identity cookie', async () => {
+    h.cookie.value = undefined
+    const res = await signOutRequest()
+    expect(res.headers.get('set-cookie') ?? '').not.toMatch(/konf\.session/)
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('/signin with an identity session', () => {
+  const render = (callbackUrl?: string) =>
+    Signin({ searchParams: Promise.resolve({ callbackUrl }) })
+
+  it('redirects a signed-in identity user to the callback path', async () => {
+    await expect(render('/cfp/list')).rejects.toThrow('REDIRECT /cfp/list')
+  })
+
+  it('refuses an off-site callback', async () => {
+    await expect(render('//evil.example')).rejects.toThrow(/^REDIRECT \/$/)
+  })
+
+  it('renders the page with the flag unset', async () => {
+    vi.stubEnv('KONF_IDENTITY_TENANTS', '')
+    await expect(render('/cfp/list')).resolves.toBeTruthy()
   })
 })
 

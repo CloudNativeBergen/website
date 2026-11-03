@@ -1,7 +1,7 @@
 import { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { auth } from '@/lib/auth'
+import { getAuthSession } from '@/lib/auth'
 import { getInvitationByToken } from '@/lib/cospeaker/sanity'
 import {
   isInvitationExpired,
@@ -31,7 +31,7 @@ interface PageProps {
 export default async function InvitationResponsePage({
   searchParams,
 }: PageProps) {
-  const session = await auth()
+  const session = await getAuthSession()
   const params = await searchParams
 
   const isTestMode = AppEnvironment.isDevelopment && params.test === 'true'

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
-import { auth } from '@/lib/auth'
+import { getAuthSession } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveMetadataBrand } from '@/lib/seo/brand'
 import { emailLinkIdentifierOf } from '@/lib/auth/email-link/identity'
@@ -63,7 +63,7 @@ export default async function OrganizerInvitationAcceptPage({
   const acceptPath = `${ORGANIZER_INVITE_ACCEPT_PATH}?token=${encodeURIComponent(token)}`
   const signInHref = `/signin?callbackUrl=${encodeURIComponent(acceptPath)}`
 
-  const session = await auth()
+  const session = await getAuthSession()
   if (!session?.speaker?._id) redirect(signInHref)
 
   const state = await resolveState({
