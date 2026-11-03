@@ -966,6 +966,18 @@ describe('amount basis', () => {
     expect(revenue(normalized)).toBe(0)
   })
 
+  it('zeroes every seat of a fully refunded seven-seat order', () => {
+    // 2000/7 summed seven times is 2000.0000000000002 in floats; without
+    // integer-øre netting each seat kept a tiny positive ("paid") price.
+    const rows = [
+      ...[1, 2, 3, 4, 5, 6, 7].map((id) => seat(id, '2000.00')),
+      seat(8, '-2000.00'),
+    ]
+    const normalized = toPerTicketAmounts(rows, 'per-order')
+    expect(normalized).toHaveLength(7)
+    expect(normalized.map((r) => Number(r.sum))).toEqual(Array(7).fill(0))
+  })
+
   it('reduces revenue by a partial refund', () => {
     const rows = [seat(1, '2000.00'), seat(2, '2000.00'), seat(3, '-500.00')]
     const normalized = toPerTicketAmounts(rows, 'per-order')

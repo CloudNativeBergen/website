@@ -222,8 +222,11 @@ export function toPerTicketAmounts<
     .map((t) => {
       const { refund } = orders.get(t.order_id)!
       if (basis === 'per-ticket' && refund === 0) return clampSumLeft(t)
-      const g = gross.get(t.order_id)!
-      const ratio = g > 0 ? Math.max(0, g + refund) / g : 0
+      // Net in integer øre: re-summed float shares (2000/7 × 7) drift past
+      // the order total, which would leave fully refunded seats a tiny price.
+      const g = Math.round(gross.get(t.order_id)! * 100)
+      const net = Math.max(0, g + Math.round(refund * 100))
+      const ratio = g > 0 ? net / g : 0
       return clampSumLeft({
         ...t,
         sum: String(share(t, t.sum) * ratio),
