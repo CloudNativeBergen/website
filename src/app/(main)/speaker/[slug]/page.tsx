@@ -6,7 +6,7 @@ import { formats, languages, levels } from '@/lib/proposal/types'
 import { flags, Flags } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import * as social from '@/components/SocialIcons'
-import { getPublicSpeaker } from '@/lib/speaker/sanity'
+import { getPublicSpeakerProfile } from '@/lib/speaker'
 import { BackLink } from '@/components/BackButton'
 import { BookmarkButton } from '@/components/BookmarkButton'
 import { ShowMore } from '@/components/ShowMore'
@@ -60,7 +60,7 @@ export async function generateMetadata({ params }: Props) {
 
   const decodedSlug = decodeURIComponent(resolvedParams.slug)
   const { conference } = await getConferenceForDomain(domain)
-  const { speaker, talks, err } = await getPublicSpeaker(
+  const { speaker, talks, err } = await getPublicSpeakerProfile(
     conference._id,
     decodedSlug,
   )
@@ -139,7 +139,7 @@ async function CachedSpeakerContent({
     speaker,
     talks: allTalks,
     err,
-  } = await getPublicSpeaker(conference._id, slug)
+  } = await getPublicSpeakerProfile(conference._id, slug)
   const talks = withoutUnpublishedSchedule(conference, allTalks ?? [])
 
   if (err) {

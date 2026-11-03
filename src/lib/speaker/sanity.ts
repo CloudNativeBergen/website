@@ -40,7 +40,7 @@ import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 // Computed field: speaker is an organizer if referenced in any conference's organizers array
 const IS_ORGANIZER_FIELD =
-  '"isOrganizer": _id in *[_type == "conference"].organizers[]._ref'
+  '"isOrganizer": _id in *[_type == "conference"].organizers[]._ref' // groq-global: speaker identity spans tenants; this is the platform-wide organizer bit, a boolean only. Org-scoped rights come from organizerOrgIds.
 
 // Computed field (CaaS T1-2, #614): the ORG-SCOPED organizer capability — the
 // `organization._ref`s of the conferences whose `organizers[]` contain this
@@ -49,7 +49,7 @@ const IS_ORGANIZER_FIELD =
 // deduped in `applySpeakerToToken`. This is the source of the session token's
 // `organizerOrgIds`, which the authorization middleware/gates key on.
 const ORGANIZER_ORG_IDS_FIELD =
-  '"organizerOrgIds": *[_type == "conference" && ^._id in organizers[]._ref && defined(organization._ref)].organization._ref'
+  '"organizerOrgIds": *[_type == "conference" && ^._id in organizers[]._ref && defined(organization._ref)].organization._ref' // groq-global: must see every org this speaker organizes for; projects only the organization refs (the tenant keys themselves), no tenant data.
 
 /**
  * PUBLIC schedule predicate. A conference now keeps several `schedule` documents
@@ -136,6 +136,8 @@ async function speakerSlugExists(
 ): Promise<boolean> {
   try {
     const existingId = await clientReadUncached.fetch(
+      // groq-global: speaker slugs are unique platform-wide (one speaker spans
+      // editions and orgs); returns only an id for the collision check.
       groq`*[_type == "speaker" && slug.current == $slug && _id != $selfId][0]._id`,
       { slug, selfId: selfId ?? '' },
     )
@@ -353,6 +355,8 @@ async function findSpeakerByProvider(
 
   try {
     speaker = await clientReadUncached.fetch(
+      // groq-global: sign-in identity lookup by provider account; a speaker is
+      // a cross-tenant identity, and org rights are applied after this read.
       `*[ _type == "speaker" && $id in providers][0]${LOGIN_SPEAKER_PROJECTION}`,
       { id },
     )
@@ -1070,6 +1074,9 @@ export async function getSpeaker(
     //     it has just created through this function, and the CFP profile page
     //     re-reads the profile the speaker has just saved.
     speaker = await clientReadUncached.fetch<Speaker | null>(
+      // groq-global: speaker identity by id spans tenants (sign-in token
+      // refresh, own profile). Not org-scoped here: a caller acting on another
+      // speaker owns the org check (e.g. requireSpeakerInCurrentOrg).
       `*[ _type == "speaker" && _id == $speakerId][0]{
       ...,
       ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
@@ -1173,6 +1180,8 @@ export async function getPublicSpeaker(
 
   try {
     data = await clientReadCached.fetch(
+      // groq-global-scoped: only a speaker with a confirmed talk in
+      // $conferenceId matches (the nested count carries the tenant predicate).
       `*[ _type == "speaker" && slug.current == $speakerSlug && count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]) > 0][0]{
         name, title, bio, links, flags, "image": ${SPEAKER_IMAGE_URL},
         "talks": *[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]{
@@ -1191,7 +1200,7 @@ export async function getPublicSpeaker(
           },
           "scheduleInfo": {
             "talkId": _id,
-            "schedule": *[_type == "schedule" && conference._ref == $conferenceId && ${OFFICIAL_SCHEDULE_FILTER} && ^._id in tracks[].talks[].talk._ref] | order(date asc) [0]
+            "schedule": *[_type == "schedule" && conference._ref == $conferenceId && ${/* groq-global-scoped: conference._ref == $conferenceId on this root; the interpolation is a status constant */ OFFICIAL_SCHEDULE_FILTER} && ^._id in tracks[].talks[].talk._ref] | order(date asc) [0]
           } {
             "date": schedule.date,
             "trackTitle": schedule.tracks[^.talkId in talks[].talk._ref][0].trackTitle,
@@ -1438,12 +1447,16 @@ async function querySpeakers(
         : conferenceFilter
       : conferenceFilter
 
-    const query = groq`*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${conferenceFilter}]) > 0 ${orgFilter}] {
+    // groq-global-scoped: the guard above requires conferenceId or orgId, so
+    // orgFilter or the nested conferenceFilter always carries the tenant.
+    const query = groq`*[
+      count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${/* groq-global-scoped: conferenceFilter when set; else the outer orgFilter bounds which speakers return (this count is existence only) */ conferenceFilter}]) > 0 &&
+      _type == "speaker" ${orgFilter}] {
       ...,
       ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
       "slug": slug.current,
       "image": ${SPEAKER_IMAGE_URL},
-      "proposals": *[_type == "talk" && references(^._id) && status in [${statusFilter}] ${proposalsConferenceFilter}] {
+      "proposals": *[_type == "talk" && references(^._id) && status in [${statusFilter}] ${/* groq-global-scoped: proposalsConferenceFilter is conferenceFilter or the org predicate, never empty (see above) */ proposalsConferenceFilter}] {
         _id,
         title,
         status,
@@ -1851,6 +1864,8 @@ export async function getOrganizersByConference(conferenceId: string): Promise<{
 
   try {
     // Fetch organizers directly from the conference document's organizers array
+    // groq-global-scoped: the conference document itself, by the id the caller
+    // resolved for this request.
     const query = groq`*[_type == "conference" && _id == $conferenceId][0].organizers[]-> {
       ...,
       ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},

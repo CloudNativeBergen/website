@@ -18,7 +18,7 @@ import {
   LightBulbIcon,
 } from '@/lib/og/components'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getPublicSpeaker } from '@/lib/speaker/sanity'
+import { getPublicSpeakerProfile } from '@/lib/speaker'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 
 const createSponsorLogo = (
@@ -255,7 +255,7 @@ export default async function Image({
   const fonts = await loadBrandFonts(domain)
   // Per-tenant brand gradient; unthemed conferences resolve to the house pair.
   const brand = ogBrandColors(conference.theme)
-  const { speaker, talks, err } = await getPublicSpeaker(
+  const { speaker, talks, err } = await getPublicSpeakerProfile(
     conference._id,
     decodedSlug,
   )
