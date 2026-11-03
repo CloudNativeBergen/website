@@ -52,23 +52,6 @@ const ORGANIZER_ORG_IDS_FIELD =
   '"organizerOrgIds": *[_type == "conference" && ^._id in organizers[]._ref && defined(organization._ref)].organization._ref' // groq-global: must see every org this speaker organizes for; projects only the organization refs (the tenant keys themselves), no tenant data.
 
 /**
- * PUBLIC schedule predicate. A conference now keeps several `schedule` documents
- * per day — private `draft`s the organizers are still moving talks around in and
- * `archived` snapshots of every previously-published day — so a reverse lookup
- * that matches ANY document containing the talk resolves to whichever the store
- * happens to return first. After a single promote cycle an archived doc always
- * exists, which made the public speaker page show a stale (or never-published)
- * time slot at random.
- *
- * Legacy days written before the draft feature carry NO `status` at all: a bare
- * `status == "official"` would blank the program for every existing conference,
- * so a missing status counts as official — the same fallback `getScheduleData`
- * applies in `src/lib/schedule/server.ts`.
- */
-export const OFFICIAL_SCHEDULE_FILTER =
-  '(status == "official" || !defined(status))'
-
-/**
  * MINIMAL projection for the two hot login queries (`findSpeakerByProvider`,
  * `findSpeakersByEmails`). These run on EVERY login and cannot be indexed
  * (Sanity), so we never spread the full document (`...`) — that dragged along
@@ -1183,33 +1166,7 @@ export async function getPublicSpeaker(
       // groq-global-scoped: only a speaker with a confirmed talk in
       // $conferenceId matches (the nested count carries the tenant predicate).
       `*[ _type == "speaker" && slug.current == $speakerSlug && count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]) > 0][0]{
-        name, title, bio, links, flags, "image": ${SPEAKER_IMAGE_URL},
-        "talks": *[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]{
-          _id, title, description, language, level, format, audiences, video,
-          attachments[]{
-            ...,
-            _type == "fileAttachment" => {
-              "url": file.asset->url
-            }
-          },
-          speakers[]-> {
-            _id, name, title, "slug": slug.current, "image": ${SPEAKER_IMAGE_URL}
-          },
-          topics[]-> {
-            _id, title, "slug": slug.current
-          },
-          "scheduleInfo": {
-            "talkId": _id,
-            "schedule": *[_type == "schedule" && conference._ref == $conferenceId && ${/* groq-global-scoped: conference._ref == $conferenceId on this root; the interpolation is a status constant */ OFFICIAL_SCHEDULE_FILTER} && ^._id in tracks[].talks[].talk._ref] | order(date asc) [0]
-          } {
-            "date": schedule.date,
-            "trackTitle": schedule.tracks[^.talkId in talks[].talk._ref][0].trackTitle,
-            "timeSlot": schedule.tracks[^.talkId in talks[].talk._ref][0].talks[talk._ref == ^.talkId][0]{
-              startTime,
-              endTime
-            }
-          }
-        },
+        _id, name, title, bio, links, flags, "image": ${SPEAKER_IMAGE_URL},
         "galleryImages": *[_type == "imageGallery" && conference._ref == $conferenceId && ^._id in speakers[]._ref] {
           _id,
           _rev,
@@ -1234,14 +1191,10 @@ export async function getPublicSpeaker(
   // An unknown slug (or one with no confirmed talk here) is not an error: it
   // is a 404, and crawlers request plenty of them. `err` is a failed read only.
   if (!data || Object.keys(data).length === 0) {
-    return { speaker: null, talks: [], err }
+    return { speaker: null, err }
   }
 
-  const talks =
-    data && 'talks' in data ? (data.talks as ProposalExisting[]) : []
-  const speaker = data as Speaker
-
-  return { speaker, talks, err }
+  return { speaker: data as Speaker, err }
 }
 
 /**

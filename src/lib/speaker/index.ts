@@ -9,6 +9,7 @@
  */
 import type { ProposalExisting } from '@/lib/proposal/types'
 import * as store from './sanity'
+import type { PublicTalk } from '@/lib/proposal/public'
 import type { DuplicateSpeakerInput } from './duplicates'
 import type { SpeakerUpdateActor } from './socialTag'
 import type {
@@ -29,8 +30,8 @@ export type PublicSpeaker = Pick<
 
 export interface PublicSpeakerProfile {
   speaker: PublicSpeaker | null
-  /** Confirmed talks in the conference. Typed by the proposal seam later. */
-  talks: ProposalExisting[]
+  /** Confirmed talks in the conference, from the proposal seam. */
+  talks: PublicTalk[]
   err: Error | null
 }
 
@@ -42,11 +43,14 @@ export async function getPublicSpeakerProfile(
   conferenceId: string,
   slug: string,
 ): Promise<PublicSpeakerProfile> {
-  const { speaker, talks, err } = await store.getPublicSpeaker(
-    conferenceId,
-    slug,
-  )
-  return { speaker, talks, err: err as Error | null }
+  const { speaker, err } = await store.getPublicSpeaker(conferenceId, slug)
+  if (!speaker) return { speaker: null, talks: [], err: err as Error | null }
+  const { _id: speakerId, ...publicSpeaker } = speaker
+  // Lazy: a static import puts proposal/server (server-only) behind every
+  // client bundle that reaches this seam via conference/sanity -> gallery.
+  const { listPublicTalks } = await import('@/lib/proposal/server')
+  const talks = await listPublicTalks(conferenceId, { speakerId })
+  return { speaker: publicSpeaker, talks: talks.talks, err: talks.err }
 }
 
 // --- Shared result shapes -------------------------------------------------

@@ -445,34 +445,21 @@ describe('isOrganizer computed from conference.organizers', () => {
   })
 })
 
-describe('getPublicSpeaker — schedule lookup', () => {
+describe('getPublicSpeaker', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCachedFetch.mockResolvedValue({ name: 'Test Speaker', talks: [] })
+    mockCachedFetch.mockResolvedValue({
+      _id: 'speaker-1',
+      name: 'Test Speaker',
+    })
   })
 
-  /**
-   * A conference keeps one `schedule` document per day PER STATUS — private
-   * `draft`s organizers are still moving talks around in, plus an `archived`
-   * snapshot of every superseded published version. The public speaker page
-   * resolves a talk's slot by reverse lookup, so without a status constraint it
-   * would advertise whichever document the store returned first: after a single
-   * promote cycle an archived doc always exists.
-   */
-  it('resolves the slot from the OFFICIAL schedule only', async () => {
-    await getPublicSpeaker('conf-1', 'test-speaker')
-
+  // Talks moved to the proposal seam (`listPublicTalks`, #1887); the speaker
+  // read only carries the profile and the _id the seam keys the talks on.
+  it('reads the profile with its _id and no nested talks', async () => {
+    const { speaker } = await getPublicSpeaker('conf-1', 'test-speaker')
+    expect(speaker?._id).toBe('speaker-1')
     const query = mockCachedFetch.mock.calls[0][0] as string
-    const lookup = query
-      .split('\n')
-      .find((line) => line.includes('"schedule": *['))
-    expect(lookup).toBeDefined()
-    expect(lookup).toContain('status == "official"')
-    // Legacy days written before drafts existed carry NO status field; they must
-    // still resolve, or every existing conference's speaker pages lose their
-    // times.
-    expect(lookup).toContain('!defined(status)')
-    // Deterministic pick when a talk somehow appears on two official days.
-    expect(lookup).toContain('order(date asc)')
+    expect(query).not.toContain('"talks":')
   })
 })
