@@ -2,7 +2,7 @@
 // api.konf.app before Sanity, per tenant, behind KONF_D1_WRITE_TENANTS.
 import 'server-only'
 import { cookies, headers } from 'next/headers'
-import { sessionCookieRequestHost } from '@/lib/auth-cookie-domain'
+import { requestDomain } from '@/lib/conference/request-domain'
 import { IDENTITY_SESSION_COOKIE } from '@/lib/auth/identity-cookie'
 import { konfApiHeaders } from './client'
 
@@ -57,9 +57,9 @@ export function movedConferencePatch(
   return out
 }
 
-/** The request's host, as the gateway resolves it. */
+/** The tenant's host: the same source resolveConferenceId uses. */
 export async function requestHost(): Promise<string | null> {
-  return sessionCookieRequestHost(await headers())
+  return (await requestDomain()) || null
 }
 
 /**

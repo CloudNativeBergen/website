@@ -7,10 +7,16 @@ vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
 
 // --- next/headers: drives the domains current-host guard --------------------
 const hostMock = vi.fn<() => string | null>(() => 'cloudnativebergen.no')
+const forwardedHostMock = vi.fn<() => string | null>(() => null)
 const sessionCookieMock = vi.fn<() => string | undefined>()
 vi.mock('next/headers', () => ({
   headers: async () => ({
-    get: (key: string) => (key === 'host' ? hostMock() : null),
+    get: (key: string) =>
+      key === 'host'
+        ? hostMock()
+        : key === 'x-forwarded-host'
+          ? forwardedHostMock()
+          : null,
   }),
   cookies: async () => ({
     get: () => {
@@ -1518,6 +1524,12 @@ describe('conference router — D1 write path (#1881)', () => {
     expect(init.headers.origin).toBe('https://cloudnativebergen.no')
     expect(lastSet).toEqual({ title: 'T', organizer: 'Org', description: 'D' })
     expect(lastUnset).toEqual(['city'])
+  })
+
+  it('sends the API call for the tenant host, not x-forwarded-host', async () => {
+    forwardedHostMock.mockReturnValue('evil.example')
+    await makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' })
+    expect(apiCalls()[0][1].headers.origin).toBe('https://cloudnativebergen.no')
   })
 
   it('maps theme to primaryColor/accentColor, and theme: null unsets both', async () => {
