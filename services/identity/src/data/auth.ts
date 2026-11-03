@@ -37,6 +37,8 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
     secret: env.BETTER_AUTH_SECRET,
     database: drizzleAdapter(db, { provider: 'sqlite', schema }),
     telemetry: { enabled: false },
+    // OAuth failures land on our page (src/error-page.ts), not Better Auth's.
+    onAPIError: { errorURL: `${env.BETTER_AUTH_URL}/error` },
     socialProviders: {
       github: {
         clientId: env.GITHUB_CLIENT_ID,
