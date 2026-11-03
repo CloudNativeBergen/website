@@ -3,9 +3,11 @@
 import { WorkerEntrypoint } from 'cloudflare:workers'
 import { createAuth, createData } from './data'
 import { handoff, type HandoffEnv } from './handoff'
+import { loginTestPage } from './login-test'
 import type { WorkerEnv } from './worker'
 
-type Env = WorkerEnv & HandoffEnv
+/** LOGIN_TEST_PAGE: "1" on preview only (service.cue) serves GET /test. */
+type Env = WorkerEnv & HandoffEnv & { LOGIN_TEST_PAGE?: string }
 
 /**
  * RPC for the gateway, reachable only over a service binding with
@@ -35,6 +37,13 @@ export default {
     }
     if (pathname === '/handoff' || pathname.startsWith('/handoff/')) {
       return handoff(request, env)
+    }
+    if (
+      pathname === '/test' &&
+      request.method === 'GET' &&
+      env.LOGIN_TEST_PAGE === '1'
+    ) {
+      return loginTestPage()
     }
     // Only Better Auth and the login handoff are public. The gateway and tenant-directory use the
     // RPC entrypoints above.

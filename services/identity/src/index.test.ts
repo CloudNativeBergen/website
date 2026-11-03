@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('cloudflare:workers', () => ({ WorkerEntrypoint: class {} }))
@@ -30,5 +31,33 @@ describe('identity routing', () => {
       const r = await worker.fetch(new Request(`http://id.test${path}`), env)
       expect(r.status, path).toBe(404)
     }
+  })
+  it('serves /test only when LOGIN_TEST_PAGE is "1"', async () => {
+    const req = () => new Request('http://id.test/test')
+    const on = await worker.fetch(req(), { LOGIN_TEST_PAGE: '1' } as never)
+    expect(on.status).toBe(200)
+    expect(await on.text()).toContain('Sign in with GitHub')
+    expect(on.headers.get('cache-control')).toBe('no-store')
+    expect(on.headers.get('content-security-policy')).toMatch(
+      /script-src 'nonce-[0-9a-f]{32}'/,
+    )
+    for (const e of [
+      {},
+      { LOGIN_TEST_PAGE: '0' },
+      { LOGIN_TEST_PAGE: 'true' },
+    ]) {
+      const off = await worker.fetch(req(), e as never)
+      expect(off.status).toBe(404)
+    }
+  })
+  it('enables the test page on preview and never on production', () => {
+    const cfg = readFileSync(
+      new URL('../wrangler.jsonc', import.meta.url),
+      'utf8',
+    )
+    const [, prod] = cfg.split('"production": {')
+    expect(prod).toBeDefined()
+    expect(prod).not.toContain('LOGIN_TEST_PAGE')
+    expect(cfg.split('"production": {')[0]).toContain('"LOGIN_TEST_PAGE": "1"')
   })
 })
