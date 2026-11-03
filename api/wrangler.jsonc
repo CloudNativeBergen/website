@@ -81,7 +81,7 @@
       // Identity has its own host: auth.konf.app is the NextAuth site today.
       "vars": {
         "IDENTITY_ISSUER": "https://id.konf.app",
-        "OVERRIDE_TENANTS": {},
+        "OVERRIDE_TENANTS": { "conference": ["organization-cloud-native-days"] },
       },
       "ratelimits": [
         {
