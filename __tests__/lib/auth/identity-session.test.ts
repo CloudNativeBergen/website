@@ -215,6 +215,15 @@ describe('proxy with an identity session', () => {
     expect(res.headers.get('location')).toContain('/api/auth/signin')
   })
 
+  it('redirects to sign-in when identity is unreachable, logging no token', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.fetch.mockRejectedValue(new Error('down'))
+    const res = await adminRequest()
+    expect(res.headers.get('location')).toContain('/api/auth/signin')
+    expect(log).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(log.mock.calls)).not.toContain(h.cookie.value)
+  })
+
   it('redirects to sign-in when the flag is unset', async () => {
     vi.stubEnv('KONF_IDENTITY_TENANTS', '')
     const res = await adminRequest()
