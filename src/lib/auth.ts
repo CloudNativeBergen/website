@@ -31,7 +31,7 @@ export interface NextAuthRequest extends NextRequest {
  * JWT. Shared by the normal login path and the Phase-2 link path so both mint an
  * identical token shape.
  */
-function applySpeakerToToken(
+export function applySpeakerToToken(
   token: JWT,
   speaker: Speaker,
   account: Account,
@@ -859,7 +859,9 @@ export async function getAuthSession(req?: {
   if (!session) {
     const bearerToken = extractBearerToken(req?.headers)
     if (bearerToken) return getSessionFromBearerToken(bearerToken)
-    return null
+    // identity session cookie, flagged tenants only (#1892).
+    const { identitySession } = await import('@/lib/auth/identity-session')
+    return identitySession()
   }
 
   // SECURITY: Impersonation is ONLY allowed in development mode
