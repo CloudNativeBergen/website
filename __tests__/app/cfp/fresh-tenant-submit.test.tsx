@@ -88,7 +88,9 @@ vi.mock('@/lib/proposal/data/sanity', () => {
   }
 })
 
-vi.mock('@/lib/proposal/server', () => ({
+// Seam names not overridden here delegate to the mocked data module.
+vi.mock('@/lib/proposal/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/proposal/server')>()),
   updateProposalStatus: vi.fn(),
   getProposalSanity: vi.fn(),
 }))

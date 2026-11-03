@@ -52,7 +52,7 @@ import {
   updateProposal,
   deleteProposal,
   ProposalDeletionBlockedError,
-} from '@/lib/proposal/data/sanity'
+} from '@/lib/proposal/server'
 import { Attachment } from '@/lib/attachment/types'
 import {
   createCoSpeakerInvitation,

@@ -1,4 +1,4 @@
-import { getWorkshops } from '@/lib/proposal/data/sanity'
+import { getWorkshops } from '@/lib/proposal/server'
 import type { Conference } from '@/lib/conference/types'
 import { sendWorkshopCanceledEmail } from '@/lib/email/workshop'
 import {
