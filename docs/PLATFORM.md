@@ -5,7 +5,7 @@ A short developer overview of the GraphQL API at `api.konf.app` and the services
 ## What it is
 
 - `api/` is the gateway: Hive Gateway on a Cloudflare Worker, serving `/graphql`. It composes a supergraph at build time from the subgraph schemas (`api/src/supergraph.ts`) and reaches each subgraph over a Worker service binding (`api/src/gateway.ts`).
-- `services/<name>` are the subgraphs, one Worker per domain, written with Pothos. On `main`: `tenant-directory` (which conference a host belongs to) and `identity` (Better Auth; no public subgraph). More come per domain, starting with `content` (#1838) and `conference` (#1829).
+- `services/<name>` are the subgraphs, one Worker per domain, written with Pothos. On `main`: `tenant-directory` (which conference a host belongs to), `identity` (Better Auth; no public subgraph), `content` (editorial fields and homepage blocks, read from Sanity) and `conference` (structured fields, D1). Logos come from `content`, not D1. More come per domain.
 - `packages/tenancy` holds the code every subgraph uses to read the per-request tenant context and to keep data access scoped to one tenant.
 - The site still reads most data from Sanity. Reads move to the API one module at a time, behind flags.
 
@@ -42,7 +42,7 @@ pnpm --filter @runkonf/api compose     # fails if the subgraphs do not compose
 pnpm --filter @runkonf/api dev         # compose, then wrangler dev
 ```
 
-Identity tests run against a real local D1 through Miniflare. A cross-tenant test that walks the whole public schema with two tenants is in #1837.
+Identity tests run against a real local D1 through Miniflare. A cross-tenant test that walks the whole public schema with two tenants runs with them (#1837).
 
 ## The read path flag
 
@@ -52,7 +52,7 @@ Identity tests run against a real local D1 through Miniflare. A cross-tenant tes
 - For a listed tenant, the site's server calls `api.konf.app` for the request's host and merges the returned fields over the Sanity conference. The result is cached with the same tags as the Sanity read, so a revalidation clears both.
 - Any error, a timeout (2 seconds), a `null` answer or a conference id that does not match makes the site use the Sanity data for that request. Turning a tenant off is removing it from the list.
 
-Which subgraph answers for a tenant is a separate switch in the gateway (`@override`, from #1829). The site does not need to know about it.
+Which subgraph answers for a tenant is a separate switch in the gateway (`@override`). The site does not need to know about it.
 
 ## Further reading
 
