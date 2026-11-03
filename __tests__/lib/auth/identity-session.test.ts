@@ -7,13 +7,26 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const h = vi.hoisted(() => ({
-  mockAuth: vi.fn(),
-  getOrCreateSpeaker: vi.fn(),
-  cookie: { value: 'tok-1' as string | undefined },
-  host: { value: 'conf.example' },
-  fetch: vi.fn(),
-}))
+const h = vi.hoisted(() => {
+  const nextAuthSession = { value: null as unknown }
+  // next-auth's `auth`: `auth()` reads the cookie session; `auth(handler)`
+  // (the proxy's form) sets req.auth to it. Built at import, so hoisted.
+  const authImpl = (arg?: unknown) => {
+    if (typeof arg !== 'function') return Promise.resolve(nextAuthSession.value)
+    return async (req: { auth: unknown }, ctx: unknown) => {
+      req.auth = nextAuthSession.value
+      return arg(req, ctx)
+    }
+  }
+  return {
+    nextAuthSession,
+    mockAuth: vi.fn(authImpl),
+    getOrCreateSpeaker: vi.fn(),
+    cookie: { value: 'tok-1' as string | undefined },
+    host: { value: 'conf.example' },
+    fetch: vi.fn(),
+  }
+})
 
 vi.mock('next-auth', () => ({
   default: () => ({
@@ -49,7 +62,17 @@ vi.mock('next/headers', () => ({
   headers: async () => new Headers({ host: h.host.value }),
 }))
 
+import { NextRequest } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
+import middleware from '@/proxy'
+
+function adminRequest() {
+  const req = new NextRequest('https://conf.example/admin', {
+    headers: { host: h.host.value },
+  })
+  if (h.cookie.value) req.cookies.set('__Host-konf.session', h.cookie.value)
+  return middleware(req) as Promise<Response>
+}
 
 const speaker = {
   _id: 'speaker-1',
@@ -83,7 +106,7 @@ beforeEach(() => {
   vi.stubEnv('KONF_IDENTITY_TENANTS', 'org-1')
   vi.stubEnv('IDENTITY_URL', 'https://id.test')
   vi.stubGlobal('fetch', h.fetch)
-  h.mockAuth.mockResolvedValue(null)
+  h.nextAuthSession.value = null
   h.getOrCreateSpeaker.mockResolvedValue({ speaker, err: null })
   identityReplies('https://conf.example')
 })
@@ -140,7 +163,7 @@ describe('getAuthSession with an identity session', () => {
 
   it('prefers the NextAuth session', async () => {
     const nextAuth = { expires: 'x', speaker: { _id: 'speaker-n' } }
-    h.mockAuth.mockResolvedValue(nextAuth)
+    h.nextAuthSession.value = nextAuth
     expect(await getAuthSession()).toBe(nextAuth)
     expect(h.fetch).not.toHaveBeenCalled()
   })
@@ -148,5 +171,39 @@ describe('getAuthSession with an identity session', () => {
   it('falls back to signed out when identity fails', async () => {
     h.fetch.mockRejectedValue(new Error('down'))
     expect(await getAuthSession()).toBeNull()
+  })
+
+  it('resolves the speaker once for concurrent first requests', async () => {
+    const all = await Promise.all([1, 2, 3, 4].map(() => getAuthSession()))
+    expect(all.every((s) => s?.speaker?._id === 'speaker-1')).toBe(true)
+    expect(h.getOrCreateSpeaker).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not cache an identity 5xx', async () => {
+    h.fetch.mockResolvedValueOnce(new Response(null, { status: 503 }))
+    expect(await getAuthSession()).toBeNull()
+    expect((await getAuthSession())?.speaker?._id).toBe('speaker-1')
+  })
+})
+
+describe('proxy with an identity session', () => {
+  it('lets a flagged identity session into /admin', async () => {
+    const res = await adminRequest()
+    expect(res.headers.get('location')).toBeNull()
+    expect(h.getOrCreateSpeaker).toHaveBeenCalledTimes(1)
+  })
+
+  it('redirects to sign-in when the tenant is not flagged', async () => {
+    vi.stubEnv('KONF_IDENTITY_TENANTS', 'org-other')
+    const res = await adminRequest()
+    expect(res.headers.get('location')).toContain('/api/auth/signin')
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+
+  it('lets a NextAuth session in without asking identity', async () => {
+    h.nextAuthSession.value = { expires: 'x', speaker: { _id: 'n' } }
+    const res = await adminRequest()
+    expect(res.headers.get('location')).toBeNull()
+    expect(h.fetch).not.toHaveBeenCalled()
   })
 })

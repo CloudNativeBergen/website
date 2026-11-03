@@ -23,27 +23,47 @@ const TTL_MS = 60_000
 // ponytail: per-instance memo so a page's many getAuthSession calls, and the
 // next few requests, cost one identity round trip. Revocation shows up within
 // TTL_MS. Move to a shared cache if instances multiply.
-const memo = new Map<string, { at: number; session: Session | null }>()
+const memo = new Map<string, { at: number; session: Promise<Session | null> }>()
 
+/** The identity session for this request (RSC / route handlers). */
 export async function identitySession(): Promise<Session | null> {
   try {
     if (!process.env.KONF_IDENTITY_TENANTS || !process.env.IDENTITY_URL) {
       return null
     }
-    const token = (await cookies()).get(IDENTITY_SESSION_COOKIE)?.value
-    if (!token) return null
-    const host = sessionCookieRequestHost(await headers())
-    if (!host) return null
+    return await identitySessionFor(
+      (await cookies()).get(IDENTITY_SESSION_COOKIE)?.value,
+      sessionCookieRequestHost(await headers()),
+    )
+  } catch {
+    return null
+  }
+}
+
+/** Same, from explicit request values (the proxy has no next/headers). */
+export async function identitySessionFor(
+  token: string | undefined,
+  host: string | null,
+): Promise<Session | null> {
+  try {
+    if (!process.env.KONF_IDENTITY_TENANTS || !process.env.IDENTITY_URL) {
+      return null
+    }
+    if (!token || !host) return null
     const { conference } = await getConferenceForDomain(host)
     if (!conference || !isIdentityTenant(conference)) return null
 
     const key = `${host} ${token}`
     const hit = memo.get(key)
-    if (hit && Date.now() - hit.at < TTL_MS) return hit.session
-    const session = await resolve(token, `https://${host}`)
+    if (hit && Date.now() - hit.at < TTL_MS) return await hit.session
+    // The in-flight promise is shared, so parallel first requests run
+    // getOrCreateSpeaker once. A rejection (identity 5xx, network, Sanity)
+    // is not a definite answer: drop it so the next request retries.
+    const session = resolve(token, `https://${host}`)
     if (memo.size > 1000) memo.clear()
     memo.set(key, { at: Date.now(), session })
-    return session
+    session.catch(() => memo.delete(key))
+    return await session
   } catch {
     return null
   }
@@ -55,7 +75,10 @@ async function identityGET<T>(path: string, token: string): Promise<T | null> {
     cache: 'no-store',
     signal: AbortSignal.timeout(5000),
   })
-  return res.ok ? ((await res.json()) as T) : null
+  if (res.ok) return (await res.json()) as T
+  // 4xx is identity's answer (no such session); anything else is not.
+  if (res.status >= 400 && res.status < 500) return null
+  throw new Error(`identity ${res.status}`)
 }
 
 async function resolve(token: string, origin: string): Promise<Session | null> {
@@ -96,7 +119,8 @@ async function resolve(token: string, origin: string): Promise<Session | null> {
   const { speaker, err } = await getOrCreateSpeaker(user, account, {
     email_verified: true,
   })
-  if (err || !speaker?._id) return null
+  if (err) throw err
+  if (!speaker?._id) return null
 
   const jwt: JWT = { sub: speaker._id, ...user, picture: user.image }
   applySpeakerToToken(jwt, speaker, account)

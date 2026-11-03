@@ -1,6 +1,8 @@
 import { auth } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { AppEnvironment } from '@/lib/environment/config'
+import { sessionCookieRequestHost } from '@/lib/auth-cookie-domain'
+import { IDENTITY_SESSION_COOKIE } from '@/lib/auth/identity-cookie'
 
 // The session cookie's `Domain` is rewritten PER REQUEST for every response
 // this produces: `auth` itself applies it to its handler-wrapper form (see
@@ -8,7 +10,7 @@ import { AppEnvironment } from '@/lib/environment/config'
 // refresh is scoped to the ACTUAL request host, not a module-load constant
 // (#682). Wrapping inside `auth` rather than around it also leaves the
 // `auth((req) => …)` call shape — the one the #671 outage broke — untouched.
-const nextAuthMiddleware = auth((req) => {
+const nextAuthMiddleware = auth(async (req) => {
   const { pathname } = req.nextUrl
   const hasTestParam = req.nextUrl.searchParams.get('test') === 'true'
 
@@ -41,7 +43,7 @@ const nextAuthMiddleware = auth((req) => {
     return NextResponse.next()
   }
 
-  if (!req.auth) {
+  if (!req.auth && !(await identitySignedIn(req))) {
     const signInPage = '/api/auth/signin'
     const signInUrl = new URL(signInPage, req.nextUrl.origin)
     // A same-site path, not `req.url`: the email-link flow's
@@ -62,6 +64,17 @@ const nextAuthMiddleware = auth((req) => {
     },
   })
 })
+
+/** Identity session cookie, flagged tenants only (#1892). */
+async function identitySignedIn(req: NextRequest): Promise<boolean> {
+  const token = req.cookies.get(IDENTITY_SESSION_COOKIE)?.value
+  if (!token) return false
+  const { identitySessionFor } = await import('@/lib/auth/identity-session')
+  return !!(await identitySessionFor(
+    token,
+    sessionCookieRequestHost(req.headers),
+  ))
+}
 
 /**
  * `/workshop*` IS NOT HANDLED HERE (#1311). The portal keeps a session of its
