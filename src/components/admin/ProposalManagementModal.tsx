@@ -1,4 +1,5 @@
 'use client'
+import type { OrganizerProposal } from '@/lib/proposal/organizer'
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
@@ -47,7 +48,7 @@ export const DRAFT_SPEAKER_ID = 'draft-new-speaker'
 interface ProposalManagementModalProps {
   isOpen: boolean
   onClose: () => void
-  editingProposal?: ProposalExisting | null
+  editingProposal?: ProposalExisting | OrganizerProposal | null
   conference: Conference
   onProposalCreated?: (proposal: ProposalExisting) => void
   onProposalUpdated?: (proposal: ProposalExisting) => void

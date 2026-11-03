@@ -1,3 +1,4 @@
+import type { OrganizerProposal } from '@/lib/proposal/organizer'
 import { ProposalExisting, Status } from './types'
 import { SpeakerWithReviewInfo } from '@/lib/speaker/types'
 import { Reference } from 'sanity'
@@ -16,7 +17,7 @@ export function countActiveProposals(
 }
 
 export function extractSpeakersFromProposal(
-  proposal: ProposalExisting,
+  proposal: ProposalExisting | OrganizerProposal,
 ): SpeakerWithReviewInfo[] {
   if (!proposal.speakers || !Array.isArray(proposal.speakers)) {
     return []

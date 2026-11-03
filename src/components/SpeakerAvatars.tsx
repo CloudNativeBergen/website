@@ -1,3 +1,4 @@
+import type { OrganizerProposalSpeaker } from '@/lib/proposal/organizer'
 import { Speaker } from '@/lib/speaker/types'
 import { formatSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
@@ -5,7 +6,7 @@ import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
 import { Reference } from 'sanity'
 
 interface SpeakerAvatarsProps {
-  speakers: Speaker[] | Reference[]
+  speakers: Speaker[] | Reference[] | OrganizerProposalSpeaker[]
   size?: 'sm' | 'md' | 'lg'
   maxVisible?: number
   showTooltip?: boolean

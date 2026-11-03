@@ -1,5 +1,5 @@
+import type { OrganizerProposal } from '@/lib/proposal/organizer'
 import {
-  ProposalExisting,
   Status,
   ReviewStatus,
   Language,
@@ -26,10 +26,10 @@ export interface ProposalFilters {
 }
 
 export function filterProposals(
-  proposals: ProposalExisting[],
+  proposals: OrganizerProposal[],
   filters: ProposalFilters,
   currentUserId?: string,
-): ProposalExisting[] {
+): OrganizerProposal[] {
   const speakersWithAcceptedTalks = new Set<string>()
 
   if (filters.hideMultipleTalks) {

@@ -47,6 +47,7 @@ import { AttachmentSchema } from '@/server/schemas/attachment'
 import {
   getProposal,
   getProposals,
+  listOrganizerProposals,
   buildProposalDocument,
   createProposal,
   updateProposal,
@@ -106,7 +107,6 @@ import {
   extractSpeakerIds,
   extractSpeakersFromProposal,
 } from '@/lib/proposal/utils'
-import { filterProposals } from '@/lib/proposal/utils/filtering'
 import { convertPortableTextToString } from '@/lib/proposal/utils/validation'
 import { Speaker } from '@/lib/speaker/types'
 import { createSpeaker } from '@/lib/speaker/server'
@@ -2167,12 +2167,11 @@ export const proposalRouter = router({
         try {
           const conferenceId = await resolveConferenceId()
 
-          const { proposals, proposalsError } = await getProposals({
+          const { proposals, proposalsError } = await listOrganizerProposals(
             conferenceId,
-            returnAll: true,
-            includeReviews: true,
-            includePreviousAcceptedTalks: true,
-          })
+            input,
+            ctx.speaker._id,
+          )
 
           if (proposalsError) {
             throw new TRPCError({
@@ -2182,7 +2181,7 @@ export const proposalRouter = router({
             })
           }
 
-          return filterProposals(proposals || [], input, ctx.speaker._id)
+          return proposals
         } catch (error) {
           if (error instanceof TRPCError) throw error
 

@@ -1,8 +1,11 @@
+import type { OrganizerProposal } from '@/lib/proposal/organizer'
 import { ProposalExisting } from '../types'
 import { reviewStats } from '@/lib/review/summary'
 import { Speaker } from '@/lib/speaker/types'
 
-export function calculateAverageRating(proposal: ProposalExisting): number {
+export function calculateAverageRating(
+  proposal: ProposalExisting | OrganizerProposal,
+): number {
   const { count, averageTotal } = reviewStats(
     proposal.reviews,
     proposal.reviewSummary,
@@ -11,11 +14,15 @@ export function calculateAverageRating(proposal: ProposalExisting): number {
 }
 
 /** Live reviews plus the folded summary of deleted ones. */
-export function reviewCountOf(proposal: ProposalExisting): number {
+export function reviewCountOf(
+  proposal: ProposalExisting | OrganizerProposal,
+): number {
   return reviewStats(proposal.reviews, proposal.reviewSummary).count
 }
 
-export function getProposalSpeakerNames(proposal: ProposalExisting): string {
+export function getProposalSpeakerNames(
+  proposal: ProposalExisting | OrganizerProposal,
+): string {
   const speakers =
     proposal.speakers && Array.isArray(proposal.speakers)
       ? proposal.speakers

@@ -1,3 +1,7 @@
+import {
+  toOrganizerProposal,
+  type OrganizerProposal,
+} from '@/lib/proposal/organizer'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ProposalStatistics } from './ProposalStatistics'
 import {
@@ -50,7 +54,7 @@ const mockTopics: Topic[] = [
   },
 ]
 
-const createMockProposal = (
+const createMockProposalRaw = (
   id: string,
   level: Level,
   audiences: Audience[],
@@ -74,7 +78,11 @@ const createMockProposal = (
   conference: { _type: 'reference', _ref: 'conf-1' },
 })
 
-const mockProposals: ProposalExisting[] = [
+const createMockProposal = (
+  ...args: Parameters<typeof createMockProposalRaw>
+) => toOrganizerProposal(createMockProposalRaw(...args))
+
+const mockProposals: OrganizerProposal[] = [
   createMockProposal(
     '1',
     Level.beginner,

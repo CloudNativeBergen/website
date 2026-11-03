@@ -1,5 +1,5 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getProposals } from '@/lib/proposal/server'
+import { listOrganizerProposals } from '@/lib/proposal/server'
 import { ErrorDisplay } from '@/components/admin'
 import { ProposalsPageClient } from '@/components/admin/ProposalsPageClient'
 import { InviteReviewersPrompt } from '@/components/admin/InviteReviewersPrompt'
@@ -22,12 +22,9 @@ export default async function AdminProposals() {
     )
   }
 
-  const { proposals, proposalsError } = await getProposals({
-    conferenceId: conference._id,
-    returnAll: true,
-    includeReviews: true,
-    includePreviousAcceptedTalks: true,
-  })
+  const { proposals, proposalsError } = await listOrganizerProposals(
+    conference._id,
+  )
 
   if (proposalsError) {
     return (

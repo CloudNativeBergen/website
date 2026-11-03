@@ -1,4 +1,5 @@
 'use client'
+import type { OrganizerProposal } from '@/lib/proposal/organizer'
 
 import { useState, useEffect, useCallback } from 'react'
 import { calculateAverageRating, reviewCountOf } from '@/lib/proposal'
@@ -38,7 +39,7 @@ import { api } from '@/lib/trpc/client'
 import { Conference } from '@/lib/conference/types'
 
 interface AdminActionBarProps {
-  proposal: ProposalExisting
+  proposal: ProposalExisting | OrganizerProposal
   conference: Conference
   /** Only used for the localhost warning in the action modal. */
   domain?: string

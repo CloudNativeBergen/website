@@ -1,14 +1,15 @@
 'use client'
 
+import type { OrganizerProposal } from '@/lib/proposal/organizer'
+
 import { useState, useMemo, memo, useCallback } from 'react'
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { ChartBarIcon } from '@heroicons/react/24/solid'
-import { ProposalExisting } from '@/lib/proposal/types'
 import { Topic } from '@/lib/topic/types'
 import { levels, audiences } from '@/lib/proposal/types'
 
 interface ProposalStatisticsProps {
-  proposals: ProposalExisting[]
+  proposals: OrganizerProposal[]
 }
 
 interface StatItem {
@@ -25,8 +26,8 @@ interface StatSection {
 }
 
 function calculateStats<T extends string>(
-  proposals: ProposalExisting[],
-  getAttribute: (proposal: ProposalExisting) => T | T[],
+  proposals: OrganizerProposal[],
+  getAttribute: (proposal: OrganizerProposal) => T | T[],
   labelMap: Map<T, string>,
 ): StatSection {
   if (proposals.length === 0) {
@@ -63,7 +64,7 @@ function calculateStats<T extends string>(
   }
 }
 
-function calculateTopicStats(proposals: ProposalExisting[]): StatSection {
+function calculateTopicStats(proposals: OrganizerProposal[]): StatSection {
   if (proposals.length === 0) {
     return { title: 'Topics', items: [], total: 0 }
   }
