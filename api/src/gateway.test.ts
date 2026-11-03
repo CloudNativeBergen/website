@@ -141,14 +141,16 @@ const jwt = (
 }
 
 describe('gateway', () => {
-  it('exposes no @tag(internal) provisioning fields', async () => {
+  it('exposes updateConference as the only mutation, no @tag(internal) fields', async () => {
     const { env } = makeEnv()
     const res = await gateway.fetch(
-      post({ query: '{ __schema { mutationType { name } } }' }),
+      post({ query: '{ __schema { mutationType { fields { name } } } }' }),
       env,
     )
     expect(await res.json()).toEqual({
-      data: { __schema: { mutationType: null } },
+      data: {
+        __schema: { mutationType: { fields: [{ name: 'updateConference' }] } },
+      },
     })
     expect(compose()).not.toMatch(/provision|internal"\)|type Organization/)
   })
@@ -277,6 +279,20 @@ describe('gateway', () => {
     const deep = `{ __schema { types { fields { type { ${'ofType { '.repeat(10)}name${' }'.repeat(10)} } } } } }`
     const res = await gateway.fetch(post({ query: deep }), env)
     expect(JSON.stringify(await res.json())).toMatch(/depth limit/i)
+  })
+
+  it('applies the alias limit to mutations (no mutation can nest past the depth limit)', async () => {
+    const { env, envelopes } = makeEnv()
+    const aliases = Array.from(
+      { length: 16 },
+      (_, i) => `a${i}: updateConference(input: {}) { id }`,
+    ).join(' ')
+    const wide = await gateway.fetch(
+      post({ query: `mutation { ${aliases} }` }),
+      env,
+    )
+    expect(JSON.stringify(await wide.json())).toMatch(/aliases limit/i)
+    expect(envelopes).toEqual([])
   })
 
   it('rejects 300 aliased __schema fields', async () => {
@@ -480,6 +496,19 @@ describe('gateway', () => {
         env,
       )
       expect(keys(env)).toEqual(['user:user_1'])
+    })
+
+    it('answers 429 to a mutation before any identity work', async () => {
+      const { env } = makeEnv(undefined, false)
+      const res = await gateway.fetch(
+        post(
+          { query: 'mutation { updateConference(input: {}) { id } }' },
+          { origin: VERIFIED },
+        ),
+        env,
+      )
+      expect(res.status).toBe(429)
+      expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
     })
 
     it('answers 429 before any identity or Membership work', async () => {
