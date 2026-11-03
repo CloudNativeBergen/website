@@ -20,7 +20,7 @@ import { buildClassificationContext } from '@/lib/tickets/classificationContext'
 import { calculateTicketStatistics } from '@/lib/tickets/utils'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput } from '@/lib/tickets/types'
-import { getSpeakers } from '@/lib/speaker/sanity'
+import { getSpeakers } from '@/lib/speaker'
 import { countOrUnknown } from '@/lib/tickets/freeAllocation'
 import { tallyParticipants } from '@/lib/tickets/participants'
 

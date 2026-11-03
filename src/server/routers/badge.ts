@@ -26,7 +26,7 @@ import {
 import { issueBadgeForSpeaker } from '@/lib/badge/issuance'
 import { rebakeBadge } from '@/lib/badge/rebake'
 import { isJWTFormat } from '@/lib/openbadges'
-import { getSpeaker } from '@/lib/speaker/sanity'
+import { getSpeaker } from '@/lib/speaker'
 import {
   getBadgeById,
   getBadgeForConference,

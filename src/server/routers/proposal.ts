@@ -109,10 +109,8 @@ import {
 import { filterProposals } from '@/lib/proposal/utils/filtering'
 import { convertPortableTextToString } from '@/lib/proposal/utils/validation'
 import { Speaker } from '@/lib/speaker/types'
-import {
-  buildOrganizerCreatedSpeaker,
-  findSpeakerByEmailForOrganizerCreate,
-} from '@/lib/speaker/sanity'
+import { buildOrganizerCreatedSpeaker } from '@/lib/speaker/sanity'
+import { findSpeakerByEmailForOrganizerCreate } from '@/lib/speaker'
 import { normalizeEmail, canonicalEmail } from '@/lib/speaker/email'
 import { eventBus } from '@/lib/events/bus'
 import { runAfterResponse } from '@/server/runAfterResponse'

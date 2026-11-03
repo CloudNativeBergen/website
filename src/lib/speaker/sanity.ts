@@ -1441,22 +1441,30 @@ async function querySpeakers(
     // admin speakers page both did) rendered a shared speaker's proposals from
     // EVERY organization. Falling back to the single-conference filter keeps the
     // page working (it just stops crossing editions) and can never cross tenants.
-    const proposalsConferenceFilter = includeProposalsFromOtherConferences
-      ? orgId
-        ? '&& conference->organization._ref == $orgId'
-        : conferenceFilter
-      : conferenceFilter
+    //
+    // The talk-level tenant predicate (#1876): the conference when given, else
+    // the org. The guard above means one of them is set, so this is never empty.
+    // It used to be `conferenceFilter` alone, which is EMPTY on an orgId-only
+    // call: a speaker in the org then qualified on a talk at another org's
+    // conference, and with includeProposalsFromOtherConferences=false the
+    // nested proposals were not scoped at all.
+    const orgTalkFilter = '&& conference->organization._ref == $orgId'
+    const talkTenantFilter = conferenceId ? conferenceFilter : orgTalkFilter
+    const proposalsConferenceFilter =
+      includeProposalsFromOtherConferences && orgId
+        ? orgTalkFilter
+        : talkTenantFilter
 
     // groq-global-scoped: the guard above requires conferenceId or orgId, so
     // orgFilter or the nested conferenceFilter always carries the tenant.
     const query = groq`*[
-      count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${/* groq-global-scoped: conferenceFilter when set; else the outer orgFilter bounds which speakers return (this count is existence only) */ conferenceFilter}]) > 0 &&
+      count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${/* groq-global-scoped: talkTenantFilter is the conference or org predicate, never empty (see above) */ talkTenantFilter}]) > 0 &&
       _type == "speaker" ${orgFilter}] {
       ...,
       ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
       "slug": slug.current,
       "image": ${SPEAKER_IMAGE_URL},
-      "proposals": *[_type == "talk" && references(^._id) && status in [${statusFilter}] ${/* groq-global-scoped: proposalsConferenceFilter is conferenceFilter or the org predicate, never empty (see above) */ proposalsConferenceFilter}] {
+      "proposals": *[_type == "talk" && references(^._id) && status in [${statusFilter}] ${/* groq-global-scoped: proposalsConferenceFilter is the org predicate or talkTenantFilter, never empty (see above) */ proposalsConferenceFilter}] {
         _id,
         title,
         status,

@@ -29,7 +29,7 @@ import {
   getDuplicateSpeakerCandidateRecords,
   getSpeakerTicketGrantState,
   findSpeakerByEmailForOrganizerCreate,
-} from '@/lib/speaker/sanity'
+} from '@/lib/speaker'
 import {
   findDuplicateSpeakerCandidates,
   type DuplicateCandidatesReport,

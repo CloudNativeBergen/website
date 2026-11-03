@@ -1,6 +1,6 @@
 import { eventBus } from '@/lib/events/bus'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getSpeaker } from '@/lib/speaker/sanity'
+import { getSpeaker } from '@/lib/speaker'
 import { logger } from '@/lib/logger'
 import type { Speaker } from '@/lib/speaker/types'
 import type { GallerySpeakerTaggedEvent } from '@/lib/events/types'

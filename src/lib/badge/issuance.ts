@@ -5,7 +5,7 @@ import {
 } from './artifacts'
 import { createBadgeConfiguration } from './config'
 import { getCurrentDateTime } from '@/lib/time'
-import { getSpeaker } from '@/lib/speaker/sanity'
+import { getSpeaker } from '@/lib/speaker'
 import { createBadge, uploadBadgeSVGAsset, checkBadgeExists } from './sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getPlatformOrgId } from '@/lib/authz/platform'

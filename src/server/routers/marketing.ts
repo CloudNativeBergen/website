@@ -235,7 +235,7 @@ import {
   mayAlreadyBeLive,
 } from '@/lib/social/state-machine'
 import type { VariantStatus } from '@/lib/social/types'
-import { getOrganizersByConference } from '@/lib/speaker/sanity'
+import { getOrganizersByConference } from '@/lib/speaker'
 import { checkTagsForApproval } from '@/lib/marketing/tagging/verify'
 import {
   getTaskTagPeople,
