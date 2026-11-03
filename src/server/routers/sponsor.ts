@@ -1883,8 +1883,7 @@ export const sponsorRouter = router({
 
         // Ensure assigned person is an organizer of this conference
         if (data.assignedTo) {
-          const { getOrganizersByConference } =
-            await import('@/lib/speaker')
+          const { getOrganizersByConference } = await import('@/lib/speaker')
           const { speakers: organizers } =
             await getOrganizersByConference(resolvedConferenceId)
           if (!organizers?.some((o) => o._id === data.assignedTo)) {
@@ -2219,8 +2218,7 @@ export const sponsorRouter = router({
           // Ensure assigned person is an organizer of this conference
           if (input.assignedTo) {
             const conferenceId = await resolveConferenceId()
-            const { getOrganizersByConference } =
-              await import('@/lib/speaker')
+            const { getOrganizersByConference } = await import('@/lib/speaker')
             const { speakers: organizers } =
               await getOrganizersByConference(conferenceId)
             if (!organizers?.some((o) => o._id === input.assignedTo)) {

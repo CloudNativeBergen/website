@@ -18,8 +18,6 @@ import type {
   TicketEmailGrant,
 } from './types'
 
-export type { OrgDirectorySpeaker, ExistingSpeakerForEmail } from './sanity'
-
 /** A speaker's public profile in one conference. */
 export type PublicSpeaker = Pick<
   Speaker,
@@ -44,7 +42,10 @@ export async function getPublicSpeakerProfile(
   conferenceId: string,
   slug: string,
 ): Promise<PublicSpeakerProfile> {
-  const { speaker, talks, err } = await store.getPublicSpeaker(conferenceId, slug)
+  const { speaker, talks, err } = await store.getPublicSpeaker(
+    conferenceId,
+    slug,
+  )
   return { speaker, talks, err: err as Error | null }
 }
 
