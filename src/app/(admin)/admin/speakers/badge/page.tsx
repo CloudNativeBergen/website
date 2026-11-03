@@ -6,7 +6,7 @@ import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { BadgeManagementClient } from '@/components/admin/BadgeManagementClient'
 import { AcademicCapIcon } from '@heroicons/react/24/outline'
 import { getBadgeStats, listBadgesForConference } from '@/lib/badge/sanity'
-import { getSpeakers, getOrganizers } from '@/lib/speaker/sanity'
+import { getSpeakers, getOrganizers } from '@/lib/speaker'
 import { Status, type ProposalExisting } from '@/lib/proposal/types'
 import type { Speaker } from '@/lib/speaker/types'
 

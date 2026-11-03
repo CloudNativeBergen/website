@@ -1,5 +1,5 @@
 import { ProposalExisting } from '@/lib/proposal/types'
-import { getSpeaker } from '@/lib/speaker/sanity'
+import { getSpeaker } from '@/lib/speaker'
 import { formatNumber } from '@/lib/format'
 import { Action } from '@/lib/proposal/types'
 import type { ProposalStatusChangeEvent } from '@/lib/events/types'

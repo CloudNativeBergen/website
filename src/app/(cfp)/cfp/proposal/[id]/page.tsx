@@ -8,7 +8,7 @@ import {
   isOrganizerForCurrentOrg,
   resolveCurrentOrgId,
 } from '@/lib/authz/organizer'
-import { getSpeaker } from '@/lib/speaker/sanity'
+import { getSpeaker } from '@/lib/speaker'
 import { resolveEditorSpeaker } from '@/lib/proposal/editorSpeaker'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ProposalReadOnlyView } from '@/components/cfp/ProposalReadOnlyView'

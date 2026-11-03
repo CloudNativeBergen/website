@@ -6,7 +6,7 @@ import {
   isOrganizerForCurrentOrg,
   resolveCurrentOrgId,
 } from '@/lib/authz/organizer'
-import { getSpeaker } from '@/lib/speaker/sanity'
+import { getSpeaker } from '@/lib/speaker'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import { BackLink } from '@/components/BackButton'

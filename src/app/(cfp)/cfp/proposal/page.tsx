@@ -16,7 +16,7 @@ import { ProposalGuidanceSidebar } from '@/components/cfp/ProposalGuidanceSideba
 import { getAuthSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
-import { getSpeaker } from '@/lib/speaker/sanity'
+import { getSpeaker } from '@/lib/speaker'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isConferenceUnavailable } from '@/lib/conference/guard'
 import { landingUtmFrom } from '@/lib/marketing/landing-utm'

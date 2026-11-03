@@ -1071,7 +1071,7 @@ async function updateCrmRecord(
   // Ensure assigned person is an organizer of this conference
   if (updateData.assignedTo) {
     const conferenceId = await resolveConferenceId()
-    const { getOrganizersByConference } = await import('@/lib/speaker/sanity')
+    const { getOrganizersByConference } = await import('@/lib/speaker')
     const { speakers: organizers } =
       await getOrganizersByConference(conferenceId)
     if (!organizers?.some((o) => o._id === updateData.assignedTo)) {
@@ -1145,7 +1145,7 @@ async function updateCrmRecord(
         let assigneeName: string | null = null
         if (updateData.assignedTo) {
           try {
-            const { getSpeaker } = await import('@/lib/speaker/sanity')
+            const { getSpeaker } = await import('@/lib/speaker')
             const { speaker } = await getSpeaker(updateData.assignedTo)
             assigneeName = speaker?.name || updateData.assignedTo
           } catch (lookupError) {
@@ -1596,7 +1596,7 @@ export const sponsorRouter = router({
 
     listOrganizers: adminProcedure.query(async () => {
       const conferenceId = await resolveConferenceId()
-      const { getOrganizersByConference } = await import('@/lib/speaker/sanity')
+      const { getOrganizersByConference } = await import('@/lib/speaker')
 
       const { speakers, err } = await getOrganizersByConference(conferenceId)
 
@@ -1883,8 +1883,7 @@ export const sponsorRouter = router({
 
         // Ensure assigned person is an organizer of this conference
         if (data.assignedTo) {
-          const { getOrganizersByConference } =
-            await import('@/lib/speaker/sanity')
+          const { getOrganizersByConference } = await import('@/lib/speaker')
           const { speakers: organizers } =
             await getOrganizersByConference(resolvedConferenceId)
           if (!organizers?.some((o) => o._id === data.assignedTo)) {
@@ -2219,8 +2218,7 @@ export const sponsorRouter = router({
           // Ensure assigned person is an organizer of this conference
           if (input.assignedTo) {
             const conferenceId = await resolveConferenceId()
-            const { getOrganizersByConference } =
-              await import('@/lib/speaker/sanity')
+            const { getOrganizersByConference } = await import('@/lib/speaker')
             const { speakers: organizers } =
               await getOrganizersByConference(conferenceId)
             if (!organizers?.some((o) => o._id === input.assignedTo)) {

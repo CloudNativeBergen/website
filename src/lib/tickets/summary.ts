@@ -22,7 +22,7 @@
 import 'server-only'
 import type { Conference } from '@/lib/conference/types'
 import { canonicalEmail } from '@/lib/speaker/email'
-import { getSpeakers, getOrganizerCount } from '@/lib/speaker/sanity'
+import { getSpeakers, getOrganizerCount } from '@/lib/speaker'
 import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
 import { Status } from '@/lib/proposal/types'
 import { calculateDiscountUsage } from '@/lib/discounts'

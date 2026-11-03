@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { getSpeaker } from '@/lib/speaker/sanity'
+import { getSpeaker } from '@/lib/speaker'
 import { Flags } from '@/lib/speaker/types'
 import { getTravelSupportById } from './sanity'
 import { TravelSupportStatus, TravelSupportDetail } from './types'

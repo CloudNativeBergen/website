@@ -241,6 +241,14 @@ vi.mock('@/lib/speaker/sanity', async (importOriginal) => {
     generateUniqueSlug: async (name: string) => name.toLowerCase(),
   }
 })
+// The router reads through the seam (#1876); mock it there too, since a
+// partial mock of `./sanity` is not seen by the seam's own import of it.
+vi.mock('@/lib/speaker', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  getSpeaker: h.getSpeaker,
+  getSpeakerAdminDetail: h.getSpeakerAdminDetail,
+  updateSpeaker: h.updateSpeaker,
+}))
 vi.mock('@/lib/speaker/merge', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, mergeSpeakers: h.mergeSpeakers }

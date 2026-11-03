@@ -1,6 +1,6 @@
 import { connection } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
-import { getSpeaker } from '@/lib/speaker/sanity'
+import { getSpeaker } from '@/lib/speaker'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { CFPProfilePage } from '@/components/cfp/CFPProfilePage'

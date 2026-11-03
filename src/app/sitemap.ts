@@ -3,7 +3,7 @@ import { headers } from 'next/headers'
 
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { getDiscoveryVisibilityForDomain } from '@/lib/conference/visibility'
-import { getSpeakers } from '@/lib/speaker/sanity'
+import { getSpeakers } from '@/lib/speaker'
 import { buildSitemap } from '@/lib/seo/sitemap'
 import { canonicalHost } from '@/lib/seo/canonical'
 import { isProgramPublished } from '@/lib/conference/state'
