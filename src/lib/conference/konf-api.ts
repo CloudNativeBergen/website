@@ -53,6 +53,22 @@ export async function fetchKonfApiConference(
   cacheTag('content:conferences')
   cacheTag(domainTag(host))
   cacheTag(conferenceTag(conferenceId))
+  try {
+    return await readKonfApiConference(host, conferenceId)
+  } catch (err) {
+    // A production build redacts an error thrown out of a `'use cache'` body
+    // to "An error occurred in the Server Components render", so the caller's
+    // log cannot say why. Log the real cause here, server-side only.
+    const e = err as Error
+    console.warn(`[konf-api] read failed for ${host}: ${e.name}: ${e.message}`)
+    throw err
+  }
+}
+
+async function readKonfApiConference(
+  host: string,
+  conferenceId: string,
+): Promise<ApiConference> {
   const res = await fetch(KONF_API_URL, {
     method: 'POST',
     // Cached across visitors, so no client IP (see konfApiHeaders).
