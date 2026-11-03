@@ -2,7 +2,9 @@ import type { Metadata } from 'next'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { signIn, providerMap } from '@/lib/auth'
-import { GitHubIcon, LinkedInIcon } from '@/components/SocialIcons'
+import { SignInProviderButtons } from '@/components/SignInProviderButtons'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isIdentityTenant } from '@/lib/auth/identity-handoff'
 import { AuthError } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { requestEmailSignInLinkAction } from './actions'
@@ -19,6 +21,10 @@ export default async function Signin(props: {
 }) {
   const searchParams = await props.searchParams
   const error = searchParams.error
+  // Decided here so the tenant list never reaches the client. The handoff
+  // has no return path yet, so callbackUrl is dropped on that branch.
+  const { conference } = await getConferenceForCurrentDomain()
+  const handoff = !!conference && isIdentityTenant(conference)
 
   return (
     <>
@@ -53,41 +59,23 @@ export default async function Signin(props: {
               </div>
             )}
 
-            <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {Object.values(providerMap).map((provider) => (
-                <form
-                  key={provider.id}
-                  action={async () => {
-                    'use server'
-                    try {
-                      await signIn(provider.id, {
-                        redirectTo: searchParams.callbackUrl ?? '/',
-                      })
-                    } catch (error) {
-                      if (error instanceof AuthError) {
-                        return redirect(
-                          `${SIGNIN_ERROR_URL}?error=${error.type}`,
-                        )
-                      }
-                      throw error
-                    }
-                  }}
-                >
-                  <button
-                    type="submit"
-                    className="inline-flex w-full cursor-pointer items-center justify-center rounded-2xl bg-brand-cloud-blue px-6 py-4 text-lg font-semibold text-white transition-all duration-200 hover:bg-brand-cloud-blue-hover focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {provider.id === 'github' && (
-                      <GitHubIcon className="mr-2 h-5 w-5" />
-                    )}
-                    {provider.id === 'linkedin' && (
-                      <LinkedInIcon className="mr-2 h-5 w-5" />
-                    )}
-                    <span>Sign in with {provider.name}</span>
-                  </button>
-                </form>
-              ))}
-            </div>
+            <SignInProviderButtons
+              providers={Object.values(providerMap)}
+              handoff={handoff}
+              signInAction={async (providerId: string) => {
+                'use server'
+                try {
+                  await signIn(providerId, {
+                    redirectTo: searchParams.callbackUrl ?? '/',
+                  })
+                } catch (error) {
+                  if (error instanceof AuthError) {
+                    return redirect(`${SIGNIN_ERROR_URL}?error=${error.type}`)
+                  }
+                  throw error
+                }
+              }}
+            />
 
             {/*
               EMAIL SIGN-IN. Placed after the OAuth buttons because it is the
