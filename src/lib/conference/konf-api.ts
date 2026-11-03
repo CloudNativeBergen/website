@@ -105,7 +105,8 @@ export async function mergeKonfApiConference(
         ...(accentColor != null && { accentColor }),
       }
     }
-    if (Array.isArray(homepageSections))
+    // `[]` means no value: keep Sanity's composition, hidden flags and all.
+    if (Array.isArray(homepageSections) && homepageSections.length > 0)
       merged.homepageSections = homepageSections
     return merged as unknown as Conference
   } catch (err) {

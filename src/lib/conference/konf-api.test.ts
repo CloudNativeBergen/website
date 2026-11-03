@@ -135,6 +135,15 @@ describe('KONF_API_TENANTS', () => {
     ])
   })
 
+  it('an empty block list keeps the Sanity composition', async () => {
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    const stored = [{ _type: 'homepageHero', _key: 'h', hidden: true }]
+    sanityFetch.mockResolvedValue({ ...sanityDoc, homepageSections: stored })
+    apiReply({ homepageSections: '[]' })
+    const { conference } = await getConferenceForDomain('2026.example.com')
+    expect(conference.homepageSections).toEqual(stored)
+  })
+
   it('API error falls back to Sanity', async () => {
     vi.stubEnv('KONF_API_TENANTS', 'conf-1')
     fetchMock.mockResolvedValue(new Response('boom', { status: 502 }))

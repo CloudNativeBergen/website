@@ -1,3 +1,4 @@
+import { isLateSubmissionAllowed } from '@/lib/proposal/late-submission-token'
 import { TRPCError } from '@trpc/server'
 import { ProposalInputSchema } from '@/server/schemas/proposal'
 import { hasSubmittableFormats, isCfpOpen } from '@/lib/conference/state'
@@ -109,14 +110,24 @@ export function assertMayBecomeSubmitted({
   conference,
   content,
   contentSource,
+  lateSubmission,
 }: {
   conference: Pick<Conference, 'cfpStartDate' | 'cfpEndDate'> & {
+    _id?: string
     formats?: Conference['formats']
   }
   content: { topics?: unknown; _id?: unknown }
   contentSource: 'payload' | 'stored'
+  /** Organizer-issued late link (#249): lifts the CFP window, nothing else. */
+  lateSubmission?: { token?: string; email?: string | null }
 }): void {
-  if (!isCfpOpen(conference)) {
+  if (
+    !isCfpOpen(conference) &&
+    !isLateSubmissionAllowed(lateSubmission?.token, {
+      conferenceId: conference._id ?? '',
+      email: lateSubmission?.email,
+    })
+  ) {
     throw new TRPCError({ code: 'FORBIDDEN', message: CFP_CLOSED_MESSAGE })
   }
 

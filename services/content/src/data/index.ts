@@ -37,6 +37,7 @@ type Doc = Record<string, unknown> & {
   theme?: { primaryColor?: string | null; accentColor?: string | null } | null
   socialLinks?: string[] | null
   homepageSections?: Block[] | null
+  speakerInfo?: SpeakerInfo | null
 }
 
 /** A homepage block as Sanity stores it; `_type` picks the GraphQL type. */
@@ -48,6 +49,22 @@ export type Block = Record<string, unknown> & {
 const list = <T>(v: unknown) => (Array.isArray(v) ? (v as T[]) : [])
 
 const s = (v: unknown) => (typeof v === 'string' && v.trim()) || null
+
+type SpeakerInfo = Record<string, unknown> & {
+  onsiteContact?: Record<string, unknown>
+  dinner?: Record<string, unknown>
+}
+
+/**
+ * What /info shows (src/lib/conference/info-faq.ts): no on-site phone and no
+ * dinner `rsvpNote`. Those stay with speakers and org members.
+ */
+function publicSpeakerInfo(info: SpeakerInfo): SpeakerInfo {
+  const out: SpeakerInfo = structuredClone(info)
+  delete out.onsiteContact?.phone
+  delete out.dinner?.rsvpNote
+  return out
+}
 
 /**
  * Same mapping as services/conference/scripts/backfill.ts (#1829), plus the
@@ -81,11 +98,17 @@ function toConference(c: Doc, member: boolean) {
     registrationLink: s(c.registrationLink),
     socialLinks: c.socialLinks ?? [],
     // Hidden blocks are drafts: org members only (#1830), in both fields.
-    homepageSections: JSON.stringify(blocks),
+    // Null, not `[]`, when nothing is visible: the site keeps its stored
+    // composition then, so hidden blocks never fall back to the default layout.
+    homepageSections: blocks.length ? JSON.stringify(blocks) : null,
     homepageBlocks: blocks,
     // Portable Text, as Sanity stores it; the site renders it with PortableText.
     announcement: c.announcement ? JSON.stringify(c.announcement) : null,
-    speakerInfo: c.speakerInfo ? JSON.stringify(c.speakerInfo) : null,
+    speakerInfo: c.speakerInfo
+      ? JSON.stringify(
+          member ? c.speakerInfo : publicSpeakerInfo(c.speakerInfo),
+        )
+      : null,
     sponsorshipCustomization: c.sponsorshipCustomization
       ? JSON.stringify(c.sponsorshipCustomization)
       : null,
@@ -102,7 +125,7 @@ function toConference(c: Doc, member: boolean) {
     // Invite links that hand out free tickets: never public (types.ts).
     sponsorRegistrationLink: member ? s(c.sponsorRegistrationLink) : null,
     speakerRegistrationLink: member ? s(c.speakerRegistrationLink) : null,
-    volunteerRegistrationLink: s(c.volunteerRegistrationLink),
+    volunteerRegistrationLink: member ? s(c.volunteerRegistrationLink) : null,
     registrationEnabled: c.registrationEnabled === true,
     ticketCustomization: (c.ticketCustomization ?? null) as Record<
       string,

@@ -52,8 +52,9 @@ beforeAll(async () => {
 })
 
 /**
- * Fake tenant-directory: knows only conf.example, and records the envelope
- * header of every subgraph call (the gateway's own lookup sends none).
+ * Fake tenant-directory (knows only conf.example) and a fake content
+ * subgraph that records the envelope header of every federated call (the
+ * gateway's own directory lookup sends none).
  */
 function makeEnv(
   role: { orgRole: string | null } = { orgRole: 'admin' },
@@ -69,16 +70,15 @@ function makeEnv(
     DIRECTORY: {
       fetch: async (_url: string, init: RequestInit) => {
         const body = JSON.parse(String(init.body))
-        // The gateway's own lookup; the federated subgraph call is minified.
-        if (body.query.includes('orgId conferenceId')) {
-          const known = body.variables.host === 'conf.example'
-          return Response.json({
-            data: { tenantByHost: known ? TENANT : null },
-          })
-        }
+        const known = body.variables.host === 'conf.example'
+        return Response.json({ data: { tenantByHost: known ? TENANT : null } })
+      },
+    },
+    CONTENT: {
+      fetch: async (_url: string, init: RequestInit) => {
         forwarded.push(new Headers(init.headers))
         envelopes.push(forwarded.at(-1)!.get(ENVELOPE_HEADER))
-        return Response.json({ data: { tenantByHost: null } })
+        return Response.json({ data: { conference: null } })
       },
     },
     CONFERENCE: {
@@ -112,7 +112,7 @@ const post = (body: unknown, headers: Record<string, string> = {}): Request =>
     body: JSON.stringify(body),
   })
 
-const SUBGRAPH_QUERY = { query: '{ tenantByHost(host: "q") { orgId } }' }
+const SUBGRAPH_QUERY = { query: '{ conference { id } }' }
 
 const jwt = (
   opts: {
@@ -349,13 +349,7 @@ describe('gateway', () => {
 
   it('masks unexpected subgraph failures', async () => {
     const { env } = makeEnv()
-    ;(env.DIRECTORY as unknown as { fetch: unknown }).fetch = async (
-      _url: string,
-      init: RequestInit,
-    ) => {
-      if (String(init.body).includes('orgId conferenceId')) {
-        return Response.json({ data: { tenantByHost: null } })
-      }
+    ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () => {
       throw new Error('secret detail')
     }
     const res = await gateway.fetch(post(SUBGRAPH_QUERY), env)

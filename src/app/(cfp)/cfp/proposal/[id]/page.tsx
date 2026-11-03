@@ -22,6 +22,7 @@ import { ProposalMessagesSection } from '@/components/messaging'
 import { getUnreadCountsByProposalIds } from '@/lib/messaging/sanity'
 import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline'
 import { isConferenceOver } from '@/lib/conference/state'
+import { isLateSubmissionAllowed } from '@/lib/proposal/late-submission-token'
 import { BackLink } from '@/components/BackButton'
 import { buildUrlWithImpersonation } from '@/lib/impersonation'
 
@@ -29,14 +30,18 @@ interface ProposalViewPageProps {
   params: Promise<{
     id: string
   }>
+  searchParams?: Promise<{ token?: string | string[] }>
 }
 
 export default async function ProposalViewPage({
   params,
+  searchParams,
 }: ProposalViewPageProps) {
   await connection()
 
   const { id } = await params
+  const { token } = (await searchParams) ?? {}
+  const lateToken = typeof token === 'string' ? token : undefined
   const headersList = await headers()
   const fullUrl = headersList.get('x-url') || ''
   const session = await getAuthSession({ url: fullUrl })
@@ -256,6 +261,15 @@ export default async function ProposalViewPage({
                 allowedFormats={conference.formats}
                 currentUserSpeaker={currentUserSpeaker}
                 initialStatus={proposal.status}
+                lateSubmissionToken={
+                  // Late link (#249); the server re-checks it on submit.
+                  isLateSubmissionAllowed(lateToken, {
+                    conferenceId: conference._id,
+                    email: session.speaker.email,
+                  })
+                    ? lateToken
+                    : undefined
+                }
               />
             </div>
           </div>
