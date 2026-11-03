@@ -401,6 +401,7 @@ export const workshopRouter = router({
       try {
         const announcements = await getWorkshopAnnouncements(
           input.workshopId,
+          await resolveConferenceId(),
           input.limit,
         )
         return {

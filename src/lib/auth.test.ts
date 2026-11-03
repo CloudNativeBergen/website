@@ -364,6 +364,22 @@ describe('signOutHandler — clears link-flow state', () => {
     expect(currentJar.delete).toHaveBeenCalledWith(LINK_INTENT_COOKIE)
   })
 
+  it('expires the identity session cookie with its __Host- attributes', async () => {
+    currentJar = createJar({ '__Host-konf.session': 'tok.sig' })
+    const set = vi.fn()
+    currentJar.set = set
+
+    await signOutHandler()
+
+    expect(set).toHaveBeenCalledWith('__Host-konf.session', '', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      expires: new Date(0),
+    })
+  })
+
   it('deletes RESIDUAL host-only session cookies (incl. chunked parts) on sign-out', async () => {
     // @auth/core's own clear targets the Domain-scoped cookie; a pre-widening
     // HOST-ONLY cookie of the same name must be deleted separately or the user

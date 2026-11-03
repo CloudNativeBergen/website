@@ -127,6 +127,17 @@ export async function signOutHandler(): Promise<void> {
     const jar = await cookies()
     jar.delete(LINK_INTENT_COOKIE)
 
+    // The first-party identity session (#1803) outranks NextAuth in
+    // /api/token, so it goes too. A `__Host-` clear needs Secure and Path=/.
+    // ponytail: cookie only; identity has no revoke endpoint yet, so the
+    // session stays valid server-side until it expires.
+    const { IDENTITY_SESSION_COOKIE, IDENTITY_COOKIE_OPTIONS } =
+      await import('@/lib/auth/identity-cookie')
+    jar.set(IDENTITY_SESSION_COOKIE, '', {
+      ...IDENTITY_COOKIE_OPTIONS,
+      expires: new Date(0),
+    })
+
     // RESIDUAL HOST-ONLY COOKIE CLEANUP (belt and braces alongside the per-response
     // rewriter): @auth/core clears the session cookie with the CURRENT cookie
     // options, and `rewriteSessionCookieDomains` duplicates that clear into BOTH

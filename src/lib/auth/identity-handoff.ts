@@ -17,16 +17,13 @@ import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { AppEnvironment } from '@/lib/environment/config'
 import type { Conference } from '@/lib/conference/types'
 
-/** Host-only, https-only, never readable from script. */
-export const IDENTITY_SESSION_COOKIE = '__Host-konf.session'
+import {
+  IDENTITY_COOKIE_OPTIONS as COOKIE,
+  IDENTITY_SESSION_COOKIE,
+} from './identity-cookie'
+
 /** Login-CSRF nonce: identity gets only its SHA-256 as `state`. */
 export const HANDOFF_NONCE_COOKIE = '__Host-konf.handoff'
-const COOKIE = {
-  httpOnly: true,
-  secure: true,
-  sameSite: 'lax',
-  path: '/',
-} as const
 const PROVIDERS = new Set(['github', 'linkedin'])
 const noStore = {
   'cache-control': 'no-store',

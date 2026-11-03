@@ -97,3 +97,27 @@ export function diffConference(
     return sanity === api ? [] : [{ field, sanity, api }]
   })
 }
+
+const KIND_RANK = { 'platform-edition': 0, 'platform-alias': 1, custom: 2 }
+
+/**
+ * `--all`: one host per routable conference. The platform-edition host wins,
+ * but a conference that lost it to a collision is still checked through its
+ * alias or a verified custom domain instead of being skipped.
+ */
+export function pickHosts<
+  D extends {
+    conferenceId: string
+    kind: keyof typeof KIND_RANK
+    verification: string
+  },
+>(domains: D[]): D[] {
+  const best = new Map<string, D>()
+  for (const d of domains) {
+    if (d.kind === 'custom' && d.verification !== 'verified') continue
+    const cur = best.get(d.conferenceId)
+    if (!cur || KIND_RANK[d.kind] < KIND_RANK[cur.kind])
+      best.set(d.conferenceId, d)
+  }
+  return [...best.values()]
+}

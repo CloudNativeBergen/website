@@ -304,8 +304,9 @@ describe('workshop.announcements — public query bounds', () => {
     ])
     const result = await makeCaller(null).announcements({ workshopId: 'ws-1' })
     expect(result.count).toBe(1)
-    // Default limit (50) applied by the schema.
-    expect(getAnnouncementsMock).toHaveBeenCalledWith('ws-1', 50)
+    // Default limit (50) applied by the schema; the conference comes from the
+    // request's domain, never the client.
+    expect(getAnnouncementsMock).toHaveBeenCalledWith('ws-1', CONFERENCE_ID, 50)
   })
 
   it('rejects a limit above 50', async () => {

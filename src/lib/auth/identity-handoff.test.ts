@@ -17,8 +17,9 @@ vi.mock('@/lib/environment/config', () => ({
   },
 }))
 
-const { handoffGET, tokenPOST, IDENTITY_SESSION_COOKIE, HANDOFF_NONCE_COOKIE } =
+const { handoffGET, tokenPOST, HANDOFF_NONCE_COOKIE } =
   await import('./identity-handoff')
+const { IDENTITY_SESSION_COOKIE } = await import('./identity-cookie')
 
 const SITE = 'https://conf.example'
 const fetchMock = vi.fn()

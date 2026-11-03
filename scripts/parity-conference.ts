@@ -18,6 +18,7 @@ import {
   FIELDS,
   diffConference,
   expected,
+  pickHosts,
 } from '../services/conference/scripts/parity'
 import { normalizeHost } from '../services/tenant-directory/src/data/naming'
 import { loadBackfill } from './backfill-conference'
@@ -52,9 +53,9 @@ async function main() {
 
   const { rows, domains } = await loadBackfill()
   const byId = new Map(rows.map((r) => [r.conference_id, r]))
-  // --all: one host per conference, its platform edition host.
+  // --all: one host per conference, its platform edition host when it has one.
   const targets = all
-    ? domains.filter((d) => d.kind === 'platform-edition')
+    ? pickHosts(domains)
     : domains.filter((d) => d.hostname === host)
   if (!targets.length) {
     console.error(`${host}: not a routable host in Sanity`)
