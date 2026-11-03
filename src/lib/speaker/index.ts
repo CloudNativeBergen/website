@@ -7,7 +7,7 @@
  * Return types name the fields a caller may rely on, shaped like the future
  * GraphQL type, so a second backend only has to produce these fields.
  */
-import type { ProposalExisting, Status } from '@/lib/proposal/types'
+import type { ProposalExisting } from '@/lib/proposal/types'
 import * as store from './sanity'
 import type { DuplicateSpeakerInput } from './duplicates'
 import type { SpeakerUpdateActor } from './socialTag'
@@ -76,45 +76,23 @@ export interface OrganizerListResult {
  * only `orgId`, to the org's conferences. Cached.
  */
 export function getSpeakers(
-  conferenceId?: string,
-  statuses?: Status[],
-  includeProposalsFromOtherConferences?: boolean,
-  orgId?: string | null,
+  ...args: Parameters<typeof store.getSpeakers>
 ): Promise<SpeakerListResult> {
-  return store.getSpeakers(
-    conferenceId,
-    statuses,
-    includeProposalsFromOtherConferences,
-    orgId,
-  )
+  return store.getSpeakers(...args)
 }
 
 /** {@link getSpeakers} read past the cache, for admin mutations. */
 export function getSpeakersUncached(
-  conferenceId?: string,
-  statuses?: Status[],
-  includeProposalsFromOtherConferences?: boolean,
-  orgId?: string | null,
+  ...args: Parameters<typeof store.getSpeakersUncached>
 ): Promise<SpeakerListResult> {
-  return store.getSpeakersUncached(
-    conferenceId,
-    statuses,
-    includeProposalsFromOtherConferences,
-    orgId,
-  )
+  return store.getSpeakersUncached(...args)
 }
 
 /** Speakers with an accepted or confirmed talk. */
 export function getSpeakersWithAcceptedTalks(
-  conferenceId?: string,
-  includeProposalsFromOtherConferences?: boolean,
-  orgId?: string | null,
+  ...args: Parameters<typeof store.getSpeakersWithAcceptedTalks>
 ): Promise<SpeakerListResult> {
-  return store.getSpeakersWithAcceptedTalks(
-    conferenceId,
-    includeProposalsFromOtherConferences,
-    orgId,
-  )
+  return store.getSpeakersWithAcceptedTalks(...args)
 }
 
 /** Every speaker in the org, for the admin directory. */

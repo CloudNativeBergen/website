@@ -80,7 +80,7 @@ vi.mock('@/lib/organization/sanity', async (importOriginal) => ({
   getOrganizationRefForCurrentConference: async () => 'org-A',
 }))
 
-vi.mock('@/lib/speaker/sanity', async (importOriginal) => ({
+vi.mock('@/lib/speaker', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getSpeakerTicketGrantState: h.grantState,
   findSpeakerByEmailForOrganizerCreate: h.findExisting,
