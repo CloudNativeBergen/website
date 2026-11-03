@@ -7,7 +7,7 @@ import { resolveSpeakerTicketType } from '@/lib/tickets/speakerStatus'
 import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
 import { normalizeEmail } from '@/lib/speaker/email'
 import { sendSpeakerTicketEmail } from '@/lib/speaker/ticket-email'
-import { recordSpeakerTicketEmailed } from '@/lib/proposal/data/sanity'
+import { recordSpeakerTicketEmailed } from '@/lib/proposal/server'
 
 /**
  * Gives each confirmed speaker their complimentary ticket by asking the

@@ -5,7 +5,7 @@ import {
   isOrganizerForCurrentOrg,
   resolveCurrentOrgId,
 } from '@/lib/authz/organizer'
-import { getProposal } from '@/lib/proposal/data/sanity'
+import { getProposal } from '@/lib/proposal/server'
 
 /**
  * REST API endpoint for generating Vercel Blob upload tokens.

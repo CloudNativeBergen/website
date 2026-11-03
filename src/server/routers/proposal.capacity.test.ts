@@ -52,7 +52,9 @@ vi.mock('@/lib/proposal/data/sanity', () => ({
   deleteProposal: vi.fn(),
   ProposalDeletionBlockedError: class extends Error {},
 }))
-vi.mock('@/lib/proposal/server', () => ({
+// Seam names not overridden here delegate to the mocked data module.
+vi.mock('@/lib/proposal/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/proposal/server')>()),
   getProposalSanity: h.getProposal,
   getProposals: vi.fn(),
   updateProposalStatus: vi.fn(),
