@@ -26,7 +26,7 @@ import {
   EXCLUDE_PRIVATE_SPEAKER_FIELDS,
 } from '@/lib/sanity/helpers'
 import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
-import { OFFICIAL_SCHEDULE_FILTER } from '@/lib/speaker/sanity'
+import { OFFICIAL_SCHEDULE_FILTER } from '@/lib/speaker/schedule-groq'
 
 /**
  * The `scheduleInfo` projection — where an accepted/confirmed talk landed on the
@@ -1125,7 +1125,7 @@ export async function listPublicTalks(
   try {
     const talks = await clientReadCached.fetch<unknown[] | null>(
       groq`*[_type == "talk" && status == "confirmed" && conference._ref == $conferenceId && references($speakerId)]{
-          _id, title, description, language, level, format, audiences, video,
+          _id, title, description, language, level, format,
           attachments[]{
             ...,
             _type == "fileAttachment" => {

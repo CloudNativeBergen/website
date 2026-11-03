@@ -179,4 +179,17 @@ describe('listPublicTalks', () => {
       timeSlot: { startTime: '09:00', endTime: '09:30' },
     })
   })
+  it('treats a legacy status-less schedule as official', async () => {
+    h.docs = h.docs.map((d) => {
+      if (d._id !== 'official-day') return d
+      const { status: _status, ...legacy } = d
+      return legacy
+    })
+    const { talks } = await listPublicTalks('conf-a', { speakerId: 's1' })
+    expect(talks[0].scheduleInfo).toEqual({
+      date: '2026-02-02',
+      trackTitle: 'Main',
+      timeSlot: { startTime: '09:00', endTime: '09:30' },
+    })
+  })
 })

@@ -13,7 +13,7 @@ import {
   clientWrite,
 } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { OFFICIAL_SCHEDULE_FILTER } from '@/lib/speaker/sanity'
+import { OFFICIAL_SCHEDULE_FILTER } from '@/lib/speaker/schedule-groq'
 import type { FeedbackSlot } from './window'
 
 /**
