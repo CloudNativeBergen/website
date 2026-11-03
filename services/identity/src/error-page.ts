@@ -3,6 +3,7 @@
 // carries the site the login started from). `origin` is attacker-controlled:
 // it becomes a link only after the same tenant-directory check /handoff uses.
 import { createData, type DataEnv } from './data'
+import type { HandoffEnv } from './handoff'
 
 const GENERIC = 'Noe gikk galt under innloggingen. Prøv igjen.'
 const MESSAGES: Record<string, string> = {
@@ -14,7 +15,22 @@ const MESSAGES: Record<string, string> = {
   access_denied: 'Du avbrøt innloggingen. Prøv igjen hvis du vil logge inn.',
 }
 
-export async function errorPage(request: Request, env: DataEnv) {
+type Env = DataEnv & Pick<HandoffEnv, 'HANDOFF_IP_LIMIT'>
+
+/** The origin check, or false when rate-limited or the directory fails. */
+async function verified(request: Request, env: Env, origin: string) {
+  if (!origin) return false
+  // Same per-IP bucket as GET /handoff: each lookup costs a directory call.
+  const ip = request.headers.get('cf-connecting-ip') ?? 'unknown'
+  if (!(await env.HANDOFF_IP_LIMIT.limit({ key: ip })).success) return false
+  try {
+    return await createData(env).isVerifiedOrigin(origin)
+  } catch {
+    return false
+  }
+}
+
+export async function errorPage(request: Request, env: Env) {
   const url = new URL(request.url)
   const code = url.searchParams.get('error') ?? ''
   // Only fixed text reaches the page; the raw code is never echoed.
@@ -22,7 +38,7 @@ export async function errorPage(request: Request, env: DataEnv) {
   const origin = url.searchParams.get('origin') ?? ''
   // isVerifiedOrigin accepts only exactly `https://<hostname>`, so the href
   // holds no characters that need escaping.
-  const retry = (await createData(env).isVerifiedOrigin(origin))
+  const retry = (await verified(request, env, origin))
     ? `<a class="btn" href="${origin}/">Prøv igjen</a>`
     : '<p>Gå tilbake til konferansesiden og logg inn på nytt.</p>'
   const nonce = btoa(

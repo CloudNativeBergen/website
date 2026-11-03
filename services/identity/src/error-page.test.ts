@@ -1,24 +1,25 @@
 // The friendly OAuth error page (#1889).
-import { describe, expect, it } from 'vitest'
-import type { DataEnv } from './data'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { errorPage } from './error-page'
 
 // Fake tenant-directory: only conf.example is verified.
-const env = {
-  DIRECTORY: {
-    fetch: async (_url: string, init: RequestInit) => {
-      const { variables } = JSON.parse(String(init.body))
-      return Response.json({
-        data: {
-          tenantByHost:
-            variables.host === 'conf.example'
-              ? { hostname: 'conf.example' }
-              : null,
-        },
-      })
+const directory = vi.fn(async (_url: string, init: RequestInit) => {
+  const { variables } = JSON.parse(String(init.body))
+  return Response.json({
+    data: {
+      tenantByHost:
+        variables.host === 'conf.example' ? { hostname: 'conf.example' } : null,
     },
-  },
-} as unknown as DataEnv
+  })
+})
+const env = {
+  DIRECTORY: { fetch: directory },
+  HANDOFF_IP_LIMIT: { limit: vi.fn(async () => ({ success: true })) },
+} as unknown as Parameters<typeof errorPage>[1]
+beforeEach(() => {
+  env.HANDOFF_IP_LIMIT.limit = vi.fn(async () => ({ success: true }))
+  directory.mockClear()
+})
 
 const get = async (query: string) => {
   const res = await errorPage(new Request(`http://id.test/error?${query}`), env)
@@ -55,6 +56,22 @@ describe('error page', () => {
     const { html } = await get(
       `error=state_mismatch&origin=${encodeURIComponent(origin)}`,
     )
+    expect(html).not.toContain('<a ')
+    expect(html).toContain('logg inn på nytt')
+  })
+
+  it('rate-limits the lookup per IP before calling the directory', async () => {
+    env.HANDOFF_IP_LIMIT.limit = vi.fn(async () => ({ success: false }))
+    const { res, html } = await get('error=x&origin=https://conf.example')
+    expect(res.status).toBe(400)
+    expect(html).not.toContain('<a ')
+    expect(directory).not.toHaveBeenCalled()
+  })
+
+  it('renders without a link when the directory fails', async () => {
+    directory.mockRejectedValueOnce(new Error('down'))
+    const { res, html } = await get('error=x&origin=https://conf.example')
+    expect(res.status).toBe(400)
     expect(html).not.toContain('<a ')
     expect(html).toContain('logg inn på nytt')
   })
