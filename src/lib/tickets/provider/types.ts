@@ -184,9 +184,9 @@ export type TicketAmountBasis = 'per-ticket' | 'per-order'
  *
  * Refunds are netted per order (#1451): a row with a negative `sum` is a refund,
  * not a seat, so it is dropped and its amount subtracted from the order's
- * total. Seat rows are always kept, so attendee counts are unchanged; a fully
- * refunded order keeps its seats at 0. A negative `sum_left` (credit balance)
- * counts as 0 outstanding.
+ * total. A fully refunded order's seats are dropped too: they are not
+ * attendees. A partially refunded order keeps every seat at its net share. A
+ * negative `sum_left` (credit balance) counts as 0 outstanding.
  */
 export function toPerTicketAmounts<
   T extends { order_id: number; sum: string; sum_left?: string },
@@ -219,13 +219,15 @@ export function toPerTicketAmounts<
 
   return tickets
     .filter((t) => parseTicketAmount(t.sum) >= 0)
-    .map((t) => {
+    .flatMap((t) => {
       const { refund } = orders.get(t.order_id)!
-      if (basis === 'per-ticket' && refund === 0) return clampSumLeft(t)
+      if (basis === 'per-ticket' && refund === 0) return [clampSumLeft(t)]
       // Net in integer øre: re-summed float shares (2000/7 × 7) drift past
       // the order total, which would leave fully refunded seats a tiny price.
       const g = Math.round(gross.get(t.order_id)! * 100)
       const net = Math.max(0, g + Math.round(refund * 100))
+      // Fully refunded: not an attendee. A refund-free free order (g = 0) stays.
+      if (refund < 0 && net === 0) return []
       const ratio = g > 0 ? net / g : 0
       return clampSumLeft({
         ...t,
