@@ -10,6 +10,7 @@
  * Returned objects are `ProposalExisting` (re-exported from `./types`); a
  * narrower public talk type comes with the API backend.
  */
+import 'server-only'
 import type { ProposalExisting, ProposalInput, Status } from './types'
 import * as store from './data/sanity'
 
