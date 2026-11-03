@@ -15,6 +15,7 @@ import {
   ENVELOPE_HEADER,
   type TenantEnvelope,
 } from '@runkonf/tenancy'
+import { GraphQLError } from 'graphql'
 import { clientIp } from './client-ip'
 import { SITE_ASSERTION_HEADER, verifySiteAssertion } from './site-identity'
 
@@ -77,6 +78,37 @@ function hostOf(origin: unknown): string | null {
 }
 
 type Tenant = { orgId: string; conferenceId: string | null }
+
+/** Subgraph codes a public caller may see; the message never passes. */
+const SAFE_CODES = new Set(['UNAUTHENTICATED', 'FORBIDDEN', 'BAD_USER_INPUT'])
+
+/**
+ * Hive forwards subgraph errors as GraphQLErrors, which `maskedErrors: true`
+ * lets through verbatim (message, serviceName, any extension). Those and any
+ * non-GraphQL error become a generic message plus a safe code; the gateway's
+ * own GraphQLErrors (validation, depth, aliases) pass unchanged.
+ */
+// By name, not instanceof: graphql loads as more than one module copy here.
+const isGraphQLError = (e: unknown): e is GraphQLError =>
+  e instanceof Error && e.name === 'GraphQLError'
+
+export function maskError(error: unknown, message: string): Error {
+  const gql = isGraphQLError(error) ? error : null
+  const fromSubgraph = gql?.extensions?.serviceName !== undefined
+  const unexpected = gql?.originalError && !isGraphQLError(gql.originalError)
+  if (gql && !fromSubgraph && !unexpected) return gql
+  console.error('masked graphql error', error)
+  const code = gql?.extensions?.code
+  return new GraphQLError(message, {
+    path: gql?.path,
+    extensions: {
+      code:
+        typeof code === 'string' && SAFE_CODES.has(code)
+          ? code
+          : 'INTERNAL_SERVER_ERROR',
+    },
+  })
+}
 
 function reject(status: 401 | 429 | 503, code: string, message: string) {
   return Response.json(
@@ -150,8 +182,8 @@ export function createGateway(supergraph: string) {
     supergraph,
     graphqlEndpoint: '/graphql',
     landingPage: false,
-    // Unexpected errors reach the client as "Unexpected error.".
-    maskedErrors: true,
+    // Unexpected and subgraph errors reach the client as "Unexpected error.".
+    maskedErrors: { maskError },
     // One operation per request, so per-operation limits hold.
     batching: false,
     // Cost ceiling, checked per subgraph request (Hive demand control).

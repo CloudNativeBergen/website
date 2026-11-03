@@ -356,6 +356,56 @@ describe('gateway', () => {
     expect(await res.text()).not.toContain('secret detail')
   })
 
+  it('masks subgraph error messages and serviceName, keeping a safe code', async () => {
+    const { env } = makeEnv()
+    ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+      Response.json({
+        data: { conference: null },
+        errors: [
+          {
+            message: 'missing tenant envelope',
+            path: ['conference'],
+            extensions: { code: 'UNAUTHENTICATED', stacktrace: ['at x'] },
+          },
+        ],
+      })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await gateway.fetch(post(SUBGRAPH_QUERY), env)
+    const text = await res.text()
+    expect(text).not.toContain('missing tenant envelope')
+    expect(text).not.toContain('serviceName')
+    expect(text).not.toContain('stacktrace')
+    expect(JSON.parse(text).errors).toEqual([
+      {
+        message: 'Unexpected error.',
+        path: ['conference'],
+        extensions: { code: 'UNAUTHENTICATED' },
+      },
+    ])
+    // Full detail stays in the server log.
+    expect(JSON.stringify(error.mock.calls)).toContain(
+      'missing tenant envelope',
+    )
+    error.mockRestore()
+  })
+
+  it('replaces a subgraph code outside the safe list', async () => {
+    const { env } = makeEnv()
+    ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+      Response.json({
+        data: { conference: null },
+        errors: [
+          { message: 'db host 10.0.0.1', extensions: { code: 'SANITY_DOWN' } },
+        ],
+      })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const text = await (await gateway.fetch(post(SUBGRAPH_QUERY), env)).text()
+    expect(text).not.toContain('10.0.0.1')
+    expect(text).not.toContain('SANITY_DOWN')
+    expect(text).toContain('INTERNAL_SERVER_ERROR')
+    expect(text).not.toContain('serviceName')
+  })
+
   describe('rate limiting', () => {
     const keys = (env: Env) =>
       vi.mocked(env.API_LIMITER.limit).mock.calls.map(([o]) => o.key)
