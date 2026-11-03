@@ -1790,6 +1790,8 @@ export async function mergeSpeakers(
     // widened together or the guard stops bounding what the transaction touches.
     const referencingDocs =
       (await clientRead.fetch<Array<Record<string, unknown>>>(
+        // groq-global: see above; bounded by requireSpeakerInCurrentOrg's
+        // requireExclusive foreign-reference check.
         groq`*[(references($loserId) ||
           (_type == "talk" && $loserId in issuedSpeakerTickets[].speakerId)
         ) && _id != $loserId]`,
@@ -1809,6 +1811,8 @@ export async function mergeSpeakers(
     const survivorDeterministicDocs =
       survivorDeterministicIds.length > 0
         ? ((await clientRead.fetch<Array<Record<string, unknown>>>(
+            // groq-global-scoped: ids derived from the loser-keyed docs above,
+            // which the requireExclusive guard bounded to this org.
             groq`*[_id in $ids]`,
             { ids: survivorDeterministicIds },
             { cache: 'no-store' },
