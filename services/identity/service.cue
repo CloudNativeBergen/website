@@ -10,7 +10,8 @@ service: #PlatformService & {
 	routes: {preview: ["id-preview.konf.app"], production: ["id.konf.app"]}
 	// Last moment a NextAuth session may upgrade to an identity session (#1842).
 	vars: {
-		preview: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z"}
+		// LOGIN_TEST_PAGE serves the manual login test page at /test (preview only).
+		preview: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", LOGIN_TEST_PAGE: "1"}
 		production: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z"}
 	}
 	// Verified origins for the login handoff (#688).
