@@ -11,7 +11,13 @@ import {
   generateEnvelopeKeyPair,
   verifyEnvelope,
 } from '@runkonf/tenancy'
-import { createGateway, SESSION_ORIGIN_CLAIM, type Env } from './gateway'
+import { GraphQLError } from 'graphql'
+import {
+  createGateway,
+  maskError,
+  SESSION_ORIGIN_CLAIM,
+  type Env,
+} from './gateway'
 import { SITE_ASSERTION_HEADER } from './site-identity'
 import { compose } from './supergraph'
 import { SIGNED_IP_HEADER, signClientIp } from './client-ip'
@@ -354,6 +360,86 @@ describe('gateway', () => {
     }
     const res = await gateway.fetch(post(SUBGRAPH_QUERY), env)
     expect(await res.text()).not.toContain('secret detail')
+  })
+
+  it('masks subgraph error messages and serviceName, keeping a safe code', async () => {
+    const { env } = makeEnv()
+    ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+      Response.json({
+        data: { conference: null },
+        errors: [
+          {
+            message: 'missing tenant envelope',
+            path: ['conference'],
+            extensions: { code: 'UNAUTHENTICATED', stacktrace: ['at x'] },
+          },
+        ],
+      })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await gateway.fetch(post(SUBGRAPH_QUERY), env)
+    const text = await res.text()
+    expect(text).not.toContain('missing tenant envelope')
+    expect(text).not.toContain('serviceName')
+    expect(text).not.toContain('stacktrace')
+    expect(JSON.parse(text).errors).toEqual([
+      {
+        message: 'Unexpected error.',
+        path: ['conference'],
+        extensions: { code: 'UNAUTHENTICATED' },
+      },
+    ])
+    // Full detail stays in the server log.
+    expect(JSON.stringify(error.mock.calls)).toContain(
+      'missing tenant envelope',
+    )
+    error.mockRestore()
+  })
+
+  it('masks a subgraph 5xx without its body, the request or serviceName', async () => {
+    const { env } = makeEnv()
+    ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+      new Response('upstream secret page', { status: 502 })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await gateway.fetch(post(SUBGRAPH_QUERY), env)
+    const text = await res.text()
+    expect(text).not.toContain('upstream secret')
+    expect(text).not.toContain('{conference{id}}')
+    expect(text).not.toContain('"request"')
+    expect(text).not.toContain('serviceName')
+    expect(text).not.toContain('Unexpected response')
+    expect(JSON.parse(text).errors[0]).toMatchObject({
+      message: 'Unexpected error.',
+      extensions: { code: 'INTERNAL_SERVER_ERROR' },
+    })
+  })
+
+  it('masks a GraphQLError chain that ends in a plain Error', () => {
+    const inner = new GraphQLError('inner', {
+      originalError: new Error('secret detail'),
+    })
+    const outer = new GraphQLError('secret detail', { originalError: inner })
+    const masked = maskError(outer, 'Unexpected error.')
+    expect(masked.message).toBe('Unexpected error.')
+    expect((masked as GraphQLError).extensions).toMatchObject({
+      unexpected: true,
+    })
+  })
+
+  it('replaces a subgraph code outside the safe list', async () => {
+    const { env } = makeEnv()
+    ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+      Response.json({
+        data: { conference: null },
+        errors: [
+          { message: 'db host 10.0.0.1', extensions: { code: 'SANITY_DOWN' } },
+        ],
+      })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const text = await (await gateway.fetch(post(SUBGRAPH_QUERY), env)).text()
+    expect(text).not.toContain('10.0.0.1')
+    expect(text).not.toContain('SANITY_DOWN')
+    expect(text).toContain('INTERNAL_SERVER_ERROR')
+    expect(text).not.toContain('serviceName')
   })
 
   describe('rate limiting', () => {
