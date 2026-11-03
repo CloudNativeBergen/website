@@ -7,9 +7,16 @@ vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
 
 // --- next/headers: drives the domains current-host guard --------------------
 const hostMock = vi.fn<() => string | null>(() => 'cloudnativebergen.no')
+const sessionCookieMock = vi.fn<() => string | undefined>()
 vi.mock('next/headers', () => ({
   headers: async () => ({
     get: (key: string) => (key === 'host' ? hostMock() : null),
+  }),
+  cookies: async () => ({
+    get: () => {
+      const value = sessionCookieMock()
+      return value ? { value } : undefined
+    },
   }),
 }))
 
@@ -1467,5 +1474,104 @@ describe('conference router — updateVolunteerLinks', () => {
         'volunteerSlackInviteUrl',
       ]),
     )
+  })
+})
+
+// #1881 phase 2: moved fields go to D1 (api.konf.app) before Sanity.
+describe('conference router — D1 write path (#1881)', () => {
+  const fetchMock = vi.fn()
+  const apiCalls = () =>
+    fetchMock.mock.calls.filter(([url]) => String(url).includes('api.konf.app'))
+  const ok = (body: unknown) =>
+    new Response(JSON.stringify(body), { status: 200 })
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubEnv('KONF_D1_WRITE_TENANTS', CONFERENCE_ID)
+    vi.stubEnv('IDENTITY_URL', 'https://id.example')
+    sessionCookieMock.mockReturnValue('sess')
+    fetchMock.mockImplementation(async (url: URL | string) =>
+      String(url).includes('/api/auth/token')
+        ? ok({ token: 'user-jwt' })
+        : ok({ data: { updateConference: { id: CONFERENCE_ID } } }),
+    )
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  it('sends only moved keys to D1, with the user JWT, then all keys to Sanity', async () => {
+    await makeCaller({ isOrganizer: true }).updateBasicInfo({
+      title: 'T',
+      organizer: 'Org',
+      city: null,
+      description: 'D',
+    })
+    const [[, init]] = apiCalls()
+    expect(JSON.parse(init.body).variables.input).toEqual({
+      title: 'T',
+      city: null,
+    })
+    expect(init.headers.authorization).toBe('Bearer user-jwt')
+    expect(init.headers.origin).toBe('https://cloudnativebergen.no')
+    expect(lastSet).toEqual({ title: 'T', organizer: 'Org', description: 'D' })
+    expect(lastUnset).toEqual(['city'])
+  })
+
+  it('maps theme to primaryColor/accentColor, and theme: null unsets both', async () => {
+    await makeCaller({ isOrganizer: true }).updateBranding({ theme: null })
+    expect(JSON.parse(apiCalls()[0][1].body).variables.input).toEqual({
+      primaryColor: null,
+      accentColor: null,
+    })
+  })
+
+  it('never calls Sanity when the D1 write fails', async () => {
+    fetchMock.mockImplementation(async (url: URL | string) =>
+      String(url).includes('/api/auth/token')
+        ? ok({ token: 'user-jwt' })
+        : ok({ errors: [{ message: 'denied' }] }),
+    )
+    await expect(
+      makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses, without touching Sanity, when the organizer has no identity session', async () => {
+    sessionCookieMock.mockReturnValue(undefined)
+    await expect(
+      makeCaller({ isOrganizer: true }).updateVisibility({
+        visibility: 'unlisted',
+      }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' })
+    expect(apiCalls()).toHaveLength(0)
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('returns a warning, no rollback, when Sanity fails after D1', async () => {
+    commitMock.mockRejectedValue(new Error('sanity down'))
+    const result = await makeCaller({ isOrganizer: true }).updateSocialLinks({
+      socialLinks: ['https://x.example'],
+    })
+    expect(apiCalls()).toHaveLength(1)
+    expect(result).toMatchObject({ success: true, warning: expect.any(String) })
+  })
+
+  it('makes no API call with the flag off', async () => {
+    vi.stubEnv('KONF_D1_WRITE_TENANTS', '')
+    await makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(lastSet).toEqual({ venueName: 'X' })
+  })
+
+  it('makes no API call for a fieldset without moved keys', async () => {
+    await makeCaller({ isOrganizer: true }).updateLocalInfo({
+      cateringInfo: 'Pizza',
+    })
+    expect(apiCalls()).toHaveLength(0)
+    expect(lastSet).toEqual({ cateringInfo: 'Pizza' })
   })
 })
