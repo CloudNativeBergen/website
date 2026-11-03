@@ -427,10 +427,10 @@ export const Architecture: Story = {
                 'list — filtered by status, invoice, tags, tiers, assignee',
                 'getById / create / update / delete',
                 'moveStage — pipeline transitions + activity log',
-                'updateContractStatus / updateSignatureStatus',
+                'updateContractStatus',
                 'updateInvoiceStatus — auto-sets timestamps',
                 'bulkUpdate / bulkDelete',
-                'copyFromPreviousYear / importAllHistoric',
+                'importAllHistoric',
                 'listOrganizers',
                 'activities.list — audit log',
               ]}

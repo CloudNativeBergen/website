@@ -100,7 +100,6 @@ import {
   getSponsorContractDetails,
   listSponsorsForConference,
   countSponsorsForConference,
-  copySponsorsFromPreviousYear,
   importAllHistoricSponsors,
   tierExists,
 } from '@/lib/sponsor-crm/sanity'
@@ -126,7 +125,6 @@ import {
   MoveStageSchema,
   UpdateInvoiceStatusSchema,
   UpdateContractStatusSchema,
-  CopySponsorsSchema,
   ImportAllHistoricSponsorsSchema,
   BulkUpdateSponsorCRMSchema,
   BulkDeleteSponsorCRMSchema,
@@ -232,7 +230,6 @@ import {
   type TransitionResult,
 } from '@/lib/sponsor-crm/state-machine'
 import { preconditionFailed } from '@/server/errors'
-import { UpdateSignatureStatusSchema } from '@/server/schemas/sponsorForConference'
 import {
   getSigningProvider,
   type SigningProviderType,
@@ -1203,31 +1200,6 @@ export const sponsorRouter = router({
       }
     }),
 
-  getById: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
-    // OWNERSHIP (#730): `getSponsor` is unscoped, so this read returned any
-    // tenant's sponsor record (name, org number, contacts) and doubled as an
-    // existence oracle.
-    await requireDocumentInCurrentOrg(input.id, 'sponsor')
-    const { sponsor, error } = await getSponsor(input.id)
-
-    if (error) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to fetch sponsor',
-        cause: error,
-      })
-    }
-
-    if (!sponsor) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Sponsor not found',
-      })
-    }
-
-    return sponsor
-  }),
-
   create: adminProcedure
     .input(SponsorInputSchema)
     .mutation(async ({ input }) => {
@@ -1405,30 +1377,6 @@ export const sponsorRouter = router({
       }
 
       return sponsorTiers || []
-    }),
-
-    getById: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
-      // OWNERSHIP (#730): `getSponsorTier` is unscoped — same existence-oracle
-      // shape as `sponsor.getById`.
-      await requireDocumentInCurrentConference(input.id, 'sponsorTier')
-      const { sponsorTier, error } = await getSponsorTier(input.id)
-
-      if (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch sponsor tier',
-          cause: error,
-        })
-      }
-
-      if (!sponsorTier) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Sponsor tier not found',
-        })
-      }
-
-      return sponsorTier
     }),
 
     create: adminProcedure
@@ -2536,28 +2484,6 @@ export const sponsorRouter = router({
         return { success: true }
       }),
 
-    copyFromPreviousYear: adminProcedure
-      .input(CopySponsorsSchema)
-      .mutation(async ({ input, ctx }) => {
-        // TENANCY (#823): the tenant comes from the authorization waist, never
-        // from `input` — both conference ids in it are client-supplied, and the
-        // lib re-proves each one against this org before reading any sponsor.
-        const { result, error } = await copySponsorsFromPreviousYear({
-          ...input,
-          organizationId: ctx.orgId,
-        })
-
-        if (error) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to copy sponsors from previous year',
-            cause: error,
-          })
-        }
-
-        return result
-      }),
-
     // R1 (#1687): what "Copy to next year" can do for this record.
     renewal: adminProcedure
       .input(SponsorIdSchema)
@@ -2618,7 +2544,9 @@ export const sponsorRouter = router({
     importAllHistoric: adminProcedure
       .input(ImportAllHistoricSponsorsSchema)
       .mutation(async ({ input, ctx }) => {
-        // TENANCY (#823): see `copyFromPreviousYear` above.
+        // TENANCY (#823): the tenant comes from the authorization waist, never
+        // from `input`; the lib re-proves any client-supplied conference id
+        // against this org before reading any sponsor.
         const { result, error } = await importAllHistoricSponsors({
           ...input,
           organizationId: ctx.orgId,
@@ -2970,108 +2898,6 @@ export const sponsorRouter = router({
           agreementStatus: result.providerStatus,
           changed: newStatus !== currentStatus,
         }
-      }),
-
-    updateSignatureStatus: adminProcedure
-      .input(UpdateSignatureStatusSchema)
-      .mutation(async ({ input, ctx }) => {
-        const logCtx = `[updateSignatureStatus] sfc=${input.id}`
-
-        const { sponsorForConference: existing, error: existingError } =
-          await getSponsorForCurrentConference(input.id)
-
-        if (!existing) {
-          console.error(`${logCtx} Sponsor lookup failed:`, existingError)
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Sponsor relationship not found.',
-          })
-        }
-
-        const oldStatus = existing.signatureStatus || 'not-started'
-
-        // Signature-axis guard: a signature can only be tracked once the
-        // contract has been sent. Blocks manually marking pending/signed on a
-        // record whose contract never went out.
-        assertGuard(
-          canTransition('signature', oldStatus, input.newStatus, existing),
-        )
-
-        // Marking the signature signed also drives the contract to
-        // contract-signed (below), so it must satisfy that state's invariants
-        // (tier + value + primary contact, not a dead deal). Routed through
-        // canTransition (not checkState) so re-confirming an already-signed
-        // record stays a no-op, matching updateContractStatus.
-        if (input.newStatus === 'signed') {
-          assertGuard(
-            canTransition(
-              'contract',
-              existing.contractStatus,
-              'contract-signed',
-              existing,
-            ),
-          )
-        }
-
-        try {
-          await clientWrite
-            .patch(input.id)
-            .set({
-              signatureStatus: input.newStatus,
-              ...(input.newStatus === 'signed' && {
-                contractStatus: 'contract-signed',
-                contractSignedAt: getCurrentDateTime(),
-              }),
-            })
-            .commit()
-        } catch (patchError) {
-          console.error(
-            `${logCtx} Failed to update signature status:`,
-            patchError,
-          )
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to update the signature status. Please try again.',
-            cause: patchError,
-          })
-        }
-
-        if (input.newStatus === 'signed') {
-          await publishSponsorStatusChange({
-            conferenceId: existing.conference._id,
-            sponsorForConferenceId: input.id,
-            previous: existing,
-            next: { contractStatus: 'contract-signed' },
-            source: 'crm.updateSignatureStatus',
-            triggeredBy: ctx.speaker._id,
-          })
-        }
-
-        const userId = ctx.speaker._id
-        if (userId && oldStatus !== input.newStatus) {
-          try {
-            await logSignatureStatusChange(
-              input.id,
-              oldStatus,
-              input.newStatus,
-              userId,
-            )
-          } catch (logError) {
-            console.error(
-              `${logCtx} Failed to log signature status change:`,
-              logError,
-            )
-          }
-        }
-
-        if (input.newStatus === 'signed') {
-          await sendContractSignedSlackNotification(input.id, existing)
-        }
-
-        const { sponsorForConference } = await getSponsorForCurrentConference(
-          input.id,
-        )
-        return sponsorForConference
       }),
 
     /**

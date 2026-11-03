@@ -359,54 +359,6 @@ export const badgeRouter = router({
         }
       }),
 
-    getById: adminProcedure
-      .input(BadgeIdInputSchema)
-      .query(async ({ input }) => {
-        try {
-          // OWNERSHIP (#863). `getBadgeById` filters on the PUBLIC `badgeId`
-          // with no conference predicate, which is right for the public
-          // verification surface and wrong here: `BADGE_FIELDS` projects
-          // `speaker->{email, talks[]->}` plus the `emailSent`/`emailError`
-          // delivery state, i.e. strictly more than the public `verify`
-          // returns. Read through the scoped lookup instead, so an organizer
-          // of another tenant gets the same 'Badge not found' as for an id
-          // that does not exist.
-          const conferenceId = await resolveConferenceId()
-          const { badge, error, reason } = await getBadgeForConference(
-            input.badgeId,
-            conferenceId,
-          )
-
-          // A FAILED read is not a verdict (#848): only `unavailable` is a 500.
-          // `not-found` covers "no such badge" and "not this conference's"
-          // alike, which is the point — the two must be indistinguishable.
-          if (reason === 'unavailable') {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to fetch badge',
-              cause: error,
-            })
-          }
-
-          if (!badge) {
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: 'Badge not found',
-            })
-          }
-
-          return badge
-        } catch (error) {
-          if (error instanceof TRPCError) throw error
-
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch badge',
-            cause: error,
-          })
-        }
-      }),
-
     resendEmail: adminProcedure
       .input(ResendBadgeEmailInputSchema)
       .mutation(async ({ input }) => {

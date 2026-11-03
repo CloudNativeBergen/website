@@ -408,14 +408,6 @@ describe('sponsor (org-owned) mutations refuse a foreign id (#730)', () => {
     expect(lib.getSponsor).not.toHaveBeenCalled()
   })
 
-  it('getById refuses another tenant’s sponsor', async () => {
-    foreign('sponsor')
-    await expect(sponsor().getById({ id: 'sp-B' })).rejects.toMatchObject({
-      code: 'NOT_FOUND',
-    })
-    expect(lib.getSponsor).not.toHaveBeenCalled()
-  })
-
   it('delete refuses another tenant’s sponsor', async () => {
     foreign('sponsor')
     await expect(sponsor().delete({ id: 'sp-B' })).rejects.toMatchObject({
@@ -426,7 +418,6 @@ describe('sponsor (org-owned) mutations refuse a foreign id (#730)', () => {
 
   it('our OWN sponsor still reads, updates and deletes', async () => {
     owned('sponsor')
-    await expect(sponsor().getById({ id: 'sp-A' })).resolves.toBeTruthy()
     await expect(
       sponsor().update({ id: 'sp-A', data: {} }),
     ).resolves.toBeTruthy()
@@ -440,14 +431,6 @@ describe('sponsor (org-owned) mutations refuse a foreign id (#730)', () => {
 })
 
 describe('sponsorTier (conference-owned) mutations refuse a foreign id (#730)', () => {
-  it('getById refuses another conference’s tier', async () => {
-    foreign('sponsorTier')
-    await expect(
-      sponsor().tiers.getById({ id: 'tier-B' }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
-    expect(lib.getSponsorTier).not.toHaveBeenCalled()
-  })
-
   it('update refuses another conference’s tier', async () => {
     foreign('sponsorTier')
     await expect(
@@ -488,9 +471,6 @@ describe('sponsorTier (conference-owned) mutations refuse a foreign id (#730)', 
 
   it('our OWN tier still reads, updates and deletes', async () => {
     owned('sponsorTier')
-    await expect(
-      sponsor().tiers.getById({ id: 'tier-A' }),
-    ).resolves.toBeTruthy()
     await expect(
       sponsor().tiers.update({ id: 'tier-A', data: {} }),
     ).resolves.toBeTruthy()

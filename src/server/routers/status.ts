@@ -5,7 +5,6 @@ import { conferenceSenders } from '@/lib/email/from'
 import { describeSenderPolicy } from '@/lib/email/sender-policy'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { buildConferenceStatusSummary } from '@/lib/status/summary'
-import { buildSystemChecks } from '@/lib/system-status/checks'
 import {
   postSlackMessage,
   escapeMrkdwn,
@@ -81,12 +80,6 @@ export const statusRouter = router({
       }
 
       return buildConferenceStatusSummary(conference)
-    }),
-
-    // Passive registry, including the live Sanity read probe + subscription count.
-    systemChecks: adminProcedure.query(async () => {
-      const conference = await requireConference()
-      return buildSystemChecks(conference)
     }),
 
     // Post a test message to the same Slack channel the weekly update uses.

@@ -175,11 +175,6 @@ export const UpdateSignatureStatusSchema = z.object({
   newStatus: SignatureStatusSchema,
 })
 
-export const CopySponsorsSchema = z.object({
-  sourceConferenceId: z.string().min(1, 'Source conference ID is required'),
-  targetConferenceId: z.string().min(1, 'Target conference ID is required'),
-})
-
 export const BulkUpdateSponsorCRMSchema = z.object({
   ids: z
     .array(z.string().min(1))

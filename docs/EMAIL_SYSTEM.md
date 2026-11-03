@@ -29,7 +29,6 @@ The Cloud Native Days Norway website features a comprehensive email system built
 │  Core Libraries                                                   │
 │  ├── /lib/email/config.ts (shared configuration & utilities)     │
 │  ├── /lib/email/markdown.ts (PortableText ↔ Markdown conversion)│
-│  ├── /lib/email/speaker.ts (speaker-specific emails)             │
 │  ├── /lib/email/audience.ts (audience management)                │
 │  └── /lib/proposal/notification.ts (proposal notifications)      │
 ├─────────────────────────────────────────────────────────────────┤

@@ -12,7 +12,6 @@ import {
   organizerProcedure,
   adminProcedure,
   resolveConferenceId,
-  resolveOrganizationId,
 } from '@/server/trpc'
 import {
   requireDocumentInCurrentConference,
@@ -914,42 +913,6 @@ function proposalConferenceId(conference: unknown): string | undefined {
 }
 
 export const proposalRouter = router({
-  // List current user&apos;s proposals
-  list: protectedProcedure.query(async ({ ctx }) => {
-    try {
-      // ORG-SCOPE (S1, E4): the speaker's CFP list on a tenant domain shows
-      // that org's editions (cross-conference within the org is intended;
-      // cross-ORG is a leak). FAIL CLOSED: an unresolvable org lists nothing
-      // rather than every tenant's proposals.
-      const orgId = await resolveOrganizationId()
-      if (!orgId) return []
-
-      const { proposals, proposalsError } = await getProposals({
-        speakerId: ctx.speaker._id,
-        orgId,
-        returnAll: false,
-      })
-
-      if (proposalsError) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch proposals',
-          cause: proposalsError,
-        })
-      }
-
-      return proposals || []
-    } catch (error) {
-      if (error instanceof TRPCError) throw error
-
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to fetch proposals',
-        cause: error,
-      })
-    }
-  }),
-
   // Get proposal by ID
   getById: organizerProcedure
     .input(IdParamSchema)

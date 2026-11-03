@@ -1385,7 +1385,6 @@ describe('the guarded mutation surface is pinned (#730)', () => {
       'admin.delete',
       'admin.merge',
       'admin.removeTicketEmail',
-      'admin.sendEmail',
       // Takes a client-supplied `speakerId`; guarded by
       // `requireSpeakerInCurrentOrg` before anything is read, with refusal
       // tests above.

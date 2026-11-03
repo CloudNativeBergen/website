@@ -147,7 +147,7 @@ describe('budget router — authorization (org-scoped waist)', () => {
   })
 
   it('rejects an unauthenticated caller (UNAUTHORIZED)', async () => {
-    await expect(makeCaller(null).get()).rejects.toMatchObject({
+    await expect(makeCaller(null).create()).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
     })
     await expect(
@@ -171,7 +171,7 @@ describe('budget router — authorization (org-scoped waist)', () => {
 
 describe('budget router — conference scoping', () => {
   it('resolves the budget by the domain conference, never client input', async () => {
-    await makeCaller(orgOrganizer).get()
+    await makeCaller(orgOrganizer).create()
     expect(uncachedFetchMock).toHaveBeenCalledWith(
       expect.stringContaining('conference._ref == $conferenceId'),
       { conferenceId: CONFERENCE_ID },
@@ -182,7 +182,7 @@ describe('budget router — conference scoping', () => {
     // Unresolvable org: the waist denies before any budget read (the
     // org-unresolvable bridge is gone — fail closed, post-044-backfill).
     conferenceFetchMock.mockResolvedValue(null)
-    await expect(makeCaller(orgOrganizer).get()).rejects.toMatchObject({
+    await expect(makeCaller(orgOrganizer).create()).rejects.toMatchObject({
       code: 'FORBIDDEN',
     })
     expect(uncachedFetchMock).not.toHaveBeenCalled()
