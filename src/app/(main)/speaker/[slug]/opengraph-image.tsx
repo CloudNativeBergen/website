@@ -18,7 +18,7 @@ import {
   LightBulbIcon,
 } from '@/lib/og/components'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getPublicSpeakerProfile } from '@/lib/speaker'
+import { getPublicSpeakerProfile } from '@/lib/speaker/server'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 
 const createSponsorLogo = (
