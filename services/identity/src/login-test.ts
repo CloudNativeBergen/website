@@ -48,7 +48,7 @@ dt{font-weight:600}dd{margin:0 0 .5rem;word-break:break-all}
 <button id="gh">Sign in with GitHub</button>
 <button id="li">Sign in with LinkedIn</button>
 <h2>Session</h2>
-<p id="status">Loading…</p>
+<p id="status" role="status">Loading…</p>
 <dl id="out" hidden><dt>Name</dt><dd id="name"></dd><dt>Email</dt><dd id="email"></dd>
 <dt>Provider</dt><dd id="provider"></dd><dt>Session expires</dt><dd id="expires"></dd></dl>
 <button id="so">Sign out</button>
