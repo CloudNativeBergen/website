@@ -40,9 +40,7 @@ import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 // Computed field: speaker is an organizer if referenced in any conference's organizers array
 const IS_ORGANIZER_FIELD =
-  // groq-global: speaker identity spans tenants; this is the platform-wide
-  // organizer bit, a boolean only. Org-scoped rights come from organizerOrgIds.
-  '"isOrganizer": _id in *[_type == "conference"].organizers[]._ref'
+  '"isOrganizer": _id in *[_type == "conference"].organizers[]._ref' // groq-global: speaker identity spans tenants; this is the platform-wide organizer bit, a boolean only. Org-scoped rights come from organizerOrgIds.
 
 // Computed field (CaaS T1-2, #614): the ORG-SCOPED organizer capability — the
 // `organization._ref`s of the conferences whose `organizers[]` contain this
@@ -51,9 +49,7 @@ const IS_ORGANIZER_FIELD =
 // deduped in `applySpeakerToToken`. This is the source of the session token's
 // `organizerOrgIds`, which the authorization middleware/gates key on.
 const ORGANIZER_ORG_IDS_FIELD =
-  // groq-global: must see every org this speaker organizes for; projects only
-  // the organization refs (the tenant keys themselves), no tenant data.
-  '"organizerOrgIds": *[_type == "conference" && ^._id in organizers[]._ref && defined(organization._ref)].organization._ref'
+  '"organizerOrgIds": *[_type == "conference" && ^._id in organizers[]._ref && defined(organization._ref)].organization._ref' // groq-global: must see every org this speaker organizes for; projects only the organization refs (the tenant keys themselves), no tenant data.
 
 /**
  * PUBLIC schedule predicate. A conference now keeps several `schedule` documents
@@ -1079,8 +1075,8 @@ export async function getSpeaker(
     //     re-reads the profile the speaker has just saved.
     speaker = await clientReadUncached.fetch<Speaker | null>(
       // groq-global: speaker identity by id spans tenants (sign-in token
-      // refresh, own profile). Callers that act on another speaker authorize
-      // the id first (requireSpeakerInCurrentOrg).
+      // refresh, own profile). Not org-scoped here: a caller acting on another
+      // speaker owns the org check (e.g. requireSpeakerInCurrentOrg).
       `*[ _type == "speaker" && _id == $speakerId][0]{
       ...,
       ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
@@ -1453,8 +1449,9 @@ async function querySpeakers(
 
     // groq-global-scoped: the guard above requires conferenceId or orgId, so
     // orgFilter or the nested conferenceFilter always carries the tenant.
-    const query = groq`*[_type == "speaker" &&
-      count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${/* groq-global-scoped: conferenceFilter when set; else the outer orgFilter bounds which speakers return (this count is existence only) */ conferenceFilter}]) > 0 ${orgFilter}] {
+    const query = groq`*[
+      count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${/* groq-global-scoped: conferenceFilter when set; else the outer orgFilter bounds which speakers return (this count is existence only) */ conferenceFilter}]) > 0 &&
+      _type == "speaker" ${orgFilter}] {
       ...,
       ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
       "slug": slug.current,
