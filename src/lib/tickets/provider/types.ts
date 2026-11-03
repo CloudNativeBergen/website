@@ -181,28 +181,68 @@ export type TicketAmountBasis = 'per-ticket' | 'per-order'
  * tickets — the order total is the only fact such a feed carries, so an even
  * split is the honest reconstruction; per-category revenue for a mixed order is
  * therefore approximate in that (currently hypothetical) case.
+ *
+ * Refunds are netted per order (#1451): a row with a negative `sum` is a refund,
+ * not a seat, so it is dropped and its amount subtracted from the order's
+ * total. A fully refunded order's seats are dropped too: they are not
+ * attendees. A partially refunded order keeps every seat at its net share. A
+ * negative `sum_left` (credit balance) counts as 0 outstanding.
  */
 export function toPerTicketAmounts<
   T extends { order_id: number; sum: string; sum_left?: string },
 >(tickets: T[], basis: TicketAmountBasis): T[] {
-  if (basis === 'per-ticket') return tickets
+  const clean = (t: T) =>
+    parseTicketAmount(t.sum) >= 0 &&
+    (t.sum_left === undefined || parseTicketAmount(t.sum_left) >= 0)
+  if (basis === 'per-ticket' && tickets.every(clean)) return tickets
 
-  const ticketsPerOrder = new Map<number, number>()
+  const orders = new Map<number, { seats: number; refund: number }>()
   for (const t of tickets) {
-    ticketsPerOrder.set(t.order_id, (ticketsPerOrder.get(t.order_id) ?? 0) + 1)
+    const o = orders.get(t.order_id) ?? { seats: 0, refund: 0 }
+    const sum = parseTicketAmount(t.sum)
+    if (sum < 0) o.refund += sum
+    else o.seats += 1
+    orders.set(t.order_id, o)
   }
 
-  const split = (value: string | undefined, by: number) =>
-    value === undefined ? undefined : String(parseTicketAmount(value) / by)
+  // Per-ticket share of each seat row, before refunds.
+  const share = (t: T, value: string) =>
+    parseTicketAmount(value) /
+    (basis === 'per-order' ? orders.get(t.order_id)!.seats : 1)
 
-  return tickets.map((t) => {
-    const by = ticketsPerOrder.get(t.order_id) || 1
-    return {
-      ...t,
-      sum: split(t.sum, by)!,
-      ...(t.sum_left === undefined ? {} : { sum_left: split(t.sum_left, by) }),
-    }
-  })
+  // Gross seat revenue per order, to scale each seat by (gross + refund) / gross.
+  const gross = new Map<number, number>()
+  for (const t of tickets) {
+    if (parseTicketAmount(t.sum) < 0) continue
+    gross.set(t.order_id, (gross.get(t.order_id) ?? 0) + share(t, t.sum))
+  }
+
+  return tickets
+    .filter((t) => parseTicketAmount(t.sum) >= 0)
+    .flatMap((t) => {
+      const { refund } = orders.get(t.order_id)!
+      if (basis === 'per-ticket' && refund === 0) return [clampSumLeft(t)]
+      // Net in integer øre: re-summed float shares (2000/7 × 7) drift past
+      // the order total, which would leave fully refunded seats a tiny price.
+      const g = Math.round(gross.get(t.order_id)! * 100)
+      const net = Math.max(0, g + Math.round(refund * 100))
+      // Fully refunded: not an attendee. A refund-free free order (g = 0) stays.
+      if (refund < 0 && net === 0) return []
+      const ratio = g > 0 ? net / g : 0
+      return clampSumLeft({
+        ...t,
+        sum: String(share(t, t.sum) * ratio),
+        ...(t.sum_left === undefined
+          ? {}
+          : { sum_left: String(share(t, t.sum_left)) }),
+      })
+    })
+}
+
+function clampSumLeft<T extends { sum_left?: string }>(t: T): T {
+  return t.sum_left !== undefined && parseTicketAmount(t.sum_left) < 0
+    ? { ...t, sum_left: '0' }
+    : t
 }
 
 /** Options for `TicketingProvider.fetchEventTickets`. */

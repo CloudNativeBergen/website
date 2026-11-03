@@ -948,4 +948,75 @@ describe('amount basis', () => {
 
     expect(total).toBe(3000)
   })
+
+  // #1451: refunds net per order; fully refunded seats are not attendees.
+  const seat = (id: number, sum: string, sum_left = '0.00') => ({
+    id,
+    order_id: 88,
+    sum,
+    sum_left,
+  })
+  const revenue = (rows: { sum: string }[]) =>
+    rows.reduce((acc, r) => acc + Number(r.sum), 0)
+
+  it('drops every seat of a fully refunded order', () => {
+    const rows = [
+      seat(1, '2000.00'),
+      seat(2, '2000.00'),
+      seat(3, '-2000.00'),
+      { ...seat(4, '500.00'), order_id: 89 },
+    ]
+    const normalized = toPerTicketAmounts(rows, 'per-order')
+    expect(normalized.map((r) => [r.id, Number(r.sum)])).toEqual([[4, 500]])
+  })
+
+  it('drops every seat of a fully refunded seven-seat order', () => {
+    // 2000/7 summed seven times is 2000.0000000000002 in floats; without
+    // integer-øre netting each seat kept a tiny positive ("paid") price.
+    const rows = [
+      ...[1, 2, 3, 4, 5, 6, 7].map((id) => seat(id, '2000.00')),
+      seat(8, '-2000.00'),
+    ]
+    expect(toPerTicketAmounts(rows, 'per-order')).toEqual([])
+  })
+
+  it('drops a fully refunded seat on a per-ticket feed', () => {
+    const rows = [seat(1, '1000.00'), seat(2, '-1000.00')]
+    expect(toPerTicketAmounts(rows, 'per-ticket')).toEqual([])
+  })
+
+  it('keeps a free order with no refund', () => {
+    const rows = [seat(1, '0.00'), seat(2, '0.00')]
+    const normalized = toPerTicketAmounts(rows, 'per-order')
+    expect(normalized.map((r) => [r.id, Number(r.sum)])).toEqual([
+      [1, 0],
+      [2, 0],
+    ])
+  })
+
+  it('reduces revenue by a partial refund', () => {
+    const rows = [seat(1, '2000.00'), seat(2, '2000.00'), seat(3, '-500.00')]
+    const normalized = toPerTicketAmounts(rows, 'per-order')
+    expect(normalized.map((r) => [r.id, Number(r.sum)])).toEqual([
+      [1, 750],
+      [2, 750],
+    ])
+  })
+
+  it('treats a credit balance as nothing outstanding', () => {
+    const rows = [seat(1, '1000.00', '-200.00'), seat(2, '1000.00', '-200.00')]
+    const normalized = toPerTicketAmounts(rows, 'per-order')
+    expect(normalized).toHaveLength(2)
+    expect(revenue(normalized)).toBe(1000)
+    expect(normalized.every((r) => r.sum_left === '0')).toBe(true)
+  })
+
+  it('nets refund rows on a per-ticket feed too', () => {
+    const rows = [seat(1, '1000.00'), seat(2, '1000.00'), seat(3, '-1000.00')]
+    const normalized = toPerTicketAmounts(rows, 'per-ticket')
+    expect(normalized.map((r) => [r.id, Number(r.sum)])).toEqual([
+      [1, 500],
+      [2, 500],
+    ])
+  })
 })
