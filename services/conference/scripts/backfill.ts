@@ -16,10 +16,6 @@ export interface SanityConference {
   endDate?: string | null
   lifecycleStatus?: string | null
   visibility?: string | null
-  logoBright?: string | null
-  logoDark?: string | null
-  logomarkBright?: string | null
-  logomarkDark?: string | null
   backgroundPattern?: string | null
   theme?: { primaryColor?: string | null; accentColor?: string | null } | null
   registrationLink?: string | null
@@ -39,10 +35,6 @@ export interface Row {
   start_date: string | null
   end_date: string | null
   visibility: 'live' | 'unlisted'
-  logo_bright: string | null
-  logo_dark: string | null
-  logomark_bright: string | null
-  logomark_dark: string | null
   background_pattern: string | null
   primary_color: string | null
   accent_color: string | null
@@ -85,10 +77,6 @@ export function mapBackfill(
       end_date: s(c.endDate),
       // Absent means live (src/lib/conference/contract.ts).
       visibility: c.visibility === 'unlisted' ? 'unlisted' : 'live',
-      logo_bright: s(c.logoBright),
-      logo_dark: s(c.logoDark),
-      logomark_bright: s(c.logomarkBright),
-      logomark_dark: s(c.logomarkDark),
       background_pattern: s(c.backgroundPattern),
       primary_color: s(c.theme?.primaryColor),
       accent_color: s(c.theme?.accentColor),

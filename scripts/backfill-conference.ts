@@ -37,7 +37,7 @@ export async function loadBackfill() {
     "docs": *[_type == "conference" && !(_id in path("drafts.**"))]{
     _id, "orgId": organization._ref, title, tagline, city, country,
     venueName, venueAddress, startDate, endDate, lifecycleStatus, domains, visibility,
-    logoBright, logoDark, logomarkBright, logomarkDark, backgroundPattern, theme,
+    backgroundPattern, theme,
     registrationLink, socialLinks
   }
   }`)

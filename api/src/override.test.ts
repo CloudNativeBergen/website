@@ -41,7 +41,14 @@ describe('content in the supergraph', () => {
     // Editorial fields have no copy in the conference service.
     const native = sdl(conference)
     expect(native).toMatch(/type Conference @key\(fields: "id"/)
-    for (const f of ['description', 'homepageSections'])
+    for (const f of [
+      'description',
+      'homepageSections',
+      'logoBright',
+      'logoDark',
+      'logomarkBright',
+      'logomarkDark',
+    ])
       expect(native).not.toMatch(new RegExp(`\\b${f}:`))
   })
 })
