@@ -22,7 +22,9 @@ function primeOwnership(
   sponsorOrg: string | null = ORG,
   linkedOrgs: (string | null)[] = [],
 ) {
-  ;(clientWrite.fetch as any).mockResolvedValueOnce({ sponsorOrg, linkedOrgs })
+  ;(clientWrite.fetch as any)
+    .mockResolvedValueOnce(sponsorOrg)
+    .mockResolvedValueOnce(linkedOrgs)
 }
 
 describe('deleteSponsor', () => {
@@ -38,6 +40,7 @@ describe('deleteSponsor', () => {
         { _id: 'sfc-2', contractAssetRef: undefined },
       ]) // sponsorForConference docs
       .mockResolvedValueOnce(['activity-1', 'activity-2']) // related activities
+      .mockResolvedValueOnce([]) // no other sponsor uses the asset
       .mockResolvedValueOnce(['asset-1']) // safe-to-delete assets
 
     const mockTransaction = {
@@ -90,8 +93,8 @@ describe('deleteSponsor', () => {
 
     await deleteSponsor('sponsor-1', ORG)
 
-    // Ownership probe + the SFC docs read; no activity cascade.
-    expect(clientWrite.fetch).toHaveBeenCalledTimes(2)
+    // Ownership probe (two reads) + the SFC docs read; no activity cascade.
+    expect(clientWrite.fetch).toHaveBeenCalledTimes(3)
   })
 
   it('skips asset deletion when assets are referenced by other sponsors', async () => {
@@ -101,7 +104,8 @@ describe('deleteSponsor', () => {
         { _id: 'sfc-1', contractAssetRef: 'asset-shared' },
       ]) // SFC docs
       .mockResolvedValueOnce([]) // no activities
-      .mockResolvedValueOnce([]) // safety check: asset referenced elsewhere
+      .mockResolvedValueOnce(['asset-shared']) // asset referenced elsewhere
+      .mockResolvedValueOnce([]) // so nothing is safe to delete
 
     const mockTransaction = {
       delete: vi.fn().mockReturnThis(),
@@ -126,6 +130,7 @@ describe('deleteSponsor', () => {
         { _id: 'sfc-2', contractAssetRef: 'asset-1' },
       ]) // same asset referenced twice
       .mockResolvedValueOnce([]) // no activities
+      .mockResolvedValueOnce([]) // no other sponsor uses it
       .mockResolvedValueOnce(['asset-1']) // safe to delete
 
     const mockTransaction = {
@@ -183,7 +188,7 @@ describe('deleteSponsor', () => {
       expect(mockTransaction.delete).not.toHaveBeenCalled()
       expect(mockTransaction.commit).not.toHaveBeenCalled()
       // Only the probe ran — no cascade read reached another tenant's rows.
-      expect(clientWrite.fetch).toHaveBeenCalledTimes(1)
+      expect(clientWrite.fetch).toHaveBeenCalledTimes(2)
     })
 
     it('refuses when ANY linked conference belongs to another org', async () => {

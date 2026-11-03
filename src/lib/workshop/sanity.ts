@@ -12,6 +12,10 @@ import { isCanceledWorkshop, isListedWorkshop } from './listed'
 import type { HolderSignup } from './holders'
 import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
+// groq-global-scoped: correlated to the parent talk by `^._id`; every parent
+// read below is a workshop the caller already proved is in its conference.
+const CONFIRMED_SIGNUP_COUNT = groq`count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"])`
+
 export async function getWorkshopSignups(
   userWorkOSId: string,
   conferenceId: string,
@@ -24,6 +28,8 @@ export async function getWorkshopSignups(
   const statusFilter = status
     ? ` && status == $status`
     : ` && (status == "confirmed" || status == "waitlist")`
+  // groq-global-scoped: the tenant predicate is literal; the interpolated
+  // tail is a constant status clause.
   const query = groq`
     *[_type == "workshopSignup" && userWorkOSId == $userWorkOSId && conference._ref == $conferenceId${statusFilter}] {
       _id,
@@ -63,10 +69,12 @@ export async function checkWorkshopCapacity(workshopId: string): Promise<{
   signups: number
   available: number
 }> {
+  // groq-global-scoped: point read by id; the router checks
+  // isListedWorkshopOf(workshopId, conferenceId) first.
   const query = groq`
     *[_type == "talk" && _id == $workshopId][0] {
       "capacity": coalesce(capacity, 30),
-      "signupCount": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"])
+      "signupCount": ${CONFIRMED_SIGNUP_COUNT}
     }
   `
 
@@ -160,6 +168,8 @@ export async function deleteWorkshopSignup(signupId: string): Promise<void> {
 export async function getWorkshopById(
   workshopId: string,
 ): Promise<ProposalWithWorkshopData | null> {
+  // groq-global-scoped: point read by id; the router's changeCapacity call
+  // refuses a workshop outside the current conference first.
   const query = groq`
     *[_type == "talk" && _id == $workshopId][0] {
       _id,
@@ -179,7 +189,7 @@ export async function getWorkshopById(
         bio,
         "image": ${SPEAKER_IMAGE_URL}
       },
-      "signupCount": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"])
+      "signupCount": ${CONFIRMED_SIGNUP_COUNT}
     }
   `
 
@@ -199,6 +209,8 @@ export async function getWorkshopSignupsByWorkshop(
   // email addresses included.
   const statusFilter = status ? ` && status == $status` : ''
 
+  // groq-global-scoped: the tenant predicate is literal; the interpolated
+  // tail is a constant status clause.
   const query = groq`*[_type == "workshopSignup" && workshop._ref == $workshopId && conference._ref == $conferenceId${statusFilter}] | order(signedUpAt desc) {
     _id,
     _type,
@@ -243,7 +255,7 @@ export async function getWorkshopSignupStatisticsBySpeaker(
     title,
     capacity,
     format,
-    "signups": *[_type == "workshopSignup" && workshop._ref == ^._id] {
+    "signups": *[_type == "workshopSignup" && workshop._ref == ^._id && conference._ref == ^.conference._ref] {
       _id,
       status,
       experienceLevel,
@@ -375,6 +387,8 @@ export async function getAllWorkshopSignups(filters: {
 
   // `start`/`end` are derived from numbers, never from raw strings, so the slice
   // cannot carry injected GROQ.
+  // groq-global-scoped: `conditions` always carries the unconditional
+  // conference._ref == $conferenceId pushed above.
   const query = groq`*[${whereClause}] | order(signedUpAt desc) [${start}...${end}] {
     _id,
     _type,

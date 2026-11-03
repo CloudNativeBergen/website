@@ -169,6 +169,8 @@ export async function getSponsorTier(
 ): Promise<{ sponsorTier?: SponsorTierExisting; error?: Error }> {
   try {
     const sponsorTier = await clientWrite.fetch(
+      // groq-global-scoped: point read by id; every caller asserts
+      // requireDocumentInCurrentConference(id, 'sponsorTier') first.
       `*[_type == "sponsorTier" && _id == $id][0]{
         _id,
         _createdAt,
@@ -325,18 +327,19 @@ export async function deleteSponsor(
   // commit can land and its acknowledgement be lost.
   let conferenceIds: string[] | undefined
   try {
-    const claim = await clientWrite.fetch<{
-      sponsorOrg: string | null
-      linkedOrgs: (string | null)[] | null
-    }>(
-      // Nothing here is returned to the caller — only the comparison result.
+    // Nothing in these two reads is returned to the caller — only the
+    // comparison result.
+    const sponsorOrg = await clientWrite.fetch<string | null>(
       // groq-global: an OWNERSHIP PROBE must see the document whichever tenant owns it; resolving its tenant is the whole point of REFUSING it.
-      `{"sponsorOrg": *[_type == "sponsor" && _id == $id][0].organization._ref,
-        "linkedOrgs": *[_type == "sponsorForConference" && sponsor._ref == $id].conference->organization._ref
-      }`,
+      `*[_type == "sponsor" && _id == $id][0].organization._ref`,
       { id },
     )
-    const claimants = [claim.sponsorOrg, ...(claim.linkedOrgs ?? [])].filter(
+    const linkedOrgs = await clientWrite.fetch<(string | null)[] | null>(
+      // groq-global: same ownership probe — every tenant linking this sponsor must be seen to be refused.
+      `*[_type == "sponsorForConference" && sponsor._ref == $id].conference->organization._ref`,
+      { id },
+    )
+    const claimants = [sponsorOrg, ...(linkedOrgs ?? [])].filter(
       (o): o is string => Boolean(o),
     )
     if (claimants.length === 0 || claimants.some((o) => o !== orgId)) {
@@ -353,6 +356,8 @@ export async function deleteSponsor(
         contractAssetRef?: string
       }>
     >(
+      // groq-global-scoped: the probe above proved the caller's org is the
+      // sponsor's only claimant, so these rows are all the caller's own.
       `*[_type == "sponsorForConference" && sponsor._ref == $id]{
         _id,
         "conferenceId": conference._ref,
@@ -372,6 +377,7 @@ export async function deleteSponsor(
     let relatedActivityIds: string[] = []
     if (sfcIds.length > 0) {
       relatedActivityIds = await clientWrite.fetch<string[]>(
+        // groq-global-scoped: activities of the caller's own rows read above.
         `*[_type == "sponsorActivity" && sponsorForConference._ref in $sfcIds]._id`,
         { sfcIds },
       )
@@ -385,17 +391,19 @@ export async function deleteSponsor(
     ]
     let safeAssetIds: string[] = []
     if (candidateAssetIds.length > 0) {
-      safeAssetIds = await clientWrite.fetch<string[]>(
-        // The inner "is anyone else still using it?" count MUST stay
-        // cross-tenant — scoping it would delete an asset another edition or
-        // another tenant still references.
-        // groq-global: `sanity.fileAsset` carries no tenant key of any kind.
-        `*[
-          _type == "sanity.fileAsset" &&
-          _id in $assetIds &&
-          count(*[_type == "sponsorForConference" && contractDocument.asset._ref == ^._id && !(sponsor._ref == $id)]) == 0
-        ]._id`,
+      const stillUsed = await clientWrite.fetch<string[]>(
+        // groq-global: "is anyone else still using it?" MUST stay cross-tenant —
+        // scoping it would delete an asset another edition or another tenant
+        // still references. Only asset ids are returned.
+        `*[_type == "sponsorForConference" && contractDocument.asset._ref in $assetIds && !(sponsor._ref == $id)].contractDocument.asset._ref`,
         { assetIds: candidateAssetIds, id },
+      )
+      safeAssetIds = await clientWrite.fetch<string[]>(
+        // groq-global: `sanity.fileAsset` carries no tenant key of any kind.
+        `*[_type == "sanity.fileAsset" && _id in $assetIds]._id`,
+        {
+          assetIds: candidateAssetIds.filter((a) => !stillUsed.includes(a)),
+        },
       )
     }
 
@@ -424,6 +432,8 @@ export async function getSponsor(id: string): Promise<{
 }> {
   try {
     const sponsor = await clientWrite.fetch(
+      // groq-global-scoped: point read by id; every caller asserts
+      // requireDocumentInCurrentOrg(id, 'sponsor') first.
       `*[_type == "sponsor" && _id == $id][0]{
         _id,
         _createdAt,
@@ -449,12 +459,11 @@ export async function getSponsor(id: string): Promise<{
 }
 
 /**
- * Tenant filter for the sponsor company pickers (E10).
+ * Sponsor company picker search (E10), scoped to the caller's organization.
  *
- * CALLERS MUST FAIL CLOSED FIRST. This helper is only ever reached with a
- * resolved `orgId`; the `null` case is handled by the callers below, which
- * return empty WITHOUT querying. Previously a null org produced an EMPTY clause
- * — an unresolvable tenant read every tenant's sponsor list.
+ * FAIL CLOSED. This and `getAllSponsors` return an error WITHOUT querying
+ * when `orgId` is null. Previously a null org produced an EMPTY clause — an
+ * unresolvable tenant read every tenant's sponsor list.
  *
  * The predicate is UNCONDITIONAL. It used to carry a `!defined(organization) ||`
  * disjunct — a bridge for org-less legacy sponsors written before the 044
@@ -474,16 +483,6 @@ export async function getSponsor(id: string): Promise<{
  * hardened here; it is a separate fail-closed decision, and its failure mode is
  * now a missing row rather than a cross-tenant one.
  */
-function sponsorOrgFilter(orgId: string): {
-  clause: string
-  params: Record<string, string>
-} {
-  return {
-    clause: ' && organization._ref == $orgId',
-    params: { orgId },
-  }
-}
-
 export async function searchSponsors(
   query: string,
   orgId: string | null | undefined,
@@ -502,9 +501,8 @@ export async function searchSponsors(
   }
 
   try {
-    const { clause, params } = sponsorOrgFilter(orgId)
     const sponsors = await clientWrite.fetch(
-      `*[_type == "sponsor" && name match $searchQuery${clause}]{
+      `*[_type == "sponsor" && name match $searchQuery && organization._ref == $orgId]{
         _id,
         _createdAt,
         _updatedAt,
@@ -513,7 +511,7 @@ export async function searchSponsors(
         logo,
         logoBright
       }`,
-      { searchQuery: `${query}*`, ...params },
+      { searchQuery: `${query}*`, orgId },
     )
 
     return { sponsors }
@@ -538,9 +536,8 @@ export async function getAllSponsors(
   }
 
   try {
-    const { clause, params } = sponsorOrgFilter(orgId)
     const sponsors = await clientWrite.fetch(
-      `*[_type == "sponsor"${clause}] | order(name asc){
+      `*[_type == "sponsor" && organization._ref == $orgId] | order(name asc){
         _id,
         _createdAt,
         _updatedAt,
@@ -550,7 +547,7 @@ export async function getAllSponsors(
         logoBright,
         linkedinUrl
       }`,
-      params,
+      { orgId },
     )
 
     return { sponsors }

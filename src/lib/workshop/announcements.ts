@@ -43,6 +43,8 @@ export interface WorkshopAnnouncementView {
 export async function getWorkshopForAnnouncement(
   workshopId: string,
 ): Promise<WorkshopForAnnouncement | null> {
+  // groq-global-scoped: point read by id; both router callers compare the
+  // returned conferenceId to the current conference before using it.
   const query = groq`*[_type == "talk" && _id == $workshopId][0]{
     _id,
     title,
@@ -74,6 +76,8 @@ export async function getWorkshopForAnnouncement(
 export async function getConfirmedAnnouncementRecipients(
   workshopId: string,
 ): Promise<AnnouncementRecipient[]> {
+  // groq-global-scoped: `workshop.announce` checks the workshop is in the
+  // current conference before fanning out to its signups.
   const query = groq`*[_type == "workshopSignup" && workshop._ref == $workshopId && status == "confirmed"]{
     userEmail,
     userName
@@ -127,6 +131,8 @@ export interface AnnouncementForAuthz {
 export async function getWorkshopAnnouncementForAuthz(
   announcementId: string,
 ): Promise<AnnouncementForAuthz | null> {
+  // groq-global-scoped: point read by id; authorizeAnnouncementMutation
+  // compares the returned conferenceId to the current conference.
   const query = groq`*[_type == "workshopAnnouncement" && _id == $announcementId][0]{
     _id,
     "workshopId": workshop._ref,
@@ -160,12 +166,16 @@ export async function deleteWorkshopAnnouncement(
   await clientWrite.delete(announcementId)
 }
 
-/** Read announcements for a workshop, newest first, bounded to `limit`. */
+/**
+ * Read announcements for a workshop, newest first, bounded to `limit`. Scoped
+ * to `conferenceId`: the public procedure takes `workshopId` from the client.
+ */
 export async function getWorkshopAnnouncements(
   workshopId: string,
+  conferenceId: string,
   limit: number,
 ): Promise<WorkshopAnnouncementView[]> {
-  const query = groq`*[_type == "workshopAnnouncement" && workshop._ref == $workshopId] | order(createdAt desc)[0...$limit]{
+  const query = groq`*[_type == "workshopAnnouncement" && workshop._ref == $workshopId && conference._ref == $conferenceId] | order(createdAt desc)[0...$limit]{
     _id,
     body,
     createdAt,
@@ -174,7 +184,7 @@ export async function getWorkshopAnnouncements(
 
   const announcements = await clientWrite.fetch<WorkshopAnnouncementView[]>(
     query,
-    { workshopId, limit },
+    { workshopId, conferenceId, limit },
   )
   return announcements ?? []
 }
