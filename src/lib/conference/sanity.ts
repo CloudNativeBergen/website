@@ -1,3 +1,4 @@
+import { requestDomain } from './request-domain'
 import {
   clientWrite,
   clientReadCached,
@@ -8,7 +9,6 @@ import { normalizeDomain } from './domains'
 import { normalizeConference } from './normalize'
 import type { ConferenceResolutionStatus } from './guard'
 import { isConferenceOver } from './state'
-import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag, domainTag } from '@/lib/cache/tags'
 import { GALLERY_CONSTANTS } from '@/lib/gallery/constants'
@@ -131,8 +131,7 @@ export async function getConferenceForCurrentDomain({
   error: Error | null
   status: ConferenceResolutionStatus
 }> {
-  const headersList = await headers()
-  const domain = headersList.get('host') || ''
+  const domain = await requestDomain()
   try {
     return await getConferenceForDomain(domain, {
       organizers,

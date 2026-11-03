@@ -1,3 +1,10 @@
+import {
+  identityJwt,
+  isD1WriteTenant,
+  movedConferencePatch,
+  requestHost,
+  updateConferenceViaApi,
+} from '@/lib/konf-api/conference-write'
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
@@ -360,6 +367,37 @@ async function applyConferencePatch(
     })
   }
 
+  // #1881 phase 2: D1 first for flagged tenants. A failure here aborts before
+  // Sanity is touched. Prefixed (nested) fieldsets hold no moved fields.
+  const moved = pathPrefix ? {} : movedConferencePatch(input)
+  const d1 = Object.keys(moved).length > 0 && isD1WriteTenant(conferenceId)
+  if (d1) {
+    const host = await requestHost()
+    const jwt = host && (await identityJwt())
+    // Refuse rather than write Sanity alone: that would leave D1 stale with
+    // nothing to flag it until parity runs.
+    if (!host || !jwt) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message:
+          'Saving these settings needs a Konf sign-in. Sign out and in again, then retry.',
+      })
+    }
+    try {
+      await updateConferenceViaApi(host, conferenceId, moved, jwt)
+    } catch (error) {
+      console.error(
+        `[conference] D1 write failed for ${conferenceId}; Sanity untouched`,
+        error,
+      )
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to update conference settings',
+        cause: error,
+      })
+    }
+  }
+
   try {
     let patch = clientWrite.patch(conferenceId)
     if (pathPrefix) patch = patch.setIfMissing({ [pathPrefix]: {} })
@@ -377,6 +415,20 @@ async function applyConferencePatch(
     return { success: true, updated: result }
   } catch (error) {
     if (error instanceof TRPCError) throw error
+    if (d1) {
+      // D1 has the change, Sanity does not. No rollback (#1881 decision 4):
+      // log for parity and tell the caller.
+      console.error(
+        `[conference] Sanity write failed after D1 write for ${conferenceId}`,
+        error,
+      )
+      revalidateTag(conferenceTag(conferenceId), 'default')
+      return {
+        success: true,
+        updated: null,
+        warning: 'Saved, but the legacy copy did not update.',
+      }
+    }
     throw new TRPCError({
       code: 'INTERNAL_SERVER_ERROR',
       message: 'Failed to update conference settings',

@@ -52,6 +52,14 @@ Identity tests run against a real local D1 through Miniflare. A cross-tenant tes
 - For a listed tenant, the site's server calls `api.konf.app` for the request's host and merges the returned fields over the Sanity conference. The result is cached with the same tags as the Sanity read, so a revalidation clears both.
 - Any error, a timeout (2 seconds), a `null` answer or a conference id that does not match makes the site use the Sanity data for that request. Turning a tenant off is removing it from the list.
 
+## The write path flag
+
+`src/lib/konf-api/conference-write.ts` lets the admin write the moved conference fields to D1 through `api.konf.app`, per tenant (#1881):
+
+- `KONF_D1_WRITE_TENANTS` is a comma-separated list of conference ids. Empty or unset means off for everyone. It is unset in every environment.
+- For a listed tenant, each settings save sends its moved fields to `updateConference` first, with the organizer's identity JWT. If that fails, the save fails and Sanity is not touched. Then Sanity gets the whole patch. If Sanity fails after D1 succeeded, the error is logged with the conference id and the save returns a warning.
+- An organizer with no identity session (`KONF_IDENTITY_TENANTS` off, or not signed in through identity) cannot save moved fields for a listed tenant. Only list tenants that are also in `KONF_IDENTITY_TENANTS`.
+
 Which subgraph answers for a tenant is a separate switch in the gateway (`@override`). The site does not need to know about it.
 
 ## Further reading
