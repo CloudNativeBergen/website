@@ -45,6 +45,8 @@ describe('content in the supergraph', () => {
       'description',
       'homepageSections',
       'logoBright',
+      'logoDark',
+      'logomarkBright',
       'logomarkDark',
     ])
       expect(native).not.toMatch(new RegExp(`\\b${f}:`))
