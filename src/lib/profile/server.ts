@@ -17,6 +17,8 @@ async function getSpeakerKnownEmails(
   if (!speakerId) return []
   try {
     const emails = await clientReadUncached.fetch<string[] | null>(
+      // groq-global-scoped: the signed-in caller's own speaker document, by
+      // the id on their session.
       `*[_type == "speaker" && _id == $id][0].knownEmails`,
       { id: speakerId },
     )

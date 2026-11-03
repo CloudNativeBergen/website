@@ -27,6 +27,8 @@ export async function getFeaturedSpeakers(
 ): Promise<{ speakers: FeaturedSpeaker[]; error: Error | null }> {
   try {
     const speakers = await clientWrite.fetch(
+      // groq-global-scoped: the conference document itself, by the id the
+      // caller resolved for this request.
       `*[_type == "conference" && _id == $conferenceId][0].featuredSpeakers[]->{
         _id,
         name,
@@ -63,6 +65,8 @@ export async function getFeaturedTalks(
 ): Promise<{ talks: FeaturedTalk[]; error: Error | null }> {
   try {
     const talks = await clientWrite.fetch(
+      // groq-global-scoped: the conference document itself, by the id the
+      // caller resolved for this request.
       `*[_type == "conference" && _id == $conferenceId][0].featuredTalks[]->{
         _id,
         title,
@@ -176,15 +180,23 @@ export async function getFeaturedContentSummary(
   conferenceId: string,
 ): Promise<{ summary: FeaturedContentSummary; error: Error | null }> {
   try {
-    const result = await clientWrite.fetch(
-      `{
-        "featuredSpeakersCount": count(*[_type == "conference" && _id == $conferenceId][0].featuredSpeakers),
-        "featuredTalksCount": count(*[_type == "conference" && _id == $conferenceId][0].featuredTalks),
-        "availableSpeakersCount": count(*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && conference._ref == $conferenceId && status in ["confirmed", "accepted"]]) > 0]),
+    const counts = await clientWrite.fetch(
+      // groq-global-scoped: the conference document itself, by the id the
+      // caller resolved for this request.
+      `*[_type == "conference" && _id == $conferenceId][0]{
+        "featuredSpeakersCount": count(featuredSpeakers),
+        "featuredTalksCount": count(featuredTalks),
         "availableTalksCount": count(*[_type == "talk" && conference._ref == $conferenceId && status in ["confirmed", "accepted"]])
       }`,
       { conferenceId },
     )
+    const availableSpeakersCount = await clientWrite.fetch<number>(
+      // groq-global-scoped: speakers are platform identities; only those with a
+      // talk in this conference are counted, and only the count is returned.
+      `count(*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && conference._ref == $conferenceId && status in ["confirmed", "accepted"]]) > 0])`,
+      { conferenceId },
+    )
+    const result = { ...counts, availableSpeakersCount }
 
     return {
       summary: {

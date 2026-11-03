@@ -11,9 +11,12 @@ export async function getAgentConfig(conferenceId: string): Promise<{
   try {
     const conference = await clientRead.fetch<{
       agentConfig?: AgentConfiguration
-    }>(`*[_type == "conference" && _id == $conferenceId][0]{ agentConfig }`, {
-      conferenceId,
-    })
+    }>(
+      // groq-global-scoped: the conference document itself, by the id the
+      // router resolved for this request.
+      `*[_type == "conference" && _id == $conferenceId][0]{ agentConfig }`,
+      { conferenceId },
+    )
 
     return { config: conference?.agentConfig }
   } catch (error) {

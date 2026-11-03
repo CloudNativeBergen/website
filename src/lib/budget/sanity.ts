@@ -21,6 +21,7 @@ import type { ConferenceBudgetDocument } from './types'
 
 // Tenant-scoped root filter (composed like src/lib/messaging/sanity.ts).
 const BUDGET_FILTER = `_type == "conferenceBudget" && ${CONFERENCE_FILTER}`
+// groq-global-scoped: BUDGET_FILTER carries CONFERENCE_FILTER.
 const BUDGET_QUERY = `*[${BUDGET_FILTER}][0]`
 
 /** Thrown when patching a conference that has no budget document yet. */

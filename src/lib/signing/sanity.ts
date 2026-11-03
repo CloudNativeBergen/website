@@ -52,6 +52,9 @@ export interface SigningContractData {
   contractCurrency?: string
 }
 
+// groq-global: the signing token is an unguessable bearer capability for one
+// contract and the only key the public signing page has; the deal's own
+// conference is resolved from the match.
 const SIGNING_CONTRACT_QUERY = `*[_type == "sponsorForConference" && signatureId == $signingToken][0]{
   _id,
   _rev,

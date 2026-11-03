@@ -164,13 +164,15 @@ export async function issueBadgeForSpeaker(
     // conferenceId; a null org denies (fail closed).
     const { clientReadUncached } = await import('@/lib/sanity/client')
     const orgRef = await clientReadUncached.fetch<string | null>(
+      // groq-global-scoped: the conference document itself, by its
+      // domain-derived id.
       `*[_type == "conference" && _id == $conferenceId][0].organization._ref`,
       { conferenceId },
     )
     const isOrgOrganizer = orgRef
       ? await clientReadUncached.fetch<boolean>(
-          `count(*[_type == "conference" && organization._ref == $orgRef && $speakerId in organizers[]._ref]) > 0`,
-          { orgRef, speakerId: speaker._id },
+          `count(*[_type == "conference" && organization._ref == $orgId && $speakerId in organizers[]._ref]) > 0`,
+          { orgId: orgRef, speakerId: speaker._id },
         )
       : false
     if (!isOrgOrganizer) {

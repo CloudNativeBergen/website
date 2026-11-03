@@ -39,6 +39,8 @@ export async function resolveActiveReminderConferences(
 ): Promise<ReminderConference[]> {
   const today = toDateString(now)
   const conferences = await clientReadUncached.fetch<ReminderConference[]>(
+    // groq-global: cron sweep over every tenant's active conferences; dedup
+    // markers are per conference.
     `*[_type == "conference" && defined(startDate) && defined(endDate) && endDate >= $today]
       | order(startDate asc)[0...${MAX_CONFERENCES_PER_RUN}]{
         _id,

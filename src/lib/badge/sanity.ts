@@ -119,6 +119,7 @@ export async function createBadge(params: {
     const created = await clientWrite.create(doc)
 
     const badge = await clientRead.fetch<BadgeRecord>(
+      // groq-global-scoped: re-read of the badge this function just wrote.
       `*[_type == "speakerBadge" && _id == $id][0]{${BADGE_FIELDS}}`,
       { id: created._id },
     )
@@ -155,6 +156,8 @@ export async function patchBadgeArtifacts(
       _id: string
       bakedSvg?: { asset?: { _ref?: string } }
     }>(
+      // groq-global-scoped: rebakeBadge loads the badge and checks it belongs to
+      // the request's conference before calling this.
       `*[_type == "speakerBadge" && badgeId == $badgeId][0]{ _id, bakedSvg }`,
       { badgeId },
     )
@@ -190,6 +193,7 @@ export async function patchBadgeArtifacts(
     }
 
     const badge = await clientRead.fetch<BadgeRecord>(
+      // groq-global-scoped: re-read of the badge this function just wrote.
       `*[_type == "speakerBadge" && _id == $id][0]{${BADGE_FIELDS}}`,
       { id: updated._id },
     )
@@ -225,6 +229,9 @@ export async function getBadgeById(badgeId: string): Promise<{
 }> {
   try {
     const badge = await clientRead.fetch<BadgeRecord>(
+      // groq-global: public Open Badges verification. A badge id must resolve on
+      // any host, for verifiers we do not control; admin callers check the returned
+      // conference themselves.
       `*[_type == "speakerBadge" && badgeId == $badgeId][0]{${BADGE_FIELDS}}`,
       { badgeId },
     )
@@ -352,6 +359,8 @@ export async function updateBadgeEmailStatus(
 ): Promise<{ badge?: BadgeRecord; error?: Error }> {
   try {
     const badge = await clientRead.fetch<{ _id: string }>(
+      // groq-global-scoped: called right after issuing or emailing a badge the
+      // server resolved in its own conference.
       `*[_type == "speakerBadge" && badgeId == $badgeId][0]{ _id }`,
       { badgeId },
     )
@@ -378,6 +387,7 @@ export async function updateBadgeEmailStatus(
     const updated = await clientWrite.patch(badge._id).set(updates).commit()
 
     const updatedBadge = await clientRead.fetch<BadgeRecord>(
+      // groq-global-scoped: re-read of the badge this function just wrote.
       `*[_type == "speakerBadge" && _id == $id][0]{${BADGE_FIELDS}}`,
       { id: updated._id },
     )
@@ -483,6 +493,8 @@ export async function deleteBadge(
       _id: string
       bakedSvg?: { asset?: { _ref?: string } }
     }>(
+      // groq-global-scoped: badge.delete checks the badge's conference against
+      // the request before calling this.
       `*[_type == "speakerBadge" && badgeId == $badgeId][0]{ _id, bakedSvg }`,
       { badgeId },
     )

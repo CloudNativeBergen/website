@@ -81,6 +81,9 @@ export async function getVolunteerById(
   id: string,
 ): Promise<{ volunteer: VolunteerWithConference | null; error: Error | null }> {
   try {
+    // groq-global-scoped: point read by id; router callers assert
+    // requireDocumentInCurrentConference(id, 'volunteer') or check the
+    // returned conference, as the confirm page does.
     const query = `*[_type == "volunteer" && _id == $id][0] {
       _id,
       _rev,

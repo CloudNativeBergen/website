@@ -133,8 +133,8 @@ export async function notifyScheduleChanges({
 
     const movedById = new Map(moved.map((m) => [m.talkId, m]))
     const rows = await clientReadUncached.fetch<TalkSpeakerRow[]>(
-      `*[_type == "talk" && _id in $ids]{ _id, title, "speakerIds": speakers[]._ref }`,
-      { ids: Array.from(movedById.keys()) },
+      `*[_type == "talk" && _id in $ids && conference._ref == $conferenceId]{ _id, title, "speakerIds": speakers[]._ref }`,
+      { ids: Array.from(movedById.keys()), conferenceId },
       { cache: 'no-store' },
     )
 
