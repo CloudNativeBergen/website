@@ -109,7 +109,7 @@ import {
 import { filterProposals } from '@/lib/proposal/utils/filtering'
 import { convertPortableTextToString } from '@/lib/proposal/utils/validation'
 import { Speaker } from '@/lib/speaker/types'
-import { buildOrganizerCreatedSpeaker } from '@/lib/speaker/sanity'
+import { createSpeaker } from '@/lib/speaker/server'
 import { findSpeakerByEmailForOrganizerCreate } from '@/lib/speaker'
 import { normalizeEmail, canonicalEmail } from '@/lib/speaker/email'
 import { eventBus } from '@/lib/events/bus'
@@ -343,7 +343,7 @@ async function talkTopicIds(talkId: string): Promise<string[]> {
  * the profile and come back.
  *
  * WHAT IS CREATED IS A CLAIMABLE PLACEHOLDER, not a login identity — the shape
- * is `buildOrganizerCreatedSpeaker`'s, shared with `speaker.admin.create` and
+ * is `createSpeaker`'s, shared with `speaker.admin.create` and
  * `proposal.addCoSpeakerProfile`: no `knownEmails` (provider-verified only,
  * #808) and no `providers`. The organizer-typed address is stored as the
  * DISPLAY `email` only, which is what lets the person adopt the profile later
@@ -408,7 +408,6 @@ async function createProposalWithNewPrimarySpeaker({
     })
   }
 
-  const speakerDocument = await buildOrganizerCreatedSpeaker(newSpeaker, orgId)
   const newSpeakerId = uuidv4()
 
   const proposalDocument = buildProposalDocument(
@@ -424,7 +423,10 @@ async function createProposalWithNewPrimarySpeaker({
   )
 
   const transaction = clientWrite.transaction()
-  transaction.create({ _id: newSpeakerId, ...speakerDocument })
+  await createSpeaker(
+    { ...newSpeaker, orgId },
+    { id: newSpeakerId, transaction },
+  )
   transaction.create(proposalDocument as never)
   await transaction.commit()
 
@@ -1309,7 +1311,7 @@ export const proposalRouter = router({
    * accepted. For the co-speaker who will not act on the invitation.
    *
    * WHAT IS CREATED IS A CLAIMABLE PLACEHOLDER, not a login identity. The shape
-   * is `buildOrganizerCreatedSpeaker`'s, shared with `speaker.admin.create`:
+   * is `createSpeaker`'s, shared with `speaker.admin.create`:
    * no `knownEmails` (provider-verified only, #808) and no `providers`. The
    * organizer-typed address is stored as the DISPLAY `email` only, which is
    * what lets the person adopt the profile later through the ordinary
@@ -1478,15 +1480,6 @@ export const proposalRouter = router({
           })
         }
 
-        const speakerDocument = await buildOrganizerCreatedSpeaker(
-          {
-            name: input.name,
-            email: input.email,
-            title: input.title,
-            bio: input.bio,
-          },
-          orgId,
-        )
 
         // ANY UNRESOLVED INVITATION TO THIS ADDRESS IS NOW MOOT — the person is
         // a speaker, so there is nothing left to answer. Canceled in the SAME
@@ -1518,7 +1511,16 @@ export const proposalRouter = router({
         // client input, which is why `requireSpeakersInCurrentOrg` (the guard
         // for client-supplied reference ids) has nothing to check here.
         const transaction = clientWrite.transaction()
-        transaction.create({ _id: newSpeakerId, ...speakerDocument })
+        await createSpeaker(
+          {
+            name: input.name,
+            email: input.email,
+            title: input.title,
+            bio: input.bio,
+            orgId,
+          },
+          { id: newSpeakerId, transaction },
+        )
         transaction.patch(input.proposalId, (patch) =>
           patch
             .setIfMissing({ speakers: [] })

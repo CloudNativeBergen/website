@@ -6,10 +6,12 @@
  *
  * Return types name the fields a caller may rely on, shaped like the future
  * GraphQL type, so a second backend only has to produce these fields.
+ *
+ * Server-only functions (the public profile, writes that create) live in
+ * `./server`.
  */
 import type { ProposalExisting } from '@/lib/proposal/types'
 import * as store from './sanity'
-import type { PublicTalk } from '@/lib/proposal/public'
 import type { DuplicateSpeakerInput } from './duplicates'
 import type { SpeakerUpdateActor } from './socialTag'
 import type {
@@ -18,40 +20,6 @@ import type {
   SpeakerInput,
   TicketEmailGrant,
 } from './types'
-
-/** A speaker's public profile in one conference. */
-export type PublicSpeaker = Pick<
-  Speaker,
-  'name' | 'title' | 'bio' | 'links' | 'flags' | 'image' | 'galleryImages'
-> & {
-  /** Not projected by the Sanity read today, so always undefined there. */
-  slug?: string
-}
-
-export interface PublicSpeakerProfile {
-  speaker: PublicSpeaker | null
-  /** Confirmed talks in the conference, from the proposal seam. */
-  talks: PublicTalk[]
-  err: Error | null
-}
-
-/**
- * The public profile of the speaker at `slug`, or `speaker: null` when no
- * speaker with a confirmed talk in `conferenceId` has that slug.
- */
-export async function getPublicSpeakerProfile(
-  conferenceId: string,
-  slug: string,
-): Promise<PublicSpeakerProfile> {
-  const { speaker, err } = await store.getPublicSpeaker(conferenceId, slug)
-  if (!speaker) return { speaker: null, talks: [], err: err as Error | null }
-  const { _id: speakerId, ...publicSpeaker } = speaker
-  // Lazy: a static import puts proposal/server (server-only) behind every
-  // client bundle that reaches this seam via conference/sanity -> gallery.
-  const { listPublicTalks } = await import('@/lib/proposal/server')
-  const talks = await listPublicTalks(conferenceId, { speakerId })
-  return { speaker: publicSpeaker, talks: talks.talks, err: talks.err }
-}
 
 // --- Shared result shapes -------------------------------------------------
 

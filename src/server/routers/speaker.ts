@@ -73,7 +73,7 @@ import {
   RESEND_BROADCAST_VARIABLES,
 } from '@/lib/sponsor/templates'
 import type { PortableTextBlock as TemplateBlock } from '@/lib/sponsor/types'
-import { buildOrganizerCreatedSpeaker } from '@/lib/speaker/sanity'
+import { createSpeaker } from '@/lib/speaker/server'
 import { canonicalEmail, normalizeEmail } from '@/lib/speaker/email'
 import {
   requireCurrentOrgId,
@@ -940,17 +940,15 @@ export const speakerRouter = router({
           // update/delete would refuse them — refuse the create instead.
           //
           // The placeholder shape (no `knownEmails`, no `providers`) lives in
-          // `buildOrganizerCreatedSpeaker`, shared with
+          // `createSpeaker` (`@/lib/speaker/server`), shared with
           // `proposal.addCoSpeakerProfile` so the two cannot drift.
-          const speaker = await clientWrite.create(
-            await buildOrganizerCreatedSpeaker(
-              input,
-              await requireCurrentOrgId(),
-            ),
-          )
+          const { id } = await createSpeaker({
+            ...input,
+            orgId: await requireCurrentOrgId(),
+          })
 
           // Fetch the created speaker to get the proper format
-          const { speaker: createdSpeaker, err } = await getSpeaker(speaker._id)
+          const { speaker: createdSpeaker, err } = await getSpeaker(id)
 
           if (err || !createdSpeaker) {
             throw new TRPCError({
