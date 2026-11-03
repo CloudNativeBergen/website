@@ -2,18 +2,8 @@
   "rule": "tenancy/no-unscoped-groq",
   "generatedBy": "pnpm run lint:tenancy:update",
   "note": "Per-file ceiling for pre-existing unscoped GROQ reads. A number may only go DOWN. See eslint-rules/tenancy-ratchet.js and docs/TENANT_SCOPING.md.",
-  "total": 21,
+  "total": 2,
   "files": {
-    "src/app/(admin)/admin/actions.ts": 1,
-    "src/app/(admin)/admin/settings/new-edition/page.tsx": 1,
-    "src/app/(cfp)/cfp/workshop/[id]/page.tsx": 2,
-    "src/lib/conference/sanity.ts": 1,
-    "src/lib/conference/visibility.ts": 1,
-    "src/lib/system-status/checks.ts": 3,
-    "src/server/routers/conference.ts": 4,
-    "src/server/routers/schedule.ts": 1,
-    "src/server/routers/tickets.ts": 1,
-    "src/server/routers/topic.ts": 3,
-    "src/server/tenancy.ts": 3
+    "src/server/tenancy.ts": 2
   }
 }

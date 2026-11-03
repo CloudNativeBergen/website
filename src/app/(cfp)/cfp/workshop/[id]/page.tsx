@@ -5,6 +5,7 @@ import { getAuthSession } from '@/lib/auth'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { groq } from 'next-sanity'
 import { BackLink } from '@/components/BackButton'
 import type { WorkshopSignupExisting } from '@/lib/workshop/types'
@@ -89,8 +90,15 @@ export default async function WorkshopDetailsPage({
     )
   }
 
-  const workshop = await clientReadUncached.fetch<WorkshopDetails | null>(
-    groq`*[_type == "talk" && _id == $workshopId && format in ["workshop_120", "workshop_240"]][0] {
+  // Tenant scope: only a workshop of the conference this domain serves. The
+  // impersonation check below is org-wide, so without it an organizer could
+  // open another tenant's workshop by id.
+  const { conference: domainConference } = await getConferenceForCurrentDomain()
+  const conferenceId = domainConference?._id
+  const workshop = !conferenceId
+    ? null
+    : await clientReadUncached.fetch<WorkshopDetails | null>(
+        groq`*[_type == "talk" && _id == $workshopId && conference._ref == $conferenceId && format in ["workshop_120", "workshop_240"]][0] {
       _id,
       title,
       format,
@@ -101,8 +109,8 @@ export default async function WorkshopDetailsPage({
       "speakers": speakers[]->{ _id, name, email, organization },
       "conferenceId": conference._ref
     }`,
-    { workshopId },
-  )
+        { workshopId, conferenceId },
+      )
 
   if (!workshop) {
     return (
@@ -179,7 +187,7 @@ export default async function WorkshopDetailsPage({
     : null
 
   const signups = await clientReadUncached.fetch<WorkshopSignupExisting[]>(
-    groq`*[_type == "workshopSignup" && workshop._ref == $workshopId && status in ["confirmed", "waitlist"]] | order(signedUpAt asc) {
+    groq`*[_type == "workshopSignup" && workshop._ref == $workshopId && conference._ref == $conferenceId && status in ["confirmed", "waitlist"]] | order(signedUpAt asc) {
       _id,
       userName,
       experienceLevel,
@@ -187,7 +195,7 @@ export default async function WorkshopDetailsPage({
       status,
       signedUpAt
     }`,
-    { workshopId },
+    { workshopId, conferenceId },
   )
 
   const confirmedSignups = signups.filter(

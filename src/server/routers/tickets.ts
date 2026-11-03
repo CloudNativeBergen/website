@@ -646,6 +646,8 @@ async function saveTicketTypeRoles(
 
 async function getTicketSettings(conferenceId: string) {
   try {
+    // groq-global-scoped: the conference document itself; every caller passes
+    // the id resolveConferenceId() resolved from the request domain.
     const query = `*[_type == "conference" && _id == $conferenceId][0]{
       _id,
       ticketCapacity,

@@ -32,6 +32,8 @@ async function uniqueTopicSlug(title: string): Promise<string> {
   let candidate = base
   for (let suffix = 2; suffix < 1000; suffix++) {
     const clash = await clientReadUncached.fetch<string | null>(
+      // groq-global: Studio's slug uniqueness is dataset-wide per type, so the
+      // clash check must be too; it returns only whether an id exists.
       `*[_type == "topic" && slug.current == $slug][0]._id`,
       { slug: candidate },
     )
@@ -163,10 +165,14 @@ export const topicRouter = router({
       await requireDocumentInCurrentOrg(input.id, 'topic')
       const [talkCount, conferenceCount] = await Promise.all([
         clientReadUncached.fetch<number>(
+          // groq-global: the delete guard must see references from every
+          // tenant or it strands them; requireDocumentInCurrentOrg proved the
+          // topic is ours above, and only a count is returned.
           `count(*[_type == "talk" && references($id)])`,
           { id: input.id },
         ),
         clientReadUncached.fetch<number>(
+          // groq-global: same delete guard as the talk count above.
           `count(*[_type == "conference" && references($id)])`,
           { id: input.id },
         ),

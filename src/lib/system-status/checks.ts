@@ -905,6 +905,8 @@ async function sanityReadProbe(): Promise<SystemCheck> {
   const start = Date.now()
   try {
     const id = await clientReadUncached.fetch<string | null>(
+      // groq-global: platform-only connectivity probe (buildSystemChecks gates
+      // it on seesPlatformRows); returns one id.
       `*[_type == "conference"][0]._id`,
     )
     const ms = Date.now() - start
@@ -939,17 +941,20 @@ async function pushSubscriptionCount(): Promise<SystemCheck> {
     // 404/410 back from the push service — during any period when sends fail
     // earlier (e.g. an invalid VAPID config), stale device rows accumulate
     // unpruned, so this number can far exceed live devices.
-    const stats = await clientReadUncached.fetch<{
-      total: number
-      speakers: number
-    }>(
-      `{
-        "total": count(*[_type == "speaker"].pushSubscriptions[]),
-        "speakers": count(*[_type == "speaker" && count(pushSubscriptions) > 0])
-      }`,
-    )
-    const total = stats?.total ?? 0
-    const speakers = stats?.speakers ?? 0
+    // Platform-only (buildSystemChecks gates on seesPlatformRows); speakers
+    // are platform identities, and only counts leave this function.
+    const [totalCount, speakerCount] = await Promise.all([
+      clientReadUncached.fetch<number>(
+        // groq-global: platform-wide subscription count, platform org only.
+        `count(*[_type == "speaker"].pushSubscriptions[])`,
+      ),
+      clientReadUncached.fetch<number>(
+        // groq-global: platform-wide speaker count, platform org only.
+        `count(*[_type == "speaker" && count(pushSubscriptions) > 0])`,
+      ),
+    ])
+    const total = totalCount ?? 0
+    const speakers = speakerCount ?? 0
     return {
       ...meta,
       status: 'ok',
