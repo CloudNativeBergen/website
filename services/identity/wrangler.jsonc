@@ -18,12 +18,13 @@
       "service": "konf-tenant-directory",
     },
   ],
+  "vars": {
+    "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z",
+  },
   "workers_dev": false,
   "preview_urls": false,
   "env": {
     "preview": {
-      // Last moment a NextAuth session may upgrade to an identity session (#1842).
-      "vars": { "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z" },
       "d1_databases": [
         {
           "binding": "DB",
@@ -63,9 +64,11 @@
           "service": "konf-tenant-directory-preview",
         },
       ],
+      "vars": {
+        "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z",
+      },
     },
     "production": {
-      "vars": { "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z" },
       "d1_databases": [
         {
           "binding": "DB",
@@ -105,6 +108,9 @@
           "service": "konf-tenant-directory",
         },
       ],
+      "vars": {
+        "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z",
+      },
     },
   },
   "observability": {

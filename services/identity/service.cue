@@ -8,6 +8,11 @@ service: #PlatformService & {
 	tenancy: false
 	// The public host for sign-in and the login handoff (#1803).
 	routes: {preview: ["id-preview.konf.app"], production: ["id.konf.app"]}
+	// Last moment a NextAuth session may upgrade to an identity session (#1842).
+	vars: {
+		preview: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z"}
+		production: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z"}
+	}
 	// Verified origins for the login handoff (#688).
 	serviceBindings: [{binding: "DIRECTORY", service: "konf-tenant-directory"}]
 	// Handoff limits (src/handoff.ts): POSTs per tenant origin, GET per IP.
