@@ -28,7 +28,9 @@ describe('SignInProviderButtons', () => {
   })
 
   it('posts the NextAuth action with the provider id when not flagged', async () => {
-    const signInAction = vi.fn(async (_id: string) => {})
+    const signInAction = vi.fn<(id: string, form?: FormData) => Promise<void>>(
+      async () => {},
+    )
     render(
       <SignInProviderButtons
         providers={providers}
