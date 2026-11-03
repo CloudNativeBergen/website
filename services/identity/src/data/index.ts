@@ -1,7 +1,14 @@
 // Public data layer. Exports functions and the auth instance, never the raw handle.
-import { and, eq } from 'drizzle-orm'
+import { and, eq, like, lt } from 'drizzle-orm'
 import { rawDb } from './db'
-import { member, organization, user } from './schema'
+import {
+  account,
+  auditEvent,
+  member,
+  organization,
+  user,
+  verification,
+} from './schema'
 
 export { createAuth, type AuthEnv } from './auth'
 
@@ -15,11 +22,98 @@ export interface Principal {
 
 export interface DataEnv {
   DB: D1Database
+  /** konf-tenant-directory over a service binding: verified origins (#688). */
+  DIRECTORY: Fetcher
 }
+
+const TENANT_QUERY =
+  'query ($host: String!) { tenantByHost(host: $host) { hostname } }'
 
 export function createData(env: DataEnv) {
   const db = rawDb(env.DB)
   return {
+    /**
+     * True only for an exact `https://<host>` origin (no path, port or
+     * userinfo) whose host the directory holds as verified for an active
+     * Organization. The anonymous lookup hides everything else.
+     */
+    async isVerifiedOrigin(origin: string): Promise<boolean> {
+      let url: URL
+      try {
+        url = new URL(origin)
+      } catch {
+        return false
+      }
+      if (origin !== `https://${url.hostname}`) return false
+      const res = await env.DIRECTORY.fetch(
+        'https://tenant-directory.internal/graphql',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            query: TENANT_QUERY,
+            variables: { host: url.hostname },
+          }),
+        },
+      )
+      if (!res.ok) return false
+      const { data } = (await res.json()) as {
+        data?: { tenantByHost: { hostname: string } | null }
+      }
+      return data?.tenantByHost?.hostname === url.hostname
+    },
+    /** The user holding a provider account, for the session upgrade. */
+    async userIdForAccount(providerId: string, accountId: string) {
+      const [row] = await db
+        .select({ userId: account.userId })
+        .from(account)
+        .where(
+          and(
+            eq(account.providerId, providerId),
+            eq(account.accountId, accountId),
+          ),
+        )
+        .limit(1)
+      return row?.userId
+    },
+    /** Stores a handoff record under a hashed key. */
+    async putHandoff(key: string, value: string, expiresAt: Date) {
+      // Unredeemed handoffs would otherwise pile up.
+      await db
+        .delete(verification)
+        .where(
+          and(
+            like(verification.identifier, 'handoff:%'),
+            lt(verification.expiresAt, new Date()),
+          ),
+        )
+      await db
+        .insert(verification)
+        .values({ id: crypto.randomUUID(), identifier: key, value, expiresAt })
+    },
+    /** Handoff audit row: ids, origin and match type only. */
+    async audit(
+      action: 'handoff.exchange' | 'session.upgrade',
+      userId: string,
+      origin: string,
+      detail?: string,
+    ) {
+      await db.insert(auditEvent).values({ action, userId, origin, detail })
+    },
+    /**
+     * Deletes and returns in one statement, so two concurrent redemptions
+     * cannot both read the record (single use).
+     */
+    async takeHandoff(key: string) {
+      const [row] = await db
+        .delete(verification)
+        .where(eq(verification.identifier, key))
+        .returning({
+          value: verification.value,
+          expiresAt: verification.expiresAt,
+        })
+      return row ?? null
+    },
     /**
      * Tenant-directory owns org ids. Idempotent on id; a slug taken by
      * another id still fails (UNIQUE).

@@ -99,6 +99,8 @@ export async function getContractTemplate(id: string): Promise<{
 }> {
   try {
     const template = await clientRead.fetch<ContractTemplate>(
+      // groq-global-scoped: point read by id; every caller asserts
+      // requireDocumentInCurrentConference(id, 'contractTemplate') first.
       `*[_type == "contractTemplate" && _id == $id][0]{${CONTRACT_TEMPLATE_FIELDS}}`,
       { id },
     )
@@ -137,6 +139,8 @@ export async function createContractTemplate(
     const created = await clientWrite.create(doc)
 
     const template = await clientRead.fetch<ContractTemplate>(
+      // groq-global-scoped: re-read of the document just created; the router
+      // checks `data.conference` against the current conference.
       `*[_type == "contractTemplate" && _id == $id][0]{${CONTRACT_TEMPLATE_FIELDS}}`,
       { id: created._id },
     )
@@ -210,6 +214,8 @@ export async function updateContractTemplate(
     await patch.commit()
 
     const template = await clientRead.fetch<ContractTemplate>(
+      // groq-global-scoped: re-read after the patch; the router asserts
+      // requireDocumentInCurrentConference(id, 'contractTemplate') first.
       `*[_type == "contractTemplate" && _id == $id][0]{${CONTRACT_TEMPLATE_FIELDS}}`,
       { id },
     )

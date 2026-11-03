@@ -24,6 +24,7 @@ import type {
   SponsorStatus,
   SponsorTag,
 } from './types'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 /**
  * How many early sign-ups were made through this sponsor's workshop
@@ -47,6 +48,18 @@ import type {
  */
 // groq-global-scoped: correlated to the sponsor it is projected on (`conference._ref == ^.conference._ref`); every read that carries these fields reads sponsors of one conference.
 const EARLY_SIGNUP_COUNT = `count(*[_type == "workshopSignup" && conference._ref == ^.conference._ref && earlyAccessSponsor._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))])`
+
+// groq-global-scoped: correlated to the parent sponsorForConference row by
+// `^._id`, so it inherits that read's tenant scope.
+const LAST_ACTIVITY = `*[_type == "sponsorActivity" && sponsorForConference._ref == ^._id] | order(createdAt desc)[0]{
+    activityType,
+    description,
+    createdAt,
+    createdBy->{ _id, name }
+  }`
+
+// groq-global-scoped: correlated to the parent row by `^._id`, as above.
+const ACTIVITY_COUNT = `count(*[_type == "sponsorActivity" && sponsorForConference._ref == ^._id])`
 
 const SPONSOR_FOR_CONFERENCE_FIELDS = `
   _id,
@@ -130,7 +143,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     _id,
     name,
     email,
-    "image": coalesce(image.asset->url, imageURL)
+    "image": ${SPEAKER_IMAGE_URL}
   },
   contactInitiatedAt,
   contractSignedAt,
@@ -170,13 +183,8 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   "workshopEarlySignupCount": ${EARLY_SIGNUP_COUNT},
   nextFollowUpAt,
   outreachCount,
-  "lastActivity": *[_type == "sponsorActivity" && sponsorForConference._ref == ^._id] | order(createdAt desc)[0]{
-    activityType,
-    description,
-    createdAt,
-    createdBy->{ _id, name }
-  },
-  "activityCount": count(*[_type == "sponsorActivity" && sponsorForConference._ref == ^._id])
+  "lastActivity": ${LAST_ACTIVITY},
+  "activityCount": ${ACTIVITY_COUNT}
 `
 
 /**
@@ -283,6 +291,8 @@ export async function createSponsorForConference(
 
     const sponsorForConference =
       await clientRead.fetch<SponsorForConferenceExpanded>(
+        // groq-global-scoped: re-read of the document just created in the
+        // conference the router resolved.
         `*[_type == "sponsorForConference" && _id == $id][0]{${SPONSOR_FOR_CONFERENCE_FIELDS}}`,
         { id: created._id },
       )
@@ -371,6 +381,8 @@ export async function updateSponsorForConference(
 
     const sponsorForConference =
       await clientRead.fetch<SponsorForConferenceExpanded>(
+        // groq-global-scoped: re-read after the patch; every router path loads
+        // the row through getSponsorForCurrentConference first.
         `*[_type == "sponsorForConference" && _id == $id][0]{${SPONSOR_FOR_CONFERENCE_FIELDS}}`,
         { id },
       )
@@ -396,6 +408,8 @@ export async function deleteSponsorForConference(
       const doc = await clientWrite.fetch<{
         contractDocument?: { asset?: { _ref: string } }
       }>(
+        // groq-global-scoped: point read by id; the delete procedure checks
+        // the row is in the current conference first.
         `*[_type == "sponsorForConference" && _id == $id][0]{ contractDocument }`,
         { id },
       )
@@ -405,19 +419,26 @@ export async function deleteSponsorForConference(
     // Only delete the asset if it's not referenced by other documents
     let safeContractAssetId: string | undefined
     if (contractAssetId) {
-      const safe = await clientWrite.fetch<string[]>(
-        `*[
-          _type == "sanity.fileAsset" &&
-          _id == $assetId &&
-          count(*[_type == "sponsorForConference" && contractDocument.asset._ref == ^._id && _id != $id]) == 0
-        ]._id`,
+      const inUse = await clientWrite.fetch<number>(
+        // groq-global: must stay cross-tenant — an asset another edition or
+        // tenant still references must not be deleted. Returns only a count.
+        `count(*[_type == "sponsorForConference" && contractDocument.asset._ref == $assetId && _id != $id])`,
         { assetId: contractAssetId, id },
       )
-      safeContractAssetId = safe?.[0]
+      if (inUse === 0) {
+        const asset = await clientWrite.fetch<string | null>(
+          // groq-global: `sanity.fileAsset` carries no tenant key of any kind.
+          `*[_type == "sanity.fileAsset" && _id == $assetId][0]._id`,
+          { assetId: contractAssetId },
+        )
+        safeContractAssetId = asset ?? undefined
+      }
     }
 
     // Clean up related activity documents to prevent orphans
     const relatedActivityIds = await clientWrite.fetch<string[]>(
+      // groq-global-scoped: the activities of the row being deleted, which the
+      // delete procedure checked is in the current conference.
       `*[_type == "sponsorActivity" && sponsorForConference._ref == $id]._id`,
       { id },
     )
@@ -445,6 +466,9 @@ export async function getSponsorForConference(id: string): Promise<{
   try {
     const sponsorForConference =
       await clientRead.fetch<SponsorForConferenceExpanded>(
+        // groq-global-scoped: point read by id; the router wrapper
+        // getSponsorForCurrentConference drops a row from another conference,
+        // and the contract-reminders cron is a deliberate cross-tenant sweep.
         `*[_type == "sponsorForConference" && _id == $id][0]{${SPONSOR_FOR_CONFERENCE_FIELDS}}`,
         { id },
       )
@@ -490,7 +514,7 @@ export async function listSponsorsForConference(
   error?: Error
 }> {
   try {
-    let filterQuery = `_type == "sponsorForConference" && conference._ref == $conferenceId`
+    let filterQuery = ''
 
     if (filters?.status && filters.status.length > 0) {
       filterQuery += ` && status in $statuses`
@@ -525,7 +549,9 @@ export async function listSponsorsForConference(
     }
 
     const sponsors = await clientRead.fetch<SponsorForConferenceExpanded[]>(
-      `*[${filterQuery}] | order(status asc, _createdAt desc){${SPONSOR_FOR_CONFERENCE_FIELDS}}`,
+      // groq-global-scoped: the tenant predicate is literal here; the
+      // interpolated tail only adds optional && filters.
+      `*[_type == "sponsorForConference" && conference._ref == $conferenceId${filterQuery}] | order(status asc, _createdAt desc){${SPONSOR_FOR_CONFERENCE_FIELDS}}`,
       {
         conferenceId,
         statuses: filters?.status,
@@ -565,15 +591,20 @@ export async function countSponsorsForConference(
   statuses?: string[],
 ): Promise<{ count?: number; error?: Error }> {
   try {
-    let filterQuery = `_type == "sponsorForConference" && conference._ref == $conferenceId`
+    let filterQuery = ''
     if (statuses && statuses.length > 0) {
       filterQuery += ` && status in $statuses`
     }
 
-    const count = await clientRead.fetch<number>(`count(*[${filterQuery}])`, {
-      conferenceId,
-      statuses,
-    })
+    const count = await clientRead.fetch<number>(
+      // groq-global-scoped: the tenant predicate is literal here; the
+      // interpolated tail only adds optional && filters.
+      `count(*[_type == "sponsorForConference" && conference._ref == $conferenceId${filterQuery}])`,
+      {
+        conferenceId,
+        statuses,
+      },
+    )
 
     return { count }
   } catch (error) {

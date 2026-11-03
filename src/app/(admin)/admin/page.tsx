@@ -18,7 +18,12 @@ async function DashboardContent() {
   const eventWindow =
     !!loaded.conference && isEventHeroWindow(loaded.conference)
   const { conference, error } = eventWindow
-    ? await getConferenceForCurrentDomain({ topics: true, schedule: true })
+    ? await getConferenceForCurrentDomain({
+        topics: true,
+        schedule: true,
+        // Same fields as the briefing send, so the briefing version matches.
+        includeSpeakerRegistrationLink: true,
+      })
     : loaded
 
   if (error || !conference) {

@@ -59,6 +59,10 @@ builder.queryType({
     tenantByHost: t.field({
       type: Domain,
       nullable: true,
+      // Tenant resolution for the gateway and identity, which call it over
+      // the DIRECTORY binding; never public, so no caller probes other
+      // tenants' hostnames (#1787).
+      tag: 'internal',
       description:
         'Resolves an Origin or hostname. Without a PlatformContext only a verified hostname of an active Organization resolves.',
       args: { host: t.arg.string({ required: true }) },
@@ -68,6 +72,9 @@ builder.queryType({
     conference: t.field({
       type: Conference,
       nullable: true,
+      // The public `conference` belongs to content, then the conference
+      // subgraph, and never takes an id from the caller (#1788, #1835).
+      tag: 'internal',
       args: { id: t.arg.id({ required: true }) },
       resolve: (_, { id }, ctx) =>
         ctx.data.conference(String(id), isPlatform(ctx)),

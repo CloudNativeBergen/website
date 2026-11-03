@@ -233,6 +233,12 @@ export const UpdateCommunicationSchema = z.object({
     .refine(isAbsoluteHttpsUrl, 'Enter an absolute https:// URL')
     .nullable()
     .optional(),
+  speakerSlackInviteUrl: z
+    .string()
+    .trim()
+    .refine(isAbsoluteHttpsUrl, 'Enter an absolute https:// URL')
+    .nullable()
+    .optional(),
 })
 
 const optionalClearableHttpsUrl = z
@@ -328,6 +334,8 @@ export const UpdateLocalInfoSchema = z.object({
   venueTravelInfo: z.string().trim().nullable().optional(),
   speakerDinnerInfo: z.string().trim().nullable().optional(),
   localRecommendations: z.string().trim().nullable().optional(),
+  cateringInfo: z.string().trim().nullable().optional(),
+  afterpartyInfo: z.string().trim().nullable().optional(),
   socialHashtag: z.string().trim().max(100).nullable().optional(),
 })
 

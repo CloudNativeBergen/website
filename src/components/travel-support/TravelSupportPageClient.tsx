@@ -149,6 +149,9 @@ export function TravelSupportPageClient({
     beneficiaryName: string
     bankName: string
     swiftCode: string
+    streetAddress?: string
+    postalCode?: string
+    city?: string
     country: string
     preferredCurrency: 'NOK' | 'USD' | 'EUR' | 'GBP' | 'SEK' | 'DKK' | 'OTHER'
     iban?: string

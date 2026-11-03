@@ -102,6 +102,7 @@ vi.mock('@heroicons/react/24/outline', () => {
     DocumentTextIcon: icon('document'),
     PaperAirplaneIcon: icon('send'),
     ArrowPathIcon: icon('refresh'),
+    ArrowDownTrayIcon: icon('download'),
     ArrowTopRightOnSquareIcon: icon('external'),
     CheckIcon: icon('check-small'),
   }
@@ -426,6 +427,25 @@ describe('SponsorContractView', () => {
       fireEvent.click(screen.getByText('Looks good, continue'))
       return { ...view, onSendContract }
     }
+
+    it('offers the previewed PDF as a download (#603)', () => {
+      mockGeneratePdf.mockImplementation((opts: any) => ({
+        mutate: () =>
+          opts.onSuccess({ pdf: 'QUJD', filename: 'contract-acme.pdf' }),
+        isPending: false,
+      }))
+      render(
+        <SponsorContractView
+          conferenceId="conf-2026"
+          sponsor={mockSponsor({ registrationComplete: true })}
+          onSendContract={vi.fn()}
+        />,
+      )
+      fireEvent.click(screen.getByText('Generate contract PDF'))
+      const link = screen.getByText('Download PDF').closest('a')!
+      expect(link).toHaveAttribute('download', 'contract-acme.pdf')
+      expect(link).toHaveAttribute('href', 'data:application/pdf;base64,QUJD')
+    })
 
     it('keeps the reviewed PDF and the confirmation step after handing off to the composer', () => {
       const { onSendContract } = toConfirm()

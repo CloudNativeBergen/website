@@ -147,6 +147,9 @@ export async function getTravelSupportById(
           iban,
           accountNumber,
           swiftCode,
+          streetAddress,
+          postalCode,
+          city,
           country,
           preferredCurrency
         },

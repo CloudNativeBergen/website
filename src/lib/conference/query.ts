@@ -8,6 +8,7 @@
  */
 
 import { EXPANDED_SECTIONS_KEY } from './sections'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 /*
  * ---------------------------------------------------------------------------
@@ -66,7 +67,7 @@ const EXPANDED_ORGANIZERS = `organizers[]->{
       name,
       title,
       "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL)
+      "image": ${SPEAKER_IMAGE_URL}
       }`
 
 // groq-global-scoped: the nested `*[_type == "talk"]` root below is bounded to
@@ -82,7 +83,7 @@ const EXPANDED_FEATURED_SPEAKERS = `featuredSpeakers[]->{
       name,
       title,
       "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL),
+      "image": ${SPEAKER_IMAGE_URL},
       "flags": flags[@ in ["local", "first-time"]],
       "talks": *[_type == "talk" && references(^._id) && conference._ref == ^.^._id && status == "confirmed"]{
       _id,
@@ -113,7 +114,7 @@ const EXPANDED_FEATURED_TALKS = `featuredTalks[]->{
         name,
         "slug": slug.current,
         title,
-        "image": coalesce(image.asset->url, imageURL)
+        "image": ${SPEAKER_IMAGE_URL}
       }
       }`
 
@@ -201,7 +202,7 @@ const EXPANDED_SCHEDULES = `schedules[]-> {
             name,
             "slug": slug.current,
             title,
-            "image": coalesce(image.asset->url, imageURL)
+            "image": ${SPEAKER_IMAGE_URL}
             }
           }
         }

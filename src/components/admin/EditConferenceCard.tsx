@@ -477,6 +477,14 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         description:
           'Private invitation link for volunteers to join the conference Slack workspace/channel.',
       },
+      {
+        name: 'speakerSlackInviteUrl',
+        label: 'Speaker Slack Invite Link',
+        type: 'url',
+        nullableWhenEmpty: true,
+        description:
+          'Private invitation link for speakers to join the conference Slack workspace/channel. Sent in the speaker briefing email.',
+      },
     ],
   },
   ticketingIds: {
@@ -554,6 +562,22 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         nullableWhenEmpty: true,
         description:
           'What to see and do in the host city, shown to speakers. Leave blank to omit that question.',
+      },
+      {
+        name: 'cateringInfo',
+        label: 'Food and drinks',
+        type: 'textarea',
+        nullableWhenEmpty: true,
+        description:
+          'What food and drinks you serve. Shown on /info as “Will food and drinks be served?”. Leave blank to omit that question.',
+      },
+      {
+        name: 'afterpartyInfo',
+        label: 'After the conference',
+        type: 'textarea',
+        nullableWhenEmpty: true,
+        description:
+          'The afterparty or other plans after the last talk. Shown on /info as “What happens after the conference?”. Leave blank to omit that question.',
       },
       {
         name: 'socialHashtag',

@@ -63,6 +63,13 @@ export interface DisplayMessage {
   isSponsor?: boolean
   /** True when the current viewer authored the message (right-aligned accent). */
   isOwn: boolean
+  /**
+   * True when someone else on the viewer's side of the conversation wrote it
+   * (#915): a fellow organizer for an organizer, a co-speaker for a speaker.
+   * Party is relative to the viewer, never a synonym for "organizer". Shares
+   * the viewer's side with a related but distinct tint.
+   */
+  isSameParty?: boolean
   body: string
   createdAt: string
 }
@@ -196,12 +203,13 @@ function MessageSkeleton() {
 }
 
 function MessageBubble({ message }: { message: DisplayMessage }) {
-  const { isOwn } = message
+  const { isOwn, isSameParty } = message
+  const ourSide = isOwn || isSameParty
   return (
-    <div className={isOwn ? 'flex justify-end' : 'flex justify-start'}>
+    <div className={ourSide ? 'flex justify-end' : 'flex justify-start'}>
       <div className="max-w-[80%]">
         <div
-          className={`flex items-baseline gap-2 ${isOwn ? 'justify-end' : 'justify-start'}`}
+          className={`flex items-baseline gap-2 ${ourSide ? 'justify-end' : 'justify-start'}`}
         >
           <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">
             {message.authorName}
@@ -225,7 +233,9 @@ function MessageBubble({ message }: { message: DisplayMessage }) {
           className={`mt-1 rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
             isOwn
               ? 'bg-brand-cloud-blue text-white dark:bg-blue-600'
-              : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
+              : isSameParty
+                ? 'bg-blue-100 text-blue-950 dark:bg-blue-950 dark:text-blue-100'
+                : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
           }`}
         >
           {message.body}
@@ -1156,17 +1166,20 @@ export function ConversationThread({
         }
       }
       const p = participantById.get(msg.authorId)
+      const isOwn = !!meId && msg.authorId === meId
       return {
         id: msg._id,
         authorName: p?.name ?? 'Unknown',
         authorImage: p?.image,
         isOrganizer: p?.isOrganizer ?? false,
-        isOwn: !!meId && msg.authorId === meId,
+        isOwn,
+        isSameParty:
+          !isOwn && (p?.isOrganizer ?? false) === (audience === 'organizer'),
         body: msg.body,
         createdAt: msg.createdAt,
       }
     })
-  }, [pages, participantById, meId])
+  }, [pages, participantById, meId, audience])
 
   // AUTO-MARK-READ: opening a thread clears its `message_received` notifications
   // for the bell. We mark BOTH audience link variants (a recipient only ever

@@ -5,6 +5,7 @@ import type {
   SponsorActivityExpanded,
   SponsorCommunicationRecord,
 } from './types'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 // The SUMMARY projection. A sent-communication record's `body` (rendered
 // HTML) and `attachments` are deliberately absent here — the feed stays cheap
@@ -27,7 +28,7 @@ const SPONSOR_ACTIVITY_FIELDS = `
     _id,
     name,
     email,
-    "image": coalesce(image.asset->url, imageURL)
+    "image": ${SPEAKER_IMAGE_URL}
   },
   createdAt,
   communicationKind,
@@ -57,6 +58,8 @@ export async function listActivitiesForSponsor(
   try {
     const limitClause = limit ? ` [0...${limit}]` : ''
     const activities = await clientRead.fetch<SponsorActivityExpanded[]>(
+      // groq-global-scoped: keyed by a sponsorForConference id the caller
+      // (`activities.list`) asserts with requireDocumentInCurrentConference.
       `*[_type == "sponsorActivity" && sponsorForConference._ref == $sponsorId] | order(createdAt desc)${limitClause}{${SPONSOR_ACTIVITY_FIELDS}}`,
       { sponsorId: sponsorForConferenceId },
     )

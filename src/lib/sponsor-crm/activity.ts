@@ -540,6 +540,8 @@ export async function updateSponsorActivity(
       createdBy?: { _ref: string }
       communicationKind?: string
     }>(
+      // groq-global-scoped: point read by id; the router asserts
+      // requireDocumentInCurrentConference(id, 'sponsorActivity') first.
       `*[_type == "sponsorActivity" && _id == $activityId][0]{ activityType, createdBy, communicationKind }`,
       {
         activityId,
@@ -595,6 +597,8 @@ export async function deleteSponsorActivity(
       createdBy?: { _ref: string }
       communicationKind?: string
     }>(
+      // groq-global-scoped: point read by id; the router asserts
+      // requireDocumentInCurrentConference(id, 'sponsorActivity') first.
       `*[_type == "sponsorActivity" && _id == $activityId][0]{ activityType, createdBy, communicationKind }`,
       {
         activityId,

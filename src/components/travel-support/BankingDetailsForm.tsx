@@ -35,6 +35,9 @@ export function BankingDetailsForm({
     iban: initialData?.iban || '',
     accountNumber: initialData?.accountNumber || '',
     swiftCode: initialData?.swiftCode || '',
+    streetAddress: initialData?.streetAddress || '',
+    postalCode: initialData?.postalCode || '',
+    city: initialData?.city || '',
     country: initialData?.country || '',
     preferredCurrency: initialData?.preferredCurrency || 'NOK',
   })
@@ -204,6 +207,37 @@ export function BankingDetailsForm({
                 8-11 character bank identifier for international transfers.
                 Example: DEUTDEFF
               </HelpText>
+            </div>
+
+            <div className="sm:col-span-6">
+              <Input
+                name="streetAddress"
+                label="Street Address"
+                value={formData.streetAddress ?? ''}
+                setValue={(value) => updateField('streetAddress', value)}
+              />
+              <HelpText>
+                Optional. Some banks need the beneficiary&apos;s address for
+                international transfers
+              </HelpText>
+            </div>
+
+            <div className="sm:col-span-2">
+              <Input
+                name="postalCode"
+                label="Postal Code"
+                value={formData.postalCode ?? ''}
+                setValue={(value) => updateField('postalCode', value)}
+              />
+            </div>
+
+            <div className="sm:col-span-4">
+              <Input
+                name="city"
+                label="City"
+                value={formData.city ?? ''}
+                setValue={(value) => updateField('city', value)}
+              />
             </div>
 
             <div className="sm:col-span-3">

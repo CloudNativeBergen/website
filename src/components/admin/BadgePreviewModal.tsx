@@ -9,6 +9,7 @@ import type { BadgeRecord } from '@/lib/badge/types'
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { formatDateTimeSafe } from '@/lib/time'
+import { speakerImageUrl } from '@/lib/sanity/client'
 
 interface BadgePreviewModalProps {
   isOpen: boolean
@@ -144,7 +145,10 @@ export function BadgePreviewModal({
                 <dd className="mt-1 flex items-center gap-2 text-sm text-gray-900 dark:text-white">
                   {speaker.image && (
                     <img
-                      src={`${speaker.image}?w=32&h=32&q=85&auto=format&fit=crop`}
+                      src={speakerImageUrl(speaker.image, {
+                        width: 32,
+                        height: 32,
+                      })}
                       alt={speaker.name}
                       className="h-8 w-8 rounded-full object-cover"
                     />

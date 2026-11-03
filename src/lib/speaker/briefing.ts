@@ -77,6 +77,8 @@ export interface SpeakerBriefing {
   venueName?: string
   venueAddress?: string
   venueTravelInfo?: string
+  /** #164. Email only; absent when unset, so the briefing hash is unchanged. */
+  slackInviteUrl?: string
   talks?: SpeakerBriefingTalk[]
   todos?: SpeakerBriefingTodo[]
 }
@@ -106,6 +108,7 @@ type Briefable = Pick<
   | 'venueName'
   | 'venueAddress'
   | 'venueTravelInfo'
+  | 'speakerSlackInviteUrl'
 >
 
 const text = (s?: string) => s?.trim() || undefined
@@ -249,6 +252,7 @@ export function getSpeakerBriefing(
       venueName: text(conference.venueName),
       venueAddress: text(conference.venueAddress),
       venueTravelInfo: text(conference.venueTravelInfo),
+      slackInviteUrl: text(conference.speakerSlackInviteUrl),
       talks: talks?.length ? talks : undefined,
       todos: todos?.length
         ? todos.map((t) => ({ label: TODO_LABELS[t.kind], ...t }))

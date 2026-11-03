@@ -64,7 +64,8 @@ describe('deleteSponsorForConference', () => {
       .mockResolvedValueOnce({
         contractDocument: { asset: { _ref: 'asset-pdf-1' } },
       }) // contract doc lookup
-      .mockResolvedValueOnce(['asset-pdf-1']) // safety check: asset not referenced elsewhere
+      .mockResolvedValueOnce(0) // safety check: asset not referenced elsewhere
+      .mockResolvedValueOnce('asset-pdf-1') // asset exists
       .mockResolvedValueOnce([]) // no activities
 
     const mockTransaction = {
@@ -126,7 +127,7 @@ describe('deleteSponsorForConference', () => {
       .mockResolvedValueOnce({
         contractDocument: { asset: { _ref: 'asset-shared' } },
       }) // contract doc lookup
-      .mockResolvedValueOnce([]) // safety check: asset referenced elsewhere, not safe
+      .mockResolvedValueOnce(1) // safety check: asset referenced elsewhere, not safe
       .mockResolvedValueOnce([]) // no activities
 
     const mockTransaction = {

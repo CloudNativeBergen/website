@@ -25,6 +25,7 @@ import {
   createReferenceWithKey,
   EXCLUDE_PRIVATE_SPEAKER_FIELDS,
 } from '@/lib/sanity/helpers'
+import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 /**
  * The `scheduleInfo` projection — where an accepted/confirmed talk landed on the
@@ -77,7 +78,7 @@ export const REVIEW_SCORES_FIELD = `"reviewScores": *[_type == "review" && propo
 const REVIEWS_PROJECTION_BODY = `{
       ...,
       reviewer-> {
-        _id, name, email, "image": coalesce(image.asset->url, imageURL)
+        _id, name, email, "image": ${SPEAKER_IMAGE_URL}
       }
     }`
 
@@ -293,7 +294,7 @@ export async function getProposal({
         "socialTagOptOut": select(_id == $speakerId => socialTagOptOut, null),
         "socialTagOptOutAt": null,
         "slug": slug.current,
-        "image": coalesce(image.asset->url, imageURL),
+        "image": ${SPEAKER_IMAGE_URL},
         ${isOrganizer && includeSubmittedTalks ? `${SUBMITTED_TALKS_PROJECTION},` : ''}
         ${isOrganizer && includePreviousAcceptedTalks ? `${PREVIOUS_ACCEPTED_TALKS_WITH_STATS_PROJECTION},` : ''}
         _id
@@ -397,7 +398,7 @@ export async function getProposals({
     // spec §9.2), and this list feeds the PUBLIC workshop list whole.
     "feedbackCode": null,
     speakers[]-> {
-      _id, name, email, providers, "image": coalesce(image.asset->url, imageURL), flags, "slug": slug.current,
+      _id, name, email, providers, "image": ${SPEAKER_IMAGE_URL}, flags, "slug": slug.current,
       ${includePreviousAcceptedTalks ? `${PREVIOUS_ACCEPTED_TALKS_PROJECTION},` : ''}
       _id
     },
@@ -1060,7 +1061,7 @@ export async function searchProposals({
         email,
         providers,
         bio,
-        "image": coalesce(image.asset->url, imageURL),
+        "image": ${SPEAKER_IMAGE_URL},
         flags,
         "slug": slug.current
         ${

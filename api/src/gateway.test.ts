@@ -1,11 +1,18 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { SignJWT, exportJWK, generateKeyPair, type CryptoKey } from 'jose'
+import {
+  SignJWT,
+  exportJWK,
+  exportSPKI,
+  generateKeyPair,
+  type CryptoKey,
+} from 'jose'
 import {
   ENVELOPE_HEADER,
   generateEnvelopeKeyPair,
   verifyEnvelope,
 } from '@runkonf/tenancy'
-import { createGateway, type Env } from './gateway'
+import { createGateway, SESSION_ORIGIN_CLAIM, type Env } from './gateway'
+import { SITE_ASSERTION_HEADER } from './site-identity'
 import { compose } from './supergraph'
 import { SIGNED_IP_HEADER, signClientIp } from './client-ip'
 
@@ -24,6 +31,9 @@ const TENANT = { orgId: 'org_a', conferenceId: 'conf_a' }
 let envelopeKeys: { privatePem: string; publicPem: string }
 let identityKey: CryptoKey
 let jwks: unknown
+const siteKeys: Record<string, CryptoKey> = {}
+let sitePublicKeys: string
+let strangerKey: CryptoKey
 const gateway = createGateway(compose())
 
 beforeAll(async () => {
@@ -31,11 +41,20 @@ beforeAll(async () => {
   const pair = await generateKeyPair('EdDSA', { extractable: true })
   identityKey = pair.privateKey
   jwks = { keys: [{ ...(await exportJWK(pair.publicKey)), kid: 'k1' }] }
+  const spki: Record<string, string> = {}
+  for (const kid of ['s1', 's2']) {
+    const p = await generateKeyPair('EdDSA', { extractable: true })
+    siteKeys[kid] = p.privateKey
+    spki[kid] = await exportSPKI(p.publicKey)
+  }
+  sitePublicKeys = JSON.stringify(spki)
+  strangerKey = (await generateKeyPair('EdDSA')).privateKey
 })
 
 /**
- * Fake tenant-directory: knows only conf.example, and records the envelope
- * header of every subgraph call (the gateway's own lookup sends none).
+ * Fake tenant-directory (knows only conf.example) and a fake content
+ * subgraph that records the envelope header of every federated call (the
+ * gateway's own directory lookup sends none).
  */
 function makeEnv(
   role: { orgRole: string | null } = { orgRole: 'admin' },
@@ -44,33 +63,46 @@ function makeEnv(
 ) {
   const envelopes: (string | null)[] = []
   const forwarded: Headers[] = []
+  const conference: (string | null)[] = []
   const env = {
     ENVELOPE_PRIVATE_KEY: envelopeKeys.privatePem,
     IDENTITY_ISSUER: 'https://id.test',
     DIRECTORY: {
       fetch: async (_url: string, init: RequestInit) => {
         const body = JSON.parse(String(init.body))
-        // The gateway's own lookup; the federated subgraph call is minified.
-        if (body.query.includes('orgId conferenceId')) {
-          const known = body.variables.host === 'conf.example'
-          return Response.json({
-            data: { tenantByHost: known ? TENANT : null },
-          })
-        }
+        const known = body.variables.host === 'conf.example'
+        return Response.json({ data: { tenantByHost: known ? TENANT : null } })
+      },
+    },
+    CONTENT: {
+      fetch: async (_url: string, init: RequestInit) => {
         forwarded.push(new Headers(init.headers))
         envelopes.push(forwarded.at(-1)!.get(ENVELOPE_HEADER))
-        return Response.json({ data: { tenantByHost: null } })
+        return Response.json({ data: { conference: null } })
+      },
+    },
+    CONFERENCE: {
+      fetch: async (_url: string, init: RequestInit) => {
+        conference.push(new Headers(init.headers).get(ENVELOPE_HEADER))
+        return Response.json({ data: { conference: { id: 'conf_a' } } })
       },
     },
     IDENTITY: { fetch: async () => Response.json(jwks) },
     API_LIMITER: { limit: vi.fn(async () => ({ success: allow })) },
     API_IP_LIMITER: { limit: vi.fn(async () => ({ success: ipAllow })) },
     CLIENT_IP_SECRET: 'ip-secret',
+    SITE_PUBLIC_KEYS: sitePublicKeys,
     MEMBERSHIP: {
       principal: vi.fn(async () => ({ ...role, platformOperator: false })),
     },
   }
-  return { env: env as unknown as Env, envelopes, forwarded, role }
+  return {
+    env: env as unknown as Env,
+    envelopes,
+    forwarded,
+    conference,
+    role,
+  }
 }
 
 const post = (body: unknown, headers: Record<string, string> = {}): Request =>
@@ -80,13 +112,19 @@ const post = (body: unknown, headers: Record<string, string> = {}): Request =>
     body: JSON.stringify(body),
   })
 
-const SUBGRAPH_QUERY = { query: '{ tenantByHost(host: "q") { orgId } }' }
+const SUBGRAPH_QUERY = { query: '{ conference { id } }' }
 
 const jwt = (
-  opts: { aud?: string; iss?: string; ttl?: number; iat?: number } = {},
+  opts: {
+    aud?: string
+    iss?: string
+    ttl?: number
+    iat?: number
+    claims?: Record<string, unknown>
+  } = {},
 ) => {
   const iat = opts.iat ?? Math.floor(Date.now() / 1000)
-  return new SignJWT({})
+  return new SignJWT(opts.claims ?? { [SESSION_ORIGIN_CLAIM]: VERIFIED })
     .setProtectedHeader({ alg: 'EdDSA', kid: 'k1' })
     .setSubject('user_1')
     .setAudience(opts.aud ?? 'konf-gateway')
@@ -107,6 +145,30 @@ describe('gateway', () => {
       data: { __schema: { mutationType: null } },
     })
     expect(compose()).not.toMatch(/provision|internal"\)|type Organization/)
+  })
+
+  it('exposes no conference(id:) field', async () => {
+    // content's argument-free `conference` is public; tenant-directory's
+    // conference(id:) is internal.
+    const { env } = makeEnv()
+    const res = await gateway.fetch(
+      post({
+        query: '{ __schema { queryType { fields { name args { name } } } } }',
+      }),
+      env,
+    )
+    const { data } = (await res.json()) as {
+      data: {
+        __schema: {
+          queryType: { fields: { name: string; args: { name: string }[] }[] }
+        }
+      }
+    }
+    const conference = data.__schema.queryType.fields.find(
+      (f) => f.name === 'conference',
+    )
+    expect(conference?.args ?? []).toEqual([])
+    expect(compose()).not.toMatch(/conference\(id:/)
   })
 
   it('answers the health query', async () => {
@@ -237,6 +299,28 @@ describe('gateway', () => {
     expect(forwarded[0].get('authorization')).toBeNull()
   })
 
+  it('never accepts a NextAuth session cookie (#1803)', async () => {
+    const { env, envelopes, forwarded } = makeEnv()
+    const cookie =
+      '__Secure-authjs.session-token=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0.x; authjs.session-token=y'
+    await gateway.fetch(post(SUBGRAPH_QUERY, { origin: VERIFIED, cookie }), env)
+    expect(
+      await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem),
+    ).toMatchObject({ userId: null })
+    expect(forwarded[0].get('cookie')).toBeNull()
+    expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+
+    // Nor the same value presented as a bearer token.
+    const res = await gateway.fetch(
+      post(SUBGRAPH_QUERY, {
+        origin: VERIFIED,
+        authorization: 'Bearer eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0.x',
+      }),
+      env,
+    )
+    expect(res.status).toBe(401)
+  })
+
   it.each(['Basic abc', 'Bearer', 'Bearer a b', 'nonsense'])(
     'rejects a malformed Authorization header %j',
     async (authorization) => {
@@ -265,13 +349,7 @@ describe('gateway', () => {
 
   it('masks unexpected subgraph failures', async () => {
     const { env } = makeEnv()
-    ;(env.DIRECTORY as unknown as { fetch: unknown }).fetch = async (
-      _url: string,
-      init: RequestInit,
-    ) => {
-      if (String(init.body).includes('orgId conferenceId')) {
-        return Response.json({ data: { tenantByHost: null } })
-      }
+    ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () => {
       throw new Error('secret detail')
     }
     const res = await gateway.fetch(post(SUBGRAPH_QUERY), env)
@@ -360,5 +438,182 @@ describe('gateway', () => {
       expect(res.status).toBe(429)
       expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
     })
+  })
+
+  describe('site service identity', () => {
+    const assertion = (
+      opts: {
+        kid?: string
+        key?: CryptoKey
+        iat?: number
+        ttl?: number
+        aud?: string
+      } = {},
+    ) => {
+      const iat = opts.iat ?? Math.floor(Date.now() / 1000)
+      return new SignJWT({ host: 'conf.example' })
+        .setProtectedHeader({ alg: 'EdDSA', kid: opts.kid ?? 's1' })
+        .setIssuer('konf-site')
+        .setAudience(opts.aud ?? 'konf-gateway')
+        .setJti(crypto.randomUUID())
+        .setIssuedAt(iat)
+        .setExpirationTime(iat + (opts.ttl ?? 60))
+        .sign(opts.key ?? siteKeys[opts.kid ?? 's1'])
+    }
+    const minted = async (envelopes: (string | null)[]) =>
+      envelopes[0] && verifyEnvelope(envelopes[0], envelopeKeys.publicPem)
+
+    it.each(['s1', 's2'])(
+      'trusts the asserted host over Origin (kid %s)',
+      async (kid) => {
+        const { env, envelopes, forwarded } = makeEnv()
+        await gateway.fetch(
+          post(SUBGRAPH_QUERY, {
+            origin: 'https://unverified.example',
+            [SITE_ASSERTION_HEADER]: await assertion({ kid }),
+          }),
+          env,
+        )
+        // Anonymous: the assertion grants no role.
+        expect(await minted(envelopes)).toEqual({
+          typ: 'tenant',
+          ...TENANT,
+          userId: null,
+          orgRole: null,
+          scopes: [],
+        })
+        expect(forwarded[0].get(SITE_ASSERTION_HEADER)).toBeNull()
+      },
+    )
+
+    it.each([
+      ['forged', () => assertion({ key: strangerKey })],
+      [
+        'expired',
+        () => assertion({ iat: Math.floor(Date.now() / 1000) - 120 }),
+      ],
+      ['too long-lived', () => assertion({ ttl: 3600 })],
+      ['unknown-kid', () => assertion({ kid: 'gone', key: siteKeys.s1 })],
+      ['wrong-audience', () => assertion({ aud: 'konf-subgraphs' })],
+      ['garbage', async () => 'nope'],
+    ])('ignores a %s assertion and falls back to Origin', async (_, token) => {
+      const { env, envelopes } = makeEnv()
+      await gateway.fetch(
+        post(SUBGRAPH_QUERY, { [SITE_ASSERTION_HEADER]: await token() }),
+        env,
+      )
+      expect(envelopes).toEqual([null])
+    })
+
+    it('ignores every assertion when SITE_PUBLIC_KEYS is unset', async () => {
+      const { env, envelopes } = makeEnv()
+      delete (env as { SITE_PUBLIC_KEYS?: string }).SITE_PUBLIC_KEYS
+      await gateway.fetch(
+        post(SUBGRAPH_QUERY, { [SITE_ASSERTION_HEADER]: await assertion() }),
+        env,
+      )
+      expect(envelopes).toEqual([null])
+    })
+
+    it('ignores a replayed assertion', async () => {
+      const token = await assertion()
+      const first = makeEnv()
+      await gateway.fetch(
+        post(SUBGRAPH_QUERY, { [SITE_ASSERTION_HEADER]: token }),
+        first.env,
+      )
+      const again = makeEnv()
+      await gateway.fetch(
+        post(SUBGRAPH_QUERY, { [SITE_ASSERTION_HEADER]: token }),
+        again.env,
+      )
+      expect(await minted(first.envelopes)).toMatchObject(TENANT)
+      expect(again.envelopes).toEqual([null])
+    })
+
+    it.each([
+      [
+        'differs from Origin',
+        { [SESSION_ORIGIN_CLAIM]: 'https://other.example' },
+      ],
+      ['is missing', {}],
+    ])(
+      'refuses a browser-lane user whose session origin %s',
+      async (_, claims) => {
+        const { env, envelopes } = makeEnv()
+        const res = await gateway.fetch(
+          post(SUBGRAPH_QUERY, {
+            origin: VERIFIED,
+            authorization: `Bearer ${await jwt({ claims })}`,
+          }),
+          env,
+        )
+        expect(res.status).toBe(401)
+        expect(envelopes).toEqual([])
+      },
+    )
+
+    it('refuses a server-lane user without a session origin', async () => {
+      const { env } = makeEnv()
+      const res = await gateway.fetch(
+        post(SUBGRAPH_QUERY, {
+          [SITE_ASSERTION_HEADER]: await assertion(),
+          authorization: `Bearer ${await jwt({ claims: {} })}`,
+        }),
+        env,
+      )
+      expect(res.status).toBe(401)
+    })
+
+    it('refuses a user whose session origin differs from the asserted host', async () => {
+      const { env, envelopes } = makeEnv()
+      const res = await gateway.fetch(
+        post(SUBGRAPH_QUERY, {
+          [SITE_ASSERTION_HEADER]: await assertion(),
+          authorization: `Bearer ${await jwt({ claims: { [SESSION_ORIGIN_CLAIM]: 'https://other.example' } })}`,
+        }),
+        env,
+      )
+      expect(res.status).toBe(401)
+      expect(envelopes).toEqual([])
+    })
+
+    it('accepts a user whose session origin is the asserted host', async () => {
+      const { env, envelopes } = makeEnv()
+      const res = await gateway.fetch(
+        post(SUBGRAPH_QUERY, {
+          [SITE_ASSERTION_HEADER]: await assertion(),
+          authorization: `Bearer ${await jwt({ claims: { [SESSION_ORIGIN_CLAIM]: VERIFIED } })}`,
+        }),
+        env,
+      )
+      expect(res.status).toBe(200)
+      expect(await minted(envelopes)).toMatchObject({ userId: 'user_1' })
+    })
+  })
+})
+
+describe('conference subgraph', () => {
+  it('composes into the public contract without an id argument', () => {
+    const sdl = compose()
+    expect(sdl).toMatch(/conference: Conference/)
+    expect(sdl).not.toMatch(/conference\(id/)
+  })
+
+  it('reaches konf-conference over its binding with the minted envelope', async () => {
+    const { env, conference } = makeEnv()
+    // org_a has the `conference` override label on (#1835).
+    env.OVERRIDE_TENANTS = { conference: [TENANT.orgId] }
+    const res = await gateway.fetch(
+      post({ query: '{ conference { id } }' }, { origin: VERIFIED }),
+      env,
+    )
+    expect(await res.json()).toEqual({ data: { conference: { id: 'conf_a' } } })
+    expect(conference).toHaveLength(1)
+    const envelope = await verifyEnvelope(
+      conference[0]!,
+      envelopeKeys.publicPem,
+    )
+    expect(envelope).toMatchObject({ typ: 'tenant', ...TENANT, userId: null })
   })
 })

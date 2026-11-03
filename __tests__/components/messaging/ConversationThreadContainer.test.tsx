@@ -316,3 +316,49 @@ describe('ConversationThread — not-found scoping (C5)', () => {
     expect(screen.getByLabelText(/write a message/i)).toBeInTheDocument()
   })
 })
+
+describe('ConversationThread — party alignment (#915)', () => {
+  // Hans and Øyvind organize; Kristian and Kari co-speak on the proposal.
+  const participants = [
+    { _id: 'hans', name: 'Hans', isOrganizer: true },
+    { _id: 'oyvind', name: 'Øyvind', isOrganizer: true },
+    { _id: 'kristian', name: 'Kristian', isOrganizer: false },
+    { _id: 'kari', name: 'Kari', isOrganizer: false },
+  ]
+  const rowOf = (body: string) =>
+    screen.getByText(body).parentElement!.parentElement!.className
+
+  function renderAs(me: string, audience: 'organizer' | 'speaker') {
+    mockSession = { speaker: { _id: me } }
+    const conv = generalConversation('conv-1')
+    getConversationResult = {
+      ...conv,
+      data: { ...conv.data, participants },
+    }
+    listMessagesResult = messagesPage(
+      ['hans', 'oyvind', 'kristian', 'kari'].map((id, i) => ({
+        _id: `m${i}`,
+        authorId: id,
+        body: `from ${id}`,
+        createdAt: `2026-01-0${i + 1}T00:00:00Z`,
+      })),
+    )
+    render(<ConversationThread conversationId="conv-1" audience={audience} />)
+  }
+
+  it('puts both organizers on the right for an organizer', () => {
+    renderAs('hans', 'organizer')
+    expect(rowOf('from hans')).toContain('justify-end')
+    expect(rowOf('from oyvind')).toContain('justify-end')
+    expect(rowOf('from kristian')).toContain('justify-start')
+    expect(rowOf('from kari')).toContain('justify-start')
+  })
+
+  it('puts the speaker and co-speaker on the right for a speaker', () => {
+    renderAs('kristian', 'speaker')
+    expect(rowOf('from kristian')).toContain('justify-end')
+    expect(rowOf('from kari')).toContain('justify-end')
+    expect(rowOf('from hans')).toContain('justify-start')
+    expect(rowOf('from oyvind')).toContain('justify-start')
+  })
+})

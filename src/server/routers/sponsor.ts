@@ -4402,7 +4402,10 @@ export const sponsorRouter = router({
           const base64 = pdfBuffer.toString('base64')
           return {
             pdf: base64,
-            filename: `contract-${sponsorForConference.sponsor.name.toLowerCase().replace(/\s+/g, '-')}.pdf`,
+            filename: `contract-${sponsorForConference.sponsor.name
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-|-$/g, '')}.pdf`,
           }
         } catch (pdfError) {
           throw new TRPCError({

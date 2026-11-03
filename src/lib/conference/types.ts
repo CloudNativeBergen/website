@@ -175,6 +175,10 @@ export interface Conference {
   venueTravelInfo?: string
   speakerDinnerInfo?: string
   localRecommendations?: string
+  /** #831: /info "Will food and drinks be served?"; absent = no question. */
+  cateringInfo?: string
+  /** #831: /info "What happens after the conference?"; absent = no question. */
+  afterpartyInfo?: string
   /**
    * Structured speaker briefing (#1592), edited at `/admin/speakers/info`.
    * Projected by the main conference projection's `...` spread. ABSENT/blank
@@ -288,6 +292,11 @@ export interface Conference {
   /** Where `postBriefingToSlack` posts the shared speaker info (#1592). */
   speakerSlackChannel?: string
   volunteerSlackInviteUrl?: string
+  /**
+   * Private Slack invite for speakers (#164), sent in the briefing email.
+   * Redacted unless `includeSpeakerRegistrationLink` is set.
+   */
+  speakerSlackInviteUrl?: string
   volunteerRegistrationLink?: string
   socialLinks?: string[]
   /**

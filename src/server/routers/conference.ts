@@ -115,6 +115,8 @@ async function briefingConference() {
   // Uncached: a send right after a save must see the saved info.
   const { conference, error } = await getConferenceForCurrentDomain({
     uncached: true,
+    // The speaker Slack invite (#164) is part of the briefing and its hash.
+    includeSpeakerRegistrationLink: true,
   })
   if (error || !conference?._id) {
     throw new TRPCError({

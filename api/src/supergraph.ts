@@ -12,6 +12,8 @@ import {
 } from '@graphql-tools/utils'
 import { composeServices } from '@theguild/federation-composition'
 import { parse, type GraphQLSchema } from 'graphql'
+import { schema as content } from '../../services/content/src/subgraph'
+import { schema as conference } from '../../services/conference/src/subgraph'
 import { schema as tenantDirectory } from '../../services/tenant-directory/src/subgraph'
 
 /**
@@ -19,7 +21,11 @@ import { schema as tenantDirectory } from '../../services/tenant-directory/src/s
  * supergraph, which the gateway maps to a service binding (see BINDINGS in
  * gateway.ts). Identity has no public subgraph.
  */
-const SUBGRAPHS = { 'tenant-directory': tenantDirectory }
+export const SUBGRAPHS = {
+  'tenant-directory': tenantDirectory,
+  content,
+  conference,
+}
 
 /** Drops @tag(internal) types, fields, args and enum values, then prunes. */
 export function publicContract(schema: GraphQLSchema): GraphQLSchema {
@@ -40,7 +46,7 @@ export function publicContract(schema: GraphQLSchema): GraphQLSchema {
   )
 }
 
-export function compose(): string {
+function composeAll() {
   const result = composeServices(
     Object.entries(SUBGRAPHS).map(([name, schema]) => ({
       name,
@@ -51,5 +57,10 @@ export function compose(): string {
   if (result.errors?.length) {
     throw new Error(result.errors.map((e) => e.message).join('\n'))
   }
-  return result.supergraphSdl!
+  return result
 }
+
+export const compose = (): string => composeAll().supergraphSdl!
+
+/** The client-facing schema the gateway serves (no join directives). */
+export const publicSdl = (): string => composeAll().publicSdl!

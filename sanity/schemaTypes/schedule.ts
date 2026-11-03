@@ -39,8 +39,9 @@ export default defineType({
       name: 'owner',
       title: 'Owner',
       type: 'reference',
-      to: [{ type: 'staff' }], // Assuming staff is the type for organizers
-      description: 'The organizer who owns this draft',
+      // Organizers are speakers; saveScheduleToSanity writes ctx.speaker._id.
+      to: [{ type: 'speaker' }],
+      description: 'The organizer who created this schedule day',
     }),
     defineField({
       name: 'date',

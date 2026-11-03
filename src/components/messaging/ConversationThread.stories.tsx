@@ -114,6 +114,62 @@ export const WithMessages: Story = {
   ),
 }
 
+// #915: an organizer viewing a three-way thread. Their own message and a
+// fellow organizer's share the right side in related tints; the speaker sits
+// opposite in neutral gray.
+const makeThreeWay = (): DisplayMessage[] => [
+  {
+    id: 't1',
+    authorName: 'Hans',
+    isOrganizer: true,
+    isOwn: true,
+    body: 'Thanks for the submission. Could you say more about the demo?',
+    createdAt: minutesAgo(90),
+  },
+  {
+    id: 't2',
+    authorName: 'Kristian',
+    isOrganizer: false,
+    isOwn: false,
+    body: 'Sure, it is a live failover across two clusters.',
+    createdAt: minutesAgo(60),
+  },
+  {
+    id: 't3',
+    authorName: 'Øyvind',
+    isOrganizer: true,
+    isOwn: false,
+    isSameParty: true,
+    body: 'Sounds great. Please plan for a backup recording.',
+    createdAt: minutesAgo(30),
+  },
+]
+
+/** Organizer view of a three-way thread: you, a colleague, the speaker. */
+export const PartyAligned: Story = {
+  args: {
+    messages: [],
+    subject: 'Live failover demo',
+    preference: defaultPreference,
+  },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeThreeWay()} />
+  ),
+}
+
+/** Dark theme, three-way thread. */
+export const PartyAlignedDark: Story = {
+  args: {
+    messages: [],
+    subject: 'Live failover demo',
+    preference: defaultPreference,
+  },
+  parameters: { dark: true },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeThreeWay()} />
+  ),
+}
+
 /** The proposal-mount empty state before anyone has posted (composer shows). */
 export const Empty: Story = {
   args: {

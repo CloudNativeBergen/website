@@ -1,3 +1,4 @@
+import { mintLateSubmissionToken } from '@/lib/proposal/late-submission-token'
 import { revalidateTag } from 'next/cache'
 import { notifySpeakerRemoved } from '@/lib/slack/notify'
 import { conferenceTag } from '@/lib/cache/tags'
@@ -906,6 +907,12 @@ function expirePublicTalkReads(
   if (conferenceId) revalidateTag(conferenceTag(conferenceId), 'default')
 }
 
+/** A talk's conference as either a reference or a dereferenced document. */
+function proposalConferenceId(conference: unknown): string | undefined {
+  const c = conference as { _ref?: string; _id?: string } | null | undefined
+  return c?._ref ?? c?._id
+}
+
 export const proposalRouter = router({
   // List current user&apos;s proposals
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -1039,6 +1046,10 @@ export const proposalRouter = router({
             conference,
             content: input.data,
             contentSource: 'payload',
+            lateSubmission: {
+              token: input.lateSubmissionToken,
+              email: ctx.speaker.email,
+            },
           })
         }
 
@@ -1848,10 +1859,23 @@ export const proposalRouter = router({
         // submission is wrong whoever promotes it. (The 3-proposal cap below is
         // the opposite call — a per-speaker fairness rule organizers override.)
         if (proposal.status === Status.draft && status === Status.submitted) {
+          // The owner arm of the read returns the speaker's draft at ANY
+          // tenant, while the CFP window and late link are judged against the
+          // HOST conference. Submit only where the draft belongs.
+          if (proposalConferenceId(proposal.conference) !== conference._id) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'This proposal belongs to another conference',
+            })
+          }
           assertMayBecomeSubmitted({
             conference,
             content: proposal,
             contentSource: 'stored',
+            lateSubmission: {
+              token: input.lateSubmissionToken,
+              email: ctx.speaker.email,
+            },
           })
         }
 
@@ -2145,6 +2169,35 @@ export const proposalRouter = router({
 
   // Admin operations
   admin: router({
+    // Signed, time-limited link that lets a speaker submit after the CFP has
+    // closed (#249). Bound to this conference, optionally to one email.
+    createLateSubmissionLink: adminProcedure
+      .input(
+        z.object({
+          email: z.string().email().optional(),
+          expiresInDays: z.number().int().min(1).max(30).default(3),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        const { conference, domain } = await getConferenceForCurrentDomain()
+        if (!conference?._id || !domain) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to get current conference',
+          })
+        }
+        const expiresAt = Date.now() + input.expiresInDays * 86_400_000
+        const token = mintLateSubmissionToken({
+          conferenceId: conference._id,
+          exp: expiresAt,
+          email: input.email,
+        })
+        return {
+          url: `https://${domain}/cfp/submit?token=${encodeURIComponent(token)}`,
+          expiresAt: new Date(expiresAt).toISOString(),
+        }
+      }),
+
     // List all proposals (admin)
     list: adminProcedure
       .input(ProposalFilterSchema)

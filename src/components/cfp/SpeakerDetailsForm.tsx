@@ -22,6 +22,7 @@ import {
   Checkbox,
   LinkInput,
 } from '../Form'
+import { speakerImageUrl } from '@/lib/sanity/client'
 
 // Derived purely from the module-level `genderOptions`; allocate once.
 const genderOptionsMap = new Map(genderOptions.map((g) => [g, g]))
@@ -551,7 +552,7 @@ export function SpeakerDetailsForm({
                   src={
                     speakerImagePreviewUrl ||
                     (speakerImage.startsWith('http')
-                      ? `${speakerImage}?w=96&h=96&fit=crop`
+                      ? speakerImageUrl(speakerImage, { width: 96, height: 96 })
                       : speakerImage)
                   }
                   alt="Speaker Image"

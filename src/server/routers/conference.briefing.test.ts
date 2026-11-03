@@ -186,7 +186,10 @@ describe('speaker briefing procedures', () => {
 
   it('reads the conference uncached', async () => {
     await caller().sendBriefing()
-    expect(getConferenceMock).toHaveBeenCalledWith({ uncached: true })
+    expect(getConferenceMock).toHaveBeenCalledWith({
+      uncached: true,
+      includeSpeakerRegistrationLink: true,
+    })
   })
 
   it('passes mentionChannel into the Slack payload', async () => {
