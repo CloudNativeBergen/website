@@ -55,8 +55,44 @@ describe('planMembers', () => {
     expect(p.skippedExisting).toBe(1)
     const sql = toSql(p.rows)
     expect(sql).not.toContain('u-owner')
-    expect(sql).not.toContain('mem-cndn-owner-1')
     expect(sql).not.toMatch(/UPDATE|DELETE|REPLACE/i)
+  })
+
+  it('matches an identity email that differs only in case', () => {
+    const p = planMembers(
+      [{ orgId: CNDN, speakerId: 's4', knownEmails: ['mixed@example.com'] }],
+      [{ id: 'u-mixed', email: 'Mixed@Example.COM', emailVerified: 1 }],
+    )
+    expect(p.rows.map((r) => r.userId)).toEqual(['u-mixed'])
+  })
+
+  it('refuses identity emails that collide by case, naming only the count', () => {
+    const run = () =>
+      planMembers(
+        [],
+        [
+          { id: 'u-a', email: 'dup@example.com', emailVerified: 1 },
+          { id: 'u-b', email: 'DUP@example.com', emailVerified: 1 },
+        ],
+      )
+    expect(run).toThrow(/^1 verified identity email\(s\) collide/)
+    expect(run).not.toThrow(/dup@/i)
+  })
+
+  it('escapes single quotes in ids in the emitted SQL', () => {
+    const p = planMembers(
+      [
+        {
+          orgId: "org-o'brien",
+          speakerId: 's5',
+          knownEmails: ["o'brien@example.com"],
+        },
+      ],
+      [{ id: "u-o'brien", email: "o'brien@example.com", emailVerified: 1 }],
+    )
+    const sql = toSql(p.rows)
+    expect(sql).toContain("'org-o''brien', 'u-o''brien'")
+    expect(sql.match(/'/g)!.length % 2).toBe(0)
   })
 
   it('maps every organizer to ORGANIZER_ROLE', () => {

@@ -56,9 +56,18 @@ export function planMembers(
   existing: ExistingMember[] = [],
 ) {
   const verified = new Map<string, string>()
+  let caseCollisions = 0
   for (const u of users)
-    if (u.emailVerified === true || Number(u.emailVerified) === 1)
-      verified.set(u.email.trim().toLowerCase(), u.id)
+    if (u.emailVerified === true || Number(u.emailVerified) === 1) {
+      const e = u.email.trim().toLowerCase()
+      if (verified.has(e)) caseCollisions++
+      verified.set(e, u.id)
+    }
+  // Never name the emails: the error lands in terminal scrollback and CI logs.
+  if (caseCollisions)
+    throw new Error(
+      `${caseCollisions} verified identity email(s) collide when lowercased; resolve the duplicate users first`,
+    )
 
   const seen = new Set(existing.map((m) => `${m.organizationId}\0${m.userId}`))
   const rows: {
@@ -116,8 +125,16 @@ async function main() {
   const args = process.argv.slice(2)
   const flag = (n: string) => {
     const i = args.indexOf(n)
-    return i >= 0 ? args[i + 1] : undefined
+    if (i < 0) return undefined
+    const v = args[i + 1]
+    if (!v || v.startsWith('--')) {
+      console.error(`${n} needs a path`)
+      process.exit(2)
+    }
+    return v
   }
+  const membersPath = flag('--members')
+  const dir = flag('--out') ?? '.'
   const usersPath = args[0]
   if (!usersPath || usersPath.startsWith('--')) {
     console.error(
@@ -160,13 +177,11 @@ async function main() {
       return [...out.values()]
     })
 
-  const membersPath = flag('--members')
   const plan = planMembers(
     flat,
     readRows<IdentityUser>(usersPath),
     membersPath ? readRows<ExistingMember>(membersPath) : [],
   )
-  const dir = flag('--out') ?? '.'
   writeFileSync(join(dir, 'identity-members.sql'), toSql(plan.rows))
   writeFileSync(
     join(dir, 'identity-members-unmatched.json'),
