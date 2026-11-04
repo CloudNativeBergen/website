@@ -12,6 +12,7 @@
   // Secrets per env: ENVELOPE_PRIVATE_KEY, CLIENT_IP_SECRET.
   // OVERRIDE_TENANTS: @override label -> orgIds routed to the native subgraph.
   // API_LIMITER: per caller, 300 requests a minute (#1790);
+  // API_MUTATION_LIMITER: per caller, 60 mutations a minute (#1888);
   // API_IP_LIMITER: per IP, 1200 a minute, before the tenant lookup. namespace_id is
   // unique per account; the local default shares preview's.
   "ratelimits": [
@@ -19,6 +20,11 @@
       "name": "API_LIMITER",
       "namespace_id": "1791",
       "simple": { "limit": 300, "period": 60 },
+    },
+    {
+      "name": "API_MUTATION_LIMITER",
+      "namespace_id": "1888",
+      "simple": { "limit": 60, "period": 60 },
     },
     {
       "name": "API_IP_LIMITER",
@@ -57,6 +63,11 @@
           "simple": { "limit": 300, "period": 60 },
         },
         {
+          "name": "API_MUTATION_LIMITER",
+          "namespace_id": "1888",
+          "simple": { "limit": 60, "period": 60 },
+        },
+        {
           "name": "API_IP_LIMITER",
           "namespace_id": "1795",
           "simple": { "limit": 1200, "period": 60 },
@@ -88,6 +99,11 @@
           "name": "API_LIMITER",
           "namespace_id": "1793",
           "simple": { "limit": 300, "period": 60 },
+        },
+        {
+          "name": "API_MUTATION_LIMITER",
+          "namespace_id": "1889",
+          "simple": { "limit": 60, "period": 60 },
         },
         {
           "name": "API_IP_LIMITER",

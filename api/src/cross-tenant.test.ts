@@ -448,6 +448,7 @@ beforeAll(async () => {
     ...bindings,
     API_LIMITER: { limit: async () => ({ success: true }) },
     API_IP_LIMITER: { limit: async () => ({ success: true }) },
+    API_MUTATION_LIMITER: { limit: async () => ({ success: true }) },
     CLIENT_IP_SECRET: 'ip-secret',
     IDENTITY: {
       fetch: (url: string, init?: RequestInit) =>

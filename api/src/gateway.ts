@@ -4,6 +4,7 @@
 // looks up orgRole live, and mints the one envelope the subgraphs trust.
 import {
   createGatewayRuntime,
+  type GatewayPlugin,
   useCustomFetch as subgraphFetch,
 } from '@graphql-hive/gateway-runtime'
 import httpTransport from '@graphql-mesh/transport-http'
@@ -15,7 +16,7 @@ import {
   ENVELOPE_HEADER,
   type TenantEnvelope,
 } from '@runkonf/tenancy'
-import { GraphQLError } from 'graphql'
+import { getOperationAST, GraphQLError, parse } from 'graphql'
 import { clientIp } from './client-ip'
 import { SITE_ASSERTION_HEADER, verifySiteAssertion } from './site-identity'
 
@@ -36,6 +37,8 @@ export interface Env {
   IDENTITY: Fetcher
   /** Per-request limit (Workers Rate Limiting), keyed per caller (#1790) */
   API_LIMITER: RateLimit
+  /** Mutations only, MUTATION_LIMIT_PER_MINUTE per caller, on top of API_LIMITER (#1888) */
+  API_MUTATION_LIMITER: RateLimit
   /** Coarse per-IP limit, checked before the tenant lookup */
   API_IP_LIMITER: RateLimit
   /** wrangler secret put CLIENT_IP_SECRET: shared with the site to sign the client IP */
@@ -79,8 +82,40 @@ function hostOf(origin: unknown): string | null {
 
 type Tenant = { orgId: string; conferenceId: string | null }
 
-/** Subgraph codes a public caller may see; the message never passes. */
-const SAFE_CODES = new Set(['UNAUTHENTICATED', 'FORBIDDEN', 'BAD_USER_INPUT'])
+/**
+ * Subgraph codes a public caller may see, with the message that replaces the
+ * subgraph's. Only BAD_USER_INPUT keeps detail (see `inputDetail`). NOT_FOUND
+ * is safe because every subgraph refuses FORBIDDEN before it looks a row up,
+ * and the row is the envelope's own tenant, never one the caller names.
+ */
+const SAFE_CODES: ReadonlyMap<string, string | null> = new Map([
+  ['UNAUTHENTICATED', null],
+  ['FORBIDDEN', null],
+  ['BAD_USER_INPUT', null],
+  ['NOT_FOUND', 'Not found.'],
+])
+
+export const MAX_INPUT_MESSAGE = 300
+const MAX_FIELD = 100
+// A field is a schema name or input path, nothing else.
+const FIELD_NAME = /^[A-Za-z_][\w.[\]]*$/
+
+/**
+ * A subgraph's validation message and field, capped. Nothing else of the
+ * error (other extensions, originalError, cause, stack) is read.
+ */
+function inputDetail(gql: GraphQLError) {
+  const field = gql.extensions?.field
+  return {
+    message: gql.message.slice(0, MAX_INPUT_MESSAGE),
+    field:
+      typeof field === 'string' &&
+      field.length <= MAX_FIELD &&
+      FIELD_NAME.test(field)
+        ? field
+        : undefined,
+  }
+}
 
 /**
  * Hive forwards subgraph errors as GraphQLErrors, which `maskedErrors: true`
@@ -103,16 +138,24 @@ export function maskError(error: unknown, message: string): Error {
   if (gql && !fromSubgraph && isOriginal(gql)) return gql
   const code = gql?.extensions?.code
   const safe = typeof code === 'string' && SAFE_CODES.has(code)
-  return new GraphQLError(message, {
-    path: gql?.path,
-    extensions: {
-      code: safe ? code : 'INTERNAL_SERVER_ERROR',
-      // As yoga's default: unexpected answers 500, an http status is kept.
-      ...(safe ? {} : { unexpected: true }),
-      ...(gql?.extensions?.http ? { http: gql.extensions.http } : {}),
+  const detail = gql && code === 'BAD_USER_INPUT' ? inputDetail(gql) : null
+  return new GraphQLError(
+    detail?.message ?? (safe ? SAFE_CODES.get(code) : null) ?? message,
+    {
+      path: gql?.path,
+      extensions: {
+        code: safe ? code : 'INTERNAL_SERVER_ERROR',
+        ...(detail?.field ? { field: detail.field } : {}),
+        // As yoga's default: unexpected answers 500, an http status is kept.
+        ...(safe ? {} : { unexpected: true }),
+        ...(gql?.extensions?.http ? { http: gql.extensions.http } : {}),
+      },
     },
-  })
+  )
 }
+
+/** Must equal API_MUTATION_LIMITER's limit in wrangler.jsonc (a test checks). */
+export const MUTATION_LIMIT_PER_MINUTE = 60
 
 function reject(status: 401 | 429 | 503, code: string, message: string) {
   return Response.json(
@@ -157,6 +200,33 @@ export function progressiveOverride(label: string, context: unknown) {
   return !!orgId && !!env.OVERRIDE_TENANTS?.[label]?.includes(orgId)
 }
 
+type GatewayContext = { env: Env; orgId: string | null; limitKey: string }
+
+/**
+ * Mutations spend their own budget (#1888). Classified from the params Yoga
+ * parsed, whatever the content type, and the operation it will execute.
+ * Unparseable or ambiguous documents are left to Yoga, which refuses them.
+ */
+const mutationBudget: GatewayPlugin<GatewayContext> = {
+  async onParams({ params, context }) {
+    let op
+    try {
+      op = getOperationAST(parse(params.query ?? ''), params.operationName)
+    } catch {
+      return
+    }
+    if (op?.operation !== 'mutation') return
+    const { env, limitKey } = context as unknown as GatewayContext
+    if (
+      !(await env.API_MUTATION_LIMITER.limit({ key: `${limitKey}:mutation` }))
+        .success
+    )
+      throw new GraphQLError('too many requests', {
+        extensions: { code: 'RATE_LIMITED', http: { status: 429 } },
+      })
+  },
+}
+
 export function createGateway(supergraph: string) {
   let signer: Awaited<ReturnType<typeof createSigner>> | undefined
   let jwks: ReturnType<typeof createRemoteJWKSet> | undefined
@@ -182,7 +252,7 @@ export function createGateway(supergraph: string) {
     return payload
   }
 
-  const runtime = createGatewayRuntime<{ env: Env; orgId: string | null }>({
+  const runtime = createGatewayRuntime<GatewayContext>({
     supergraph,
     graphqlEndpoint: '/graphql',
     landingPage: false,
@@ -203,6 +273,7 @@ export function createGateway(supergraph: string) {
     plugins: () => [
       maxDepthPlugin({ n: 10, ignoreIntrospection: false }),
       maxAliasesPlugin({ n: 15 }),
+      mutationBudget,
       // TODO(#1772 req. 5): persisted queries from a build-time manifest.
       subgraphFetch((url, options, context) => {
         const name = new URL(url).host.replace(/\.internal$/, '')
@@ -257,8 +328,10 @@ export function createGateway(supergraph: string) {
 
       // 3. Rate limit (#1790) before the identity and Membership work for
       // anonymous callers; signed-in callers are keyed on the verified sub.
+      // Mutations also spend their own budget, keyed the same (mutationBudget).
+      let limitKey: string
       const limited = async (key: string) =>
-        !(await env.API_LIMITER.limit({ key })).success
+        !(await env.API_LIMITER.limit({ key: (limitKey = key) })).success
       const tooMany = () => reject(429, 'RATE_LIMITED', 'too many requests')
 
       // 4. Identity: optional, but a header that is present must verify.
@@ -311,7 +384,12 @@ export function createGateway(supergraph: string) {
         )
       }
 
-      return runtime(forwarded, { env, ctx, orgId: tenant?.orgId ?? null })
+      return runtime(forwarded, {
+        env,
+        ctx,
+        orgId: tenant?.orgId ?? null,
+        limitKey: limitKey!,
+      })
     },
   }
 }

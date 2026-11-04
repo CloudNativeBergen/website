@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   SignJWT,
@@ -15,6 +16,8 @@ import { GraphQLError } from 'graphql'
 import {
   createGateway,
   maskError,
+  MAX_INPUT_MESSAGE,
+  MUTATION_LIMIT_PER_MINUTE,
   SESSION_ORIGIN_CLAIM,
   type Env,
 } from './gateway'
@@ -66,6 +69,7 @@ function makeEnv(
   role: { orgRole: string | null } = { orgRole: 'admin' },
   allow = true,
   ipAllow = true,
+  mutationAllow = true,
 ) {
   const envelopes: (string | null)[] = []
   const forwarded: Headers[] = []
@@ -96,6 +100,9 @@ function makeEnv(
     IDENTITY: { fetch: async () => Response.json(jwks) },
     API_LIMITER: { limit: vi.fn(async () => ({ success: allow })) },
     API_IP_LIMITER: { limit: vi.fn(async () => ({ success: ipAllow })) },
+    API_MUTATION_LIMITER: {
+      limit: vi.fn(async () => ({ success: mutationAllow })),
+    },
     CLIENT_IP_SECRET: 'ip-secret',
     SITE_PUBLIC_KEYS: sitePublicKeys,
     MEMBERSHIP: {
@@ -458,9 +465,267 @@ describe('gateway', () => {
     expect(text).not.toContain('serviceName')
   })
 
+  describe('subgraph error passthrough (#1888)', () => {
+    const subgraphError = (
+      code: string,
+      msg: string,
+      extra: Record<string, unknown> = {},
+    ) =>
+      new GraphQLError(msg, {
+        path: ['updateConference'],
+        originalError: Object.assign(new Error('cause: D1_ERROR at row 7'), {
+          stack: 'Error: at d1.ts:1',
+        }),
+        extensions: { code, serviceName: 'conference', ...extra },
+      })
+    const json = (e: Error) => JSON.parse(JSON.stringify(e))
+
+    it('passes the message and field of BAD_USER_INPUT, nothing else', () => {
+      const masked = maskError(
+        subgraphError('BAD_USER_INPUT', 'name is too long', {
+          field: 'name',
+          sql: 'SELECT * FROM conferences',
+          orgId: 'org_b',
+        }),
+        'Unexpected error.',
+      )
+      expect(json(masked)).toEqual({
+        message: 'name is too long',
+        path: ['updateConference'],
+        extensions: { code: 'BAD_USER_INPUT', field: 'name' },
+      })
+    })
+
+    it('truncates an oversized message and drops a malformed field', () => {
+      const masked = maskError(
+        subgraphError('BAD_USER_INPUT', 'x'.repeat(10_000), {
+          field: "name'; DROP TABLE conferences",
+        }),
+        'Unexpected error.',
+      ) as GraphQLError
+      expect(masked.message).toBe('x'.repeat(MAX_INPUT_MESSAGE))
+      expect(masked.extensions).toEqual({ code: 'BAD_USER_INPUT' })
+    })
+
+    it('answers NOT_FOUND with a generic message', () => {
+      const masked = maskError(
+        subgraphError('NOT_FOUND', 'conference conf_b of org_b not found'),
+        'Unexpected error.',
+      )
+      expect(json(masked)).toEqual({
+        message: 'Not found.',
+        path: ['updateConference'],
+        extensions: { code: 'NOT_FOUND' },
+      })
+    })
+
+    it.each([
+      'UNAUTHENTICATED',
+      'FORBIDDEN',
+      'INTERNAL_SERVER_ERROR',
+      'CONFLICT',
+      'GRAPHQL_VALIDATION_FAILED',
+      'bad_user_input',
+      'BAD_USER_INPUT ',
+      '',
+    ])('masks the message, field and code of %j', (code) => {
+      const secret =
+        "D1_ERROR: SELECT * FROM conferences WHERE org_id = 'org_b'"
+      const masked = maskError(
+        subgraphError(code, secret, { field: 'name' }),
+        'Unexpected error.',
+      ) as GraphQLError
+      expect(masked.message).toBe('Unexpected error.')
+      expect(masked.extensions).toEqual(
+        ['UNAUTHENTICATED', 'FORBIDDEN'].includes(code)
+          ? { code }
+          : { code: 'INTERNAL_SERVER_ERROR', unexpected: true },
+      )
+      expect(JSON.stringify(masked)).not.toMatch(/SELECT|D1_ERROR|org_b/)
+    })
+
+    it('carries the field over the wire from the subgraph', async () => {
+      const { env } = makeEnv()
+      ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+        Response.json({
+          data: { conference: null },
+          errors: [
+            {
+              message: 'endDate is before startDate',
+              path: ['conference'],
+              extensions: { code: 'BAD_USER_INPUT', field: 'endDate' },
+            },
+          ],
+        })
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const body = (await (
+        await gateway.fetch(post(SUBGRAPH_QUERY), env)
+      ).json()) as {
+        errors: unknown[]
+      }
+      expect(body.errors[0]).toMatchObject({
+        message: 'endDate is before startDate',
+        extensions: { code: 'BAD_USER_INPUT', field: 'endDate' },
+      })
+      expect(JSON.stringify(body)).not.toContain('serviceName')
+    })
+  })
+
   describe('rate limiting', () => {
     const keys = (env: Env) =>
       vi.mocked(env.API_LIMITER.limit).mock.calls.map(([o]) => o.key)
+
+    const MUTATION = {
+      query: 'mutation { updateConference(input: {}) { id } }',
+    }
+    const mutationKeys = (env: Env) =>
+      vi.mocked(env.API_MUTATION_LIMITER.limit).mock.calls.map(([o]) => o.key)
+
+    it('refuses a mutation when the mutation budget is spent', async () => {
+      const { env } = makeEnv(undefined, true, true, false)
+      const res = await gateway.fetch(
+        post(MUTATION, {
+          origin: VERIFIED,
+          authorization: `Bearer ${await jwt()}`,
+        }),
+        env,
+      )
+      expect(res.status).toBe(429)
+      expect(mutationKeys(env)).toEqual(['user:user_1:mutation'])
+      expect(await res.json()).toMatchObject({
+        errors: [{ extensions: { code: 'RATE_LIMITED' } }],
+      })
+    })
+
+    // Yoga parses JSON, application/graphql and form bodies alike; each is
+    // classified from what Yoga parsed, not from the raw body.
+    const MUTATION_DOC = 'mutation { updateConference(input: {}) { id } }'
+    const QUERY_DOC = '{ conference { id } }'
+    const raw = (type: string, body: string, method = 'POST') =>
+      new Request('http://api.test/graphql', {
+        method,
+        headers: { origin: VERIFIED, 'content-type': type },
+        body,
+      })
+    const bodies = (doc: string): [string, string][] => [
+      ['application/json', JSON.stringify({ query: doc })],
+      ['application/graphql', doc],
+      [
+        'application/x-www-form-urlencoded',
+        new URLSearchParams({ query: doc }).toString(),
+      ],
+    ]
+
+    it.each(bodies(MUTATION_DOC))(
+      'spends the mutation budget for a mutation as %s',
+      async (type, body) => {
+        const { env, conference } = makeEnv(undefined, true, true, false)
+        const res = await gateway.fetch(raw(type, body), env)
+        expect(res.status).toBe(429)
+        expect(mutationKeys(env)).toEqual(['anon:org_a:unknown:mutation'])
+        expect(conference).toEqual([])
+      },
+    )
+
+    it.each(bodies(QUERY_DOC))(
+      'keeps a query as %s off the mutation budget',
+      async (type, body) => {
+        const { env } = makeEnv(undefined, true, true, false)
+        const res = await gateway.fetch(raw(type, body), env)
+        expect(res.status).toBe(200)
+        expect(mutationKeys(env)).toEqual([])
+      },
+    )
+
+    it('pins what Yoga does with GET and multipart', async () => {
+      const { env, conference } = makeEnv()
+      const get = await gateway.fetch(
+        new Request(
+          `http://api.test/graphql?query=${encodeURIComponent(MUTATION_DOC)}`,
+          { headers: { origin: VERIFIED } },
+        ),
+        env,
+      )
+      expect(get.status).toBe(405)
+      const form = new FormData()
+      form.set('operations', JSON.stringify({ query: MUTATION_DOC }))
+      form.set('map', '{}')
+      const multipart = await gateway.fetch(
+        new Request('http://api.test/graphql', {
+          method: 'POST',
+          headers: { origin: VERIFIED },
+          body: form,
+        }),
+        env,
+      )
+      expect(multipart.status).toBe(415)
+      expect(conference).toEqual([])
+    })
+
+    it('counts a mutation whose operationName reads like a query', async () => {
+      const { env } = makeEnv(undefined, true, true, false)
+      const res = await gateway.fetch(
+        post(
+          {
+            query:
+              'mutation GetConference { updateConference(input: {}) { id } }',
+            operationName: 'GetConference',
+          },
+          { origin: VERIFIED },
+        ),
+        env,
+      )
+      expect(res.status).toBe(429)
+      expect(mutationKeys(env)).toEqual(['anon:org_a:unknown:mutation'])
+    })
+
+    it('keeps queries off the mutation budget, even when it is spent', async () => {
+      const { env } = makeEnv(undefined, true, true, false)
+      const res = await gateway.fetch(
+        post(
+          {
+            query: 'mutation M { x } query Q { conference { id } }',
+            operationName: 'Q',
+          },
+          { origin: VERIFIED, authorization: `Bearer ${await jwt()}` },
+        ),
+        env,
+      )
+      expect(res.status).toBe(200)
+      expect(keys(env)).toEqual(['user:user_1'])
+      expect(mutationKeys(env)).toEqual([])
+    })
+
+    it('picks the mutation by operationName', async () => {
+      const { env } = makeEnv(undefined, true, true, false)
+      const res = await gateway.fetch(
+        post(
+          {
+            query:
+              'query Q { conference { id } } mutation M { updateConference(input: {}) { id } }',
+            operationName: 'M',
+          },
+          { origin: VERIFIED },
+        ),
+        env,
+      )
+      expect(res.status).toBe(429)
+      expect(mutationKeys(env)).toEqual(['anon:org_a:unknown:mutation'])
+    })
+
+    it('matches the mutation budget configured in wrangler.jsonc', () => {
+      const config = readFileSync(
+        new URL('../wrangler.jsonc', import.meta.url),
+        'utf8',
+      )
+      const limits = [
+        ...config.matchAll(
+          /"name": "API_MUTATION_LIMITER",[^}]*"limit": (\d+)/g,
+        ),
+      ].map((m) => Number(m[1]))
+      expect(limits).toEqual([60, 60, 60])
+      expect(MUTATION_LIMIT_PER_MINUTE).toBe(60)
+    })
 
     it('keys anonymous callers on tenant and the signed client IP', async () => {
       const { env } = makeEnv()
@@ -498,7 +763,7 @@ describe('gateway', () => {
       expect(keys(env)).toEqual(['user:user_1'])
     })
 
-    it('answers 429 to a mutation before any identity work', async () => {
+    it('answers 429 to a mutation on the general budget before identity work', async () => {
       const { env } = makeEnv(undefined, false)
       const res = await gateway.fetch(
         post(
