@@ -5,6 +5,10 @@ import { cookies, headers } from 'next/headers'
 import { requestDomain } from '@/lib/conference/request-domain'
 import { IDENTITY_SESSION_COOKIE } from '@/lib/auth/identity-cookie'
 import { konfApiHeaders } from './client'
+import {
+  LIFECYCLE_STATUS_VALUES,
+  type LifecycleStatus,
+} from '@/lib/homepage/lifecycle'
 
 const KONF_API_URL = 'https://api.konf.app/graphql'
 const TIMEOUT_MS = 5000
@@ -50,6 +54,10 @@ export function movedConferencePatch(
       const t = v as { primaryColor: string; accentColor: string } | null
       out.primaryColor = t?.primaryColor ?? null
       out.accentColor = t?.accentColor ?? null
+    } else if (k === 'lifecycleStatus') {
+      // D1 `published` follows the Sanity override, as the backfill derives it
+      // (services/conference/scripts/backfill.ts). null clears it: public.
+      out.published = !LIFECYCLE_STATUS_VALUES.includes(v as LifecycleStatus)
     } else if (MOVED.has(k)) {
       out[k] = v
     }

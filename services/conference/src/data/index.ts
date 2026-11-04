@@ -10,7 +10,7 @@ export type ConferenceRow = typeof conferences.$inferSelect
 
 /** The writable fields. Omitted = untouched; null = unset. */
 export type ConferencePatch = Partial<
-  Omit<ConferenceRow, 'conferenceId' | 'orgId' | 'published' | 'updatedAt'>
+  Omit<ConferenceRow, 'conferenceId' | 'orgId' | 'updatedAt'>
 >
 
 /** Org roles that may write (#1881, owner decision 3). */
