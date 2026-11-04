@@ -134,13 +134,51 @@ describe('rolloutFlags (#1925)', () => {
     const stampAt = (at: number, now: number) =>
       vi.spyOn(Date, 'now').mockReturnValueOnce(at).mockReturnValue(now)
 
-    it('a cached entry read more than 10 minutes ago is unverified', async () => {
+    const flagReads = () => fetchMock.mock.calls.length
+
+    it('a stale cached entry with a healthy gateway reads it directly once and is verified', async () => {
       reply(on)
       stampAt(T0, T0 + 10 * 60_000 + 1)
-      expect(await rolloutFlags('stale-hit.example', conf)).toEqual({
+      expect(await rolloutFlags('stale-hit.example', conf)).toEqual(on)
+      expect(flagReads()).toBe(2) // the cached read (no-op cache here) + one direct
+      // The direct read became the last good value, stamped with its own time.
+      fetchMock.mockRejectedValue(new Error('down'))
+      vi.spyOn(Date, 'now').mockReturnValue(T0 + 19 * 60_000)
+      expect(await rolloutFlags('stale-hit.example', conf)).toEqual(on)
+    })
+
+    it('a stale cached entry and a failed direct read use a recent last good', async () => {
+      reply(on)
+      stampAt(T0, T0 + 2 * 60_000)
+      await rolloutFlags('stale-lkg.example', conf) // last good at T0
+      fetchMock
+        .mockImplementationOnce(
+          async () =>
+            new Response(JSON.stringify({ data: { rolloutFlags: on } })),
+        )
+        .mockRejectedValueOnce(new Error('down'))
+      // Cached hit stamped T0 - 1, so it is stale while last good (T0) is not.
+      stampAt(T0 - 1, T0 + 10 * 60_000 - 1)
+      expect(await rolloutFlags('stale-lkg.example', conf)).toEqual(on)
+      expect(flagReads()).toBe(3)
+      expect(console.warn).toHaveBeenCalledWith(
+        '[konf-api] rollout flags unavailable for conf-1, using last good: down',
+      )
+    })
+
+    it('a stale cached entry and a failed direct read with no last good is unverified', async () => {
+      fetchMock
+        .mockImplementationOnce(
+          async () =>
+            new Response(JSON.stringify({ data: { rolloutFlags: on } })),
+        )
+        .mockRejectedValueOnce(new Error('down'))
+      stampAt(T0, T0 + 10 * 60_000 + 1)
+      expect(await rolloutFlags('stale-none.example', conf)).toEqual({
         ...off,
         unverified: true,
       })
+      expect(flagReads()).toBe(2)
     })
 
     it('a cached entry within the revalidate window is verified', async () => {

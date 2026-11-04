@@ -1638,6 +1638,44 @@ describe('conference router — D1 write path (#1881)', () => {
     expect(lastSet).toEqual({ venueName: 'X' })
   })
 
+  // A stale remote-cache hit (quiet tenant) with a healthy gateway is not an
+  // outage: one direct read verifies the flags and the save goes through.
+  describe('stale cached flags (#1938)', () => {
+    const T0 = 1_700_000_000_000
+    beforeEach(() => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      // The cached read is stamped T0; every later clock read is 11 minutes on.
+      vi.spyOn(Date, 'now')
+        .mockReturnValueOnce(T0)
+        .mockReturnValue(T0 + 11 * 60_000)
+    })
+
+    it('saves after one direct gateway read', async () => {
+      hostMock.mockReturnValue('idle-1938.example')
+      await makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' })
+      expect(flagCalls()).toHaveLength(2) // cached + exactly one direct
+      expect(commitMock).toHaveBeenCalled()
+    })
+
+    it('refuses when the direct read fails and there is no last good', async () => {
+      hostMock.mockReturnValue('idle-down-1938.example')
+      let flagReads = 0
+      fetchMock.mockImplementation(async (url: URL | string, init) =>
+        String(init?.body).includes('rolloutFlags')
+          ? flagReads++ === 0
+            ? ok({ data: { rolloutFlags: { d1Write: true } } })
+            : new Response('', { status: 503 })
+          : ok({ data: { updateConference: { id: CONFERENCE_ID } } }),
+      )
+      vi.stubEnv('KONF_D1_WRITE_TENANTS', '')
+      await expect(
+        makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' }),
+      ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' })
+      expect(flagCalls()).toHaveLength(2)
+      expect(commitMock).not.toHaveBeenCalled()
+    })
+  })
+
   // #1938: an unreadable d1Write flag must not fall to "off" and Sanity-only.
   describe('when the rollout flags cannot be read', () => {
     beforeEach(() => {

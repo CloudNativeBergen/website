@@ -77,6 +77,13 @@ export async function fetchRolloutFlags(
   'use cache: remote'
   cacheLife(FLAGS_CACHE_LIFE)
   cacheTag(domainTag(host))
+  return readRolloutFlags(host)
+}
+
+/** One uncached gateway read of the flags; fetchRolloutFlags caches it. */
+async function readRolloutFlags(
+  host: string,
+): Promise<{ flags: RolloutFlags; at: number }> {
   const url = konfApiUrl()
   if (!url) throw new Error('KONF_API_URL is not set on this environment')
   const res = await fetch(url, {
@@ -109,7 +116,8 @@ export async function fetchRolloutFlags(
 
 /**
  * Flags for this host's conference. `KONF_API_DISABLED=1` turns everything
- * off. A read failure uses the host's last good flags if under LAST_GOOD_MS
+ * off. A cached entry older than LAST_GOOD_MS is replaced by one direct,
+ * uncached read. A read failure uses the host's last good flags if under LAST_GOOD_MS
  * old; else the env lists, marked `unverified` so a D1 write can refuse.
  */
 export async function rolloutFlags(
@@ -134,9 +142,12 @@ export async function rolloutFlags(
   // One cache entry per tenant, whatever port or case the Host header had.
   host = normalizeDomain(host)
   try {
-    const read = await fetchRolloutFlags(host)
+    let read = await fetchRolloutFlags(host)
+    // A stale cache hit (quiet tenant, revalidating in the background) is
+    // not an outage: read the gateway directly once. Its failure falls to
+    // the last good value below.
     if (Date.now() - read.at >= LAST_GOOD_MS)
-      throw new Error('cached flags are too old')
+      read = await readRolloutFlags(host)
     const prev = lastGood.get(host)
     if (!prev || read.at >= prev.at) {
       lastGood.delete(host) // re-insert at the end: oldest first
