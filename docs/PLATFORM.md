@@ -62,9 +62,9 @@ pnpm --filter @runkonf/tenant-directory exec wrangler d1 execute DB --remote --e
 
 How they travel: `tenantByHost` returns them, and the gateway reads them with its tenant lookup on every request. `d1_override` applies at once. The site asks the gateway's `rolloutFlags` query, which answers only on the site's signed server lane and only for the asserted host, so it takes no argument and no other caller sees a tenant's flags. The site caches the answer per host for 5 minutes (stale up to an hour), so a change in D1 reaches the site within minutes. The site needs `KONF_SITE_SIGNING_KEY` to read them.
 
-Fail safe: if the read fails or times out (2 seconds), the site treats the D1 flags as off for that request: the Sanity path.
+Fail safe: if the read fails or times out (2 seconds), the site uses the last flags it read for that host in the last 10 minutes (kept in memory per server instance). With none, API read and identity login are off for that request (the Sanity path), and a settings save that touches moved fields is refused with "try again" rather than written to Sanity alone (#1938). Fields that have not moved still save. Each failure is logged with the conference id.
 
-Kill switch: `KONF_API_DISABLED=1` on Vercel turns all three site flags off for every tenant, env lists included, and stops identity sessions. The gateway has no switch; set `d1_override = 0` in D1 instead.
+Kill switch: `KONF_API_DISABLED=1` on Vercel turns all three site flags off for every tenant, env lists included, and stops identity sessions. The gateway has no switch; set `d1_override = 0` in D1 instead. While it is set, settings saves go to Sanity only, so D1 drifts. Before removing it, run `pnpm tsx scripts/parity-conference.ts --all` and fix every difference (it checks D1 only for tenants with `d1_override` on; see the caveat in [DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md)). A save made after the switch is off goes to D1 first and does not repair fields edited during the outage.
 
 <a id="the-read-path-flag"></a>
 

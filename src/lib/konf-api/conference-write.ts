@@ -4,6 +4,7 @@ import 'server-only'
 import { cookies, headers } from 'next/headers'
 import { requestDomain } from '@/lib/conference/request-domain'
 import { IDENTITY_SESSION_COOKIE } from '@/lib/auth/identity-cookie'
+import { TRPCError } from '@trpc/server'
 import { rolloutFlags } from '@/lib/conference/konf-api'
 import { konfApiHeaders, konfApiUrl } from './client'
 import {
@@ -31,12 +32,24 @@ const MOVED = new Set([
   'socialLinks',
 ])
 
-/** The host's `d1Write` rollout flag (#1925). */
+/**
+ * The host's `d1Write` rollout flag (#1925). Throws when the flag cannot be
+ * read and no recent good value exists (#1938): writing Sanity alone could
+ * drift D1, so the moved-field save is refused instead.
+ */
 export async function isD1WriteTenant(
   host: string | null,
   conferenceId: string,
 ): Promise<boolean> {
-  return (await rolloutFlags(host, { _id: conferenceId })).d1Write
+  const f = await rolloutFlags(host, { _id: conferenceId })
+  if (f.unverified && !f.d1Write) {
+    throw new TRPCError({
+      code: 'SERVICE_UNAVAILABLE',
+      message:
+        'These settings cannot be saved right now. Wait a minute and try again.',
+    })
+  }
+  return f.d1Write
 }
 
 /**

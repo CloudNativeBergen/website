@@ -1607,6 +1607,38 @@ describe('conference router — D1 write path (#1881)', () => {
     expect(lastSet).toEqual({ venueName: 'X' })
   })
 
+  // #1938: an unreadable d1Write flag must not fall to "off" and Sanity-only.
+  describe('when the rollout flags cannot be read', () => {
+    beforeEach(() => {
+      vi.stubEnv('KONF_D1_WRITE_TENANTS', '')
+      vi.stubEnv('KONF_SITE_SIGNING_KEY', 'k')
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      fetchMock.mockImplementation(async (url: URL | string, init) =>
+        JSON.parse(String(init?.body ?? '{}')).query?.includes('rolloutFlags')
+          ? new Response('', { status: 503 })
+          : ok({ data: { updateConference: { id: CONFERENCE_ID } } }),
+      )
+    })
+
+    it('refuses a moved-field save and never writes Sanity', async () => {
+      hostMock.mockReturnValue('noflags-1938.example')
+      await expect(
+        makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' }),
+      ).rejects.toMatchObject({
+        code: 'SERVICE_UNAVAILABLE',
+        message: expect.stringContaining('try again'),
+      })
+      expect(commitMock).not.toHaveBeenCalled()
+    })
+
+    it('still saves fields that have not moved', async () => {
+      await makeCaller({ isOrganizer: true }).updateLocalInfo({
+        cateringInfo: 'Pizza',
+      })
+      expect(lastSet).toEqual({ cateringInfo: 'Pizza' })
+    })
+  })
+
   it('makes no API call for a fieldset without moved keys', async () => {
     await makeCaller({ isOrganizer: true }).updateLocalInfo({
       cateringInfo: 'Pizza',

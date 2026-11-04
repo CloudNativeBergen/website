@@ -40,6 +40,19 @@ const FLAGS_QUERY = '{ rolloutFlags { apiRead identityLogin d1Write } }'
 const FLAGS_CACHE_LIFE = { stale: 60, revalidate: 300, expire: 3600 } as const
 
 /**
+ * Last good flags per host (#1938), used when a read fails. 10 minutes is two
+ * revalidate windows of FLAGS_CACHE_LIFE: it rides out a gateway blip, and a
+ * flag changed in D1 meanwhile lands at most 5 minutes later than it would on
+ * a healthy read. Older than that, a failed read gives `unverified`.
+ */
+const LAST_GOOD_MS = 10 * 60_000
+const LAST_GOOD_MAX = 500
+const lastGood = new Map<string, { flags: RolloutFlags; at: number }>()
+
+/** Flags from a failed read with no recent good value: d1Write is unknown. */
+export type MaybeUnverified = RolloutFlags & { unverified?: true }
+
+/**
  * Transition (#1925): the old comma-separated env lists, OR'ed with the D1
  * flags until those are backfilled. Remove with the lists (docs/PLATFORM.md).
  */
@@ -88,12 +101,13 @@ export async function fetchRolloutFlags(host: string): Promise<RolloutFlags> {
 
 /**
  * Flags for this host's conference. `KONF_API_DISABLED=1` turns everything
- * off. Any read failure leaves only the env lists: the Sanity path, as before.
+ * off. A read failure uses the host's last good flags if under LAST_GOOD_MS
+ * old; else the env lists, marked `unverified` so a D1 write can refuse.
  */
 export async function rolloutFlags(
   host: string | null,
   conference: Pick<Conference, '_id' | 'organization'>,
-): Promise<RolloutFlags> {
+): Promise<MaybeUnverified> {
   if (process.env.KONF_API_DISABLED === '1') return OFF
   const org = conference.organization?._ref
   // No gateway on this environment (#1926): API read and D1 write are off.
@@ -109,19 +123,28 @@ export async function rolloutFlags(
   host = normalizeDomain(host)
   try {
     const d1 = await fetchRolloutFlags(host)
-    return {
-      apiRead: env.apiRead || d1.apiRead,
-      identityLogin: env.identityLogin || d1.identityLogin,
-      d1Write: env.d1Write || d1.d1Write,
-    }
+    lastGood.delete(host) // re-insert at the end: oldest first
+    lastGood.set(host, { flags: d1, at: Date.now() })
+    if (lastGood.size > LAST_GOOD_MAX)
+      lastGood.delete(lastGood.keys().next().value!)
+    return or(env, d1)
   } catch (err) {
+    const good = lastGood.get(host)
+    const fresh = good && Date.now() - good.at < LAST_GOOD_MS
     console.warn(
-      `[konf-api] rollout flags unavailable for ${host}:`,
-      (err as Error).message,
+      `[konf-api] rollout flags unavailable for ${conference._id}` +
+        (fresh ? ', using last good' : ', none recent') +
+        `: ${(err as Error).message}`,
     )
-    return env
+    return fresh ? or(env, good.flags) : { ...env, unverified: true }
   }
 }
+
+const or = (a: RolloutFlags, b: RolloutFlags): RolloutFlags => ({
+  apiRead: a.apiRead || b.apiRead,
+  identityLogin: a.identityLogin || b.identityLogin,
+  d1Write: a.d1Write || b.d1Write,
+})
 
 /**
  * Cached on the same model and tags as the Sanity conference read
