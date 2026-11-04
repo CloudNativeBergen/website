@@ -1363,15 +1363,16 @@ export const speakerRouter = router({
      *    address we store as an identity is not the mailbox the ticket went to.
      * 3. A CROSS-SPEAKER COLLISION IS REFUSED, GLOBALLY. If any speaker
      *    document already carries the address as its display `email` or in its
-     *    `knownEmails`, granting it here would merge two people's sign-in
-     *    identities — worse than the unclaimed ticket this exists to fix.
+     *    `knownEmails`, granting it here would put one address on two people
+     *    — worse than the unclaimed ticket this exists to fix.
      *    `findSpeakerByEmailForOrganizerCreate` is the probe, and it discloses
      *    one bit plus a name only for a person this organizer can already see.
      * 4. THE GRANT IS RECORDED. `ticketEmailGrants` keeps who added it, when,
      *    and off which ticket, so a wrong grant can be traced and revoked.
      *
      * STANDING: `requireExclusive`, the same as `updateEmail` and for the same
-     * reason (`@/server/tenancy`) — this writes a LOGIN MATCH KEY, and ordinary
+     * reason (`@/server/tenancy`) — this writes only a ticket grant (never a sign-in
+     * key), and ordinary
      * standing accrues to any tenant a person has ever signed into. It is the
      * stricter choice and it does narrow the feature: a speaker who also
      * belongs to another organization cannot be linked this way.
@@ -1387,7 +1388,7 @@ export const speakerRouter = router({
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message:
-              'That address cannot be used as a sign-in identity: its normalized form differs from the address itself.',
+              'That address cannot be used: its normalized form differs from the address itself.',
           })
         }
 
@@ -1429,7 +1430,7 @@ export const speakerRouter = router({
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message:
-              'That ticket’s address cannot be used as a sign-in identity: its normalized form differs from the address the ticket was sent to.',
+              'That ticket’s address cannot be used: its normalized form differs from the address the ticket was sent to.',
           })
         }
 

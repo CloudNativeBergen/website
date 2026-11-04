@@ -298,7 +298,7 @@ describe('speaker.admin.addTicketEmail', () => {
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
       message:
-        'That address cannot be used as a sign-in identity: its normalized form differs from the address itself.',
+        'That address cannot be used: its normalized form differs from the address itself.',
     })
     expect(h.patch).not.toHaveBeenCalled()
   })
@@ -324,7 +324,7 @@ describe('speaker.admin.addTicketEmail', () => {
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
       message:
-        'That ticket’s address cannot be used as a sign-in identity: its normalized form differs from the address the ticket was sent to.',
+        'That ticket’s address cannot be used: its normalized form differs from the address the ticket was sent to.',
     })
     expect(h.patch).not.toHaveBeenCalled()
   })
@@ -461,8 +461,8 @@ describe('speaker.admin.removeTicketEmail', () => {
   })
 
   /**
-   * Without this check the endpoint would strip a LOGIN-VERIFIED address out of
-   * somebody's match-set — locking a person out of their own account through an
+   * Without this check the endpoint would strip an address that was not a ticket grant
+   * (e.g. a login-verified one) from somebody's record, through an
    * endpoint whose job is undoing an organizer's mistake.
    */
   it('refuses to remove an address that was never granted from a ticket', async () => {
