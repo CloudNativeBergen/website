@@ -146,6 +146,21 @@ describe('services never import Sanity', () => {
     }
   })
 
+  it('lets only the conference parity cron import @sanity/client (#1892)', async () => {
+    const cron = 'services/conference/src/data/parity.ts'
+    expect(await restricted(cron, imp('@sanity/client'))).toEqual([])
+    for (const [file, spec] of [
+      [cron, 'next-sanity'],
+      [cron, '@sanity/image-url'],
+      ['services/conference/src/data/index.ts', '@sanity/client'],
+      ['services/conference/src/subgraph.ts', '@sanity/client'],
+    ]) {
+      expect(await restricted(file, imp(spec))).toEqual([
+        expect.stringContaining('do not read Sanity'),
+      ])
+    }
+  })
+
   it('does not match look-alike packages', async () => {
     expect(
       await restricted('services/cfp/src/subgraph.ts', imp('sanity-extra')),

@@ -72,7 +72,13 @@ beforeEach(() => {
   insert.run('conf-a', 'org-a', 1, 'A 2026', '["https://a.example"]')
   insert.run('conf-b', 'org-b', 1, 'B 2026', '[]')
   insert.run('conf-a-draft', 'org-a', 0, 'A 2027', '[]')
-  env = { DB: d1(sqlite), GATEWAY_PUBLIC_KEY: keys.publicPem }
+  env = {
+    DB: d1(sqlite),
+    GATEWAY_PUBLIC_KEY: keys.publicPem,
+    SANITY_PROJECT_ID: 'p',
+    SANITY_DATASET: 'd',
+    SANITY_API_TOKEN_READ: 't',
+  }
 })
 
 const QUERY = '{ conference { id title socialLinks } }'
@@ -190,6 +196,21 @@ describe('updateConference', () => {
       expect(row('conf-a').title).toBe(`by ${role}`)
       expect(row('conf-a').updated_at).toMatch(/^\d{4}-/)
     }
+  })
+
+  it('sets published from the lifecycle, and refuses null', async () => {
+    const admin = tenant('org-a', 'conf-a', 'admin')
+    expect(
+      (await update(admin, { published: false })).body.errors,
+    ).toBeUndefined()
+    expect(row('conf-a').published).toBe(0)
+    expect(
+      (await update(admin, { published: true })).body.errors,
+    ).toBeUndefined()
+    expect(row('conf-a').published).toBe(1)
+    const { body } = await update(admin, { published: null })
+    expect(body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    expect(row('conf-a').published).toBe(1)
   })
 
   it('refuses anonymous callers and members without a writing role', async () => {

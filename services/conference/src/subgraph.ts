@@ -58,6 +58,10 @@ const ConferencePatchInput = builder.inputType('ConferencePatch', {
     ...Object.fromEntries(STRINGS.map((k) => [k, t.string()])),
     visibility: t.string({ description: '`live` or `unlisted`. Not null.' }),
     socialLinks: t.stringList({ description: 'http(s) URLs. Not null.' }),
+    published: t.boolean({
+      description:
+        'False when Sanity marks the edition cancelled or archived. Not null.',
+    }),
   }),
 })
 
@@ -93,7 +97,8 @@ function validate(input: Record<string, unknown>): ConferencePatch {
   }
   for (const [k, v] of Object.entries(input)) {
     if (v == null) {
-      if (k === 'visibility' || k === 'socialLinks') bad(k, 'cannot be null')
+      if (k === 'visibility' || k === 'socialLinks' || k === 'published')
+        bad(k, 'cannot be null')
       continue
     }
     if (k === 'visibility' && v !== 'live' && v !== 'unlisted') {

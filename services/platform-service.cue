@@ -16,12 +16,14 @@ package codegen
 #PlatformService: {
 	name:    string & =~"^[a-z][a-z0-9-]*$"
 	tenancy: *true | false
-	// Cron Trigger schedules. Tenancy-off services only: a cron has no
-	// envelope. The service then exports `scheduled(data)` from src/data.
+	// Cron Trigger schedules. A cron has no envelope. Tenancy-off: the
+	// service exports `scheduled(data)` from src/data. Tenancy-on (db only):
+	// it exports `scheduled(env)` and `ScheduledEnv` from src/data, and the
+	// cron gets env directly, never a resolver.
 	crons: *[] | [...string]
 	// Worker service bindings (RPC). The service types them in its DataEnv.
 	serviceBindings: *[] | [...{binding: string, service: string, entrypoint?: string}]
-	if tenancy {crons: []}
+	if tenancy && !db {crons: []}
 	// Custom-domain routes per environment, for a service with its own
 	// public surface (identity). Subgraphs keep none (epic #1772, req. 8).
 	routes: {
@@ -69,9 +71,14 @@ package codegen
 		_envHead:    "export interface WorkerEnv extends DataEnv {"
 		_dataArg:    "env"
 	}
-	if len(crons) > 0 {
+	if len(crons) > 0 && !tenancy {
 		_scheduledImport:  ", scheduled"
 		_scheduledHandler: "\n  scheduled: (_controller: ScheduledController, env: WorkerEnv) =>\n    scheduled(createData(env)),"
+	}
+	if len(crons) > 0 && tenancy {
+		_dataImport:       ", scheduled, type ScheduledEnv"
+		_envHead:          "export interface WorkerEnv extends ScheduledEnv {\n  DB: D1Database"
+		_scheduledHandler: "\n  scheduled: (_controller: ScheduledController, env: WorkerEnv) =>\n    scheduled(env),"
 	}
 
 	// JSON files, written verbatim.
@@ -274,7 +281,7 @@ package codegen
 				      ),
 				    )
 				    return yoga.fetch(request, { envelope, data: createData(\(_dataArg), envelope) })
-				  },
+				  },\(_scheduledHandler)
 				} satisfies ExportedHandler<WorkerEnv>
 
 				"""
