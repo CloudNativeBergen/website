@@ -80,6 +80,31 @@ export interface OrganizerProposal {
   attachments?: Attachment[]
 }
 
+/** Another talk by a speaker, with the review aggregates the detail rates it by. */
+export interface OrganizerTalkSummary extends OrganizerPreviousTalk {
+  reviewCount?: number
+  reviewScores?: { total: number; weight?: number }[]
+}
+
+export interface OrganizerProposalDetailSpeaker extends OrganizerProposalSpeaker {
+  title?: string
+  bio?: string
+  links?: string[]
+  submittedTalks?: OrganizerTalkSummary[]
+  previousAcceptedTalks?: OrganizerTalkSummary[]
+}
+
+/**
+ * The admin proposal detail (#1887): {@link OrganizerProposal} plus what the
+ * detail tree (ProposalDetail, AdminActionBar, ReviewPanel, PublishedContent)
+ * reads beyond the list. {@link toOrganizerProposalDetail} copies exactly these.
+ */
+export interface OrganizerProposalDetail extends OrganizerProposal {
+  _updatedAt: string
+  withdrawnReason?: string
+  speakers?: OrganizerProposalDetailSpeaker[]
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any -- raw store rows */
 const ref = (x: any) => x && { _id: x._id, title: x.title }
 
@@ -158,6 +183,34 @@ export function toOrganizerProposal(raw: any): OrganizerProposal {
     reviewSummary: raw.reviewSummary,
     coSpeakerInvitations: raw.coSpeakerInvitations,
     attachments: raw.attachments,
+  }
+}
+const talkSummary = (t: any): OrganizerTalkSummary => ({
+  ...previousTalk(t),
+  reviewCount: t.reviewCount,
+  reviewScores: t.reviewScores?.map(
+    (r: any) => r && { total: r.total, weight: r.weight },
+  ),
+})
+
+const detailSpeaker = (s: any): OrganizerProposalDetailSpeaker => ({
+  ...speaker(s),
+  title: s.title,
+  bio: s.bio,
+  links: s.links,
+  submittedTalks: s.submittedTalks?.map((t: any) => t && talkSummary(t)),
+  previousAcceptedTalks: s.previousAcceptedTalks?.map(
+    (t: any) => t && talkSummary(t),
+  ),
+})
+
+/** Map a raw store row to an {@link OrganizerProposalDetail}, copying only its fields. */
+export function toOrganizerProposalDetail(raw: any): OrganizerProposalDetail {
+  return {
+    ...toOrganizerProposal(raw),
+    _updatedAt: raw._updatedAt,
+    withdrawnReason: raw.withdrawnReason,
+    speakers: raw.speakers?.map((s: any) => s && detailSpeaker(s)),
   }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

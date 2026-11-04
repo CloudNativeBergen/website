@@ -2,13 +2,14 @@
 
 import { StarIcon } from '@heroicons/react/24/solid'
 import { Review } from '@/lib/review/types'
+import type { OrganizerReview } from '@/lib/proposal/organizer'
 import { Speaker } from '@/lib/speaker/types'
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { formatDateSafe } from '@/lib/time'
 
 interface ProposalReviewListProps {
-  reviews: Review[]
+  reviews: (Review | OrganizerReview)[]
   currentUserId?: string
   minimal?: boolean
 }

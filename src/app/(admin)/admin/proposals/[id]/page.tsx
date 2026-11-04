@@ -4,7 +4,7 @@ import { CalendarIcon } from '@heroicons/react/20/solid'
 import { notFound } from 'next/navigation'
 import { formatDate } from '@/lib/time'
 import { ClockIcon } from '@heroicons/react/20/solid'
-import { getProposalSanity } from '@/lib/proposal/server'
+import { getOrganizerProposal } from '@/lib/proposal/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   ProposalDetail,
@@ -41,15 +41,11 @@ export default async function ProposalDetailPage({
     // ORG-SCOPE the organizer read to this tenant (B1, #642): a proposal from
     // another organization's conference must not be reachable by URL id even for a
     // signed-in organizer. A null org fails closed (proposal → notFound below).
-    const { proposal, proposalError } = await getProposalSanity({
+    // Not conference scope: previous accepted talks link to earlier editions.
+    const { proposal, proposalError } = await getOrganizerProposal(
+      conference?.organization?._ref ?? null,
       id,
-      speakerId: '',
-      isOrganizer: true,
-      organizerOrgId: conference?.organization?._ref ?? null,
-      includeReviews: true,
-      includePreviousAcceptedTalks: true,
-      includeSubmittedTalks: true,
-    })
+    )
 
     if (proposalError) {
       return (

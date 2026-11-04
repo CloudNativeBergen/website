@@ -4,6 +4,8 @@ import { ProposalsList } from './ProposalsList'
 import { Status, Format, Language, Level, Audience } from '@/lib/proposal/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { fn } from 'storybook/test'
+import { http, HttpResponse } from 'msw'
+import type { OrganizerProposal } from '@/lib/proposal/organizer'
 import { Speaker } from '@/lib/speaker/types'
 
 const rawProposals: ProposalExisting[] = [
@@ -119,11 +121,24 @@ const createMockProposal = (
   ...args: Parameters<typeof createMockProposalRaw>
 ) => toOrganizerProposal(createMockProposalRaw(...args))
 
+// The list re-fetches through `proposal.admin.list`; answer it with the same
+// OrganizerProposal fixtures the story passes as `initialProposals`.
+const listHandler = (proposals: OrganizerProposal[]) => ({
+  msw: {
+    handlers: [
+      http.get('/api/trpc/proposal.admin.list', () =>
+        HttpResponse.json({ result: { data: proposals } }),
+      ),
+    ],
+  },
+})
+
 const meta = {
   title: 'Systems/Proposals/ProposalsList',
   component: ProposalsList,
   parameters: {
     layout: 'fullscreen',
+    ...listHandler(mockProposals),
   },
   tags: ['autodocs'],
 } satisfies Meta<typeof ProposalsList>
@@ -164,67 +179,69 @@ export const EmptyList: Story = {
   args: {
     initialProposals: [],
   },
+  parameters: listHandler([]),
 }
 
 export const SingleProposal: Story = {
   args: {
     initialProposals: [mockProposals[0]],
   },
+  parameters: listHandler([mockProposals[0]]),
 }
+
+const onlySubmitted = mockProposals.filter((p) => p.status === Status.submitted)
 
 export const OnlySubmitted: Story = {
-  args: {
-    initialProposals: mockProposals.filter(
-      (p) => p.status === Status.submitted,
-    ),
-  },
+  args: { initialProposals: onlySubmitted },
+  parameters: listHandler(onlySubmitted),
 }
 
+const mixedStatus = [
+  createMockProposal(
+    'p1',
+    'Draft Proposal',
+    Status.draft,
+    Format.presentation_25,
+    'Alice',
+  ),
+  createMockProposal(
+    'p2',
+    'Submitted Talk',
+    Status.submitted,
+    Format.presentation_45,
+    'Bob',
+  ),
+  createMockProposal(
+    'p3',
+    'Accepted Workshop',
+    Status.accepted,
+    Format.workshop_120,
+    'Charlie',
+  ),
+  createMockProposal(
+    'p4',
+    'Rejected Lightning',
+    Status.rejected,
+    Format.lightning_10,
+    'David',
+  ),
+  createMockProposal(
+    'p5',
+    'Waitlisted Talk',
+    Status.waitlisted,
+    Format.presentation_40,
+    'Eve',
+  ),
+  createMockProposal(
+    'p6',
+    'Confirmed Workshop',
+    Status.confirmed,
+    Format.workshop_240,
+    'Frank',
+  ),
+]
+
 export const MixedStatus: Story = {
-  args: {
-    initialProposals: [
-      createMockProposal(
-        'p1',
-        'Draft Proposal',
-        Status.draft,
-        Format.presentation_25,
-        'Alice',
-      ),
-      createMockProposal(
-        'p2',
-        'Submitted Talk',
-        Status.submitted,
-        Format.presentation_45,
-        'Bob',
-      ),
-      createMockProposal(
-        'p3',
-        'Accepted Workshop',
-        Status.accepted,
-        Format.workshop_120,
-        'Charlie',
-      ),
-      createMockProposal(
-        'p4',
-        'Rejected Lightning',
-        Status.rejected,
-        Format.lightning_10,
-        'David',
-      ),
-      createMockProposal(
-        'p5',
-        'Waitlisted Talk',
-        Status.waitlisted,
-        Format.presentation_40,
-        'Eve',
-      ),
-      createMockProposal(
-        'p6',
-        'Confirmed Workshop',
-        Status.confirmed,
-        Format.workshop_240,
-        'Frank',
-      ),
-    ],
-  },
+  args: { initialProposals: mixedStatus },
+  parameters: listHandler(mixedStatus),
 }

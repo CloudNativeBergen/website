@@ -5,7 +5,10 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { runGroq } from '../../helpers/sanityStore'
-import { toOrganizerProposal } from '@/lib/proposal/organizer'
+import {
+  toOrganizerProposal,
+  toOrganizerProposalDetail,
+} from '@/lib/proposal/organizer'
 
 const h = vi.hoisted(() => ({ docs: [] as Record<string, unknown>[] }))
 
@@ -20,7 +23,8 @@ vi.mock('@/lib/sanity/client', () => {
   }
 })
 
-const { listOrganizerProposals } = await import('@/lib/proposal/server')
+const { listOrganizerProposals, getOrganizerProposal } =
+  await import('@/lib/proposal/server')
 
 const rawRow = {
   _id: 'talk-1',
@@ -227,5 +231,146 @@ describe('listOrganizerProposals tenancy', () => {
     expect(proposals[0].reviews?.map((r) => r.comment)).toEqual([
       'foreign review',
     ])
+  })
+})
+
+describe('toOrganizerProposalDetail', () => {
+  const detailRow = {
+    ...rawRow,
+    withdrawnReason: 'r',
+    speakers: [
+      {
+        ...rawRow.speakers[0],
+        title: 'Eng',
+        links: ['https://x.example'],
+        socialTagOptOut: true,
+        submittedTalks: [
+          {
+            ...rawRow.speakers[0].previousAcceptedTalks[0],
+            reviewCount: 1,
+            reviewScores: [{ total: 12, _type: 'x' }],
+          },
+        ],
+      },
+    ],
+  }
+
+  it('copies exactly the detail fields', () => {
+    const p = toOrganizerProposalDetail(detailRow)
+    expect(Object.keys(p).sort()).toEqual(
+      [
+        ...Object.keys(toOrganizerProposal(rawRow)),
+        '_updatedAt',
+        'withdrawnReason',
+      ].sort(),
+    )
+    expect(Object.keys(p.speakers![0]).sort()).toEqual(
+      [
+        '_id',
+        'bio',
+        'email',
+        'flags',
+        'image',
+        'links',
+        'name',
+        'previousAcceptedTalks',
+        'providers',
+        'slug',
+        'submittedTalks',
+        'title',
+      ].sort(),
+    )
+    expect(Object.keys(p.speakers![0].submittedTalks![0]).sort()).toEqual(
+      [
+        '_createdAt',
+        '_id',
+        'conference',
+        'reviewCount',
+        'reviewScores',
+        'status',
+        'title',
+        'topics',
+      ].sort(),
+    )
+    expect(p.speakers![0].submittedTalks![0].reviewScores).toEqual([
+      { total: 12, weight: undefined },
+    ])
+    const json = JSON.stringify(p)
+    for (const leak of ['_ref', '_rev', '_type', 'socialTagOptOut', 'utm']) {
+      expect(json).not.toContain(leak)
+    }
+  })
+})
+
+describe('getOrganizerProposal tenancy', () => {
+  beforeEach(() => {
+    h.docs = [
+      { _id: 'org-1', _type: 'organization' },
+      { _id: 'org-2', _type: 'organization' },
+      {
+        _id: 'conf-2025',
+        _type: 'conference',
+        title: '2025',
+        organization: { _ref: 'org-1' },
+      },
+      {
+        _id: 'conf-2026',
+        _type: 'conference',
+        title: '2026',
+        organization: { _ref: 'org-1' },
+      },
+      {
+        _id: 'conf-x',
+        _type: 'conference',
+        title: 'X',
+        organization: { _ref: 'org-2' },
+      },
+      { _id: 's1', _type: 'speaker', name: 'Ada' },
+      {
+        _id: 'earlier',
+        _type: 'talk',
+        title: 'Earlier edition',
+        status: 'accepted',
+        conference: { _ref: 'conf-2025' },
+        speakers: [{ _ref: 's1' }],
+      },
+      {
+        _id: 'foreign',
+        _type: 'talk',
+        title: 'Foreign',
+        status: 'submitted',
+        conference: { _ref: 'conf-x' },
+        speakers: [{ _ref: 's1' }],
+      },
+    ]
+  })
+
+  // previousAcceptedTalks links across editions of the same organization, so
+  // a talk from another edition must stay readable.
+  it('reads a same-org proposal from another edition', async () => {
+    const { proposal, proposalError } = await getOrganizerProposal(
+      'org-1',
+      'earlier',
+    )
+    expect(proposalError).toBeNull()
+    expect(proposal?.title).toBe('Earlier edition')
+  })
+
+  it('reads a foreign-org id as null, like a nonexistent one', async () => {
+    expect(await getOrganizerProposal('org-1', 'foreign')).toEqual({
+      proposal: null,
+      proposalError: null,
+    })
+    expect(await getOrganizerProposal('org-1', 'missing')).toEqual({
+      proposal: null,
+      proposalError: null,
+    })
+  })
+
+  it('fails closed on a null org', async () => {
+    expect(await getOrganizerProposal(null, 'earlier')).toEqual({
+      proposal: null,
+      proposalError: null,
+    })
   })
 })

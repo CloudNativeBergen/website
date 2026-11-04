@@ -17,7 +17,12 @@ import 'server-only'
 import type { ProposalExisting, ProposalInput, Status } from './types'
 import * as store from './data/sanity'
 import { toPublicTalk, type PublicTalk } from './public'
-import { toOrganizerProposal, type OrganizerProposal } from './organizer'
+import {
+  toOrganizerProposal,
+  toOrganizerProposalDetail,
+  type OrganizerProposal,
+  type OrganizerProposalDetail,
+} from './organizer'
 import { filterProposals, type ProposalFilters } from './utils/filtering'
 
 export { sendAcceptRejectNotification } from './email/notification'
@@ -27,7 +32,7 @@ export {
   buildProposalDocument,
 } from './data/sanity'
 export type { ProposalExisting, ProposalInput } from './types'
-export type { OrganizerProposal } from './organizer'
+export type { OrganizerProposal, OrganizerProposalDetail } from './organizer'
 
 export interface ProposalResult {
   proposal: ProposalExisting
@@ -96,6 +101,36 @@ export async function listOrganizerProposals(
   return {
     proposals: filters ? filterProposals(mapped, filters, reviewerId) : mapped,
     proposalsError,
+  }
+}
+
+/**
+ * One proposal for the organizer detail page, ORG-SCOPED (B1, #642) to `orgId`,
+ * the server-resolved organization of the domain conference. Organization, not
+ * conference: `previousAcceptedTalks` links to earlier editions of the same org.
+ * A foreign-org id reads `null` exactly like a nonexistent one; a null org
+ * fails closed.
+ */
+export async function getOrganizerProposal(
+  orgId: string | null,
+  id: string,
+): Promise<{
+  proposal: OrganizerProposalDetail | null
+  proposalError: Error | null
+}> {
+  if (!orgId) return { proposal: null, proposalError: null }
+  const { proposal, proposalError } = await store.getProposal({
+    id,
+    speakerId: '',
+    isOrganizer: true,
+    organizerOrgId: orgId,
+    includeReviews: true,
+    includePreviousAcceptedTalks: true,
+    includeSubmittedTalks: true,
+  })
+  return {
+    proposal: proposal ? toOrganizerProposalDetail(proposal) : null,
+    proposalError,
   }
 }
 

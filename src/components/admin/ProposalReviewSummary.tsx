@@ -3,10 +3,11 @@
 import { StarIcon } from '@heroicons/react/24/solid'
 import { StarIcon as StarIconOutline } from '@heroicons/react/24/outline'
 import { Review } from '@/lib/review/types'
+import type { OrganizerReview } from '@/lib/proposal/organizer'
 import clsx from 'clsx'
 
 interface ProposalReviewSummaryProps {
-  reviews: Review[]
+  reviews: (Review | OrganizerReview)[]
 }
 
 export function ProposalReviewSummary({ reviews }: ProposalReviewSummaryProps) {

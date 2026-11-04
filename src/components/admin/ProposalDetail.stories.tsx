@@ -11,6 +11,7 @@ import {
 import { Speaker, Flags } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
+import { toOrganizerProposalDetail } from '@/lib/proposal/organizer'
 
 const mockTopics: Topic[] = [
   {
@@ -86,6 +87,10 @@ const meta: Meta<typeof ProposalDetail> = {
   title: 'Systems/Proposals/Admin/ProposalDetail',
   component: ProposalDetail,
   tags: ['autodocs'],
+  // Render what the detail page now receives: the fixture through the mapper.
+  render: (args) => (
+    <ProposalDetail proposal={toOrganizerProposalDetail(args.proposal)} />
+  ),
   parameters: {
     docs: {
       description: {
