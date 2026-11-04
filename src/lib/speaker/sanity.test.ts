@@ -291,6 +291,34 @@ describe('getOrCreateSpeaker — verified email cross-provider link', () => {
   })
 })
 
+describe('getOrCreateSpeaker — GitHub email lookup per session path (#1901)', () => {
+  it('identity session (no token): skips the GitHub lookup and uses the identity email', async () => {
+    fetchMock.mockImplementation(routeFetch({ provider: {} }))
+    const { speaker } = await getOrCreateSpeaker(
+      user({ email: 'id@example.com' }),
+      { provider: 'github', providerAccountId: 'gh-9', type: 'oauth' },
+      { email_verified: true },
+    )
+    expect(verifiedEmailsMock).not.toHaveBeenCalled()
+    expect(speaker.knownEmails).toEqual(['id@example.com'])
+  })
+
+  it('GitHub OAuth: runs the lookup with the access token', async () => {
+    fetchMock.mockImplementation(routeFetch({ provider: {} }))
+    verifiedEmailsMock.mockResolvedValue({
+      error: null,
+      emails: [{ email: 'extra@example.com', verified: true }],
+    })
+    const { speaker } = await getOrCreateSpeaker(user(), githubAccount())
+    expect(verifiedEmailsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ access_token: 'gh-token' }),
+    )
+    expect(speaker.knownEmails).toEqual(
+      expect.arrayContaining(['jane@example.com', 'extra@example.com']),
+    )
+  })
+})
+
 describe('getOrCreateSpeaker — verified-only security invariant', () => {
   it('does NOT link on an unverified LinkedIn email; creates a new speaker', async () => {
     const emailMatchesSpy = existingSpeaker()
