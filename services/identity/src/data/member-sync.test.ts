@@ -246,6 +246,14 @@ describe('syncMembers', () => {
     expect(events()).toEqual(['identity.membership.sync_failed'])
   })
 
+  it('grant mode: published conferences with no organizers log only sync_failed', async () => {
+    const { d1, env } = await freshDb()
+    conferences = [{ orgId: 'org-a', ids: [] }]
+    await syncMembers(env)
+    expect(await members(d1)).toHaveLength(1)
+    expect(events()).toEqual(['identity.membership.sync_failed'])
+  })
+
   it('skips an org with no organizers and warns', async () => {
     const { d1, env } = await freshDb()
     conferences = [{ orgId: 'org-b', ids: ['sp-ok'] }]
@@ -479,6 +487,38 @@ describe('syncMembers drift mode (MEMBER_SOURCE_ORGS)', () => {
     } finally {
       now.mockRestore()
     }
+  })
+
+  it('reports every member of a drift org whose conferences lost all organizers', async () => {
+    const { env, d1 } = await driftDb()
+    conferences = [
+      { orgId: 'org-a', ids: [] },
+      { orgId: 'org-b', ids: null },
+    ]
+    await syncMembers(env)
+    await syncMembers(env)
+    expect(driftLog()).toMatchObject({
+      orgId: 'org-a',
+      missingInSanity: ['u-ok', 'u-owner', 'u-stray'],
+    })
+    expect(slackPosts).toHaveLength(1)
+    expect(events()).toContain('identity.membership.drift_deduped')
+    // org-b grants nothing on an empty roster, exactly as before.
+    expect(
+      (await members(d1)).filter((m) => m.organizationId === 'org-b'),
+    ).toEqual([])
+    expect(events()).not.toContain('identity.membership.granted')
+    expect(events()).not.toContain('identity.membership.synced')
+  })
+
+  it('a globally empty read stays sync_failed: no drift, no grants', async () => {
+    const { env, d1 } = await driftDb()
+    const before = await members(d1)
+    conferences = []
+    await syncMembers(env)
+    expect(await members(d1)).toEqual(before)
+    expect(slackPosts).toEqual([])
+    expect(events()).toEqual(['identity.membership.sync_failed'])
   })
 
   it('only logs when the webhook is unset', async () => {

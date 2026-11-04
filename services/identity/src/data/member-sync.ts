@@ -66,7 +66,8 @@ interface Organizer {
   emails: string[]
 }
 
-/** orgId -> its organizers with their lowercased known emails. */
+/** orgId -> its organizers with their lowercased known emails, plus the
+ * orgs with a readable published conference (their roster may be empty). */
 async function organizerEmails(env: SyncEnv) {
   const cs = await groq<{ orgId: string; ids: string[] | null }[]>(
     env,
@@ -103,7 +104,7 @@ async function organizerEmails(env: SyncEnv) {
       list.push({ speakerId: id, emails })
       out.set(c.orgId, list)
     }
-  return out
+  return { byOrg: out, confOrgs: new Set(cs.map((c) => c.orgId)) }
 }
 
 export async function syncMembers(env: SyncEnv) {
@@ -117,8 +118,9 @@ export async function syncMembers(env: SyncEnv) {
     })
   }
   let byOrg: Map<string, Organizer[]>
+  let confOrgs: Set<string>
   try {
-    byOrg = await organizerEmails(env)
+    ;({ byOrg, confOrgs } = await organizerEmails(env))
   } catch (e) {
     return log('error', 'identity.membership.sync_failed', {
       reason: 'sanity_read',
@@ -126,11 +128,11 @@ export async function syncMembers(env: SyncEnv) {
     })
   }
   // An unauthenticated read of a private dataset returns [], not an error.
-  if (byOrg.size === 0) {
-    return log('error', 'identity.membership.sync_failed', {
-      reason: 'no_organizers',
-    })
-  }
+  // No organizers anywhere never grants. Drift orgs with a published
+  // conference still run: their roster is validly empty (#1947 review).
+  const noOrganizers = byOrg.size === 0
+  if (noOrganizers)
+    log('error', 'identity.membership.sync_failed', { reason: 'no_organizers' })
 
   const { results: users } = await env.DB.prepare(
     'SELECT id, email FROM user WHERE emailVerified = 1',
@@ -160,6 +162,8 @@ export async function syncMembers(env: SyncEnv) {
   let granted = 0
   for (const { id: orgId } of orgs) {
     const organizers = byOrg.get(orgId)
+    if (noOrganizers && !(sourceOrgs.has(orgId) && confOrgs.has(orgId)))
+      continue
     if (sourceOrgs.has(orgId)) {
       // Never grants. A drift or Slack failure must not stop the sync.
       await checkDrift(env, orgId, organizers ?? [], verified).catch((e) =>
@@ -198,7 +202,7 @@ export async function syncMembers(env: SyncEnv) {
       }
     }
   }
-  log('log', 'identity.membership.synced', { granted })
+  if (!noOrganizers) log('log', 'identity.membership.synced', { granted })
 }
 
 const DAY_MS = 24 * 3600 * 1000
