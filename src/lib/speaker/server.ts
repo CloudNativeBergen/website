@@ -13,6 +13,7 @@ import type { PublicTalk } from '@/lib/proposal/public'
 import * as store from './sanity'
 import { canonicalEmail, normalizeEmail } from './email'
 import type { Speaker, TicketEmailGrant } from './types'
+import type { PushPreferences } from '@/lib/push/types'
 
 /** A speaker's public profile in one conference. */
 export type PublicSpeaker = Pick<
@@ -129,4 +130,89 @@ export async function removeSpeakerTicketEmail(
           ),
         })
   ).commit()
+}
+
+/**
+ * Queue appending `orgId` to a speaker's `organizations` on `transaction`; the
+ * caller commits. Unconditional: callers ensure the membership is new.
+ */
+export function addSpeakerOrganization(
+  speakerId: string,
+  orgId: string,
+  options: { transaction: Transaction },
+): void {
+  options.transaction.patch(speakerId, (p) =>
+    p
+      .setIfMissing({ organizations: [] })
+      .insert('after', 'organizations[-1]', [
+        { _type: 'reference', _ref: orgId, _key: orgId },
+      ]),
+  )
+}
+
+/**
+ * Escape a string for a GROQ double-quoted literal. Endpoints are already
+ * plain https URLs (`isValidPushEndpoint`); `\` and `"` are escaped
+ * defensively so the selector can never be broken out of.
+ */
+function escapeGroqString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+function pushEndpointSelector(endpoint: string): string {
+  return `pushSubscriptions[endpoint=="${escapeGroqString(endpoint)}"]`
+}
+
+/** A push subscription as stored on the speaker document. */
+export interface StoredPushSubscription {
+  _key: string
+  endpoint: string
+  keys: { p256dh: string; auth: string }
+  createdAt: string
+  userAgent?: string
+}
+
+/**
+ * In ONE transaction: unset the subscriptions at `removeEndpoints`, then
+ * append `item`. Two patches so the unset applies before the insert and the
+ * new record is never matched by its own dedup selector.
+ */
+export async function replaceSpeakerPushSubscriptions(
+  speakerId: string,
+  removeEndpoints: string[],
+  item: StoredPushSubscription,
+): Promise<void> {
+  await clientWrite
+    .transaction()
+    .patch(speakerId, (patch) =>
+      patch.unset(removeEndpoints.map(pushEndpointSelector)),
+    )
+    .patch(speakerId, (patch) =>
+      patch
+        .setIfMissing({ pushSubscriptions: [] })
+        .insert('after', 'pushSubscriptions[-1]', [item]),
+    )
+    .commit()
+}
+
+/** Unset the push subscription with `endpoint`, if present (atomic). */
+export async function removeSpeakerPushSubscription(
+  speakerId: string,
+  endpoint: string,
+): Promise<void> {
+  await clientWrite
+    .patch(speakerId)
+    .unset([pushEndpointSelector(endpoint)])
+    .commit()
+}
+
+/** Overwrite a speaker's push preferences. Callers normalise first. */
+export async function setSpeakerPushPreferences(
+  speakerId: string,
+  preferences: PushPreferences,
+): Promise<void> {
+  await clientWrite
+    .patch(speakerId)
+    .set({ pushPreferences: preferences })
+    .commit()
 }

@@ -40,6 +40,8 @@ const fetchMock = vi.fn(async (query: string) => {
 const createSpy = vi.fn()
 const patchSpy = vi.fn()
 const commitMock = vi.fn().mockResolvedValue({})
+// Every transaction clientWrite.transaction() minted, in order.
+const txs: unknown[] = []
 
 function makePatchRecorder(id: string) {
   const ops: Array<{ op: string; args: unknown[] }> = []
@@ -53,7 +55,7 @@ function makePatchRecorder(id: string) {
       return p
     },
   }
-  return { p, done: () => patchSpy(id, ops) }
+  return { p, done: (tx: unknown) => patchSpy(id, ops, tx) }
 }
 
 function makeTransaction() {
@@ -65,11 +67,12 @@ function makeTransaction() {
     patch: (id: string, fn: (p: unknown) => unknown) => {
       const rec = makePatchRecorder(id)
       fn(rec.p)
-      rec.done()
+      rec.done(tx)
       return tx
     },
-    commit: () => commitMock(),
+    commit: () => commitMock(tx),
   }
+  txs.push(tx)
   return tx
 }
 
@@ -156,6 +159,7 @@ beforeEach(() => {
   orgSlugCount = 0
   claimedDomains = ['cloudnativebergen.no']
   speakerMatches = []
+  txs.length = 0
   commitMock.mockResolvedValue({})
 })
 
@@ -360,8 +364,13 @@ describe('createOrganization — atomic transaction', () => {
     expect(createSpy).toHaveBeenCalledTimes(3) // org + conference + domain lock
     expect(patchSpy).toHaveBeenCalledTimes(1)
 
-    const [patchedId, ops] = patchSpy.mock.calls[0]
+    const [patchedId, ops, patchedTx] = patchSpy.mock.calls[0]
     expect(patchedId).toBe('sp-existing')
+    // The membership patch must ride the ONE committed transaction, not a
+    // fresh one that is never committed.
+    expect(txs).toHaveLength(1)
+    expect(patchedTx).toBe(txs[0])
+    expect(commitMock.mock.calls[0][0]).toBe(txs[0])
     expect(ops).toEqual([
       { op: 'setIfMissing', args: [{ organizations: [] }] },
       {

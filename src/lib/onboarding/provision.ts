@@ -1,8 +1,10 @@
+import 'server-only'
 import { createHash } from 'crypto'
 import { revalidateTag } from 'next/cache'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { generateKey } from '@/lib/sanity/helpers'
 import { DISPLAY_EMAIL_MATCHABLE } from '@/lib/speaker/email'
+import { addSpeakerOrganization } from '@/lib/speaker/server'
 import {
   normalizeDomain,
   wildcardFormForHost,
@@ -547,17 +549,9 @@ export async function provisionOrganization(
     } else if (existingSpeaker) {
       // The org is brand-new, so the membership cannot already exist — an
       // unconditional append is safe and stays inside the transaction.
-      tx = tx.patch(existingSpeaker._id, (p) =>
-        p
-          .setIfMissing({ organizations: [] })
-          .insert('after', 'organizations[-1]', [
-            {
-              _type: 'reference',
-              _ref: organization._id,
-              _key: organization._id,
-            },
-          ]),
-      )
+      addSpeakerOrganization(existingSpeaker._id, organization._id, {
+        transaction: tx,
+      })
     }
     if (receiptId) {
       const now = Date.now()
