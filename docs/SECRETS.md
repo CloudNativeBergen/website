@@ -19,23 +19,24 @@ Environments: **Preview** and **Production** are separate everywhere. Never reus
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`                                                                                                                                        | Worker `konf-identity[-preview]`                                                                   | **shared** (one OAuth app)                    | `ID_KONF_APP_GH_CLIENT_ID` / `ID_KONF_APP_GH_CLIENT_SECRET`                                                | Regenerate the secret in the GitHub OAuth app, update fnox, `wrangler secret put` on both Workers.                                                                                  |
 | `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET`                                                                                                                                    | Worker `konf-identity[-preview]`                                                                   | **shared** (one OAuth app)                    | `ID_KONF_APP_LI_CLIENT_ID` / `ID_KONF_APP_LI_CLIENT_SECRET`                                                | As GitHub, in the LinkedIn developer portal.                                                                                                                                        |
 | `SANITY_API_TOKEN_READ`                                                                                                                                                            | Workers `konf-content`, `konf-conference`, `konf-identity` (+ `-preview`)                          | **shared**: the production read token on both | `SANITY_API_TOKEN_READ_PROD`                                                                               | Create a new read token in Sanity manage, update fnox, `wrangler secret put SANITY_API_TOKEN_READ --env <env>` on each of the three Workers (both envs), then delete the old token. |
+| `CF_API_TOKEN` (zone-scoped, SSL and Certificates: Edit; `CF_ZONE_ID` is a plain id)                                                                                               | Worker `konf-tenant-directory[-preview]`, for custom hostnames                                     | Per env expected; **not verified**            | none yet (gap)                                                                                             | Create a new zone-scoped token in Cloudflare, `wrangler secret put CF_API_TOKEN --env <env>`, delete the old token. Distinct from the CI deploy token below.                        |
 | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`                                                                                                                                    | GitHub environments `workers-preview`, `workers-production`                                        | separate token per environment                | not in fnox                                                                                                | Create a new scoped token in Cloudflare, replace the GitHub environment secret, delete the old token.                                                                               |
 | Site secrets (`AUTH_SECRET`, `AUTH_GITHUB_*`, `AUTH_LINKEDIN_*`, `SANITY_API_TOKEN_READ`/`_WRITE`, `RESEND_API_KEY`, `CRON_SECRET`, `BADGE_ISSUER_*`, and the rest of `fnox list`) | Vercel env                                                                                         | per Vercel environment                        | same name as the variable                                                                                  | See [AUTH.md](./AUTH.md) for the auth ones; otherwise rotate at the provider, update fnox, update Vercel, redeploy.                                                                 |
 
 Deliberately shared, accepted by the owner: the GitHub and LinkedIn OAuth apps (one app serves preview and production) and the Sanity read token (preview reads the same token as production, though preview Workers read the `development` dataset). Everything else must differ between preview and production.
 
-Gaps: `KONF_PREVIEW_GATEWAY_*` and a fnox key for `BETTER_AUTH_SECRET` do not exist yet. `scripts/rotate-gateway-key.sh preview` creates the first pair. Whether Vercel Preview/Production hold the pairs above must be checked in the Vercel dashboard; this table says what they should hold.
+Gaps: `KONF_PREVIEW_GATEWAY_*` and a fnox key for `BETTER_AUTH_SECRET` do not exist yet, nor do fnox keys for `CF_API_TOKEN`. `scripts/rotate-gateway-key.sh preview` creates the first pair. Whether Vercel Preview/Production hold the pairs above must be checked in the Vercel dashboard; this table says what they should hold.
 
-Also set on Vercel, not secret: `KONF_API_URL` (see [PLATFORM.md](./PLATFORM.md#gateway-url)).
+Also set on Vercel, not secret: `KONF_API_URL` (see [PLATFORM.md](./PLATFORM.md#gateway-url); the site reads it since #1935, so it only takes effect once that PR is merged).
 
 ## Setting a Worker secret
 
 ```sh
 cd <api|services/NAME>
-fnox get NAME | npx wrangler secret put NAME --env <preview|production>
+fnox get FNOX_KEY | npx wrangler secret put WORKER_NAME --env <preview|production>
 ```
 
-Pipe from fnox so the value never reaches the terminal or shell history.
+`FNOX_KEY` and `WORKER_NAME` differ: use the table (for example `KONF_PREVIEW_GATEWAY_PRIVATE_KEY` becomes `ENVELOPE_PRIVATE_KEY`). Pipe from fnox so the value never reaches the terminal or shell history.
 
 ## Gateway key
 
@@ -58,4 +59,4 @@ The site signs `x-konf-service` with `KONF_SITE_SIGNING_KEY`; the gateway verifi
 
 ## Shared pairs
 
-`CLIENT_IP_SECRET`, `IDENTITY_EXCHANGE_SECRET` and `IDENTITY_UPGRADE_SECRET` are symmetric secrets held on both sides. Generate with `openssl rand -base64 32` piped into `fnox set <KEY>`, then put the same value on the Worker (`fnox get KEY | wrangler secret put NAME --env <env>`) and on Vercel for that environment. There is no overlap window: the two sides disagree until both are set, so set both back to back. Effect while they disagree: client IP signing is ignored (the gateway falls back to `CF-Connecting-IP`); exchange and upgrade sign-ins fail.
+`CLIENT_IP_SECRET`, `IDENTITY_EXCHANGE_SECRET` and `IDENTITY_UPGRADE_SECRET` are symmetric secrets held on both sides. Generate with `openssl rand -base64 32` piped into `fnox set <KEY>`, then put the same value on the Worker (`fnox get FNOX_KEY | wrangler secret put WORKER_NAME --env <env>`) and on Vercel for that environment. There is no overlap window, and a Vercel variable change only reaches a new deployment: set the Vercel variable first, redeploy, and update the Worker secret as soon as that deployment is live. The sides disagree in between. Effect while they disagree: client IP signing is ignored (the gateway falls back to `CF-Connecting-IP`); exchange and upgrade sign-ins fail.
