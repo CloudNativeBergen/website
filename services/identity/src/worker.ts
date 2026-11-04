@@ -5,7 +5,7 @@ import {
   envelopeFromRequest,
   type Envelope,
 } from '@runkonf/tenancy'
-import { createData, type DataEnv } from './data'
+import { createData, type DataEnv, scheduled } from './data'
 import { schema } from './subgraph'
 
 export interface WorkerEnv extends DataEnv {
@@ -37,4 +37,6 @@ export default {
     }
     return yoga.fetch(request, { envelope, data: createData(env) })
   },
+  scheduled: (_controller: ScheduledController, env: WorkerEnv) =>
+    scheduled(createData(env)),
 } satisfies ExportedHandler<WorkerEnv>

@@ -11,6 +11,7 @@ import {
 } from './schema'
 
 export { createAuth, type AuthEnv } from './auth'
+import { syncMembers, type SyncEnv } from './member-sync'
 
 /** What the gateway needs per request to mint an envelope. */
 export interface Principal {
@@ -20,7 +21,7 @@ export interface Principal {
   platformOperator: boolean
 }
 
-export interface DataEnv {
+export interface DataEnv extends SyncEnv {
   DB: D1Database
   /** konf-tenant-directory over a service binding: verified origins (#688). */
   DIRECTORY: Fetcher
@@ -32,6 +33,8 @@ const TENANT_QUERY =
 export function createData(env: DataEnv) {
   const db = rawDb(env.DB)
   return {
+    /** Grants missing organizer memberships from Sanity (cron, #1907). */
+    syncMembers: () => syncMembers(env),
     /**
      * True only for an exact `https://<host>` origin (no path, port or
      * userinfo) whose host the directory holds as verified for an active
@@ -144,3 +147,7 @@ export function createData(env: DataEnv) {
     },
   }
 }
+
+/** Cron entry (service.cue `crons`). */
+export const scheduled = (data: ReturnType<typeof createData>) =>
+  data.syncMembers()
