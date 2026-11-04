@@ -166,7 +166,7 @@ describe('speaker write seam: push + onboarding', () => {
     })
     vi.mocked(clientReadUncached.fetch).mockResolvedValueOnce({
       pushSubscriptions: Array.from({ length: 20 }, (_, i) => old(i + 1)),
-    })
+    } as never)
     await addPushSubscription('sp-1', {
       endpoint: 'https://p/new"\\',
       keys: { p256dh: 'P', auth: 'A' },
