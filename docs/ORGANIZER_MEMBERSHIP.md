@@ -54,8 +54,10 @@ Line references are to `origin/main` at 24dd262a.
 - **Invites** use the plugin's `invitation` rows: lowercased email, role,
   `pending`, 30 days (`invitationExpiresIn: 30 * 24 * 3600`, set in the plugin
   config, so the plugin and our mutations share one expiry). A new migration
-  adds a unique partial index on `(organizationId, email) WHERE status =
-'pending'`. **Invites do not touch Sanity.** The person is added to
+  adds a unique partial index on `(organizationId, lower(email)) WHERE status =
+'pending'`. An expired invite keeps `status = 'pending'` in the table (the
+  plugin filters expiry on read), so a `beforeCreateInvitation` hook cancels
+  expired pending rows for the address before a new invite is written. **Invites do not touch Sanity.** The person is added to
   `organizers[]` only when the invite is accepted, because Sanity grants
   `/admin`.
 
@@ -75,27 +77,53 @@ role)` and `cancelOrganizationInvitation(invitationId)`. Each calls the
   `cancelInvitation`), so there is one implementation. Acceptance is the
   plugin's `acceptInvitation` on verified sign-in; its `afterAcceptInvitation`
   hook mirrors to Sanity.
+- **Arguments (better-auth 1.7.14):** `removeMember` takes `memberIdOrEmail`
+  and `updateMemberRole` takes `memberId`, not a user id, so the resolver maps
+  `userId` to the `member.id` first. Both take an optional `organizationId`.
+- **The plugin's endpoints need a member session.** Every `auth.api.*` call
+  above runs `orgSessionMiddleware` and then looks up the caller's own
+  `member` row in the org (`MEMBER_NOT_FOUND` otherwise). An operator who is
+  not a member of the org cannot use them; the operator path in PR 3 needs
+  its own write (adapter or D1) with the same audit row, or a decision to
+  make operators members.
 - **Org scope.** Tenant callers: the org comes from the envelope only. Operators
   with a `PlatformContext` have no org, so the operator path alone takes an
   explicit `organizationId` argument, checked to exist and recorded in the audit
   row. A tenant caller who passes it is refused.
+- **Role rules the plugin already enforces** (default `creatorRole` `owner`):
+  only an owner may invite with role `owner`, change an owner's role, grant
+  `owner`, or remove an owner; `admin` holds `member: create, update, delete`
+  and `invitation: create, cancel`, so admins manage admins. The plugin does
+  not stop an admin cancelling an owner's invitation; a
+  `beforeCancelInvitation` hook does. No custom access control is needed.
 - **Authorisation** in the resolver, before any fetch: `orgRole` `owner` or
   `admin`, or operator scope. Admins manage admins; only owners and operators
   grant, demote or remove an owner. Self-removal stays refused
   (`conference.ts:1079`).
 - **Last owner: a trigger on `member`**, so every path hits it (our mutations,
   the plugin's HTTP routes, `leave`, hand-run SQL). `BEFORE DELETE` and
-  `BEFORE UPDATE OF role` raise `LAST_OWNER` when the row is the org's only
-  `owner`. A D1 statement is atomic, so two concurrent demotions cannot both
-  pass.
+  `BEFORE UPDATE OF role, organizationId` raise `LAST_OWNER` when the row is
+  the org's only `owner` (roles are comma lists). A cascade from a deleted
+  organization passes. D1 serialises writes and a statement is atomic, so two
+  demotions cannot both pass, and a multi-row demotion rolls back whole. The
+  plugin's own only-owner checks on `remove-member`, `update-member-role` and
+  `leave` are read-then-write; the trigger is what makes them hold.
 - **Idempotency:** remove of a non-member and setRole to the current role are
-  no-op successes; a second invite to the same pending email hits the unique
-  index and returns the existing invite. Retries are safe.
+  no-op successes. A second invite to the same live pending email is refused
+  by the plugin (`USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION`) before the
+  index is reached; the resolver passes `resend: true` to get the existing
+  invite back (the plugin then extends its expiry). The index is the backstop
+  for races and direct writes. Retries are safe.
 - **Audit:** the plugin hooks write `audit_event` for `member.add`,
-  `member.remove`, `member.role`, `invite.create`, `invite.cancel` and
-  `invite.accept`, with `detail = {orgId, actorId, from, to, invitationId}` (ids
-  only, #1310). For invite events the subject has no user yet, so `userId` is
-  the inviter (`invitation.inviterId`); acceptance uses the new member.
+  `member.remove`, `member.role`, `invite.create`, `invite.cancel`,
+  `invite.accept` and `invite.reject`, with `detail = {orgId, actorId,
+memberId, from, to, invitationId}` (ids only, #1310). For invite events the
+  subject has no user yet, so `userId` is the actor (inviter or canceller);
+  accept and reject use the invitee. `afterRemoveMember` and
+  `afterUpdateMemberRole` get no actor, so it is read from the request context
+  (`@better-auth/core/context`). Accepting fires `afterAcceptInvitation` only,
+  not `afterAddMember`. `leave` runs no organization hook: a top-level
+  `hooks.after` on `/organization/leave` writes `member.leave`.
 - The site replaces `updateOrganizers` with per-person procedures, and patches
   with array ops, not read-modify-write (as `conference.ts:651`).
 
