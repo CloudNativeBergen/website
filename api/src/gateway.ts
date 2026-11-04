@@ -72,7 +72,7 @@ const JWT_MAX_SECONDS = 300
 const ENVELOPE_TTL_SECONDS = 60
 
 const TENANT_QUERY =
-  'query($host: String!) { tenantByHost(host: $host) { orgId conferenceId } }'
+  'query($host: String!) { tenantByHost(host: $host) { orgId conferenceId flags { apiRead identityLogin d1Write d1Override } } }'
 
 /** Operator lane: the host of the tenant the operator acts for. */
 export const OPERATOR_TENANT_HEADER = 'x-konf-operator-tenant'
@@ -114,7 +114,18 @@ function hostOf(origin: unknown): string | null {
   }
 }
 
-type Tenant = { orgId: string; conferenceId: string | null }
+/** Per-conference rollout flags from tenant-directory D1 (#1925). */
+export type RolloutFlags = {
+  apiRead: boolean
+  identityLogin: boolean
+  d1Write: boolean
+  d1Override: boolean
+}
+type Tenant = {
+  orgId: string
+  conferenceId: string | null
+  flags?: RolloutFlags | null
+}
 
 /**
  * Subgraph codes a public caller may see, with the message that replaces the
@@ -231,14 +242,29 @@ async function resolveTenant(
 
 /**
  * Progressive override per tenant: an @override label is on for the orgIds
- * OVERRIDE_TENANTS lists. The orgId is the one the envelope is minted for.
+ * OVERRIDE_TENANTS lists (transition, #1925), or for `conference` when the
+ * resolved conference has d1_override. Both come from the host the envelope
+ * is minted for, never from the caller.
  */
 export function progressiveOverride(label: string, context: unknown) {
-  const { env, orgId } = context as { env: Env; orgId: string | null }
-  return !!orgId && !!env.OVERRIDE_TENANTS?.[label]?.includes(orgId)
+  const { env, orgId, flags } = context as {
+    env: Env
+    orgId: string | null
+    flags?: RolloutFlags | null
+  }
+  if (!orgId) return false
+  if (env.OVERRIDE_TENANTS?.[label]?.includes(orgId)) return true
+  return label === 'conference' && !!flags?.d1Override
 }
 
-type GatewayContext = { env: Env; orgId: string | null; limitKey: string }
+type GatewayContext = {
+  env: Env
+  orgId: string | null
+  limitKey: string
+  flags: RolloutFlags | null
+  /** Set only for a verified site assertion: what `rolloutFlags` answers. */
+  siteFlags: RolloutFlags | null
+}
 
 /**
  * Mutations spend their own budget (#1888). Classified from the params Yoga
@@ -309,8 +335,18 @@ export function createGateway(supergraph: string) {
     progressiveOverride: (label, context) =>
       progressiveOverride(label, context),
     // Kept from the skeleton: `{ health }` answers without any subgraph.
-    additionalTypeDefs: 'extend type Query { health: String! }',
-    additionalResolvers: { Query: { health: () => 'ok' } },
+    // `rolloutFlags` (#1925): the resolved tenant's own flags, for the site's
+    // signed server lane only. Null for any other caller; it takes no argument.
+    additionalTypeDefs: `
+      type SiteRolloutFlags { apiRead: Boolean! identityLogin: Boolean! d1Write: Boolean! }
+      extend type Query { health: String! rolloutFlags: SiteRolloutFlags }`,
+    additionalResolvers: {
+      Query: {
+        health: () => 'ok',
+        rolloutFlags: (_: unknown, __: unknown, ctx: GatewayContext) =>
+          ctx.siteFlags,
+      },
+    },
     plugins: () => [
       maxDepthPlugin({ n: 10, ignoreIntrospection: false }),
       maxAliasesPlugin({ n: 15 }),
@@ -482,6 +518,8 @@ export function createGateway(supergraph: string) {
         ctx,
         orgId: tenant?.orgId ?? null,
         limitKey: limitKey!,
+        flags: tenant?.flags ?? null,
+        siteFlags: (siteHost && tenant?.flags) || null,
       })
     },
   }

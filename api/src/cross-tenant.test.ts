@@ -31,7 +31,15 @@ import {
   type GraphQLNamedType,
 } from 'graphql'
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 import {
   ENVELOPE_HEADER,
   createSigner,
@@ -138,6 +146,25 @@ function value(
   if (col.dflt_value === "'[]'") return JSON.stringify([text])
   if (col.dflt_value === "'{}'") return JSON.stringify({ v: text })
   return text
+}
+
+/**
+ * The seed sets every 0/1 CHECK column to 1, d1_override (#1925) included.
+ * Tests pin it: on for org A's conference only, or for nobody.
+ */
+async function overrideForA(on: boolean) {
+  for (const db of dbs) {
+    const { results } = await db
+      .prepare(
+        "SELECT 1 FROM pragma_table_info('conferences') WHERE name = 'd1_override'",
+      )
+      .all()
+    if (results.length)
+      await db
+        .prepare('UPDATE conferences SET d1_override = (id = ? AND ?)')
+        .bind(CONF.a, on ? 1 : 0)
+        .run()
+  }
 }
 
 /** One A row and one B row in every table, parents first. */
@@ -532,6 +559,7 @@ describe.each([
     env.OVERRIDE_TENANTS = Object.fromEntries(
       LABELS.map((l) => [l, labelsOn ? [ORG.a] : []]),
     )
+    await overrideForA(labelsOn)
     calls.clear()
     const headers = (): Record<string, string> => ({
       origin: ORIGIN,
@@ -589,6 +617,7 @@ it('resolves each origin over DIRECTORY and forwards its envelope to CONTENT', a
   // The gateway's own lookup per origin, then content over CONTENT with the
   // envelope the gateway minted for that tenant.
   env.OVERRIDE_TENANTS = {}
+  await overrideForA(false)
   for (const t of TENANTS) {
     const body = await run('{ conference { id title } }', {
       origin: `https://${HOST[t]}`,
@@ -621,8 +650,12 @@ describe('cross-tenant mutation walk', () => {
     }
     return rows.sort()
   }
-  const mutate = async (headers: Record<string, string>) => {
+  // Before the tests' snapshots, so the reset is not counted as a write.
+  beforeEach(async () => {
     env.OVERRIDE_TENANTS = {}
+    await overrideForA(false)
+  })
+  const mutate = async (headers: Record<string, string>) => {
     const bodies: { data?: unknown; errors?: unknown[] }[] = []
     for (const m of mutations()) bodies.push(JSON.parse(await run(m, headers)))
     return bodies
@@ -691,6 +724,7 @@ describe('cross-tenant mutation walk', () => {
 describe('negative control: the Sanity fixture follows the GROQ', () => {
   const read = async (rewrite: (q: string) => string) => {
     env.OVERRIDE_TENANTS = {}
+    await overrideForA(false)
     rewriteGroq = rewrite
     try {
       return await run('{ conference { id description } }', { origin: ORIGIN })

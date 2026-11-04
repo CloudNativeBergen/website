@@ -40,12 +40,37 @@ const Conference = builder
     }),
   })
 
+type Flags = Record<
+  'apiRead' | 'identityLogin' | 'd1Write' | 'd1Override',
+  boolean
+>
+
+// Per-conference rollout flags (#1925). Read-only here: no mutation sets
+// them; an operator writes the D1 columns.
+const RolloutFlags = builder.objectRef<Flags>('RolloutFlags').implement({
+  fields: (t) => ({
+    apiRead: t.exposeBoolean('apiRead'),
+    identityLogin: t.exposeBoolean('identityLogin'),
+    d1Write: t.exposeBoolean('d1Write'),
+    d1Override: t.exposeBoolean('d1Override'),
+  }),
+})
+
 const Domain = builder
   .objectRef<
-    Row<'hostname' | 'kind' | 'verification' | 'orgId' | 'conferenceId'>
+    Row<'hostname' | 'kind' | 'verification' | 'orgId' | 'conferenceId'> & {
+      flags?: Flags
+    }
   >('Domain')
   .implement({
     fields: (t) => ({
+      // Only tenantByHost fills it; null from the provisioning mutations.
+      flags: t.field({
+        type: RolloutFlags,
+        nullable: true,
+        tag: 'internal',
+        resolve: (d) => d.flags ?? null,
+      }),
       hostname: t.exposeString('hostname'),
       kind: t.exposeString('kind'),
       verification: t.exposeString('verification'),

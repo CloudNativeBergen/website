@@ -1,9 +1,10 @@
 // Phase 2 of #1881: the admin's conference writes go to D1 through
-// api.konf.app before Sanity, per tenant, behind KONF_D1_WRITE_TENANTS.
+// api.konf.app before Sanity, per tenant, behind the d1Write rollout flag.
 import 'server-only'
 import { cookies, headers } from 'next/headers'
 import { requestDomain } from '@/lib/conference/request-domain'
 import { IDENTITY_SESSION_COOKIE } from '@/lib/auth/identity-cookie'
+import { rolloutFlags } from '@/lib/conference/konf-api'
 import { konfApiHeaders, konfApiUrl } from './client'
 import {
   LIFECYCLE_STATUS_VALUES,
@@ -30,12 +31,12 @@ const MOVED = new Set([
   'socialLinks',
 ])
 
-/** `KONF_D1_WRITE_TENANTS`: comma-separated conference ids. Empty = off. */
-export function isD1WriteTenant(conferenceId: string): boolean {
-  return (process.env.KONF_D1_WRITE_TENANTS ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .includes(conferenceId)
+/** The host's `d1Write` rollout flag (#1925). */
+export async function isD1WriteTenant(
+  host: string | null,
+  conferenceId: string,
+): Promise<boolean> {
+  return (await rolloutFlags(host, { _id: conferenceId })).d1Write
 }
 
 /**

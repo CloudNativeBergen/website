@@ -226,8 +226,10 @@ describe('proxy with an identity session', () => {
     expect(JSON.stringify(log.mock.calls)).not.toContain(h.cookie.value)
   })
 
-  it('redirects to sign-in when the flag is unset', async () => {
-    vi.stubEnv('KONF_IDENTITY_TENANTS', '')
+  // The proxy cannot read the D1 flag (#1925); the page applies it. Only the
+  // global kill switch short-circuits here.
+  it('redirects to sign-in under KONF_API_DISABLED=1', async () => {
+    vi.stubEnv('KONF_API_DISABLED', '1')
     const res = await adminRequest()
     expect(res.headers.get('location')).toContain('/api/auth/signin')
     expect(h.fetch).not.toHaveBeenCalled()

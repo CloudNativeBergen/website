@@ -7,6 +7,7 @@ import { safeCallbackPath } from '@/lib/auth/email-link/origin'
 import { redirect } from 'next/navigation'
 import { SignInProviderButtons } from '@/components/SignInProviderButtons'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { requestDomain } from '@/lib/conference/request-domain'
 import { isIdentityTenant } from '@/lib/auth/identity-handoff'
 import { oauthSignInAction, requestEmailSignInLinkAction } from './actions'
 import { FullPageActionForm } from './FullPageActionForm'
@@ -26,7 +27,8 @@ export default async function Signin(props: {
   // Decided here so the tenant list never reaches the client. The handoff
   // has no return path yet, so callbackUrl is dropped on that branch.
   const { conference } = await getConferenceForCurrentDomain()
-  const handoff = !!conference && isIdentityTenant(conference)
+  const handoff =
+    !!conference && (await isIdentityTenant(await requestDomain(), conference))
 
   return (
     <>

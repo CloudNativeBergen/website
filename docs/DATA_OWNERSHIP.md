@@ -25,14 +25,14 @@ The target is kontroll on the API.
    1. The subgraph proxies Sanity and clients move to the API. The data does not
       move.
    2. Backfill into D1, then a short dual-write window with a parity sweep.
-      Today that is `KONF_D1_WRITE_TENANTS` plus the daily conference parity
+      Today that is the `d1_write` rollout flag plus the daily conference parity
       cron. Caveat: the parity script compares Sanity with anonymous gateway
       reads, which still come from Sanity while the override is off (#1879), so
       a clean result does not yet validate D1. A sweep that reads D1 is a
-      prerequisite for closing the window. See [The write path flag](./PLATFORM.md#the-write-path-flag).
-   3. Flip reads to D1 (`OVERRIDE_TENANTS`). Sanity becomes read-only for that
+      prerequisite for closing the window. See [Write path](./PLATFORM.md#write-path-d1_write).
+   3. Flip reads to D1 (the `d1_override` rollout flag). Sanity becomes read-only for that
       entity, then the fields are deleted. The current read mechanism is in
-      [The read path flag](./PLATFORM.md#the-read-path-flag).
+      [Read path](./PLATFORM.md#read-path-api_read).
 
    Every dual-write window has an end date and a removal step. Windows last
    weeks, not years.

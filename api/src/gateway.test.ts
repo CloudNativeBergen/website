@@ -830,10 +830,11 @@ describe('gateway', () => {
         iat?: number
         ttl?: number
         aud?: string
+        host?: string
       } = {},
     ) => {
       const iat = opts.iat ?? Math.floor(Date.now() / 1000)
-      return new SignJWT({ host: 'conf.example' })
+      return new SignJWT({ host: opts.host ?? 'conf.example' })
         .setProtectedHeader({ alg: 'EdDSA', kid: opts.kid ?? 's1' })
         .setIssuer('konf-site')
         .setAudience(opts.aud ?? 'konf-gateway')
@@ -971,6 +972,106 @@ describe('gateway', () => {
       )
       expect(res.status).toBe(200)
       expect(await minted(envelopes)).toMatchObject({ userId: 'user_1' })
+    })
+
+    describe('rolloutFlags (#1925)', () => {
+      const on = {
+        apiRead: true,
+        identityLogin: true,
+        d1Write: false,
+        d1Override: true,
+      }
+      const other = {
+        apiRead: false,
+        identityLogin: false,
+        d1Write: true,
+        d1Override: false,
+      }
+      const QUERY = {
+        query: '{ rolloutFlags { apiRead identityLogin d1Write } }',
+      }
+      const withFlags = () => {
+        const made = makeEnv()
+        const hosts: Record<string, unknown> = {
+          'conf.example': { ...TENANT, flags: on },
+          'other.example': {
+            orgId: 'org_b',
+            conferenceId: 'conf_b',
+            flags: other,
+          },
+        }
+        ;(made.env.DIRECTORY as unknown as { fetch: unknown }).fetch = async (
+          _url: string,
+          init: RequestInit,
+        ) => {
+          const { variables } = JSON.parse(String(init.body))
+          return Response.json({
+            data: { tenantByHost: hosts[variables.host] ?? null },
+          })
+        }
+        return made
+      }
+      const ask = async (headers: Record<string, string>) => {
+        const { env } = withFlags()
+        const res = await gateway.fetch(post(QUERY, headers), env)
+        return ((await res.json()) as { data: { rolloutFlags: unknown } }).data
+          .rolloutFlags
+      }
+
+      it("answers the asserted host's own flags, and only those", async () => {
+        expect(
+          await ask({ [SITE_ASSERTION_HEADER]: await assertion() }),
+        ).toEqual({
+          apiRead: true,
+          identityLogin: true,
+          d1Write: false,
+        })
+        expect(
+          await ask({
+            origin: VERIFIED,
+            [SITE_ASSERTION_HEADER]: await assertion({ host: 'other.example' }),
+          }),
+        ).toEqual({ apiRead: false, identityLogin: false, d1Write: true })
+      })
+
+      it('answers null without a verified site assertion', async () => {
+        expect(await ask({ origin: VERIFIED })).toBeNull()
+        expect(
+          await ask({
+            origin: VERIFIED,
+            [SITE_ASSERTION_HEADER]: await assertion({ key: strangerKey }),
+          }),
+        ).toBeNull()
+      })
+
+      it('takes no argument, so a caller cannot name a tenant or a value', async () => {
+        const { env } = withFlags()
+        const res = await gateway.fetch(
+          post(
+            { query: '{ rolloutFlags(host: "other.example") { apiRead } }' },
+            { [SITE_ASSERTION_HEADER]: await assertion() },
+          ),
+          env,
+        )
+        const body = (await res.json()) as {
+          data?: unknown
+          errors?: unknown[]
+        }
+        expect(body.errors?.length).toBeGreaterThan(0)
+        expect(body.data ?? null).toBeNull()
+      })
+
+      it('routes the conference label to D1 on the flag, per resolved tenant', async () => {
+        for (const [origin, routed] of [
+          ['https://conf.example', 1],
+          ['https://other.example', 0],
+        ] as const) {
+          const { env, conference } = withFlags()
+          env.OVERRIDE_TENANTS = {}
+          await gateway.fetch(post(SUBGRAPH_QUERY, { origin }), env)
+          expect(conference).toHaveLength(routed)
+        }
+      })
     })
   })
 })

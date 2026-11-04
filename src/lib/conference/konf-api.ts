@@ -3,6 +3,7 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag, domainTag } from '@/lib/cache/tags'
 import { konfApiHeaders, konfApiUrl } from '@/lib/konf-api/client'
 import { CONFERENCE_CACHE_LIFE } from './cache-life'
+import { normalizeDomain } from './domains'
 import type { Conference } from './types'
 
 // Spike for #1772 (#1833): read core conference fields from the Konf GraphQL
@@ -23,18 +24,103 @@ type ApiConference = Record<string, unknown> & {
   homepageSections?: string | unknown[] | null
 }
 
-/** `KONF_API_TENANTS`: comma-separated conference ids or organization ids. Empty = off. */
-export function isKonfApiTenant(conference: Conference): boolean {
-  const ids = (process.env.KONF_API_TENANTS ?? '')
+/** Per-conference rollout flags (#1925), as the gateway's `rolloutFlags`. */
+export type RolloutFlags = {
+  apiRead: boolean
+  identityLogin: boolean
+  d1Write: boolean
+}
+const OFF: RolloutFlags = {
+  apiRead: false,
+  identityLogin: false,
+  d1Write: false,
+}
+const FLAGS_QUERY = '{ rolloutFlags { apiRead identityLogin d1Write } }'
+// Short, so a flag flipped in D1 lands within minutes.
+const FLAGS_CACHE_LIFE = { stale: 60, revalidate: 300, expire: 3600 } as const
+
+/**
+ * Transition (#1925): the old comma-separated env lists, OR'ed with the D1
+ * flags until those are backfilled. Remove with the lists (docs/PLATFORM.md).
+ */
+function listed(name: string, conferenceId: string, orgId?: string): boolean {
+  const ids = (process.env[name] ?? '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
-  if (ids.length === 0) return false
-  return (
-    ids.includes(conference._id) ||
-    (!!conference.organization?._ref &&
-      ids.includes(conference.organization._ref))
-  )
+  return ids.includes(conferenceId) || (!!orgId && ids.includes(orgId))
+}
+
+/**
+ * The tenant's rollout flags from tenant-directory, through the gateway.
+ * The gateway answers only the signed site lane and only for the asserted
+ * host, so there is no tenant argument. Throws on failure (not cached).
+ */
+export async function fetchRolloutFlags(host: string): Promise<RolloutFlags> {
+  'use cache: remote'
+  cacheLife(FLAGS_CACHE_LIFE)
+  cacheTag(domainTag(host))
+  const url = konfApiUrl()
+  if (!url) throw new Error('KONF_API_URL is not set on this environment')
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: await konfApiHeaders(host),
+    body: JSON.stringify({ query: FLAGS_QUERY }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const json = (await res.json()) as {
+    data?: { rolloutFlags?: Partial<RolloutFlags> | null }
+    errors?: unknown[]
+  }
+  if (json.errors?.length) throw new Error(JSON.stringify(json.errors))
+  const f = json.data?.rolloutFlags
+  // Null is a valid "off", but with a signing key it usually means a
+  // misconfigured key or a host missing from the directory.
+  if (!f) console.warn(`[konf-api] no rollout flags for ${host}`)
+  return {
+    apiRead: f?.apiRead === true,
+    identityLogin: f?.identityLogin === true,
+    d1Write: f?.d1Write === true,
+  }
+}
+
+/**
+ * Flags for this host's conference. `KONF_API_DISABLED=1` turns everything
+ * off. Any read failure leaves only the env lists: the Sanity path, as before.
+ */
+export async function rolloutFlags(
+  host: string | null,
+  conference: Pick<Conference, '_id' | 'organization'>,
+): Promise<RolloutFlags> {
+  if (process.env.KONF_API_DISABLED === '1') return OFF
+  const org = conference.organization?._ref
+  // No gateway on this environment (#1926): API read and D1 write are off.
+  const api = konfApiUrl() !== null
+  const env: RolloutFlags = {
+    apiRead: api && listed('KONF_API_TENANTS', conference._id, org),
+    identityLogin: listed('KONF_IDENTITY_TENANTS', conference._id, org),
+    d1Write: api && listed('KONF_D1_WRITE_TENANTS', conference._id),
+  }
+  // Without a gateway or the signing key there is nothing more to read.
+  if (!api || !host || !process.env.KONF_SITE_SIGNING_KEY) return env
+  // One cache entry per tenant, whatever port or case the Host header had.
+  host = normalizeDomain(host)
+  try {
+    const d1 = await fetchRolloutFlags(host)
+    return {
+      apiRead: env.apiRead || d1.apiRead,
+      identityLogin: env.identityLogin || d1.identityLogin,
+      d1Write: env.d1Write || d1.d1Write,
+    }
+  } catch (err) {
+    console.warn(
+      `[konf-api] rollout flags unavailable for ${host}:`,
+      (err as Error).message,
+    )
+    return env
+  }
 }
 
 /**
