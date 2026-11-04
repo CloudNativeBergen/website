@@ -60,7 +60,11 @@ describe('scheduled', () => {
     await scheduled(env)
     expect(fetchMock).toHaveBeenCalledWith(expect.any(String), { ids: ['c1'] })
     expect(error.mock.calls.map((c) => JSON.parse(c[0]))).toEqual([
-      { event: 'conference.parity.drift', conferenceId: 'c1', fields: ['title'] },
+      {
+        event: 'conference.parity.drift',
+        conferenceId: 'c1',
+        fields: ['title'],
+      },
     ])
     expect(JSON.parse(log.mock.calls[0][0])).toEqual({
       event: 'conference.parity.sweep',

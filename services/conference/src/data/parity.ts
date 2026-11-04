@@ -3,7 +3,11 @@
 // nothing is repaired (owner decision). Only published D1 rows are checked.
 // The one conference file that reads Sanity (eslint.config.js, #1892).
 import { createClient } from '@sanity/client'
-import { mapBackfill, type Row, type SanityConference } from '../../scripts/backfill'
+import {
+  mapBackfill,
+  type Row,
+  type SanityConference,
+} from '../../scripts/backfill'
 import { diffConference, expected } from '../../scripts/parity'
 
 export interface ScheduledEnv {
@@ -24,9 +28,10 @@ const QUERY = `*[_type == "conference" && _id in $ids]{
 /** Pure: per drifting conference, the fields that differ. */
 export function findDrift(d1: Row[], docs: SanityConference[]) {
   const sanity = new Map(
-    mapBackfill(docs, new Set(d1.map((r) => r.conference_id))).rows.map(
-      (r) => [r.conference_id, r],
-    ),
+    mapBackfill(docs, new Set(d1.map((r) => r.conference_id))).rows.map((r) => [
+      r.conference_id,
+      r,
+    ]),
   )
   return d1.flatMap((row) => {
     const want = sanity.get(row.conference_id)
@@ -39,8 +44,9 @@ export function findDrift(d1: Row[], docs: SanityConference[]) {
 }
 
 export async function scheduled(env: ScheduledEnv) {
-  const { results } = await env.DB.prepare('SELECT * FROM conferences WHERE published = 1')
-    .all<Row>()
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM conferences WHERE published = 1',
+  ).all<Row>()
   if (!results.length) return
   const docs = await createClient({
     projectId: env.SANITY_PROJECT_ID,

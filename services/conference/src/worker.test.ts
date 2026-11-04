@@ -72,7 +72,13 @@ beforeEach(() => {
   insert.run('conf-a', 'org-a', 1, 'A 2026', '["https://a.example"]')
   insert.run('conf-b', 'org-b', 1, 'B 2026', '[]')
   insert.run('conf-a-draft', 'org-a', 0, 'A 2027', '[]')
-  env = { DB: d1(sqlite), GATEWAY_PUBLIC_KEY: keys.publicPem }
+  env = {
+    DB: d1(sqlite),
+    GATEWAY_PUBLIC_KEY: keys.publicPem,
+    SANITY_PROJECT_ID: 'p',
+    SANITY_DATASET: 'd',
+    SANITY_API_TOKEN_READ: 't',
+  }
 })
 
 const QUERY = '{ conference { id title socialLinks } }'
