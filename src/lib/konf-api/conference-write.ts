@@ -4,13 +4,12 @@ import 'server-only'
 import { cookies, headers } from 'next/headers'
 import { requestDomain } from '@/lib/conference/request-domain'
 import { IDENTITY_SESSION_COOKIE } from '@/lib/auth/identity-cookie'
-import { konfApiHeaders } from './client'
+import { konfApiHeaders, konfApiUrl } from './client'
 import {
   LIFECYCLE_STATUS_VALUES,
   type LifecycleStatus,
 } from '@/lib/homepage/lifecycle'
 
-const KONF_API_URL = 'https://api.konf.app/graphql'
 const TIMEOUT_MS = 5000
 
 /** The `ConferencePatch` fields in services/conference/src/subgraph.ts. */
@@ -103,7 +102,9 @@ export async function updateConferenceViaApi(
   patch: Record<string, unknown>,
   userJwt: string,
 ): Promise<void> {
-  const res = await fetch(KONF_API_URL, {
+  const url = konfApiUrl()
+  if (!url) throw new Error('KONF_API_URL is not set on this environment')
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       ...(await konfApiHeaders(host, await headers())),

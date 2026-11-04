@@ -120,7 +120,7 @@ describe('KONF_API_TENANTS', () => {
     })
     const { conference } = await getConferenceForDomain('2026.example.com')
     const [url, init] = fetchMock.mock.calls[0]
-    expect(url).toBe('https://api.konf.app/graphql')
+    expect(url).toBe('https://api.konf.app/graphql') // VERCEL_ENV unset
     expect(init.headers.origin).toBe('https://2026.example.com')
     expect(conference.title).toBe('API title')
     expect(conference.city).toBe('Bergen')

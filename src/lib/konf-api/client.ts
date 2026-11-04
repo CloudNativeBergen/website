@@ -3,6 +3,21 @@
 // anonymous with Origin, as before.
 import { importJWK, SignJWT, type JWK } from 'jose'
 
+const PRODUCTION_GATEWAY = 'https://api.konf.app/graphql'
+
+/**
+ * The one place the gateway URL is decided (#1926). `KONF_API_URL` wins. Unset,
+ * production (and a local run with no VERCEL_ENV) use the production gateway;
+ * preview and development get `null`, which callers treat as "API off, use
+ * Sanity", so a preview deploy never reaches production.
+ */
+export function konfApiUrl(): string | null {
+  const url = process.env.KONF_API_URL?.trim()
+  if (url) return url
+  const env = process.env.VERCEL_ENV
+  return !env || env === 'production' ? PRODUCTION_GATEWAY : null
+}
+
 const ASSERTION_SECONDS = 60
 const enc = new TextEncoder()
 

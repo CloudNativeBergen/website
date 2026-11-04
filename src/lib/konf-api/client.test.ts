@@ -9,7 +9,7 @@ vi.mock('jose', async () => {
 })
 
 import { exportJWK, exportSPKI, generateKeyPair } from 'jose'
-import { konfApiHeaders } from './client'
+import { konfApiHeaders, konfApiUrl } from './client'
 import { verifyClientIp } from '../../../api/src/client-ip'
 import { verifySiteAssertion } from '../../../api/src/site-identity'
 
@@ -50,5 +50,30 @@ describe('konfApiHeaders', () => {
       '203.0.113.7',
     )
     expect(await verifyClientIp(h['x-konf-client-ip'], 'other')).toBeNull()
+  })
+})
+
+describe('konfApiUrl (#1926)', () => {
+  afterEach(() => vi.unstubAllEnvs())
+  const url = (env: Record<string, string>) => {
+    vi.stubEnv('KONF_API_URL', '')
+    vi.stubEnv('VERCEL_ENV', '')
+    for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v)
+    return konfApiUrl()
+  }
+  it('defaults to production when unset or production', () => {
+    expect(url({})).toBe('https://api.konf.app/graphql')
+    expect(url({ VERCEL_ENV: 'production' })).toBe(
+      'https://api.konf.app/graphql',
+    )
+  })
+  it('is null on preview and development without the var', () => {
+    expect(url({ VERCEL_ENV: 'preview' })).toBeNull()
+    expect(url({ VERCEL_ENV: 'development' })).toBeNull()
+  })
+  it('the var wins everywhere', () => {
+    expect(
+      url({ VERCEL_ENV: 'preview', KONF_API_URL: 'https://p.example/graphql' }),
+    ).toBe('https://p.example/graphql')
   })
 })
