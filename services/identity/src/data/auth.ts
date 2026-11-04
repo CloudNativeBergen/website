@@ -153,6 +153,19 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
           throw new APIError('FORBIDDEN', {
             message: 'A resend needs an organization and an email',
           })
+        // Guard before fetch: a non-member must not reach the invite lookup,
+        // or the refusal it gets would reveal whether a pending owner invite
+        // exists for that email. Return and let the plugin refuse as usual.
+        const [m] = await db
+          .select({ role: schema.member.role })
+          .from(schema.member)
+          .where(
+            and(
+              eq(schema.member.organizationId, orgId),
+              eq(schema.member.userId, session.user.id),
+            ),
+          )
+        if (!m) return
         const [inv] = await db
           .select({ id: schema.invitation.id, role: schema.invitation.role })
           .from(schema.invitation)
@@ -165,21 +178,10 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
             ),
           )
         if (!inv) return // no pending invite: a normal create, hooks run
-        if (isOwner(inv.role)) {
-          const [m] = await db
-            .select({ role: schema.member.role })
-            .from(schema.member)
-            .where(
-              and(
-                eq(schema.member.organizationId, orgId),
-                eq(schema.member.userId, session.user.id),
-              ),
-            )
-          if (!isOwner(m?.role))
-            throw new APIError('FORBIDDEN', {
-              message: 'Only an owner can resend an owner invitation',
-            })
-        }
+        if (isOwner(inv.role) && !isOwner(m.role))
+          throw new APIError('FORBIDDEN', {
+            message: 'Only an owner can resend an owner invitation',
+          })
         await resendOf.set({ id: inv.id, actor: session.user.id })
       }),
       after: createAuthMiddleware(async (ctx) => {

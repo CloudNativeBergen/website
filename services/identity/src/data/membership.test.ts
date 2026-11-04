@@ -497,6 +497,85 @@ describe('resending an invitation', () => {
     },
   )
 
+  const post = async (h: Headers, body: object) => {
+    const hh = new Headers(h)
+    hh.set('content-type', 'application/json')
+    hh.set('origin', env.BETTER_AUTH_URL)
+    const res = await auth.handler(
+      new Request(
+        `${env.BETTER_AUTH_URL}/api/auth/organization/invite-member`,
+        { method: 'POST', headers: hh, body: JSON.stringify(body) },
+      ),
+    )
+    return [res.status, await res.text()]
+  }
+
+  // Guard before fetch: a non-member's refusal must not depend on whether a
+  // pending owner invite exists for the email.
+  it('gives a non-member the same refusal whether or not an owner invite exists', async () => {
+    const { orgId, members } = await org('owner')
+    const email = `ox-${orgId}@example.com`
+    const inv = await auth.api.createInvitation({
+      headers: members[0].headers,
+      body: { organizationId: orgId, email, role: 'owner' },
+    })
+    const outsider = await newUser(`out-${orgId}@example.com`)
+    const body = (e: string) => ({
+      organizationId: orgId,
+      email: e,
+      role: 'admin',
+      resend: true,
+    })
+    const before = await state(inv.id)
+    const withInvite = await post(outsider.headers, body(email))
+    const without = await post(outsider.headers, body(`none-${orgId}@example.com`))
+    expect(withInvite[0]).toBeGreaterThanOrEqual(400)
+    expect(withInvite).toEqual(without)
+    expect(await state(inv.id)).toEqual(before)
+    expect(await resends(inv.id)).toHaveLength(0)
+  })
+
+  // Pins the expiry filter: an expired owner invite is not the plugin's
+  // resend target, so the hook must not refuse an admin over it.
+  it('ignores an expired owner invite when an admin resends', async () => {
+    const { orgId, members } = await org('owner', 'admin')
+    const [owner, admin] = members
+    const email = `rx-${orgId}@example.com`
+    const inv = await auth.api.createInvitation({
+      headers: owner.headers,
+      body: { organizationId: orgId, email, role: 'owner' },
+    })
+    await run(
+      'UPDATE invitation SET expiresAt = ? WHERE id = ?',
+      Date.now() - 1000,
+      inv.id,
+    )
+    const r = await resend(admin.headers, orgId, email)
+    expect(r.id).not.toBe(inv.id)
+    expect(r.role).toBe('admin')
+    expect(await resends(inv.id)).toHaveLength(0)
+  })
+
+  it('lets an owner resend with the org omitted and a mixed-case email', async () => {
+    const { orgId, members } = await org('owner')
+    const owner = members[0]
+    const email = `rm-${orgId}@example.com`
+    const inv = await auth.api.createInvitation({
+      headers: owner.headers,
+      body: { organizationId: orgId, email, role: 'owner' },
+    })
+    await auth.api.setActiveOrganization({
+      headers: owner.headers,
+      body: { organizationId: orgId },
+    })
+    const r = await auth.api.createInvitation({
+      headers: owner.headers,
+      body: { email: email[0].toUpperCase() + email.slice(1), role: 'owner', resend: true },
+    })
+    expect(r.id).toBe(inv.id)
+    expect(await resends(inv.id)).toHaveLength(1)
+  })
+
   it('lets an admin resend an admin invite, with an audit row', async () => {
     const { orgId, members } = await org('owner', 'admin')
     const admin = members[1]
