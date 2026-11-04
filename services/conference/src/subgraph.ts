@@ -81,8 +81,22 @@ const isDate = (v: string) => {
 }
 const isHex = (v: string) => /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(v)
 
+/** Max characters per string field; anything not listed gets 2,000. */
+export const MAX_LEN: Record<string, number> = {
+  title: 200,
+  tagline: 500,
+  city: 100,
+  country: 100,
+  venueName: 200,
+  venueAddress: 500,
+  backgroundPattern: 100,
+}
+export const MAX_DEFAULT = 2000
+export const MAX_SOCIAL_LINKS = 20
+
 /** Throws on the first invalid field; returns the patch otherwise. */
 function validate(input: Record<string, unknown>): ConferencePatch {
+  // The message is constant per rule and never echoes the value.
   const bad = (field: string, why: string) => {
     throw createGraphQLError(`${field}: ${why}`, {
       extensions: { code: 'BAD_USER_INPUT', field },
@@ -103,6 +117,14 @@ function validate(input: Record<string, unknown>): ConferencePatch {
     }
     if (k === 'visibility' && v !== 'live' && v !== 'unlisted') {
       bad(k, 'must be live or unlisted')
+    }
+    const max = MAX_LEN[k] ?? MAX_DEFAULT
+    if (typeof v === 'string' && v.length > max) bad(k, `at most ${max} characters`)
+    if (k === 'socialLinks' && (v as string[]).length > MAX_SOCIAL_LINKS) {
+      bad(k, `at most ${MAX_SOCIAL_LINKS} links`)
+    }
+    if (k === 'socialLinks' && (v as string[]).some((u) => u.length > max)) {
+      bad(k, `each link at most ${max} characters`)
     }
     if (k === 'socialLinks' && !(v as string[]).every(isUrl)) {
       bad(k, 'must be http(s) URLs')

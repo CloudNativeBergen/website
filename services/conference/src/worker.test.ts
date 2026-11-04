@@ -307,4 +307,104 @@ describe('updateConference', () => {
       socialLinks: ['https://x.example'],
     })
   })
+
+  const admin = () => tenant('org-a', 'conf-a', 'admin')
+
+  it('caps strings and socialLinks at the limit, without echoing input', async () => {
+    const cases: [string, number][] = [
+      ['title', 200],
+      ['tagline', 500],
+      ['city', 100],
+      ['country', 100],
+      ['venueName', 200],
+      ['venueAddress', 500],
+      ['backgroundPattern', 100],
+    ]
+    for (const [field, max] of cases) {
+      const ok = await update(admin(), { [field]: 'q'.repeat(max) })
+      expect(ok.body.errors, field).toBeUndefined()
+      const over = 'Z'.repeat(max) + 'SECRET'
+      const { body } = await update(admin(), { [field]: over.slice(0, max + 1) })
+      expect(body.errors[0].extensions, field).toMatchObject({
+        code: 'BAD_USER_INPUT',
+        field,
+      })
+      expect(body.errors[0].message).not.toContain('ZZ')
+    }
+    const url = (n: number) => 'https://x.example/' + 'a'.repeat(n - 18)
+    const link = await update(admin(), { registrationLink: url(2000) })
+    expect(link.body.errors).toBeUndefined()
+    const long = await update(admin(), { registrationLink: url(2001) })
+    expect(long.body.errors[0].extensions.field).toBe('registrationLink')
+    expect(long.body.errors[0].message).not.toContain('aaaa')
+    const links = (n: number) =>
+      Array.from({ length: n }, (_, i) => `https://x.example/${i}`)
+    expect((await update(admin(), { socialLinks: links(20) })).body.errors)
+      .toBeUndefined()
+    for (const socialLinks of [links(21), [url(2001)]]) {
+      const { body } = await update(admin(), { socialLinks })
+      expect(body.errors[0].extensions).toMatchObject({
+        code: 'BAD_USER_INPUT',
+        field: 'socialLinks',
+      })
+      expect(body.errors[0].message).not.toContain('x.example')
+    }
+    expect((await update(admin(), { socialLinks: [url(2000)] })).body.errors)
+      .toBeUndefined()
+  })
+
+  it('FORBIDDEN still comes before any query', async () => {
+    const prepare = vi.spyOn(env.DB, 'prepare')
+    const { body } = await update(tenant('org-a', 'conf-a', 'member'), {
+      title: 'ok',
+    })
+    expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
+    expect(prepare).not.toHaveBeenCalled()
+  })
+
+  it('a no-op patch leaves updated_at alone and returns the row', async () => {
+    sqlite.exec(
+      "UPDATE conferences SET updated_at = 'T0' WHERE conference_id = 'conf-a'",
+    )
+    for (const input of [
+      {},
+      { title: 'A 2026' },
+      { socialLinks: ['https://a.example'], published: true },
+    ]) {
+      const { body } = await update(admin(), input)
+      expect(body.errors, JSON.stringify(input)).toBeUndefined()
+      expect(body.data.updateConference.title).toBe('A 2026')
+      expect(row('conf-a').updated_at).toBe('T0')
+    }
+    // A foreign id is NOT_FOUND even for an empty patch.
+    const { body } = await update(tenant('org-a', 'conf-b', 'admin'), {})
+    expect(body.errors[0].extensions.code).toBe('NOT_FOUND')
+  })
+
+  it('a concurrent edit between read and write cannot break start <= end', async () => {
+    sqlite.exec(
+      "UPDATE conferences SET start_date = '2026-06-10', end_date = '2026-06-12' WHERE conference_id = 'conf-a'",
+    )
+    // Another editor commits endDate = 06-10 after this request has read
+    // the row and before it writes.
+    const prepare = env.DB.prepare.bind(env.DB)
+    let raced = false
+    vi.spyOn(env.DB, 'prepare').mockImplementation((q: string) => {
+      if (!raced && /^update/i.test(q)) {
+        raced = true
+        sqlite.exec(
+          "UPDATE conferences SET end_date = '2026-06-10' WHERE conference_id = 'conf-a'",
+        )
+      }
+      return prepare(q)
+    })
+    const { body } = await update(admin(), { startDate: '2026-06-11' })
+    expect(raced).toBe(true)
+    expect(body.errors[0].extensions).toMatchObject({
+      code: 'BAD_USER_INPUT',
+      field: 'endDate',
+    })
+    const r = row('conf-a')
+    expect(r.start_date as string <= (r.end_date as string)).toBe(true)
+  })
 })
