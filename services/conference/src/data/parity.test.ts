@@ -33,6 +33,18 @@ describe('findDrift', () => {
     ).toEqual([{ conferenceId: 'c1', fields: ['city', 'socialLinks'] }])
   })
 
+  it('reports an unpublished D1 row whose Sanity doc is live', () => {
+    expect(findDrift([d1({ published: 0 })], [doc])).toEqual([
+      { conferenceId: 'c1', fields: ['(conference)'] },
+    ])
+    expect(
+      findDrift(
+        [d1({ published: 0 })],
+        [{ ...doc, lifecycleStatus: 'archived' }],
+      ),
+    ).toEqual([])
+  })
+
   it('reports a row Sanity no longer has, or a moved org', () => {
     expect(findDrift([d1()], [])).toEqual([
       { conferenceId: 'c1', fields: ['(conference)'] },
@@ -75,13 +87,16 @@ describe('scheduled', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     const all = vi.fn().mockResolvedValue({ results: [d1({ title: 'Old' })] })
+    const prepare = vi.fn(() => ({ all }))
     const env = {
-      DB: { prepare: () => ({ all }) } as unknown as D1Database,
+      DB: { prepare } as unknown as D1Database,
       SANITY_PROJECT_ID: 'p',
       SANITY_DATASET: 'd',
       SANITY_API_TOKEN_READ: 't',
     }
     await scheduled(env)
+    // Unpublished rows too: a split cancel must not drop out of the sweep.
+    expect(prepare).toHaveBeenCalledWith('SELECT * FROM conferences')
     expect(fetchMock).toHaveBeenCalledWith(expect.any(String), { ids: ['c1'] })
     expect(error.mock.calls.map((c) => JSON.parse(c[0]))).toEqual([
       {

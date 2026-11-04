@@ -200,9 +200,13 @@ describe('updateConference', () => {
 
   it('sets published from the lifecycle, and refuses null', async () => {
     const admin = tenant('org-a', 'conf-a', 'admin')
-    expect((await update(admin, { published: false })).body.errors).toBeUndefined()
+    expect(
+      (await update(admin, { published: false })).body.errors,
+    ).toBeUndefined()
     expect(row('conf-a').published).toBe(0)
-    expect((await update(admin, { published: true })).body.errors).toBeUndefined()
+    expect(
+      (await update(admin, { published: true })).body.errors,
+    ).toBeUndefined()
     expect(row('conf-a').published).toBe(1)
     const { body } = await update(admin, { published: null })
     expect(body.errors[0].extensions.code).toBe('BAD_USER_INPUT')

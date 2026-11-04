@@ -1,6 +1,7 @@
 // Daily D1 vs Sanity parity sweep (#1892 phase 3). Alert-only: drift is one
 // structured error log line per conference for a Grafana alert to match;
-// nothing is repaired (owner decision). Only published D1 rows are checked.
+// nothing is repaired (owner decision). Every D1 row is checked: an
+// unpublished one must match a cancelled or archived Sanity doc.
 // The one conference file that reads Sanity (eslint.config.js, #1892).
 import { createClient } from '@sanity/client'
 import {
@@ -45,7 +46,7 @@ export function findDrift(d1: Row[], docs: SanityConference[]) {
 
 export async function scheduled(env: ScheduledEnv) {
   const { results } = await env.DB.prepare(
-    'SELECT * FROM conferences WHERE published = 1',
+    'SELECT * FROM conferences',
   ).all<Row>()
   // A private dataset read without a token returns [], not an error: that
   // would report every row as drift.

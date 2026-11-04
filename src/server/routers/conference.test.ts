@@ -1526,6 +1526,14 @@ describe('conference router — D1 write path (#1881)', () => {
     expect(lastUnset).toEqual(['city'])
   })
 
+  it('sends a lifecycle override to D1 as published (#1892)', async () => {
+    await makeCaller({ isOrganizer: true }).updateLifecycleStatus({
+      lifecycleStatus: 'cancelled',
+    })
+    const [[, init]] = apiCalls()
+    expect(JSON.parse(init.body).variables.input).toEqual({ published: false })
+  })
+
   it('sends the API call for the tenant host, not x-forwarded-host', async () => {
     forwardedHostMock.mockReturnValue('evil.example')
     await makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' })
