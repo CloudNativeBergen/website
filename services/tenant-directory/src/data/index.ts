@@ -78,6 +78,10 @@ export function createData(
           conferenceId: domains.conferenceId,
           orgStatus: organizations.status,
           lifecycle: conferences.lifecycle,
+          apiRead: conferences.apiRead,
+          identityLogin: conferences.identityLogin,
+          d1Write: conferences.d1Write,
+          d1Override: conferences.d1Override,
         })
         .from(domains)
         .innerJoin(organizations, eq(organizations.id, domains.orgId))
@@ -92,7 +96,8 @@ export function createData(
       ) {
         return null
       }
-      return row
+      const { apiRead, identityLogin, d1Write, d1Override, ...rest } = row
+      return { ...rest, flags: { apiRead, identityLogin, d1Write, d1Override } }
     },
 
     async conference(id: string, trusted: boolean) {

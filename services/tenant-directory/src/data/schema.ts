@@ -1,4 +1,4 @@
-// Drizzle mirror of migrations/0001_init.sql.
+// Drizzle mirror of migrations/0001_init.sql and 0002_rollout_flags.sql.
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const organizations = sqliteTable('organizations', {
@@ -17,6 +17,14 @@ export const conferences = sqliteTable('conferences', {
   lifecycle: text('lifecycle', {
     enum: ['draft', 'live', 'archived'],
   }).notNull(),
+  apiRead: integer('api_read', { mode: 'boolean' }).notNull().default(false),
+  identityLogin: integer('identity_login', { mode: 'boolean' })
+    .notNull()
+    .default(false),
+  d1Write: integer('d1_write', { mode: 'boolean' }).notNull().default(false),
+  d1Override: integer('d1_override', { mode: 'boolean' })
+    .notNull()
+    .default(false),
 })
 
 export const domains = sqliteTable('domains', {

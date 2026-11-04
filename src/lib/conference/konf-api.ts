@@ -24,18 +24,94 @@ type ApiConference = Record<string, unknown> & {
   homepageSections?: string | unknown[] | null
 }
 
-/** `KONF_API_TENANTS`: comma-separated conference ids or organization ids. Empty = off. */
-export function isKonfApiTenant(conference: Conference): boolean {
-  const ids = (process.env.KONF_API_TENANTS ?? '')
+/** Per-conference rollout flags (#1925), as the gateway's `rolloutFlags`. */
+export type RolloutFlags = {
+  apiRead: boolean
+  identityLogin: boolean
+  d1Write: boolean
+}
+const OFF: RolloutFlags = {
+  apiRead: false,
+  identityLogin: false,
+  d1Write: false,
+}
+const FLAGS_QUERY = '{ rolloutFlags { apiRead identityLogin d1Write } }'
+// Short, so a flag flipped in D1 lands within minutes.
+const FLAGS_CACHE_LIFE = { stale: 60, revalidate: 300, expire: 3600 } as const
+
+/**
+ * Transition (#1925): the old comma-separated env lists, OR'ed with the D1
+ * flags until those are backfilled. Remove with the lists (docs/PLATFORM.md).
+ */
+function listed(name: string, conferenceId: string, orgId?: string): boolean {
+  const ids = (process.env[name] ?? '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
-  if (ids.length === 0) return false
-  return (
-    ids.includes(conference._id) ||
-    (!!conference.organization?._ref &&
-      ids.includes(conference.organization._ref))
-  )
+  return ids.includes(conferenceId) || (!!orgId && ids.includes(orgId))
+}
+
+/**
+ * The tenant's rollout flags from tenant-directory, through the gateway.
+ * The gateway answers only the signed site lane and only for the asserted
+ * host, so there is no tenant argument. Throws on failure (not cached).
+ */
+export async function fetchRolloutFlags(host: string): Promise<RolloutFlags> {
+  'use cache: remote'
+  cacheLife(FLAGS_CACHE_LIFE)
+  cacheTag(domainTag(host))
+  const res = await fetch(KONF_API_URL, {
+    method: 'POST',
+    headers: await konfApiHeaders(host),
+    body: JSON.stringify({ query: FLAGS_QUERY }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const json = (await res.json()) as {
+    data?: { rolloutFlags?: Partial<RolloutFlags> | null }
+    errors?: unknown[]
+  }
+  if (json.errors?.length) throw new Error(JSON.stringify(json.errors))
+  const f = json.data?.rolloutFlags
+  return {
+    apiRead: f?.apiRead === true,
+    identityLogin: f?.identityLogin === true,
+    d1Write: f?.d1Write === true,
+  }
+}
+
+/**
+ * Flags for this host's conference. `KONF_API_DISABLED=1` turns everything
+ * off. Any read failure leaves only the env lists: the Sanity path, as before.
+ */
+export async function rolloutFlags(
+  host: string | null,
+  conference: Pick<Conference, '_id' | 'organization'>,
+): Promise<RolloutFlags> {
+  if (process.env.KONF_API_DISABLED === '1') return OFF
+  const org = conference.organization?._ref
+  const env: RolloutFlags = {
+    apiRead: listed('KONF_API_TENANTS', conference._id, org),
+    identityLogin: listed('KONF_IDENTITY_TENANTS', conference._id, org),
+    d1Write: listed('KONF_D1_WRITE_TENANTS', conference._id),
+  }
+  // Without the signing key the gateway can only answer null.
+  if (!host || !process.env.KONF_SITE_SIGNING_KEY) return env
+  try {
+    const d1 = await fetchRolloutFlags(host)
+    return {
+      apiRead: env.apiRead || d1.apiRead,
+      identityLogin: env.identityLogin || d1.identityLogin,
+      d1Write: env.d1Write || d1.d1Write,
+    }
+  } catch (err) {
+    console.warn(
+      `[konf-api] rollout flags unavailable for ${host}:`,
+      (err as Error).message,
+    )
+    return env
+  }
 }
 
 /**

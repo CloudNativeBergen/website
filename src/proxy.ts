@@ -78,7 +78,7 @@ async function identitySignedIn(req: NextRequest): Promise<boolean> {
   if (
     !token ||
     !host ||
-    !process.env.KONF_IDENTITY_TENANTS ||
+    process.env.KONF_API_DISABLED === '1' ||
     !process.env.IDENTITY_URL
   ) {
     return false

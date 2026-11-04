@@ -1,5 +1,5 @@
 // The site session from an identity session cookie (#1892), for tenants in
-// KONF_IDENTITY_TENANTS. getAuthSession calls this only when there is no
+// the identityLogin flag. getAuthSession calls this only when there is no
 // NextAuth session and no CLI bearer token. Any failure means signed out.
 //
 // identity's get-session answers with the user and the session's `origin`, the
@@ -35,7 +35,7 @@ export function forgetIdentitySession(token: string): void {
 /** The identity session for this request (RSC / route handlers). */
 export async function identitySession(): Promise<Session | null> {
   try {
-    if (!process.env.KONF_IDENTITY_TENANTS || !process.env.IDENTITY_URL) {
+    if (process.env.KONF_API_DISABLED === '1' || !process.env.IDENTITY_URL) {
       return null
     }
     return await identitySessionFor(
@@ -53,12 +53,12 @@ export async function identitySessionFor(
   host: string | null,
 ): Promise<Session | null> {
   try {
-    if (!process.env.KONF_IDENTITY_TENANTS || !process.env.IDENTITY_URL) {
+    if (process.env.KONF_API_DISABLED === '1' || !process.env.IDENTITY_URL) {
       return null
     }
     if (!token || !host) return null
     const { conference } = await getConferenceForDomain(host)
-    if (!conference || !isIdentityTenant(conference)) return null
+    if (!conference || !(await isIdentityTenant(host, conference))) return null
 
     const key = `${host} ${token}`
     const hit = memo.get(key)

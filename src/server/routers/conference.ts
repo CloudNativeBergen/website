@@ -370,9 +370,11 @@ async function applyConferencePatch(
   // #1881 phase 2: D1 first for flagged tenants. A failure here aborts before
   // Sanity is touched. Prefixed (nested) fieldsets hold no moved fields.
   const moved = pathPrefix ? {} : movedConferencePatch(input)
-  const d1 = Object.keys(moved).length > 0 && isD1WriteTenant(conferenceId)
+  const hasMoved = Object.keys(moved).length > 0
+  const host = hasMoved ? await requestHost() : null
+  // A null host still honours the env list, so the refusal below holds.
+  const d1 = hasMoved && (await isD1WriteTenant(host, conferenceId))
   if (d1) {
-    const host = await requestHost()
     const jwt = host && (await identityJwt())
     // Refuse rather than write Sanity alone: that would leave D1 stale with
     // nothing to flag it until parity runs.

@@ -1,4 +1,4 @@
-// First-party sessions from identity (id.konf.app), behind KONF_IDENTITY_TENANTS
+// First-party sessions from identity (id.konf.app), behind the identityLogin flag
 // (#1803, epic #1772 "First-party web"). With the flag off for a tenant, both
 // routes answer 404 and nothing else changes.
 //
@@ -15,6 +15,7 @@ import { sessionCookieRequestHost } from '@/lib/auth-cookie-domain'
 import { EMAIL_LINK_IDENTIFIER_CLAIM } from '@/lib/auth/email-link/identity'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { AppEnvironment } from '@/lib/environment/config'
+import { rolloutFlags } from '@/lib/conference/konf-api'
 import type { Conference } from '@/lib/conference/types'
 
 import {
@@ -30,17 +31,12 @@ const noStore = {
   'referrer-policy': 'no-referrer',
 }
 
-/** `KONF_IDENTITY_TENANTS`: comma-separated conference or organization ids. Empty = off. */
-export function isIdentityTenant(conference: Conference): boolean {
-  const ids = (process.env.KONF_IDENTITY_TENANTS ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-  return (
-    ids.includes(conference._id) ||
-    (!!conference.organization?._ref &&
-      ids.includes(conference.organization._ref))
-  )
+/** The host's `identityLogin` rollout flag (#1925). */
+export async function isIdentityTenant(
+  host: string,
+  conference: Conference,
+): Promise<boolean> {
+  return (await rolloutFlags(host, conference)).identityLogin
 }
 
 /** This request's origin, or null when the tenant is not flagged. */
@@ -51,7 +47,9 @@ async function flaggedOrigin(request: NextRequest): Promise<string | null> {
   const host = sessionCookieRequestHost(request.headers)
   if (!host) return null
   const { conference } = await getConferenceForDomain(host)
-  return conference && isIdentityTenant(conference) ? `https://${host}` : null
+  return conference && (await isIdentityTenant(host, conference))
+    ? `https://${host}`
+    : null
 }
 
 const notFound = () => new NextResponse(null, { status: 404, headers: noStore })

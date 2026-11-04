@@ -96,7 +96,11 @@ beforeEach(() => {
     readFileSync(
       new URL('../migrations/0001_init.sql', import.meta.url),
       'utf8',
-    ),
+    ) +
+      readFileSync(
+        new URL('../migrations/0002_rollout_flags.sql', import.meta.url),
+        'utf8',
+      ),
   )
   env = {
     DB: d1(sqlite),
@@ -422,5 +426,87 @@ describe('custom domain rollback and removal', () => {
       (await gql(RESOLVE, { host: 'conf.acme.org' }, operator)).body.data
         .tenantByHost,
     ).toBeNull()
+  })
+})
+
+describe('rollout flags (#1925)', () => {
+  const FLAGS = `query($host: String!) { tenantByHost(host: $host) { conferenceId flags { apiRead identityLogin d1Write d1Override } } }`
+  const off = {
+    apiRead: false,
+    identityLogin: false,
+    d1Write: false,
+    d1Override: false,
+  }
+
+  it("returns the host's own conference flags, never another's", async () => {
+    const a = await provision('acme', 'ka')
+    const b = await provision('beta', 'kb')
+    sqlite
+      .prepare(
+        'UPDATE conferences SET api_read = 1, d1_override = 1 WHERE id = ?',
+      )
+      .run(conferenceOf(a.id))
+    const got = async (host: string) =>
+      (await gql(FLAGS, { host })).body.data.tenantByHost
+    expect(await got('acme.konf.run')).toEqual({
+      conferenceId: conferenceOf(a.id),
+      flags: { ...off, apiRead: true, d1Override: true },
+    })
+    expect(await got('beta.konf.run')).toEqual({
+      conferenceId: conferenceOf(b.id),
+      flags: off,
+    })
+  })
+
+  it('exposes no way to write a flag, and tags the field internal', async () => {
+    const { body } = await gql('{ _service { sdl } }')
+    const sdl: string = body.data._service.sdl
+    const mutation = /type Mutation[^}]*}/.exec(sdl)![0]
+    expect(mutation).not.toMatch(
+      /apiRead|identityLogin|d1Write|d1Override|flags/i,
+    )
+    expect(sdl).not.toMatch(/^input /m)
+    expect(sdl).toMatch(/flags: RolloutFlags @tag\(name: "internal"\)/)
+  })
+
+  it('backfills CNDN 2026 and nothing else', async () => {
+    const org = await provision()
+    sqlite
+      .prepare(
+        "INSERT INTO conferences (id, org_id, slug, name, lifecycle) VALUES ('eb7b16c6-00fa-44a0-adcd-4a480de34242', ?, '2026x', 'CNDN', 'live')",
+      )
+      .run(org.id)
+    sqlite.exec(
+      readFileSync(
+        new URL(
+          '../migrations/0003_backfill_cndn_2026_flags.sql',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    )
+    const rows = sqlite
+      .prepare(
+        'SELECT id, api_read, identity_login, d1_write, d1_override FROM conferences ORDER BY id',
+      )
+      .all()
+    expect(rows).toEqual(
+      [
+        {
+          id: conferenceOf(org.id),
+          api_read: 0,
+          identity_login: 0,
+          d1_write: 0,
+          d1_override: 0,
+        },
+        {
+          id: 'eb7b16c6-00fa-44a0-adcd-4a480de34242',
+          api_read: 1,
+          identity_login: 1,
+          d1_write: 1,
+          d1_override: 0,
+        },
+      ].sort((x, y) => x.id.localeCompare(y.id)),
+    )
   })
 })
