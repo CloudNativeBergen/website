@@ -372,13 +372,54 @@ async function findSpeakersByEmails(
     const speakers = (await clientReadUncached.fetch(
       // groq-global: cross-tenant identity join — a returning global person must
       // resolve regardless of which org they first belonged to (#615).
-      groq`*[_type == "speaker" && (${DISPLAY_EMAIL_MATCHABLE} && lower(email) in $emails || count((knownEmails[])[lower(@) in $emails]) > 0)] | order(_createdAt asc) [0...5] ${LOGIN_SPEAKER_PROJECTION}`,
+      // A ticket-GRANTED address (`ticketEmailGrants`) is excluded: an
+      // organizer of one org attested it, the person never proved it, and a
+      // sign-in through it would inherit the speaker's organizer rights in
+      // every OTHER org (#1914). It still links tickets; it never signs in.
+      groq`*[_type == "speaker" && (${DISPLAY_EMAIL_MATCHABLE} && lower(email) in $emails || count((knownEmails[])[lower(@) in $emails && !(lower(@) in coalesce(^.ticketEmailGrants[].email, []))]) > 0)] | order(_createdAt asc) [0...5] ${LOGIN_SPEAKER_PROJECTION}`,
       { emails },
     )) as Speaker[]
     return { speakers: speakers || [], err: null }
   } catch (error) {
     return { speakers: [], err: error as Error }
   }
+}
+
+/**
+ * True when any of `emails` (normalized) is a `ticketEmailGrants` address on
+ * some speaker. A sign-in that matches no speaker on its own but hits a grant
+ * is REFUSED by the callers below (#1914): creating a fresh speaker there would
+ * mint a duplicate that an organizer could later merge into the grant holder,
+ * handing over the account. Errors fail closed (`err` set).
+ */
+async function isTicketGrantedEmail(
+  emails: string[],
+): Promise<{ granted: boolean; err: Error | null }> {
+  if (emails.length === 0) return { granted: false, err: null }
+  try {
+    const n = (await clientReadUncached.fetch(
+      // groq-global: grants are checked across every tenant, like the identity
+      // join above; only a count leaves this function.
+      groq`count(*[_type == "speaker" && count(ticketEmailGrants[lower(email) in $emails]) > 0])`,
+      { emails },
+    )) as number
+    return { granted: n > 0, err: null }
+  } catch (error) {
+    return { granted: false, err: error as Error }
+  }
+}
+
+/** Generic on purpose: never says which speaker holds the grant. */
+const TICKET_GRANT_SIGN_IN_REFUSED =
+  'This address is linked to an existing speaker profile by an organizer and cannot be used to create a new account. Sign in with the address you registered with.'
+
+async function refuseIfTicketGranted(emails: string[]): Promise<Error | null> {
+  const { granted, err } = await isTicketGrantedEmail(emails)
+  if (err) {
+    console.error('Error checking ticket-granted emails', err)
+    return err
+  }
+  return granted ? new Error(TICKET_GRANT_SIGN_IN_REFUSED) : null
 }
 
 /**
@@ -762,6 +803,12 @@ export async function getOrCreateSpeaker(
   //    form keeps new documents self-consistent with `knownEmails` and with
   //    every comparison performed elsewhere. Only new writes are affected —
   //    existing documents are left untouched and are folded at query time.
+  //
+  //    REFUSED when an address is a ticket grant on some speaker (#1914).
+  const refused = await refuseIfTicketGranted(
+    uniqueEmails([...verifiedIncoming, normalizeEmail(user.email)]),
+  )
+  if (refused) return { speaker: {} as Speaker, err: refused }
   const _id = randomUUID()
   const knownEmails = uniqueEmails(verifiedIncoming)
   const slugValue = await generateUniqueSlug(user.name, _id)
@@ -917,7 +964,9 @@ export async function getOrCreateSpeakerForVerifiedEmail(
     )
   }
 
-  // 3. New person.
+  // 3. New person — unless the address is a ticket grant (#1914).
+  const refused = await refuseIfTicketGranted([normalized])
+  if (refused) return { speaker: {} as Speaker, err: refused }
   const _id = randomUUID()
   const name = options.nameHint?.trim() || nameFromEmailLocalPart(normalized)
   const slugValue = await generateUniqueSlug(name, _id)

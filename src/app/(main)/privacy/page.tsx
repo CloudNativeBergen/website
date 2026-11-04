@@ -1209,24 +1209,20 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           </h4>
                           <p className="text-sm text-emerald-700 dark:text-emerald-300">
                             <strong>
-                              You can sign in with that address from then on.
+                              Tickets registered to that address count as yours.
                             </strong>{' '}
-                            It becomes a full login identity for your speaker
-                            profile, exactly like an address you signed in with
-                            yourself — because whoever bought the ticket had to
-                            receive it at that address. We only accept an
-                            address a ticket for this event was actually
-                            registered to, and we refuse it if it already
-                            belongs to another account.
+                            The address is not a login: it cannot be used to
+                            sign in to your profile. We only accept an address a
+                            ticket for this event was actually registered to,
+                            and we refuse it if it already belongs to another
+                            account.
                           </p>
                         </div>
                       </div>
                       <p className="mt-4 text-sm text-emerald-700 dark:text-emerald-300">
                         An organizer can unlink it again: the address and the
-                        record of who added it are removed, and the sign-in goes
-                        with them. If the address is wrong, or you do not want
-                        it to sign in to your profile, ask the organizers to
-                        unlink it or email{' '}
+                        record of who added it are removed. If the address is
+                        wrong, ask the organizers to unlink it or email{' '}
                         <a
                           href={`mailto:${contactEmail}`}
                           className="underline"

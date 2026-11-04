@@ -89,7 +89,7 @@ export function TicketAddressModal({
       showNotification({
         type: 'success',
         title: 'Ticket address linked',
-        message: `${email} now matches this speaker's ticket, and can sign in to this profile.`,
+        message: `${email} now matches this speaker's ticket.`,
       })
     } catch (error) {
       showNotification({
@@ -108,7 +108,7 @@ export function TicketAddressModal({
       showNotification({
         type: 'success',
         title: 'Ticket address removed',
-        message: `${email} no longer matches this speaker, and can no longer sign in to this profile.`,
+        message: `${email} no longer matches this speaker's ticket.`,
       })
     } catch (error) {
       showNotification({
@@ -140,10 +140,9 @@ export function TicketAddressModal({
         used.
       </p>
       <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-        A linked address becomes part of this speaker&apos;s identity: whoever
-        reads mail at it can sign in to this speaker profile. Link an address
-        only when you are satisfied it belongs to this person. Removing it here
-        takes that access away again.
+        A linked address is used only to match tickets to this speaker. It
+        cannot be used to sign in. Link an address only when you are satisfied
+        it belongs to this person.
       </p>
 
       <div className="mt-5">
@@ -333,9 +332,9 @@ export function TicketGrantConfirm({
         Link {email} to {speakerName ?? 'this speaker'}?
       </p>
       <p className="mt-1 text-sm text-yellow-900 dark:text-yellow-200">
-        Whoever reads mail at this address will be able to sign in to this
-        speaker profile and see everything it holds. The link is recorded with
-        your name, and can be removed here.
+        Tickets registered under this address will count as this speaker&apos;s.
+        The address cannot be used to sign in. The link is recorded with your
+        name, and can be removed here.
       </p>
       <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button
@@ -352,7 +351,7 @@ export function TicketGrantConfirm({
           disabled={busy}
           className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-brand-cloud-blue px-4 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500"
         >
-          {linking ? 'Linking…' : 'Link and grant sign-in'}
+          {linking ? 'Linking…' : 'Link address'}
         </button>
       </div>
     </div>

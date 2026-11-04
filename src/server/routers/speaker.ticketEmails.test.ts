@@ -6,13 +6,11 @@
  *
  * A speaker who bought their ticket under an address we do not hold reads "Not
  * claimed" forever, because the claim status is a join on ADDRESSES. An
- * organizer can now link the address off the ticket, and the owner decision is
- * that the address becomes a FULL SIGN-IN IDENTITY: it joins `knownEmails`, on
- * the reasoning that an attendee registers under an address they control
- * because that is where the ticket is delivered.
+ * organizer can now link the address off the ticket. It is recorded ONLY in
+ * `ticketEmailGrants`, which the ticket join reads; it never joins
+ * `knownEmails` and never signs anyone in (#1914).
  *
- * That makes this an identity-granting write, so what this file pins is the
- * four controls that make it defensible:
+ * The address is still a ticket-linking key, so this file pins the controls:
  *
  *  1. The address must be ATTESTED BY A TICKET for this event. An organizer
  *     cannot hand it an address of their own choosing.
@@ -21,8 +19,7 @@
  *  3. An address whose NFKC form differs from itself is refused, the same rule
  *     email sign-in applies: the stored identity must be the mailbox the ticket
  *     reached.
- *  4. Removal REVOKES: the address leaves `knownEmails`, so the login-side
- *     lookup stops resolving this speaker.
+ *  4. Removal REVOKES: the grant leaves `ticketEmailGrants`.
  */
 
 const h = vi.hoisted(() => ({
@@ -149,7 +146,7 @@ beforeEach(() => {
 })
 
 describe('speaker.admin.addTicketEmail', () => {
-  it('adds the address to knownEmails and records its provenance', async () => {
+  it('records the grant and its provenance, never in knownEmails', async () => {
     const { grants } = await makeCaller().admin.addTicketEmail({
       id: 'speaker-1',
       email: 'Ada@Work.Example',
@@ -159,7 +156,7 @@ describe('speaker.admin.addTicketEmail', () => {
     // APPENDED, not written back from the snapshot this request read: two
     // organizers granting at once must not drop each other's entry.
     expect(h.set).not.toHaveBeenCalled()
-    expect(h.append).toHaveBeenCalledWith('knownEmails', ['ada@work.example'])
+    expect(h.append).not.toHaveBeenCalledWith('knownEmails', expect.anything())
 
     // The trail: who, when, and off which ticket. `registeredEmail` and
     // `ticketId` come from the provider record, never from the request.
@@ -301,7 +298,7 @@ describe('speaker.admin.addTicketEmail', () => {
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
       message:
-        'That address cannot be used as a sign-in identity: its normalized form differs from the address itself.',
+        'That address cannot be used: its normalized form differs from the address itself.',
     })
     expect(h.patch).not.toHaveBeenCalled()
   })
@@ -327,7 +324,7 @@ describe('speaker.admin.addTicketEmail', () => {
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
       message:
-        'That ticket’s address cannot be used as a sign-in identity: its normalized form differs from the address the ticket was sent to.',
+        'That ticket’s address cannot be used: its normalized form differs from the address the ticket was sent to.',
     })
     expect(h.patch).not.toHaveBeenCalled()
   })
@@ -394,7 +391,7 @@ describe('speaker.admin.removeTicketEmail', () => {
     })
   })
 
-  it('REVOKES: the address leaves knownEmails and the grant list', async () => {
+  it('REVOKES: the address leaves the grant list', async () => {
     const { grants } = await makeCaller().admin.removeTicketEmail({
       id: 'speaker-1',
       email: 'Ada@Work.Example',
@@ -403,7 +400,6 @@ describe('speaker.admin.removeTicketEmail', () => {
     // DIFFERENT address must not be restored by this one.
     expect(h.set).not.toHaveBeenCalled()
     expect(h.unset).toHaveBeenCalledWith([
-      'knownEmails[@ == "ada@work.example"]',
       'ticketEmailGrants[email == "ada@work.example"]',
     ])
     expect(grants.map((grant) => grant.email)).toEqual(['ada@other.example'])
@@ -440,7 +436,6 @@ describe('speaker.admin.removeTicketEmail', () => {
     })
 
     expect(h.unset).toHaveBeenCalledWith([
-      'knownEmails[@ == "ada@work.example"]',
       'ticketEmailGrants[email == "ada@work.example"]',
     ])
     expect(grants).toEqual([])
@@ -466,31 +461,8 @@ describe('speaker.admin.removeTicketEmail', () => {
   })
 
   /**
-   * The display address is a login key too. Dropping the granted address from
-   * `knownEmails` while it is also the display email would report a revocation
-   * that did not happen.
-   */
-  it('refuses when the granted address has since become the display email', async () => {
-    h.grantState.mockResolvedValue({
-      email: 'ada@work.example',
-      knownEmails: ['ada@work.example'],
-      grants: [{ _key: 'k1', email: 'ada@work.example' }],
-    })
-    await expect(
-      makeCaller().admin.removeTicketEmail({
-        id: 'speaker-1',
-        email: 'ada@work.example',
-      }),
-    ).rejects.toMatchObject({
-      code: 'BAD_REQUEST',
-      message: expect.stringContaining('display email'),
-    })
-    expect(h.patch).not.toHaveBeenCalled()
-  })
-
-  /**
-   * Without this check the endpoint would strip a LOGIN-VERIFIED address out of
-   * somebody's match-set — locking a person out of their own account through an
+   * Without this check the endpoint would strip an address that was not a ticket grant
+   * (e.g. a login-verified one) from somebody's record, through an
    * endpoint whose job is undoing an organizer's mistake.
    */
   it('refuses to remove an address that was never granted from a ticket', async () => {
