@@ -30,7 +30,10 @@ const hostnames = {
   delete: vi.fn<CustomHostnames['delete']>(),
   find: vi.fn<CustomHostnames['find']>(),
 }
-const identity = { ensure: vi.fn(async () => undefined) }
+const identity = {
+  ensure: vi.fn(async () => undefined),
+  syncMembers: vi.fn(async (): Promise<unknown> => undefined),
+}
 vi.mock('./data/cloudflare', () => ({ cloudflareHostnames: () => hostnames }))
 
 const { default: worker } = await import('./worker')
@@ -109,6 +112,7 @@ beforeEach(() => {
   hostnames.get.mockReset()
   hostnames.delete.mockReset()
   identity.ensure.mockReset()
+  identity.syncMembers.mockReset()
 })
 
 async function gql(
@@ -338,7 +342,9 @@ describe('reserved slugs', () => {
 })
 
 describe('cron', () => {
-  const tick = () => worker.scheduled!({} as ScheduledController, env)
+  const at = (iso: string) =>
+    ({ scheduledTime: Date.parse(iso) }) as ScheduledController
+  const tick = () => worker.scheduled!(at('2026-11-04T10:05:00Z'), env)
 
   it('mirrors Cloudflare status for pending custom domains only', async () => {
     const org = await provision()
@@ -384,6 +390,66 @@ describe('cron', () => {
       vi.useRealTimers()
     }
     expect(await resolve('a.example.org')).toBeNull()
+  })
+})
+
+describe('cron: identity membership sync (#1907)', () => {
+  const at = (iso: string) =>
+    ({ scheduledTime: Date.parse(iso) }) as ScheduledController
+
+  it('calls identity only on the run scheduled at minute 0, whatever the clock says', async () => {
+    for (const m of ['05', '10', '55']) {
+      await worker.scheduled!(at(`2026-11-04T10:${m}:00Z`), env)
+    }
+    expect(identity.syncMembers).not.toHaveBeenCalled()
+    // A late start keeps its scheduledTime: still the hourly run.
+    vi.useFakeTimers({
+      now: Date.parse('2026-11-04T11:03:00Z'),
+      toFake: ['Date'],
+    })
+    try {
+      await worker.scheduled!(at('2026-11-04T11:00:00Z'), env)
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(identity.syncMembers).toHaveBeenCalledTimes(1)
+  })
+
+  it('a throwing sync is logged without emails and the directory work still ran', async () => {
+    const org = await provision()
+    hostnames.create.mockResolvedValueOnce({
+      id: 'cf1',
+      verification: 'pending',
+    })
+    await gql(
+      `mutation($c: ID!, $h: String!) { addCustomDomain(conferenceId: $c, hostname: $h) { hostname } }`,
+      { c: conferenceOf(org.id), h: 'a.example.org' },
+      operator,
+    )
+    hostnames.get.mockResolvedValue('verified')
+    identity.syncMembers.mockRejectedValue(new Error('boom ann@example.org'))
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await expect(
+        worker.scheduled!(at('2026-11-04T12:00:00Z'), env),
+      ).resolves.toBeUndefined()
+      expect(hostnames.get).toHaveBeenCalledTimes(1)
+      const logged = err.mock.calls.map((c) => String(c[0])).join('\n')
+      expect(logged).toContain('"event":"identity.membership.sync_failed"')
+      expect(logged).not.toContain('@')
+    } finally {
+      err.mockRestore()
+    }
+  })
+
+  it('binds identity Organizations in every env and keeps one cron', () => {
+    const cfg = readFileSync(
+      new URL('../wrangler.jsonc', import.meta.url),
+      'utf8',
+    )
+    expect(cfg.match(/"entrypoint": "Organizations"/g)).toHaveLength(3)
+    expect(cfg).toContain('"service": "konf-identity-preview"')
+    expect(cfg.match(/"crons"/g)).toHaveLength(1)
   })
 })
 

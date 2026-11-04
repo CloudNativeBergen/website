@@ -4,12 +4,13 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('cloudflare:workers', () => ({ WorkerEntrypoint: class {} }))
 // The auth handler is not under test here; stub it to see what reaches it.
 vi.mock('./handoff', () => ({ handoff: () => new Response('handoff') }))
+const syncMembers = vi.fn(async () => 'synced')
 vi.mock('./data', () => ({
   createAuth: () => ({ handler: () => new Response('auth') }),
-  createData: () => ({}),
+  createData: () => ({ syncMembers }),
 }))
 
-const { default: worker } = await import('./index')
+const { default: worker, Membership, Organizations } = await import('./index')
 const env = {} as never
 
 describe('identity routing', () => {
@@ -59,5 +60,22 @@ describe('identity routing', () => {
     expect(prod).toBeDefined()
     expect(prod).not.toContain('LOGIN_TEST_PAGE')
     expect(cfg.split('"production": {')[0]).toContain('"LOGIN_TEST_PAGE": "1"')
+  })
+})
+
+describe('membership sync RPC (#1907)', () => {
+  it('Organizations.syncMembers runs the data-layer sync; the gateway entrypoint has none', async () => {
+    const rpc = new Organizations({} as never, {} as never)
+    expect(await rpc.syncMembers()).toBe('synced')
+    expect(syncMembers).toHaveBeenCalledTimes(1)
+    expect('syncMembers' in Membership.prototype).toBe(false)
+  })
+  it('has no cron of its own (the account allows 5; tenant-directory drives it)', () => {
+    const cfg = readFileSync(
+      new URL('../wrangler.jsonc', import.meta.url),
+      'utf8',
+    )
+    expect(cfg).not.toContain('crons')
+    expect('scheduled' in worker).toBe(false)
   })
 })

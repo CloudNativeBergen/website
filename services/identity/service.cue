@@ -15,10 +15,10 @@ service: #PlatformService & {
 		preview: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", LOGIN_TEST_PAGE: "1", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development"}
 		production: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production"}
 	}
-	// Organizer membership sync (#1907, src/data/member-sync.ts), hourly.
-	// Secret per env: SANITY_API_TOKEN_READ. Without it the sync grants nothing.
-	_memberSyncSchedule: "0 * * * *"
-	crons: [_memberSyncSchedule]
+	// Organizer membership sync (#1907, src/data/member-sync.ts) has no cron
+	// here: the account allows 5. tenant-directory's cron calls
+	// Organizations.syncMembers() hourly. Secret per env: SANITY_API_TOKEN_READ.
+	// Without it the sync grants nothing.
 	// Verified origins for the login handoff (#688).
 	serviceBindings: [{binding: "DIRECTORY", service: "konf-tenant-directory"}]
 	// Handoff limits (src/handoff.ts): POSTs per tenant origin, GET per IP.
