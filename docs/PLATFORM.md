@@ -44,23 +44,47 @@ pnpm --filter @runkonf/api dev         # compose, then wrangler dev
 
 Identity tests run against a real local D1 through Miniflare. A cross-tenant test that walks the whole public schema with two tenants runs with them (#1837).
 
-## The read path flag
+## Rollout flags
 
-`src/lib/conference/konf-api.ts` lets the site read conference fields from the API instead of Sanity, per tenant:
+Each conference has four rollout flags in tenant-directory D1 (`conferences` table, #1925). They default to off. No GraphQL mutation writes them; an operator sets them with SQL:
 
-- `KONF_API_TENANTS` is a comma-separated list of conference ids or organization ids. Empty or unset means off for everyone.
-- For a listed tenant, the site's server calls `api.konf.app` for the request's host and merges the returned fields over the Sanity conference. The result is cached with the same tags as the Sanity read, so a revalidation clears both.
-- Any error, a timeout (2 seconds), a `null` answer or a conference id that does not match makes the site use the Sanity data for that request. Turning a tenant off is removing it from the list.
+| Column           | Effect                                                            |
+| ---------------- | ----------------------------------------------------------------- |
+| `api_read`       | The site reads core conference fields from `api.konf.app`.        |
+| `identity_login` | The site signs in through identity (`id.konf.app`).               |
+| `d1_write`       | The admin writes the moved conference fields to D1 before Sanity. |
+| `d1_override`    | The gateway routes the `conference` `@override` label to D1.      |
 
-## The write path flag
+```sh
+pnpm --filter @runkonf/tenant-directory exec wrangler d1 execute DB --remote --env production \
+  --command "UPDATE conferences SET api_read = 1 WHERE id = '<conference id>'"
+```
 
-`src/lib/konf-api/conference-write.ts` lets the admin write the moved conference fields to D1 through `api.konf.app`, per tenant (#1881):
+How they travel: `tenantByHost` returns them, and the gateway reads them with its tenant lookup on every request. `d1_override` applies at once. The site asks the gateway's `rolloutFlags` query, which answers only on the site's signed server lane and only for the asserted host, so it takes no argument and no other caller sees a tenant's flags. The site caches the answer per host for 5 minutes (stale up to an hour), so a change in D1 reaches the site within minutes. The site needs `KONF_SITE_SIGNING_KEY` to read them.
 
-- `KONF_D1_WRITE_TENANTS` is a comma-separated list of conference ids. Empty or unset means off for everyone. It is unset in every environment.
-- For a listed tenant, each settings save sends its moved fields to `updateConference` first, with the organizer's identity JWT. If that fails, the save fails and Sanity is not touched. Then Sanity gets the whole patch. If Sanity fails after D1 succeeded, the error is logged with the conference id and the save returns a warning.
-- An organizer with no identity session (`KONF_IDENTITY_TENANTS` off, or not signed in through identity) cannot save moved fields for a listed tenant. Only list tenants that are also in `KONF_IDENTITY_TENANTS`.
+Fail safe: if the read fails or times out (2 seconds), the site treats the D1 flags as off for that request: the Sanity path.
 
-Which subgraph answers for a tenant is a separate switch in the gateway (`@override`). The site does not need to know about it.
+Kill switch: `KONF_API_DISABLED=1` on Vercel turns all three site flags off for every tenant, env lists included, and stops identity sessions. The gateway has no switch; set `d1_override = 0` in D1 instead.
+
+<a id="the-read-path-flag"></a>
+
+### Read path (`api_read`)
+
+`src/lib/conference/konf-api.ts` merges the API's conference fields over the Sanity conference. The result is cached with the same tags as the Sanity read. Any error, a timeout, a `null` answer or a conference id that does not match makes the site use the Sanity data for that request.
+
+<a id="the-write-path-flag"></a>
+
+### Write path (`d1_write`)
+
+`src/lib/konf-api/conference-write.ts` sends each settings save's moved fields to `updateConference` first, with the organizer's identity JWT (#1881). If that fails, the save fails and Sanity is not touched. If Sanity fails after D1 succeeded, the error is logged and the save returns a warning. An organizer without an identity session cannot save moved fields, so turn `d1_write` on only together with `identity_login`.
+
+### Transition: the old env lists
+
+Until the D1 flags are backfilled (`services/tenant-directory/migrations/0003_backfill_cndn_2026_flags.sql`), the old lists still work and are OR'ed with the D1 flags: `KONF_API_TENANTS` and `KONF_IDENTITY_TENANTS` (conference or organization ids), `KONF_D1_WRITE_TENANTS` (conference ids) on Vercel, and `OVERRIDE_TENANTS` (organization ids per label) in `api/wrangler.jsonc`. To remove them:
+
+1. Approve the production Workers deploy, which applies migrations 0002 and 0003. Check the CNDN 2026 row: `SELECT id, api_read, identity_login, d1_write, d1_override FROM conferences WHERE api_read OR identity_login OR d1_write OR d1_override`.
+2. Delete `KONF_API_TENANTS`, `KONF_IDENTITY_TENANTS` and `KONF_D1_WRITE_TENANTS` from every Vercel environment and redeploy. Check that sign-in through identity and the settings save still work on 2026.cloudnativedays.no.
+3. Delete `listed()` and its three calls in `src/lib/conference/konf-api.ts`, and the `OVERRIDE_TENANTS` var with its check in `progressiveOverride` (`api/src/gateway.ts`), in one PR.
 
 ## Data ownership
 

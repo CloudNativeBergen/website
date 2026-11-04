@@ -1560,6 +1560,18 @@ describe('conference router — D1 write path (#1881)', () => {
     expect(commitMock).not.toHaveBeenCalled()
   })
 
+  // #1925: the env list still applies without a host, so the refusal holds.
+  it('refuses, without touching Sanity, when the request has no host', async () => {
+    hostMock.mockReturnValue(null)
+    await expect(
+      makeCaller({ isOrganizer: true }).updateVisibility({
+        visibility: 'unlisted',
+      }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' })
+    expect(apiCalls()).toHaveLength(0)
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
   it('refuses, without touching Sanity, when the organizer has no identity session', async () => {
     sessionCookieMock.mockReturnValue(undefined)
     await expect(
