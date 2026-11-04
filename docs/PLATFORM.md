@@ -52,6 +52,10 @@ Identity tests run against a real local D1 through Miniflare. A cross-tenant tes
 - For a listed tenant, the site's server calls `api.konf.app` for the request's host and merges the returned fields over the Sanity conference. The result is cached with the same tags as the Sanity read, so a revalidation clears both.
 - Any error, a timeout (2 seconds), a `null` answer or a conference id that does not match makes the site use the Sanity data for that request. Turning a tenant off is removing it from the list.
 
+## Gateway URL
+
+`KONF_API_URL` is the gateway the site calls, read in one place (`konfApiUrl()` in `src/lib/konf-api/client.ts`). Unset, it defaults to `https://api.konf.app/graphql` only when `VERCEL_ENV` is `production` or unset (local). On a Vercel preview or development deploy with it unset, the API is treated as off and the site reads and writes Sanity only, so a preview never reaches production. Any other non-Vercel runtime (Docker, `next start` in CI) counts as unset and defaults to production, so set `KONF_API_URL` there if you also set the tenant flags. Set it on Vercel Preview to the preview gateway: `https://konf-api-preview.<account>.workers.dev/graphql` (Worker `konf-api-preview`, `api/wrangler.jsonc` `env.preview`; the account subdomain is in the Cloudflare dashboard).
+
 ## The write path flag
 
 `src/lib/konf-api/conference-write.ts` lets the admin write the moved conference fields to D1 through `api.konf.app`, per tenant (#1881):

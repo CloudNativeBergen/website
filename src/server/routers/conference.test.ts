@@ -1534,6 +1534,14 @@ describe('conference router — D1 write path (#1881)', () => {
     expect(JSON.parse(init.body).variables.input).toEqual({ published: false })
   })
 
+  it('preview without KONF_API_URL: no gateway call, Sanity only (#1926)', async () => {
+    vi.stubEnv('VERCEL_ENV', 'preview')
+    vi.stubEnv('KONF_API_URL', '')
+    await makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' })
+    expect(apiCalls()).toHaveLength(0)
+    expect(lastSet).toEqual({ venueName: 'X' })
+  })
+
   it('sends the API call for the tenant host, not x-forwarded-host', async () => {
     forwardedHostMock.mockReturnValue('evil.example')
     await makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' })
