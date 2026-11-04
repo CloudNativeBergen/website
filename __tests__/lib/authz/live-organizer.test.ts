@@ -213,6 +213,18 @@ describe('live organizer rights (#1923)', () => {
     expect(await adminAllowed()).toBe(false)
   })
 
+  it('a later good read with no rights beats the grace', async () => {
+    h.auth.mockResolvedValue(token('sp-g4'))
+    h.rights.set('sp-g4', ['org-A'])
+    expect(await adminAllowed()).toBe(true)
+    h.rights.set('sp-g4', [])
+    vi.advanceTimersByTime(61_000)
+    expect(await adminAllowed()).toBe(false)
+    h.rights.set('sp-g4', null)
+    vi.advanceTimersByTime(61_000)
+    expect(await adminAllowed()).toBe(false)
+  })
+
   it('upload token: a removed organizer gets no organizer proposal access after 60 s', async () => {
     const { POST } = await import('@/app/api/upload/proposal-attachment/route')
     h.auth.mockResolvedValue(token('sp-u'))
