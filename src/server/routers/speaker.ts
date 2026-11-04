@@ -1336,15 +1336,16 @@ export const speakerRouter = router({
      * GRANT A TICKET ADDRESS AS AN IDENTITY.
      *
      * A speaker who bought their ticket under an address we do not hold reads
-     * "Not claimed" forever. This adds that address to `knownEmails`, which is
-     * the whole fix: the existing join finds the ticket and workshop
-     * eligibility matches.
+     * "Not claimed" forever. This records the address in `ticketEmailGrants`,
+     * which is the whole fix: the ticket join reads `ticketEmailGrants[].email`
+     * (`@/lib/speaker/ticketInputs`), so the ticket and workshop eligibility
+     * match.
      *
-     * IT DOES NOT GRANT SIGN-IN. `findSpeakersByEmails` skips every address in
-     * `ticketEmailGrants` (#1914): the address is attested by an organizer of
-     * ONE org, and a sign-in through it would inherit the speaker's organizer
-     * rights in every other org — including ones they join after this grant,
-     * which the exclusivity check below cannot see. The four controls still
+     * IT DOES NOT GRANT SIGN-IN. The address is never written to `knownEmails`,
+     * and `findSpeakersByEmails` also skips any `knownEmails` entry that is in
+     * `ticketEmailGrants` (#1914). A sign-in that finds no speaker but hits a
+     * grant is REFUSED (`getOrCreateSpeaker`), so it cannot mint a duplicate
+     * that a later merge would hand the account to. The four controls still
      * stand, because the address is a ticket-linking key.
      *
      * 1. THE ADDRESS MUST BE ATTESTED BY A TICKET FOR THIS EVENT. The organizer
@@ -1480,10 +1481,7 @@ export const speakerRouter = router({
           })
         }
 
-        // (4) The identity and its provenance are written TOGETHER, in one
-        // patch: a grant with no match-set entry grants nothing, and a
-        // match-set entry with no grant is the untraceable case this design
-        // exists to avoid.
+        // (4) The grant carries its own provenance.
         const grant = {
           _key: generateKey('ticket-grant'),
           email,
@@ -1499,10 +1497,8 @@ export const speakerRouter = router({
         }
         // APPEND, NOT SET. The probe above and this write are separate
         // round-trips, so writing back the arrays THIS request read would let
-        // two organizers working at once silently drop each other's grant — and
-        // a dropped grant is an address left in `knownEmails` with no trail, the
-        // one state this design exists to prevent. Appending touches only the
-        // two entries it adds.
+        // two organizers working at once silently drop each other's grant.
+        // Appending touches only the entry it adds.
         await addSpeakerTicketEmail(input.id, grant)
         return {
           grants: redactForeignGrants([...state.grants, grant], orgId),
@@ -1510,13 +1506,10 @@ export const speakerRouter = router({
       }),
 
     /**
-     * REVOKE a granted ticket address: out of `ticketEmailGrants` AND out of
-     * `knownEmails`, so signing in with it stops working.
+     * REVOKE a granted ticket address: out of `ticketEmailGrants`, so the
+     * ticket stops linking to this speaker.
      *
-     * ONLY A GRANTED ADDRESS CAN BE REMOVED. Without that check this endpoint
-     * would be a way to strip a LOGIN-VERIFIED address out of somebody's
-     * match-set — locking a person out of their own account through an endpoint
-     * whose stated job is undoing an organizer's own mistake.
+     * ONLY A GRANTED ADDRESS CAN BE REMOVED; nothing else is touched.
      *
      * ORDINARY STANDING, unlike the grant. Exclusivity is the right bar for
      * HANDING OUT an identity; requiring it to take one back would mean a grant
@@ -1546,31 +1539,18 @@ export const speakerRouter = router({
               'That address was not granted from a ticket, so it cannot be removed here.',
           })
         }
-        // THE DISPLAY ADDRESS IS A LOGIN KEY TOO (`findSpeakersByEmails` matches
-        // `email` as well as `knownEmails`). If the granted address has since
-        // become the display one, dropping it from the match-set would report a
-        // revocation that did not happen. Refuse and say which field is left,
-        // rather than silently half-revoking.
-        if (normalizeEmail(state.email) === email) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message:
-              'This address is now the speaker’s display email, which also signs them in. Change the display email first, then remove the link.',
-          })
-        }
-
         // UNSET BY PREDICATE, not a rewritten array: the read above and this
         // write are separate round-trips, so replacing both arrays wholesale
         // would let one organizer's removal restore an address another had just
-        // revoked. These selectors touch only the matching entries.
+        // revoked. The selector touches only the matching entry.
         //
         // The address goes into the selector as a literal, so it is restricted
         // to characters that cannot terminate the string or the bracket. Every
         // address this feature stores passes the NFKC check and comes off a
         // provider ticket, so the fallback is for pathological provider data
         // rather than for anything an organizer can type: it rewrites the
-        // arrays instead, which is correct but can lose a concurrent edit.
-        await removeSpeakerTicketEmail(input.id, email, state)
+        // array instead, which is correct but can lose a concurrent edit.
+        await removeSpeakerTicketEmail(input.id, email, state.grants)
         return {
           grants: redactForeignGrants(
             state.grants.filter(

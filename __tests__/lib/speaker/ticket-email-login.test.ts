@@ -50,8 +50,8 @@ const dataset: Record<string, unknown>[] = [
     name: 'Victim',
     slug: { current: 'victim' },
     email: 'victim@example.com',
-    // The granted address sits in the match-set, as `addSpeakerTicketEmail`
-    // writes it, next to the speaker's own verified address.
+    // LEGACY shape: a granted address in the match-set. `addSpeakerTicketEmail`
+    // no longer writes it there; the login predicate still skips it.
     knownEmails: ['victim@example.com', 'attacker@example.com'],
     ticketEmailGrants: [
       {
@@ -98,15 +98,17 @@ describe('ticket-granted addresses never resolve a sign-in (#1914)', () => {
     const { speaker, err } = await getOrCreateSpeakerForVerifiedEmail(
       'attacker@example.com',
     )
-    expect(err).toBeNull()
-    expect(speaker._id).not.toBe('sp-victim')
+    expect(speaker._id).toBeUndefined()
     expect(speaker.organizerOrgIds ?? []).not.toContain(ORG_Y)
-    expect(createMock).toHaveBeenCalledTimes(1)
+    // Refused, not a fresh duplicate an organizer could merge into the victim.
+    expect(err?.message).toMatch(/cannot be used to create a new account/)
+    expect(err?.message).not.toMatch(/victim/i)
+    expect(createMock).not.toHaveBeenCalled()
   })
 
   it('provider sign-in verifying a granted address does not become the speaker', async () => {
     verifiedEmailsMock.mockResolvedValue({ emails: [], error: null })
-    const { speaker } = await getOrCreateSpeaker(
+    const { speaker, err } = await getOrCreateSpeaker(
       { name: 'Attacker', email: 'attacker@example.com' } as User,
       {
         provider: 'github',
@@ -115,7 +117,37 @@ describe('ticket-granted addresses never resolve a sign-in (#1914)', () => {
         access_token: 't',
       } as Account,
     )
-    expect(speaker._id).not.toBe('sp-victim')
+    expect(speaker._id).toBeUndefined()
+    expect(err?.message).toMatch(/cannot be used to create a new account/)
+    expect(err?.message).not.toMatch(/victim/i)
+    expect(createMock).not.toHaveBeenCalled()
+  })
+
+  it('a grant-only address (not in knownEmails) is refused too', async () => {
+    dataset.push({
+      _id: 'sp-other',
+      _type: 'speaker',
+      name: 'Other',
+      email: 'other@example.com',
+      knownEmails: ['other@example.com'],
+      ticketEmailGrants: [{ _key: 'g2', email: 'grant-only@example.com' }],
+    })
+    try {
+      const { err } = await getOrCreateSpeakerForVerifiedEmail(
+        'grant-only@example.com',
+      )
+      expect(err?.message).toMatch(/cannot be used to create a new account/)
+      expect(createMock).not.toHaveBeenCalled()
+    } finally {
+      dataset.pop()
+    }
+  })
+
+  it('a normal new user is still created', async () => {
+    const { speaker, err } =
+      await getOrCreateSpeakerForVerifiedEmail('newbie@example.com')
+    expect(err).toBeNull()
+    expect(speaker.email).toBe('newbie@example.com')
     expect(createMock).toHaveBeenCalledTimes(1)
   })
 

@@ -90,8 +90,11 @@ export async function updateSpeakerEmail(
 }
 
 /**
- * Append a ticket address and its grant in one patch. APPEND, not set, so two
- * organizers granting at once never drop each other's entry.
+ * Append a ticket grant. Writes ONLY `ticketEmailGrants`: ticket joins read
+ * `ticketEmailGrants[].email`, and a grant must never become a login key
+ * (#1914). APPEND, not set, so two organizers granting at once never drop each
+ * other's entry. One `append` per patch: `@sanity/client` keeps only the last
+ * insert when a Patch chains two.
  */
 export async function addSpeakerTicketEmail(
   speakerId: string,
@@ -99,33 +102,27 @@ export async function addSpeakerTicketEmail(
 ): Promise<void> {
   await clientWrite
     .patch(speakerId)
-    .setIfMissing({ knownEmails: [], ticketEmailGrants: [] })
-    .append('knownEmails', [grant.email])
+    .setIfMissing({ ticketEmailGrants: [] })
     .append('ticketEmailGrants', [grant])
     .commit()
 }
 
 /**
- * Remove a granted ticket address from `knownEmails` and `ticketEmailGrants`.
- * Unsets by predicate when `email` is safe in a selector literal; otherwise
- * rewrites both arrays from the read `state` (correct, but can lose a
- * concurrent edit).
+ * Remove a granted ticket address from `ticketEmailGrants`. Unsets by predicate
+ * when `email` is safe in a selector literal; otherwise rewrites the array from
+ * the read `grants` (correct, but can lose a concurrent edit).
  */
 export async function removeSpeakerTicketEmail(
   speakerId: string,
   email: string,
-  state: { knownEmails: string[]; grants: TicketEmailGrant[] },
+  grants: TicketEmailGrant[],
 ): Promise<void> {
   const patch = clientWrite.patch(speakerId)
   await (
     /^[a-z0-9!#$%&'*+/=?^_`{|}~.@-]+$/.test(email)
-      ? patch.unset([
-          `knownEmails[@ == "${email}"]`,
-          `ticketEmailGrants[email == "${email}"]`,
-        ])
+      ? patch.unset([`ticketEmailGrants[email == "${email}"]`])
       : patch.set({
-          knownEmails: state.knownEmails.filter((held) => held !== email),
-          ticketEmailGrants: state.grants.filter(
+          ticketEmailGrants: grants.filter(
             (grant) => normalizeEmail(grant.email) !== email,
           ),
         })

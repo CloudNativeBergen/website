@@ -100,48 +100,56 @@ describe('speaker write seam', () => {
     expect(calls).toStrictEqual(expected)
   })
 
-  it('addSpeakerTicketEmail appends the address and grant in one patch', async () => {
+  it('addSpeakerTicketEmail appends only the grant', async () => {
     await addSpeakerTicketEmail('speaker-1', grant)
     expect(calls).toStrictEqual([
       ['patch', 'speaker-1'],
-      ['setIfMissing', { knownEmails: [], ticketEmailGrants: [] }],
-      ['append', 'knownEmails', ['ada@work.example']],
+      ['setIfMissing', { ticketEmailGrants: [] }],
       ['append', 'ticketEmailGrants', [grant]],
       ['commit'],
     ])
   })
 
-  it('removeSpeakerTicketEmail unsets by predicate for a selector-safe address', async () => {
-    await removeSpeakerTicketEmail('speaker-1', 'ada@work.example', {
-      knownEmails: ['ada@work.example', 'ada@home.example'],
-      grants: [grant],
+  // The builder calls above are recorded against a mock. Replay them on the
+  // REAL @sanity/client Patch and assert what it would send: chaining two
+  // `append`s keeps only the last insert, which is how #1914's grant never
+  // reached `knownEmails` in production.
+  it('addSpeakerTicketEmail serializes to a single grant insert', async () => {
+    const { Patch } =
+      await vi.importActual<typeof import('@sanity/client')>('@sanity/client')
+    await addSpeakerTicketEmail('speaker-1', grant)
+    let real = new Patch('speaker-1')
+    for (const [op, ...args] of calls.slice(1, -1)) {
+      real = (
+        real as unknown as Record<string, (...a: unknown[]) => typeof real>
+      )[op as string](...args)
+    }
+    expect(real.serialize()).toStrictEqual({
+      id: 'speaker-1',
+      setIfMissing: { ticketEmailGrants: [] },
+      insert: { after: 'ticketEmailGrants[-1]', items: [grant] },
     })
+  })
+
+  it('removeSpeakerTicketEmail unsets by predicate for a selector-safe address', async () => {
+    await removeSpeakerTicketEmail('speaker-1', 'ada@work.example', [grant])
     expect(calls).toStrictEqual([
       ['patch', 'speaker-1'],
-      [
-        'unset',
-        [
-          'knownEmails[@ == "ada@work.example"]',
-          'ticketEmailGrants[email == "ada@work.example"]',
-        ],
-      ],
+      ['unset', ['ticketEmailGrants[email == "ada@work.example"]']],
       ['commit'],
     ])
   })
 
-  it('removeSpeakerTicketEmail rewrites both arrays for an unsafe address', async () => {
+  it('removeSpeakerTicketEmail rewrites the grants for an unsafe address', async () => {
     const odd = 'a"b@work.example'
     const other = { ...grant, _key: 'k2', email: 'ada@home.example' }
-    await removeSpeakerTicketEmail('speaker-1', odd, {
-      knownEmails: [odd, 'ada@home.example'],
-      grants: [{ ...grant, email: odd }, other],
-    })
+    await removeSpeakerTicketEmail('speaker-1', odd, [
+      { ...grant, email: odd },
+      other,
+    ])
     expect(calls).toStrictEqual([
       ['patch', 'speaker-1'],
-      [
-        'set',
-        { knownEmails: ['ada@home.example'], ticketEmailGrants: [other] },
-      ],
+      ['set', { ticketEmailGrants: [other] }],
       ['commit'],
     ])
   })
