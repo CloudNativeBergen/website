@@ -1,5 +1,4 @@
-import { clientWrite } from '../sanity/client'
-import { canonicalEmail } from '../speaker/email'
+import { updateSpeakerEmail } from '../speaker/server'
 
 /**
  * Set a speaker's display `email`.
@@ -36,10 +35,7 @@ export async function updateProfileEmail(
   speakerId: string,
 ): Promise<{ error: Error | null }> {
   try {
-    await clientWrite
-      .patch(speakerId)
-      .set({ email: canonicalEmail(email) })
-      .commit()
+    await updateSpeakerEmail(speakerId, email)
 
     return { error: null }
   } catch (error) {

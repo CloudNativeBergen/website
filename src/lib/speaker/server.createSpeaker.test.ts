@@ -103,6 +103,17 @@ describe('createSpeaker', () => {
     expect(old).not.toHaveProperty('knownEmails')
   })
 
+  it('refuses a transaction without an id and queues nothing', async () => {
+    const tx = { create: vi.fn() }
+    await expect(
+      createSpeaker({ name: 'Grace', orgId: 'org-1' }, {
+        transaction: tx,
+      } as never),
+    ).rejects.toThrow('transaction needs an id')
+    expect(tx.create).not.toHaveBeenCalled()
+    expect(createMock).not.toHaveBeenCalled()
+  })
+
   it('refuses without an organization and writes nothing', async () => {
     await expect(createSpeaker({ name: 'X', orgId: '' })).rejects.toThrow(
       'without an organization',

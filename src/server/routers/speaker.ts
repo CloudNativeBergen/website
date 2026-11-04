@@ -73,7 +73,12 @@ import {
   RESEND_BROADCAST_VARIABLES,
 } from '@/lib/sponsor/templates'
 import type { PortableTextBlock as TemplateBlock } from '@/lib/sponsor/types'
-import { createSpeaker } from '@/lib/speaker/server'
+import {
+  addSpeakerTicketEmail,
+  createSpeaker,
+  deleteSpeaker,
+  removeSpeakerTicketEmail,
+} from '@/lib/speaker/server'
 import { canonicalEmail, normalizeEmail } from '@/lib/speaker/email'
 import {
   requireCurrentOrgId,
@@ -1053,7 +1058,7 @@ export const speakerRouter = router({
           `*[_type == "speaker" && _id == $id][0].email`,
           { id: input.id },
         )
-        await clientWrite.delete(input.id)
+        await deleteSpeaker(input.id)
         // Best effort, after the delete: the sync keeps opt-outs of existing
         // speakers, so a deleted one is taken out here (#1715).
         if (email?.trim()) {
@@ -1494,12 +1499,7 @@ export const speakerRouter = router({
         // a dropped grant is an address left in `knownEmails` with no trail, the
         // one state this design exists to prevent. Appending touches only the
         // two entries it adds.
-        await clientWrite
-          .patch(input.id)
-          .setIfMissing({ knownEmails: [], ticketEmailGrants: [] })
-          .append('knownEmails', [email])
-          .append('ticketEmailGrants', [grant])
-          .commit()
+        await addSpeakerTicketEmail(input.id, grant)
         return {
           grants: redactForeignGrants([...state.grants, grant], orgId),
         }
@@ -1566,20 +1566,7 @@ export const speakerRouter = router({
         // provider ticket, so the fallback is for pathological provider data
         // rather than for anything an organizer can type: it rewrites the
         // arrays instead, which is correct but can lose a concurrent edit.
-        const patch = clientWrite.patch(input.id)
-        await (
-          /^[a-z0-9!#$%&'*+/=?^_`{|}~.@-]+$/.test(email)
-            ? patch.unset([
-                `knownEmails[@ == "${email}"]`,
-                `ticketEmailGrants[email == "${email}"]`,
-              ])
-            : patch.set({
-                knownEmails: state.knownEmails.filter((held) => held !== email),
-                ticketEmailGrants: state.grants.filter(
-                  (grant) => normalizeEmail(grant.email) !== email,
-                ),
-              })
-        ).commit()
+        await removeSpeakerTicketEmail(input.id, email, state)
         return {
           grants: redactForeignGrants(
             state.grants.filter(

@@ -11,7 +11,8 @@ import { clientWrite } from '@/lib/sanity/client'
 import { listPublicTalks } from '@/lib/proposal/server'
 import type { PublicTalk } from '@/lib/proposal/public'
 import * as store from './sanity'
-import type { Speaker } from './types'
+import { canonicalEmail, normalizeEmail } from './email'
+import type { Speaker, TicketEmailGrant } from './types'
 
 /** A speaker's public profile in one conference. */
 export type PublicSpeaker = Pick<
@@ -57,15 +58,75 @@ export type CreateSpeakerInput = store.OrganizerCreatedSpeakerFields & {
  */
 export async function createSpeaker(
   { orgId, ...fields }: CreateSpeakerInput,
-  options: { id?: string; transaction?: Transaction } = {},
+  options: { id: string; transaction: Transaction } | { id?: string } = {},
 ): Promise<{ id: string }> {
   const document = await store.buildOrganizerCreatedSpeaker(fields, orgId)
   const doc = options.id ? { _id: options.id, ...document } : document
-  if (options.transaction) {
+  if ('transaction' in options && options.transaction) {
+    // The type requires the id; this guards untyped callers.
     if (!options.id) throw new Error('createSpeaker: transaction needs an id')
     options.transaction.create(doc as typeof document & { _id: string })
     return { id: options.id }
   }
   const created = await clientWrite.create(doc)
   return { id: created._id }
+}
+
+/** Delete a speaker document. Callers check ownership first. */
+export async function deleteSpeaker(speakerId: string): Promise<void> {
+  await clientWrite.delete(speakerId)
+}
+
+/** Set a speaker's display email, canonicalized (see `updateProfileEmail`). */
+export async function updateSpeakerEmail(
+  speakerId: string,
+  email: string,
+): Promise<void> {
+  await clientWrite
+    .patch(speakerId)
+    .set({ email: canonicalEmail(email) })
+    .commit()
+}
+
+/**
+ * Append a ticket address and its grant in one patch. APPEND, not set, so two
+ * organizers granting at once never drop each other's entry.
+ */
+export async function addSpeakerTicketEmail(
+  speakerId: string,
+  grant: TicketEmailGrant & { _key: string },
+): Promise<void> {
+  await clientWrite
+    .patch(speakerId)
+    .setIfMissing({ knownEmails: [], ticketEmailGrants: [] })
+    .append('knownEmails', [grant.email])
+    .append('ticketEmailGrants', [grant])
+    .commit()
+}
+
+/**
+ * Remove a granted ticket address from `knownEmails` and `ticketEmailGrants`.
+ * Unsets by predicate when `email` is safe in a selector literal; otherwise
+ * rewrites both arrays from the read `state` (correct, but can lose a
+ * concurrent edit).
+ */
+export async function removeSpeakerTicketEmail(
+  speakerId: string,
+  email: string,
+  state: { knownEmails: string[]; grants: TicketEmailGrant[] },
+): Promise<void> {
+  const patch = clientWrite.patch(speakerId)
+  await (
+    /^[a-z0-9!#$%&'*+/=?^_`{|}~.@-]+$/.test(email)
+      ? patch.unset([
+          `knownEmails[@ == "${email}"]`,
+          `ticketEmailGrants[email == "${email}"]`,
+        ])
+      : patch.set({
+          knownEmails: state.knownEmails.filter((held) => held !== email),
+          ticketEmailGrants: state.grants.filter(
+            (grant) => normalizeEmail(grant.email) !== email,
+          ),
+        })
+  ).commit()
 }
