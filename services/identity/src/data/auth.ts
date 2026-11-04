@@ -1,8 +1,15 @@
 // The Better Auth instance. Lives in the data layer because it holds the raw
 // D1 handle; nothing outside src/data/ gets that handle back.
 import { betterAuth } from 'better-auth'
-import { tryGetCurrentAuthEndpointContext } from '@better-auth/core/context'
-import { APIError, createAuthMiddleware } from 'better-auth/api'
+import {
+  defineRequestState,
+  tryGetCurrentAuthEndpointContext,
+} from '@better-auth/core/context'
+import {
+  APIError,
+  createAuthMiddleware,
+  getSessionFromCtx,
+} from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { bearer, jwt, organization } from 'better-auth/plugins'
 import { and, count, eq, lte, sql } from 'drizzle-orm'
@@ -32,7 +39,12 @@ export const JWT_AUDIENCE = 'konf-gateway'
 export const INVITATION_EXPIRES_IN = 30 * 24 * 3600
 
 const isOwner = (role: string | null | undefined) =>
-  (role ?? '').split(',').some((r) => r.trim() === 'owner')
+  (role ?? '').split(',').some((r) => r.trim().toLowerCase() === 'owner')
+
+/** The pending invitation a `resend: true` invite refreshes, if any. */
+const resendOf = defineRequestState<{ id: string; actor: string } | undefined>(
+  () => undefined,
+)
 
 export function createAuth(d1: D1Database, env: AuthEnv) {
   const db = rawDb(d1)
@@ -122,8 +134,64 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
       },
     },
     hooks: {
-      // `leave` runs no organization hook; audit it from the route.
+      // `resend: true` refreshes a pending invitation and returns before any
+      // organization hook runs, checking only the role in the body. Apply the
+      // owner rule to the stored invitation here instead (#1941).
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== '/organization/invite-member' || !ctx.body?.resend)
+          return
+        const session = await getSessionFromCtx(ctx)
+        if (!session) return // the endpoint refuses it
+        const orgId: string | undefined =
+          ctx.body.organizationId ?? session.session.activeOrganizationId
+        const email = String(ctx.body.email ?? '').toLowerCase()
+        if (!orgId || !email) return
+        const [inv] = await db
+          .select({ id: schema.invitation.id, role: schema.invitation.role })
+          .from(schema.invitation)
+          .where(
+            and(
+              eq(schema.invitation.organizationId, orgId),
+              eq(sql`lower(${schema.invitation.email})`, email),
+              eq(schema.invitation.status, 'pending'),
+            ),
+          )
+        if (!inv) return // no pending invite: a normal create, hooks run
+        if (isOwner(inv.role)) {
+          const [m] = await db
+            .select({ role: schema.member.role })
+            .from(schema.member)
+            .where(
+              and(
+                eq(schema.member.organizationId, orgId),
+                eq(schema.member.userId, session.user.id),
+              ),
+            )
+          if (!isOwner(m?.role))
+            throw new APIError('FORBIDDEN', {
+              message: 'Only an owner can resend an owner invitation',
+            })
+        }
+        await resendOf.set({ id: inv.id, actor: session.user.id })
+      }),
       after: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === '/organization/invite-member') {
+          const s = await resendOf.get()
+          const r = ctx.context.returned as
+            { id?: string; organizationId?: string } | undefined
+          if (s && r?.id === s.id)
+            await db.insert(schema.auditEvent).values({
+              action: 'invite.resend',
+              userId: s.actor,
+              detail: JSON.stringify({
+                actorId: s.actor,
+                orgId: r.organizationId,
+                invitationId: s.id,
+              }),
+            })
+          return
+        }
+        // `leave` runs no organization hook; audit it from the route.
         if (ctx.path !== '/organization/leave') return
         const m = ctx.context.returned as
           { id: string; userId: string; organizationId: string } | undefined
@@ -186,6 +254,10 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
             })
           },
           beforeCancelInvitation: async ({ invitation: i, cancelledBy }) => {
+            if (i.status !== 'pending')
+              throw new APIError('BAD_REQUEST', {
+                message: 'Only a pending invitation can be cancelled',
+              })
             if (!isOwner(i.role)) return
             const [m] = await db
               .select({ role: schema.member.role })

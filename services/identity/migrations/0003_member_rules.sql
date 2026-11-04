@@ -5,17 +5,22 @@
 -- of role or organizationId, that would leave it without one. Roles are
 -- comma lists ("owner,admin"). Inserts are never checked, so the
 -- insert-only member sync is unaffected. A cascade from a deleted
--- organization passes: the organization row is already gone.
+-- organization passes: the organization row is already gone. The owner
+-- test ignores case (explicitly, not via LIKE, which case_sensitive_like
+-- flips) and whitespace, tabs and newlines included.
+-- INSERT OR REPLACE bypasses these triggers: its implicit delete fires no
+-- DELETE trigger because recursive_triggers is off. Only raw SQL can issue
+-- it; Better Auth's drizzle adapter never does.
 CREATE TRIGGER member_last_owner_delete BEFORE DELETE ON member
-WHEN (',' || replace(OLD.role, ' ', '') || ',') LIKE '%,owner,%'
+WHEN (',' || lower(replace(replace(replace(replace(OLD.role, ' ', ''), char(9), ''), char(10), ''), char(13), '')) || ',') LIKE '%,owner,%'
   AND EXISTS (SELECT 1 FROM organization o WHERE o.id = OLD.organizationId)
-  AND NOT EXISTS (SELECT 1 FROM member m WHERE m.organizationId = OLD.organizationId AND m.id <> OLD.id AND (',' || replace(m.role, ' ', '') || ',') LIKE '%,owner,%')
+  AND NOT EXISTS (SELECT 1 FROM member m WHERE m.organizationId = OLD.organizationId AND m.id <> OLD.id AND (',' || lower(replace(replace(replace(replace(m.role, ' ', ''), char(9), ''), char(10), ''), char(13), '')) || ',') LIKE '%,owner,%')
 BEGIN SELECT RAISE(ABORT, 'LAST_OWNER'); END;
 
 CREATE TRIGGER member_last_owner_update BEFORE UPDATE OF role, organizationId ON member
-WHEN (',' || replace(OLD.role, ' ', '') || ',') LIKE '%,owner,%'
-  AND (NEW.organizationId <> OLD.organizationId OR (',' || replace(NEW.role, ' ', '') || ',') NOT LIKE '%,owner,%')
-  AND NOT EXISTS (SELECT 1 FROM member m WHERE m.organizationId = OLD.organizationId AND m.id <> OLD.id AND (',' || replace(m.role, ' ', '') || ',') LIKE '%,owner,%')
+WHEN (',' || lower(replace(replace(replace(replace(OLD.role, ' ', ''), char(9), ''), char(10), ''), char(13), '')) || ',') LIKE '%,owner,%'
+  AND (NEW.organizationId <> OLD.organizationId OR (',' || lower(replace(replace(replace(replace(NEW.role, ' ', ''), char(9), ''), char(10), ''), char(13), '')) || ',') NOT LIKE '%,owner,%')
+  AND NOT EXISTS (SELECT 1 FROM member m WHERE m.organizationId = OLD.organizationId AND m.id <> OLD.id AND (',' || lower(replace(replace(replace(replace(m.role, ' ', ''), char(9), ''), char(10), ''), char(13), '')) || ',') LIKE '%,owner,%')
 BEGIN SELECT RAISE(ABORT, 'LAST_OWNER'); END;
 
 -- One pending invitation per address and organization. Duplicates already

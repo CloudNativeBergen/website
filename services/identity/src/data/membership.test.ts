@@ -162,6 +162,25 @@ describe('last-owner trigger', () => {
     expect(await roleOf(members[1].memberId)).toBe('owner')
   })
 
+  it('treats role case and whitespace variants (tab included) as owner', async () => {
+    const { members } = await org('Owner', 'admin')
+    const [owner, admin] = members
+    await expect(
+      run('DELETE FROM member WHERE id = ?', owner.memberId),
+    ).rejects.toThrow(/LAST_OWNER/)
+    await expect(
+      run("UPDATE member SET role = 'admin' WHERE id = ?", owner.memberId),
+    ).rejects.toThrow(/LAST_OWNER/)
+    await run(
+      "UPDATE member SET role = ' OWNER' || char(9) WHERE id = ?",
+      admin.memberId,
+    )
+    await run("UPDATE member SET role = 'admin' WHERE id = ?", owner.memberId)
+    await expect(
+      run("UPDATE member SET role = 'admin' WHERE id = ?", admin.memberId),
+    ).rejects.toThrow(/LAST_OWNER/)
+  })
+
   it("never blocks inserts, including the sync's ON CONFLICT insert", async () => {
     const { orgId } = await org()
     const u = await newUser(`ins-${orgId}@example.com`)
@@ -356,11 +375,102 @@ describe('role rules', () => {
       headers: owner.headers,
       body: { invitationId: inv.id },
     })
+    await expect(
+      auth.api.cancelInvitation({
+        headers: owner.headers,
+        body: { invitationId: inv.id },
+      }),
+    ).rejects.toThrow(/Only a pending invitation/)
     await auth.api.updateMemberRole({
       headers: owner.headers,
       body: { organizationId: orgId, memberId: owner2.memberId, role: 'admin' },
     })
     expect(await roleOf(owner2.memberId)).toBe('admin')
+  })
+})
+
+describe('resending an invitation', () => {
+  const state = (id: string) =>
+    all<{ status: string; expiresAt: number }>(
+      'SELECT status, expiresAt FROM invitation WHERE id = ?',
+      id,
+    ).then((r) => r[0])
+  const resends = (id: string) =>
+    all<{ userId: string; detail: string }>(
+      "SELECT userId, detail FROM audit_event WHERE action = 'invite.resend' AND detail LIKE ?",
+      `%"${id}"%`,
+    )
+  // The probe from the #1941 review: the plugin's resend path checks only
+  // the role in the body and returns before any organization hook.
+  const resend = (h: Headers, orgId: string, email: string) =>
+    auth.api.createInvitation({
+      headers: h,
+      body: { organizationId: orgId, email, role: 'admin', resend: true },
+    })
+
+  it('refuses an admin resending an owner invite, over the API and HTTP', async () => {
+    const { orgId, members } = await org('owner', 'admin')
+    const [owner, admin] = members
+    const email = `ro-${orgId}@example.com`
+    const inv = await auth.api.createInvitation({
+      headers: owner.headers,
+      body: { organizationId: orgId, email, role: 'owner' },
+    })
+    const before = await state(inv.id)
+    await expect(
+      resend(admin.headers, orgId, email.toUpperCase()),
+    ).rejects.toThrow(/owner invitation/)
+    const h = new Headers(admin.headers)
+    h.set('content-type', 'application/json')
+    h.set('origin', env.BETTER_AUTH_URL)
+    const res = await auth.handler(
+      new Request(
+        `${env.BETTER_AUTH_URL}/api/auth/organization/invite-member`,
+        {
+          method: 'POST',
+          headers: h,
+          body: JSON.stringify({
+            organizationId: orgId,
+            email,
+            role: 'admin',
+            resend: true,
+          }),
+        },
+      ),
+    )
+    expect(res.status).toBe(403)
+    expect(await res.text()).toMatch(/owner invitation/)
+    expect(await state(inv.id)).toEqual(before)
+    expect(await resends(inv.id)).toHaveLength(0)
+
+    await run(
+      'UPDATE invitation SET expiresAt = ? WHERE id = ?',
+      Date.now() + 1000,
+      inv.id,
+    )
+    const r = await resend(owner.headers, orgId, email)
+    expect(r.id).toBe(inv.id)
+    expect((await state(inv.id)).expiresAt).toBeGreaterThan(Date.now() + 1e9)
+    const rows = await resends(inv.id)
+    expect(rows.map((x) => [x.userId, JSON.parse(x.detail)])).toEqual([
+      [owner.userId, { actorId: owner.userId, orgId, invitationId: inv.id }],
+    ])
+  })
+
+  it('lets an admin resend an admin invite, with an audit row', async () => {
+    const { orgId, members } = await org('owner', 'admin')
+    const admin = members[1]
+    const email = `ra-${orgId}@example.com`
+    const inv = await auth.api.createInvitation({
+      headers: admin.headers,
+      body: { organizationId: orgId, email, role: 'admin' },
+    })
+    expect((await resend(admin.headers, orgId, email)).id).toBe(inv.id)
+    const rows = await resends(inv.id)
+    expect(rows.map((x) => [x.userId, JSON.parse(x.detail)])).toEqual([
+      [admin.userId, { actorId: admin.userId, orgId, invitationId: inv.id }],
+    ])
+    expect(JSON.stringify(rows)).not.toContain('@')
   })
 })
 
