@@ -1505,6 +1505,10 @@ describe('conference router — D1 write path (#1881)', () => {
     )
   const ok = (body: unknown) =>
     new Response(JSON.stringify(body), { status: 200 })
+  const flagCalls = () =>
+    fetchMock.mock.calls.filter(([, init]) =>
+      String(init?.body).includes('rolloutFlags'),
+    )
 
   beforeEach(() => {
     vi.stubGlobal('fetch', fetchMock)
@@ -1655,6 +1659,9 @@ describe('conference router — D1 write path (#1881)', () => {
         code: 'SERVICE_UNAVAILABLE',
         message: expect.stringContaining('try again'),
       })
+      // The refusal comes from the gateway's 503, not a local error before it.
+      expect(flagCalls()).toHaveLength(1)
+      expect(apiCalls()).toHaveLength(0)
       expect(commitMock).not.toHaveBeenCalled()
     })
 
@@ -1670,6 +1677,8 @@ describe('conference router — D1 write path (#1881)', () => {
       await expect(
         makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' }),
       ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' })
+      // Refused for the missing key, before any gateway read.
+      expect(flagCalls()).toHaveLength(0)
       expect(commitMock).not.toHaveBeenCalled()
     })
   })

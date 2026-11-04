@@ -40,10 +40,12 @@ const FLAGS_QUERY = '{ rolloutFlags { apiRead identityLogin d1Write } }'
 const FLAGS_CACHE_LIFE = { stale: 60, revalidate: 300, expire: 3600 } as const
 
 /**
- * Last good flags per host (#1938), used when a read fails. 10 minutes is two
- * revalidate windows of FLAGS_CACHE_LIFE: it rides out a gateway blip, and a
- * flag changed in D1 meanwhile lands at most 5 minutes later than it would on
- * a healthy read. Older than that, a failed read gives `unverified`.
+ * Maximum age of a flags read, measured from when the gateway answered (#1938).
+ * Applies to the remote cache entry (served stale for up to an hour if
+ * revalidation keeps failing) and to the in-memory last good value. 10 minutes
+ * is two revalidate windows of FLAGS_CACHE_LIFE: a healthy entry is at most
+ * 5 minutes old, plus the stale-while-revalidate hit that triggers its
+ * refresh. Older than that gives `unverified`.
  */
 const LAST_GOOD_MS = 10 * 60_000
 const LAST_GOOD_MAX = 500
@@ -69,7 +71,9 @@ function listed(name: string, conferenceId: string, orgId?: string): boolean {
  * The gateway answers only the signed site lane and only for the asserted
  * host, so there is no tenant argument. Throws on failure (not cached).
  */
-export async function fetchRolloutFlags(host: string): Promise<RolloutFlags> {
+export async function fetchRolloutFlags(
+  host: string,
+): Promise<{ flags: RolloutFlags; at: number }> {
   'use cache: remote'
   cacheLife(FLAGS_CACHE_LIFE)
   cacheTag(domainTag(host))
@@ -93,9 +97,13 @@ export async function fetchRolloutFlags(host: string): Promise<RolloutFlags> {
   // misconfigured key or a host missing from the directory.
   if (!f) console.warn(`[konf-api] no rollout flags for ${host}`)
   return {
-    apiRead: f?.apiRead === true,
-    identityLogin: f?.identityLogin === true,
-    d1Write: f?.d1Write === true,
+    flags: {
+      apiRead: f?.apiRead === true,
+      identityLogin: f?.identityLogin === true,
+      d1Write: f?.d1Write === true,
+    },
+    // When the gateway answered, cached with the flags: a cache hit is not a read.
+    at: Date.now(),
   }
 }
 
@@ -126,12 +134,17 @@ export async function rolloutFlags(
   // One cache entry per tenant, whatever port or case the Host header had.
   host = normalizeDomain(host)
   try {
-    const d1 = await fetchRolloutFlags(host)
-    lastGood.delete(host) // re-insert at the end: oldest first
-    lastGood.set(host, { flags: d1, at: Date.now() })
-    if (lastGood.size > LAST_GOOD_MAX)
-      lastGood.delete(lastGood.keys().next().value!)
-    return or(env, d1)
+    const read = await fetchRolloutFlags(host)
+    if (Date.now() - read.at >= LAST_GOOD_MS)
+      throw new Error('cached flags are too old')
+    const prev = lastGood.get(host)
+    if (!prev || read.at >= prev.at) {
+      lastGood.delete(host) // re-insert at the end: oldest first
+      lastGood.set(host, read)
+      if (lastGood.size > LAST_GOOD_MAX)
+        lastGood.delete(lastGood.keys().next().value!)
+    }
+    return or(env, read.flags)
   } catch (err) {
     const good = lastGood.get(host)
     const fresh = good && Date.now() - good.at < LAST_GOOD_MS

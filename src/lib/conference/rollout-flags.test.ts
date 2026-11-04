@@ -128,6 +128,39 @@ describe('rolloutFlags (#1925)', () => {
       })
     })
 
+    // A remote cache hit carries the time the gateway answered, not now.
+    // Date.now() is called once to stamp the read, then once to check its age.
+    const T0 = 1_700_000_000_000
+    const stampAt = (at: number, now: number) =>
+      vi.spyOn(Date, 'now').mockReturnValueOnce(at).mockReturnValue(now)
+
+    it('a cached entry read more than 10 minutes ago is unverified', async () => {
+      reply(on)
+      stampAt(T0, T0 + 10 * 60_000 + 1)
+      expect(await rolloutFlags('stale-hit.example', conf)).toEqual({
+        ...off,
+        unverified: true,
+      })
+    })
+
+    it('a cached entry within the revalidate window is verified', async () => {
+      reply(on)
+      stampAt(T0, T0 + 5 * 60_000)
+      expect(await rolloutFlags('fresh-hit.example', conf)).toEqual(on)
+    })
+
+    it('the last good value keeps the original read time', async () => {
+      reply(on)
+      stampAt(T0, T0 + 6 * 60_000) // cache hit of a read 6 minutes old
+      expect(await rolloutFlags('orig.example', conf)).toEqual(on)
+      vi.spyOn(Date, 'now').mockReturnValue(T0 + 10 * 60_000 + 1)
+      fetchMock.mockRejectedValue(new Error('down'))
+      expect(await rolloutFlags('orig.example', conf)).toEqual({
+        ...off,
+        unverified: true,
+      })
+    })
+
     it('is bounded in size: the oldest host is evicted past 500', async () => {
       reply(on)
       for (let i = 0; i <= 500; i++) await rolloutFlags(`h${i}.example`, conf)
