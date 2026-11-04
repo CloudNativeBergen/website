@@ -289,6 +289,21 @@ const eslintConfig = [
       return rules
     })(),
   },
+  // The conference parity sweep (#1892): one cron file, `@sanity/client` only.
+  {
+    files: ['services/conference/src/data/parity.ts'],
+    rules: (() => {
+      const rules = boundary({
+        ...SANITY,
+        regex: SANITY.regex.replace(
+          '@sanity/[^/]+',
+          '@sanity/(?!client$)[^/]+',
+        ),
+      })
+      rules['no-restricted-syntax'].push(...reexports(DB_REEXPORT))
+      return rules
+    })(),
+  },
   {
     files: ['api/**/*.{ts,mts,cts,tsx,js,mjs}'],
     rules: boundary(SANITY),

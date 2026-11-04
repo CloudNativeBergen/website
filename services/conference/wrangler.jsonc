@@ -12,6 +12,13 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["17 4 * * *"],
+  },
+  "vars": {
+    "SANITY_PROJECT_ID": "mvzwvw14",
+    "SANITY_DATASET": "development",
+  },
   "workers_dev": false,
   "preview_urls": false,
   "env": {
@@ -25,6 +32,10 @@
         },
       ],
       "name": "konf-conference-preview",
+      "vars": {
+        "SANITY_PROJECT_ID": "mvzwvw14",
+        "SANITY_DATASET": "development",
+      },
     },
     "production": {
       "d1_databases": [
@@ -36,6 +47,10 @@
         },
       ],
       "name": "konf-conference",
+      "vars": {
+        "SANITY_PROJECT_ID": "mvzwvw14",
+        "SANITY_DATASET": "production",
+      },
     },
   },
   "observability": {

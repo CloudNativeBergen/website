@@ -98,3 +98,6 @@ export function createData(d1: D1Database, envelope: Envelope) {
   // should fail the resolver, not the whole request.
   return { conferences: () => new Conferences(db, envelope) }
 }
+
+// The cron (#1892): the generated worker calls it with env, never a resolver.
+export { scheduled, type ScheduledEnv } from './parity'
