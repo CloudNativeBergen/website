@@ -80,6 +80,28 @@ export const OPERATOR_TENANT_HEADER = 'x-konf-operator-tenant'
 /** Scope on a tenant envelope minted in the operator lane. */
 export const OPERATOR_SCOPE = 'platform:operator'
 
+/** CORS for the operator lane; the default for everyone else. */
+export function operatorCors(request: Request, env: Env) {
+  const origin = request.headers.get('origin')
+  const operator = env.OPERATOR_ORIGIN
+  if (operator && origin && hostOf(origin) === hostOf(operator))
+    return {
+      origin: [origin],
+      credentials: true,
+      methods: ['GET', 'POST'],
+      allowedHeaders: ['authorization', 'content-type', OPERATOR_TENANT_HEADER],
+    }
+  const asked = request.headers.get('access-control-request-headers') ?? ''
+  if (
+    asked
+      .toLowerCase()
+      .split(/\s*,\s*/)
+      .includes(OPERATOR_TENANT_HEADER)
+  )
+    return false as const
+  return {}
+}
+
 /** Identity JWT claim: the origin the session was handed off to (#1803). */
 export const SESSION_ORIGIN_CLAIM = 'origin'
 
@@ -272,6 +294,9 @@ export function createGateway(supergraph: string) {
     supergraph,
     graphqlEndpoint: '/graphql',
     landingPage: false,
+    // Only OPERATOR_ORIGIN may send the operator header, with credentials.
+    // Every other origin keeps Yoga's default (reflect origin and headers).
+    cors: (request, ctx) => operatorCors(request, (ctx as { env: Env }).env),
     // Unexpected and subgraph errors reach the client as "Unexpected error.".
     maskedErrors: { maskError },
     // One operation per request, so per-operation limits hold.
@@ -341,6 +366,15 @@ export function createGateway(supergraph: string) {
       // operator names, never the Origin's.
       const operatorHost = hostOf(env.OPERATOR_ORIGIN)
       const operatorLane = !siteHost && !!operatorHost && host === operatorHost
+      // A browser preflight carries no credentials: answer it with the CORS
+      // policy before any auth, tenant or Membership work.
+      if (operatorLane && request.method === 'OPTIONS')
+        return runtime(forwarded, {
+          env,
+          ctx,
+          orgId: null,
+          limitKey: `ip:${ip}`,
+        })
       // Guard before fetch: no anonymous tenant lookup in the operator lane.
       if (operatorLane && !request.headers.has('authorization'))
         return reject(401, 'UNAUTHENTICATED', 'operator lane needs a session')

@@ -1156,4 +1156,41 @@ describe('operator lane (#1892 phase 4)', () => {
     expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
     expect(envelopes).toEqual([])
   })
+
+  const preflight = (origin: string, headers: string) =>
+    new Request('http://api.test/graphql', {
+      method: 'OPTIONS',
+      headers: {
+        origin,
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': headers,
+      },
+    })
+
+  it('answers the operator preflight before auth, tenant or Membership work', async () => {
+    const { env } = opsEnv()
+    const res = await gateway.fetch(
+      preflight(OPS, `authorization, content-type, ${OPERATOR_TENANT_HEADER}`),
+      env,
+    )
+    expect(res.status).toBe(204)
+    expect(res.headers.get('access-control-allow-origin')).toBe(OPS)
+    expect(res.headers.get('access-control-allow-credentials')).toBe('true')
+    expect(
+      res.headers.get('access-control-allow-headers')?.split(', '),
+    ).toEqual(['authorization', 'content-type', OPERATOR_TENANT_HEADER])
+    expect(env.DIRECTORY.fetch).not.toHaveBeenCalled()
+    expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+  })
+
+  it('gives another origin no CORS grant for the operator header', async () => {
+    const { env } = opsEnv()
+    const res = await gateway.fetch(
+      preflight(VERIFIED, `authorization, ${OPERATOR_TENANT_HEADER}`),
+      env,
+    )
+    expect(res.headers.get('access-control-allow-origin')).toBeNull()
+    expect(res.headers.get('access-control-allow-headers')).toBeNull()
+    expect(res.headers.get('access-control-allow-credentials')).toBeNull()
+  })
 })
