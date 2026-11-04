@@ -371,7 +371,10 @@ async function applyConferencePatch(
   // #1881 phase 2: D1 first for flagged tenants. A failure here aborts before
   // Sanity is touched. Prefixed (nested) fieldsets hold no moved fields.
   const moved = pathPrefix ? {} : movedConferencePatch(input)
-  const d1 = Object.keys(moved).length > 0 && konfApiUrl() && isD1WriteTenant(conferenceId)
+  const d1 =
+    Object.keys(moved).length > 0 &&
+    konfApiUrl() &&
+    isD1WriteTenant(conferenceId)
   if (d1) {
     const host = await requestHost()
     const jwt = host && (await identityJwt())

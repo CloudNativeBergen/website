@@ -54,7 +54,7 @@ Identity tests run against a real local D1 through Miniflare. A cross-tenant tes
 
 ## Gateway URL
 
-`KONF_API_URL` is the gateway the site calls, read in one place (`konfApiUrl()` in `src/lib/konf-api/client.ts`). Unset, it defaults to `https://api.konf.app/graphql` only when `VERCEL_ENV` is `production` or unset (local). On a Vercel preview or development deploy with it unset, the API is treated as off and the site reads and writes Sanity only, so a preview never reaches production. Set it on Vercel Preview to the preview gateway: `https://konf-api-preview.<account>.workers.dev/graphql` (Worker `konf-api-preview`, `api/wrangler.jsonc` `env.preview`; the account subdomain is in the Cloudflare dashboard).
+`KONF_API_URL` is the gateway the site calls, read in one place (`konfApiUrl()` in `src/lib/konf-api/client.ts`). Unset, it defaults to `https://api.konf.app/graphql` only when `VERCEL_ENV` is `production` or unset (local). On a Vercel preview or development deploy with it unset, the API is treated as off and the site reads and writes Sanity only, so a preview never reaches production. Any other non-Vercel runtime (Docker, `next start` in CI) counts as unset and defaults to production, so set `KONF_API_URL` there if you also set the tenant flags. Set it on Vercel Preview to the preview gateway: `https://konf-api-preview.<account>.workers.dev/graphql` (Worker `konf-api-preview`, `api/wrangler.jsonc` `env.preview`; the account subdomain is in the Cloudflare dashboard).
 
 ## The write path flag
 
