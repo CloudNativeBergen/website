@@ -117,8 +117,12 @@ export async function rolloutFlags(
     identityLogin: listed('KONF_IDENTITY_TENANTS', conference._id, org),
     d1Write: api && listed('KONF_D1_WRITE_TENANTS', conference._id),
   }
-  // Without a gateway or the signing key there is nothing more to read.
-  if (!api || !host || !process.env.KONF_SITE_SIGNING_KEY) return env
+  // No gateway: nothing to read.
+  if (!api) return env
+  // Gateway set but unreadable (no host or signing key) is a misconfiguration:
+  // refuse moved-field saves rather than fall to Sanity-only (#1938).
+  if (!host || !process.env.KONF_SITE_SIGNING_KEY)
+    return { ...env, unverified: true }
   // One cache entry per tenant, whatever port or case the Host header had.
   host = normalizeDomain(host)
   try {

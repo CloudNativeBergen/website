@@ -179,9 +179,12 @@ describe('rolloutFlags (#1925)', () => {
 
   it('makes no call without the signing key or a host', async () => {
     reply({ apiRead: true, identityLogin: true, d1Write: true })
-    expect(await rolloutFlags(null, conf)).toEqual(off)
+    expect(await rolloutFlags(null, conf)).toEqual({ ...off, unverified: true })
     vi.stubEnv('KONF_SITE_SIGNING_KEY', '')
-    expect(await rolloutFlags('a.example', conf)).toEqual(off)
+    expect(await rolloutFlags('a.example', conf)).toEqual({
+      ...off,
+      unverified: true,
+    })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

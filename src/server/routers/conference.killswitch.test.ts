@@ -142,6 +142,9 @@ const REBIND = { checkinCustomerId: 9999 }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // No gateway: a gateway without a signing key refuses moved-field saves.
+  vi.stubEnv('VERCEL_ENV', 'preview')
+  vi.stubEnv('KONF_API_URL', '')
   h.getConference.mockResolvedValue({
     conference: {
       _id: CONF,

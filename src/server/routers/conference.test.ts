@@ -3,7 +3,15 @@ import type { Context } from '@/server/trpc'
 import { Format } from '@/lib/proposal/types'
 
 // --- next/cache -------------------------------------------------------------
-vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
+vi.mock('next/cache', () => ({
+  revalidateTag: vi.fn(),
+  cacheLife: () => {},
+  cacheTag: () => {},
+}))
+vi.mock('@/lib/konf-api/client', async (orig) => ({
+  ...(await orig<typeof import('@/lib/konf-api/client')>()),
+  konfApiHeaders: async (host: string) => ({ origin: `https://${host}` }),
+}))
 
 // --- next/headers: drives the domains current-host guard --------------------
 const hostMock = vi.fn<() => string | null>(() => 'cloudnativebergen.no')
@@ -170,6 +178,9 @@ function makeCaller(
 
 beforeEach(() => {
   vi.resetAllMocks()
+  // No gateway by default: a gateway without a signing key now refuses moved-field saves.
+  vi.stubEnv('VERCEL_ENV', 'preview')
+  vi.stubEnv('KONF_API_URL', '')
   lastPatchId = undefined
   lastSet = undefined
   lastUnset = undefined
@@ -1487,19 +1498,35 @@ describe('conference router — updateVolunteerLinks', () => {
 describe('conference router — D1 write path (#1881)', () => {
   const fetchMock = vi.fn()
   const apiCalls = () =>
-    fetchMock.mock.calls.filter(([url]) => String(url).includes('api.konf.app'))
+    fetchMock.mock.calls.filter(
+      ([url, init]) =>
+        String(url).includes('api.konf.app') &&
+        !String(init?.body).includes('rolloutFlags'),
+    )
   const ok = (body: unknown) =>
     new Response(JSON.stringify(body), { status: 200 })
 
   beforeEach(() => {
     vi.stubGlobal('fetch', fetchMock)
+    vi.stubEnv('VERCEL_ENV', 'production')
+    vi.stubEnv('KONF_SITE_SIGNING_KEY', 'k')
     vi.stubEnv('KONF_D1_WRITE_TENANTS', CONFERENCE_ID)
     vi.stubEnv('IDENTITY_URL', 'https://id.example')
     sessionCookieMock.mockReturnValue('sess')
-    fetchMock.mockImplementation(async (url: URL | string) =>
+    fetchMock.mockImplementation(async (url: URL | string, init) =>
       String(url).includes('/api/auth/token')
         ? ok({ token: 'user-jwt' })
-        : ok({ data: { updateConference: { id: CONFERENCE_ID } } }),
+        : String(init?.body).includes('rolloutFlags')
+          ? ok({
+              data: {
+                rolloutFlags: {
+                  apiRead: false,
+                  identityLogin: false,
+                  d1Write: false,
+                },
+              },
+            })
+          : ok({ data: { updateConference: { id: CONFERENCE_ID } } }),
     )
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -1603,7 +1630,7 @@ describe('conference router — D1 write path (#1881)', () => {
   it('makes no API call with the flag off', async () => {
     vi.stubEnv('KONF_D1_WRITE_TENANTS', '')
     await makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' })
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(apiCalls()).toHaveLength(0)
     expect(lastSet).toEqual({ venueName: 'X' })
   })
 
@@ -1636,6 +1663,14 @@ describe('conference router — D1 write path (#1881)', () => {
         cateringInfo: 'Pizza',
       })
       expect(lastSet).toEqual({ cateringInfo: 'Pizza' })
+    })
+    it('refuses a moved-field save when the gateway is set but the signing key is missing', async () => {
+      vi.stubEnv('KONF_SITE_SIGNING_KEY', '')
+      hostMock.mockReturnValue('nokey-1938.example')
+      await expect(
+        makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' }),
+      ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' })
+      expect(commitMock).not.toHaveBeenCalled()
     })
   })
 
