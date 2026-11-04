@@ -324,7 +324,9 @@ describe('updateConference', () => {
       const ok = await update(admin(), { [field]: 'q'.repeat(max) })
       expect(ok.body.errors, field).toBeUndefined()
       const over = 'Z'.repeat(max) + 'SECRET'
-      const { body } = await update(admin(), { [field]: over.slice(0, max + 1) })
+      const { body } = await update(admin(), {
+        [field]: over.slice(0, max + 1),
+      })
       expect(body.errors[0].extensions, field).toMatchObject({
         code: 'BAD_USER_INPUT',
         field,
@@ -339,8 +341,9 @@ describe('updateConference', () => {
     expect(long.body.errors[0].message).not.toContain('aaaa')
     const links = (n: number) =>
       Array.from({ length: n }, (_, i) => `https://x.example/${i}`)
-    expect((await update(admin(), { socialLinks: links(20) })).body.errors)
-      .toBeUndefined()
+    expect(
+      (await update(admin(), { socialLinks: links(20) })).body.errors,
+    ).toBeUndefined()
     for (const socialLinks of [links(21), [url(2001)]]) {
       const { body } = await update(admin(), { socialLinks })
       expect(body.errors[0].extensions).toMatchObject({
@@ -349,8 +352,9 @@ describe('updateConference', () => {
       })
       expect(body.errors[0].message).not.toContain('x.example')
     }
-    expect((await update(admin(), { socialLinks: [url(2000)] })).body.errors)
-      .toBeUndefined()
+    expect(
+      (await update(admin(), { socialLinks: [url(2000)] })).body.errors,
+    ).toBeUndefined()
   })
 
   it('FORBIDDEN still comes before any query', async () => {
@@ -405,6 +409,6 @@ describe('updateConference', () => {
       field: 'endDate',
     })
     const r = row('conf-a')
-    expect(r.start_date as string <= (r.end_date as string)).toBe(true)
+    expect((r.start_date as string) <= (r.end_date as string)).toBe(true)
   })
 })

@@ -119,7 +119,8 @@ function validate(input: Record<string, unknown>): ConferencePatch {
       bad(k, 'must be live or unlisted')
     }
     const max = MAX_LEN[k] ?? MAX_DEFAULT
-    if (typeof v === 'string' && v.length > max) bad(k, `at most ${max} characters`)
+    if (typeof v === 'string' && v.length > max)
+      bad(k, `at most ${max} characters`)
     if (k === 'socialLinks' && (v as string[]).length > MAX_SOCIAL_LINKS) {
       bad(k, `at most ${MAX_SOCIAL_LINKS} links`)
     }
