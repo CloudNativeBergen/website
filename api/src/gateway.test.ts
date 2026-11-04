@@ -18,6 +18,8 @@ import {
   maskError,
   MAX_INPUT_MESSAGE,
   MUTATION_LIMIT_PER_MINUTE,
+  OPERATOR_SCOPE,
+  OPERATOR_TENANT_HEADER,
   SESSION_ORIGIN_CLAIM,
   type Env,
 } from './gateway'
@@ -995,5 +997,148 @@ describe('conference subgraph', () => {
       envelopeKeys.publicPem,
     )
     expect(envelope).toMatchObject({ typ: 'tenant', ...TENANT, userId: null })
+  })
+})
+
+describe('operator lane (#1892 phase 4)', () => {
+  const OPS = 'https://my.konf.app'
+  const opsJwt = () => jwt({ claims: { [SESSION_ORIGIN_CLAIM]: OPS } })
+
+  function opsEnv(platformOperator = true, allow = true) {
+    const made = makeEnv({ orgRole: 'admin' }, allow)
+    const env = made.env as Env & Record<string, unknown>
+    env.OPERATOR_ORIGIN = OPS
+    env.MEMBERSHIP.principal = vi.fn(async () => ({
+      orgRole: 'admin',
+      platformOperator,
+    }))
+    return { ...made, env }
+  }
+
+  const call = async (
+    env: Env,
+    headers: Record<string, string>,
+    query = SUBGRAPH_QUERY,
+  ) => gateway.fetch(post(query, headers), env)
+
+  it('mints a PlatformContext for an operator with no tenant named', async () => {
+    const { env, envelopes } = opsEnv()
+    await call(env, { origin: OPS, authorization: `Bearer ${await opsJwt()}` })
+    expect(await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem)).toEqual(
+      { typ: 'platform', userId: 'user_1', platformRole: 'operator' },
+    )
+  })
+
+  it('mints a tenant envelope with the operator scope and own orgRole for a named tenant', async () => {
+    const { env, envelopes } = opsEnv()
+    await call(env, {
+      origin: OPS,
+      authorization: `Bearer ${await opsJwt()}`,
+      [OPERATOR_TENANT_HEADER]: 'conf.example',
+    })
+    expect(env.MEMBERSHIP.principal).toHaveBeenCalledWith('user_1', 'org_a')
+    expect(await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem)).toEqual(
+      {
+        typ: 'tenant',
+        ...TENANT,
+        userId: 'user_1',
+        orgRole: 'admin',
+        scopes: [OPERATOR_SCOPE],
+      },
+    )
+  })
+
+  it('refuses a non-operator: no platform envelope', async () => {
+    const { env, envelopes } = opsEnv(false)
+    const res = await call(env, {
+      origin: OPS,
+      authorization: `Bearer ${await opsJwt()}`,
+    })
+    expect(res.status).toBe(403)
+    expect(envelopes).toEqual([])
+  })
+
+  it('refuses an anonymous caller', async () => {
+    const { env, envelopes } = opsEnv()
+    const res = await call(env, { origin: OPS })
+    expect(res.status).toBe(401)
+    expect(envelopes).toEqual([])
+    expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+  })
+
+  it('refuses an unknown tenant host', async () => {
+    const { env, envelopes } = opsEnv()
+    const res = await call(env, {
+      origin: OPS,
+      authorization: `Bearer ${await opsJwt()}`,
+      [OPERATOR_TENANT_HEADER]: 'nowhere.example',
+    })
+    expect(res.status).toBe(400)
+    expect(envelopes).toEqual([])
+  })
+
+  it('refuses a tenant-site session on the operator lane', async () => {
+    const { env, envelopes } = opsEnv()
+    const res = await call(env, {
+      origin: OPS,
+      authorization: `Bearer ${await jwt()}`, // session origin is the tenant site
+    })
+    expect(res.status).toBe(401)
+    expect(envelopes).toEqual([])
+  })
+
+  it('never enters the operator lane through a site assertion', async () => {
+    const { env, envelopes } = opsEnv()
+    const assertion = await new SignJWT({ host: 'my.konf.app' })
+      .setProtectedHeader({ alg: 'EdDSA', kid: 's1' })
+      .setIssuer('konf-site')
+      .setAudience('konf-gateway')
+      .setJti(crypto.randomUUID())
+      .setIssuedAt()
+      .setExpirationTime('60s')
+      .sign(siteKeys.s1)
+    await call(env, {
+      [SITE_ASSERTION_HEADER]: assertion,
+      authorization: `Bearer ${await opsJwt()}`,
+    })
+    expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+    expect(envelopes.filter(Boolean)).toEqual([])
+  })
+
+  it('refuses an operator token replayed on a tenant site host', async () => {
+    const { env, envelopes } = opsEnv()
+    const res = await call(env, {
+      origin: VERIFIED,
+      authorization: `Bearer ${await opsJwt()}`,
+      [OPERATOR_TENANT_HEADER]: 'conf.example',
+    })
+    expect(res.status).toBe(401)
+    expect(envelopes).toEqual([])
+  })
+
+  it('ignores the tenant header outside the operator lane', async () => {
+    const { env, forwarded } = opsEnv()
+    await call(env, { origin: VERIFIED, [OPERATOR_TENANT_HEADER]: 'x' })
+    expect(forwarded[0].has(OPERATOR_TENANT_HEADER)).toBe(false)
+  })
+
+  it('is off when OPERATOR_ORIGIN is unset', async () => {
+    const { env, envelopes } = opsEnv()
+    delete (env as Record<string, unknown>).OPERATOR_ORIGIN
+    await call(env, { origin: OPS, authorization: `Bearer ${await opsJwt()}` })
+    expect(envelopes).toEqual([null])
+    expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+  })
+
+  it('spends the per-user budget before Membership', async () => {
+    const { env, envelopes } = opsEnv(true, false)
+    const res = await call(env, {
+      origin: OPS,
+      authorization: `Bearer ${await opsJwt()}`,
+    })
+    expect(res.status).toBe(429)
+    expect(env.API_LIMITER.limit).toHaveBeenCalledWith({ key: 'user:user_1' })
+    expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+    expect(envelopes).toEqual([])
   })
 })

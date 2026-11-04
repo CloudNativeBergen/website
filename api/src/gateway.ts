@@ -14,6 +14,7 @@ import { createRemoteJWKSet, customFetch, jwtVerify } from 'jose'
 import {
   createSigner,
   ENVELOPE_HEADER,
+  type Envelope,
   type TenantEnvelope,
 } from '@runkonf/tenancy'
 import { getOperationAST, GraphQLError, parse } from 'graphql'
@@ -45,6 +46,11 @@ export interface Env {
   CLIENT_IP_SECRET?: string
   /** wrangler secret put SITE_PUBLIC_KEYS: JSON `{ kid: SPKI PEM }` of the site's server-lane keys */
   SITE_PUBLIC_KEYS?: string
+  /**
+   * The operator lane's one origin, e.g. `https://my.konf.app` (wrangler var,
+   * per env). Unset turns the lane off.
+   */
+  OPERATOR_ORIGIN?: string
   /** konf-identity `Membership` entrypoint (RPC) */
   MEMBERSHIP: {
     principal(
@@ -67,6 +73,12 @@ const ENVELOPE_TTL_SECONDS = 60
 
 const TENANT_QUERY =
   'query($host: String!) { tenantByHost(host: $host) { orgId conferenceId } }'
+
+/** Operator lane: the host of the tenant the operator acts for. */
+export const OPERATOR_TENANT_HEADER = 'x-konf-operator-tenant'
+
+/** Scope on a tenant envelope minted in the operator lane. */
+export const OPERATOR_SCOPE = 'platform:operator'
 
 /** Identity JWT claim: the origin the session was handed off to (#1803). */
 export const SESSION_ORIGIN_CLAIM = 'origin'
@@ -157,7 +169,11 @@ export function maskError(error: unknown, message: string): Error {
 /** Must equal API_MUTATION_LIMITER's limit in wrangler.jsonc (a test checks). */
 export const MUTATION_LIMIT_PER_MINUTE = 60
 
-function reject(status: 401 | 429 | 503, code: string, message: string) {
+function reject(
+  status: 400 | 401 | 403 | 429 | 503,
+  code: string,
+  message: string,
+) {
   return Response.json(
     { errors: [{ message, extensions: { code } }] },
     { status },
@@ -316,15 +332,30 @@ export function createGateway(supergraph: string) {
         env.SITE_PUBLIC_KEYS,
       )
       forwarded.headers.delete(SITE_ASSERTION_HEADER)
+      forwarded.headers.delete(OPERATOR_TENANT_HEADER)
       const host = hostOf(
         siteHost ? `https://${siteHost}` : request.headers.get('origin'),
       )
+      // Operator lane (#1892 phase 4): the browser Origin is OPERATOR_ORIGIN
+      // and no site assertion is present. Its tenant is only ever the one the
+      // operator names, never the Origin's.
+      const operatorHost = hostOf(env.OPERATOR_ORIGIN)
+      const operatorLane = !siteHost && !!operatorHost && host === operatorHost
       let tenant: Tenant | null
       try {
-        tenant = await resolveTenant(host, env)
+        tenant = await resolveTenant(
+          operatorLane ? request.headers.get(OPERATOR_TENANT_HEADER) : host,
+          env,
+        )
       } catch {
         return reject(503, 'UNAVAILABLE', 'tenant lookup unavailable')
       }
+      if (
+        operatorLane &&
+        request.headers.has(OPERATOR_TENANT_HEADER) &&
+        !tenant
+      )
+        return reject(400, 'BAD_USER_INPUT', 'unknown tenant')
 
       // 3. Rate limit (#1790) before the identity and Membership work for
       // anonymous callers; signed-in callers are keyed on the verified sub.
@@ -338,6 +369,8 @@ export function createGateway(supergraph: string) {
       let userId: string | null = null
       const auth = request.headers.get('authorization')
       if (auth === null) {
+        if (operatorLane)
+          return reject(401, 'UNAUTHENTICATED', 'operator lane needs a session')
         if (await limited(`anon:${tenant?.orgId ?? null}:${ip}`))
           return tooMany()
       } else {
@@ -359,8 +392,33 @@ export function createGateway(supergraph: string) {
 
       // 5 + 6. With a tenant: live orgRole, then one short-lived envelope.
       // Without one, subgraphs see an anonymous request with no envelope.
-      // TODO: platform context for operators flagged in identity.
-      if (tenant) {
+      if (operatorLane) {
+        // userId is set: anonymous callers were refused above.
+        const principal = await env.MEMBERSHIP.principal(
+          userId!,
+          tenant?.orgId ?? '',
+        )
+        if (!principal?.platformOperator)
+          return reject(403, 'FORBIDDEN', 'not a platform operator')
+        signer ??= await createSigner(env.ENVELOPE_PRIVATE_KEY)
+        // Acting for a tenant: an ordinary tenant envelope carrying the
+        // operator's own orgRole there, so writes still need owner/admin.
+        // Without one: a PlatformContext, which no Scoped repository accepts.
+        const envelope: Envelope = tenant
+          ? {
+              typ: 'tenant',
+              orgId: tenant.orgId,
+              conferenceId: tenant.conferenceId,
+              userId,
+              orgRole: principal.orgRole,
+              scopes: [OPERATOR_SCOPE],
+            }
+          : { typ: 'platform', userId: userId!, platformRole: 'operator' }
+        forwarded.headers.set(
+          ENVELOPE_HEADER,
+          await signer.sign(envelope, ENVELOPE_TTL_SECONDS),
+        )
+      } else if (tenant) {
         let orgRole: string | null = null
         if (userId) {
           const principal = await env.MEMBERSHIP.principal(userId, tenant.orgId)
