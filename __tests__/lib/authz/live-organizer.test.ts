@@ -14,17 +14,39 @@ const h = vi.hoisted(() => ({
   // Rights per speaker id, as Sanity would answer; `null` = read fails.
   rights: new Map<string, string[] | null>(),
   rightsReads: 0,
+  getProposal: vi.fn(),
 }))
 
 vi.mock('next-auth', () => ({
   default: () => ({
-    auth: h.auth,
+    // Wrapper form `auth(handler)` sets req.auth from the token, as next-auth does.
+    auth: (...a: unknown[]) =>
+      typeof a[0] === 'function'
+        ? async (req: { auth?: unknown }) => {
+            req.auth = await h.auth()
+            return (a[0] as (r: unknown) => unknown)(req)
+          }
+        : h.auth(...a),
     signIn: vi.fn(),
     handlers: { GET: vi.fn(), POST: vi.fn() },
   }),
   AuthError: class AuthError extends Error {},
 }))
 vi.mock('@/lib/events/registry', () => ({}))
+vi.mock('@/lib/proposal/server', async (orig) => ({
+  ...(await orig<object>()),
+  getProposal: h.getProposal,
+}))
+// handleUpload runs the route's token gate on the pathname it is given.
+vi.mock('@vercel/blob/client', () => ({
+  handleUpload: async (o: {
+    body: { pathname: string }
+    onBeforeGenerateToken: (p: string) => Promise<unknown>
+  }) => {
+    await o.onBeforeGenerateToken(o.body.pathname)
+    return { ok: true }
+  },
+}))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: h.getConference,
 }))
@@ -95,7 +117,7 @@ async function adminAllowed(url = 'http://localhost:3000/'): Promise<boolean> {
     return true
   } catch (err) {
     if ((err as { code?: string }).code === 'FORBIDDEN') return false
-    return true // past the waist; the endpoint body failed on its own
+    throw err
   }
 }
 
@@ -156,6 +178,68 @@ describe('live organizer rights (#1923)', () => {
     // A failure is not cached: the next request reads again.
     h.rights.set('sp-3', ['org-A'])
     expect(await adminAllowed()).toBe(true)
+  })
+
+  it('a failure within 10 min of a good read serves the good read', async () => {
+    h.auth.mockResolvedValue(token('sp-g1'))
+    h.rights.set('sp-g1', ['org-A'])
+    expect(await adminAllowed()).toBe(true)
+    h.rights.set('sp-g1', null)
+    vi.advanceTimersByTime(9 * 60_000)
+    expect(await adminAllowed()).toBe(true)
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '[authz-grace] organizer refresh failed for speaker sp-g1',
+      ),
+    )
+  })
+
+  it('a failure more than 10 min after the last good read refuses', async () => {
+    h.auth.mockResolvedValue(token('sp-g2'))
+    h.rights.set('sp-g2', ['org-A'])
+    expect(await adminAllowed()).toBe(true)
+    h.rights.set('sp-g2', null)
+    vi.advanceTimersByTime(10 * 60_000 + 1_000)
+    expect(await adminAllowed()).toBe(false)
+  })
+
+  it('the grace serves only a good read, never a revocation-free token', async () => {
+    // Removed at the last good read: the grace keeps the removal.
+    h.auth.mockResolvedValue(token('sp-g3'))
+    h.rights.set('sp-g3', [])
+    expect(await adminAllowed()).toBe(false)
+    h.rights.set('sp-g3', null)
+    vi.advanceTimersByTime(61_000)
+    expect(await adminAllowed()).toBe(false)
+  })
+
+  it('upload token: a removed organizer gets no organizer proposal access after 60 s', async () => {
+    const { POST } = await import('@/app/api/upload/proposal-attachment/route')
+    h.auth.mockResolvedValue(token('sp-u'))
+    h.rights.set('sp-u', ['org-A'])
+    h.getProposal.mockResolvedValue({ proposal: null, proposalError: null })
+    const id = '11111111-2222-3333-4444-555555555555'
+    const call = () =>
+      (POST as unknown as (r: unknown) => Promise<Response>)(
+        new Request('http://localhost:3000/api/upload/proposal-attachment', {
+          method: 'POST',
+          body: JSON.stringify({ pathname: `proposal-${id}-1-a.pdf` }),
+        }),
+      )
+    await call()
+    expect(h.getProposal).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id,
+        isOrganizer: true,
+        organizerOrgId: 'org-A',
+      }),
+    )
+    h.rights.set('sp-u', [])
+    vi.advanceTimersByTime(61_000)
+    await call()
+    expect(h.getProposal).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id, isOrganizer: false, organizerOrgId: null }),
+    )
   })
 
   it('reads Sanity once per speaker per 60 s', async () => {

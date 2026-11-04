@@ -5,6 +5,7 @@ import {
   isOrganizerForCurrentOrg,
   resolveCurrentOrgId,
 } from '@/lib/authz/organizer'
+import { withLiveOrganizerRights } from '@/lib/authz/live-organizer'
 import { getProposal } from '@/lib/proposal/server'
 
 /**
@@ -48,6 +49,8 @@ import { getProposal } from '@/lib/proposal/server'
  * @see src/server/routers/proposal.ts (proposal.uploadAttachment) for transfer logic
  */
 export const POST = auth(async (req: NextAuthRequest) => {
+  // The token's organizer claims roll for 30 days; use the live ones (#1923).
+  req.auth = await withLiveOrganizerRights(req.auth)
   if (
     !req.auth ||
     !req.auth.user ||

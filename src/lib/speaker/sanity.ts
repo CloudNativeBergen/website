@@ -40,7 +40,7 @@ import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 
 // Computed field: speaker is an organizer if referenced in any conference's organizers array
 const IS_ORGANIZER_FIELD =
-  '"isOrganizer": _id in *[_type == "conference"].organizers[]._ref' // groq-global: speaker identity spans tenants; this is the platform-wide organizer bit, a boolean only. Org-scoped rights come from organizerOrgIds.
+  '"isOrganizer": _id in *[_type == "conference" && !(_id in path("drafts.**"))].organizers[]._ref' // groq-global: speaker identity spans tenants; this is the platform-wide organizer bit, a boolean only. Org-scoped rights come from organizerOrgIds.
 
 // Computed field (CaaS T1-2, #614): the ORG-SCOPED organizer capability — the
 // `organization._ref`s of the conferences whose `organizers[]` contain this
@@ -49,7 +49,7 @@ const IS_ORGANIZER_FIELD =
 // deduped in `applySpeakerToToken`. This is the source of the session token's
 // `organizerOrgIds`, which the authorization middleware/gates key on.
 const ORGANIZER_ORG_IDS_FIELD =
-  '"organizerOrgIds": *[_type == "conference" && ^._id in organizers[]._ref && defined(organization._ref)].organization._ref' // groq-global: must see every org this speaker organizes for; projects only the organization refs (the tenant keys themselves), no tenant data.
+  '"organizerOrgIds": *[_type == "conference" && !(_id in path("drafts.**")) && ^._id in organizers[]._ref && defined(organization._ref)].organization._ref' // groq-global: must see every org this speaker organizes for; projects only the organization refs (the tenant keys themselves), no tenant data.
 
 /**
  * MINIMAL projection for the two hot login queries (`findSpeakerByProvider`,
