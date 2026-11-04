@@ -306,25 +306,32 @@ describe('getOrganizerProposal tenancy', () => {
   beforeEach(() => {
     h.docs = [
       { _id: 'org-1', _type: 'organization' },
+      { _id: 'org-2', _type: 'organization' },
       {
-        _id: 'conf-a',
+        _id: 'conf-2025',
         _type: 'conference',
-        title: 'A',
+        title: '2025',
         organization: { _ref: 'org-1' },
       },
       {
-        _id: 'conf-b',
+        _id: 'conf-2026',
         _type: 'conference',
-        title: 'B',
+        title: '2026',
         organization: { _ref: 'org-1' },
+      },
+      {
+        _id: 'conf-x',
+        _type: 'conference',
+        title: 'X',
+        organization: { _ref: 'org-2' },
       },
       { _id: 's1', _type: 'speaker', name: 'Ada' },
       {
-        _id: 'mine',
+        _id: 'earlier',
         _type: 'talk',
-        title: 'Mine',
-        status: 'submitted',
-        conference: { _ref: 'conf-a' },
+        title: 'Earlier edition',
+        status: 'accepted',
+        conference: { _ref: 'conf-2025' },
         speakers: [{ _ref: 's1' }],
       },
       {
@@ -332,29 +339,36 @@ describe('getOrganizerProposal tenancy', () => {
         _type: 'talk',
         title: 'Foreign',
         status: 'submitted',
-        conference: { _ref: 'conf-b' },
+        conference: { _ref: 'conf-x' },
         speakers: [{ _ref: 's1' }],
       },
     ]
   })
 
-  it('reads a proposal of the requested conference', async () => {
+  // previousAcceptedTalks links across editions of the same organization, so
+  // a talk from another edition must stay readable.
+  it('reads a same-org proposal from another edition', async () => {
     const { proposal, proposalError } = await getOrganizerProposal(
-      'conf-a',
-      'mine',
+      'org-1',
+      'earlier',
     )
     expect(proposalError).toBeNull()
-    expect(proposal?.title).toBe('Mine')
+    expect(proposal?.title).toBe('Earlier edition')
   })
 
-  // conf-b shares the organization, so only the conference predicate keeps
-  // its talk out: org scoping alone would admit it.
-  it('reads a foreign-conference id as null, like a nonexistent one', async () => {
-    expect(await getOrganizerProposal('conf-a', 'foreign')).toEqual({
+  it('reads a foreign-org id as null, like a nonexistent one', async () => {
+    expect(await getOrganizerProposal('org-1', 'foreign')).toEqual({
       proposal: null,
       proposalError: null,
     })
-    expect(await getOrganizerProposal('conf-a', 'missing')).toEqual({
+    expect(await getOrganizerProposal('org-1', 'missing')).toEqual({
+      proposal: null,
+      proposalError: null,
+    })
+  })
+
+  it('fails closed on a null org', async () => {
+    expect(await getOrganizerProposal(null, 'earlier')).toEqual({
       proposal: null,
       proposalError: null,
     })

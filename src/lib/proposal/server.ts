@@ -105,25 +105,25 @@ export async function listOrganizerProposals(
 }
 
 /**
- * One proposal for the organizer detail page, scoped to `conferenceId` (from
- * `resolveConferenceId()`). The conference predicate is in the query, so a
- * foreign-conference id reads `null` exactly like a nonexistent one.
+ * One proposal for the organizer detail page, ORG-SCOPED (B1, #642) to `orgId`,
+ * the server-resolved organization of the domain conference. Organization, not
+ * conference: `previousAcceptedTalks` links to earlier editions of the same org.
+ * A foreign-org id reads `null` exactly like a nonexistent one; a null org
+ * fails closed.
  */
 export async function getOrganizerProposal(
-  conferenceId: string,
+  orgId: string | null,
   id: string,
 ): Promise<{
   proposal: OrganizerProposalDetail | null
   proposalError: Error | null
 }> {
-  const orgId = await store.getConferenceOrganizationId(conferenceId)
   if (!orgId) return { proposal: null, proposalError: null }
   const { proposal, proposalError } = await store.getProposal({
     id,
     speakerId: '',
     isOrganizer: true,
     organizerOrgId: orgId,
-    conferenceId,
     includeReviews: true,
     includePreviousAcceptedTalks: true,
     includeSubmittedTalks: true,

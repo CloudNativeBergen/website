@@ -5,7 +5,6 @@ import { notFound } from 'next/navigation'
 import { formatDate } from '@/lib/time'
 import { ClockIcon } from '@heroicons/react/20/solid'
 import { getOrganizerProposal } from '@/lib/proposal/server'
-import { resolveConferenceId } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   ProposalDetail,
@@ -39,12 +38,12 @@ export default async function ProposalDetailPage({
     const { conference, domain } = await getConferenceForCurrentDomain({
       topics: true,
     })
-    // TENANT-SCOPE the organizer read (#642, #1887): the conference predicate
-    // is in the query, so a proposal from another conference reads null and
-    // renders the same not-found as a nonexistent id.
-    const conferenceId = await resolveConferenceId()
+    // ORG-SCOPE the organizer read to this tenant (B1, #642): a proposal from
+    // another organization's conference must not be reachable by URL id even for a
+    // signed-in organizer. A null org fails closed (proposal → notFound below).
+    // Not conference scope: previous accepted talks link to earlier editions.
     const { proposal, proposalError } = await getOrganizerProposal(
-      conferenceId,
+      conference?.organization?._ref ?? null,
       id,
     )
 
@@ -65,7 +64,7 @@ export default async function ProposalDetailPage({
     const schedules = conference
       ? await clientReadUncached.fetch<{ _id: string; status: string }[]>(
           `*[_type == "schedule" && conference._ref == $conferenceId && references($proposalId)] { _id, status }`,
-          { conferenceId, proposalId: id },
+          { conferenceId: conference._id, proposalId: id },
         )
       : []
 
