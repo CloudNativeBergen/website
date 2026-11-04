@@ -9,7 +9,7 @@ The target is kontroll on the API.
 
 ## Rules
 
-1. **One owner per entity.** Editorial content (pages, rich text, images, logos)
+1. **One owner per entity.** Editorial content (pages, rich text, images)
    stays in Sanity and is served by the content subgraph. Conference settings
    and tenants/domains live in D1. Users and memberships live in the D1 identity
    database. Proposals, speakers and tickets are undecided and get decided one
@@ -26,13 +26,17 @@ The target is kontroll on the API.
       move.
    2. Backfill into D1, then a short dual-write window with a parity sweep.
       Today that is `KONF_D1_WRITE_TENANTS` plus the daily conference parity
-      cron; see [The write path flag](./PLATFORM.md#the-write-path-flag).
+      cron. Caveat: the parity script compares Sanity with anonymous gateway
+      reads, which still come from Sanity while the override is off (#1879), so
+      a clean result does not yet validate D1. A sweep that reads D1 is a
+      prerequisite for closing the window. See [The write path flag](./PLATFORM.md#the-write-path-flag).
    3. Flip reads to D1 (`OVERRIDE_TENANTS`). Sanity becomes read-only for that
       entity, then the fields are deleted. The current read mechanism is in
       [The read path flag](./PLATFORM.md#the-read-path-flag).
 
    Every dual-write window has an end date and a removal step. Windows last
    weeks, not years.
+
 4. **Guard rails.**
    - An import-boundary lint extends #1800 to the site and kontroll, per
      entity.
@@ -45,15 +49,15 @@ The target is kontroll on the API.
 
 ## Entity table
 
-| Entity               | Owner                      | Adapter                    | Write mode                                           | Window end                                      |
-| -------------------- | -------------------------- | -------------------------- | ---------------------------------------------------- | ----------------------------------------------- |
-| Conference settings  | D1 (owner in transition)   | D1, Sanity                 | Dual write on for CNDN 2026 since 2026-11-04         | One week of clean parity, then #1879            |
-| Tenants and domains  | D1 (tenant-directory)      | D1                         | D1 only                                              | Done                                            |
-| Identity             | D1 (identity)              | D1                         | D1 only                                              | Done                                            |
-| Editorial content    | Sanity (content subgraph)  | Sanity                     | Sanity only                                          | Permanent                                       |
-| Proposals, speakers  | Sanity, behind the site seam (#1876, #1887) | Sanity | Sanity only                                          | Undecided                                       |
-| Logos                | Sanity                     | Sanity                     | Sanity only; R2 later (#1866)                        | Not scheduled                                   |
-| Tickets              | Undecided                  | -                          | -                                                    | Undecided                                       |
+| Entity              | Owner                                       | Adapter    | Write mode                                   | Window end                           |
+| ------------------- | ------------------------------------------- | ---------- | -------------------------------------------- | ------------------------------------ |
+| Conference settings | D1 (owner in transition)                    | D1, Sanity | Dual write on for CNDN 2026 since 2026-11-04 | One week of clean parity, then #1879 |
+| Tenants and domains | D1 (tenant-directory)                       | D1         | D1 only                                      | Done                                 |
+| Identity            | D1 (identity)                               | D1         | D1 only                                      | Done                                 |
+| Editorial content   | Sanity (content subgraph)                   | Sanity     | Sanity only                                  | Permanent                            |
+| Proposals, speakers | Sanity, behind the site seam (#1876, #1887) | Sanity     | Sanity only                                  | Undecided                            |
+| Logos               | Sanity                                      | Sanity     | Sanity only; R2 later (#1866)                | Not scheduled                        |
+| Tickets             | Undecided                                   | -          | -                                            | Undecided                            |
 
 Update the row in the same PR that changes an owner, an adapter or a write
 mode.
