@@ -1,5 +1,10 @@
 import 'server-only'
-import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import { clientReadUncached } from '@/lib/sanity/client'
+import {
+  removeSpeakerPushSubscription,
+  replaceSpeakerPushSubscriptions,
+  setSpeakerPushPreferences,
+} from '@/lib/speaker/server'
 import { groq } from 'next-sanity'
 import { generateKey } from '@/lib/sanity/helpers'
 import {
@@ -26,22 +31,6 @@ import {
 
 /** Hard cap on stored subscriptions per speaker (oldest evicted on overflow). */
 export const MAX_SUBSCRIPTIONS_PER_SPEAKER = 20
-
-/**
- * Escape a string for safe interpolation into a GROQ filter double-quoted
- * literal. Endpoints are already constrained to plain https URLs by
- * `isValidPushEndpoint` (no quotes survive URL parsing), but we escape `\` and
- * `"` defensively so the `pushSubscriptions[endpoint=="…"]` selector can never
- * be broken out of.
- */
-function escapeGroqString(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-}
-
-/** The GROQ array selector matching the stored subscription with `endpoint`. */
-function endpointSelector(endpoint: string): string {
-  return `pushSubscriptions[endpoint=="${escapeGroqString(endpoint)}"]`
-}
 
 interface StoredSubscription {
   _key?: string
@@ -185,25 +174,12 @@ export async function addPushSubscription(
     ...(record.userAgent ? { userAgent: record.userAgent } : {}),
   }
 
-  const unsetPaths = [
-    endpointSelector(record.endpoint),
-    ...Array.from(evict).map(endpointSelector),
-  ]
-
-  // Two patches in one transaction: (1) remove the incoming endpoint (dedup) and
-  // any evicted overflow; (2) ensure the array exists and append the new record.
-  // Splitting the unset and insert into separate patches guarantees the removal
-  // is applied before the insert, so the just-inserted record is never matched
-  // by the dedup selector.
-  await clientWrite
-    .transaction()
-    .patch(speakerId, (patch) => patch.unset(unsetPaths))
-    .patch(speakerId, (patch) =>
-      patch
-        .setIfMissing({ pushSubscriptions: [] })
-        .insert('after', 'pushSubscriptions[-1]', [item]),
-    )
-    .commit()
+  // The dedup + eviction unset and the append ride ONE transaction (see seam).
+  await replaceSpeakerPushSubscriptions(
+    speakerId,
+    [record.endpoint, ...Array.from(evict)],
+    item,
+  )
 }
 
 /** Remove the subscription with the given endpoint, if present (atomic). */
@@ -211,10 +187,7 @@ export async function removePushSubscription(
   speakerId: string,
   endpoint: string,
 ): Promise<void> {
-  await clientWrite
-    .patch(speakerId)
-    .unset([endpointSelector(endpoint)])
-    .commit()
+  await removeSpeakerPushSubscription(speakerId, endpoint)
 }
 
 /**
@@ -244,9 +217,6 @@ export async function setPushPreferences(
   preferences: PushPreferences,
 ): Promise<PushPreferences> {
   const normalized = normalizePushPreferences(preferences)
-  await clientWrite
-    .patch(speakerId)
-    .set({ pushPreferences: normalized })
-    .commit()
+  await setSpeakerPushPreferences(speakerId, normalized)
   return normalized
 }
