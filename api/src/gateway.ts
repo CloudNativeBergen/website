@@ -4,6 +4,7 @@
 // looks up orgRole live, and mints the one envelope the subgraphs trust.
 import {
   createGatewayRuntime,
+  type GatewayPlugin,
   useCustomFetch as subgraphFetch,
 } from '@graphql-hive/gateway-runtime'
 import httpTransport from '@graphql-mesh/transport-http'
@@ -156,28 +157,6 @@ export function maskError(error: unknown, message: string): Error {
 /** Must equal API_MUTATION_LIMITER's limit in wrangler.jsonc (a test checks). */
 export const MUTATION_LIMIT_PER_MINUTE = 60
 
-/**
- * Whether the request runs a mutation. Unparseable or ambiguous bodies are
- * not mutations here; Yoga refuses them before any subgraph is called.
- */
-async function isMutation(request: Request): Promise<boolean> {
-  if (request.method !== 'POST') return false
-  try {
-    const { query, operationName } = (await request.clone().json()) as {
-      query?: unknown
-      operationName?: unknown
-    }
-    if (typeof query !== 'string') return false
-    const op = getOperationAST(
-      parse(query),
-      typeof operationName === 'string' ? operationName : undefined,
-    )
-    return op?.operation === 'mutation'
-  } catch {
-    return false
-  }
-}
-
 function reject(status: 401 | 429 | 503, code: string, message: string) {
   return Response.json(
     { errors: [{ message, extensions: { code } }] },
@@ -221,6 +200,33 @@ export function progressiveOverride(label: string, context: unknown) {
   return !!orgId && !!env.OVERRIDE_TENANTS?.[label]?.includes(orgId)
 }
 
+type GatewayContext = { env: Env; orgId: string | null; limitKey: string }
+
+/**
+ * Mutations spend their own budget (#1888). Classified from the params Yoga
+ * parsed, whatever the content type, and the operation it will execute.
+ * Unparseable or ambiguous documents are left to Yoga, which refuses them.
+ */
+const mutationBudget: GatewayPlugin<GatewayContext> = {
+  async onParams({ params, context }) {
+    let op
+    try {
+      op = getOperationAST(parse(params.query ?? ''), params.operationName)
+    } catch {
+      return
+    }
+    if (op?.operation !== 'mutation') return
+    const { env, limitKey } = context as unknown as GatewayContext
+    if (
+      !(await env.API_MUTATION_LIMITER.limit({ key: `${limitKey}:mutation` }))
+        .success
+    )
+      throw new GraphQLError('too many requests', {
+        extensions: { code: 'RATE_LIMITED', http: { status: 429 } },
+      })
+  },
+}
+
 export function createGateway(supergraph: string) {
   let signer: Awaited<ReturnType<typeof createSigner>> | undefined
   let jwks: ReturnType<typeof createRemoteJWKSet> | undefined
@@ -246,7 +252,7 @@ export function createGateway(supergraph: string) {
     return payload
   }
 
-  const runtime = createGatewayRuntime<{ env: Env; orgId: string | null }>({
+  const runtime = createGatewayRuntime<GatewayContext>({
     supergraph,
     graphqlEndpoint: '/graphql',
     landingPage: false,
@@ -267,6 +273,7 @@ export function createGateway(supergraph: string) {
     plugins: () => [
       maxDepthPlugin({ n: 10, ignoreIntrospection: false }),
       maxAliasesPlugin({ n: 15 }),
+      mutationBudget,
       // TODO(#1772 req. 5): persisted queries from a build-time manifest.
       subgraphFetch((url, options, context) => {
         const name = new URL(url).host.replace(/\.internal$/, '')
@@ -321,13 +328,10 @@ export function createGateway(supergraph: string) {
 
       // 3. Rate limit (#1790) before the identity and Membership work for
       // anonymous callers; signed-in callers are keyed on the verified sub.
-      // Mutations also spend their own, smaller budget (#1888).
-      const mutation = await isMutation(forwarded)
+      // Mutations also spend their own budget, keyed the same (mutationBudget).
+      let limitKey: string
       const limited = async (key: string) =>
-        !(await env.API_LIMITER.limit({ key })).success ||
-        (mutation &&
-          !(await env.API_MUTATION_LIMITER.limit({ key: `${key}:mutation` }))
-            .success)
+        !(await env.API_LIMITER.limit({ key: (limitKey = key) })).success
       const tooMany = () => reject(429, 'RATE_LIMITED', 'too many requests')
 
       // 4. Identity: optional, but a header that is present must verify.
@@ -380,7 +384,12 @@ export function createGateway(supergraph: string) {
         )
       }
 
-      return runtime(forwarded, { env, ctx, orgId: tenant?.orgId ?? null })
+      return runtime(forwarded, {
+        env,
+        ctx,
+        orgId: tenant?.orgId ?? null,
+        limitKey: limitKey!,
+      })
     },
   }
 }

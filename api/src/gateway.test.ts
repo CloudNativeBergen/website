@@ -592,7 +592,91 @@ describe('gateway', () => {
       )
       expect(res.status).toBe(429)
       expect(mutationKeys(env)).toEqual(['user:user_1:mutation'])
-      expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+      expect(await res.json()).toMatchObject({
+        errors: [{ extensions: { code: 'RATE_LIMITED' } }],
+      })
+    })
+
+    // Yoga parses JSON, application/graphql and form bodies alike; each is
+    // classified from what Yoga parsed, not from the raw body.
+    const MUTATION_DOC = 'mutation { updateConference(input: {}) { id } }'
+    const QUERY_DOC = '{ conference { id } }'
+    const raw = (type: string, body: string, method = 'POST') =>
+      new Request('http://api.test/graphql', {
+        method,
+        headers: { origin: VERIFIED, 'content-type': type },
+        body,
+      })
+    const bodies = (doc: string): [string, string][] => [
+      ['application/json', JSON.stringify({ query: doc })],
+      ['application/graphql', doc],
+      [
+        'application/x-www-form-urlencoded',
+        new URLSearchParams({ query: doc }).toString(),
+      ],
+    ]
+
+    it.each(bodies(MUTATION_DOC))(
+      'spends the mutation budget for a mutation as %s',
+      async (type, body) => {
+        const { env, conference } = makeEnv(undefined, true, true, false)
+        const res = await gateway.fetch(raw(type, body), env)
+        expect(res.status).toBe(429)
+        expect(mutationKeys(env)).toEqual(['anon:org_a:unknown:mutation'])
+        expect(conference).toEqual([])
+      },
+    )
+
+    it.each(bodies(QUERY_DOC))(
+      'keeps a query as %s off the mutation budget',
+      async (type, body) => {
+        const { env } = makeEnv(undefined, true, true, false)
+        const res = await gateway.fetch(raw(type, body), env)
+        expect(res.status).toBe(200)
+        expect(mutationKeys(env)).toEqual([])
+      },
+    )
+
+    it('pins what Yoga does with GET and multipart', async () => {
+      const { env, conference } = makeEnv()
+      const get = await gateway.fetch(
+        new Request(
+          `http://api.test/graphql?query=${encodeURIComponent(MUTATION_DOC)}`,
+          { headers: { origin: VERIFIED } },
+        ),
+        env,
+      )
+      expect(get.status).toBe(405)
+      const form = new FormData()
+      form.set('operations', JSON.stringify({ query: MUTATION_DOC }))
+      form.set('map', '{}')
+      const multipart = await gateway.fetch(
+        new Request('http://api.test/graphql', {
+          method: 'POST',
+          headers: { origin: VERIFIED },
+          body: form,
+        }),
+        env,
+      )
+      expect(multipart.status).toBe(415)
+      expect(conference).toEqual([])
+    })
+
+    it('counts a mutation whose operationName reads like a query', async () => {
+      const { env } = makeEnv(undefined, true, true, false)
+      const res = await gateway.fetch(
+        post(
+          {
+            query:
+              'mutation GetConference { updateConference(input: {}) { id } }',
+            operationName: 'GetConference',
+          },
+          { origin: VERIFIED },
+        ),
+        env,
+      )
+      expect(res.status).toBe(429)
+      expect(mutationKeys(env)).toEqual(['anon:org_a:unknown:mutation'])
     })
 
     it('keeps queries off the mutation budget, even when it is spent', async () => {
@@ -679,7 +763,7 @@ describe('gateway', () => {
       expect(keys(env)).toEqual(['user:user_1'])
     })
 
-    it('answers 429 to a mutation before any identity work', async () => {
+    it('answers 429 to a mutation on the general budget before identity work', async () => {
       const { env } = makeEnv(undefined, false)
       const res = await gateway.fetch(
         post(
