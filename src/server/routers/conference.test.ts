@@ -1645,6 +1645,8 @@ describe('conference router — D1 write path (#1881)', () => {
     beforeEach(() => {
       vi.spyOn(console, 'warn').mockImplementation(() => {})
       // The cached read is stamped T0; every later clock read is 11 minutes on.
+      // This relies on konfApiHeaders being mocked: the real one calls Date.now in
+      // siteAssertion and would consume these stamps.
       vi.spyOn(Date, 'now')
         .mockReturnValueOnce(T0)
         .mockReturnValue(T0 + 11 * 60_000)

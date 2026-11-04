@@ -130,6 +130,8 @@ describe('rolloutFlags (#1925)', () => {
 
     // A remote cache hit carries the time the gateway answered, not now.
     // Date.now() is called once to stamp the read, then once to check its age.
+    // This relies on konfApiHeaders being mocked: the real one calls Date.now in
+    // siteAssertion and would consume these stamps.
     const T0 = 1_700_000_000_000
     const stampAt = (at: number, now: number) =>
       vi.spyOn(Date, 'now').mockReturnValueOnce(at).mockReturnValue(now)
@@ -139,18 +141,22 @@ describe('rolloutFlags (#1925)', () => {
     it('a stale cached entry with a healthy gateway reads it directly once and is verified', async () => {
       reply(on)
       stampAt(T0, T0 + 10 * 60_000 + 1)
-      expect(await rolloutFlags('stale-hit.example', conf)).toEqual(on)
+      expect(
+        await rolloutFlags('stale-hit.example', conf, { verify: true }),
+      ).toEqual(on)
       expect(flagReads()).toBe(2) // the cached read (no-op cache here) + one direct
       // The direct read became the last good value, stamped with its own time.
       fetchMock.mockRejectedValue(new Error('down'))
       vi.spyOn(Date, 'now').mockReturnValue(T0 + 19 * 60_000)
-      expect(await rolloutFlags('stale-hit.example', conf)).toEqual(on)
+      expect(
+        await rolloutFlags('stale-hit.example', conf, { verify: true }),
+      ).toEqual(on)
     })
 
     it('a stale cached entry and a failed direct read use a recent last good', async () => {
       reply(on)
       stampAt(T0, T0 + 2 * 60_000)
-      await rolloutFlags('stale-lkg.example', conf) // last good at T0
+      await rolloutFlags('stale-lkg.example', conf, { verify: true }) // last good at T0
       fetchMock
         .mockImplementationOnce(
           async () =>
@@ -159,7 +165,9 @@ describe('rolloutFlags (#1925)', () => {
         .mockRejectedValueOnce(new Error('down'))
       // Cached hit stamped T0 - 1, so it is stale while last good (T0) is not.
       stampAt(T0 - 1, T0 + 10 * 60_000 - 1)
-      expect(await rolloutFlags('stale-lkg.example', conf)).toEqual(on)
+      expect(
+        await rolloutFlags('stale-lkg.example', conf, { verify: true }),
+      ).toEqual(on)
       expect(flagReads()).toBe(3)
       expect(console.warn).toHaveBeenCalledWith(
         '[konf-api] rollout flags unavailable for conf-1, using last good: down',
@@ -174,11 +182,21 @@ describe('rolloutFlags (#1925)', () => {
         )
         .mockRejectedValueOnce(new Error('down'))
       stampAt(T0, T0 + 10 * 60_000 + 1)
-      expect(await rolloutFlags('stale-none.example', conf)).toEqual({
+      expect(
+        await rolloutFlags('stale-none.example', conf, { verify: true }),
+      ).toEqual({
         ...off,
         unverified: true,
       })
       expect(flagReads()).toBe(2)
+    })
+
+    it('without verify, a stale cached entry makes no direct read and is unverified', async () => {
+      reply(on)
+      stampAt(T0, T0 + 10 * 60_000 + 1)
+      const flags = await rolloutFlags('stale-page.example', conf)
+      expect(flagReads()).toBe(1) // the cached read only
+      expect(flags).toEqual({ ...on, unverified: true })
     })
 
     it('a cached entry within the revalidate window is verified', async () => {

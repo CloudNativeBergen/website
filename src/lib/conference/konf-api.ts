@@ -116,13 +116,15 @@ async function readRolloutFlags(
 
 /**
  * Flags for this host's conference. `KONF_API_DISABLED=1` turns everything
- * off. A cached entry older than LAST_GOOD_MS is replaced by one direct,
- * uncached read. A read failure uses the host's last good flags if under LAST_GOOD_MS
+ * off. With `verify` (D1 writes only), a cached entry older than LAST_GOOD_MS
+ * is replaced by one direct, uncached read. Without it, a stale entry is
+ * returned at once, marked `unverified`, so page renders never block on it. A read failure uses the host's last good flags if under LAST_GOOD_MS
  * old; else the env lists, marked `unverified` so a D1 write can refuse.
  */
 export async function rolloutFlags(
   host: string | null,
   conference: Pick<Conference, '_id' | 'organization'>,
+  { verify = false }: { verify?: boolean } = {},
 ): Promise<MaybeUnverified> {
   if (process.env.KONF_API_DISABLED === '1') return OFF
   const org = conference.organization?._ref
@@ -146,8 +148,9 @@ export async function rolloutFlags(
     // A stale cache hit (quiet tenant, revalidating in the background) is
     // not an outage: read the gateway directly once. Its failure falls to
     // the last good value below.
-    if (Date.now() - read.at >= LAST_GOOD_MS)
-      read = await readRolloutFlags(host)
+    const stale = Date.now() - read.at >= LAST_GOOD_MS
+    if (stale && verify) read = await readRolloutFlags(host)
+    else if (stale) return { ...or(env, read.flags), unverified: true }
     const prev = lastGood.get(host)
     if (!prev || read.at >= prev.at) {
       lastGood.delete(host) // re-insert at the end: oldest first

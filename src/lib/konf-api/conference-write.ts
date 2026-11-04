@@ -41,7 +41,7 @@ export async function isD1WriteTenant(
   host: string | null,
   conferenceId: string,
 ): Promise<boolean> {
-  const f = await rolloutFlags(host, { _id: conferenceId })
+  const f = await rolloutFlags(host, { _id: conferenceId }, { verify: true })
   if (f.unverified && !f.d1Write) {
     throw new TRPCError({
       code: 'SERVICE_UNAVAILABLE',
