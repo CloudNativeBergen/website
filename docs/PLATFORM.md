@@ -62,6 +62,10 @@ Identity tests run against a real local D1 through Miniflare. A cross-tenant tes
 
 Which subgraph answers for a tenant is a separate switch in the gateway (`@override`). The site does not need to know about it.
 
+## Data ownership
+
+Which system owns each entity, and how data moves between owners: [DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md).
+
 ## Further reading
 
 - `api/README.md`: gateway commands and environments.

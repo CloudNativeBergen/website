@@ -1,5 +1,7 @@
 # The Control Model — this app, kontroll, and one Sanity dataset
 
+> Amended by [DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md): the shared dataset is the starting point; the target is kontroll on the API.
+
 Two applications share one Sanity dataset:
 
 - **this repository** (`CloudNativeBergen/website`, public) serves the tenant
