@@ -5,6 +5,7 @@ import { createAuth, createData } from './data'
 import { errorPage } from './error-page'
 import { handoff, type HandoffEnv } from './handoff'
 import { loginTestPage } from './login-test'
+import { orgWriteGate } from './org-write-gate'
 import type { WorkerEnv } from './worker'
 
 /** LOGIN_TEST_PAGE: "1" on preview only (service.cue) serves GET /test. */
@@ -43,7 +44,7 @@ export default {
   fetch(request: Request, env: Env) {
     const { pathname } = new URL(request.url)
     if (pathname.startsWith('/api/auth/')) {
-      return createAuth(env.DB, env).handler(request)
+      return orgWriteGate(request) ?? createAuth(env.DB, env).handler(request)
     }
     if (pathname === '/handoff' || pathname.startsWith('/handoff/')) {
       return handoff(request, env)
