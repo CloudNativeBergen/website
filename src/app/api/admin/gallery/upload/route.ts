@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { getAuthSession } from '@/lib/auth'
 import { createGalleryImage } from '@/lib/gallery/sanity'
 import { galleryImageCreateSchema } from '@/server/schemas/gallery'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -18,7 +18,7 @@ interface UploadResult {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth()
+    const session = await getAuthSession()
     if (!session?.speaker?._id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

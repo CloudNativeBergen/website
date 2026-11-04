@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
-import { auth } from '@/lib/auth'
+import { getAuthSession } from '@/lib/auth'
 import { EMAIL_LINK_PENDING_COOKIE } from '@/lib/auth/email-link/intent'
 import { requestHost } from '@/lib/auth/email-link/origin'
 import { peekEmailSignInToken } from '@/lib/auth/email-link/verify'
@@ -48,7 +48,7 @@ export default async function ConfirmEmailSignIn() {
   )
   if (!peeked.ok) redirect('/signin?error=EmailSignIn')
 
-  const session = await auth()
+  const session = await getAuthSession()
   const current = session?.speaker?.email ?? null
 
   return (

@@ -2,6 +2,9 @@ import type { Metadata } from 'next'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { providerMap } from '@/lib/auth'
+import { identitySession } from '@/lib/auth/identity-session'
+import { safeCallbackPath } from '@/lib/auth/email-link/origin'
+import { redirect } from 'next/navigation'
 import { SignInProviderButtons } from '@/components/SignInProviderButtons'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isIdentityTenant } from '@/lib/auth/identity-handoff'
@@ -16,6 +19,9 @@ export default async function Signin(props: {
   searchParams: Promise<{ callbackUrl?: string; error?: string }>
 }) {
   const searchParams = await props.searchParams
+  // Signed in through identity (#1892): nothing to choose here.
+  if (await identitySession())
+    redirect(safeCallbackPath(searchParams.callbackUrl))
   const error = searchParams.error
   // Decided here so the tenant list never reaches the client. The handoff
   // has no return path yet, so callbackUrl is dropped on that branch.

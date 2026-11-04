@@ -56,7 +56,10 @@ export function sanitizeSession(session: Session | null): Session | undefined {
 }
 
 async function SessionLoader({ children }: { children: React.ReactNode }) {
-  const session = await auth()
+  // identity session for flagged tenants when there is no NextAuth one (#1892).
+  const session =
+    (await auth()) ??
+    (await (await import('@/lib/auth/identity-session')).identitySession())
 
   return (
     <SessionProvider session={sanitizeSession(session)}>

@@ -1,6 +1,8 @@
 import { auth } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { AppEnvironment } from '@/lib/environment/config'
+import { sessionCookieRequestHost } from '@/lib/auth-cookie-domain'
+import { IDENTITY_SESSION_COOKIE } from '@/lib/auth/identity-cookie'
 
 // The session cookie's `Domain` is rewritten PER REQUEST for every response
 // this produces: `auth` itself applies it to its handler-wrapper form (see
@@ -8,7 +10,7 @@ import { AppEnvironment } from '@/lib/environment/config'
 // refresh is scoped to the ACTUAL request host, not a module-load constant
 // (#682). Wrapping inside `auth` rather than around it also leaves the
 // `auth((req) => …)` call shape — the one the #671 outage broke — untouched.
-const nextAuthMiddleware = auth((req) => {
+const nextAuthMiddleware = auth(async (req) => {
   const { pathname } = req.nextUrl
   const hasTestParam = req.nextUrl.searchParams.get('test') === 'true'
 
@@ -41,7 +43,7 @@ const nextAuthMiddleware = auth((req) => {
     return NextResponse.next()
   }
 
-  if (!req.auth) {
+  if (!req.auth && !(await identitySignedIn(req))) {
     const signInPage = '/api/auth/signin'
     const signInUrl = new URL(signInPage, req.nextUrl.origin)
     // A same-site path, not `req.url`: the email-link flow's
@@ -62,6 +64,43 @@ const nextAuthMiddleware = auth((req) => {
     },
   })
 })
+
+/**
+ * Identity session cookie (#1892): a gate only. The proxy runs outside the
+ * React server layer, so it must not reach `'use cache'` reads, `server-only`
+ * modules or Sanity writes. It asks identity whether the session is live and
+ * bound to this origin; the page's getAuthSession then applies the tenant
+ * flag and maps the speaker, and redirects when either fails.
+ */
+async function identitySignedIn(req: NextRequest): Promise<boolean> {
+  const token = req.cookies.get(IDENTITY_SESSION_COOKIE)?.value
+  const host = sessionCookieRequestHost(req.headers)
+  if (
+    !token ||
+    !host ||
+    !process.env.KONF_IDENTITY_TENANTS ||
+    !process.env.IDENTITY_URL
+  ) {
+    return false
+  }
+  try {
+    const res = await fetch(
+      new URL('/api/auth/get-session', process.env.IDENTITY_URL),
+      {
+        headers: { authorization: `Bearer ${token}` },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000),
+      },
+    )
+    if (!res.ok) return false
+    const got = (await res.json()) as { session?: { origin?: string } } | null
+    return got?.session?.origin === `https://${host}`
+  } catch (err) {
+    // Error class and message only: no token, no user.
+    console.error('[identity] proxy session check failed', String(err))
+    return false
+  }
+}
 
 /**
  * `/workshop*` IS NOT HANDLED HERE (#1311). The portal keeps a session of its
