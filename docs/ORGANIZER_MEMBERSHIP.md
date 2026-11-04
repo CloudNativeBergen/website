@@ -1,197 +1,196 @@
 # Organizer membership: identity as the source
 
-Design for #1923 (epic #1772, follows #1907, #1909, #1913). No code yet. Line
-references are to `origin/main` at 3364f583.
+Design for #1923 (epic #1772, follows #1907, #1909, #1913, #1920). No code yet.
+Line references are to `origin/main` at 24dd262a.
 
 ## Today
 
 - The site grants `/admin` from `organizerOrgIds`: the orgs of every conference
   whose `organizers[]` holds the speaker (`src/lib/speaker/sanity.ts:51-52`),
-  checked by `isOrganizerForOrg` (`src/lib/authz/organizer.ts:55`).
+  checked by `isOrganizerForOrg` (`src/lib/authz/organizer.ts:48`).
 - That set is baked into the NextAuth token at sign-in (`src/lib/auth.ts:60`)
-  and re-read only on `trigger === 'update'` (`src/lib/auth.ts:208`).
-- `/admin` edits it as a whole array per edition: `updateOrganizers`
-  (`src/server/routers/conference.ts:1076-1130`, UI in
-  `src/components/admin/OrganizersEditor.tsx`). The only guards are "not
-  yourself" (`:1079`) and "already has standing in this org" (`:1097`).
-- Identity stores org-level `member(userId, organizationId, role)`, unique per
-  pair (`services/identity/migrations/0001_init.sql:74-81`). It also has an
-  unused `invitation` table keyed by email (`:83-92`).
-- The gateway reads `member.role` live on every request
-  (`api/src/gateway.ts:360-371` via `principal`,
-  `services/identity/src/data/index.ts:131-148`) and puts it into a 60 s envelope
-  (`api/src/gateway.ts:66`).
-- The hourly cron (`services/identity/src/index.ts:54`,
-  `services/identity/src/data/index.ts:152`) runs `syncMembers`. It is
-  insert-only with role `admin` (`services/identity/src/data/member-sync.ts:6,25`).
-  It skips ticket-granted addresses (`:78-83`) and email-case clashes
-  (`:128-139`). It never deletes, so a removed organizer keeps `admin` in D1.
-  This is the #1923 bug. #1920 (open) moves the cron to tenant-directory.
-- Identity has no subgraph in the gateway: `BINDINGS` lists tenant-directory,
-  content and conference only (`api/src/gateway.ts:57-61`), and
-  `services/identity/src/subgraph.ts` is an empty schema.
+  and re-read only on `trigger === 'update'` (`src/lib/auth.ts:208`). The
+  session is a JWT (`src/lib/auth.ts:648`) on Auth.js defaults: re-issued every
+  24 h with unchanged claims, expiring after 30 days idle
+  (`@auth/core/lib/init.js:38,76`). **A removed organizer keeps `/admin` for as
+  long as they stay active.**
+- `/admin` edits `organizers[]` as a whole array per edition: `updateOrganizers`
+  (`src/server/routers/conference.ts:1076-1130`). The guards are "not yourself"
+  (`:1079`) and "standing in this org" (`:1097`).
+- Identity stores `member(userId, organizationId, role)`, unique per pair
+  (`services/identity/migrations/0001_init.sql:74-81`), and has an unused
+  `invitation` table (`:83-93`). `audit_event.userId` is `NOT NULL` (`:100`).
+- Better Auth's organization plugin is live on id.konf.app
+  (`services/identity/src/data/auth.ts:117-131`, with
+  `requireEmailVerificationOnInvitation`), and every `/api/auth/*` path reaches
+  it (`services/identity/src/index.ts:36-37`).
+- The gateway reads `member.role` live per request
+  (`services/identity/src/data/index.ts:131-148`, `api/src/gateway.ts:459-463`)
+  into a 60 s envelope (`api/src/gateway.ts:72`). Operators get a tenant
+  envelope when a tenant resolves, otherwise a `PlatformContext`
+  (`api/src/gateway.ts:443-453`), which has no `orgId`
+  (`packages/tenancy/src/index.ts:38-42`).
+- `syncMembers` is insert-only with role `admin`
+  (`services/identity/src/data/member-sync.ts:6,25-26`). It never deletes, so a
+  removed organizer keeps `admin` in D1: the #1923 bug. Since #1920
+  tenant-directory's hourly cron calls it
+  (`services/tenant-directory/src/data/index.ts:67,342`).
+- Identity has no subgraph: `BINDINGS` lists tenant-directory, content and
+  conference only (`api/src/gateway.ts:64-68`).
 
 ## 1. Data model
 
-- **The org is the unit of membership.** `member(userId, organizationId, role)`
-  decides the rights. Roles are `owner` and `admin`, the same mapping as #1907.
-- **Per edition.** Each edition's `organizers[]` in Sanity becomes a mirror that
-  only decides who appears on that edition's team (display, teams, notification
-  fan-out). It grants nothing once the site reads rights from identity. Adding
-  someone in `/admin` creates the org member (if missing) and appends them to the
-  current edition. Removing someone deletes the org member and strips them from
-  `organizers[]` and `teams[].members` of **every** edition of the org, because a
-  stale edition entry would grant `/admin` again through `organizerOrgIds`.
-  Taking someone off one edition while keeping their org rights is a Sanity-only
-  edit, with no identity write.
-- **No identity account yet: an `invitation` row**, using the existing table:
-  `email` (lowercased), `role`, `status='pending'`, `inviterId` and
-  `expiresAt` (30 days). When a user with a **verified** email matching the
-  invitation signs in, identity inserts the `member` row in the same
-  transaction, marks the invitation `accepted`, and writes the audit row. Until
-  then the person is in Sanity `organizers[]` (the site needs a speaker id) but
-  has no API rights. That is correct, since they could not sign in to the API
-  anyway.
+- **The org is the unit of membership.** `member` decides rights; roles are
+  `owner` and `admin` (#1907).
+- **Editions are a mirror.** Each edition's `organizers[]` decides who appears
+  on its team (display, teams, notifications). Until the last PR it still
+  grants `/admin` too (`sanity.ts:51-52`). Adding someone creates the org member
+  and appends them to the current edition.
+- **Removing someone removes them from every edition's `organizers[]`**, because
+  any stale entry grants `/admin` again. Past editions' `teams[].members` are
+  **not** rewritten: they are a historical record, and `teams[]` grants
+  nothing. Taking someone off one edition while keeping org rights is a
+  Sanity-only edit.
+- **Invites** use the plugin's `invitation` rows: lowercased email, role,
+  `pending`, 30 days (`invitationExpiresIn: 30 * 24 * 3600`, set in the plugin
+  config, so the plugin and our mutations share one expiry). A new migration
+  adds a unique partial index on `(organizationId, email) WHERE status =
+'pending'`. **Invites do not touch Sanity.** The person is added to
+  `organizers[]` only when the invite is accepted, because Sanity grants
+  `/admin`.
 
 ## 2. Write path
 
 ```text
-/admin -> tRPC addOrganizer | removeOrganizer | setOrganizerRole (adminProcedure)
-       -> api.konf.app mutation, identity subgraph (new, behind the gateway)
-       -> identity D1: member / invitation / audit_event, one batch
-       -> on success: Sanity patch (organizers[], teams[]) for the edition(s)
+/admin -> tRPC addOrganizer | removeOrganizer | setOrganizerRole | cancelInvite
+       -> api.konf.app mutation, identity subgraph (new)
+       -> resolver calls auth.api.* (organization plugin), audit in its hooks
+       -> on success: Sanity array patch (organizers[]) for the edition(s)
 ```
 
-- **Three mutations** on a new identity subgraph:
-  `addOrganizationMember(email, role)`, `removeOrganizationMember(userId)`
-  and `setOrganizationMemberRole(userId, role)`. The org always comes from the
-  envelope (`orgId`), never from an argument. The site calls them with the
-  caller's identity JWT and the site assertion, the same lane as
-  `src/lib/konf-api/client.ts:57-72` and `conference-write.ts`.
-- The site replaces `updateOrganizers` (whole array) with per-person
-  procedures, so a stale form cannot remove someone by omission. The Sanity
-  patch uses array ops, not read-modify-write (the same reason as
-  `conference.ts:651`).
-- **Authorisation** is enforced in the identity resolver, not in the site:
-  - The caller's envelope `orgRole` must be `owner` or `admin`, or the caller is
-    a platform operator. Operator context in the envelope is #1919 (the TODO at
-    `api/src/gateway.ts:362`).
-  - Only `owner` (or an operator) may grant, demote or remove an `owner`.
-  - **Last owner:** removing or demoting is one conditional statement that
-    counts other owners in the same `WHERE`
-    (`... AND (SELECT count(*) FROM member WHERE organizationId=?1 AND role='owner' AND userId<>?2) > 0`).
-    A count of zero changes no rows and returns `LAST_OWNER`. One statement, so
-    two concurrent demotions cannot both pass.
-  - Self-removal stays refused (today's guard, `conference.ts:1079`).
-- **Idempotency:** add is `ON CONFLICT(userId, organizationId) DO NOTHING`
-  (role changes go through `setRole` only); remove of a non-member is a no-op
-  success; setRole to the current role is a no-op. Each mutation returns the
-  resulting state, so a retry is safe.
-- **Identity succeeds, then the Sanity mirror fails:** identity holds the truth
-  and the API is already right. The tRPC call returns an error naming the
-  mirror ("saved; the team list did not update, retry"). Retrying repeats the
-  whole call, which is idempotent on both sides. The drift check (section 4)
-  alerts if nobody retries. No outbox: the retry and the drift alert cover it,
-  and an outbox adds a queue for a write that happens a few times a year.
-- **Identity fails:** Sanity is not touched and the call fails, the same rule as
-  the conference D1 write (`conference.ts:370-392`).
+- **Four mutations** on a new identity subgraph: `inviteOrganizationMember(email,
+role)`, `removeOrganizationMember(userId)`, `setOrganizationMemberRole(userId,
+role)` and `cancelOrganizationInvitation(invitationId)`. Each calls the
+  matching `auth.api.*` (`createInvitation`, `removeMember`, `updateMemberRole`,
+  `cancelInvitation`), so there is one implementation. Acceptance is the
+  plugin's `acceptInvitation` on verified sign-in; its `afterAcceptInvitation`
+  hook mirrors to Sanity.
+- **Org scope.** Tenant callers: the org comes from the envelope only. Operators
+  with a `PlatformContext` have no org, so the operator path alone takes an
+  explicit `organizationId` argument, checked to exist and recorded in the audit
+  row. A tenant caller who passes it is refused.
+- **Authorisation** in the resolver, before any fetch: `orgRole` `owner` or
+  `admin`, or operator scope. Admins manage admins; only owners and operators
+  grant, demote or remove an owner. Self-removal stays refused
+  (`conference.ts:1079`).
+- **Last owner: a trigger on `member`**, so every path hits it (our mutations,
+  the plugin's HTTP routes, `leave`, hand-run SQL). `BEFORE DELETE` and
+  `BEFORE UPDATE OF role` raise `LAST_OWNER` when the row is the org's only
+  `owner`. A D1 statement is atomic, so two concurrent demotions cannot both
+  pass.
+- **Idempotency:** remove of a non-member and setRole to the current role are
+  no-op successes; a second invite to the same pending email hits the unique
+  index and returns the existing invite. Retries are safe.
+- **Audit:** the plugin hooks write `audit_event` for `member.add`,
+  `member.remove`, `member.role`, `invite.create`, `invite.cancel` and
+  `invite.accept`, with `detail = {orgId, actorId, from, to, invitationId}` (ids
+  only, #1310). For invite events the subject has no user yet, so `userId` is
+  the inviter (`invitation.inviterId`); acceptance uses the new member.
+- The site replaces `updateOrganizers` with per-person procedures, and patches
+  with array ops, not read-modify-write (as `conference.ts:651`).
 
-## 3. Revocation latency
+### Failures
 
-- **Gateway: next request.** `principal` reads D1 on every request with no
-  cache (`services/identity/src/data/index.ts:131-148`). The envelope is minted
-  per request and lives at most 60 s (`api/src/gateway.ts:66`), but a subgraph
-  never reuses it. The identity JWT (at most 300 s, `api/src/gateway.ts:65`)
-  carries no role. Nothing that holds `orgRole` outlives the delete. The
-  identity PR adds a test that removes the member between two requests and
-  expects the second to be refused.
-- **Site: the mirror is synchronous**, so Sanity lags identity by the length of
-  one request, or until a failed mirror is retried. The real gap is
-  older than this change: `organizerOrgIds` lives in the NextAuth token until
-  the user signs in again or triggers an update (`src/lib/auth.ts:60,208`). A
-  removed organizer keeps `/admin` on the site today for the life of their
-  session. Closing it needs a live check in the admin gate (open question 2).
+- **Identity fails:** Sanity untouched, the call fails (as
+  `conference.ts:375-392`).
+- **Add, then the mirror fails:** harmless. API rights exist, `/admin` does not
+  yet. The error says "saved; the team list did not update, retry".
+- **Remove, then the mirror fails: the dangerous half.** API access is gone,
+  `/admin` stays open through `organizers[]`. With PR 0 the site re-reads
+  `organizerOrgIds` every 60 s, so the window is the mirror retry: the user's
+  retry, else the next drift run (hourly) alerts and a person removes the entry.
+  **No outbox**, which holds only while the drift alert reaches someone (open
+  question 2): removals happen a few times a year. Without a watched sink, add
+  an outbox.
 
-## 4. Sync changes
+## 3. Plugin HTTP endpoints
 
-- `syncMembers` gets a mode, `MEMBER_SYNC_MODE=grant|drift` (identity env,
-  default `grant`).
-  - `grant`: today's behaviour. It is the backfill and stays until the switch.
-  - `drift`: no writes. Per org it compares Sanity organizers (same matching as
-    today) with `member` rows plus pending invitations. It logs
-    `identity.membership.drift` with the org id, counts and user ids (ids only,
-    never emails, #1310) for each of three cases: in Sanity but not in identity,
-    in identity but not in Sanity, and owner missing. It alerts when any count is
-    non-zero.
-- **The switch, in order:**
-  1. Rerun the #1909 backfill.
-  2. Set `KONF_MEMBER_WRITE_TENANTS` on the site for one org.
-  3. One clean drift run.
-  4. All orgs.
-  5. `MEMBER_SYNC_MODE=drift`.
+Every `/api/auth/organization/*` route is reachable today
+(`index.ts:36-37`). An org `admin` with an identity session can call, directly:
+`invite-member`, `cancel-invitation`, `remove-member`, `update-member-role`,
+plus `accept-invitation`, `reject-invitation` and `leave` for themselves.
 
-  While some orgs are switched and others are not, `grant` mode skips the
-  switched orgs, listed in `MEMBER_SOURCE_ORGS` (identity env), so the cron
-  never re-grants someone an organizer just removed.
+- **Gated now.** An interim gate (separate PR, refs #1933) blocks the plugin's
+  organization **write** routes over HTTP in `services/identity/src/index.ts`.
+- **#1923 is not affected:** its mutations call `auth.api.*` server-side, which
+  does not pass the fetch handler.
+- **The gate stays** (or narrows to let `accept-invitation` through, if
+  acceptance moves to a browser flow) once the mutations exist. Open HTTP
+  routes would skip the resolver's role rules and the Sanity mirror. Audit
+  (hooks) and the last-owner trigger would still hold, and drift would catch
+  the mirror, but that is a backstop, not the path.
 
-## 5. Security
+## 4. Revocation latency
 
-- **Tenant isolation:** the org is taken from the envelope only. The target user
-  must already be a member of, or invited to, that org; for remove and setRole
-  the `WHERE organizationId = envelope.orgId` is part of every statement. A test
-  sends a foreign org's userId and expects zero rows changed and the same error
-  as for a non-member (no existence oracle).
-- **Audit:** every add, remove, role change, invite and acceptance writes
-  `audit_event` in the same D1 batch (`0001_init.sql:96-102`,
-  `0002_handoff.sql:4-5`):
-  - `action` = `member.add`, `member.remove`, `member.role`, `invite.create` or
-    `invite.accept`;
-  - `userId` = the subject;
-  - `detail` = JSON `{orgId, actorId, from, to}` (ids and roles only).
-- **Ticket grants (#1914/#1915):** an invitation is matched only to the user's
-  verified primary email, never to an address the site records in
-  `ticketEmailGrants`. The drift check keeps the exclusion at
-  `member-sync.ts:78-83`.
-- **Email matching:** trim and lowercase. Accept only `emailVerified = 1`. An
-  email shared by two users (`member-sync.ts:128-139`) gets neither. The invite
-  stays pending and the case is logged as a count.
+- **Gateway: next request.** `principal` reads D1 per request with no cache;
+  the envelope is minted per request (60 s max) and never reused; the identity
+  JWT (300 s, `gateway.ts:71`) carries no role. The identity PR tests a member
+  removed between two requests.
+- **Site:** PR 0 (below) bounds it to 60 s plus the mirror retry.
 
-## 6. Rollout
+## 5. Sync changes
 
-| #   | PR                                                                                                                         | Files                                                                            | Gate                         |
-| --- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------- |
-| 1   | identity: member data functions, last-owner statement, audit, tests                                                        | `services/identity/src/data/{index,member}.ts`                                   | none                         |
-| 2   | identity: drift mode + `MEMBER_SOURCE_ORGS` (rebased on #1920)                                                             | `services/identity/src/data/member-sync.ts`, `service.cue`                       | after #1920                  |
-| 3   | identity subgraph mutations, plus `identity` in `BINDINGS` and the supergraph, plus operator context                       | `services/identity/src/subgraph.ts`, **`api/src/gateway.ts`**, supergraph config | **waits for #1919**          |
-| 4   | invitation acceptance on verified sign-in                                                                                  | `services/identity/src/data/auth.ts`                                             | owner review (identity auth) |
-| 5   | site: per-person tRPC procedures, `konf-api/member-write.ts`, `OrganizersEditor` + story, flag `KONF_MEMBER_WRITE_TENANTS` | `src/server/routers/conference.ts`, `src/lib/konf-api/`, `src/components/admin/` | after 3                      |
-| 6   | site: live organizer check in the admin gate (if Q2 = yes)                                                                 | `src/lib/authz/organizer.ts`, possibly **`src/lib/auth.ts`**                     | **owner approval (auth)**    |
-| 7   | the switch: backfill rerun, flag per org, then `MEMBER_SYNC_MODE=drift`                                                    | env only                                                                         | clean drift run              |
+- `syncMembers` gets `MEMBER_SOURCE_ORGS` (identity env, comma-separated org
+  ids; the sync code runs in identity, tenant-directory's cron only calls it).
+  **Drift is per org:**
+  - orgs not listed: `grant`, today's behaviour (the backfill);
+  - listed orgs: no grants. Drift compares Sanity organizers (same matching)
+    with `member` plus pending invites, writes nothing, and logs `identity.membership.drift` with org id, counts and user ids
+    (never emails) for: in Sanity not identity, in identity not Sanity, fewer
+    than two owners.
+- **Alert sink:** the drift log goes to the identity Worker's logs; the alert
+  destination is open question 2.
+- **Site flag:** `KONF_MEMBER_WRITE_TENANTS` holds **organization** ids and is
+  checked against the resolved org, unlike its per-conference siblings
+  (`src/lib/konf-api/conference-write.ts:34-36`). Switching one edition of an
+  org would leave the others writing Sanity alone.
 
-None touches `packages/tenancy`: the envelope already carries `orgRole`
-(`packages/tenancy/src/index.ts:30`). If #1919 adds the operator field there,
-PR 3 builds on it.
+## 6. Prerequisites per org
 
-**Rollback:** clear `KONF_MEMBER_WRITE_TENANTS`, and the site falls back to
-`updateOrganizers` writing Sanity only. Set `MEMBER_SYNC_MODE=grant` and empty
-`MEMBER_SOURCE_ORGS`. Identity rows written in the meantime stay; the drift log
-lists any that must be removed by hand. Nothing is migrated destructively, so
-there is no schema rollback.
+- The org is in `KONF_IDENTITY_TENANTS` (`src/lib/auth/identity-handoff.ts:33`).
+- Every organizer who will use the editor signs in through identity: the write
+  needs an identity JWT (`conference-write.ts:78-93`) and a `member` row, or it
+  fails `PRECONDITION_FAILED` like `conference.ts:379-385`. NextAuth-only
+  sessions see a dead editor.
+- At least two owners. Each owner's identity primary email matches one of their
+  speaker `knownEmails`, or the sync cannot match them and they are locked out.
 
-## 7. Open questions for the owner
+## 7. Rollout
 
-1. **Can `admin` manage members, or only `owner` and operators?** The issue
-   says "operator or owner"; the brief says owner, admin or operator.
-   _Recommended:_ admins can add and remove admins; only owners and operators
-   touch owners.
-2. **Close the site's session gap with a live check?** Today a removed
-   organizer keeps `/admin` until their token refreshes. _Recommended:_ yes.
-   `withOrgOrganizer` re-reads the caller's membership (Sanity mirror now,
-   identity later) with a short tag-invalidated cache. This is PR 6, auth-adjacent.
-3. **Remove from all editions, or only the current one?** _Recommended:_ all
-   editions of the org (section 1). Anything else leaves a grant path through
-   `organizerOrgIds`.
-4. **Invitation expiry?** _Recommended:_ 30 days, re-sendable from `/admin`.
-5. **Who becomes `owner` at the switch?** Today only one person, set by hand
-   (#1907). _Recommended:_ the owner names at least two owners per org before its
-   flag flips, so the last-owner guard never locks an org.
+| #   | PR                                                                                                         | Gate                    |
+| --- | ---------------------------------------------------------------------------------------------------------- | ----------------------- |
+| 0   | site: 60 s live refresh of `organizerOrgIds` in `getAuthSession` (`src/lib/auth.ts:912`), in progress      | owner review (auth)     |
+| -   | identity: interim HTTP gate on plugin org write routes (separate PR, refs #1933)                           | owner review            |
+| 1   | identity: migration (trigger, pending-invite index), `invitationExpiresIn`, audit hooks, tests             | owner review (identity) |
+| 2   | identity: per-org drift in `syncMembers`, `MEMBER_SOURCE_ORGS`                                             | after 1                 |
+| 3   | identity subgraph: four mutations over `auth.api.*`, operator org argument, `identity` in `BINDINGS`       | after 1                 |
+| 4   | site: per-person procedures, cancel, `OrganizersEditor` + story, `KONF_MEMBER_WRITE_TENANTS` by org        | after 0 and 3           |
+| 5   | switch, per org: prerequisites (section 6), backfill rerun, flag, then add the org to `MEMBER_SOURCE_ORGS` | clean drift run         |
+| 6   | site: `/admin` gate reads rights from identity; `organizers[]` stops granting                              | open question 1         |
+
+**Rollback** (clear the org from `KONF_MEMBER_WRITE_TENANTS` and
+`MEMBER_SOURCE_ORGS`) restores the Sanity write path, not access. Grant mode
+re-adds anyone still in `organizers[]`, and removals made in identity whose
+mirror failed stay open in Sanity. Steps:
+
+1. Read the last drift log for the org: "in Sanity, not in identity".
+2. Remove those speakers from `organizers[]` in `/admin` before clearing
+   `MEMBER_SOURCE_ORGS`, or grant mode puts them back in identity.
+3. Then clear the flags. No schema rollback: the migration only adds.
+
+## 8. Open questions for the owner
+
+1. **When does the site read rights from identity (PR 6)?** _Recommended:_ per
+   org, once it has two owners and drift has been clean for 7 days.
+2. **Where do drift alerts go?** Worker logs alone are not watched.
+   _Recommended:_ the same channel as other production alerts; name it.
