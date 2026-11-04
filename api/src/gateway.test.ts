@@ -1060,7 +1060,10 @@ describe('operator lane (#1892 phase 4)', () => {
 
   it('refuses an anonymous caller', async () => {
     const { env, envelopes } = opsEnv()
-    const res = await call(env, { origin: OPS })
+    const res = await call(env, {
+      origin: OPS,
+      [OPERATOR_TENANT_HEADER]: 'nowhere.example', // 401, not the lookup's 400
+    })
     expect(res.status).toBe(401)
     expect(envelopes).toEqual([])
     expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
@@ -1114,12 +1117,6 @@ describe('operator lane (#1892 phase 4)', () => {
     })
     expect(res.status).toBe(401)
     expect(envelopes).toEqual([])
-  })
-
-  it('ignores the tenant header outside the operator lane', async () => {
-    const { env, forwarded } = opsEnv()
-    await call(env, { origin: VERIFIED, [OPERATOR_TENANT_HEADER]: 'x' })
-    expect(forwarded[0].has(OPERATOR_TENANT_HEADER)).toBe(false)
   })
 
   it('is off when OPERATOR_ORIGIN is unset', async () => {

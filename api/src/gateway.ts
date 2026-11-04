@@ -341,6 +341,9 @@ export function createGateway(supergraph: string) {
       // operator names, never the Origin's.
       const operatorHost = hostOf(env.OPERATOR_ORIGIN)
       const operatorLane = !siteHost && !!operatorHost && host === operatorHost
+      // Guard before fetch: no anonymous tenant lookup in the operator lane.
+      if (operatorLane && !request.headers.has('authorization'))
+        return reject(401, 'UNAUTHENTICATED', 'operator lane needs a session')
       let tenant: Tenant | null
       try {
         tenant = await resolveTenant(
@@ -369,8 +372,6 @@ export function createGateway(supergraph: string) {
       let userId: string | null = null
       const auth = request.headers.get('authorization')
       if (auth === null) {
-        if (operatorLane)
-          return reject(401, 'UNAUTHENTICATED', 'operator lane needs a session')
         if (await limited(`anon:${tenant?.orgId ?? null}:${ip}`))
           return tooMany()
       } else {
