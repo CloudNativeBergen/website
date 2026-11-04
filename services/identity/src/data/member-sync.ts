@@ -1,6 +1,7 @@
 // Sanity organizers -> identity `member` sync (#1907), run by the cron.
 // Insert-only: grants missing `admin` rows, never updates, deletes or
-// demotes. Matching and ids follow scripts/backfill-identity-members.ts (#1909).
+// demotes. Orgs in MEMBER_SOURCE_ORGS have identity as their source: they
+// get a drift check instead and are never granted (#1923). Matching and ids follow scripts/backfill-identity-members.ts (#1909).
 
 /** Role every synced organizer gets. The owner decided this; see #1907. */
 export const ORGANIZER_ROLE = 'admin'
@@ -11,6 +12,10 @@ export interface SyncEnv {
   SANITY_DATASET?: string
   /** wrangler secret put SANITY_API_TOKEN_READ (per environment) */
   SANITY_API_TOKEN_READ?: string
+  /** Comma-separated org ids in drift mode. Empty: every org grants. */
+  MEMBER_SOURCE_ORGS?: string
+  /** wrangler secret put SLACK_MEMBER_DRIFT_WEBHOOK_URL (optional) */
+  SLACK_MEMBER_DRIFT_WEBHOOK_URL?: string
 }
 
 // Organizers of an org are the speakers in `organizers[]` of its published
@@ -56,7 +61,12 @@ async function groq<T>(env: SyncEnv, query: string, params = {}): Promise<T> {
   return ((await res.json()) as { result: T }).result
 }
 
-/** orgId -> lowercased known emails of its organizers. */
+interface Organizer {
+  speakerId: string
+  emails: string[]
+}
+
+/** orgId -> its organizers with their lowercased known emails. */
 async function organizerEmails(env: SyncEnv) {
   const cs = await groq<{ orgId: string; ids: string[] | null }[]>(
     env,
@@ -84,13 +94,13 @@ async function organizerEmails(env: SyncEnv) {
       ]
     }),
   )
-  const out = new Map<string, string[][]>()
+  const out = new Map<string, Organizer[]>()
   for (const c of cs)
     for (const id of c.ids ?? []) {
       const emails = byId.get(id)
       if (!emails) continue
       const list = out.get(c.orgId) ?? []
-      list.push(emails)
+      list.push({ speakerId: id, emails })
       out.set(c.orgId, list)
     }
   return out
@@ -106,7 +116,7 @@ export async function syncMembers(env: SyncEnv) {
       reason: 'missing_config',
     })
   }
-  let byOrg: Map<string, string[][]>
+  let byOrg: Map<string, Organizer[]>
   try {
     byOrg = await organizerEmails(env)
   } catch (e) {
@@ -141,9 +151,26 @@ export async function syncMembers(env: SyncEnv) {
   const { results: orgs } = await env.DB.prepare(
     'SELECT id FROM organization',
   ).all<{ id: string }>()
+  const sourceOrgs = new Set(
+    (env.MEMBER_SOURCE_ORGS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  )
   let granted = 0
   for (const { id: orgId } of orgs) {
     const organizers = byOrg.get(orgId)
+    if (sourceOrgs.has(orgId)) {
+      // Never grants. A drift or Slack failure must not stop the sync.
+      await checkDrift(env, orgId, organizers ?? [], verified).catch((e) =>
+        log('error', 'identity.membership.drift_failed', {
+          orgId,
+          // Name only: a message is not ours to vet for emails.
+          error: e instanceof Error ? e.name : 'unknown',
+        }),
+      )
+      continue
+    }
     if (!organizers?.length) {
       log('warn', 'identity.membership.org_skipped', {
         orgId,
@@ -152,7 +179,7 @@ export async function syncMembers(env: SyncEnv) {
       continue
     }
     const userIds = new Set<string>()
-    for (const emails of organizers) {
+    for (const { emails } of organizers) {
       const userId = emails.map((e) => verified.get(e)).find(Boolean)
       if (userId) userIds.add(userId)
     }
@@ -172,4 +199,112 @@ export async function syncMembers(env: SyncEnv) {
     }
   }
   log('log', 'identity.membership.synced', { granted })
+}
+
+const DAY_MS = 24 * 3600 * 1000
+
+/** Ids only: speaker ids for Sanity organizers, user ids for identity rows. */
+export interface Drift {
+  /** Speaker ids in organizers[] with no identity `member` row. */
+  missingInIdentity: string[]
+  /** User ids with a `member` row who are no Sanity organizer. */
+  missingInSanity: string[]
+  /** User ids in both whose role holds neither owner nor admin. */
+  roleMismatch: string[]
+}
+
+/** Compares, writes no `member` row, alerts on change or once a day. */
+async function checkDrift(
+  env: SyncEnv,
+  orgId: string,
+  organizers: Organizer[],
+  verified: Map<string, string | null>,
+) {
+  const { results: rows } = await env.DB.prepare(
+    'SELECT userId, role FROM member WHERE organizationId = ?1',
+  )
+    .bind(orgId)
+    .all<{ userId: string; role: string }>()
+  const roles = new Map(rows.map((r) => [r.userId, r.role]))
+  const inSanity = new Set<string>()
+  const missingInIdentity: string[] = []
+  for (const { speakerId, emails } of organizers) {
+    const userId = emails.map((e) => verified.get(e)).find(Boolean)
+    if (userId) inSanity.add(userId)
+    if (!userId || !roles.has(userId)) missingInIdentity.push(speakerId)
+  }
+  const roleOk = (r: string) =>
+    r
+      .toLowerCase()
+      .split(',')
+      .some((x) => ['owner', 'admin'].includes(x.trim()))
+  const drift: Drift = {
+    missingInIdentity: [...new Set(missingInIdentity)].sort(),
+    missingInSanity: [...roles.keys()].filter((u) => !inSanity.has(u)).sort(),
+    roleMismatch: [...inSanity]
+      .filter((u) => roles.has(u) && !roleOk(roles.get(u)!))
+      .sort(),
+  }
+  const counts = Object.fromEntries(
+    Object.entries(drift).map(([k, v]) => [k, v.length]),
+  )
+  if (Object.values(counts).every((n) => n === 0)) {
+    // Clean: forget the last alert, so a recurrence posts at once.
+    await env.DB.prepare(
+      'DELETE FROM member_drift_alert WHERE organizationId = ?1',
+    )
+      .bind(orgId)
+      .run()
+    return log('log', 'identity.membership.drift_clean', { orgId })
+  }
+  log('warn', 'identity.membership.drift', { orgId, counts, ...drift })
+
+  const url = env.SLACK_MEMBER_DRIFT_WEBHOOK_URL
+  if (!url) return
+  const hash = await sha256(JSON.stringify(drift))
+  const last = await env.DB.prepare(
+    'SELECT hash, postedAt FROM member_drift_alert WHERE organizationId = ?1',
+  )
+    .bind(orgId)
+    .first<{ hash: string; postedAt: number }>()
+  const now = Date.now()
+  // Post when the drift set changes; while it stays the same, once a day.
+  if (last?.hash === hash && now - last.postedAt < DAY_MS)
+    return log('log', 'identity.membership.drift_deduped', { orgId })
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ text: slackText(orgId, drift) }),
+    signal: AbortSignal.timeout(5000),
+  })
+  if (!res.ok)
+    return log('error', 'identity.membership.drift_alert_failed', {
+      orgId,
+      status: res.status,
+    })
+  await env.DB.prepare(
+    'INSERT INTO member_drift_alert (organizationId, hash, postedAt) VALUES (?1, ?2, ?3) ON CONFLICT (organizationId) DO UPDATE SET hash = excluded.hash, postedAt = excluded.postedAt',
+  )
+    .bind(orgId, hash, now)
+    .run()
+  log('log', 'identity.membership.drift_alerted', { orgId })
+}
+
+async function sha256(s: string) {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
+  return [...new Uint8Array(d)]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+/** Ids and counts only, never emails. */
+export function slackText(orgId: string, d: Drift) {
+  const line = (label: string, ids: string[]) =>
+    `${label}: ${ids.length}${ids.length ? ` (${ids.join(', ')})` : ''}`
+  return [
+    `Organizer membership drift in org ${orgId}`,
+    line('In Sanity, missing in identity (speaker ids)', d.missingInIdentity),
+    line('In identity, missing in Sanity (user ids)', d.missingInSanity),
+    line('Role neither owner nor admin (user ids)', d.roleMismatch),
+  ].join('\n')
 }

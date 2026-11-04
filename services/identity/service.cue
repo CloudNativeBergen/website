@@ -12,16 +12,21 @@ service: #PlatformService & {
 	// Sanity ids as in services/content; preview reads development only.
 	vars: {
 		// LOGIN_TEST_PAGE serves the manual login test page at /test (preview only).
-		preview: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", LOGIN_TEST_PAGE: "1", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development"}
+		preview: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", LOGIN_TEST_PAGE: "1", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development", MEMBER_SOURCE_ORGS: ""}
 		// OPERATOR_ORIGINS: non-tenant origins whose token only platform
 		// operators get (#1922). None in preview: kontroll has no stable
 		// preview origin.
-		production: {OPERATOR_ORIGINS: "https://my.konf.app", IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production"}
+		production: {OPERATOR_ORIGINS: "https://my.konf.app", IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", MEMBER_SOURCE_ORGS: ""}
 	}
 	// Organizer membership sync (#1907, src/data/member-sync.ts) has no cron
 	// here: the account allows 5. tenant-directory's cron calls
 	// Organizations.syncMembers() hourly. Secret per env: SANITY_API_TOKEN_READ.
 	// Without it the sync grants nothing.
+	// MEMBER_SOURCE_ORGS: comma-separated org ids whose membership source is
+	// identity. Those orgs get drift checks and never grants (#1923). Empty:
+	// every org grants, as before. Optional secret per env:
+	// SLACK_MEMBER_DRIFT_WEBHOOK_URL (Slack incoming webhook for drift
+	// alerts); unset, drift is logged only.
 	// Verified origins for the login handoff (#688).
 	serviceBindings: [{binding: "DIRECTORY", service: "konf-tenant-directory"}]
 	// Handoff limits (src/handoff.ts): POSTs per tenant origin, GET per IP.
