@@ -67,7 +67,10 @@ import { appRouter } from '@/server/_app'
 import { getAuthSession } from '@/lib/auth'
 import { clearOrganizerRightsMemo } from '@/lib/authz/live-organizer'
 
-const createCaller = initTRPC.context<Context>().create().createCallerFactory(appRouter)
+const createCaller = initTRPC
+  .context<Context>()
+  .create()
+  .createCallerFactory(appRouter)
 
 // The token claims org-A, as minted at sign-in.
 function token(id: string) {
@@ -145,7 +148,9 @@ describe('live organizer rights (#1923)', () => {
     h.rights.set('sp-3', null)
     expect(await adminAllowed()).toBe(false)
     expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('[authz-deny] organizer refresh failed for speaker sp-3'),
+      expect.stringContaining(
+        '[authz-deny] organizer refresh failed for speaker sp-3',
+      ),
       'sanity down',
     )
     // A failure is not cached: the next request reads again.

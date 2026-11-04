@@ -939,7 +939,9 @@ export async function getAuthSession(req?: {
   if (!session) {
     const bearerToken = extractBearerToken(req?.headers)
     if (bearerToken)
-      return withLiveOrganizerRights(await getSessionFromBearerToken(bearerToken))
+      return withLiveOrganizerRights(
+        await getSessionFromBearerToken(bearerToken),
+      )
     // identity session cookie, flagged tenants only (#1892).
     const { identitySession } = await import('@/lib/auth/identity-session')
     return identitySession()

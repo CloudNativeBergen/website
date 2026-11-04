@@ -9,10 +9,11 @@ const TTL_MS = 60_000
 
 // Same query as ORGANIZER_ORG_IDS_FIELD / the isOrganizer field in
 // src/lib/speaker/sanity.ts, for one speaker.
-const QUERY = `{
-  "organizerOrgIds": *[_type == "conference" && $id in organizers[]._ref && defined(organization._ref)].organization._ref,
-  "isOrganizer": count(*[_type == "conference" && $id in organizers[]._ref]) > 0
-}` // groq-global: rights span every org this speaker organizes; projects only org refs.
+const ORGS =
+  '"organizerOrgIds": *[_type == "conference" && $id in organizers[]._ref && defined(organization._ref)].organization._ref' // groq-global: must see every org this speaker organizes; projects only org refs.
+const ANY =
+  '"isOrganizer": count(*[_type == "conference" && $id in organizers[]._ref]) > 0' // groq-global: platform-wide organizer bit, a boolean only.
+const QUERY = `{ ${ORGS}, ${ANY} }`
 
 type Rights = { organizerOrgIds: string[]; isOrganizer: boolean }
 
@@ -23,14 +24,12 @@ const memo = new Map<string, { at: number; rights: Promise<Rights> }>()
 function rightsFor(id: string): Promise<Rights> {
   const hit = memo.get(id)
   if (hit && Date.now() - hit.at < TTL_MS) return hit.rights
-  const rights = clientReadUncached
-    .fetch<Rights>(QUERY, { id })
-    .then((r) => ({
-      organizerOrgIds: Array.from(
-        new Set((r?.organizerOrgIds ?? []).filter(Boolean)),
-      ),
-      isOrganizer: r?.isOrganizer === true,
-    }))
+  const rights = clientReadUncached.fetch<Rights>(QUERY, { id }).then((r) => ({
+    organizerOrgIds: Array.from(
+      new Set((r?.organizerOrgIds ?? []).filter(Boolean)),
+    ),
+    isOrganizer: r?.isOrganizer === true,
+  }))
   if (memo.size > 1000) memo.clear()
   memo.set(id, { at: Date.now(), rights })
   // A failed read is not an answer: retry on the next request.
