@@ -22,7 +22,7 @@ Project uses [mise](https://mise.jdx.sh/).
 - `mise run dev` & `mise run storybook` (local servers)
 - For CLI (`cli/` Rust): `cd cli && mise run <check|clippy|fmt|test|build>`
 
-**Do NOT use `rtk`.** This file previously mandated it on every command. It is not installed, and independent benchmarking (JetBrains, 86 paired SkillsBench tasks, measuring real billing rather than rtk's self-reported metrics) found a **+7.6% cost _increase_** at low reasoning effort and ~zero at high — because it only intercepts Bash, while Read/Grep/Glob bypass it entirely, capping any saving near 3% of input tokens.
+**Do NOT use `rtk`.** It is not installed and benchmarking showed no saving.
 
 **Verification commands that are easy to get wrong:**
 
