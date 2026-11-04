@@ -230,6 +230,80 @@ describe('updateConference', () => {
     }
   })
 
+  describe('operator lane (#1921)', () => {
+    const as = (scopes: string[], orgRole: string | null = null): Envelope => ({
+      ...tenant('org-a', 'conf-a', orgRole),
+      userId: 'op',
+      scopes,
+    })
+    const audits = (log: { mock: { calls: unknown[][] } }) =>
+      log.mock.calls
+        .map(([line]) => JSON.parse(String(line)))
+        .filter((e) => e.event === 'operator.write')
+
+    it('lets the operator scope write without a role, and audits it', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const { body } = await update(as(['platform:operator']), {
+        title: 'by op',
+        tagline: 't',
+      })
+      expect(body.errors).toBeUndefined()
+      expect(row('conf-a').title).toBe('by op')
+      expect(audits(log)).toEqual([
+        {
+          event: 'operator.write',
+          'konf.user_id': 'op',
+          'konf.org_id': 'org-a',
+          'konf.conference_id': 'conf-a',
+          fields: expect.toSatisfy(
+            (f: string[]) => [...f].sort().join() === 'tagline,title',
+          ),
+          at: expect.stringMatching(/^\d{4}-/),
+        },
+      ])
+      log.mockRestore()
+    })
+
+    it('refuses other or look-alike scopes, and a forged operator envelope', async () => {
+      for (const scopes of [
+        ['platform:admin'],
+        ['platform:operator:x', 'operator'],
+      ]) {
+        const { body } = await update(as(scopes, 'member'), { title: 'x' })
+        expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
+      }
+      const other = await createSigner(
+        (await generateEnvelopeKeyPair()).privatePem,
+      )
+      const forged = await gql(
+        await other.sign(as(['platform:operator'])),
+        MUTATION,
+        { input: { title: 'x' } },
+      )
+      expect(forged.status).toBe(403)
+      expect(row('conf-a').title).toBe('A 2026')
+    })
+
+    it('refuses an operator without a named tenant (PlatformContext)', async () => {
+      // What the gateway mints on the lane when x-konf-operator-tenant is absent.
+      const { body } = await update(
+        { typ: 'platform', userId: 'op', platformRole: 'operator' },
+        { title: 'x' },
+      )
+      expect(body.data).toBeNull()
+      expect(body.errors).toHaveLength(1)
+      expect(row('conf-a').title).toBe('A 2026')
+    })
+
+    it('does not audit an owner/admin write', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+      await update(tenant('org-a', 'conf-a', 'admin'), { title: 'by admin' })
+      expect(row('conf-a').title).toBe('by admin')
+      expect(audits(log)).toEqual([])
+      log.mockRestore()
+    })
+  })
+
   it('refuses before touching the database', async () => {
     const prepare = vi.spyOn(env.DB, 'prepare')
     await update(tenant('org-a', 'conf-a', 'member'), { title: 'x' })
