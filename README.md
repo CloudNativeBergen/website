@@ -107,26 +107,6 @@ This project uses **Turbopack** for both development and production builds to en
 
 **The fix is already in place** via the top-level `turbopack` option in `next.config.ts`.
 
-### VS Code Configuration
-
-This project includes VS Code workspace settings in `.vscode/settings.json` that automatically configure:
-
-- **Prettier formatting** using the project's `prettier.config.js` settings
-- **Format on save** for consistent code style
-- **ESLint integration** with auto-fix on save
-- **Tailwind CSS IntelliSense** for better development experience
-
-#### Recommended Extensions
-
-The project includes recommended VS Code extensions in `.vscode/extensions.json`:
-
-- **Prettier - Code formatter** (`esbenp.prettier-vscode`)
-- **Tailwind CSS IntelliSense** (`bradlc.vscode-tailwindcss`)
-- **TypeScript and JavaScript Nightly** (`ms-vscode.vscode-typescript-next`)
-- **Sanity.io** (`sanity-io.vscode-sanity`)
-
-VS Code will prompt you to install these extensions when you open the workspace.
-
 ### Code Style
 
 The project uses **Prettier** for code formatting with these settings:

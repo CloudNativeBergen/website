@@ -1,7 +1,6 @@
 # Development tools - exclude from production builds
 
 src/dev-tools/
-public/dev/
 _.dev._
 
 # Test files
@@ -15,12 +14,6 @@ _.spec._
 docs/
 \*.md
 !README.md
-
-# Development configuration
-
-.env.example
-jest.config.ts
-jest.setup.ts
 
 # DO NOT ignore cache directories - we need Vercel to rebuild CSS
 # Commenting out potential cache ignores to ensure fresh CSS builds
