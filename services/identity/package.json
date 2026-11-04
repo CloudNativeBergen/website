@@ -8,21 +8,21 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
+    "@runkonf/tenancy": "workspace:*",
     "@apollo/subgraph": "~2.14.3",
-    "@better-auth/core": "1.7.14",
     "@pothos/core": "^4",
     "@pothos/plugin-directives": "^4",
     "@pothos/plugin-federation": "^4",
-    "@runkonf/tenancy": "workspace:*",
-    "better-auth": "1.7.14",
     "drizzle-orm": "^0.45.2",
     "graphql": "16.14.2",
-    "graphql-yoga": "^5"
+    "graphql-yoga": "^5",
+    "better-auth": "1.7.14",
+    "@better-auth/core": "1.7.14"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261101.1",
-    "jose": "^6.2.14",
+    "wrangler": "^4.156.0",
     "miniflare": "5.20261023.3-beta",
-    "wrangler": "^4.156.0"
+    "jose": "^6.2.14"
   }
 }
