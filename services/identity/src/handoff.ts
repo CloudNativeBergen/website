@@ -24,6 +24,12 @@ export interface HandoffEnv extends AuthEnv, DataEnv {
   HANDOFF_SITE_LIMIT: RateLimit
   /** Per client IP, on GET /handoff. ponytail: coarse, one bucket per IP. */
   HANDOFF_IP_LIMIT: RateLimit
+  /**
+   * Comma-separated exact origins (e.g. https://my.konf.app) that are not
+   * tenants but get a token for platform operators only (#1922). Unset or
+   * empty: none.
+   */
+  OPERATOR_ORIGINS?: string
 }
 
 export const HANDOFF_TTL_MS = 60_000
@@ -45,6 +51,10 @@ const b64 = async (s: string) => btoa(String.fromCharCode(...(await digest(s))))
 /** Hex SHA-256: the site computes `state` the same way. */
 export const sha256hex = async (s: string) =>
   [...(await digest(s))].map((b) => b.toString(16).padStart(2, '0')).join('')
+
+const isOperatorOrigin = (env: HandoffEnv, origin: string) =>
+  !!origin &&
+  (env.OPERATOR_ORIGINS ?? '').split(',').some((o) => o.trim() === origin)
 
 const handoffKey = async (token: string) => `handoff:${await b64(token)}`
 
@@ -77,6 +87,10 @@ export async function handoff(request: Request, env: HandoffEnv) {
   const url = new URL(request.url)
   const auth = createAuth(env.DB, env)
   const data = createData(env)
+  /** An operator origin is no tenant: only platform operators get its token. */
+  const refused = async (userId: string, origin: string) =>
+    isOperatorOrigin(env, origin) &&
+    !(await data.principal(userId, ''))?.platformOperator
 
   if (request.method === 'GET' && url.pathname === '/handoff') {
     const ip = request.headers.get('cf-connecting-ip') ?? 'unknown'
@@ -86,7 +100,12 @@ export async function handoff(request: Request, env: HandoffEnv) {
     const origin = url.searchParams.get('origin') ?? ''
     const state = url.searchParams.get('state') ?? ''
     if (!/^[0-9a-f]{64}$/.test(state)) return fail(400)
-    if (!(await data.isVerifiedOrigin(origin))) return fail(400)
+    if (
+      !isOperatorOrigin(env, origin) &&
+      !(await data.isVerifiedOrigin(origin))
+    ) {
+      return fail(400)
+    }
 
     const session = await auth.api.getSession({ headers: request.headers })
     if (!session) {
@@ -169,6 +188,7 @@ export async function handoff(request: Request, env: HandoffEnv) {
     if (!str('nonce') || (await sha256hex(str('nonce'))) !== stored.state) {
       return fail(401)
     }
+    if (await refused(stored.userId, origin)) return fail(403)
     await data.audit('handoff.exchange', stored.userId, origin)
     return sessionFor(auth, stored.userId, origin)
   }
@@ -192,6 +212,7 @@ export async function handoff(request: Request, env: HandoffEnv) {
   }
   // No match: the user signs in through the handoff instead.
   if (!userId) return fail(404)
+  if (await refused(userId, origin)) return fail(403)
   await data.audit('session.upgrade', userId, origin, match)
   return sessionFor(auth, userId, origin)
 }

@@ -410,3 +410,98 @@ describe('session upgrade', () => {
     ).toBe(401)
   })
 })
+
+describe('operator origins (#1922)', () => {
+  const OPS = 'https://my.konf.app'
+  const withOps = async (
+    value: string | undefined,
+    fn: () => Promise<void>,
+  ) => {
+    const saved = env.OPERATOR_ORIGINS
+    env.OPERATOR_ORIGINS = value
+    try {
+      await fn()
+    } finally {
+      env.OPERATOR_ORIGINS = saved
+    }
+  }
+  async function exchangeAt(origin: string, operator: boolean) {
+    const u = await newUser(`op${Math.random()}@x.test`)
+    if (operator) {
+      await env.DB.prepare('UPDATE user SET platformOperator = 1 WHERE id = ?')
+        .bind(u.id)
+        .run()
+    }
+    const res = await start(origin, await cookieFor(u.id))
+    if (res.status !== 302) return { user: u, res }
+    const token = new URL(res.headers.get('location')!).searchParams.get(
+      'token',
+    )!
+    return {
+      user: u,
+      res: await post('/handoff/exchange', { token, origin, nonce: NONCE }),
+    }
+  }
+
+  it('gives an operator a token whose origin claim is the operator origin', async () => {
+    await withOps(` https://other.example, ${OPS}`, async () => {
+      const { user, res } = await exchangeAt(OPS, true)
+      expect(res.status).toBe(200)
+      const { session } = (await res.json()) as { session: string }
+      const jwt = await createAuth(env.DB, env).handler(
+        new Request(`${BASE}/api/auth/token`, {
+          headers: { authorization: `Bearer ${session}` },
+        }),
+      )
+      const { token: t } = (await jwt.json()) as { token: string }
+      const claims = JSON.parse(atob(t.split('.')[1]))
+      expect(claims).toMatchObject({ sub: user.id, origin: OPS })
+    })
+  })
+
+  it('refuses a non-operator on an operator origin, without an audit row', async () => {
+    await withOps(OPS, async () => {
+      const { user, res } = await exchangeAt(OPS, false)
+      expect(res.status).toBe(403)
+      const { results } = await env.DB.prepare(
+        "SELECT 1 FROM audit_event WHERE action = 'handoff.exchange' AND userId = ?",
+      )
+        .bind(user.id)
+        .all()
+      expect(results).toEqual([])
+    })
+  })
+
+  it('refuses a non-operator upgrade on an operator origin that is also a tenant', async () => {
+    await newUser('opup@x.test', true)
+    await withOps(SITE, async () => {
+      const res = await post('/handoff/upgrade', {
+        origin: SITE,
+        verifiedEmail: 'opup@x.test',
+      })
+      expect(res.status).toBe(403)
+    })
+  })
+
+  it.each([undefined, '', ' , '])(
+    'refuses the operator origin as unknown when OPERATOR_ORIGINS is %j',
+    async (value) => {
+      await withOps(value, async () => {
+        expect((await exchangeAt(OPS, true)).res.status).toBe(400)
+      })
+    },
+  )
+
+  it('still refuses an unknown origin', async () => {
+    await withOps(OPS, async () => {
+      const { res } = await exchangeAt('https://evil.example', true)
+      expect(res.status).toBe(400)
+    })
+  })
+
+  it('leaves a tenant origin as before, for a non-operator', async () => {
+    await withOps(OPS, async () => {
+      expect((await exchangeAt(SITE, false)).res.status).toBe(200)
+    })
+  })
+})
