@@ -23,9 +23,8 @@ vi.mock('@/lib/sanity/client', () => {
   }
 })
 
-const { listOrganizerProposals, getOrganizerProposal } = await import(
-  '@/lib/proposal/server'
-)
+const { listOrganizerProposals, getOrganizerProposal } =
+  await import('@/lib/proposal/server')
 
 const rawRow = {
   _id: 'talk-1',
