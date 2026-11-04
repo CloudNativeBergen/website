@@ -62,8 +62,13 @@ vi.mock('@/lib/environment/config', () => ({
 }))
 
 // `getSpeaker` is dynamically imported inside getAuthSession; mock the module.
-vi.mock('@/lib/speaker/sanity', () => ({
+// Routed through the seam (#1876); the store mock carries no getSpeaker so a
+// regression back to `@/lib/speaker/sanity` fails here.
+vi.mock('@/lib/speaker', () => ({
   getSpeaker: h.mockGetSpeaker,
+  getOrCreateSpeaker: vi.fn(),
+}))
+vi.mock('@/lib/speaker/sanity', () => ({
   getOrCreateSpeaker: vi.fn(),
 }))
 

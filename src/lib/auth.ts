@@ -5,7 +5,7 @@ import Credentials from 'next-auth/providers/credentials'
 import type { Account, NextAuthConfig, Profile, Session, User } from 'next-auth'
 import { decode } from 'next-auth/jwt'
 import { NextRequest } from 'next/server'
-import { getOrCreateSpeaker } from '@/lib/speaker/sanity'
+import { getOrCreateSpeaker } from '@/lib/speaker'
 import {
   applySessionCookieDomain,
   sessionCookieRequestHost,
@@ -208,7 +208,7 @@ export async function jwtSignInCallback({
   if (trigger === 'update') {
     const existing = token.speaker as Session['speaker'] | undefined
     if (existing?._id && token.account) {
-      const { getSpeaker } = await import('@/lib/speaker/sanity')
+      const { getSpeaker } = await import('@/lib/speaker')
       const { speaker, err } = await getSpeaker(existing._id)
       // A transient read failure or a vanished document must NEVER invalidate a
       // live session — return the existing token untouched on any read problem.
@@ -256,7 +256,7 @@ export async function jwtSignInCallback({
         console.error('Email sign-in produced no subject')
         return {}
       }
-      const { getSpeaker } = await import('@/lib/speaker/sanity')
+      const { getSpeaker } = await import('@/lib/speaker')
       const { speaker, err } = await getSpeaker(token.sub)
       if (err || !speaker?._id) {
         console.error('Email sign-in: speaker could not be loaded', err)
@@ -332,7 +332,7 @@ export async function jwtSignInCallback({
 
     if (intent) {
       const { attachProviderToSpeaker, getSpeaker } =
-        await import('@/lib/speaker/sanity')
+        await import('@/lib/speaker')
       const resultStore = linkResultStore.getStore()
 
       const {
@@ -616,7 +616,7 @@ const config = {
         }
 
         const { getOrCreateSpeakerForVerifiedEmail } =
-          await import('@/lib/speaker/sanity')
+          await import('@/lib/speaker')
         const { speaker, err } = await getOrCreateSpeakerForVerifiedEmail(
           verified.identifier,
         )
@@ -982,7 +982,7 @@ export async function getAuthSession(req?: {
         return session
       }
 
-      const { getSpeaker } = await import('@/lib/speaker/sanity')
+      const { getSpeaker } = await import('@/lib/speaker')
       const { speaker: impersonatedSpeaker } = await getSpeaker(impersonateId)
 
       if (impersonatedSpeaker && !impersonatedSpeaker.isOrganizer) {

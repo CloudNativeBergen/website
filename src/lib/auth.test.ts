@@ -55,7 +55,8 @@ vi.mock('next-auth/jwt', () => ({
 const attachProviderToSpeaker = vi.fn()
 const getOrCreateSpeaker = vi.fn()
 const getSpeaker = vi.fn()
-vi.mock('@/lib/speaker/sanity', () => ({
+// The seam auth.ts signs in through (#1876).
+vi.mock('@/lib/speaker', () => ({
   attachProviderToSpeaker: (...args: unknown[]) =>
     attachProviderToSpeaker(...args),
   getOrCreateSpeaker: (...args: unknown[]) => getOrCreateSpeaker(...args),
@@ -597,5 +598,27 @@ describe('redirectProxyConfig — centralized OAuth origin wiring (#619)', () =>
       redirectProxyUrl: 'https://auth.example.no/api/auth',
       trustHost: true,
     })
+  })
+})
+
+describe('jwtSignInCallback — speaker seam parity (#1876)', () => {
+  it('passes the OAuth user, account and profile to the seam unchanged', async () => {
+    const profile = { login: 'y' }
+    getOrCreateSpeaker.mockResolvedValue({
+      speaker: { _id: 'spk-Y', name: 'Y User', email: 'y@example.com' },
+      err: null,
+    })
+    await jwtSignInCallback({
+      token: freshSignInToken(),
+      account: GITHUB,
+      profile,
+      trigger: 'signIn',
+    })
+    expect(getOrCreateSpeaker).toHaveBeenCalledTimes(1)
+    expect(getOrCreateSpeaker).toHaveBeenCalledWith(
+      { email: 'y@example.com', name: 'Y User', image: undefined },
+      GITHUB,
+      profile,
+    )
   })
 })
