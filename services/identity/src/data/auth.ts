@@ -12,7 +12,7 @@ import {
 } from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { bearer, jwt, organization } from 'better-auth/plugins'
-import { and, count, eq, lte, sql } from 'drizzle-orm'
+import { and, count, eq, gt, lte, sql } from 'drizzle-orm'
 import { rawDb } from './db'
 import * as schema from './schema'
 
@@ -140,12 +140,19 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
       before: createAuthMiddleware(async (ctx) => {
         if (ctx.path !== '/organization/invite-member' || !ctx.body?.resend)
           return
+        // Fail closed: every early exit refuses rather than skipping the check.
         const session = await getSessionFromCtx(ctx)
-        if (!session) return // the endpoint refuses it
+        if (!session) throw new APIError('UNAUTHORIZED')
+        // Resolve the org and the row exactly as the plugin does: `||`, not
+        // `??`, so an empty organizationId falls back to the active org here
+        // too, and expired invitations are ignored (#1941).
         const orgId: string | undefined =
-          ctx.body.organizationId ?? session.session.activeOrganizationId
+          ctx.body.organizationId || session.session.activeOrganizationId
         const email = String(ctx.body.email ?? '').toLowerCase()
-        if (!orgId || !email) return
+        if (!orgId || !email)
+          throw new APIError('FORBIDDEN', {
+            message: 'A resend needs an organization and an email',
+          })
         const [inv] = await db
           .select({ id: schema.invitation.id, role: schema.invitation.role })
           .from(schema.invitation)
@@ -154,6 +161,7 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
               eq(schema.invitation.organizationId, orgId),
               eq(sql`lower(${schema.invitation.email})`, email),
               eq(schema.invitation.status, 'pending'),
+              gt(schema.invitation.expiresAt, new Date()),
             ),
           )
         if (!inv) return // no pending invite: a normal create, hooks run

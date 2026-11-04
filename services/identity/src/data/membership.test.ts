@@ -457,6 +457,46 @@ describe('resending an invitation', () => {
     ])
   })
 
+  // The second #1941 probe: the plugin resolves the org with `||`, so an
+  // empty or missing organizationId falls back to the active org.
+  it.each([
+    ['empty', { organizationId: '' }],
+    ['omitted', {}],
+  ])(
+    'refuses an admin resending an owner invite with organizationId %s',
+    async (_, org_) => {
+      const { orgId, members } = await org('owner', 'admin')
+      const [owner, admin] = members
+      const email = `re-${orgId}@example.com`
+      const inv = await auth.api.createInvitation({
+        headers: owner.headers,
+        body: { organizationId: orgId, email, role: 'owner' },
+      })
+      await auth.api.setActiveOrganization({
+        headers: admin.headers,
+        body: { organizationId: orgId },
+      })
+      const before = await state(inv.id)
+      const body = { ...org_, email, role: 'admin' as const, resend: true }
+      await expect(
+        auth.api.createInvitation({ headers: admin.headers, body }),
+      ).rejects.toThrow(/owner invitation/)
+      const h = new Headers(admin.headers)
+      h.set('content-type', 'application/json')
+      h.set('origin', env.BETTER_AUTH_URL)
+      const res = await auth.handler(
+        new Request(
+          `${env.BETTER_AUTH_URL}/api/auth/organization/invite-member`,
+          { method: 'POST', headers: h, body: JSON.stringify(body) },
+        ),
+      )
+      expect(res.status).toBe(403)
+      expect(await res.text()).toMatch(/owner invitation/)
+      expect(await state(inv.id)).toEqual(before)
+      expect(await resends(inv.id)).toHaveLength(0)
+    },
+  )
+
   it('lets an admin resend an admin invite, with an audit row', async () => {
     const { orgId, members } = await org('owner', 'admin')
     const admin = members[1]
