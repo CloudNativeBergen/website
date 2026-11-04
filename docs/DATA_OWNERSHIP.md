@@ -3,6 +3,10 @@
 Part of the federated API epic (#1772). This document says which system owns
 each kind of data, how clients reach it, and how data moves between owners.
 
+This document amends [CONTROL_MODEL.md](./CONTROL_MODEL.md). The model there,
+one shared Sanity dataset that kontroll reads directly, is the starting point.
+The target is kontroll on the API.
+
 ## Rules
 
 1. **One owner per entity.** Editorial content (pages, rich text, images, logos)
@@ -13,17 +17,19 @@ each kind of data, how clients reach it, and how data moves between owners.
 2. **The API is the only door.** The site and kontroll talk only to
    `api.konf.app`. Clients use no `@sanity/client` and no direct D1 access.
    Subgraph resolvers call a data-source adapter, either a Sanity adapter or a
-   D1 adapter, and clients cannot tell which. The site-side dual write in
-   `src/lib/konf-api/conference-write.ts` (D1 first, then Sanity) moves into the
-   subgraph.
+   D1 adapter, and clients cannot tell which. New dual-write windows live in the
+   subgraph adapter. The existing site-side dual write in
+   `src/lib/konf-api/conference-write.ts` (D1 first, then Sanity) is temporary:
+   it stays until #1879 closes its window and is then deleted, not moved.
 3. **Cutover is per entity and per tenant, behind the adapter.**
    1. The subgraph proxies Sanity and clients move to the API. The data does not
       move.
    2. Backfill into D1, then a short dual-write window with a parity sweep.
       Today that is `KONF_D1_WRITE_TENANTS` plus the daily conference parity
-      cron.
+      cron; see [The write path flag](./PLATFORM.md#the-write-path-flag).
    3. Flip reads to D1 (`OVERRIDE_TENANTS`). Sanity becomes read-only for that
-      entity, then the fields are deleted.
+      entity, then the fields are deleted. The current read mechanism is in
+      [The read path flag](./PLATFORM.md#the-read-path-flag).
 
    Every dual-write window has an end date and a removal step. Windows last
    weeks, not years.
