@@ -5,6 +5,7 @@ import {
   requestHost,
   updateConferenceViaApi,
 } from '@/lib/konf-api/conference-write'
+import { konfApiUrl } from '@/lib/konf-api/client'
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'

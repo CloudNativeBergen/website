@@ -1,10 +1,11 @@
 // Identity entry: Better Auth under /api/auth, the login handoff under
 // /handoff, its error page at /error, the RPC entrypoints, and 404 for everything else.
 import { WorkerEntrypoint } from 'cloudflare:workers'
-import { createAuth, createData, scheduled } from './data'
+import { createAuth, createData } from './data'
 import { errorPage } from './error-page'
 import { handoff, type HandoffEnv } from './handoff'
 import { loginTestPage } from './login-test'
+import { orgWriteGate } from './org-write-gate'
 import type { WorkerEnv } from './worker'
 
 /** LOGIN_TEST_PAGE: "1" on preview only (service.cue) serves GET /test. */
@@ -28,13 +29,22 @@ export class Organizations extends WorkerEntrypoint<Env> {
   ensure(id: string, slug: string) {
     return createData(this.env).ensureOrganization(id, slug)
   }
+
+  /**
+   * Organizer membership sync (#1907), run hourly by tenant-directory's cron.
+   * No arguments: the caller cannot widen what it grants. The gateway binds
+   * `Membership`, not this class, so it cannot trigger a sync.
+   */
+  syncMembers() {
+    return createData(this.env).syncMembers()
+  }
 }
 
 export default {
   fetch(request: Request, env: Env) {
     const { pathname } = new URL(request.url)
     if (pathname.startsWith('/api/auth/')) {
-      return createAuth(env.DB, env).handler(request)
+      return orgWriteGate(request) ?? createAuth(env.DB, env).handler(request)
     }
     if (pathname === '/handoff' || pathname.startsWith('/handoff/')) {
       return handoff(request, env)
@@ -51,6 +61,4 @@ export default {
     // RPC entrypoints above.
     return new Response('Not found', { status: 404 })
   },
-  scheduled: (_controller: ScheduledController, env: Env) =>
-    scheduled(createData(env)),
 } satisfies ExportedHandler<Env>

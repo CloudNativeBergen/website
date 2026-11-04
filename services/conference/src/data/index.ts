@@ -1,6 +1,6 @@
 // Public data layer. createData is the ONLY export resolvers see:
 // it returns Scoped repositories, never the raw handle.
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { createGraphQLError } from 'graphql-yoga'
 import { ScopedRepository, type Envelope } from '@runkonf/tenancy'
 import { rawDb } from './db'
@@ -18,6 +18,11 @@ const WRITERS = new Set(['owner', 'admin'])
 
 const fail = (message: string, code: string) =>
   createGraphQLError(message, { extensions: { code } })
+
+const dateOrder = () =>
+  createGraphQLError('endDate is before startDate', {
+    extensions: { code: 'BAD_USER_INPUT', field: 'endDate' },
+  })
 
 class Conferences extends ScopedRepository {
   constructor(
@@ -65,24 +70,38 @@ class Conferences extends ScopedRepository {
       eq(conferences.orgId, org_id),
       eq(conferences.conferenceId, conference_id),
     )
-    // ponytail: read-then-write, not atomic; a racing date edit can slip past
-    // the order check. Move it into the UPDATE's WHERE if that matters.
     const row = await this.db.query.conferences.findFirst({ where })
     if (!row) throw fail('conference not found', 'NOT_FOUND')
-    const start = 'startDate' in patch ? patch.startDate : row.startDate
-    const end = 'endDate' in patch ? patch.endDate : row.endDate
-    // Only when the patch sets a date: stored legacy values never block an
-    // unrelated edit.
+    // A patch that changes nothing is a no-op: updated_at stays put.
+    const changes = Object.entries(patch).some(
+      ([k, v]) =>
+        JSON.stringify(v) !== JSON.stringify(row[k as keyof ConferenceRow]),
+    )
+    if (!changes) return row
+    // The date-order check runs inside the UPDATE, on the merged values, so a
+    // concurrent edit between the read above and this write cannot slip past
+    // it. Only when the patch sets a date: stored legacy values never block
+    // an unrelated edit.
+    const merged = (k: 'startDate' | 'endDate') =>
+      k in patch ? sql`${patch[k] ?? null}` : sql`${conferences[k]}`
+    const [s, e] = [merged('startDate'), merged('endDate')]
     const touchesDates = 'startDate' in patch || 'endDate' in patch
-    if (touchesDates && start && end && end < start) {
-      throw fail('endDate is before startDate', 'BAD_USER_INPUT')
-    }
     const [updated] = await this.db
       .update(conferences)
       .set({ ...patch, updatedAt: new Date().toISOString() })
-      .where(where)
+      .where(
+        touchesDates
+          ? and(where, sql`(${s} IS NULL OR ${e} IS NULL OR ${s} <= ${e})`)
+          : where,
+      )
       .returning()
-    if (!updated) throw fail('conference not found', 'NOT_FOUND')
+    if (!updated) {
+      // The row is the envelope's own (same where), so this says nothing
+      // about anyone else's.
+      if (await this.db.query.conferences.findFirst({ where }))
+        throw dateOrder()
+      throw fail('conference not found', 'NOT_FOUND')
+    }
     return updated
   }
 

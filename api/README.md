@@ -46,6 +46,8 @@ Run `pnpm compose` first, then deploy with `npx wrangler deploy --env preview` o
 
 ## Secrets
 
+The full inventory (every secret, who holds it, fnox key, rotation) is in [docs/SECRETS.md](../docs/SECRETS.md).
+
 | Secret                 | Envs                | What                                                            |
 | ---------------------- | ------------------- | --------------------------------------------------------------- |
 | `ENVELOPE_PRIVATE_KEY` | preview, production | PKCS8 PEM (EdDSA) that signs envelopes                          |
@@ -64,6 +66,16 @@ Every identity JWT, in both lanes, must carry an `origin` claim (the handoff
 origin, #1803) whose host equals the resolved host (asserted host, else
 `Origin`); a missing or different claim gets 401.
 Unset secrets leave the old behaviour: anonymous, tenant from `Origin`.
+
+Operator lane (kontroll, #1892 phase 4): set the var `OPERATOR_ORIGIN` (e.g.
+`https://my.konf.app`). A request whose `Origin` is that origin, with no site
+assertion, is an operator request. It must carry an identity JWT whose `origin`
+claim is the same origin, and the user must have `platformOperator` in identity;
+otherwise 401 or 403. Without `x-konf-operator-tenant` it gets a
+`PlatformContext`, which no Scoped repository accepts. With
+`x-konf-operator-tenant: <tenant host>` it gets an ordinary tenant envelope for
+that tenant, with the operator's own `orgRole` there and scope
+`platform:operator`, so writes still need owner/admin. Unset turns the lane off.
 
 To rotate, add the new kid to `SITE_PUBLIC_KEYS`, switch
 `KONF_SITE_SIGNING_KEY`, then drop the old kid. A key pair:

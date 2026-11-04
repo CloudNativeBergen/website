@@ -102,6 +102,24 @@ describe('KONF_API_TENANTS', () => {
     expect(console.warn).toHaveBeenCalled()
   })
 
+  it('preview without KONF_API_URL: no fetch, Sanity only', async () => {
+    vi.stubEnv('KONF_API_TENANTS', 'org-1')
+    vi.stubEnv('VERCEL_ENV', 'preview')
+    vi.stubEnv('KONF_API_URL', '')
+    const { conference } = await getConferenceForDomain('2026.example.com')
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(conference.title).toBe('Sanity title')
+  })
+
+  it('preview with KONF_API_URL: calls it', async () => {
+    vi.stubEnv('KONF_API_TENANTS', 'org-1')
+    vi.stubEnv('VERCEL_ENV', 'preview')
+    vi.stubEnv('KONF_API_URL', 'https://preview.example/graphql')
+    apiReply({ title: 'API title' })
+    await getConferenceForDomain('2026.example.com')
+    expect(fetchMock.mock.calls[0][0]).toBe('https://preview.example/graphql')
+  })
+
   it('other tenant listed: no fetch', async () => {
     vi.stubEnv('KONF_API_TENANTS', 'conf-other')
     await getConferenceForDomain('2026.example.com')
@@ -120,7 +138,7 @@ describe('KONF_API_TENANTS', () => {
     })
     const { conference } = await getConferenceForDomain('2026.example.com')
     const [url, init] = fetchMock.mock.calls[0]
-    expect(url).toBe('https://api.konf.app/graphql')
+    expect(url).toBe('https://api.konf.app/graphql') // VERCEL_ENV unset
     expect(init.headers.origin).toBe('https://2026.example.com')
     expect(conference.title).toBe('API title')
     expect(conference.city).toBe('Bergen')

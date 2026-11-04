@@ -31,7 +31,11 @@ export { PLATFORM_DOMAIN, normalizeHost }
 export interface DataEnv extends CloudflareEnv {
   DB: D1Database
   /** identity's Organizations entrypoint: creates the org on its side. */
-  IDENTITY: { ensure(orgId: string, slug: string): Promise<unknown> }
+  IDENTITY: {
+    ensure(orgId: string, slug: string): Promise<unknown>
+    /** Organizer membership sync (#1907); identity has no cron of its own. */
+    syncMembers(): Promise<unknown>
+  }
 }
 
 /** How often a verified custom domain is re-checked with Cloudflare. */
@@ -60,6 +64,7 @@ export function createData(
     db.query.conferences.findFirst({ where: eq(conferences.id, id) })
 
   return {
+    syncMembers: () => env.IDENTITY.syncMembers(),
     organization,
 
     /**
@@ -325,9 +330,29 @@ export function createData(
 }
 
 /** Cron Trigger: mirror Cloudflare status onto custom domains due a check. */
-export async function scheduled(data: ReturnType<typeof createData>) {
+export async function scheduled(
+  data: ReturnType<typeof createData>,
+  scheduledTime: number,
+) {
   for (const hostname of await data.customDomainsToCheck()) {
     // One failing hostname must not stop the rest; the next run retries it.
     await data.refreshCustomDomain(hostname).catch(console.error)
+  }
+  // Identity's membership sync rides this cron (the account allows 5 crons).
+  // Gate on the scheduled minute, not the clock: a late or retried run keeps
+  // its scheduledTime, so it neither skips nor repeats an hour. The sync is
+  // insert-only, so a rare double run is harmless anyway.
+  if (new Date(scheduledTime).getUTCMinutes() !== 0) return
+  try {
+    await data.syncMembers()
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        event: 'identity.membership.sync_failed',
+        reason: 'rpc',
+        // Name only: an RPC error message is not ours to vet for emails.
+        error: e instanceof Error ? e.name : 'unknown',
+      }),
+    )
   }
 }

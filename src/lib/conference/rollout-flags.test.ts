@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('server-only', () => ({}))
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 vi.mock('@/lib/konf-api/client', () => ({
+  konfApiUrl: () =>
+    process.env.VERCEL_ENV === 'preview' ? null : 'https://api.test/graphql',
   konfApiHeaders: vi.fn(async (host: string) => ({
     origin: `https://${host}`,
     'x-konf-service': `signed:${host}`,
@@ -95,6 +97,16 @@ describe('rolloutFlags (#1925)', () => {
     vi.stubEnv('KONF_API_TENANTS', 'conf-1')
     vi.stubEnv('KONF_API_DISABLED', '1')
     expect(await rolloutFlags('a.example', conf)).toEqual(off)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('turns API read and D1 write off without a gateway URL (#1926)', async () => {
+    reply({ apiRead: true, identityLogin: true, d1Write: true })
+    vi.stubEnv('VERCEL_ENV', 'preview')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    vi.stubEnv('KONF_IDENTITY_TENANTS', 'conf-1')
+    vi.stubEnv('KONF_D1_WRITE_TENANTS', 'conf-1')
+    expect(await rolloutFlags('a.example', conf)).toEqual({ ...off, identityLogin: true })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

@@ -1,7 +1,7 @@
 import 'server-only'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag, domainTag } from '@/lib/cache/tags'
-import { konfApiHeaders } from '@/lib/konf-api/client'
+import { konfApiHeaders, konfApiUrl } from '@/lib/konf-api/client'
 import { CONFERENCE_CACHE_LIFE } from './cache-life'
 import { normalizeDomain } from './domains'
 import type { Conference } from './types'
@@ -9,7 +9,6 @@ import type { Conference } from './types'
 // Spike for #1772 (#1833): read core conference fields from the Konf GraphQL
 // gateway. The gateway resolves the tenant from the signed site assertion
 // (else Origin); anonymous is enough for public fields.
-const KONF_API_URL = 'https://api.konf.app/graphql'
 const TIMEOUT_MS = 2000
 
 const QUERY = `{ conference {
@@ -61,7 +60,9 @@ export async function fetchRolloutFlags(host: string): Promise<RolloutFlags> {
   'use cache: remote'
   cacheLife(FLAGS_CACHE_LIFE)
   cacheTag(domainTag(host))
-  const res = await fetch(KONF_API_URL, {
+  const url = konfApiUrl()
+  if (!url) throw new Error('KONF_API_URL is not set on this environment')
+  const res = await fetch(url, {
     method: 'POST',
     headers: await konfApiHeaders(host),
     body: JSON.stringify({ query: FLAGS_QUERY }),
@@ -95,13 +96,15 @@ export async function rolloutFlags(
 ): Promise<RolloutFlags> {
   if (process.env.KONF_API_DISABLED === '1') return OFF
   const org = conference.organization?._ref
+  // No gateway on this environment (#1926): API read and D1 write are off.
+  const api = konfApiUrl() !== null
   const env: RolloutFlags = {
-    apiRead: listed('KONF_API_TENANTS', conference._id, org),
+    apiRead: api && listed('KONF_API_TENANTS', conference._id, org),
     identityLogin: listed('KONF_IDENTITY_TENANTS', conference._id, org),
-    d1Write: listed('KONF_D1_WRITE_TENANTS', conference._id),
+    d1Write: api && listed('KONF_D1_WRITE_TENANTS', conference._id),
   }
-  // Without the signing key the gateway can only answer null.
-  if (!host || !process.env.KONF_SITE_SIGNING_KEY) return env
+  // Without a gateway or the signing key there is nothing more to read.
+  if (!api || !host || !process.env.KONF_SITE_SIGNING_KEY) return env
   // One cache entry per tenant, whatever port or case the Host header had.
   host = normalizeDomain(host)
   try {
@@ -151,7 +154,9 @@ async function readKonfApiConference(
   host: string,
   conferenceId: string,
 ): Promise<ApiConference> {
-  const res = await fetch(KONF_API_URL, {
+  const url = konfApiUrl()
+  if (!url) throw new Error('KONF_API_URL is not set on this environment')
+  const res = await fetch(url, {
     method: 'POST',
     // Cached across visitors, so no client IP (see konfApiHeaders).
     headers: await konfApiHeaders(host),

@@ -86,11 +86,16 @@ Until the D1 flags are backfilled (`services/tenant-directory/migrations/0003_ba
 2. Delete `KONF_API_TENANTS`, `KONF_IDENTITY_TENANTS` and `KONF_D1_WRITE_TENANTS` from every Vercel environment and redeploy. Check that sign-in through identity and the settings save still work on 2026.cloudnativedays.no.
 3. Delete `listed()` and its three calls in `src/lib/conference/konf-api.ts`, and the `OVERRIDE_TENANTS` var with its check in `progressiveOverride` (`api/src/gateway.ts`), in one PR.
 
+## Gateway URL
+
+`KONF_API_URL` is the gateway the site calls, read in one place (`konfApiUrl()` in `src/lib/konf-api/client.ts`). Unset, it defaults to `https://api.konf.app/graphql` only when `VERCEL_ENV` is `production` or unset (local). On a Vercel preview or development deploy with it unset, the API is treated as off and the site reads and writes Sanity only, so a preview never reaches production. Any other non-Vercel runtime (Docker, `next start` in CI) counts as unset and defaults to production, so set `KONF_API_URL` there if you also set the tenant flags. Set it on Vercel Preview to the preview gateway: `https://konf-api-preview.<account>.workers.dev/graphql` (Worker `konf-api-preview`, `api/wrangler.jsonc` `env.preview`; the account subdomain is in the Cloudflare dashboard).
+
 ## Data ownership
 
 Which system owns each entity, and how data moves between owners: [DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md).
 
 ## Further reading
 
+- [SECRETS.md](./SECRETS.md): every platform secret, where it lives, how to rotate it.
 - `api/README.md`: gateway commands and environments.
 - Private: RunKonf/infra `docs/platform/` (`ARCHITECTURE.md`, `SPEC.md`, `DECISIONS.md`) for the full design.

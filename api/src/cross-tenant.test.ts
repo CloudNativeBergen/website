@@ -369,7 +369,12 @@ function queries(tenants: T[]) {
 function mutations() {
   return Object.values(schema.getMutationType()?.getFields() ?? {}).map((f) => {
     walked.add(`Mutation.${f.name}`)
-    return `mutation { ${f.name}${args(f.args, '')}${selection(getNamedType(f.type), 2, '')} }`
+    // An empty patch is a deliberate no-op, so updateConference needs a real edit.
+    const a =
+      f.name === 'updateConference'
+        ? '(input: {tagline: "x"})'
+        : args(f.args, '')
+    return `mutation { ${f.name}${a}${selection(getNamedType(f.type), 2, '')} }`
   })
 }
 
