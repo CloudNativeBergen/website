@@ -9,7 +9,7 @@
  * org's published conferences (there is no `is_organizer` field in Sanity).
  * Drafts and erased speakers are excluded.
  *
- * Matching: a speaker's `knownEmails` (verified on login) against the identity
+ * Matching: a speaker's `knownEmails` (login, ticket or Studio) against the identity
  * `user.email` where `emailVerified` is true. Nothing else matches; no users
  * are created.
  *
