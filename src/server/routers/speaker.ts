@@ -1337,11 +1337,15 @@ export const speakerRouter = router({
      *
      * A speaker who bought their ticket under an address we do not hold reads
      * "Not claimed" forever. This adds that address to `knownEmails`, which is
-     * the whole fix: the existing join finds the ticket, workshop eligibility
-     * matches, and the person can also SIGN IN with it.
+     * the whole fix: the existing join finds the ticket and workshop
+     * eligibility matches.
      *
-     * THAT LAST PART IS THE WHOLE RISK, so read the four controls before
-     * changing anything here.
+     * IT DOES NOT GRANT SIGN-IN. `findSpeakersByEmails` skips every address in
+     * `ticketEmailGrants` (#1914): the address is attested by an organizer of
+     * ONE org, and a sign-in through it would inherit the speaker's organizer
+     * rights in every other org — including ones they join after this grant,
+     * which the exclusivity check below cannot see. The four controls still
+     * stand, because the address is a ticket-linking key.
      *
      * 1. THE ADDRESS MUST BE ATTESTED BY A TICKET FOR THIS EVENT. The organizer
      *    does not supply an address; they pick one out of the provider's own
