@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Review } from '@/lib/review/types'
+import type { OrganizerReview } from '@/lib/proposal/organizer'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalReviewSummary } from './ProposalReviewSummary'
 import { ProposalReviewForm } from './ProposalReviewForm'
@@ -9,7 +10,7 @@ import { ProposalReviewList } from './ProposalReviewList'
 
 interface ProposalReviewPanelProps {
   proposalId: string
-  initialReviews: Review[]
+  initialReviews: (Review | OrganizerReview)[]
   currentUser?: Speaker
 }
 
@@ -18,7 +19,9 @@ export function ProposalReviewPanel({
   initialReviews,
   currentUser,
 }: ProposalReviewPanelProps) {
-  const [reviews, setReviews] = useState<Review[]>(initialReviews || [])
+  const [reviews, setReviews] = useState<(Review | OrganizerReview)[]>(
+    initialReviews || [],
+  )
 
   const currentUserReview = currentUser
     ? reviews.find(

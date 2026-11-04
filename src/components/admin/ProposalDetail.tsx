@@ -39,9 +39,10 @@ import type {
   InvitationStatus,
 } from '@/lib/cospeaker/types'
 import { daysUntilExpiry } from '@/lib/cospeaker/constants'
+import type { OrganizerProposalDetail } from '@/lib/proposal/organizer'
 
 interface ProposalDetailProps {
-  proposal: ProposalExisting
+  proposal: ProposalExisting | OrganizerProposalDetail
 }
 
 function computeAverageRating(

@@ -222,9 +222,12 @@ export async function getProposal({
   includeSubmittedTalks = false,
   includePreviousAcceptedTalks = false,
   includeSchedule = false,
+  conferenceId,
 }: {
   id: string
   speakerId: string
+  /** Also require the talk to belong to this conference (organizer detail). */
+  conferenceId?: string
   isOrganizer?: boolean
   /**
    * ORG-SCOPE for the organizer arm (go-live B1, #642; S1 owner-∨-organizer
@@ -286,7 +289,7 @@ export async function getProposal({
     // NOT in `EXCLUDE_PRIVATE_SPEAKER_FIELDS`: that constant is also spread by
     // `getSpeaker` and `getSpeakers`, exactly the reads the profile and admin
     // forms depend on, which nulling would break.
-    const query = groq`*[_type == "talk" && _id == $id && ($speakerId in speakers[]._ref || conference->organization._ref in $orgIds)]{
+    const query = groq`*[_type == "talk" && _id == $id && ($speakerId in speakers[]._ref || conference->organization._ref in $orgIds)${conferenceId ? ' && conference._ref == $conferenceId' : ''}]{
       ...,
       "_organizationId": conference->organization._ref,
       speakers[]-> {
@@ -318,6 +321,7 @@ export async function getProposal({
         id,
         speakerId,
         orgIds: isOrganizer && organizerOrgId ? [organizerOrgId] : [],
+        ...(conferenceId ? { conferenceId } : {}),
       },
       { cache: 'no-store' },
     )
@@ -336,6 +340,19 @@ export async function getProposal({
 
   // @TODO - Check if the proposal is not found and return an error
   return { proposal, proposalError }
+}
+
+/** The organization a conference belongs to, or null. */
+export async function getConferenceOrganizationId(
+  conferenceId: string,
+): Promise<string | null> {
+  // groq-global-scoped: id-keyed — reads one conference by its own `_id`.
+  const orgId = await clientRead.fetch<string | null>(
+    groq`*[_type == "conference" && _id == $conferenceId][0].organization._ref`,
+    { conferenceId },
+    { cache: 'no-store' },
+  )
+  return orgId ?? null
 }
 
 export async function getProposals({

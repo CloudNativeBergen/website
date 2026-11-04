@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation'
 
 interface ProposalReviewFormProps {
   proposalId: string
-  existingReview?: Review
+  existingReview?: Pick<Review, 'comment' | 'score'>
   onReviewSubmit: (review: Review) => void
 }
 

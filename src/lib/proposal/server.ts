@@ -17,7 +17,12 @@ import 'server-only'
 import type { ProposalExisting, ProposalInput, Status } from './types'
 import * as store from './data/sanity'
 import { toPublicTalk, type PublicTalk } from './public'
-import { toOrganizerProposal, type OrganizerProposal } from './organizer'
+import {
+  toOrganizerProposal,
+  toOrganizerProposalDetail,
+  type OrganizerProposal,
+  type OrganizerProposalDetail,
+} from './organizer'
 import { filterProposals, type ProposalFilters } from './utils/filtering'
 
 export { sendAcceptRejectNotification } from './email/notification'
@@ -27,7 +32,7 @@ export {
   buildProposalDocument,
 } from './data/sanity'
 export type { ProposalExisting, ProposalInput } from './types'
-export type { OrganizerProposal } from './organizer'
+export type { OrganizerProposal, OrganizerProposalDetail } from './organizer'
 
 export interface ProposalResult {
   proposal: ProposalExisting
@@ -96,6 +101,36 @@ export async function listOrganizerProposals(
   return {
     proposals: filters ? filterProposals(mapped, filters, reviewerId) : mapped,
     proposalsError,
+  }
+}
+
+/**
+ * One proposal for the organizer detail page, scoped to `conferenceId` (from
+ * `resolveConferenceId()`). The conference predicate is in the query, so a
+ * foreign-conference id reads `null` exactly like a nonexistent one.
+ */
+export async function getOrganizerProposal(
+  conferenceId: string,
+  id: string,
+): Promise<{
+  proposal: OrganizerProposalDetail | null
+  proposalError: Error | null
+}> {
+  const orgId = await store.getConferenceOrganizationId(conferenceId)
+  if (!orgId) return { proposal: null, proposalError: null }
+  const { proposal, proposalError } = await store.getProposal({
+    id,
+    speakerId: '',
+    isOrganizer: true,
+    organizerOrgId: orgId,
+    conferenceId,
+    includeReviews: true,
+    includePreviousAcceptedTalks: true,
+    includeSubmittedTalks: true,
+  })
+  return {
+    proposal: proposal ? toOrganizerProposalDetail(proposal) : null,
+    proposalError,
   }
 }
 
