@@ -32,6 +32,8 @@ service: #PlatformService & {
 				// Exact pin: we own identity security. Bump only after reading
 				// the advisories (GHSA, CVE-2025-61928 and later).
 				"better-auth": "1.7.14"
+				// Same pin: the request context the membership audit reads its actor from.
+				"@better-auth/core": "1.7.14"
 			}
 			// A real D1 in tests, the same engine wrangler ships.
 			devDependencies: {
