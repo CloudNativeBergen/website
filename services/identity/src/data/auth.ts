@@ -1,10 +1,11 @@
 // The Better Auth instance. Lives in the data layer because it holds the raw
 // D1 handle; nothing outside src/data/ gets that handle back.
 import { betterAuth } from 'better-auth'
-import { APIError } from 'better-auth/api'
+import { tryGetCurrentAuthEndpointContext } from '@better-auth/core/context'
+import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { bearer, jwt, organization } from 'better-auth/plugins'
-import { count, eq } from 'drizzle-orm'
+import { and, count, eq, lte, sql } from 'drizzle-orm'
 import { rawDb } from './db'
 import * as schema from './schema'
 
@@ -27,10 +28,31 @@ export interface AuthEnv {
 export const JWT_TTL_SECONDS = 300
 export const JWT_AUDIENCE = 'konf-gateway'
 
+/** Invitations live 30 days (#1923); the owner can cancel them sooner. */
+export const INVITATION_EXPIRES_IN = 30 * 24 * 3600
+
+const isOwner = (role: string | null | undefined) =>
+  (role ?? '').split(',').some((r) => r.trim() === 'owner')
+
 export function createAuth(d1: D1Database, env: AuthEnv) {
   const db = rawDb(d1)
   const audit = (action: string, userId: string, providerId?: string) =>
     db.insert(schema.auditEvent).values({ action, userId, providerId })
+  // Membership audit (#1923): ids only, never emails (#1310). The actor is
+  // the session user; an invite has no subject user yet, so its row is the
+  // actor's.
+  const actorId = () =>
+    tryGetCurrentAuthEndpointContext()?.context.session?.user.id
+  const auditMember = (
+    action: string,
+    userId: string,
+    detail: Record<string, string | undefined>,
+  ) =>
+    db.insert(schema.auditEvent).values({
+      action,
+      userId,
+      detail: JSON.stringify({ actorId: actorId(), ...detail }),
+    })
 
   return betterAuth({
     baseURL: env.BETTER_AUTH_URL,
@@ -99,6 +121,20 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
         },
       },
     },
+    hooks: {
+      // `leave` runs no organization hook; audit it from the route.
+      after: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== '/organization/leave') return
+        const m = ctx.context.returned as
+          { id: string; userId: string; organizationId: string } | undefined
+        if (m?.id)
+          await auditMember('member.leave', m.userId, {
+            actorId: m.userId, // leave is always the member themselves
+            orgId: m.organizationId,
+            memberId: m.id,
+          })
+      }),
+    },
     plugins: [
       jwt({
         jwks: { keyPairConfig: { alg: 'EdDSA', crv: 'Ed25519' } },
@@ -117,8 +153,96 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
       organization({
         allowUserToCreateOrganization: false,
         requireEmailVerificationOnInvitation: true,
+        invitationExpiresIn: INVITATION_EXPIRES_IN,
         disableOrganizationDeletion: true,
+        // Role rules (#1923): the plugin already lets admins manage admins
+        // and keeps owners (invite, role change, removal) to owners. The one
+        // gap, cancelling an owner invitation, is closed below. The last
+        // owner is guarded by a trigger (migrations/0003).
         organizationHooks: {
+          beforeCreateInvitation: async ({ invitation: i }) => {
+            // An expired invitation stays `pending` in the table, and the
+            // unique pending index would refuse a fresh one: retire it.
+            await db
+              .update(schema.invitation)
+              .set({ status: 'canceled' })
+              .where(
+                and(
+                  eq(schema.invitation.organizationId, i.organizationId),
+                  eq(
+                    sql`lower(${schema.invitation.email})`,
+                    i.email.toLowerCase(),
+                  ),
+                  eq(schema.invitation.status, 'pending'),
+                  lte(schema.invitation.expiresAt, new Date()),
+                ),
+              )
+          },
+          afterCreateInvitation: async ({ invitation: i, inviter }) => {
+            await auditMember('invite.create', inviter.id, {
+              orgId: i.organizationId,
+              invitationId: i.id,
+              to: i.role ?? undefined,
+            })
+          },
+          beforeCancelInvitation: async ({ invitation: i, cancelledBy }) => {
+            if (!isOwner(i.role)) return
+            const [m] = await db
+              .select({ role: schema.member.role })
+              .from(schema.member)
+              .where(
+                and(
+                  eq(schema.member.organizationId, i.organizationId),
+                  eq(schema.member.userId, cancelledBy.id),
+                ),
+              )
+            if (!isOwner(m?.role))
+              throw new APIError('FORBIDDEN', {
+                message: 'Only an owner can cancel an owner invitation',
+              })
+          },
+          afterCancelInvitation: async ({ invitation: i, cancelledBy }) => {
+            await auditMember('invite.cancel', cancelledBy.id, {
+              orgId: i.organizationId,
+              invitationId: i.id,
+            })
+          },
+          afterAcceptInvitation: async ({ invitation: i, member: m }) => {
+            await auditMember('invite.accept', m.userId, {
+              orgId: i.organizationId,
+              invitationId: i.id,
+              memberId: m.id,
+              to: m.role,
+            })
+          },
+          afterRejectInvitation: async ({ invitation: i, user }) => {
+            await auditMember('invite.reject', user.id, {
+              orgId: i.organizationId,
+              invitationId: i.id,
+            })
+          },
+          afterAddMember: async ({ member: m }) => {
+            await auditMember('member.add', m.userId, {
+              orgId: m.organizationId,
+              memberId: m.id,
+              to: m.role,
+            })
+          },
+          afterRemoveMember: async ({ member: m }) => {
+            await auditMember('member.remove', m.userId, {
+              orgId: m.organizationId,
+              memberId: m.id,
+              from: m.role,
+            })
+          },
+          afterUpdateMemberRole: async ({ member: m, previousRole }) => {
+            await auditMember('member.role', m.userId, {
+              orgId: m.organizationId,
+              memberId: m.id,
+              from: previousRole,
+              to: m.role,
+            })
+          },
           // Slug and name mirror tenant-directory, which owns them.
           beforeUpdateOrganization: async ({ organization: o }) => {
             if (o.slug !== undefined || o.name !== undefined) {
