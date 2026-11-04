@@ -26,6 +26,8 @@ const h = vi.hoisted(() => ({
   // The current-domain org resolver, consumed by the org-scoped impersonation
   // gate (CaaS T1-2, #614) via `@/lib/authz/organizer`. Defaults per-test.
   mockResolveOrg: vi.fn<() => Promise<string | null>>(),
+  // What Sanity says the admin organizes right now (#1923).
+  adminOrgs: [] as string[],
 }))
 
 // The impersonation gate is now ORG-SCOPED: the real admin must be an organizer
@@ -72,7 +74,23 @@ vi.mock('@/lib/speaker/sanity', () => ({
   getOrCreateSpeaker: vi.fn(),
 }))
 
+// Live organizer rights (#1923): Sanity answers that only the admin organizes
+// the current org; everyone else organizes nothing.
+vi.mock('@/lib/sanity/client', async (orig) => {
+  const real = await orig<typeof import('@/lib/sanity/client')>()
+  return {
+    ...real,
+    clientReadUncached: {
+      fetch: async (_q: string, { id }: { id: string }) =>
+        id === ADMIN_ID
+          ? { organizerOrgIds: h.adminOrgs, isOrganizer: true }
+          : { organizerOrgIds: [], isOrganizer: false },
+    },
+  }
+})
+
 import { getAuthSession } from '@/lib/auth'
+import { clearOrganizerRightsMemo } from '@/lib/authz/live-organizer'
 
 const ADMIN_ID = 'org-admin-1'
 const TARGET_SPEAKER_ID = 'speaker-2'
@@ -119,6 +137,8 @@ function reqWithImpersonate(id: string) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  clearOrganizerRightsMemo()
+  h.adminOrgs = [CURRENT_ORG_ID]
   // Default: development, non-test mode. Individual tests override as needed.
   h.env.isTestMode = false
   h.env.isDevelopment = true
@@ -185,6 +205,7 @@ describe('getAuthSession impersonation — dev/organizer gating', () => {
     ;(
       session.speaker as { organizerOrgIds: string[]; isOrganizer: boolean }
     ).organizerOrgIds = [OTHER_ORG_ID]
+    h.adminOrgs = [OTHER_ORG_ID]
     h.mockAuth.mockResolvedValue(session)
     h.mockResolveOrg.mockResolvedValue(CURRENT_ORG_ID)
 

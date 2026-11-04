@@ -927,12 +927,19 @@ export async function getAuthSession(req?: {
     return mock
   }
 
-  const session = await _auth()
+  // Organizer rights in the token are frozen at sign-in and the session rolls
+  // for 30 days, so re-read them (60 s memo, fail closed). #1923
+  const { withLiveOrganizerRights } = await import('@/lib/authz/live-organizer')
+  const cookieSession = await _auth()
+  const session = cookieSession
+    ? await withLiveOrganizerRights(cookieSession)
+    : null
 
   // If no cookie session, try Bearer token from Authorization header
   if (!session) {
     const bearerToken = extractBearerToken(req?.headers)
-    if (bearerToken) return getSessionFromBearerToken(bearerToken)
+    if (bearerToken)
+      return withLiveOrganizerRights(await getSessionFromBearerToken(bearerToken))
     // identity session cookie, flagged tenants only (#1892).
     const { identitySession } = await import('@/lib/auth/identity-session')
     return identitySession()
