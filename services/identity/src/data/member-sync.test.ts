@@ -3,6 +3,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
+import { evaluate, parse } from 'groq-js'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { memberId, syncMembers, type SyncEnv } from './member-sync'
 
@@ -73,10 +74,18 @@ const ENV = {
 }
 
 let conferences: unknown[]
-let speakers: { _id: string; knownEmails: string[] | null }[]
+/** Raw speaker documents; the real SPEAKERS query runs over them in groq-js. */
+let speakers: Record<string, unknown>[]
 const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
-  const { query } = JSON.parse(String(init.body))
-  const result = String(query).includes('"conference"') ? conferences : speakers
+  const { query, params } = JSON.parse(String(init.body))
+  const result = String(query).includes('"conference"')
+    ? conferences
+    : await (
+        await evaluate(parse(query), {
+          dataset: speakers.map((s) => ({ _type: 'speaker', ...s })),
+          params,
+        })
+      ).get()
   return new Response(JSON.stringify({ result }))
 })
 const logs: string[] = []
@@ -167,6 +176,33 @@ describe('syncMembers', () => {
         'INSERT INTO member (id, organizationId, userId, role) VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING',
       ),
     )
+  })
+
+  it('never counts an organizer-granted ticket address', async () => {
+    const { d1, env, user } = await freshDb()
+    // org-x organizer linked mallory's address to sp-ok, who organizes org-a/b.
+    await user('u-mallory', 'mallory@evil.test', 1)
+    speakers[1].knownEmails = [' Mallory@Evil.test ', 'ok@example.com']
+    speakers[1].ticketEmailGrants = [{ email: 'mallory@evil.test' }]
+    // Without its own address, sp-ok's grant alone must grant nothing.
+    speakers.push({
+      _id: 'sp-grant-only',
+      knownEmails: ['mallory@evil.test'],
+      ticketEmailGrants: [{ email: 'MALLORY@evil.test' }],
+    })
+    conferences[0] = { orgId: 'org-a', ids: ['sp-grant-only', 'sp-ok'] }
+    await syncMembers(env)
+    const rows = await members(d1)
+    expect(rows.map((m) => m.userId)).not.toContain('u-mallory')
+    expect(
+      rows
+        .filter((m) => m.role === 'admin')
+        .map((m) => [m.organizationId, m.userId])
+        .sort(),
+    ).toEqual([
+      ['org-a', 'u-ok'],
+      ['org-b', 'u-ok'],
+    ])
   })
 
   it('uses the #1909 id scheme', async () => {

@@ -14,11 +14,13 @@ export interface SyncEnv {
 }
 
 // Organizers of an org are the speakers in `organizers[]` of its published
-// conferences; drafts and erased speakers are excluded.
+// conferences; drafts and erased speakers are excluded. Addresses an
+// organizer linked from a ticket (`ticketEmailGrants`) never count: another
+// org's organizer could otherwise link an address they control and get admin.
 const CONFERENCES = `*[_type == "conference" && !(_id in path("drafts.**")) && defined(organization._ref)]{
   "orgId": organization._ref, "ids": organizers[]._ref
 }`
-const SPEAKERS = `*[_type == "speaker" && _id in $ids && !(_id in path("drafts.**")) && !defined(erasedAt)]{ _id, knownEmails }`
+const SPEAKERS = `*[_type == "speaker" && _id in $ids && !(_id in path("drafts.**")) && !defined(erasedAt)]{ _id, knownEmails, "granted": ticketEmailGrants[].email }`
 
 const INSERT =
   'INSERT INTO member (id, organizationId, userId, role) VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING'
@@ -62,20 +64,33 @@ async function organizerEmails(env: SyncEnv) {
   )
   const ids = [...new Set(cs.flatMap((c) => c.ids ?? []))]
   const speakers = ids.length
-    ? await groq<{ _id: string; knownEmails: string[] | null }[]>(
-        env,
-        SPEAKERS,
-        { ids },
-      )
+    ? await groq<
+        {
+          _id: string
+          knownEmails: string[] | null
+          granted: (string | null)[] | null
+        }[]
+      >(env, SPEAKERS, { ids })
     : []
-  const byId = new Map(speakers.map((s) => [s._id, s.knownEmails ?? []]))
+  const norm = (e: string) => e.trim().toLowerCase()
+  const byId = new Map(
+    speakers.map((s) => {
+      const granted = new Set(
+        (s.granted ?? []).filter(Boolean).map((e) => norm(e!)),
+      )
+      return [
+        s._id,
+        (s.knownEmails ?? []).map(norm).filter((e) => !granted.has(e)),
+      ]
+    }),
+  )
   const out = new Map<string, string[][]>()
   for (const c of cs)
     for (const id of c.ids ?? []) {
       const emails = byId.get(id)
       if (!emails) continue
       const list = out.get(c.orgId) ?? []
-      list.push(emails.map((e) => e.trim().toLowerCase()))
+      list.push(emails)
       out.set(c.orgId, list)
     }
   return out
