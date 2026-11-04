@@ -38,8 +38,8 @@ export type EmailLinkTier = 'stateless' | 'stored'
 // the marker must be the LAST comment line. (A multi-line annotation silently
 // fails to suppress — several already in this repo do.)
 //
-// The organizer set across ALL conferences: the same predicate
-// `IS_ORGANIZER_FIELD` uses in the login projection.
+// The organizer set across ALL conferences. Unlike `IS_ORGANIZER_FIELD`, this
+// deliberately still counts drafts: it errs to the stronger tier.
 // groq-global: role lookup spans every tenant by design
 const ANY_ORGANIZER = groq`*[_type == "conference"].organizers[]._ref`
 

@@ -71,6 +71,11 @@ vi.mock('next/headers', () => ({
   headers: async () => new Headers({ host: h.host.value }),
 }))
 
+// The NextAuth lane's organizer refresh (#1923) is covered in
+// __tests__/lib/authz/live-organizer.test.ts; pass through here.
+vi.mock('@/lib/authz/live-organizer', () => ({
+  withLiveOrganizerRights: async (s: unknown) => s,
+}))
 vi.mock('next/navigation', () => ({ redirect: h.redirect }))
 vi.mock('@/app/(main)/signin/actions', () => ({
   requestEmailSignInLinkAction: vi.fn(),
