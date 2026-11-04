@@ -31,7 +31,15 @@ import {
   type GraphQLNamedType,
 } from 'graphql'
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 import {
   ENVELOPE_HEADER,
   createSigner,
@@ -637,9 +645,12 @@ describe('cross-tenant mutation walk', () => {
     }
     return rows.sort()
   }
-  const mutate = async (headers: Record<string, string>) => {
+  // Before the tests' snapshots, so the reset is not counted as a write.
+  beforeEach(async () => {
     env.OVERRIDE_TENANTS = {}
     await overrideForA(false)
+  })
+  const mutate = async (headers: Record<string, string>) => {
     const bodies: { data?: unknown; errors?: unknown[] }[] = []
     for (const m of mutations()) bodies.push(JSON.parse(await run(m, headers)))
     return bodies

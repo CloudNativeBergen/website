@@ -371,7 +371,8 @@ async function applyConferencePatch(
   // Sanity is touched. Prefixed (nested) fieldsets hold no moved fields.
   const moved = pathPrefix ? {} : movedConferencePatch(input)
   const hasMoved = Object.keys(moved).length > 0
-  const host = hasMoved ? await requestHost() : null
+  // Outside a request scope (jobs, tests) there is no host: env lists only.
+  const host = hasMoved ? await requestHost().catch(() => null) : null
   // A null host still honours the env list, so the refusal below holds.
   const d1 = hasMoved && (await isD1WriteTenant(host, conferenceId))
   if (d1) {
