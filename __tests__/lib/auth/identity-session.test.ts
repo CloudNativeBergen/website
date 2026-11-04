@@ -59,6 +59,7 @@ vi.mock('@/lib/speaker/sanity', () => ({
 }))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForDomain: h.getConferenceForDomain,
+  getConferenceForCurrentDomain: async () => ({ conference: null }),
 }))
 vi.mock('next/headers', () => ({
   cookies: async () => ({
@@ -73,6 +74,7 @@ vi.mock('next/headers', () => ({
 vi.mock('next/navigation', () => ({ redirect: h.redirect }))
 vi.mock('@/app/(main)/signin/actions', () => ({
   requestEmailSignInLinkAction: vi.fn(),
+  oauthSignInAction: vi.fn(),
 }))
 
 import { NextRequest } from 'next/server'
