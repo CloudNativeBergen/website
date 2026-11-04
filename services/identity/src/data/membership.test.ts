@@ -528,7 +528,10 @@ describe('resending an invitation', () => {
     })
     const before = await state(inv.id)
     const withInvite = await post(outsider.headers, body(email))
-    const without = await post(outsider.headers, body(`none-${orgId}@example.com`))
+    const without = await post(
+      outsider.headers,
+      body(`none-${orgId}@example.com`),
+    )
     expect(withInvite[0]).toBeGreaterThanOrEqual(400)
     expect(withInvite).toEqual(without)
     expect(await state(inv.id)).toEqual(before)
@@ -570,7 +573,11 @@ describe('resending an invitation', () => {
     })
     const r = await auth.api.createInvitation({
       headers: owner.headers,
-      body: { email: email[0].toUpperCase() + email.slice(1), role: 'owner', resend: true },
+      body: {
+        email: email[0].toUpperCase() + email.slice(1),
+        role: 'owner',
+        resend: true,
+      },
     })
     expect(r.id).toBe(inv.id)
     expect(await resends(inv.id)).toHaveLength(1)
