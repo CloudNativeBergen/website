@@ -47,17 +47,30 @@ export async function scheduled(env: ScheduledEnv) {
   const { results } = await env.DB.prepare(
     'SELECT * FROM conferences WHERE published = 1',
   ).all<Row>()
-  if (!results.length) return
-  const docs = await createClient({
-    projectId: env.SANITY_PROJECT_ID,
-    dataset: env.SANITY_DATASET,
-    apiVersion: '2023-05-03',
-    useCdn: false,
-    token: env.SANITY_API_TOKEN_READ,
-    requestTagPrefix: 'conference.parity',
-  }).fetch<SanityConference[]>(QUERY, {
-    ids: results.map((r) => r.conference_id),
-  })
+  // A private dataset read without a token returns [], not an error: that
+  // would report every row as drift.
+  if (!env.SANITY_API_TOKEN_READ) throw new Error('SANITY_API_TOKEN_READ unset')
+  const docs = !results.length
+    ? []
+    : await createClient({
+        projectId: env.SANITY_PROJECT_ID,
+        dataset: env.SANITY_DATASET,
+        apiVersion: '2023-05-03',
+        useCdn: false,
+        token: env.SANITY_API_TOKEN_READ,
+        requestTagPrefix: 'conference.parity',
+      }).fetch<SanityConference[]>(QUERY, {
+        ids: results.map((r) => r.conference_id),
+      })
+  if (results.length && !docs.length) {
+    console.error(
+      JSON.stringify({
+        event: 'conference.parity.error',
+        reason: 'sanity returned no documents',
+      }),
+    )
+    return
+  }
   const drift = findDrift(results, docs)
   for (const d of drift)
     console.error(JSON.stringify({ event: 'conference.parity.drift', ...d }))

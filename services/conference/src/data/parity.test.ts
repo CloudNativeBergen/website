@@ -46,6 +46,30 @@ describe('findDrift', () => {
 describe('scheduled', () => {
   afterEach(() => vi.restoreAllMocks())
 
+  const envWith = (rows: unknown[], token = 't') => ({
+    DB: {
+      prepare: () => ({ all: async () => ({ results: rows }) }),
+    } as unknown as D1Database,
+    SANITY_PROJECT_ID: 'p',
+    SANITY_DATASET: 'd',
+    SANITY_API_TOKEN_READ: token,
+  })
+
+  it('refuses to run without the read token', async () => {
+    await expect(scheduled(envWith([d1()], ''))).rejects.toThrow(
+      'SANITY_API_TOKEN_READ',
+    )
+  })
+
+  it('reports an empty Sanity read as an error, not as drift', async () => {
+    fetchMock.mockResolvedValue([])
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await scheduled(envWith([d1()]))
+    expect(error.mock.calls.map((c) => JSON.parse(c[0]).event)).toEqual([
+      'conference.parity.error',
+    ])
+  })
+
   it('logs one drift event and the sweep summary', async () => {
     fetchMock.mockResolvedValue([doc])
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
