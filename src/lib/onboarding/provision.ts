@@ -1,3 +1,4 @@
+import 'server-only'
 import { createHash } from 'crypto'
 import { revalidateTag } from 'next/cache'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'

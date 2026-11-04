@@ -5,6 +5,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const calls: unknown[][] = []
+// Identity of every transaction a patch landed on, and of every transaction
+// clientWrite.transaction() minted: a fresh uncommitted one loses the write.
+const patchedTxs: unknown[] = []
+const mintedTxs: unknown[] = []
 function chain(): Record<string, unknown> {
   const c: Record<string, unknown> = {}
   for (const op of ['set', 'setIfMissing', 'append', 'unset', 'insert']) {
@@ -17,6 +21,7 @@ function makeTx(): Record<string, unknown> {
   const tx: Record<string, unknown> = {
     patch: (id: string, fn: (p: unknown) => unknown) => {
       calls.push(['tx.patch', id])
+      patchedTxs.push(tx)
       fn(chain())
       return tx
     },
@@ -30,7 +35,11 @@ vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     patch: (...a: unknown[]) => (calls.push(['patch', ...a]), chain()),
     delete: async (...a: unknown[]) => (calls.push(['delete', ...a]), {}),
-    transaction: () => makeTx(),
+    transaction: () => {
+      const tx = makeTx()
+      mintedTxs.push(tx)
+      return tx
+    },
   },
 }))
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
@@ -55,6 +64,8 @@ import { normalizePushPreferences } from '@/lib/push/types'
 
 beforeEach(() => {
   calls.length = 0
+  patchedTxs.length = 0
+  mintedTxs.length = 0
 })
 
 const grant = {
@@ -156,6 +167,9 @@ describe('speaker write seam: push + onboarding', () => {
         [{ _type: 'reference', _ref: 'org-1', _key: 'org-1' }],
       ],
     ])
+    expect(patchedTxs).toHaveLength(1)
+    expect(patchedTxs[0]).toBe(tx)
+    expect(mintedTxs).toHaveLength(0)
   })
 
   it('addPushSubscription: dedup + eviction unset, then append, in one transaction', async () => {
