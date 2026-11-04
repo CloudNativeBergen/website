@@ -232,7 +232,10 @@ describe('updateConference', () => {
 
   describe('operator lane (#1921)', () => {
     const as = (scopes: string[], orgRole: string | null = null): Envelope => ({
-      ...tenant('org-a', 'conf-a', orgRole),
+      ...(tenant('org-a', 'conf-a', orgRole) as Extract<
+        Envelope,
+        { typ: 'tenant' }
+      >),
       userId: 'op',
       scopes,
     })
