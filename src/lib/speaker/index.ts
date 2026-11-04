@@ -109,6 +109,29 @@ export function getSpeaker(speakerId: string): Promise<SpeakerResult> {
   return store.getSpeaker(speakerId)
 }
 
+// --- Sign-in (used by `src/lib/auth.ts`) ----------------------------------
+
+/** Resolve or create the speaker for an OAuth sign-in. */
+export function getOrCreateSpeaker(
+  ...args: Parameters<typeof store.getOrCreateSpeaker>
+): ReturnType<typeof store.getOrCreateSpeaker> {
+  return store.getOrCreateSpeaker(...args)
+}
+
+/** Resolve or create the speaker for a verified email-link sign-in. */
+export function getOrCreateSpeakerForVerifiedEmail(
+  ...args: Parameters<typeof store.getOrCreateSpeakerForVerifiedEmail>
+): ReturnType<typeof store.getOrCreateSpeakerForVerifiedEmail> {
+  return store.getOrCreateSpeakerForVerifiedEmail(...args)
+}
+
+/** Attach a newly linked OAuth provider to an existing speaker. */
+export function attachProviderToSpeaker(
+  ...args: Parameters<typeof store.attachProviderToSpeaker>
+): ReturnType<typeof store.attachProviderToSpeaker> {
+  return store.attachProviderToSpeaker(...args)
+}
+
 /** One speaker's admin detail, only when they belong to `orgId`. */
 export function getSpeakerAdminDetail(
   speakerId: string,
