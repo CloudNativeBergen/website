@@ -1,4 +1,5 @@
 'use client'
+import type { OrganizerProposal } from '@/lib/proposal/organizer'
 
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
@@ -28,7 +29,7 @@ export interface SpeakerProfilePreviewProps {
   isOpen: boolean
   onClose: () => void
   speaker: Speaker
-  talks: ProposalExisting[]
+  talks: (ProposalExisting | OrganizerProposal)[]
   ticketStatus?: SpeakerTicketStatus
 }
 

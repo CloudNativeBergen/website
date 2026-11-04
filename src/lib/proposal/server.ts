@@ -7,12 +7,18 @@
  * This lives in `server.ts`, not `index.ts`: the `@/lib/proposal` barrel is
  * imported by client components, and the seam pulls in the Sanity write client.
  *
- * Returned objects are `ProposalExisting` (re-exported from `./types`); a
- * narrower public talk type comes with the API backend.
+ * Public reads return `PublicTalk` (`./public`): plain, serializable, no
+ * Sanity refs. The admin proposal list returns `OrganizerProposal`
+ * (`./organizer`). Other organizer and speaker reads still return
+ * `ProposalExisting` (re-exported from `./types`) until they get their own
+ * projection (#1887).
  */
 import 'server-only'
 import type { ProposalExisting, ProposalInput, Status } from './types'
 import * as store from './data/sanity'
+import { toPublicTalk, type PublicTalk } from './public'
+import { toOrganizerProposal, type OrganizerProposal } from './organizer'
+import { filterProposals, type ProposalFilters } from './utils/filtering'
 
 export { sendAcceptRejectNotification } from './email/notification'
 /** Thrown by {@link deleteProposal}; re-exported so `instanceof` holds. */
@@ -21,6 +27,7 @@ export {
   buildProposalDocument,
 } from './data/sanity'
 export type { ProposalExisting, ProposalInput } from './types'
+export type { OrganizerProposal } from './organizer'
 
 export interface ProposalResult {
   proposal: ProposalExisting
@@ -33,6 +40,18 @@ export interface ProposalListResult {
 }
 
 // --- Public program and talk reads ----------------------------------------
+
+/**
+ * Confirmed talks in `conferenceId` by `speakerId`, as {@link PublicTalk}.
+ * `conferenceId` must come from the server (the domain conference).
+ */
+export async function listPublicTalks(
+  conferenceId: string,
+  { speakerId }: { speakerId: string },
+): Promise<{ talks: PublicTalk[]; err: Error | null }> {
+  const { talks, err } = await store.listPublicTalks(conferenceId, speakerId)
+  return { talks: talks.map(toPublicTalk), err }
+}
 
 /** Listed workshops in a conference; `includeCanceled` for the admin view. */
 export function getWorkshops(
@@ -51,6 +70,33 @@ export function getProposals(
   args: Parameters<typeof store.getProposals>[0],
 ): Promise<ProposalListResult> {
   return store.getProposals(args)
+}
+
+// --- Organizer reads ------------------------------------------------------
+
+/**
+ * Every non-draft proposal in `conferenceId`, as {@link OrganizerProposal},
+ * with reviews. `conferenceId` must come from the server
+ * (`resolveConferenceId()`), never from the client. With `filters`, the list
+ * is filtered and sorted server-side; `reviewerId` backs the review-status
+ * filter.
+ */
+export async function listOrganizerProposals(
+  conferenceId: string,
+  filters?: ProposalFilters,
+  reviewerId?: string,
+): Promise<{ proposals: OrganizerProposal[]; proposalsError: Error | null }> {
+  const { proposals, proposalsError } = await store.getProposals({
+    conferenceId,
+    returnAll: true,
+    includeReviews: true,
+    includePreviousAcceptedTalks: true,
+  })
+  const mapped = proposals.map(toOrganizerProposal)
+  return {
+    proposals: filters ? filterProposals(mapped, filters, reviewerId) : mapped,
+    proposalsError,
+  }
 }
 
 // --- One proposal (speaker's own or organizer detail) ---------------------

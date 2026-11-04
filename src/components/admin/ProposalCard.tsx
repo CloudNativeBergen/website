@@ -1,15 +1,11 @@
 'use client'
 
+import type { OrganizerProposal } from '@/lib/proposal/organizer'
+
 import { useMemo } from 'react'
 import { UserIcon, ClockIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
-import {
-  ProposalExisting,
-  formats,
-  levels,
-  languages,
-  audiences,
-} from '@/lib/proposal/types'
+import { formats, levels, languages, audiences } from '@/lib/proposal/types'
 import { SpeakerWithReviewInfo } from '@/lib/speaker/types'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import {
@@ -23,7 +19,7 @@ import {
 } from '@/lib/proposal'
 
 interface ProposalCardProps {
-  proposal: ProposalExisting
+  proposal: OrganizerProposal
   href?: string
   onSelect?: () => void
   isSelected?: boolean

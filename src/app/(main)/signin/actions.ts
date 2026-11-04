@@ -2,6 +2,7 @@
 
 import { randomBytes } from 'crypto'
 import { cookies, headers } from 'next/headers'
+import { redirect } from 'next/navigation'
 import { AuthError } from 'next-auth'
 import { signIn } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -142,5 +143,26 @@ function samePathOf(destination: string, fallback: string): string {
     return path === '/' ? fallback : path
   } catch {
     return fallback
+  }
+}
+
+const OAUTH_PROVIDERS = new Set(['github', 'linkedin'])
+
+/**
+ * NextAuth OAuth sign-in for the provider buttons. `providerId` arrives from
+ * the client, so only the configured OAuth providers get through.
+ */
+export async function oauthSignInAction(
+  callbackUrl: string,
+  providerId: string,
+): Promise<void> {
+  if (!OAUTH_PROVIDERS.has(providerId)) throw new Error('unknown provider')
+  try {
+    await signIn(providerId, { redirectTo: callbackUrl })
+  } catch (error) {
+    if (error instanceof AuthError) {
+      redirect(`/error?error=${error.type}`)
+    }
+    throw error
   }
 }

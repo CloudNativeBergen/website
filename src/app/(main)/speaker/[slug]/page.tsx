@@ -3,10 +3,10 @@ import { Container } from '@/components/Container'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { ClickableSpeakerNames } from '@/components/ClickableSpeakerNames'
 import { formats, languages, levels } from '@/lib/proposal/types'
-import { flags, Flags } from '@/lib/speaker/types'
+import { flags, Flags, type Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import * as social from '@/components/SocialIcons'
-import { getPublicSpeakerProfile } from '@/lib/speaker'
+import { getPublicSpeakerProfile } from '@/lib/speaker/server'
 import { BackLink } from '@/components/BackButton'
 import { BookmarkButton } from '@/components/BookmarkButton'
 import { ShowMore } from '@/components/ShowMore'
@@ -355,17 +355,19 @@ async function CachedSpeakerContent({
                                 </div>
                               )}
 
+                            {/* PublicTalkSpeaker carries every field these two
+                                components read (_id, name, slug, image). */}
                             {talk.speakers && talk.speakers.length > 1 && (
                               <div className="mb-3 flex items-center gap-3">
                                 <SpeakerAvatars
-                                  speakers={talk.speakers}
+                                  speakers={talk.speakers as Speaker[]}
                                   maxVisible={4}
                                   size="sm"
                                 />
                                 <div className="min-w-0 flex-1">
                                   <div className="text-sm font-medium text-brand-cloud-blue dark:text-blue-400">
                                     <ClickableSpeakerNames
-                                      speakers={talk.speakers}
+                                      speakers={talk.speakers as Speaker[]}
                                       linkClassName="hover:text-brand-cloud-blue/80 transition-colors dark:hover:text-blue-300"
                                     />
                                   </div>

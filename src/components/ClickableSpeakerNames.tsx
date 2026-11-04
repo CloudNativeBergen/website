@@ -1,9 +1,10 @@
+import type { OrganizerProposalSpeaker } from '@/lib/proposal/organizer'
 import Link from 'next/link'
 import { Speaker } from '@/lib/speaker/types'
 import { Reference } from 'sanity'
 
 interface ClickableSpeakerNamesProps {
-  speakers: Speaker[] | Reference[]
+  speakers: Speaker[] | Reference[] | OrganizerProposalSpeaker[]
   className?: string
   linkClassName?: string
   separatorClassName?: string
@@ -26,7 +27,7 @@ export function ClickableSpeakerNames({
   }
 
   const populatedSpeakers = speakers.filter(
-    (speaker): speaker is Speaker =>
+    (speaker): speaker is Speaker | OrganizerProposalSpeaker =>
       speaker &&
       typeof speaker === 'object' &&
       '_id' in speaker &&
@@ -42,7 +43,9 @@ export function ClickableSpeakerNames({
     : populatedSpeakers
   const remainingCount = maxVisible ? populatedSpeakers.length - maxVisible : 0
 
-  const getDisplayName = (speaker: Speaker): string => {
+  const getDisplayName = (
+    speaker: Speaker | OrganizerProposalSpeaker,
+  ): string => {
     if (populatedSpeakers.length === 1) {
       return speaker.name
     }

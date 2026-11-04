@@ -35,6 +35,7 @@ vi.mock('./confirm/pending', () => ({
 
 import {
   confirmEmailSignInAction,
+  oauthSignInAction,
   requestEmailSignInLinkAction,
 } from './actions'
 
@@ -85,5 +86,21 @@ describe('confirmEmailSignInAction', () => {
     await expect(confirmEmailSignInAction()).resolves.toBe(
       '/signin?error=EmailSignIn',
     )
+  })
+})
+
+describe('oauthSignInAction', () => {
+  beforeEach(() => h.signIn.mockResolvedValue(undefined))
+
+  it('signs in with a configured provider', async () => {
+    await oauthSignInAction('/cfp', 'github')
+    expect(h.signIn).toHaveBeenCalledWith('github', { redirectTo: '/cfp' })
+  })
+
+  it('rejects a client-supplied provider that is not configured', async () => {
+    await expect(oauthSignInAction('/', 'email-link')).rejects.toThrow(
+      'unknown provider',
+    )
+    expect(h.signIn).not.toHaveBeenCalled()
   })
 })

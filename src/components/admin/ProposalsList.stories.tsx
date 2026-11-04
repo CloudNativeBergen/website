@@ -1,3 +1,4 @@
+import { toOrganizerProposal } from '@/lib/proposal/organizer'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ProposalsList } from './ProposalsList'
 import { Status, Format, Language, Level, Audience } from '@/lib/proposal/types'
@@ -5,7 +6,7 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { fn } from 'storybook/test'
 import { Speaker } from '@/lib/speaker/types'
 
-const mockProposals: ProposalExisting[] = [
+const rawProposals: ProposalExisting[] = [
   {
     _id: 'prop-1',
     _type: 'talk',
@@ -76,7 +77,7 @@ const mockProposals: ProposalExisting[] = [
   },
 ]
 
-function createMockProposal(
+function createMockProposalRaw(
   id: string,
   title: string,
   status: Status,
@@ -112,6 +113,11 @@ function createMockProposal(
     conference: { _type: 'reference', _ref: 'conf-1' },
   }
 }
+
+const mockProposals = rawProposals.map(toOrganizerProposal)
+const createMockProposal = (
+  ...args: Parameters<typeof createMockProposalRaw>
+) => toOrganizerProposal(createMockProposalRaw(...args))
 
 const meta = {
   title: 'Systems/Proposals/ProposalsList',

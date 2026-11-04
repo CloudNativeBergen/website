@@ -1,5 +1,7 @@
 'use client'
 
+import type { OrganizerProposal } from '@/lib/proposal/organizer'
+
 import { useMemo } from 'react'
 import {
   DocumentTextIcon,
@@ -9,7 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import Link from 'next/link'
-import { ProposalExisting, Status, Format } from '@/lib/proposal/types'
+import { Status, Format } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
 import { ProposalCard } from './ProposalCard'
 import { ProposalsFilter, FilterState, ReviewStatus } from './ProposalsFilter'
@@ -28,7 +30,7 @@ interface ProposalsListProps {
   /** Opens the bulk Feedback Code mint (#1459). */
   onMintFeedbackCodes?: () => void
   conference?: Conference
-  initialProposals?: ProposalExisting[]
+  initialProposals?: OrganizerProposal[]
 }
 
 import { useDebounce } from '@/hooks/useDebounce'

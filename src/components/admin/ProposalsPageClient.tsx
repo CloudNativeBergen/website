@@ -1,8 +1,9 @@
 'use client'
 
+import type { OrganizerProposal } from '@/lib/proposal/organizer'
+
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ProposalExisting } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
 import { ProposalsList } from './ProposalsList'
 import { ProposalPreview } from './ProposalPreview'
@@ -13,7 +14,7 @@ import { MintFeedbackCodesDialog } from '@/components/feedback'
 import { ATTENDEE_PAGE_LIVE } from '@/lib/feedback'
 
 interface ProposalsPageClientProps {
-  proposals: ProposalExisting[]
+  proposals: OrganizerProposal[]
   currentUserId?: string
   conference: Conference
 }
