@@ -118,6 +118,7 @@ describe('last-owner trigger', () => {
   it('refuses deleting or demoting the only owner; other changes pass', async () => {
     const { orgId, members } = await org('owner', 'admin')
     const [owner, admin] = members
+    const { orgId: otherOrg } = await org('admin')
     await expect(
       run('DELETE FROM member WHERE id = ?', owner.memberId),
     ).rejects.toThrow(/LAST_OWNER/)
@@ -126,11 +127,19 @@ describe('last-owner trigger', () => {
     ).rejects.toThrow(/LAST_OWNER/)
     await expect(
       run(
-        "UPDATE member SET role = 'admin', organizationId = 'org-x' WHERE id = ?",
+        'UPDATE member SET organizationId = ? WHERE id = ?',
+        otherOrg,
         owner.memberId,
       ),
     ).rejects.toThrow(/LAST_OWNER/)
     expect(await roleOf(owner.memberId)).toBe('owner')
+    expect(
+      await all(
+        'SELECT id FROM member WHERE id = ? AND organizationId = ?',
+        owner.memberId,
+        orgId,
+      ),
+    ).toHaveLength(1)
     // A role list that keeps owner, and changes to non-owners, pass.
     await run(
       "UPDATE member SET role = 'owner,admin' WHERE id = ?",
