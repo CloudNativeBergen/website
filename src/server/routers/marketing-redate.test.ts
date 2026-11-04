@@ -81,6 +81,9 @@ function context(): Context {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // No gateway: a gateway without a signing key refuses moved-field saves.
+  vi.stubEnv('VERCEL_ENV', 'preview')
+  vi.stubEnv('KONF_API_URL', '')
   h.conference.mockResolvedValue({
     conference: { _id: CONF, organization: { _ref: 'org-A' } },
     error: null,

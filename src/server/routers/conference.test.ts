@@ -3,7 +3,15 @@ import type { Context } from '@/server/trpc'
 import { Format } from '@/lib/proposal/types'
 
 // --- next/cache -------------------------------------------------------------
-vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
+vi.mock('next/cache', () => ({
+  revalidateTag: vi.fn(),
+  cacheLife: () => {},
+  cacheTag: () => {},
+}))
+vi.mock('@/lib/konf-api/client', async (orig) => ({
+  ...(await orig<typeof import('@/lib/konf-api/client')>()),
+  konfApiHeaders: async (host: string) => ({ origin: `https://${host}` }),
+}))
 
 // --- next/headers: drives the domains current-host guard --------------------
 const hostMock = vi.fn<() => string | null>(() => 'cloudnativebergen.no')
@@ -170,6 +178,9 @@ function makeCaller(
 
 beforeEach(() => {
   vi.resetAllMocks()
+  // No gateway by default: a gateway without a signing key now refuses moved-field saves.
+  vi.stubEnv('VERCEL_ENV', 'preview')
+  vi.stubEnv('KONF_API_URL', '')
   lastPatchId = undefined
   lastSet = undefined
   lastUnset = undefined
@@ -1487,19 +1498,39 @@ describe('conference router — updateVolunteerLinks', () => {
 describe('conference router — D1 write path (#1881)', () => {
   const fetchMock = vi.fn()
   const apiCalls = () =>
-    fetchMock.mock.calls.filter(([url]) => String(url).includes('api.konf.app'))
+    fetchMock.mock.calls.filter(
+      ([url, init]) =>
+        String(url).includes('api.konf.app') &&
+        !String(init?.body).includes('rolloutFlags'),
+    )
   const ok = (body: unknown) =>
     new Response(JSON.stringify(body), { status: 200 })
+  const flagCalls = () =>
+    fetchMock.mock.calls.filter(([, init]) =>
+      String(init?.body).includes('rolloutFlags'),
+    )
 
   beforeEach(() => {
     vi.stubGlobal('fetch', fetchMock)
+    vi.stubEnv('VERCEL_ENV', 'production')
+    vi.stubEnv('KONF_SITE_SIGNING_KEY', 'k')
     vi.stubEnv('KONF_D1_WRITE_TENANTS', CONFERENCE_ID)
     vi.stubEnv('IDENTITY_URL', 'https://id.example')
     sessionCookieMock.mockReturnValue('sess')
-    fetchMock.mockImplementation(async (url: URL | string) =>
+    fetchMock.mockImplementation(async (url: URL | string, init) =>
       String(url).includes('/api/auth/token')
         ? ok({ token: 'user-jwt' })
-        : ok({ data: { updateConference: { id: CONFERENCE_ID } } }),
+        : String(init?.body).includes('rolloutFlags')
+          ? ok({
+              data: {
+                rolloutFlags: {
+                  apiRead: false,
+                  identityLogin: false,
+                  d1Write: false,
+                },
+              },
+            })
+          : ok({ data: { updateConference: { id: CONFERENCE_ID } } }),
     )
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -1603,8 +1634,93 @@ describe('conference router — D1 write path (#1881)', () => {
   it('makes no API call with the flag off', async () => {
     vi.stubEnv('KONF_D1_WRITE_TENANTS', '')
     await makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' })
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(apiCalls()).toHaveLength(0)
     expect(lastSet).toEqual({ venueName: 'X' })
+  })
+
+  // A stale remote-cache hit (quiet tenant) with a healthy gateway is not an
+  // outage: one direct read verifies the flags and the save goes through.
+  describe('stale cached flags (#1938)', () => {
+    const T0 = 1_700_000_000_000
+    beforeEach(() => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      // The cached read is stamped T0; every later clock read is 11 minutes on.
+      // This relies on konfApiHeaders being mocked: the real one calls Date.now in
+      // siteAssertion and would consume these stamps.
+      vi.spyOn(Date, 'now')
+        .mockReturnValueOnce(T0)
+        .mockReturnValue(T0 + 11 * 60_000)
+    })
+
+    it('saves after one direct gateway read', async () => {
+      hostMock.mockReturnValue('idle-1938.example')
+      await makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' })
+      expect(flagCalls()).toHaveLength(2) // cached + exactly one direct
+      expect(commitMock).toHaveBeenCalled()
+    })
+
+    it('refuses when the direct read fails and there is no last good', async () => {
+      hostMock.mockReturnValue('idle-down-1938.example')
+      let flagReads = 0
+      fetchMock.mockImplementation(async (url: URL | string, init) =>
+        String(init?.body).includes('rolloutFlags')
+          ? flagReads++ === 0
+            ? ok({ data: { rolloutFlags: { d1Write: true } } })
+            : new Response('', { status: 503 })
+          : ok({ data: { updateConference: { id: CONFERENCE_ID } } }),
+      )
+      vi.stubEnv('KONF_D1_WRITE_TENANTS', '')
+      await expect(
+        makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' }),
+      ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' })
+      expect(flagCalls()).toHaveLength(2)
+      expect(commitMock).not.toHaveBeenCalled()
+    })
+  })
+
+  // #1938: an unreadable d1Write flag must not fall to "off" and Sanity-only.
+  describe('when the rollout flags cannot be read', () => {
+    beforeEach(() => {
+      vi.stubEnv('KONF_D1_WRITE_TENANTS', '')
+      vi.stubEnv('KONF_SITE_SIGNING_KEY', 'k')
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      fetchMock.mockImplementation(async (url: URL | string, init) =>
+        JSON.parse(String(init?.body ?? '{}')).query?.includes('rolloutFlags')
+          ? new Response('', { status: 503 })
+          : ok({ data: { updateConference: { id: CONFERENCE_ID } } }),
+      )
+    })
+
+    it('refuses a moved-field save and never writes Sanity', async () => {
+      hostMock.mockReturnValue('noflags-1938.example')
+      await expect(
+        makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' }),
+      ).rejects.toMatchObject({
+        code: 'SERVICE_UNAVAILABLE',
+        message: expect.stringContaining('try again'),
+      })
+      // The refusal comes from the gateway's 503, not a local error before it.
+      expect(flagCalls()).toHaveLength(1)
+      expect(apiCalls()).toHaveLength(0)
+      expect(commitMock).not.toHaveBeenCalled()
+    })
+
+    it('still saves fields that have not moved', async () => {
+      await makeCaller({ isOrganizer: true }).updateLocalInfo({
+        cateringInfo: 'Pizza',
+      })
+      expect(lastSet).toEqual({ cateringInfo: 'Pizza' })
+    })
+    it('refuses a moved-field save when the gateway is set but the signing key is missing', async () => {
+      vi.stubEnv('KONF_SITE_SIGNING_KEY', '')
+      hostMock.mockReturnValue('nokey-1938.example')
+      await expect(
+        makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' }),
+      ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' })
+      // Refused for the missing key, before any gateway read.
+      expect(flagCalls()).toHaveLength(0)
+      expect(commitMock).not.toHaveBeenCalled()
+    })
   })
 
   it('makes no API call for a fieldset without moved keys', async () => {
