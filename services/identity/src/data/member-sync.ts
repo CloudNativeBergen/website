@@ -211,7 +211,18 @@ export interface Drift {
   missingInSanity: string[]
   /** User ids in both whose role holds neither owner nor admin. */
   roleMismatch: string[]
+  /** Owner count, set only when under two. A count: no ids. */
+  ownersBelowTwo?: number
 }
+
+/** Same rule as the LAST_OWNER trigger (migration 0003): strip space, tab,
+ * CR, LF anywhere, lowercase, then match a whole comma-separated item. */
+export const isOwner = (role: string) =>
+  role
+    .toLowerCase()
+    .replace(/[ \t\n\r]/g, '')
+    .split(',')
+    .includes('owner')
 
 /** Compares, writes no `member` row, alerts on change or once a day. */
 async function checkDrift(
@@ -245,8 +256,11 @@ async function checkDrift(
       .filter((u) => roles.has(u) && !roleOk(roles.get(u)!))
       .sort(),
   }
-  const counts = Object.fromEntries(
-    Object.entries(drift).map(([k, v]) => [k, v.length]),
+  // Pending invites do not count (#1923 follow-up).
+  const owners = rows.filter((r) => isOwner(r.role)).length
+  if (owners < 2) drift.ownersBelowTwo = owners
+  const counts: Record<string, number> = Object.fromEntries(
+    Object.entries(drift).map(([k, v]) => [k, Array.isArray(v) ? v.length : 1]),
   )
   if (Object.values(counts).every((n) => n === 0)) {
     // Clean: forget the last alert, so a recurrence posts at once.
@@ -306,5 +320,8 @@ export function slackText(orgId: string, d: Drift) {
     line('In Sanity, missing in identity (speaker ids)', d.missingInIdentity),
     line('In identity, missing in Sanity (user ids)', d.missingInSanity),
     line('Role neither owner nor admin (user ids)', d.roleMismatch),
+    ...(d.ownersBelowTwo === undefined
+      ? []
+      : [`Owners below two: ${d.ownersBelowTwo}`]),
   ].join('\n')
 }

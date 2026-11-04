@@ -335,18 +335,100 @@ describe('syncMembers drift mode (MEMBER_SOURCE_ORGS)', () => {
     expect(driftLog()).toEqual({
       event: 'identity.membership.drift',
       orgId: 'org-a',
-      counts: { missingInIdentity: 1, missingInSanity: 1, roleMismatch: 1 },
+      counts: {
+        missingInIdentity: 1,
+        missingInSanity: 1,
+        roleMismatch: 1,
+        ownersBelowTwo: 1,
+      },
       missingInIdentity: ['sp-unverified'],
       missingInSanity: ['u-stray'],
       roleMismatch: ['u-ok'],
+      ownersBelowTwo: 1,
     })
+  })
+
+  /** org-a with only Sanity organizers as members: drift is owners alone. */
+  async function ownerDb(okRole: string) {
+    const { env, d1 } = await freshDb()
+    await d1
+      .prepare(
+        "INSERT INTO member (id, organizationId, userId, role) VALUES ('m-ok', 'org-a', 'u-ok', ?1)",
+      )
+      .bind(okRole)
+      .run()
+    speakers.pop()
+    conferences[0] = { orgId: 'org-a', ids: ['sp-owner', 'sp-ok'] }
+    return {
+      d1,
+      env: {
+        ...env,
+        MEMBER_SOURCE_ORGS: 'org-a',
+        SLACK_MEMBER_DRIFT_WEBHOOK_URL: SLACK,
+      },
+    }
+  }
+
+  it('reports an org with one owner as owners below two, count only', async () => {
+    const { env } = await ownerDb('admin')
+    await syncMembers(env)
+    expect(driftLog()).toMatchObject({
+      counts: { ownersBelowTwo: 1 },
+      ownersBelowTwo: 1,
+    })
+    expect(slackPosts).toHaveLength(1)
+    const { text } = JSON.parse(slackPosts[0])
+    expect(text).toContain('Owners below two: 1')
+    expect(text).not.toContain('u-owner')
+  })
+
+  it('does not report an org with two owners (trigger-tolerant role)', async () => {
+    const { env } = await ownerDb(' Admin ,\tOW NER\n')
+    await syncMembers(env)
+    expect(events()).toContain('identity.membership.drift_clean')
+    expect(slackPosts).toEqual([])
+  })
+
+  it('changes the hash when the owner count crosses two', async () => {
+    const { env, d1 } = await ownerDb('admin')
+    const t0 = Date.parse('2026-11-04T10:00:00Z')
+    const now = vi.spyOn(Date, 'now').mockReturnValue(t0)
+    const hash = async () =>
+      (
+        await d1
+          .prepare(
+            "SELECT hash FROM member_drift_alert WHERE organizationId = 'org-a'",
+          )
+          .first<{ hash: string }>()
+      )?.hash
+    try {
+      // Keep another drift category so the org never goes clean.
+      await d1
+        .prepare(
+          "INSERT INTO member (id, organizationId, userId, role) VALUES ('m-x', 'org-a', 'u-unverified', 'member')",
+        )
+        .run()
+      await syncMembers(env)
+      const below = await hash()
+      await d1
+        .prepare("UPDATE member SET role = 'owner' WHERE id = 'm-ok'")
+        .run()
+      await syncMembers(env)
+      const above = await hash()
+      expect(below).toBeTruthy()
+      expect(above).toBeTruthy()
+      expect(above).not.toEqual(below)
+      expect(slackPosts).toHaveLength(2)
+    } finally {
+      now.mockRestore()
+    }
   })
 
   it('reports a clean org as clean and posts nothing', async () => {
     const { env, d1 } = await freshDb()
     await d1
       .prepare(
-        "INSERT INTO member (id, organizationId, userId, role) VALUES ('m-ok', 'org-a', 'u-ok', 'admin')",
+        "INSERT INTO member (id, organizationId, userId, role) VALUES ('m-ok', 'org-a', 'u-ok', 'admin,owner')",
       )
       .run()
     speakers.pop()
