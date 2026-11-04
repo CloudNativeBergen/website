@@ -106,7 +106,10 @@ describe('rolloutFlags (#1925)', () => {
     vi.stubEnv('KONF_API_TENANTS', 'conf-1')
     vi.stubEnv('KONF_IDENTITY_TENANTS', 'conf-1')
     vi.stubEnv('KONF_D1_WRITE_TENANTS', 'conf-1')
-    expect(await rolloutFlags('a.example', conf)).toEqual({ ...off, identityLogin: true })
+    expect(await rolloutFlags('a.example', conf)).toEqual({
+      ...off,
+      identityLogin: true,
+    })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
