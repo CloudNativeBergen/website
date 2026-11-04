@@ -297,8 +297,8 @@ export function createGateway(supergraph: string) {
     // `rolloutFlags` (#1925): the resolved tenant's own flags, for the site's
     // signed server lane only. Null for any other caller; it takes no argument.
     additionalTypeDefs: `
-      type RolloutFlags { apiRead: Boolean! identityLogin: Boolean! d1Write: Boolean! }
-      extend type Query { health: String! rolloutFlags: RolloutFlags }`,
+      type SiteRolloutFlags { apiRead: Boolean! identityLogin: Boolean! d1Write: Boolean! }
+      extend type Query { health: String! rolloutFlags: SiteRolloutFlags }`,
     additionalResolvers: {
       Query: {
         health: () => 'ok',

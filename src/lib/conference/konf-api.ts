@@ -3,6 +3,7 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag, domainTag } from '@/lib/cache/tags'
 import { konfApiHeaders } from '@/lib/konf-api/client'
 import { CONFERENCE_CACHE_LIFE } from './cache-life'
+import { normalizeDomain } from './domains'
 import type { Conference } from './types'
 
 // Spike for #1772 (#1833): read core conference fields from the Konf GraphQL
@@ -74,6 +75,9 @@ export async function fetchRolloutFlags(host: string): Promise<RolloutFlags> {
   }
   if (json.errors?.length) throw new Error(JSON.stringify(json.errors))
   const f = json.data?.rolloutFlags
+  // Null is a valid "off", but with a signing key it usually means a
+  // misconfigured key or a host missing from the directory.
+  if (!f) console.warn(`[konf-api] no rollout flags for ${host}`)
   return {
     apiRead: f?.apiRead === true,
     identityLogin: f?.identityLogin === true,
@@ -98,6 +102,8 @@ export async function rolloutFlags(
   }
   // Without the signing key the gateway can only answer null.
   if (!host || !process.env.KONF_SITE_SIGNING_KEY) return env
+  // One cache entry per tenant, whatever port or case the Host header had.
+  host = normalizeDomain(host)
   try {
     const d1 = await fetchRolloutFlags(host)
     return {

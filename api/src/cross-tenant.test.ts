@@ -640,7 +640,6 @@ describe('cross-tenant mutation walk', () => {
   const mutate = async (headers: Record<string, string>) => {
     env.OVERRIDE_TENANTS = {}
     await overrideForA(false)
-    await overrideForA(false)
     const bodies: { data?: unknown; errors?: unknown[] }[] = []
     for (const m of mutations()) bodies.push(JSON.parse(await run(m, headers)))
     return bodies
@@ -709,7 +708,6 @@ describe('cross-tenant mutation walk', () => {
 describe('negative control: the Sanity fixture follows the GROQ', () => {
   const read = async (rewrite: (q: string) => string) => {
     env.OVERRIDE_TENANTS = {}
-    await overrideForA(false)
     await overrideForA(false)
     rewriteGroq = rewrite
     try {
