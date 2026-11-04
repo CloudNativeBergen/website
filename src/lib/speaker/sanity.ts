@@ -409,7 +409,11 @@ async function computeVerifiedEmails(
 
   switch (account.provider) {
     case 'github': {
-      const { emails, error } = await fetchGithubVerifiedEmails(account)
+      // No token means an id.konf.app session (#1901): the identity service
+      // has already verified the primary, and the lookup would only 401.
+      const { emails, error } = account.access_token
+        ? await fetchGithubVerifiedEmails(account)
+        : { emails: [], error: null }
       if (error) {
         console.error(
           'Failed to fetch GitHub verified emails; falling back to OAuth primary',
