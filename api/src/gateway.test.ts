@@ -528,7 +528,7 @@ describe('gateway', () => {
       'bad_user_input',
       'BAD_USER_INPUT ',
       '',
-    ])('masks the message and field of %j', (code) => {
+    ])('masks the message, field and code of %j', (code) => {
       const secret =
         "D1_ERROR: SELECT * FROM conferences WHERE org_id = 'org_b'"
       const masked = maskError(
@@ -536,7 +536,11 @@ describe('gateway', () => {
         'Unexpected error.',
       ) as GraphQLError
       expect(masked.message).toBe('Unexpected error.')
-      expect(masked.extensions.field).toBeUndefined()
+      expect(masked.extensions).toEqual(
+        ['UNAUTHENTICATED', 'FORBIDDEN'].includes(code)
+          ? { code }
+          : { code: 'INTERNAL_SERVER_ERROR', unexpected: true },
+      )
       expect(JSON.stringify(masked)).not.toMatch(/SELECT|D1_ERROR|org_b/)
     })
 
