@@ -115,10 +115,8 @@
         },
       ],
       "vars": {
-        "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z",
-        // Non-tenant origins that get a token for platform operators only
-        // (#1922). Preview has none: kontroll has no stable preview origin.
         "OPERATOR_ORIGINS": "https://my.konf.app",
+        "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z",
         "SANITY_PROJECT_ID": "mvzwvw14",
         "SANITY_DATASET": "production",
       },
