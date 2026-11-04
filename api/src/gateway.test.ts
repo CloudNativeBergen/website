@@ -1004,12 +1004,17 @@ describe('operator lane (#1892 phase 4)', () => {
   const OPS = 'https://my.konf.app'
   const opsJwt = () => jwt({ claims: { [SESSION_ORIGIN_CLAIM]: OPS } })
 
-  function opsEnv(platformOperator = true, allow = true) {
-    const made = makeEnv({ orgRole: 'admin' }, allow)
+  function opsEnv(
+    platformOperator = true,
+    allow = true,
+    orgRole: string | null = 'admin',
+  ) {
+    const made = makeEnv({ orgRole }, allow)
     const env = made.env as Env & Record<string, unknown>
     env.OPERATOR_ORIGIN = OPS
+    env.DIRECTORY.fetch = vi.fn(env.DIRECTORY.fetch)
     env.MEMBERSHIP.principal = vi.fn(async () => ({
-      orgRole: 'admin',
+      orgRole,
       platformOperator,
     }))
     return { ...made, env }
@@ -1067,6 +1072,19 @@ describe('operator lane (#1892 phase 4)', () => {
     expect(res.status).toBe(401)
     expect(envelopes).toEqual([])
     expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+    expect(env.DIRECTORY.fetch).not.toHaveBeenCalled()
+  })
+
+  it('gives an operator with no role in the tenant orgRole null (no write)', async () => {
+    const { env, envelopes } = opsEnv(true, true, null)
+    await call(env, {
+      origin: OPS,
+      authorization: `Bearer ${await opsJwt()}`,
+      [OPERATOR_TENANT_HEADER]: 'conf.example',
+    })
+    expect(
+      await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem),
+    ).toMatchObject({ typ: 'tenant', orgRole: null })
   })
 
   it('refuses an unknown tenant host', async () => {
