@@ -372,7 +372,11 @@ async function findSpeakersByEmails(
     const speakers = (await clientReadUncached.fetch(
       // groq-global: cross-tenant identity join — a returning global person must
       // resolve regardless of which org they first belonged to (#615).
-      groq`*[_type == "speaker" && (${DISPLAY_EMAIL_MATCHABLE} && lower(email) in $emails || count((knownEmails[])[lower(@) in $emails]) > 0)] | order(_createdAt asc) [0...5] ${LOGIN_SPEAKER_PROJECTION}`,
+      // A ticket-GRANTED address (`ticketEmailGrants`) is excluded: an
+      // organizer of one org attested it, the person never proved it, and a
+      // sign-in through it would inherit the speaker's organizer rights in
+      // every OTHER org (#1914). It still links tickets; it never signs in.
+      groq`*[_type == "speaker" && (${DISPLAY_EMAIL_MATCHABLE} && lower(email) in $emails || count((knownEmails[])[lower(@) in $emails && !(lower(@) in coalesce(^.ticketEmailGrants[].email, []))]) > 0)] | order(_createdAt asc) [0...5] ${LOGIN_SPEAKER_PROJECTION}`,
       { emails },
     )) as Speaker[]
     return { speakers: speakers || [], err: null }
