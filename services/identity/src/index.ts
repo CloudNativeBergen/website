@@ -1,7 +1,7 @@
 // Identity entry: Better Auth under /api/auth, the login handoff under
 // /handoff, its error page at /error, the RPC entrypoints, and 404 for everything else.
 import { WorkerEntrypoint } from 'cloudflare:workers'
-import { createAuth, createData } from './data'
+import { createAuth, createData, scheduled } from './data'
 import { errorPage } from './error-page'
 import { handoff, type HandoffEnv } from './handoff'
 import { loginTestPage } from './login-test'
@@ -51,4 +51,6 @@ export default {
     // RPC entrypoints above.
     return new Response('Not found', { status: 404 })
   },
+  scheduled: (_controller: ScheduledController, env: Env) =>
+    scheduled(createData(env)),
 } satisfies ExportedHandler<Env>

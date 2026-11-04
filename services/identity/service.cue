@@ -9,11 +9,16 @@ service: #PlatformService & {
 	// The public host for sign-in and the login handoff (#1803).
 	routes: {preview: ["id-preview.konf.app"], production: ["id.konf.app"]}
 	// Last moment a NextAuth session may upgrade to an identity session (#1842).
+	// Sanity ids as in services/content; preview reads development only.
 	vars: {
 		// LOGIN_TEST_PAGE serves the manual login test page at /test (preview only).
-		preview: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", LOGIN_TEST_PAGE: "1"}
-		production: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z"}
+		preview: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", LOGIN_TEST_PAGE: "1", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development"}
+		production: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production"}
 	}
+	// Organizer membership sync (#1907, src/data/member-sync.ts), hourly.
+	// Secret per env: SANITY_API_TOKEN_READ. Without it the sync grants nothing.
+	_memberSyncSchedule: "0 * * * *"
+	crons: [_memberSyncSchedule]
 	// Verified origins for the login handoff (#688).
 	serviceBindings: [{binding: "DIRECTORY", service: "konf-tenant-directory"}]
 	// Handoff limits (src/handoff.ts): POSTs per tenant origin, GET per IP.
