@@ -23,6 +23,7 @@
     "LOGIN_TEST_PAGE": "1",
     "SANITY_PROJECT_ID": "mvzwvw14",
     "SANITY_DATASET": "development",
+    "MEMBER_SOURCE_ORGS": "",
   },
   "workers_dev": false,
   "preview_urls": false,
@@ -72,6 +73,7 @@
         "LOGIN_TEST_PAGE": "1",
         "SANITY_PROJECT_ID": "mvzwvw14",
         "SANITY_DATASET": "development",
+        "MEMBER_SOURCE_ORGS": "",
       },
     },
     "production": {
@@ -119,6 +121,7 @@
         "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z",
         "SANITY_PROJECT_ID": "mvzwvw14",
         "SANITY_DATASET": "production",
+        "MEMBER_SOURCE_ORGS": "",
       },
     },
   },
