@@ -147,7 +147,3 @@ export function createData(env: DataEnv) {
     },
   }
 }
-
-/** Cron entry (service.cue `crons`). */
-export const scheduled = (data: ReturnType<typeof createData>) =>
-  data.syncMembers()

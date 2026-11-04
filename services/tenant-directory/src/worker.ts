@@ -37,6 +37,6 @@ export default {
     }
     return yoga.fetch(request, { envelope, data: createData(env) })
   },
-  scheduled: (_controller: ScheduledController, env: WorkerEnv) =>
-    scheduled(createData(env)),
+  scheduled: (controller: ScheduledController, env: WorkerEnv) =>
+    scheduled(createData(env), controller.scheduledTime),
 } satisfies ExportedHandler<WorkerEnv>

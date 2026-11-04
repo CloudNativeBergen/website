@@ -17,7 +17,7 @@ package codegen
 	name:    string & =~"^[a-z][a-z0-9-]*$"
 	tenancy: *true | false
 	// Cron Trigger schedules. A cron has no envelope. Tenancy-off: the
-	// service exports `scheduled(data)` from src/data. Tenancy-on (db only):
+	// service exports `scheduled(data, scheduledTime)` from src/data. Tenancy-on (db only):
 	// it exports `scheduled(env)` and `ScheduledEnv` from src/data, and the
 	// cron gets env directly, never a resolver.
 	crons: *[] | [...string]
@@ -73,7 +73,7 @@ package codegen
 	}
 	if len(crons) > 0 && !tenancy {
 		_scheduledImport:  ", scheduled"
-		_scheduledHandler: "\n  scheduled: (_controller: ScheduledController, env: WorkerEnv) =>\n    scheduled(createData(env)),"
+		_scheduledHandler: "\n  scheduled: (controller: ScheduledController, env: WorkerEnv) =>\n    scheduled(createData(env), controller.scheduledTime),"
 	}
 	if len(crons) > 0 && tenancy {
 		_dataImport:       ", scheduled, type ScheduledEnv"
