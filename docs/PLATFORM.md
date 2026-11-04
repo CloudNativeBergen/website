@@ -68,5 +68,6 @@ Which system owns each entity, and how data moves between owners: [DATA_OWNERSHI
 
 ## Further reading
 
+- [SECRETS.md](./SECRETS.md): every platform secret, where it lives, how to rotate it.
 - `api/README.md`: gateway commands and environments.
 - Private: RunKonf/infra `docs/platform/` (`ARCHITECTURE.md`, `SPEC.md`, `DECISIONS.md`) for the full design.

@@ -46,6 +46,8 @@ Run `pnpm compose` first, then deploy with `npx wrangler deploy --env preview` o
 
 ## Secrets
 
+The full inventory (every secret, who holds it, fnox key, rotation) is in [docs/SECRETS.md](../docs/SECRETS.md).
+
 | Secret                 | Envs                | What                                                            |
 | ---------------------- | ------------------- | --------------------------------------------------------------- |
 | `ENVELOPE_PRIVATE_KEY` | preview, production | PKCS8 PEM (EdDSA) that signs envelopes                          |
