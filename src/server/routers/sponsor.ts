@@ -79,6 +79,7 @@ import {
   hasEnded,
 } from '@/lib/sponsor-crm/renewal'
 import { findOutboundOrigin } from '@/lib/conference/baseUrl'
+import { mergeConference } from '@/lib/conference/merge'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
 import type {
@@ -4250,11 +4251,14 @@ export const sponsorRouter = router({
           await requireDocumentInCurrentConference(input.tierId, 'sponsorTier')
         }
         const conferenceId = await resolveConferenceId()
-        const conference = await clientReadUncached.fetch<Conference | null>(
-          // groq-global-scoped: point read of the request's own conference.
-          `*[_type == "conference" && _id == $id][0]`,
-          { id: conferenceId },
-        )
+        const sanityConference =
+          await clientReadUncached.fetch<Conference | null>(
+            // groq-global-scoped: point read of the request's own conference.
+            `*[_type == "conference" && _id == $id][0]`,
+            { id: conferenceId },
+          )
+        const conference =
+          sanityConference && (await mergeConference(sanityConference))
         if (!conference) {
           throw new TRPCError({
             code: 'NOT_FOUND',

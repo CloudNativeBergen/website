@@ -11,6 +11,7 @@ import {
 } from '@/lib/sanity/client'
 import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { mergeConference } from '@/lib/conference/merge'
 import { tierExistenceQuery } from './tier-validation'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 import type {
@@ -472,6 +473,13 @@ export async function getSponsorForConference(id: string): Promise<{
 
     if (!sponsorForConference) {
       return { error: new Error('Sponsor relationship not found') }
+    }
+
+    // D1-owned conference fields (#1997); the Sanity row is the fallback.
+    if (sponsorForConference.conference?._id) {
+      sponsorForConference.conference = await mergeConference(
+        sponsorForConference.conference,
+      )
     }
 
     return { sponsorForConference }
