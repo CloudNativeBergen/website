@@ -237,6 +237,50 @@ describe('introspection (#1961)', () => {
       }
   })
 
+  it('answers the refusal 403 FORBIDDEN', async () => {
+    const r = await gateway.fetch(
+      new Request('http://api.test/graphql', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: SITE },
+        body: JSON.stringify({ query: SCHEMA }),
+      }),
+      env(false, null),
+    )
+    expect(r.status).toBe(403)
+    const body = (await r.json()) as {
+      errors: { extensions?: { code?: string } }[]
+    }
+    expect(body.errors[0].extensions?.code).toBe('FORBIDDEN')
+  })
+
+  it('names no field or argument in suggestions to anonymous callers', async () => {
+    for (const query of [
+      'mutation { provisionOrganizatio }',
+      // All required arguments given, so only the typo is reported; the
+      // required-argument list itself is a known hole (#1961).
+      `mutation { provisionOrganization(idempotencyKe: "k", ${Object.keys(ARGS)
+        .map((k) => `${k}: "x"`)
+        .join(', ')}) { id } }`,
+    ]) {
+      const body = await ask(env(false, null), { origin: SITE }, query)
+      const text = JSON.stringify(body.errors)
+      expect(text).toMatch(/Cannot query field|Unknown argument/)
+      expect(text).not.toMatch(/Did you mean/)
+      expect(text).not.toContain('provisionOrganization"')
+      expect(text).not.toContain('idempotencyKey')
+    }
+  })
+
+  it('serves no GraphiQL to a browser', async () => {
+    const r = await gateway.fetch(
+      new Request('http://api.test/graphql', {
+        headers: { accept: 'text/html', origin: SITE },
+      }),
+      env(false, null),
+    )
+    expect(await r.text()).not.toMatch(/graphiql/i)
+  })
+
   it('shows provisionOrganization and its arguments to an operator with no tenant', async () => {
     const headers = { origin: OPS, authorization: `Bearer ${await jwt(OPS)}` }
     const schema = await ask(env(true, null), headers, SCHEMA)

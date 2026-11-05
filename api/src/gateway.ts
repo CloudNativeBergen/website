@@ -291,8 +291,34 @@ const operatorIntrospection: GatewayPlugin<GatewayContext> = {
     })
     if (found)
       setResultAndStopExecution({
-        errors: [new GraphQLError('GraphQL introspection is not allowed')],
+        errors: [
+          new GraphQLError('GraphQL introspection is not allowed', {
+            extensions: { code: 'FORBIDDEN', http: { status: 403 } },
+          }),
+        ],
       })
+  },
+}
+
+/**
+ * graphql-js validation appends `Did you mean "x"?` to unknown field and
+ * argument errors, which would name @tag(operator) fields to anyone (#1961).
+ * Stripped for every caller; validation results are cached per document.
+ */
+const blockFieldSuggestions: GatewayPlugin<GatewayContext> = {
+  onValidate() {
+    return ({ result, setResult }) => {
+      if (!result.some((e) => / Did you mean /.test(e.message))) return
+      setResult(
+        result.map(
+          (e) =>
+            new GraphQLError(e.message.replace(/ Did you mean .*$/s, ''), {
+              nodes: e.nodes,
+              extensions: e.extensions,
+            }),
+        ),
+      )
+    }
   },
 }
 
@@ -350,6 +376,7 @@ export function createGateway(supergraph: string) {
     supergraph,
     graphqlEndpoint: '/graphql',
     landingPage: false,
+    graphiql: false,
     // Only OPERATOR_ORIGIN may send the operator header, with credentials.
     // Every other origin keeps Yoga's default (reflect origin and headers).
     cors: (request, ctx) => operatorCors(request, (ctx as { env: Env }).env),
@@ -381,6 +408,7 @@ export function createGateway(supergraph: string) {
     plugins: () => [
       maxDepthPlugin({ n: 10, ignoreIntrospection: false }),
       maxAliasesPlugin({ n: 15 }),
+      blockFieldSuggestions,
       mutationBudget,
       operatorIntrospection,
       // TODO(#1772 req. 5): persisted queries from a build-time manifest.
