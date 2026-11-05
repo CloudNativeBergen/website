@@ -8,6 +8,63 @@ import {
   VolunteerStatus,
   VolunteerWithConference,
 } from './types'
+import { findOutboundOrigin } from '@/lib/conference/baseUrl'
+import { mergeKonfApiConference, rolloutFlags } from '@/lib/conference/konf-api'
+import type { Conference } from '@/lib/conference/types'
+
+async function enrichVolunteersConference(
+  volunteers: VolunteerWithConference[],
+): Promise<VolunteerWithConference[]> {
+  if (!volunteers || volunteers.length === 0) return []
+  const confCache = new Map<
+    string,
+    Promise<VolunteerWithConference['conference']>
+  >()
+  return Promise.all(
+    volunteers.map(async (v) => {
+      const conf = v.conference
+      if (!conf?._id) return v
+      let promise = confCache.get(conf._id)
+      if (!promise) {
+        promise = (async () => {
+          const origin = findOutboundOrigin(conf)
+          const host = origin ? new URL(origin).host : null
+          if (
+            host &&
+            (
+              await rolloutFlags(
+                host,
+                conf as Pick<Conference, '_id' | 'organization'>,
+              )
+            ).apiRead
+          ) {
+            const merged = (await mergeKonfApiConference(
+              host,
+              conf as unknown as Conference,
+            )) as unknown as typeof conf
+            return {
+              ...conf,
+              ...merged,
+            }
+          }
+          return conf
+        })()
+        confCache.set(conf._id, promise)
+      }
+      return {
+        ...v,
+        conference: await promise,
+      }
+    }),
+  )
+}
+
+async function enrichVolunteerConference(
+  volunteer: VolunteerWithConference,
+): Promise<VolunteerWithConference> {
+  const [enriched] = await enrichVolunteersConference([volunteer])
+  return enriched
+}
 
 export async function getVolunteersByConference(
   conferenceId: string,
@@ -68,7 +125,10 @@ export async function getVolunteersByConference(
         conferenceId,
       },
     )
-    return { volunteers: volunteers || [], error: null }
+    return {
+      volunteers: await enrichVolunteersConference(volunteers || []),
+      error: null,
+    }
   } catch (error) {
     return {
       volunteers: [],
@@ -137,7 +197,10 @@ export async function getVolunteerById(
       query,
       { id },
     )
-    return { volunteer, error: null }
+    return {
+      volunteer: volunteer ? await enrichVolunteerConference(volunteer) : null,
+      error: null,
+    }
   } catch (error) {
     return {
       volunteer: null,
