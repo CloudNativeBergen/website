@@ -169,7 +169,7 @@ describe('provisionOrganization (#1924)', () => {
         data: { provisionOrganization: null },
         errors: [
           {
-            message: 'Unexpected error.',
+            message: 'Not allowed.',
             path: ['provisionOrganization'],
             extensions: { code: 'FORBIDDEN' },
           },
