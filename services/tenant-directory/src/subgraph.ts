@@ -45,6 +45,35 @@ const Conference = builder
     }),
   })
 
+// Contributes lifecycleStatus to the conference subgraph's editions (#1971).
+// The source of truth for lifecycle is this D1.
+const ConferenceEdition = builder
+  .objectRef<Row<'id' | 'lifecycle'>>('ConferenceEdition')
+  .implement({
+    fields: (t) => ({
+      id: t.exposeID('id'),
+      lifecycleStatus: t.exposeString('lifecycle', {
+        nullable: true,
+        description:
+          '`draft`, `live` or `archived`. Org members see every value; anyone else only `live`, and null otherwise.',
+      }),
+    }),
+  })
+
+builder.asEntity(ConferenceEdition, {
+  key: builder.selection<{ id: string }>('id'),
+  // Only the envelope's own org's editions: an `_entities` call naming
+  // another org's id gets null. Non-members (anonymous, operators acting
+  // for the org) get `live` or nothing, never draft or archived.
+  resolveReference: async ({ id }, ctx) => {
+    const e = ctx.envelope
+    if (e?.typ !== 'tenant') return null
+    const conf = await ctx.data.conferenceOf(e.orgId, id)
+    if (!conf) return null
+    return e.orgRole || conf.lifecycle === 'live' ? conf : null
+  },
+})
+
 type Flags = Record<
   'apiRead' | 'identityLogin' | 'd1Write' | 'd1Override',
   boolean

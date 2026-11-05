@@ -414,6 +414,7 @@ let memberJwt: string
 const dbs: D1Database[] = []
 let identityData: { isVerifiedOrigin(origin: string): Promise<boolean> }
 let forgedB: string
+let sign: (p: Record<string, unknown>) => Promise<string>
 let envelopePublicKey: string
 /** The envelope each subgraph binding last received. */
 const lastEnvelope: Record<string, string | null> = {}
@@ -537,10 +538,10 @@ beforeAll(async () => {
   identityData = createData(identityEnv)
   memberJwt = ((await res.json()) as { token: string }).token
 
+  const signer = await createSigner(keys.privatePem)
+  sign = (p) => signer.sign(p as never, 60)
   // Worst case for a forged header: a genuinely signed envelope for B.
-  forgedB = await (
-    await createSigner(keys.privatePem)
-  ).sign(
+  forgedB = await signer.sign(
     {
       typ: 'tenant',
       orgId: ORG.b,
@@ -872,6 +873,135 @@ describe('conferenceEditions (#1970)', () => {
   })
 })
 
+// --- lifecycleStatus (#1971) -----------------------------------------------
+
+const LIFECYCLE = '{ conferenceEditions { id lifecycleStatus } }'
+const directoryConferences = async () => {
+  for (const db of dbs) {
+    const { results } = await db
+      .prepare(
+        "SELECT 1 FROM pragma_table_info('conferences') WHERE name = 'lifecycle'",
+      )
+      .all()
+    if (results.length) return db
+  }
+  throw new Error('no tenant-directory D1')
+}
+const setLifecycle = async (id: string, lifecycle: string) =>
+  (await directoryConferences())
+    .prepare(
+      'INSERT INTO conferences (id, org_id, slug, name, lifecycle) VALUES (?1, ?2, ?1, ?1, ?3) ON CONFLICT (id) DO UPDATE SET lifecycle = ?3',
+    )
+    .bind(id, id === CONF.b ? ORG.b : ORG.a, lifecycle)
+    .run()
+const lifecycles = (body: string) => {
+  const json = JSON.parse(body) as {
+    data?: { conferenceEditions: { id: string; lifecycleStatus: string }[] }
+    errors?: unknown
+  }
+  expect(json.errors, body).toBeUndefined()
+  return Object.fromEntries(
+    json.data!.conferenceEditions.map((e) => [e.id, e.lifecycleStatus]),
+  )
+}
+/** An `_entities` call straight to tenant-directory, bypassing the gateway. */
+async function directoryEntities(
+  envelope: Record<string, unknown> | null,
+  id: string,
+) {
+  const res = await (
+    env[BINDINGS['tenant-directory'] as keyof Env] as unknown as Fetcher
+  ).fetch('https://tenant-directory.internal/graphql', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(envelope ? { [ENVELOPE_HEADER]: await sign(envelope) } : {}),
+    },
+    body: JSON.stringify({
+      query:
+        'query($r: [_Any!]!) { _entities(representations: $r) { ... on ConferenceEdition { id lifecycleStatus } } }',
+      variables: { r: [{ __typename: 'ConferenceEdition', id }] },
+    }),
+  })
+  return ((await res.json()) as { data: { _entities: unknown[] } }).data
+    ._entities
+}
+
+describe('lifecycleStatus (#1971)', () => {
+  beforeAll(async () => {
+    await addEditions()
+    await setLifecycle(DRAFT_A, 'draft')
+    await setLifecycle(UNLISTED_A, 'archived')
+  })
+  afterAll(async () => {
+    await dropEditions()
+    await (
+      await directoryConferences()
+    )
+      .prepare('DELETE FROM conferences WHERE id IN (?, ?)')
+      .bind(DRAFT_A, UNLISTED_A)
+      .run()
+    await setLifecycle(CONF.a, 'live')
+  })
+  beforeEach(async () => {
+    env.OVERRIDE_TENANTS = {}
+    await overrideForA(false)
+    await setLifecycle(CONF.a, 'live')
+  })
+  const member = () => ({ authorization: `Bearer ${memberJwt}` })
+  const tenantA = {
+    typ: 'tenant',
+    orgId: ORG.a,
+    conferenceId: CONF.a,
+    userId: USER.a,
+    orgRole: 'admin',
+    scopes: [],
+  }
+
+  it('gives a member every lifecycle value of their own editions', async () => {
+    expect(
+      lifecycles(await run(LIFECYCLE, { ...member(), origin: ORIGIN })),
+    ).toEqual({
+      [CONF.a]: 'live',
+      [DRAFT_A]: 'draft',
+      [UNLISTED_A]: 'archived',
+    })
+  })
+
+  it('gives an anonymous caller live on public editions, and never another value', async () => {
+    expect(lifecycles(await run(LIFECYCLE, { origin: ORIGIN }))).toEqual({
+      [CONF.a]: 'live',
+    })
+    // Public in conference D1 but archived in the directory: null, not archived.
+    await setLifecycle(CONF.a, 'archived')
+    expect(lifecycles(await run(LIFECYCLE, { origin: ORIGIN }))).toEqual({
+      [CONF.a]: null,
+    })
+  })
+
+  it("resolves no reference to another org's conference, even for an admin", async () => {
+    // Positive control: the same call resolves A's own.
+    expect(await directoryEntities(tenantA, CONF.a)).toEqual([
+      { id: CONF.a, lifecycleStatus: 'live' },
+    ])
+    expect(await directoryEntities(tenantA, CONF.b)).toEqual([null])
+    expect(await directoryEntities(tenantA, 'conf-nonexistent')).toEqual([null])
+  })
+
+  it('resolves no draft or archived reference for a non-member or no envelope', async () => {
+    const anon = { ...tenantA, userId: null, orgRole: null }
+    const operator = { ...anon, scopes: [OPERATOR_SCOPE] }
+    for (const e of [anon, operator]) {
+      expect(await directoryEntities(e, CONF.a)).toEqual([
+        { id: CONF.a, lifecycleStatus: 'live' },
+      ])
+      expect(await directoryEntities(e, DRAFT_A)).toEqual([null])
+      expect(await directoryEntities(e, UNLISTED_A)).toEqual([null])
+    }
+    expect(await directoryEntities(null, CONF.a)).toEqual([null])
+  })
+})
+
 describe('operator lane: Kontroll members (#1956)', () => {
   const OPS = 'https://my.konf.app'
   let opsJwt: string
@@ -1164,6 +1294,24 @@ describe('operator lane: Kontroll members (#1956)', () => {
       )
     })
 
+    it("gives the selected tenant's member every lifecycle value", async () => {
+      await setLifecycle(DRAFT_A, 'draft')
+      try {
+        expect(lifecycles(await run(LIFECYCLE, ops(HOST.a)))).toEqual({
+          [CONF.a]: 'live',
+          [DRAFT_A]: 'draft',
+          [UNLISTED_A]: null,
+        })
+      } finally {
+        await (
+          await directoryConferences()
+        )
+          .prepare('DELETE FROM conferences WHERE id = ?')
+          .bind(DRAFT_A)
+          .run()
+      }
+    })
+
     it("lists an operator the selected tenant's public editions, like conference", async () => {
       await identityDb()
         .prepare('UPDATE user SET platformOperator = 1 WHERE id = ?')
@@ -1173,6 +1321,10 @@ describe('operator lane: Kontroll members (#1956)', () => {
         // Operator of B, member of A: B's editions, no org role there.
         const body = await run(EDITIONS, ops(HOST.b))
         expect(editionIds(body)).toEqual([CONF.b])
+        // lifecycleStatus follows the same rule: live on a public edition.
+        expect(lifecycles(await run(LIFECYCLE, ops(HOST.b)))).toEqual({
+          [CONF.b]: 'live',
+        })
         expect(
           await verifyEnvelope(lastEnvelope.conference!, envelopePublicKey),
         ).toMatchObject({

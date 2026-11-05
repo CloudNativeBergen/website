@@ -69,6 +69,16 @@ const ConferenceEdition = builder
     }),
   })
 
+// An entity so tenant-directory can add lifecycleStatus (#1971). Only an
+// edition this caller may list resolves.
+builder.asEntity(ConferenceEdition, {
+  key: builder.selection<{ id: string }>('id'),
+  resolveReference: async ({ id }, ctx) =>
+    (await ctx.data.conferences().editions()).find(
+      (e) => e.conferenceId === id,
+    ) ?? null,
+})
+
 builder.asEntity(Conference, {
   key: builder.selection<{ id: string }>('id'),
   // Only the envelope's own Conference resolves, never an id a caller names.

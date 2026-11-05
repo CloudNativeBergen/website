@@ -143,6 +143,15 @@ export function createData(
         limit: first,
       }),
 
+    /**
+     * One of `orgId`'s conferences, by id. The org is part of the query, so
+     * another org's id finds nothing (#1971).
+     */
+    conferenceOf: (orgId: string, id: string) =>
+      db.query.conferences.findFirst({
+        where: and(eq(conferences.id, id), eq(conferences.orgId, orgId)),
+      }),
+
     /** One org's hostnames; the caller already decided it may see them. */
     domainsOf: (orgId: string) =>
       db.query.domains.findMany({
