@@ -222,6 +222,7 @@ export const OPEN_PROJECTION = `{
   formatVersion,
   scope,
   "edition": select(scope == "edition" && conference->organization._ref == organization._ref => coalesce(conference->title, "Untitled edition"), null),
+  "conference": select(scope == "edition" && conference->organization._ref == organization._ref => conference->{ _id, title, domains, organization }, null),
   "scenes": scenes[]{
     "key": _key,
     duration,

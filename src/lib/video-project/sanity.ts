@@ -1,7 +1,7 @@
 import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { mergeConferences } from '@/lib/conference/merge'
+import { mergeConference, mergeConferences } from '@/lib/conference/merge'
 import { getCurrentDateTime } from '@/lib/time'
 import { OPEN_PROJECTION, VIDEO_PROJECT_FORMAT_VERSION } from './document'
 import type { ProjectRow } from './document'
@@ -75,13 +75,29 @@ export async function readVideoProject(
   orgId: string,
   id: string,
 ): Promise<ProjectRow | null> {
-  return scopedFetch<ProjectRow | null>(
+  type ProjectRowWithConference = ProjectRow & {
+    conference?: {
+      _id: string
+      title?: string | null
+      domains?: readonly string[] | null
+      organization?: { _ref: string } | null
+    } | null
+  }
+  const row = await scopedFetch<ProjectRowWithConference | null>(
     clientReadUncached,
     { orgId },
     `*[_type == "videoProject" && _id == $id][0]${OPEN_PROJECTION}`,
     { id },
     opts,
   )
+  if (!row) return null
+  let edition = row.edition
+  if (row.conference) {
+    const merged = await mergeConference(row.conference)
+    edition = merged.title ?? edition
+  }
+  const { conference: _, ...rest } = row
+  return { ...rest, edition }
 }
 
 /** A file a project held only through itself, with the entry it named. */

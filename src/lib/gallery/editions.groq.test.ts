@@ -104,7 +104,7 @@ const DATASET = [
 ]
 
 beforeEach(() => {
-  h.dataset = DATASET
+  h.dataset = DATASET.map((d) => ({ ...d }))
   h.queries = []
 })
 
@@ -271,5 +271,39 @@ describe('getPreviousEditions D1 gateway values and fallbacks (#1997)', () => {
     expect(ed2025!.title).toBe('conf-a-2025')
     expect(ed2025!.startDate).toBe('2025-10-01')
     expect(ed2025!.endDate).toBe('2025-10-02')
+  })
+
+  it('includes an edition whose endDate is only defined in D1 when flagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-a-2025')
+
+    const conf2025 = h.dataset.find((d) => d._id === 'conf-a-2025')!
+    conf2025.domains = ['2025.example.com']
+    delete conf2025.endDate // Undefined in Sanity
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conf-a-2025',
+              title: 'D1 2025 Title',
+              startDate: '2025-11-01',
+              endDate: '2025-11-02',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const editions = await getPreviousEditions('org-a', {
+      _id: 'conf-a-2026',
+      startDate: '2026-10-01',
+    })
+    const ed2025 = editions.find((e) => e._id === 'conf-a-2025')
+    expect(ed2025).toBeDefined()
+    expect(ed2025!.title).toBe('D1 2025 Title')
+    expect(ed2025!.endDate).toBe('2025-11-02')
   })
 })

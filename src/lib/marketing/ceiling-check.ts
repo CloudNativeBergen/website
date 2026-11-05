@@ -1,4 +1,5 @@
 import { clientReadUncached } from '@/lib/sanity/client'
+import { mergeConference } from '@/lib/conference/merge'
 import {
   ceilingWarnings,
   describeCeilingWarning,
@@ -19,6 +20,7 @@ import { MARKETING_CHANNELS, type MarketingChannel } from './types'
 
 // groq-global-scoped: a by-id read of the conference itself, the tenant key.
 const CONFERENCE_ROOT = `*[_type == "conference" && _id == $conferenceId][0]{
+  _id, domains, organization,
   startDate, endDate, cfpStartDate, cfpEndDate, cfpNotifyDate, programDate,
   earlyBirdEndDate, registrationCloseDate, speakersAnnouncedDate,
   sponsorDeadlineDate, recordingsLiveDate, ticketTargets
@@ -35,7 +37,13 @@ const TASK_KEYS_ROOT = `*[_type == "marketingTask" && conference._ref == $confer
 }`
 
 interface CeilingRead {
-  conference: MilestoneSource | null
+  conference:
+    | (MilestoneSource & {
+        _id: string
+        domains?: readonly string[] | null
+        organization?: { _ref: string } | null
+      })
+    | null
   variants:
     | {
         _id: string
@@ -60,6 +68,7 @@ async function readCeilings(
     { cache: 'no-store' },
   )
   if (!read?.conference) return null
+  const mergedConference = await mergeConference(read.conference)
   const keyByVariant = new Map(
     (read.tasks ?? []).flatMap((t) =>
       t.key && t.variantId ? [[t.variantId, t.key] as const] : [],
@@ -72,10 +81,10 @@ async function readCeilings(
       at: v.scheduledAt,
       taskKey: keyByVariant.get(v._id) ?? null,
     })),
-    eventWeekOf(resolveAllMilestones(read.conference)),
+    eventWeekOf(resolveAllMilestones(mergedConference)),
     osloTodayDateString(),
   )
-  return { warnings, read }
+  return { warnings, read: { ...read, conference: mergedConference } }
 }
 
 /**

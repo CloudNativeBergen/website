@@ -1,4 +1,5 @@
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
+import { mergeConferences } from '@/lib/conference/merge'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { createNotifications } from '@/lib/notification/sanity'
 import { getCurrentDateTime } from '@/lib/time'
@@ -21,38 +22,89 @@ export async function resolveReminderConferences(
 ): Promise<ReminderConference[]> {
   const plans =
     '_type == "marketingPlan" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && conference->_type == "conference"'
-  const projection = '{"planId": _id, "conferenceId": conference._ref}'
-  const waiting = await clientReadUncached.fetch<ReminderConference[]>(
+  type RawPlanRow = {
+    planId: string
+    conferenceId: string | null
+    lastRemindedAt: string
+    startDate?: string | null
+    conference?: {
+      _id: string
+      startDate?: string | null
+      domains?: readonly string[] | null
+      organization?: { _ref: string } | null
+    } | null
+  }
+  const rows = await clientReadUncached.fetch<RawPlanRow[]>(
     // groq-global: bounded cron discovery serves plan-owning tenants waiting longest first.
-    `*[${plans}] | order(coalesce(lastRemindedAt, "") asc, conference->startDate asc, _id asc)[0...${MAX_CONFERENCES_PER_RUN}]${projection}`,
+    `*[${plans}]{
+      "planId": _id,
+      "conferenceId": conference._ref,
+      "lastRemindedAt": coalesce(lastRemindedAt, ""),
+      "startDate": conference->startDate,
+      "conference": conference->{ _id, startDate, domains, organization }
+    }`,
     {},
     { cache: 'no-store' },
   )
-  if (waiting.length < MAX_CONFERENCES_PER_RUN) return waiting
+  const validRows = (rows ?? []).filter(
+    (r): r is RawPlanRow & { conferenceId: string } => !!r.conferenceId,
+  )
+  if (validRows.length === 0) return []
 
-  const count = await clientReadUncached.fetch<number>(
-    // groq-global: only a count is read to locate a bounded, stamp-independent page.
-    `count(*[${plans}])`,
-    {},
-    { cache: 'no-store' },
-  )
-  if (count <= MAX_CONFERENCES_PER_RUN) return waiting
+  const confCache = new Map<
+    string,
+    {
+      _id: string
+      startDate?: string | null
+      domains?: readonly string[] | null
+      organization?: { _ref: string } | null
+    }
+  >()
+  for (const r of validRows) {
+    if (r.conference && !confCache.has(r.conference._id)) {
+      confCache.set(r.conference._id, r.conference)
+    }
+  }
+  const mergedConfs = await mergeConferences(Array.from(confCache.values()))
+  const confMap = new Map(mergedConfs.map((c) => [c._id, c]))
+
+  const enriched = validRows.map((r) => {
+    const conf = r.conference ? confMap.get(r.conference._id) : undefined
+    return {
+      planId: r.planId,
+      conferenceId: r.conferenceId,
+      lastRemindedAt: r.lastRemindedAt,
+      startDate: conf?.startDate ?? r.startDate ?? '',
+    }
+  })
+
+  const waiting = [...enriched]
+    .sort((a, b) => {
+      const remComp = a.lastRemindedAt.localeCompare(b.lastRemindedAt)
+      if (remComp !== 0) return remComp
+      const dateComp = a.startDate.localeCompare(b.startDate)
+      if (dateComp !== 0) return dateComp
+      return a.planId.localeCompare(b.planId)
+    })
+    .slice(0, MAX_CONFERENCES_PER_RUN)
+
+  if (enriched.length <= MAX_CONFERENCES_PER_RUN) {
+    return waiting.map(({ planId, conferenceId }) => ({ planId, conferenceId }))
+  }
+
+  const count = enriched.length
   const pageSize = MAX_CONFERENCES_PER_RUN / 2
   const day = Math.floor(Date.parse(now) / 86_400_000)
   const start = (day % Math.ceil(count / pageSize)) * pageSize
-  // Reserve half the budget for a UTC-day page. With a stable inventory this
-  // visits every plan within ceil(count / 25) daily runs, even if stamps fail.
-  const rotating = await clientReadUncached.fetch<ReminderConference[]>(
-    // groq-global: stable id pagination provides bounded fairness independent of writes.
-    `*[${plans}] | order(_id asc)[${start}...${start + pageSize}]${projection}`,
-    {},
-    { cache: 'no-store' },
-  )
+
+  const rotating = [...enriched]
+    .sort((a, b) => a.planId.localeCompare(b.planId))
+    .slice(start, start + pageSize)
+
   const reserved = new Set(rotating.map(({ planId }) => planId))
-  return [
-    ...rotating,
-    ...waiting.filter(({ planId }) => !reserved.has(planId)),
-  ].slice(0, MAX_CONFERENCES_PER_RUN)
+  return [...rotating, ...waiting.filter(({ planId }) => !reserved.has(planId))]
+    .slice(0, MAX_CONFERENCES_PER_RUN)
+    .map(({ planId, conferenceId }) => ({ planId, conferenceId }))
 }
 
 export function reminderCandidateQuery(marker: ReminderMarker): string {

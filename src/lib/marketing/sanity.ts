@@ -7,6 +7,7 @@ import {
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { mergeConference } from '@/lib/conference/merge'
 import { mediaDeletionBlockers } from '@/lib/social/media-deletion'
 import { getCurrentDateTime } from '@/lib/time'
 import type { VariantStatus } from '@/lib/social/types'
@@ -251,6 +252,12 @@ interface RawPlanView {
   ownerName: string | null
   templateVersion: string | null
   copiedFromTitle: string | null
+  copiedFromConference?: {
+    _id: string
+    title?: string | null
+    domains?: readonly string[] | null
+    organization?: { _ref: string } | null
+  } | null
   createdAt: string | null
   campaigns:
     | {
@@ -408,6 +415,7 @@ export async function getPlanView(
       "ownerName": owner->name,
       templateVersion, structurallyEdited,
       "copiedFromTitle": copiedFrom->conference->title,
+      "copiedFromConference": copiedFrom->conference->{ _id, title, domains, organization },
       createdAt,
       "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(startDate asc){
         _id, key, title, startDate, endDate, provisional, startMilestone, endMilestone, primaryOutcome, target, optional
@@ -436,6 +444,12 @@ export async function getPlanView(
 
   const tasks = toTaskViews(row.tasks)
 
+  let copiedFromTitle = row.copiedFromTitle ?? null
+  if (row.copiedFromConference) {
+    const merged = await mergeConference(row.copiedFromConference)
+    copiedFromTitle = merged.title ?? copiedFromTitle
+  }
+
   return {
     plan: {
       _id: row._id,
@@ -443,7 +457,7 @@ export async function getPlanView(
       ownerName: row.ownerName ?? null,
       templateVersion: row.templateVersion ?? '',
       structurallyEdited: row.structurallyEdited === true,
-      copiedFromTitle: row.copiedFromTitle ?? null,
+      copiedFromTitle,
       createdAt: row.createdAt ?? '',
     },
     campaigns,

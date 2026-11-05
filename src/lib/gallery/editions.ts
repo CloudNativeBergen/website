@@ -43,7 +43,7 @@ export async function getPreviousEditions(
     >(
       clientReadUncached,
       { orgId },
-      `*[_type == "conference" && _id != $currentId && defined(endDate)]
+      `*[_type == "conference" && _id != $currentId]
         | order(startDate desc) { _id, title, startDate, endDate, domains, organization }`,
       { currentId: current._id },
       { cache: 'no-store' },

@@ -110,17 +110,19 @@ export async function getCopySources(
   }
   const mergedConfs = await mergeConferences(Array.from(confCache.values()))
   const confMap = new Map(mergedConfs.map((c) => [c._id, c]))
-  return rawPlans.map((r) => {
-    const conf = r.conference ? confMap.get(r.conference._id) : undefined
-    return {
-      planId: r.planId,
-      conferenceId: r.conferenceId,
-      conferenceTitle: conf?.title ?? r.conferenceTitle ?? 'Untitled edition',
-      startDate: conf?.startDate ?? r.startDate ?? null,
-      campaigns: count(read?.campaigns ?? null, r.planId),
-      tasks: count(read?.tasks ?? null, r.planId),
-    }
-  })
+  return rawPlans
+    .map((r) => {
+      const conf = r.conference ? confMap.get(r.conference._id) : undefined
+      return {
+        planId: r.planId,
+        conferenceId: r.conferenceId,
+        conferenceTitle: conf?.title ?? r.conferenceTitle ?? 'Untitled edition',
+        startDate: conf?.startDate ?? r.startDate ?? null,
+        campaigns: count(read?.campaigns ?? null, r.planId),
+        tasks: count(read?.tasks ?? null, r.planId),
+      }
+    })
+    .sort((a, b) => (b.startDate ?? '').localeCompare(a.startDate ?? ''))
 }
 
 interface RawSource {
