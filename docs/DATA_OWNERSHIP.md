@@ -49,15 +49,15 @@ The target is kontroll on the API.
 
 ## Entity table
 
-| Entity              | Owner                                       | Adapter    | Write mode                                   | Window end                           |
-| ------------------- | ------------------------------------------- | ---------- | -------------------------------------------- | ------------------------------------ |
-| Conference settings | D1 (owner in transition)                    | D1, Sanity | Dual write on for CNDN 2026 since 2026-11-04 | One week of clean parity, then #1879 |
-| Tenants and domains | D1 (tenant-directory)                       | D1         | D1 only                                      | Done                                 |
-| Identity            | D1 (identity)                               | D1         | D1 only                                      | Done                                 |
-| Editorial content   | Sanity (content subgraph)                   | Sanity     | Sanity only                                  | Permanent                            |
-| Proposals, speakers | Sanity, behind the site seam (#1876, #1887) | Sanity     | Sanity only                                  | Undecided                            |
-| Logos               | Sanity                                      | Sanity     | Sanity only; R2 later (#1866)                | Not scheduled                        |
-| Tickets             | Undecided                                   | -          | -                                            | Undecided                            |
+| Entity                                            | Owner                                       | Adapter    | Write mode                                   | Window end                           |
+| ------------------------------------------------- | ------------------------------------------- | ---------- | -------------------------------------------- | ------------------------------------ |
+| Conference settings                               | D1 (owner in transition)                    | D1, Sanity | Dual write on for CNDN 2026 since 2026-11-04 | One week of clean parity, then #1879 |
+| Tenants, domains and conference lifecycle (#1971) | D1 (tenant-directory)                       | D1         | D1 only                                      | Done                                 |
+| Identity                                          | D1 (identity)                               | D1         | D1 only                                      | Done                                 |
+| Editorial content                                 | Sanity (content subgraph)                   | Sanity     | Sanity only                                  | Permanent                            |
+| Proposals, speakers                               | Sanity, behind the site seam (#1876, #1887) | Sanity     | Sanity only                                  | Undecided                            |
+| Logos                                             | Sanity                                      | Sanity     | Sanity only; R2 later (#1866)                | Not scheduled                        |
+| Tickets                                           | Undecided                                   | -          | -                                            | Undecided                            |
 
 Update the row in the same PR that changes an owner, an adapter or a write
 mode.
