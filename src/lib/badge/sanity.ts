@@ -4,6 +4,9 @@ import {
 } from '@/lib/sanity/client'
 import type { BadgeRecord, BadgeType } from './types'
 import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
+import { findOutboundOrigin } from '@/lib/conference/baseUrl'
+import { mergeKonfApiConference, rolloutFlags } from '@/lib/conference/konf-api'
+import type { Conference } from '@/lib/conference/types'
 
 const BADGE_FIELDS = `
   _id,
@@ -31,7 +34,9 @@ const BADGE_FIELDS = `
     country,
     tagline,
     startDate,
-    endDate
+    endDate,
+    domains,
+    organization
   },
   badgeType,
   issuedAt,
@@ -52,6 +57,55 @@ const BADGE_FIELDS = `
   emailId,
   emailError
 `
+
+async function enrichBadgesConference(
+  badges: BadgeRecord[],
+): Promise<BadgeRecord[]> {
+  if (!badges || badges.length === 0) return []
+  const confCache = new Map<string, Promise<BadgeRecord['conference']>>()
+  return Promise.all(
+    badges.map(async (badge) => {
+      const conf = badge.conference
+      if (!conf || !('_id' in conf)) return badge
+      let promise = confCache.get(conf._id)
+      if (!promise) {
+        promise = (async () => {
+          const origin = findOutboundOrigin(conf)
+          const host = origin ? new URL(origin).host : null
+          if (
+            host &&
+            (
+              await rolloutFlags(
+                host,
+                conf as Pick<Conference, '_id' | 'organization'>,
+              )
+            ).apiRead
+          ) {
+            const merged = await mergeKonfApiConference(
+              host,
+              conf as Conference,
+            )
+            return {
+              ...conf,
+              ...merged,
+            }
+          }
+          return conf
+        })()
+        confCache.set(conf._id, promise)
+      }
+      return {
+        ...badge,
+        conference: await promise,
+      }
+    }),
+  )
+}
+
+async function enrichBadgeConference(badge: BadgeRecord): Promise<BadgeRecord> {
+  const [enriched] = await enrichBadgesConference([badge])
+  return enriched
+}
 
 export async function uploadBadgeSVGAsset(
   svgContent: string,
@@ -128,7 +182,7 @@ export async function createBadge(params: {
       return { error: new Error('Failed to fetch created badge') }
     }
 
-    return { badge }
+    return { badge: await enrichBadgeConference(badge) }
   } catch (error) {
     console.error('Failed to create badge:', error)
     return { error: error as Error }
@@ -202,7 +256,7 @@ export async function patchBadgeArtifacts(
       return { error: new Error('Failed to fetch rebaked badge') }
     }
 
-    return { badge }
+    return { badge: await enrichBadgeConference(badge) }
   } catch (error) {
     console.error('Failed to patch badge artifacts:', error)
     return { error: error as Error }
@@ -240,7 +294,7 @@ export async function getBadgeById(badgeId: string): Promise<{
       return { error: new Error('Badge not found'), reason: 'not-found' }
     }
 
-    return { badge }
+    return { badge: await enrichBadgeConference(badge) }
   } catch (error) {
     console.error('Failed to fetch badge:', error)
     return { error: error as Error, reason: 'unavailable' }
@@ -291,7 +345,7 @@ export async function getBadgeForConference(
       return { error: new Error('Badge not found'), reason: 'not-found' }
     }
 
-    return { badge }
+    return { badge: await enrichBadgeConference(badge) }
   } catch (error) {
     console.error('Failed to fetch badge for conference:', error)
     return { error: error as Error, reason: 'unavailable' }
@@ -307,7 +361,7 @@ export async function listBadgesForConference(
       { conferenceId },
     )
 
-    return { badges: badges || [] }
+    return { badges: await enrichBadgesConference(badges || []) }
   } catch (error) {
     console.error('Failed to list badges:', error)
     return { error: error as Error }
@@ -344,7 +398,7 @@ export async function listBadgesForSpeakerInConference(
       { speakerId, conferenceId },
     )
 
-    return { badges: badges || [] }
+    return { badges: await enrichBadgesConference(badges || []) }
   } catch (error) {
     console.error('Failed to list speaker badges:', error)
     return { error: error as Error }
@@ -392,7 +446,11 @@ export async function updateBadgeEmailStatus(
       { id: updated._id },
     )
 
-    return { badge: updatedBadge || undefined }
+    return {
+      badge: updatedBadge
+        ? await enrichBadgeConference(updatedBadge)
+        : undefined,
+    }
   } catch (error) {
     console.error('Failed to update badge email status:', error)
     return { error: error as Error }
@@ -410,7 +468,10 @@ export async function checkBadgeExists(
       { speakerId, conferenceId, badgeType },
     )
 
-    return { exists: !!badge, badge: badge || undefined }
+    return {
+      exists: !!badge,
+      badge: badge ? await enrichBadgeConference(badge) : undefined,
+    }
   } catch (error) {
     console.error('Failed to check badge existence:', error)
     return { exists: false, error: error as Error }
