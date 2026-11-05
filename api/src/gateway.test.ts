@@ -417,7 +417,7 @@ describe('gateway', () => {
     expect(text).not.toContain('stacktrace')
     expect(JSON.parse(text).errors).toEqual([
       {
-        message: 'Unexpected error.',
+        message: 'Not signed in.',
         path: ['conference'],
         extensions: { code: 'UNAUTHENTICATED' },
       },
@@ -546,7 +546,11 @@ describe('gateway', () => {
         subgraphError(code, secret, { field: 'name' }),
         'Unexpected error.',
       ) as GraphQLError
-      expect(masked.message).toBe('Unexpected error.')
+      expect(masked.message).toBe(
+        { UNAUTHENTICATED: 'Not signed in.', FORBIDDEN: 'Not allowed.' }[
+          code
+        ] ?? 'Unexpected error.',
+      )
       expect(masked.extensions).toEqual(
         ['UNAUTHENTICATED', 'FORBIDDEN'].includes(code)
           ? { code }

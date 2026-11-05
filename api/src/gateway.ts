@@ -148,8 +148,10 @@ type Tenant = {
  * and the row is the envelope's own tenant, never one the caller names.
  */
 const SAFE_CODES: ReadonlyMap<string, string | null> = new Map([
-  ['UNAUTHENTICATED', null],
-  ['FORBIDDEN', null],
+  // A fixed message per code: the code is public already, so this leaks
+  // nothing, and a refusal no longer reads like an outage.
+  ['UNAUTHENTICATED', 'Not signed in.'],
+  ['FORBIDDEN', 'Not allowed.'],
   ['BAD_USER_INPUT', null],
   ['NOT_FOUND', 'Not found.'],
 ])

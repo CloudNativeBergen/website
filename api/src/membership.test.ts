@@ -305,7 +305,7 @@ describe('tenant path: role rules', () => {
     ])
       expect((await as(admin, orgId, m)).errors).toEqual([
         {
-          message: 'Unexpected error.',
+          message: 'Not allowed.',
           path: [expect.any(String)],
           extensions: { code: 'FORBIDDEN' },
         },
