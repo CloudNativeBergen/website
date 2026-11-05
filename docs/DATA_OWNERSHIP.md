@@ -26,10 +26,24 @@ The target is kontroll on the API.
       move.
    2. Backfill into D1, then a short dual-write window with a parity sweep.
       Today that is the `d1_write` rollout flag plus the daily conference parity
-      cron. Caveat: the parity script compares Sanity with anonymous gateway
-      reads, which still come from Sanity while the override is off (#1879), so
-      a clean result does not yet validate D1. A sweep that reads D1 is a
-      prerequisite for closing the window. See [Write path](./PLATFORM.md#write-path-d1_write).
+      cron. The cron (`services/conference/src/data/parity.ts`, daily at
+      04:17 UTC) reads the D1 table directly through the Worker's `DB` binding,
+      not the gateway, so it validates D1 whether or not `d1_override` is on.
+      It compares every column of every row (published or not) with the row
+      the backfill would write from Sanity today, with the backfill's
+      normalisation (trimmed, empty and absent are null, `social_links` as a
+      JSON array). It logs `conference.parity.drift` with the conference id
+      and column names, never values, and one `conference.parity.sweep`
+      summary with `status: in_sync | drift`. A failed or empty D1 or Sanity
+      read logs `conference.parity.error` with `status: unknown`, never
+      `in_sync`. At most 50 conferences per run; more rotate by day. If the
+      optional secret `SLACK_CONFERENCE_PARITY_WEBHOOK_URL` is set, drift and
+      unknown also post to Slack; unset, it logs only.
+      What it proves: D1 matches what Sanity holds now, column by column. It
+      does not prove the gateway serves those rows (rerun
+      `scripts/parity-conference.ts` after the #1879 flip for that), and a
+      Sanity edit that skipped the dual write shows up as drift, not as a D1
+      fault. See [Write path](./PLATFORM.md#write-path-d1_write).
    3. Flip reads to D1 (the `d1_override` rollout flag). Sanity becomes read-only for that
       entity, then the fields are deleted. The current read mechanism is in
       [Read path](./PLATFORM.md#read-path-api_read).
