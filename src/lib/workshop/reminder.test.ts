@@ -11,12 +11,17 @@
  * conference's sign-ups) and write (the last send), and Resend's batch
  * endpoint. The join, the rate limit and the email rendering run for real.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { TicketCandidate } from '@/lib/tickets/speakerStatus'
 import type { HolderSignup } from './holders'
 
+vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
+
 const workshopPortalUrl = vi.fn<() => Promise<string | null>>()
-vi.mock('./sign-in', () => ({ workshopPortalUrl: () => workshopPortalUrl() }))
+vi.mock('./sign-in', async (orig) => ({
+  ...(await orig<typeof import('./sign-in')>()),
+  workshopPortalUrl: () => workshopPortalUrl(),
+}))
 
 const fetchEventTicketCandidates =
   vi.fn<
@@ -184,6 +189,10 @@ beforeEach(() => {
     ticket('grace@example.org', 'Workshop + Conference', ''),
     ticket('linus@example.org', 'Conference only'),
   ])
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 
 describe('sendWorkshopReminder', () => {
@@ -795,5 +804,76 @@ describe('sendWorkshopReminder', () => {
       unconfirmed: 0,
     })
     expect(recipients()).toEqual(['linus@example.org'])
+  })
+
+  describe('D1 gateway values and fallbacks (#1997)', () => {
+    it('uses D1-owned fields when the gateway returns values that differ from Sanity', async () => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'conference-1')
+
+      const gatewayFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              conference: {
+                id: 'conference-1',
+                title: 'CNDN 2026 D1 Edition',
+              },
+            },
+          }),
+        ),
+      )
+      vi.stubGlobal('fetch', gatewayFetch)
+
+      const outcome = await remind(conference, 0)
+      expect(outcome).toMatchObject({ kind: 'sent', sent: 2 })
+
+      const [ada] = emails()
+      expect(ada.subject).toContain('CNDN 2026 D1 Edition')
+      expect(ada.html).toContain('CNDN 2026 D1 Edition')
+    })
+
+    it('falls back to Sanity when KONF_API_DISABLED=1', async () => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'conference-1')
+      vi.stubEnv('KONF_API_DISABLED', '1')
+
+      const gatewayFetch = vi.fn()
+      vi.stubGlobal('fetch', gatewayFetch)
+
+      const outcome = await remind(conference, 0)
+      expect(outcome).toMatchObject({ kind: 'sent', sent: 2 })
+      expect(gatewayFetch).not.toHaveBeenCalled()
+
+      const [ada] = emails()
+      expect(ada.subject).toContain('CNDN 2026')
+      expect(ada.subject).not.toContain('D1 Edition')
+      expect(ada.html).toContain('CNDN 2026')
+      expect(ada.html).not.toContain('D1 Edition')
+    })
+
+    it('falls back to Sanity when the gateway errors', async () => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'conference-1')
+
+      const gatewayFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ errors: [{ message: 'D1 unavailable' }] }),
+          {
+            status: 500,
+          },
+        ),
+      )
+      vi.stubGlobal('fetch', gatewayFetch)
+
+      const outcome = await remind(conference, 0)
+      expect(outcome).toMatchObject({ kind: 'sent', sent: 2 })
+
+      const [ada] = emails()
+      expect(ada.subject).toContain('CNDN 2026')
+      expect(ada.subject).not.toContain('D1 Edition')
+      expect(ada.html).toContain('CNDN 2026')
+      expect(ada.html).not.toContain('D1 Edition')
+    })
   })
 })
