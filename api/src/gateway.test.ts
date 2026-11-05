@@ -1323,21 +1323,18 @@ describe('operator lane (#1892 phase 4)', () => {
       async () =>
         `Bearer ${await jwt({ claims: { [SESSION_ORIGIN_CLAIM]: OPS }, iat: Math.floor(Date.now() / 1000) - 600 })}`,
     ],
-  ])(
-    'resolves no operator tenant for a %s token',
-    async (_, authorization) => {
-      const { env, envelopes } = opsEnv()
-      const res = await call(env, {
-        origin: OPS,
-        authorization: await authorization(),
-        [OPERATOR_TENANT_HEADER]: 'conf.example',
-      })
-      expect(res.status).toBe(401)
-      expect(env.DIRECTORY.fetch).not.toHaveBeenCalled()
-      expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
-      expect(envelopes).toEqual([])
-    },
-  )
+  ])('resolves no operator tenant for a %s token', async (_, authorization) => {
+    const { env, envelopes } = opsEnv()
+    const res = await call(env, {
+      origin: OPS,
+      authorization: await authorization(),
+      [OPERATOR_TENANT_HEADER]: 'conf.example',
+    })
+    expect(res.status).toBe(401)
+    expect(env.DIRECTORY.fetch).not.toHaveBeenCalled()
+    expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+    expect(envelopes).toEqual([])
+  })
 
   it('resolves the operator tenant after a valid token', async () => {
     const { env } = opsEnv()

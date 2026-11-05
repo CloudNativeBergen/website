@@ -109,10 +109,7 @@ export function operatorCors(request: Request, env: Env) {
  * in the same format as identity's OPERATOR_ORIGINS (#1948). Browsers send a
  * serialized Origin, so a non-canonical spelling is never an operator origin.
  */
-function isOperatorOrigin(
-  env: Env,
-  origin: string | null,
-): origin is string {
+function isOperatorOrigin(env: Env, origin: string | null): origin is string {
   return (
     !!origin &&
     (env.OPERATOR_ORIGIN ?? '').split(',').some((o) => o.trim() === origin)
