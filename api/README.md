@@ -93,6 +93,16 @@ verifies (#1954). Membership is re-read on every request.
 included, gets FORBIDDEN before any D1 read. At most 100 per page: pass the
 last slug as `after` for the next.
 
+`conferences(first, after, lifecycle, flag)` (#1985) lists every org's
+conferences, ordered by id, under the same rule: a `PlatformContext` only,
+FORBIDDEN before any D1 read for everyone else. tenant-directory serves the
+row (`id`, `lifecycleStatus`, `organization`, `flags`); `edition { title
+startDate endDate primaryHost }` comes from the conference subgraph, whose
+`ConferenceEdition` entity resolves any org's edition for a `PlatformContext`
+only (`unscopedForPlatformOps`, logged as `operator.read`). `primaryHost` is
+null until #1977. `lifecycle` and `flag` (that flag on) are enums. At most 100
+per page: pass the last id as `after` for the next.
+
 `rolloutFlags` returns the selected tenant's flags to an operator or member who
 got its envelope, else null. Unset turns the lane off.
 
