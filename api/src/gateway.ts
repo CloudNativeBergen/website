@@ -86,8 +86,7 @@ export const OPERATOR_SCOPE = 'platform:operator'
 /** CORS for the operator lane; the default for everyone else. */
 export function operatorCors(request: Request, env: Env) {
   const origin = request.headers.get('origin')
-  const operator = env.OPERATOR_ORIGIN
-  if (operator && origin && hostOf(origin) === hostOf(operator))
+  if (isOperatorOrigin(env, origin))
     return {
       origin: [origin],
       credentials: true,
@@ -103,6 +102,21 @@ export function operatorCors(request: Request, env: Env) {
   )
     return false as const
   return {}
+}
+
+/**
+ * Exact, case-sensitive match against OPERATOR_ORIGIN, a comma-separated list
+ * in the same format as identity's OPERATOR_ORIGINS (#1948). Browsers send a
+ * serialized Origin, so a non-canonical spelling is never an operator origin.
+ */
+function isOperatorOrigin(
+  env: Env,
+  origin: string | null,
+): origin is string {
+  return (
+    !!origin &&
+    (env.OPERATOR_ORIGIN ?? '').split(',').some((o) => o.trim() === origin)
+  )
 }
 
 /** Identity JWT claim: the origin the session was handed off to (#1803). */
@@ -378,7 +392,7 @@ export function createGateway(supergraph: string) {
     graphqlEndpoint: '/graphql',
     landingPage: false,
     graphiql: false,
-    // Only OPERATOR_ORIGIN may send the operator header, with credentials.
+    // Only an OPERATOR_ORIGIN entry may send the operator header, with credentials.
     // Every other origin keeps Yoga's default (reflect origin and headers).
     cors: (request, ctx) => operatorCors(request, (ctx as { env: Env }).env),
     // Unexpected and subgraph errors reach the client as "Unexpected error.".
@@ -458,11 +472,11 @@ export function createGateway(supergraph: string) {
       const host = hostOf(
         siteHost ? `https://${siteHost}` : request.headers.get('origin'),
       )
-      // Operator lane (#1892 phase 4): the browser Origin is OPERATOR_ORIGIN
-      // and no site assertion is present. Its tenant is only ever the one the
-      // operator names, never the Origin's.
-      const operatorHost = hostOf(env.OPERATOR_ORIGIN)
-      const operatorLane = !siteHost && !!operatorHost && host === operatorHost
+      // Operator lane (#1892 phase 4): the browser Origin is exactly an
+      // OPERATOR_ORIGIN entry and no site assertion is present. Its tenant is
+      // only ever the one the operator names, never the Origin's.
+      const operatorLane =
+        !siteHost && isOperatorOrigin(env, request.headers.get('origin'))
       // A browser preflight carries no credentials: answer it with the CORS
       // policy before any auth, tenant or Membership work.
       if (operatorLane && request.method === 'OPTIONS')
@@ -475,15 +489,23 @@ export function createGateway(supergraph: string) {
       // Guard before fetch: no anonymous tenant lookup in the operator lane.
       if (operatorLane && !request.headers.has('authorization'))
         return reject(401, 'UNAUTHENTICATED', 'operator lane needs a session')
-      let tenant: Tenant | null
-      try {
-        tenant = await resolveTenant(
-          operatorLane ? request.headers.get(OPERATOR_TENANT_HEADER) : host,
-          env,
-        )
-      } catch {
-        return reject(503, 'UNAVAILABLE', 'tenant lookup unavailable')
+      // The operator lane resolves its tenant only after the JWT verifies
+      // (#1954): a bad token never costs a directory read.
+      let tenant = null as Tenant | null
+      const lookup = async () => {
+        try {
+          tenant = await resolveTenant(
+            operatorLane ? request.headers.get(OPERATOR_TENANT_HEADER) : host,
+            env,
+          )
+          return true
+        } catch {
+          return false
+        }
       }
+      const unavailable = () =>
+        reject(503, 'UNAVAILABLE', 'tenant lookup unavailable')
+      if (!operatorLane && !(await lookup())) return unavailable()
 
       // 3. Rate limit (#1790) before the identity and Membership work for
       // anonymous callers; signed-in callers are keyed on the verified sub.
@@ -520,6 +542,7 @@ export function createGateway(supergraph: string) {
       // Without one, subgraphs see an anonymous request with no envelope.
       let platform = false
       if (operatorLane) {
+        if (!(await lookup())) return unavailable()
         // userId is set: anonymous callers were refused above. Kontroll admits
         // platform operators and organization members (#1956).
         const principal = await env.MEMBERSHIP.principal(
