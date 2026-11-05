@@ -17,7 +17,7 @@ import {
   type Envelope,
   type TenantEnvelope,
 } from '@runkonf/tenancy'
-import { getOperationAST, GraphQLError, parse } from 'graphql'
+import { getOperationAST, GraphQLError, parse, visit } from 'graphql'
 import { clientIp } from './client-ip'
 import { SITE_ASSERTION_HEADER, verifySiteAssertion } from './site-identity'
 
@@ -267,6 +267,33 @@ type GatewayContext = {
   flags: RolloutFlags | null
   /** Set only for a verified site assertion: what `rolloutFlags` answers. */
   siteFlags: RolloutFlags | null
+  /** A PlatformContext was minted: an operator with no tenant (#1961). */
+  platform: boolean
+}
+
+/**
+ * Introspection (`__schema`, `__type`) only for an operator holding a
+ * PlatformContext (#1961): the schema keeps @tag(operator) fields, so
+ * everyone else would see them. `__typename` stays allowed. Execution is
+ * unchanged; requirePlatform remains the runtime guard.
+ */
+const operatorIntrospection: GatewayPlugin<GatewayContext> = {
+  // Not a validation rule: Yoga caches validation by document and rule names,
+  // so a rule added per context lets one lane's cached pass serve another.
+  onExecute({ args, setResultAndStopExecution }) {
+    if ((args.contextValue as unknown as GatewayContext).platform) return
+    let found = false
+    visit(args.document, {
+      Field(node) {
+        if (node.name.value === '__schema' || node.name.value === '__type')
+          found = true
+      },
+    })
+    if (found)
+      setResultAndStopExecution({
+        errors: [new GraphQLError('GraphQL introspection is not allowed')],
+      })
+  },
 }
 
 /**
@@ -355,6 +382,7 @@ export function createGateway(supergraph: string) {
       maxDepthPlugin({ n: 10, ignoreIntrospection: false }),
       maxAliasesPlugin({ n: 15 }),
       mutationBudget,
+      operatorIntrospection,
       // TODO(#1772 req. 5): persisted queries from a build-time manifest.
       subgraphFetch((url, options, context) => {
         const name = new URL(url).host.replace(/\.internal$/, '')
@@ -461,6 +489,7 @@ export function createGateway(supergraph: string) {
 
       // 5 + 6. With a tenant: live orgRole, then one short-lived envelope.
       // Without one, subgraphs see an anonymous request with no envelope.
+      let platform = false
       if (operatorLane) {
         // userId is set: anonymous callers were refused above. Kontroll admits
         // platform operators and organization members (#1956).
@@ -496,6 +525,7 @@ export function createGateway(supergraph: string) {
           : operator
             ? { typ: 'platform', userId: userId!, platformRole: 'operator' }
             : null
+        platform = envelope?.typ === 'platform'
         if (envelope) {
           signer ??= await createSigner(env.ENVELOPE_PRIVATE_KEY)
           forwarded.headers.set(
@@ -536,6 +566,7 @@ export function createGateway(supergraph: string) {
         // The site's own tenant, or the one an authorized Kontroll caller
         // selected (an unauthorized selection was refused above).
         siteFlags: ((siteHost || operatorLane) && tenant?.flags) || null,
+        platform,
       })
     },
   }

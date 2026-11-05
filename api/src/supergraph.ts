@@ -3,9 +3,9 @@
 // api/supergraph.graphql; tests call compose() directly. This is the public
 // contract: anything tagged @tag(internal) is cut before composition, and so
 // is every type no longer reachable. Fields tagged @tag(operator) stay: they
-// are visible in the schema but refused at runtime by the subgraph's
-// requirePlatform unless the gateway minted a PlatformContext (operator, no
-// tenant header). Owner-approved for #1924: one supergraph, no second runtime.
+// are refused at runtime by the subgraph's requirePlatform unless the gateway
+// minted a PlatformContext (operator, no tenant header), and only that caller
+// may introspect the schema (#1961). Owner-approved for #1924: one supergraph, no second runtime.
 import {
   filterSchema,
   getDirective,

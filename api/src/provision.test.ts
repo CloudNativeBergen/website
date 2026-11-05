@@ -90,8 +90,12 @@ function env(platformOperator: boolean, orgRole: string | null) {
     IDENTITY_ISSUER: 'https://id.test',
     OPERATOR_ORIGIN: OPS,
     DIRECTORY: directory,
-    CONTENT: { fetch: async () => Response.json({}) },
-    CONFERENCE: { fetch: async () => Response.json({}) },
+    CONTENT: {
+      fetch: async () => Response.json({ data: { conference: { id: 'c' } } }),
+    },
+    CONFERENCE: {
+      fetch: async () => Response.json({ data: { conference: { id: 'c' } } }),
+    },
     IDENTITY: { fetch: async () => Response.json(jwks) },
     API_LIMITER: ok,
     API_IP_LIMITER: ok,
@@ -183,5 +187,97 @@ describe('provisionOrganization (#1924)', () => {
       data: { provisionOrganization: { id: 'org_new', slug: 'new' } },
     })
     expect(data.provision).toHaveBeenCalledWith(ARGS)
+  })
+})
+
+// #1961: the schema keeps @tag(operator) fields, so introspection is for an
+// operator holding a PlatformContext only.
+describe('introspection (#1961)', () => {
+  const ask = (e: Env, headers: Record<string, string>, query: string) =>
+    gateway
+      .fetch(
+        new Request('http://api.test/graphql', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...headers },
+          body: JSON.stringify({ query }),
+        }),
+        e,
+      )
+      .then((r) => r.json() as Promise<{ data?: unknown; errors?: unknown }>)
+  const SCHEMA = '{ __schema { mutationType { fields { name } } } }'
+  const TYPE = '{ __type(name: "Mutation") { fields { name args { name } } } }'
+
+  it('refuses __schema and __type to anonymous, tenant and tenant-acting operator callers', async () => {
+    const callers: [Env, Record<string, string>][] = [
+      [env(false, null), { origin: SITE }],
+      [
+        env(false, 'owner'),
+        { origin: SITE, authorization: `Bearer ${await jwt(SITE)}` },
+      ],
+      [
+        env(true, 'owner'),
+        {
+          origin: OPS,
+          authorization: `Bearer ${await jwt(OPS)}`,
+          [OPERATOR_TENANT_HEADER]: 'conf.example',
+        },
+      ],
+    ]
+    // An operator asks first, so a per-document validation or parse cache
+    // cannot carry their pass over to the callers below.
+    const ops = { origin: OPS, authorization: `Bearer ${await jwt(OPS)}` }
+    for (const query of [SCHEMA, TYPE])
+      expect((await ask(env(true, null), ops, query)).errors).toBeUndefined()
+    for (const [e, headers] of callers)
+      for (const query of [SCHEMA, TYPE]) {
+        const body = await ask(e, headers, query)
+        expect(body.data).toBeUndefined()
+        expect(JSON.stringify(body)).not.toContain('provisionOrganization')
+        expect(JSON.stringify(body.errors)).toMatch(/introspection/i)
+      }
+  })
+
+  it('shows provisionOrganization and its arguments to an operator with no tenant', async () => {
+    const headers = { origin: OPS, authorization: `Bearer ${await jwt(OPS)}` }
+    const schema = await ask(env(true, null), headers, SCHEMA)
+    expect(JSON.stringify(schema.data)).toContain('provisionOrganization')
+    const type = (await ask(env(true, null), headers, TYPE)) as {
+      data: {
+        __type: { fields: { name: string; args: { name: string }[] }[] }
+      }
+    }
+    const field = type.data.__type.fields.find(
+      (f) => f.name === 'provisionOrganization',
+    )
+    expect(field?.args.map((a) => a.name).sort()).toEqual(
+      Object.keys(ARGS).sort(),
+    )
+  })
+
+  it('still answers normal queries and __typename for everyone', async () => {
+    const callers: [Env, Record<string, string>][] = [
+      [env(false, null), { origin: SITE }],
+      [
+        env(false, 'owner'),
+        { origin: SITE, authorization: `Bearer ${await jwt(SITE)}` },
+      ],
+      [
+        env(true, null),
+        { origin: OPS, authorization: `Bearer ${await jwt(OPS)}` },
+      ],
+    ]
+    for (const [e, headers] of callers) {
+      const body = await ask(
+        e,
+        headers,
+        '{ __typename health rolloutFlags { apiRead } conference { id } }',
+      )
+      expect(body.errors).toBeUndefined()
+      expect(body.data).toMatchObject({
+        __typename: 'Query',
+        health: 'ok',
+        conference: { id: 'c' },
+      })
+    }
   })
 })
