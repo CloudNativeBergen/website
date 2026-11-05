@@ -11,6 +11,9 @@ import {
 } from './schema'
 
 export { createAuth, type AuthEnv } from './auth'
+import type { AuthEnv } from './auth'
+import { createMembers } from './members'
+export { MemberError, type MemberRole } from './members'
 import { syncMembers, type SyncEnv } from './member-sync'
 
 /** What the gateway needs per request to mint an envelope. */
@@ -21,7 +24,7 @@ export interface Principal {
   platformOperator: boolean
 }
 
-export interface DataEnv extends SyncEnv {
+export interface DataEnv extends SyncEnv, AuthEnv {
   DB: D1Database
   /** konf-tenant-directory over a service binding: verified origins (#688). */
   DIRECTORY: Fetcher
@@ -35,6 +38,8 @@ export function createData(env: DataEnv) {
   return {
     /** Grants missing organizer memberships from Sanity (cron, #1907). */
     syncMembers: () => syncMembers(env),
+    /** Membership writes for the subgraph (#1923): member and operator paths. */
+    members: () => createMembers(env),
     /**
      * True only for an exact `https://<host>` origin (no path, port or
      * userinfo) whose host the directory holds as verified for an active

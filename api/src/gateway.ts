@@ -36,6 +36,8 @@ export interface Env {
   CONFERENCE: Fetcher
   /** konf-identity default entrypoint: only /api/auth/* (JWKS) answers */
   IDENTITY: Fetcher
+  /** konf-identity `Graph` entrypoint: its subgraph (membership, #1923) */
+  IDENTITY_GRAPH: Fetcher
   /** Per-request limit (Workers Rate Limiting), keyed per caller (#1790) */
   API_LIMITER: RateLimit
   /** Mutations only, MUTATION_LIMIT_PER_MINUTE per caller, on top of API_LIMITER (#1888) */
@@ -65,6 +67,7 @@ export const BINDINGS = {
   'tenant-directory': 'DIRECTORY',
   content: 'CONTENT',
   conference: 'CONFERENCE',
+  identity: 'IDENTITY_GRAPH',
 } as const
 
 const JWT_AUDIENCE = 'konf-gateway'

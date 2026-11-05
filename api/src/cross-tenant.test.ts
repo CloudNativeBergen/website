@@ -461,6 +461,7 @@ beforeAll(async () => {
       /* @vite-ignore */ new URL(`${name}/src/worker.ts`, services).pathname
     )) as { default: { fetch(r: Request, e: unknown): Promise<Response> } }
     const workerEnv = {
+      ...IDENTITY_ENV,
       DB: db,
       GATEWAY_PUBLIC_KEY: keys.publicPem,
       CF_API_TOKEN: 'unused',
@@ -717,11 +718,23 @@ describe('cross-tenant mutation walk', () => {
   it("A's organizer on A's host changes A's rows and never a B row", async () => {
     const before = await snapshot()
     for (const body of await mutate({ ...organizer(), origin: ORIGIN })) {
-      // Operator-only (#1924): refused to every tenant envelope.
-      if (JSON.stringify(body).includes('provisionOrganization'))
+      const json = JSON.stringify(body)
+      // Operator-only (#1924, #1923): refused to every tenant envelope.
+      if (/"(provisionOrganization|operator\w+)"/.test(json))
         expect(body.errors).toMatchObject([
           { extensions: { code: 'FORBIDDEN' } },
         ])
+      // Membership (#1923): probe ids name no member or invitation of A, and
+      // probe emails are no address, so these refuse; the snapshot holds B.
+      else if (
+        /"(inviteMember|cancelInvitation|removeMember|changeMemberRole)"/.test(
+          json,
+        )
+      )
+        expect(['NOT_FOUND', 'BAD_USER_INPUT']).toContain(
+          (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions
+            ?.code,
+        )
       else expect(body.errors).toBeUndefined()
       expect(JSON.stringify(body)).not.toMatch(MARKER)
     }

@@ -38,13 +38,22 @@ export const JWT_AUDIENCE = 'konf-gateway'
 /** Invitations live 30 days (#1923); the owner can cancel them sooner. */
 export const INVITATION_EXPIRES_IN = 30 * 24 * 3600
 
-const isOwner = (role: string | null | undefined) =>
+export const isOwner = (role: string | null | undefined) =>
   (role ?? '').split(',').some((r) => r.trim().toLowerCase() === 'owner')
 
 /** The pending invitation a `resend: true` invite refreshes, if any. */
 const resendOf = defineRequestState<{ id: string; actor: string } | undefined>(
   () => undefined,
 )
+
+/**
+ * The session an in-process `auth.api` call runs as (src/data/members.ts).
+ * Request state, so only calls made inside that request see it; an HTTP
+ * request through `handler` starts with its own empty state.
+ */
+export const actAs = defineRequestState<
+  { user: unknown; session: unknown } | undefined
+>(() => undefined)
 
 export function createAuth(d1: D1Database, env: AuthEnv) {
   const db = rawDb(d1)
@@ -138,6 +147,8 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
       // organization hook runs, checking only the role in the body. Apply the
       // owner rule to the stored invitation here instead (#1941).
       before: createAuthMiddleware(async (ctx) => {
+        const actor = await actAs.get()
+        if (actor) ctx.context.session = actor as never
         if (ctx.path !== '/organization/invite-member' || !ctx.body?.resend)
           return
         // Fail closed: every early exit refuses rather than skipping the check.

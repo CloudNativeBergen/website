@@ -6,7 +6,7 @@ import { errorPage } from './error-page'
 import { handoff, type HandoffEnv } from './handoff'
 import { loginTestPage } from './login-test'
 import { orgWriteGate } from './org-write-gate'
-import type { WorkerEnv } from './worker'
+import graph, { type WorkerEnv } from './worker'
 
 /** LOGIN_TEST_PAGE: "1" on preview only (service.cue) serves GET /test. */
 type Env = WorkerEnv & HandoffEnv & { LOGIN_TEST_PAGE?: string }
@@ -18,6 +18,17 @@ type Env = WorkerEnv & HandoffEnv & { LOGIN_TEST_PAGE?: string }
 export class Membership extends WorkerEntrypoint<Env> {
   principal(userId: string, orgId: string) {
     return createData(this.env).principal(userId, orgId)
+  }
+}
+
+/**
+ * The identity subgraph (membership mutations, #1923) for the gateway, over a
+ * service binding with `"entrypoint": "Graph"`. Not on the public host: the
+ * default fetch below 404s /graphql.
+ */
+export class Graph extends WorkerEntrypoint<Env> {
+  fetch(request: Request) {
+    return graph.fetch(request, this.env)
   }
 }
 

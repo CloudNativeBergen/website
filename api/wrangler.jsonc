@@ -43,6 +43,11 @@
     { "binding": "CONFERENCE", "service": "konf-conference" },
     { "binding": "IDENTITY", "service": "konf-identity" },
     {
+      "binding": "IDENTITY_GRAPH",
+      "service": "konf-identity",
+      "entrypoint": "Graph",
+    },
+    {
       "binding": "MEMBERSHIP",
       "service": "konf-identity",
       "entrypoint": "Membership",
@@ -80,6 +85,11 @@
         { "binding": "CONTENT", "service": "konf-content-preview" },
         { "binding": "CONFERENCE", "service": "konf-conference-preview" },
         { "binding": "IDENTITY", "service": "konf-identity-preview" },
+        {
+          "binding": "IDENTITY_GRAPH",
+          "service": "konf-identity-preview",
+          "entrypoint": "Graph",
+        },
         {
           "binding": "MEMBERSHIP",
           "service": "konf-identity-preview",
@@ -119,6 +129,11 @@
         { "binding": "CONTENT", "service": "konf-content" },
         { "binding": "CONFERENCE", "service": "konf-conference" },
         { "binding": "IDENTITY", "service": "konf-identity" },
+        {
+          "binding": "IDENTITY_GRAPH",
+          "service": "konf-identity",
+          "entrypoint": "Graph",
+        },
         {
           "binding": "MEMBERSHIP",
           "service": "konf-identity",
