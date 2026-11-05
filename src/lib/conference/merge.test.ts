@@ -55,6 +55,8 @@ describe('purgeEndDate', () => {
     ['D1 invalid calendar date', '2024-05-01', '2024-13-45', '2024-05-01'],
     ['D1 earlier: keep Sanity', '2024-05-01', '2020-01-01', '2024-05-01'],
     ['D1 later: take D1', '2024-05-01', '2025-01-01', '2025-01-01'],
+    ['D1 later timestamp: date part only', '2024-05-01', '2025-01-01T10:00:00Z', '2025-01-01'],
+    ['D1 same day timestamp: keep Sanity', '2024-05-01', '2024-05-01T23:00:00Z', '2024-05-01'],
     ['Sanity unparsable stays as before', 'x', '2025-01-01', 'x'],
   ])('%s', (_name, sanity, d1, want) => {
     expect(purgeEndDate(sanity, d1)).toBe(want)
