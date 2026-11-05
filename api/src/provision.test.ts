@@ -90,8 +90,12 @@ function env(platformOperator: boolean, orgRole: string | null) {
     IDENTITY_ISSUER: 'https://id.test',
     OPERATOR_ORIGIN: OPS,
     DIRECTORY: directory,
-    CONTENT: { fetch: async () => Response.json({}) },
-    CONFERENCE: { fetch: async () => Response.json({}) },
+    CONTENT: {
+      fetch: async () => Response.json({ data: { conference: { id: 'c' } } }),
+    },
+    CONFERENCE: {
+      fetch: async () => Response.json({ data: { conference: { id: 'c' } } }),
+    },
     IDENTITY: { fetch: async () => Response.json(jwks) },
     API_LIMITER: ok,
     API_IP_LIMITER: ok,
@@ -183,5 +187,175 @@ describe('provisionOrganization (#1924)', () => {
       data: { provisionOrganization: { id: 'org_new', slug: 'new' } },
     })
     expect(data.provision).toHaveBeenCalledWith(ARGS)
+  })
+})
+
+// #1961: the schema keeps @tag(operator) fields, so introspection is for an
+// operator holding a PlatformContext only.
+describe('introspection (#1961)', () => {
+  const ask = (e: Env, headers: Record<string, string>, query: string) =>
+    gateway
+      .fetch(
+        new Request('http://api.test/graphql', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...headers },
+          body: JSON.stringify({ query }),
+        }),
+        e,
+      )
+      .then((r) => r.json() as Promise<{ data?: unknown; errors?: unknown }>)
+  const SCHEMA = '{ __schema { mutationType { fields { name } } } }'
+  const TYPE = '{ __type(name: "Mutation") { fields { name args { name } } } }'
+
+  it('refuses __schema and __type to anonymous, tenant and tenant-acting operator callers', async () => {
+    const callers: [Env, Record<string, string>][] = [
+      [env(false, null), { origin: SITE }],
+      [
+        env(false, 'owner'),
+        { origin: SITE, authorization: `Bearer ${await jwt(SITE)}` },
+      ],
+      [
+        env(true, 'owner'),
+        {
+          origin: OPS,
+          authorization: `Bearer ${await jwt(OPS)}`,
+          [OPERATOR_TENANT_HEADER]: 'conf.example',
+        },
+      ],
+    ]
+    // An operator asks first, so a per-document validation or parse cache
+    // cannot carry their pass over to the callers below.
+    const ops = { origin: OPS, authorization: `Bearer ${await jwt(OPS)}` }
+    for (const query of [SCHEMA, TYPE])
+      expect((await ask(env(true, null), ops, query)).errors).toBeUndefined()
+    for (const [e, headers] of callers)
+      for (const query of [SCHEMA, TYPE]) {
+        const body = await ask(e, headers, query)
+        expect(body.data).toBeUndefined()
+        expect(JSON.stringify(body)).not.toContain('provisionOrganization')
+        expect(JSON.stringify(body.errors)).toMatch(/introspection/i)
+      }
+  })
+
+  it('answers the refusal 403 FORBIDDEN', async () => {
+    const r = await gateway.fetch(
+      new Request('http://api.test/graphql', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: SITE },
+        body: JSON.stringify({ query: SCHEMA }),
+      }),
+      env(false, null),
+    )
+    expect(r.status).toBe(403)
+    const body = (await r.json()) as {
+      errors: { extensions?: { code?: string } }[]
+    }
+    expect(body.errors[0].extensions?.code).toBe('FORBIDDEN')
+  })
+
+  it('names no field or argument in suggestions to anonymous callers', async () => {
+    for (const query of [
+      'mutation { provisionOrganizatio }',
+      // All required arguments given, so only the typo is reported; the
+      // required-argument list itself is a known hole (#1961).
+      `mutation { provisionOrganization(idempotencyKe: "k", ${Object.keys(ARGS)
+        .map((k) => `${k}: "x"`)
+        .join(', ')}) { id } }`,
+    ]) {
+      const body = await ask(env(false, null), { origin: SITE }, query)
+      const text = (body.errors as { message: string }[])
+        .map((e) => e.message)
+        .join('\n')
+      expect(text).toMatch(/Cannot query field|Unknown argument/)
+      expect(text).not.toMatch(/Did you mean/)
+      expect(text).not.toContain('"provisionOrganization"')
+      expect(text).not.toContain('idempotencyKey')
+    }
+  })
+
+  it('answers a near-miss name exactly like a nonsense one', async () => {
+    const shape = async (query: string) => {
+      const r = await gateway.fetch(
+        new Request('http://api.test/graphql', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', origin: SITE },
+          body: JSON.stringify({ query }),
+        }),
+        env(false, null),
+      )
+      const body = (await r.json()) as {
+        errors: { message: string; extensions?: unknown }[]
+      }
+      return {
+        status: r.status,
+        extensions: body.errors.map((e) => e.extensions),
+        messages: body.errors.map((e) => e.message.replace(/"[^"]*"/, '"X"')),
+      }
+    }
+    const args = Object.keys(ARGS)
+      .map((k) => `${k}: "x"`)
+      .join(', ')
+    for (const [near, nonsense] of [
+      ['mutation { provisionOrganisation }', 'mutation { zzzzzz }'],
+      [
+        `mutation { provisionOrganization(idempotencyKe: "k", ${args}) { id } }`,
+        `mutation { provisionOrganization(zzzzzzzzzzzzz: "k", ${args}) { id } }`,
+      ],
+    ])
+      expect(await shape(near)).toEqual(await shape(nonsense))
+  })
+
+  it('serves no GraphiQL to a browser', async () => {
+    const r = await gateway.fetch(
+      new Request('http://api.test/graphql', {
+        headers: { accept: 'text/html', origin: SITE },
+      }),
+      env(false, null),
+    )
+    expect(await r.text()).not.toMatch(/graphiql/i)
+  })
+
+  it('shows provisionOrganization and its arguments to an operator with no tenant', async () => {
+    const headers = { origin: OPS, authorization: `Bearer ${await jwt(OPS)}` }
+    const schema = await ask(env(true, null), headers, SCHEMA)
+    expect(JSON.stringify(schema.data)).toContain('provisionOrganization')
+    const type = (await ask(env(true, null), headers, TYPE)) as {
+      data: {
+        __type: { fields: { name: string; args: { name: string }[] }[] }
+      }
+    }
+    const field = type.data.__type.fields.find(
+      (f) => f.name === 'provisionOrganization',
+    )
+    expect(field?.args.map((a) => a.name).sort()).toEqual(
+      Object.keys(ARGS).sort(),
+    )
+  })
+
+  it('still answers normal queries and __typename for everyone', async () => {
+    const callers: [Env, Record<string, string>][] = [
+      [env(false, null), { origin: SITE }],
+      [
+        env(false, 'owner'),
+        { origin: SITE, authorization: `Bearer ${await jwt(SITE)}` },
+      ],
+      [
+        env(true, null),
+        { origin: OPS, authorization: `Bearer ${await jwt(OPS)}` },
+      ],
+    ]
+    for (const [e, headers] of callers) {
+      const body = await ask(
+        e,
+        headers,
+        '{ __typename health rolloutFlags { apiRead } conference { id } }',
+      )
+      expect(body.errors).toBeUndefined()
+      expect(body.data).toMatchObject({
+        __typename: 'Query',
+        health: 'ok',
+        conference: { id: 'c' },
+      })
+    }
   })
 })

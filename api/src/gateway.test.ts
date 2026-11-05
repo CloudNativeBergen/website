@@ -12,7 +12,7 @@ import {
   generateEnvelopeKeyPair,
   verifyEnvelope,
 } from '@runkonf/tenancy'
-import { GraphQLError } from 'graphql'
+import { buildSchema, GraphQLError } from 'graphql'
 import {
   createGateway,
   maskError,
@@ -24,7 +24,7 @@ import {
   type Env,
 } from './gateway'
 import { SITE_ASSERTION_HEADER } from './site-identity'
-import { compose } from './supergraph'
+import { compose, publicSdl } from './supergraph'
 import { SIGNED_IP_HEADER, signClientIp } from './client-ip'
 
 // vitest.config.ts aliases `jose` to a key-ignoring stub; load the real one so
@@ -151,16 +151,10 @@ const jwt = (
 
 describe('gateway', () => {
   it('exposes updateConference, the membership mutations and the operator-only fields, no @tag(internal) fields', async () => {
-    const { env } = makeEnv()
-    const res = await gateway.fetch(
-      post({ query: '{ __schema { mutationType { fields { name } } } }' }),
-      env,
+    // Read from the served SDL: introspection is operator-only (#1961).
+    const names = Object.keys(
+      buildSchema(publicSdl()).getMutationType()!.getFields(),
     )
-    const names = (
-      (await res.json()) as {
-        data: { __schema: { mutationType: { fields: { name: string }[] } } }
-      }
-    ).data.__schema.mutationType.fields.map((f) => f.name)
     expect(names.sort()).toEqual([
       'cancelInvitation',
       'changeMemberRole',
@@ -188,23 +182,9 @@ describe('gateway', () => {
   it('exposes no conference(id:) field', async () => {
     // content's argument-free `conference` is public; tenant-directory's
     // conference(id:) is internal.
-    const { env } = makeEnv()
-    const res = await gateway.fetch(
-      post({
-        query: '{ __schema { queryType { fields { name args { name } } } } }',
-      }),
-      env,
-    )
-    const { data } = (await res.json()) as {
-      data: {
-        __schema: {
-          queryType: { fields: { name: string; args: { name: string }[] }[] }
-        }
-      }
-    }
-    const conference = data.__schema.queryType.fields.find(
-      (f) => f.name === 'conference',
-    )
+    const conference = buildSchema(publicSdl())
+      .getQueryType()!
+      .getFields().conference
     expect(conference?.args ?? []).toEqual([])
     expect(compose()).not.toMatch(/conference\(id:/)
   })
@@ -714,7 +694,8 @@ describe('gateway', () => {
         ),
         env,
       )
-      expect(res.status).toBe(200)
+      // `x` fails validation (400), but never the mutation budget (429).
+      expect(res.status).toBe(400)
       expect(keys(env)).toEqual(['user:user_1'])
       expect(mutationKeys(env)).toEqual([])
     })
