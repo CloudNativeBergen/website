@@ -707,7 +707,11 @@ describe('foldExpiredFeedback: D1 end date (#1997)', () => {
     organization: ref('org-1'),
   })
   const seed = () =>
-    store().reset([d1Conf(), talk('talk-1', 'conf-old'), response('r-1', 'green')])
+    store().reset([
+      d1Conf(),
+      talk('talk-1', 'conf-old'),
+      response('r-1', 'green'),
+    ])
   beforeEach(() => {
     h.rolloutFlags.mockResolvedValue({ apiRead: false })
   })
