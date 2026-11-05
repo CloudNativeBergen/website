@@ -119,24 +119,22 @@ type OrgRow = Row<'id' | 'slug' | 'name' | 'status' | 'plan'> & {
 }
 
 // After Domain: Organization.domains refers to it.
-const Organization = builder
-  .objectRef<OrgRow>('Organization')
-  .implement({
-    fields: (t) => ({
-      id: t.exposeID('id'),
-      slug: t.exposeString('slug'),
-      name: t.exposeString('name'),
-      status: t.exposeString('status'),
-      plan: t.exposeString('plan'),
-      // ISO 8601; null for orgs provisioned before #1973.
-      createdAt: t.exposeString('createdAt', { nullable: true }),
-      // Every hostname of this org, any verification state (#1969).
-      domains: t.field({
-        type: [Domain],
-        resolve: (org, _, ctx) => ctx.data.domainsOf(org.id),
-      }),
+const Organization = builder.objectRef<OrgRow>('Organization').implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    slug: t.exposeString('slug'),
+    name: t.exposeString('name'),
+    status: t.exposeString('status'),
+    plan: t.exposeString('plan'),
+    // ISO 8601; null for orgs provisioned before #1973.
+    createdAt: t.exposeString('createdAt', { nullable: true }),
+    // Every hostname of this org, any verification state (#1969).
+    domains: t.field({
+      type: [Domain],
+      resolve: (org, _, ctx) => ctx.data.domainsOf(org.id),
     }),
-  })
+  }),
+})
 
 const Lifecycle = builder.enumType('ConferenceLifecycle', {
   values: ['draft', 'live', 'archived'] as const,

@@ -1594,12 +1594,8 @@ describe('operator lane: conferences across orgs (#1985)', () => {
     ])
     expect((await list('lifecycle: live')).map((c) => c.id)).toEqual([CONF.a])
     expect(await list('lifecycle: draft')).toEqual([])
-    expect((await list('flag: d1Override')).map((c) => c.id)).toEqual([
-      CONF.a,
-    ])
-    expect(
-      await list('flag: d1Override, lifecycle: archived'),
-    ).toEqual([])
+    expect((await list('flag: d1Override')).map((c) => c.id)).toEqual([CONF.a])
+    expect(await list('flag: d1Override, lifecycle: archived')).toEqual([])
     // Not an injectable string: an unknown value fails validation.
     const bad = JSON.parse(
       await run('{ conferences(flag: "1 OR 1=1") { id } }', ops()),
@@ -1667,7 +1663,7 @@ describe('operator lane: conferences across orgs (#1985)', () => {
     for (const headers of [
       { origin: ORIGIN },
       { origin: ORIGIN, authorization: `Bearer ${memberJwt}` },
-    ]) {
+    ] as Record<string, string>[]) {
       const body = await run(LIFECYCLE, headers)
       expect(body).not.toMatch(MARKER)
       expect(lifecycles(body)).toEqual({ [CONF.a]: 'live' })
