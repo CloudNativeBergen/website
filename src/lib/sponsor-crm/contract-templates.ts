@@ -4,6 +4,7 @@ import {
 } from '@/lib/sanity/client'
 import type { PortableTextBlock } from '@/lib/sponsor/types'
 import { nanoid } from 'nanoid'
+import { mergeConference } from '@/lib/conference/merge'
 
 export interface ContractSection {
   _key: string
@@ -59,7 +60,9 @@ const CONTRACT_TEMPLATE_FIELDS = `
   title,
   conference->{
     _id,
-    title
+    title,
+    domains,
+    organization
   },
   tier->{
     _id,
@@ -79,13 +82,35 @@ const CONTRACT_TEMPLATE_FIELDS = `
   isActive
 `
 
+/**
+ * The conference title is a label: take D1's when the tenant is flagged
+ * (#1997), and hand back only `{ _id, title }` as before.
+ */
+async function withMergedTitle<T extends ContractTemplate | null | undefined>(
+  t: T,
+): Promise<T> {
+  if (!t?.conference) return t
+  const { _id, title } = await mergeConference(
+    t.conference as ContractTemplate['conference'] & {
+      domains?: string[]
+      organization?: { _ref: string }
+    },
+  )
+  return { ...t, conference: { _id, title } }
+}
+
+const withMergedTitles = (ts: ContractTemplate[] | null | undefined) =>
+  ts ? Promise.all(ts.map(withMergedTitle)) : undefined
+
 export async function listContractTemplates(
   conferenceId: string,
 ): Promise<{ templates?: ContractTemplate[]; error?: Error }> {
   try {
-    const templates = await clientRead.fetch<ContractTemplate[]>(
-      `*[_type == "contractTemplate" && conference._ref == $conferenceId] | order(title asc){${CONTRACT_TEMPLATE_FIELDS}}`,
-      { conferenceId },
+    const templates = await withMergedTitles(
+      await clientRead.fetch<ContractTemplate[]>(
+        `*[_type == "contractTemplate" && conference._ref == $conferenceId] | order(title asc){${CONTRACT_TEMPLATE_FIELDS}}`,
+        { conferenceId },
+      ),
     )
     return { templates }
   } catch (error) {
@@ -98,11 +123,13 @@ export async function getContractTemplate(id: string): Promise<{
   error?: Error
 }> {
   try {
-    const template = await clientRead.fetch<ContractTemplate>(
-      // groq-global-scoped: point read by id; every caller asserts
-      // requireDocumentInCurrentConference(id, 'contractTemplate') first.
-      `*[_type == "contractTemplate" && _id == $id][0]{${CONTRACT_TEMPLATE_FIELDS}}`,
-      { id },
+    const template = await withMergedTitle(
+      await clientRead.fetch<ContractTemplate>(
+        // groq-global-scoped: point read by id; every caller asserts
+        // requireDocumentInCurrentConference(id, 'contractTemplate') first.
+        `*[_type == "contractTemplate" && _id == $id][0]{${CONTRACT_TEMPLATE_FIELDS}}`,
+        { id },
+      ),
     )
     if (!template) {
       return { error: new Error('Contract template not found') }
@@ -138,11 +165,13 @@ export async function createContractTemplate(
 
     const created = await clientWrite.create(doc)
 
-    const template = await clientRead.fetch<ContractTemplate>(
-      // groq-global-scoped: re-read of the document just created; the router
-      // checks `data.conference` against the current conference.
-      `*[_type == "contractTemplate" && _id == $id][0]{${CONTRACT_TEMPLATE_FIELDS}}`,
-      { id: created._id },
+    const template = await withMergedTitle(
+      await clientRead.fetch<ContractTemplate>(
+        // groq-global-scoped: re-read of the document just created; the router
+        // checks `data.conference` against the current conference.
+        `*[_type == "contractTemplate" && _id == $id][0]{${CONTRACT_TEMPLATE_FIELDS}}`,
+        { id: created._id },
+      ),
     )
 
     if (!template) {
@@ -213,11 +242,13 @@ export async function updateContractTemplate(
     }
     await patch.commit()
 
-    const template = await clientRead.fetch<ContractTemplate>(
-      // groq-global-scoped: re-read after the patch; the router asserts
-      // requireDocumentInCurrentConference(id, 'contractTemplate') first.
-      `*[_type == "contractTemplate" && _id == $id][0]{${CONTRACT_TEMPLATE_FIELDS}}`,
-      { id },
+    const template = await withMergedTitle(
+      await clientRead.fetch<ContractTemplate>(
+        // groq-global-scoped: re-read after the patch; the router asserts
+        // requireDocumentInCurrentConference(id, 'contractTemplate') first.
+        `*[_type == "contractTemplate" && _id == $id][0]{${CONTRACT_TEMPLATE_FIELDS}}`,
+        { id },
+      ),
     )
 
     if (!template) {
@@ -247,9 +278,11 @@ export async function findBestContractTemplate(
   language?: 'nb' | 'en',
 ): Promise<{ template?: ContractTemplate; error?: Error }> {
   try {
-    const templates = await clientRead.fetch<ContractTemplate[]>(
-      `*[_type == "contractTemplate" && conference._ref == $conferenceId && isActive == true] | order(isDefault desc){${CONTRACT_TEMPLATE_FIELDS}}`,
-      { conferenceId },
+    const templates = await withMergedTitles(
+      await clientRead.fetch<ContractTemplate[]>(
+        `*[_type == "contractTemplate" && conference._ref == $conferenceId && isActive == true] | order(isDefault desc){${CONTRACT_TEMPLATE_FIELDS}}`,
+        { conferenceId },
+      ),
     )
 
     if (!templates || templates.length === 0) {
@@ -284,11 +317,16 @@ export async function getTermsForConference(conferenceId: string): Promise<{
   try {
     const result = await clientRead.fetch<{
       terms: PortableTextBlock[]
-      conference: { title: string }
+      conference: {
+        _id: string
+        title: string
+        domains?: string[]
+        organization?: { _ref: string }
+      } | null
     } | null>(
       `*[_type == "contractTemplate" && conference._ref == $conferenceId && isActive == true && defined(terms)] | order(isDefault desc)[0]{
         terms,
-        conference->{ title }
+        conference->{ _id, title, domains, organization }
       }`,
       { conferenceId },
     )
@@ -297,7 +335,11 @@ export async function getTermsForConference(conferenceId: string): Promise<{
       return { error: new Error('No terms found for this conference') }
     }
 
-    return { terms: result.terms, conferenceName: result.conference?.title }
+    // Label only: D1's title when the tenant is flagged (#1997).
+    const conference = result.conference
+      ? await mergeConference(result.conference)
+      : null
+    return { terms: result.terms, conferenceName: conference?.title }
   } catch (error) {
     return { error: error as Error }
   }

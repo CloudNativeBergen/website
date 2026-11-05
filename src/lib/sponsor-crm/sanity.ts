@@ -11,7 +11,7 @@ import {
 } from '@/lib/sanity/client'
 import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { mergeConference } from '@/lib/conference/merge'
+import { mergeConference, mergeConferences } from '@/lib/conference/merge'
 import { tierExistenceQuery } from './tier-validation'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 import type {
@@ -642,22 +642,30 @@ export async function importAllHistoricSponsors(
   try {
     // OWNERSHIP FIRST (#823): `targetConferenceId` is client input, so it is
     // only usable as a scope key once an ORG-scoped read has proven it ours.
-    const targetConference = await scopedFetch<{
+    const targetRow = await scopedFetch<{
       _id: string
       startDate: string
+      domains?: string[]
+      organization?: { _ref: string }
     } | null>(
       clientRead,
       { orgId: organizationId },
       `*[_type == "conference" && _id == $conferenceId][0]{
         _id,
-        startDate
+        startDate,
+        domains,
+        organization
       }`,
       { conferenceId: targetConferenceId },
     )
 
-    if (!targetConference) {
+    if (!targetRow) {
       return { error: new Error('Target conference not found') }
     }
+    const targetStart = (await mergeConference(targetRow)).startDate?.slice(
+      0,
+      10,
+    )
 
     // Get all of THIS ORGANIZATION's conferences before the target conference.
     //
@@ -666,14 +674,30 @@ export async function importAllHistoricSponsors(
     // which made `historicSponsors` below a cross-tenant read and offered one
     // tenant's sponsor roster inside another tenant's import flow. Date is not
     // a tenant key; `organization._ref` is, and `scopedFetch` prepends it.
-    const previousConferences = await scopedFetch<Array<{ _id: string }>>(
-      clientRead,
-      { orgId: organizationId },
-      `*[_type == "conference" && startDate < $targetStartDate] | order(startDate desc) {
-        _id
-      }`,
-      { targetStartDate: targetConference.startDate },
-    )
+    //
+    // D1 (#1997): `startDate` may be moved in D1, so read the org's whole
+    // conference list (a superset) and compare merged start dates in code.
+    const orgConferences =
+      (await scopedFetch<
+        Array<{
+          _id: string
+          startDate?: string
+          domains?: string[]
+          organization?: { _ref: string }
+        }>
+      >(
+        clientRead,
+        { orgId: organizationId },
+        `*[_type == "conference"]{ _id, startDate, domains, organization }`,
+        {},
+      )) ?? []
+    const previousConferences = targetStart
+      ? (await mergeConferences(orgConferences)).filter(
+          (c) =>
+            typeof c.startDate === 'string' &&
+            c.startDate.slice(0, 10) < targetStart,
+        )
+      : []
 
     if (previousConferences.length === 0) {
       return {
