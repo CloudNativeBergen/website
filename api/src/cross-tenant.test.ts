@@ -347,6 +347,9 @@ function selection(
  * into queries of at most MAX_ALIASES aliased roots. `roots` maps alias to
  * the Query field it calls.
  */
+/** Query fields tagged @tag(operator): requirePlatform refuses every walker. */
+const OPERATOR_QUERIES = new Set(['organizations'])
+
 function queries(tenants: T[]) {
   const roots = Object.values(schema.getQueryType()!.getFields()).flatMap(
     (f) => {
@@ -361,8 +364,12 @@ function queries(tenants: T[]) {
     },
   )
   const out: { query: string; roots: Record<string, string> }[] = []
-  for (let i = 0; i < roots.length; i += MAX_ALIASES) {
-    const chunk = roots.slice(i, i + MAX_ALIASES).map((r, j) => ({
+  // Operator-only roots go alone: every walker must get FORBIDDEN for them.
+  for (const r of roots.filter((r) => OPERATOR_QUERIES.has(r.field)))
+    out.push({ query: `{ ${r.sel} }`, roots: { [r.field]: r.field } })
+  const pub = roots.filter((r) => !OPERATOR_QUERIES.has(r.field))
+  for (let i = 0; i < pub.length; i += MAX_ALIASES) {
+    const chunk = pub.slice(i, i + MAX_ALIASES).map((r, j) => ({
       ...r,
       alias: `r${i + j}`,
     }))
@@ -592,9 +599,19 @@ describe.each([
       ...(signedIn ? { authorization: `Bearer ${memberJwt}` } : {}),
     })
     let sawA = false
-    for (const { query } of queries(tenants)) {
+    for (const { query, roots } of queries(tenants)) {
       const body = await run(query, headers())
       expect(body, query).not.toMatch(MARKER)
+      if (Object.values(roots).some((f) => OPERATOR_QUERIES.has(f))) {
+        const refused = JSON.parse(body)
+        expect(refused.data?.organizations ?? null, query).toBeNull()
+        expect(refused.errors[0].extensions.code, query).toBe('FORBIDDEN')
+        expect(
+          await run(query, { ...headers(), [ENVELOPE_HEADER]: forgedB }),
+          query,
+        ).toBe(body)
+        continue
+      }
       // A failed field would count as walked while proving nothing.
       const { errors = [] } = JSON.parse(body) as {
         errors?: { extensions?: { code?: string } }[]
@@ -1170,6 +1187,120 @@ describe('operator lane: Kontroll members (#1956)', () => {
           .run()
       }
     })
+  })
+})
+
+describe('operator lane: organizations (#1973)', () => {
+  const OPS = 'https://my.konf.app'
+  let opsJwt: string
+  const identityDb = () => dbs[0]
+  const ORGS = '{ organizations { id slug name plan status createdAt } }'
+  const ops = (tenant?: string): Record<string, string> => ({
+    origin: OPS,
+    authorization: `Bearer ${opsJwt}`,
+    ...(tenant ? { [OPERATOR_TENANT_HEADER]: tenant } : {}),
+  })
+  const setOperator = (on: boolean) =>
+    identityDb()
+      .prepare('UPDATE user SET platformOperator = ? WHERE id = ?')
+      .bind(on ? 1 : 0, USER.a)
+      .run()
+  beforeAll(async () => {
+    env.OPERATOR_ORIGIN = OPS
+    const { createAuth } = await import('../../services/identity/src/data')
+    const auth = createAuth(identityDb(), IDENTITY_ENV)
+    const ctx = await auth.$context
+    const { token } = await ctx.internalAdapter.createSession(USER.a, false, {
+      origin: OPS,
+    })
+    const cookie = `${ctx.authCookies.sessionToken.name}=${token}.${await makeSignature(token, ctx.secret)}`
+    const res = await auth.handler(
+      new Request(`${IDENTITY_ENV.BETTER_AUTH_URL}/api/auth/token`, {
+        headers: { cookie },
+      }),
+    )
+    opsJwt = ((await res.json()) as { token: string }).token
+  })
+  afterAll(async () => {
+    delete (env as Partial<Env>).OPERATOR_ORIGIN
+    await setOperator(false)
+  })
+  beforeEach(async () => {
+    env.OVERRIDE_TENANTS = {}
+    await setOperator(false)
+  })
+
+  it('lists every org with createdAt to an operator with no tenant', async () => {
+    await setOperator(true)
+    const body = JSON.parse(await run(ORGS, ops())) as {
+      data: { organizations: Record<string, string>[] }
+    }
+    expect(
+      (await verifyEnvelope(
+        lastEnvelope['tenant-directory']!,
+        envelopePublicKey,
+      )) as { typ: string },
+    ).toMatchObject({ typ: 'platform' })
+    const orgs = body.data.organizations
+    expect(orgs.map((o) => o.id).sort()).toEqual([ORG.a, ORG.b].sort())
+    // Ordered by slug.
+    expect(orgs.map((o) => o.slug)).toEqual(orgs.map((o) => o.slug).sort())
+    for (const o of orgs) expect(typeof o.createdAt).toBe('string')
+  })
+
+  it('pages by slug: first caps the page, after resumes past it', async () => {
+    await setOperator(true)
+    const page = async (args: string) =>
+      (
+        JSON.parse(await run(`{ organizations(${args}) { slug } }`, ops())) as {
+          data: { organizations: { slug: string }[] }
+        }
+      ).data.organizations.map((o) => o.slug)
+    const all = await page('first: 100')
+    expect(all).toHaveLength(2)
+    expect(await page('first: 1')).toEqual([all[0]])
+    expect(await page(`first: 1, after: ${JSON.stringify(all[0])}`)).toEqual([
+      all[1],
+    ])
+    expect(await page(`after: ${JSON.stringify(all[1])}`)).toEqual([])
+    // Out-of-range first is clamped to 1..100, never unbounded.
+    expect(await page('first: 0')).toEqual([all[0]])
+    expect(await page('first: 100000')).toEqual(all)
+  })
+
+  it('refuses an anonymous caller on the operator lane at the gateway', async () => {
+    calls.clear()
+    const body = JSON.parse(await run(ORGS, { origin: OPS }))
+    expect(body.data ?? null).toBeNull()
+    expect(body.errors[0].extensions.code).toBe('UNAUTHENTICATED')
+    expect(calls.has('tenant-directory')).toBe(false)
+  })
+
+  // No D1 read before the refusal: worker.test.ts spies on the D1 binding.
+  it('refuses everyone else with the identical FORBIDDEN', async () => {
+    const cases: [string, Record<string, string>, boolean][] = [
+      ['anonymous, tenant site', { origin: ORIGIN }, false],
+      [
+        'tenant admin on its site',
+        { origin: ORIGIN, authorization: `Bearer ${memberJwt}` },
+        false,
+      ],
+      ['member on the operator lane, no tenant', ops(), false],
+      ['member on the operator lane, own tenant', ops(HOST.a), false],
+      ['operator with a tenant selected', ops(HOST.a), true],
+      ['operator with another tenant selected', ops(HOST.b), true],
+    ]
+    const bodies = new Set<string>()
+    for (const [label, headers, operator] of cases) {
+      await setOperator(operator)
+      const text = await run(ORGS, headers)
+      const body = JSON.parse(text)
+      expect(body.data?.organizations ?? null, label).toBeNull()
+      expect(body.errors[0].extensions.code, label).toBe('FORBIDDEN')
+      expect(text, label).not.toMatch(MARKER)
+      bodies.add(text)
+    }
+    expect(bodies.size).toBe(1)
   })
 })
 

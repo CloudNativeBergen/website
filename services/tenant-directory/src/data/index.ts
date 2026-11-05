@@ -2,7 +2,7 @@
 // tenancy: false: the directory is the registry every tenant is resolved
 // from, so its reads span Organizations. Who may call what is decided in
 // the resolvers (src/subgraph.ts).
-import { and, eq, isNotNull, isNull, lt, or } from 'drizzle-orm'
+import { and, eq, gt, isNotNull, isNull, lt, or } from 'drizzle-orm'
 import { createGraphQLError } from 'graphql-yoga'
 import { rawDb } from './db'
 import {
@@ -134,6 +134,14 @@ export function createData(
   return {
     syncMembers: () => env.IDENTITY.syncMembers(),
     organization,
+
+    /** Every org, by slug, `first` after the `after` slug. Operator-only. */
+    organizations: (first: number, after?: string | null) =>
+      db.query.organizations.findMany({
+        where: after ? gt(organizations.slug, after) : undefined,
+        orderBy: organizations.slug,
+        limit: first,
+      }),
 
     /** One org's hostnames; the caller already decided it may see them. */
     domainsOf: (orgId: string) =>
@@ -309,6 +317,7 @@ export function createData(
             name: org.name ?? orgSlug,
             status: 'active',
             plan: 'free',
+            createdAt: new Date().toISOString(),
           }),
           db.insert(conferences).values({
             id: conferenceId,

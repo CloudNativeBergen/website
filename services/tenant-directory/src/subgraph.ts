@@ -1,6 +1,7 @@
 // tenant-directory: tenant resolution for the gateway, plus the provisioning
 // surface. Provisioning fields are @tag(internal), except
 // provisionOrganization (@tag(operator)); all need a PlatformContext.
+// `organizations` (#1973) is @tag(operator) too: requirePlatform.
 // `organization` is public and returns only the envelope's own org.
 import { createGraphQLError } from 'graphql-yoga'
 import { builder } from './builder'
@@ -27,6 +28,8 @@ function sessionOrgId(ctx: ResolverContext) {
   if (e?.typ !== 'tenant') return null
   return e.orgRole || e.scopes.includes('platform:operator') ? e.orgId : null
 }
+
+const ORGS_MAX = 100
 
 type Row<K extends string> = Record<K, string>
 
@@ -83,7 +86,11 @@ const Domain = builder
 
 // After Domain: Organization.domains refers to it.
 const Organization = builder
-  .objectRef<Row<'id' | 'slug' | 'name' | 'status' | 'plan'>>('Organization')
+  .objectRef<
+    Row<'id' | 'slug' | 'name' | 'status' | 'plan'> & {
+      createdAt: string | null
+    }
+  >('Organization')
   .implement({
     fields: (t) => ({
       id: t.exposeID('id'),
@@ -91,6 +98,8 @@ const Organization = builder
       name: t.exposeString('name'),
       status: t.exposeString('status'),
       plan: t.exposeString('plan'),
+      // ISO 8601; null for orgs provisioned before #1973.
+      createdAt: t.exposeString('createdAt', { nullable: true }),
       // Every hostname of this org, any verification state (#1969).
       domains: t.field({
         type: [Domain],
@@ -109,6 +118,21 @@ builder.queryType({
       resolve: async (_, __, ctx) => {
         const id = sessionOrgId(ctx)
         return id ? ((await ctx.data.organization(id)) ?? null) : null
+      },
+    }),
+    organizations: t.field({
+      type: [Organization],
+      tag: 'operator',
+      description: `Every Organization, ordered by slug. Platform operators only (operator lane, no tenant). At most ${ORGS_MAX} per page: pass the last slug as \`after\` for the next.`,
+      args: {
+        first: t.arg.int({ defaultValue: ORGS_MAX }),
+        after: t.arg.string(),
+      },
+      resolve: (_, { first, after }, ctx) => {
+        // Guard before fetch: no D1 read for anyone else.
+        requirePlatform(ctx)
+        const n = Math.min(Math.max(first ?? ORGS_MAX, 1), ORGS_MAX)
+        return ctx.data.organizations(n, after)
       },
     }),
     tenantByHost: t.field({

@@ -85,6 +85,12 @@ request.
   to, and an unknown host, both get the same 403 before any subgraph read.
 - Member, no header: no envelope, the same as anonymous.
 
+`organizations(first, after)` (#1973) lists every org, ordered by slug, with
+`createdAt` (null for orgs provisioned before it existed). Only a
+`PlatformContext` gets it; everyone else, operators with a tenant selected
+included, gets FORBIDDEN before any D1 read. At most 100 per page: pass the
+last slug as `after` for the next.
+
 `rolloutFlags` returns the selected tenant's flags to an operator or member who
 got its envelope, else null. Unset turns the lane off.
 

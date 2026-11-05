@@ -7,6 +7,7 @@ export const organizations = sqliteTable('organizations', {
   name: text('name').notNull(),
   status: text('status', { enum: ['active', 'suspended'] }).notNull(),
   plan: text('plan').notNull(),
+  createdAt: text('created_at'),
 })
 
 export const conferences = sqliteTable('conferences', {
