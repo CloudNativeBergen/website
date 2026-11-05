@@ -37,7 +37,7 @@ import {
  * dereferenced conference, once per distinct conference. Unflagged tenants
  * and any gateway failure keep the Sanity values.
  */
-async function withMergedConferences<P extends { conference?: unknown }>(
+export async function withMergedConferences<P extends { conference?: unknown }>(
   proposals: P[],
 ): Promise<P[]> {
   const byId = new Map<string, ConferenceCandidate>()
@@ -451,7 +451,7 @@ export async function getProposals({
     "available": coalesce(capacity, 30) - ${CONFIRMED_SIGNUPS_COUNT}`
         : ''
     }${includeSchedule ? `,${SCHEDULE_INFO_PROJECTION}` : ''}
-  } | order(conference->startDate desc, _updatedAt desc)`
+  } | order(conference->startDate desc, _updatedAt desc)` // superset order; re-sorted on merged startDate below
 
   try {
     proposals = await clientRead.fetch(
@@ -472,6 +472,11 @@ export async function getProposals({
   }
 
   proposals = await withMergedConferences(proposals)
+  // #1997: startDate is D1-owned, so the GROQ sort above only pre-orders.
+  // Stable re-sort on the merged value; a no-op for unflagged tenants.
+  const start = (p: ProposalExisting) =>
+    (p.conference as { startDate?: string } | undefined)?.startDate ?? ''
+  proposals = [...proposals].sort((a, b) => start(b).localeCompare(start(a)))
   proposals = proposals.map((proposal) => {
     if (proposal.description) {
       proposal.description = convertStringToPortableTextBlocks(

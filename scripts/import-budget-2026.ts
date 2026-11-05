@@ -699,6 +699,7 @@ async function resolveConference(): Promise<ResolvedConference> {
     )
   }
 
+  // #1997: stays on Sanity: merge.ts is server-only (throws under tsx); the pick is printed and CONFERENCE_ID overrides it.
   // Pick the 2026 edition: prefer a startDate in 2026, else a title match.
   const y2026 = editions.filter(
     (e) => e.startDate?.startsWith('2026') || /2026/.test(e.title),

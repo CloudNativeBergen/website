@@ -13,6 +13,7 @@ import { groq } from 'next-sanity'
 import { v4 as randomUUID } from 'uuid'
 import { Account, Profile, User } from 'next-auth'
 import { ProposalExisting, Status } from '../proposal/types'
+import { withMergedConferences } from '../proposal/data/sanity'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { generateUniqueSpeakerSlug } from './slug'
@@ -1483,7 +1484,9 @@ async function querySpeakers(
           _id,
           title,
           startDate,
-          endDate
+          endDate,
+          domains,
+          organization
         },
         topics[]-> {
           _id,
@@ -1499,6 +1502,14 @@ async function querySpeakers(
 
     const client = options?.uncached ? clientReadUncached : clientReadCached
     speakers = await client.fetch(query, params)
+    // #1997: title and dates are D1-owned; merge them for apiRead tenants.
+    const merged = await withMergedConferences(
+      speakers.flatMap((s) => s.proposals ?? []),
+    )
+    let i = 0
+    speakers = speakers.map((s) =>
+      s.proposals ? { ...s, proposals: s.proposals.map(() => merged[i++]) } : s,
+    )
   } catch (error) {
     err = error as Error
   }

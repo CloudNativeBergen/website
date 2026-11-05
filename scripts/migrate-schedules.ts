@@ -20,6 +20,7 @@ import { normalizeDomain } from '../src/lib/conference/domains'
 
 async function resolveConferenceId(target: string): Promise<string> {
   const domain = normalizeDomain(target)
+  // #1997: stays on Sanity: merge.ts is server-only (throws under tsx) and these moved fields only label output here.
   const conference = await clientWrite.fetch<{
     _id: string
     title?: string

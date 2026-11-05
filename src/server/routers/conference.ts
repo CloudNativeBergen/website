@@ -111,6 +111,7 @@ import { buildBriefingSlackMessage } from '@/lib/slack/speaker-briefing'
 import { postSlackMessage } from '@/lib/slack/client'
 import { resolveConferenceSlackToken } from '@/lib/slack/token'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { mergeConference } from '@/lib/conference/merge'
 import { osloTodayDateString } from '@/lib/time'
 import {
   redatePlanForConference,
@@ -1522,38 +1523,46 @@ export const conferenceRouter = router({
     .mutation(async ({ input }) => {
       const sourceId = await resolveConferenceId()
 
-      const [source, sourceTiers, sourceTemplates, claimedDomains, orgSlug] =
-        await Promise.all([
-          clientReadUncached.fetch<SourceConference | null>(
-            // groq-global-scoped: the source conference document itself, by
-            // the id resolveConferenceId() resolved from the request domain.
-            `*[_type == "conference" && _id == $id][0]`,
-            { id: sourceId },
-          ),
-          clientReadUncached.fetch<SourceSponsorTier[]>(
-            `*[_type == "sponsorTier" && conference._ref == $conferenceId]`,
-            { conferenceId: sourceId },
-          ),
-          clientReadUncached.fetch<SourceContractTemplate[]>(
-            `*[_type == "contractTemplate" && conference._ref == $conferenceId]`,
-            { conferenceId: sourceId },
-          ),
-          fetchClaimedDomains(),
-          // The org slug is what the platform hosts are minted FROM. Read from
-          // the source conference's organization ref — never from client input.
-          clientReadUncached.fetch<string | null>(
-            // groq-global-scoped: keyed by the SERVER-resolved source conference id (`resolveConferenceId`, from the request Host), exactly like the reads above it.
-            `*[_type == "conference" && _id == $id][0].organization->slug.current`,
-            { id: sourceId },
-          ),
-        ])
+      const [
+        sanitySource,
+        sourceTiers,
+        sourceTemplates,
+        claimedDomains,
+        orgSlug,
+      ] = await Promise.all([
+        clientReadUncached.fetch<SourceConference | null>(
+          // groq-global-scoped: the source conference document itself, by
+          // the id resolveConferenceId() resolved from the request domain.
+          `*[_type == "conference" && _id == $id][0]`,
+          { id: sourceId },
+        ),
+        clientReadUncached.fetch<SourceSponsorTier[]>(
+          `*[_type == "sponsorTier" && conference._ref == $conferenceId]`,
+          { conferenceId: sourceId },
+        ),
+        clientReadUncached.fetch<SourceContractTemplate[]>(
+          `*[_type == "contractTemplate" && conference._ref == $conferenceId]`,
+          { conferenceId: sourceId },
+        ),
+        fetchClaimedDomains(),
+        // The org slug is what the platform hosts are minted FROM. Read from
+        // the source conference's organization ref — never from client input.
+        clientReadUncached.fetch<string | null>(
+          // groq-global-scoped: keyed by the SERVER-resolved source conference id (`resolveConferenceId`, from the request Host), exactly like the reads above it.
+          `*[_type == "conference" && _id == $id][0].organization->slug.current`,
+          { id: sourceId },
+        ),
+      ])
 
-      if (!source?._id) {
+      if (!sanitySource?._id) {
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: 'Could not resolve the source conference',
         })
       }
+      // #1997: D1 owns the moved fields, so clone from the merged values;
+      // editorial fields stay Sanity's. Unflagged or failing: Sanity as-is.
+      const source = await mergeConference(sanitySource)
 
       // GLOBAL domain uniqueness — the authority. `input.domains` is already
       // normalized/validated for shape by the schema. Uniqueness is judged by

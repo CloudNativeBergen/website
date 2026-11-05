@@ -90,4 +90,38 @@ describe('proposal reads merge D1 conference fields', () => {
     const { proposals } = await getProposals({ conferenceId: 'conf-test' })
     expect(proposals[0].conference).toEqual(conference)
   })
+
+  it('sorts on the merged startDate, not the Sanity one', async () => {
+    vi.stubEnv('KONF_API_TENANTS', 'conf-b')
+    const confA = {
+      ...conference,
+      _id: 'conf-a',
+      startDate: '2026-09-01',
+      domains: ['a.example.com'],
+    }
+    const confB = {
+      ...conference,
+      _id: 'conf-b',
+      startDate: '2026-08-01',
+      domains: ['b.example.com'],
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: { conference: { id: 'conf-b', startDate: '2026-10-01' } },
+            }),
+          ),
+      ),
+    )
+    // Sanity order: A (Sep) before B (Aug). D1 moves B to Oct.
+    fetchMock.mockResolvedValue([
+      { _id: 'a', conference: confA },
+      { _id: 'b', conference: confB },
+    ])
+    const { proposals } = await getProposals({ orgId: 'org' })
+    expect(proposals.map((p) => p._id)).toEqual(['b', 'a'])
+  })
 })
