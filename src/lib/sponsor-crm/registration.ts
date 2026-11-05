@@ -10,6 +10,7 @@ import type { Conference } from '@/lib/conference/types'
 import { WORKSHOP_EARLY_ACCESS_PATH } from '@/lib/workshop/sign-in-paths'
 import { isPortalSigned } from './portal-phase'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { mergeConference } from '@/lib/conference/merge'
 
 /**
  * What the portal shows a sponsor once the contract is signed (#1687, phase
@@ -225,6 +226,47 @@ async function hasLivePhotoWall(conferenceId: string): Promise<boolean> {
   return !!id
 }
 
+type RegistrationConferenceDoc = {
+  _id: string
+  domains?: string[] | null
+  organization?: { _ref: string } | null
+  title?: string
+  startDate?: string
+  endDate?: string
+  venueName?: string
+  venueAddress?: string
+  registrationLink?: string
+  sponsorRegistrationLink?: string
+}
+
+/**
+ * Overlay the D1-owned conference fields (#1997) on the portal row. The
+ * deal's own conference is the merge key; editorial and group-B fields stay
+ * on Sanity. Unflagged tenants and gateway failures keep the Sanity values.
+ */
+async function applyD1ConferenceFields(result: {
+  conferenceName?: string
+  conferenceStartDate?: string | null
+  afterSigning?: RawAfterSigning
+  conferenceDoc?: RegistrationConferenceDoc | null
+}): Promise<void> {
+  const doc = result.conferenceDoc
+  delete result.conferenceDoc
+  if (!doc?._id) return
+  const c = await mergeConference(doc)
+  result.conferenceName = c.title
+  result.conferenceStartDate = c.startDate
+  if (result.afterSigning) {
+    Object.assign(result.afterSigning, {
+      startDate: c.startDate,
+      endDate: c.endDate,
+      venueName: c.venueName,
+      venueAddress: c.venueAddress,
+      ticketUrl: c.sponsorRegistrationLink ?? c.registrationLink,
+    })
+  }
+}
+
 export async function validateRegistrationToken(token: string): Promise<{
   sponsor?: RegistrationSponsorInfo
   error?: Error
@@ -239,6 +281,7 @@ export async function validateRegistrationToken(token: string): Promise<{
     const result = await clientRead.fetch<
       | (Omit<RegistrationSponsorInfo, 'afterSigning'> & {
           afterSigning?: RawAfterSigning
+          conferenceDoc?: RegistrationConferenceDoc | null
         })
       | null
     >(
@@ -256,6 +299,7 @@ export async function validateRegistrationToken(token: string): Promise<{
         "tierTitle": tier->title,
         "conferenceName": conference->title,
         "conferenceStartDate": conference->startDate,
+        "conferenceDoc": conference->{ _id, domains, organization, title, startDate, endDate, venueName, venueAddress, registrationLink, sponsorRegistrationLink },
         contactPersons[]{ _key, name, email, phone, role, isPrimary },
         billing{ invoiceFormat, email, reference, comments },
         registrationComplete,
@@ -298,6 +342,8 @@ export async function validateRegistrationToken(token: string): Promise<{
       console.error('[registration] Token lookup returned document without _id')
       return { error: new Error('Invalid registration data') }
     }
+
+    await applyD1ConferenceFields(result)
 
     const conferenceId = result.afterSigning?.conferenceId
     if (
