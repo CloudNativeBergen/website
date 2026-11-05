@@ -263,12 +263,46 @@ describe('introspection (#1961)', () => {
         .join(', ')}) { id } }`,
     ]) {
       const body = await ask(env(false, null), { origin: SITE }, query)
-      const text = JSON.stringify(body.errors)
+      const text = (body.errors as { message: string }[])
+        .map((e) => e.message)
+        .join('\n')
       expect(text).toMatch(/Cannot query field|Unknown argument/)
       expect(text).not.toMatch(/Did you mean/)
-      expect(text).not.toContain('provisionOrganization"')
+      expect(text).not.toContain('"provisionOrganization"')
       expect(text).not.toContain('idempotencyKey')
     }
+  })
+
+  it('answers a near-miss name exactly like a nonsense one', async () => {
+    const shape = async (query: string) => {
+      const r = await gateway.fetch(
+        new Request('http://api.test/graphql', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', origin: SITE },
+          body: JSON.stringify({ query }),
+        }),
+        env(false, null),
+      )
+      const body = (await r.json()) as {
+        errors: { message: string; extensions?: unknown }[]
+      }
+      return {
+        status: r.status,
+        extensions: body.errors.map((e) => e.extensions),
+        messages: body.errors.map((e) => e.message.replace(/"[^"]*"/, '"X"')),
+      }
+    }
+    const args = Object.keys(ARGS)
+      .map((k) => `${k}: "x"`)
+      .join(', ')
+    for (const [near, nonsense] of [
+      ['mutation { provisionOrganisation }', 'mutation { zzzzzz }'],
+      [
+        `mutation { provisionOrganization(idempotencyKe: "k", ${args}) { id } }`,
+        `mutation { provisionOrganization(zzzzzzzzzzzzz: "k", ${args}) { id } }`,
+      ],
+    ])
+      expect(await shape(near)).toEqual(await shape(nonsense))
   })
 
   it('serves no GraphiQL to a browser', async () => {

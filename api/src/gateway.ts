@@ -304,17 +304,18 @@ const operatorIntrospection: GatewayPlugin<GatewayContext> = {
  * graphql-js validation appends `Did you mean "x"?` to unknown field and
  * argument errors, which would name @tag(operator) fields to anyone (#1961).
  * Stripped for every caller; validation results are cached per document.
+ * Every error is rebuilt, not just ones with a suggestion, so status and
+ * extensions cannot tell a near-miss name from nonsense.
  */
 const blockFieldSuggestions: GatewayPlugin<GatewayContext> = {
   onValidate() {
     return ({ result, setResult }) => {
-      if (!result.some((e) => / Did you mean /.test(e.message))) return
+      if (!result.length) return
       setResult(
         result.map(
           (e) =>
             new GraphQLError(e.message.replace(/ Did you mean .*$/s, ''), {
               nodes: e.nodes,
-              extensions: e.extensions,
             }),
         ),
       )
