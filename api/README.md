@@ -70,12 +70,23 @@ Unset secrets leave the old behaviour: anonymous, tenant from `Origin`.
 Operator lane (kontroll, #1892 phase 4): set the var `OPERATOR_ORIGIN` (e.g.
 `https://my.konf.app`). A request whose `Origin` is that origin, with no site
 assertion, is an operator request. It must carry an identity JWT whose `origin`
-claim is the same origin, and the user must have `platformOperator` in identity;
-otherwise 401 or 403. Without `x-konf-operator-tenant` it gets a
-`PlatformContext`, which no Scoped repository accepts. With
-`x-konf-operator-tenant: <tenant host>` it gets an ordinary tenant envelope for
-that tenant, with the operator's own `orgRole` there and scope
-`platform:operator`, so writes still need owner/admin. Unset turns the lane off.
+claim is the same origin (identity hands that token only to platform operators
+and organization members, #1956); otherwise 401. Membership is re-read on every
+request.
+
+- Platform operator, no `x-konf-operator-tenant`: a `PlatformContext`, which no
+  Scoped repository accepts.
+- Platform operator, `x-konf-operator-tenant: <tenant host>`: an ordinary
+  tenant envelope for that tenant with the operator's own `orgRole` there
+  (often null) and scope `platform:operator`, so writes still need
+  owner/admin. An unknown host gets 400.
+- Member, naming a tenant host of an org they belong to: an ordinary tenant
+  envelope with their own `orgRole` and no scope. An org they do not belong
+  to, and an unknown host, both get the same 403 before any subgraph read.
+- Member, no header: no envelope, the same as anonymous.
+
+`rolloutFlags` returns the selected tenant's flags to an operator or member who
+got its envelope, else null. Unset turns the lane off.
 
 To rotate, add the new kid to `SITE_PUBLIC_KEYS`, switch
 `KONF_SITE_SIGNING_KEY`, then drop the old kid. A key pair:
