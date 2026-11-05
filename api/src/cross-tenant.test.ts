@@ -25,6 +25,9 @@ import {
   isNonNullType,
   isObjectType,
   buildSchema,
+  parse,
+  Kind,
+  type OperationDefinitionNode,
   type GraphQLArgument,
   type GraphQLInputType,
   type GraphQLOutputType,
@@ -474,16 +477,18 @@ beforeAll(async () => {
     bindings[BINDINGS[name as keyof typeof BINDINGS]] = {
       fetch: (url: string, init?: RequestInit) => {
         const body = String(init?.body)
-        // conferenceEditions is the conference subgraph's own root, served
-        // whatever the label says; only the overridden `conference` counts.
-        calls.add(
-          body.includes('_entities')
-            ? `${name}:_entities`
-            : body.includes('conferenceEditions') &&
-                !/\bconference\b/.test(body)
-              ? `${name}:editions`
-              : name,
+        // Label each call by the root fields it sends; `name` alone means a
+        // root other than the entity path or the conference subgraph's own
+        // conferenceEditions, which is served whatever the label says.
+        const op = parse(JSON.parse(body).query).definitions.find(
+          (d) => d.kind === Kind.OPERATION_DEFINITION,
+        ) as OperationDefinitionNode
+        const roots = op.selectionSet.selections.flatMap((x) =>
+          x.kind === Kind.FIELD ? [x.name.value] : [],
         )
+        for (const f of roots) calls.add(`${name}:${f}`)
+        if (roots.some((f) => f !== '_entities' && f !== 'conferenceEditions'))
+          calls.add(name)
         lastEnvelope[name] = new Headers(init?.headers).get(ENVELOPE_HEADER)
         return worker.default.fetch(new Request(url, init), workerEnv)
       },
@@ -608,6 +613,9 @@ describe.each([
     if (labelsOn && OVERRIDERS.length) {
       expect([...calls].some((c) => c.endsWith(':_entities'))).toBe(true)
     }
+    // The label moves `conference` only; editions is always served here.
+    expect(calls.has('conference:conference')).toBe(labelsOn)
+    expect(calls.has('conference:conferenceEditions')).toBe(true)
   })
 })
 
@@ -994,7 +1002,10 @@ describe('operator lane: Kontroll members (#1956)', () => {
     expect(missing).toBe(otherBody)
     expect(otherBody).not.toMatch(MARKER)
     // Only the gateway's host lookup ran: no subgraph read, no envelope.
-    expect([...calls]).toEqual(['tenant-directory'])
+    expect([...calls].sort()).toEqual([
+      'tenant-directory',
+      'tenant-directory:tenantByHost',
+    ])
     expect(Object.values(lastEnvelope).filter(Boolean)).toEqual([])
   })
 
@@ -1009,7 +1020,10 @@ describe('operator lane: Kontroll members (#1956)', () => {
       const body = JSON.parse(await run('{ conference { id } }', ops(HOST.a)))
       expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
       // Only the gateway's host lookup ran: no subgraph read, no envelope.
-      expect([...calls]).toEqual(['tenant-directory'])
+      expect([...calls].sort()).toEqual([
+        'tenant-directory',
+        'tenant-directory:tenantByHost',
+      ])
       expect(Object.values(lastEnvelope).filter(Boolean)).toEqual([])
     } finally {
       await setRole('admin')
