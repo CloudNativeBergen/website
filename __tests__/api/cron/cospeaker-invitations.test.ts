@@ -113,7 +113,11 @@ vi.mock('@/lib/conference/sanity', () => ({
   },
 }))
 
-vi.mock('next/cache', () => ({ unstable_noStore: vi.fn() }))
+vi.mock('next/cache', () => ({
+  unstable_noStore: vi.fn(),
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
+}))
 
 const CONF_A = {
   _id: 'conf-a',
@@ -194,6 +198,8 @@ describe('api/cron/cospeaker-invitations', () => {
 
   afterEach(() => {
     delete process.env.CRON_SECRET
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
   })
 
   describe('authorization', () => {
@@ -458,16 +464,126 @@ describe('api/cron/cospeaker-invitations', () => {
     expect(sends).toHaveLength(0)
   })
 
-  it('asks Sanity only for chaseable proposals on events that have not happened', async () => {
+  it('asks Sanity only for chaseable proposals', async () => {
     await run()
     const [query, params] = mockFetch.mock.calls[0] as unknown as [
       string,
       Record<string, unknown>,
     ]
     expect(query).toContain('proposal->status in $chaseable')
-    expect(query).toContain('conference->endDate >= $today')
     expect(params.chaseable).not.toContain('rejected')
     expect(params.chaseable).not.toContain('withdrawn')
     expect(params.chaseable).not.toContain('deleted')
+  })
+
+  describe('D1 gateway values and fallbacks (#1997)', () => {
+    it('skips invitation when conference has ended', async () => {
+      rows = [
+        invitation({
+          _id: 'inv-ended',
+          sweepConference: {
+            ...CONF_A,
+            endDate: '2020-01-01',
+          },
+        }),
+      ]
+
+      const { data } = await run()
+      expect(data.nudged).toBe(0)
+      expect(sends).toHaveLength(0)
+    })
+
+    it('uses D1 endDate when tenant has apiRead enabled (extended conference is nudged)', async () => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'conf-a')
+
+      // Sanity endDate is 2020-01-01 (ended), but D1 endDate is 2126-10-27 (future)
+      rows = [
+        invitation({
+          _id: 'inv-d1-extended',
+          sweepConference: {
+            ...CONF_A,
+            endDate: '2020-01-01',
+          },
+        }),
+      ]
+
+      const gatewayFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              conference: {
+                id: 'conf-a',
+                title: 'D1 CNDN 2026',
+                endDate: '2126-10-27',
+              },
+            },
+          }),
+        ),
+      )
+      vi.stubGlobal('fetch', gatewayFetch)
+
+      const { data } = await run()
+      expect(data.nudged).toBe(1)
+      expect(sends).toHaveLength(1)
+    })
+
+    it('uses D1 endDate when tenant has apiRead enabled (past conference is skipped)', async () => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'conf-a')
+
+      // Sanity endDate is future, but D1 says it ended in 2020
+      rows = [
+        invitation({
+          _id: 'inv-d1-past',
+          sweepConference: {
+            ...CONF_A,
+            endDate: '2126-10-27',
+          },
+        }),
+      ]
+
+      const gatewayFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              conference: {
+                id: 'conf-a',
+                title: 'D1 CNDN 2026',
+                endDate: '2020-01-01',
+              },
+            },
+          }),
+        ),
+      )
+      vi.stubGlobal('fetch', gatewayFetch)
+
+      const { data } = await run()
+      expect(data.nudged).toBe(0)
+      expect(sends).toHaveLength(0)
+    })
+
+    it('falls back to Sanity endDate when tenant is unflagged', async () => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+
+      // Sanity endDate is 2020-01-01 (ended); should be skipped without calling gateway
+      rows = [
+        invitation({
+          _id: 'inv-unflagged-ended',
+          sweepConference: {
+            ...CONF_A,
+            endDate: '2020-01-01',
+          },
+        }),
+      ]
+
+      const gatewayFetch = vi.fn()
+      vi.stubGlobal('fetch', gatewayFetch)
+
+      const { data } = await run()
+      expect(gatewayFetch).not.toHaveBeenCalled()
+      expect(data.nudged).toBe(0)
+    })
   })
 })

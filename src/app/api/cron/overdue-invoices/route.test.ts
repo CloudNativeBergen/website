@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-vi.mock('next/cache', () => ({ unstable_noStore: () => {} }))
+vi.mock('next/cache', () => ({
+  unstable_noStore: () => {},
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
+}))
 
 const fetch = vi.fn()
 vi.mock('@/lib/sanity/client', () => ({
@@ -27,6 +31,9 @@ beforeEach(() => {
 })
 afterEach(() => {
   process.env.CRON_SECRET = OLD
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+  vi.restoreAllMocks()
 })
 
 describe('/api/cron/overdue-invoices', () => {
@@ -77,11 +84,100 @@ describe('/api/cron/overdue-invoices', () => {
     const sent = JSON.stringify(notify.mock.calls[0][0])
     expect(sent).toContain('https://one.dev/admin/sponsors/invoices')
     expect(notify.mock.calls[0][0].text).toContain('One')
-    // Only editions that ended within the last 90 Oslo days are read.
-    expect(fetch.mock.calls[0][0]).toContain('endDate >= $cutoff')
+    // Conference candidates are fetched defined(endDate) and filtered in code
+    expect(fetch.mock.calls[0][0]).toContain('defined(endDate)')
     // Studio drafts would duplicate conferences and invoice rows.
     expect(fetch.mock.calls[0][0]).toContain('!(_id in path("drafts.**"))')
     expect(fetch.mock.calls[1][0]).toContain('!(_id in path("drafts.**"))')
-    expect(fetch.mock.calls[0][1]).toEqual({ cutoff: '1999-10-04' })
+    expect(fetch.mock.calls[0][1]).toEqual({})
+  })
+
+  describe('D1 gateway values and fallbacks (#1997)', () => {
+    it('uses D1 title and endDate when tenant has apiRead enabled', async () => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'c1')
+
+      fetch
+        .mockResolvedValueOnce([
+          {
+            _id: 'c1',
+            title: 'Sanity Title',
+            endDate: '2000-01-01',
+            domains: ['one.dev'],
+            salesNotificationChannel: '#sales',
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            sponsorName: 'Acme',
+            invoiceStatus: 'sent',
+            invoiceDueAt: '2000-01-01',
+            invoicePaidAt: null,
+            contractValue: 100,
+            contractCurrency: 'NOK',
+          },
+        ])
+
+      const gatewayFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              conference: {
+                id: 'c1',
+                title: 'D1 Title One',
+                endDate: '2000-01-02',
+              },
+            },
+          }),
+        ),
+      )
+      vi.stubGlobal('fetch', gatewayFetch)
+
+      vi.useFakeTimers({ now: new Date('2000-01-02T08:00:00Z') })
+      const res = await GET(req(auth))
+      vi.useRealTimers()
+
+      expect(await res.json()).toEqual({ success: true, posted: 1, failed: 0 })
+      expect(notify).toHaveBeenCalledTimes(1)
+      expect(notify.mock.calls[0][0].text).toContain('D1 Title One')
+    })
+
+    it('excludes conference when D1 endDate is older than 90 days', async () => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'c1')
+
+      fetch.mockResolvedValueOnce([
+        {
+          _id: 'c1',
+          title: 'Sanity Title',
+          endDate: '2000-01-01',
+          domains: ['one.dev'],
+          salesNotificationChannel: '#sales',
+        },
+      ])
+
+      const gatewayFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              conference: {
+                id: 'c1',
+                title: 'D1 Title One',
+                // Ended 100 days before 2000-01-02
+                endDate: '1999-09-01',
+              },
+            },
+          }),
+        ),
+      )
+      vi.stubGlobal('fetch', gatewayFetch)
+
+      vi.useFakeTimers({ now: new Date('2000-01-02T08:00:00Z') })
+      const res = await GET(req(auth))
+      vi.useRealTimers()
+
+      expect(await res.json()).toEqual({ success: true, posted: 0, failed: 0 })
+      expect(notify).not.toHaveBeenCalled()
+    })
   })
 })

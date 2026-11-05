@@ -1,6 +1,7 @@
 import 'server-only'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { mergeConferences, purgeEndDate } from '@/lib/conference/merge'
 import {
   MARKETING_SNAPSHOT_RETENTION_MONTHS,
   osloDateCutoff,
@@ -26,15 +27,27 @@ async function deleteForEndedConferences(
   cutoff: string,
   dryRun: boolean,
 ): Promise<{ deleted: number }> {
-  const conferences =
-    (await clientReadUncached.fetch<{ _id: string }[]>(
+  type ConfRow = {
+    _id: string
+    endDate?: string | null
+    domains?: string[] | null
+    organization?: { _ref: string } | null
+  }
+  const rawConferences =
+    (await clientReadUncached.fetch<ConfRow[]>(
       // groq-global: platform RETENTION CRON — enumerates every tenant's
-      // conferences past the horizon that still hold `type` documents; each deletion below is scoped
-      // to that one conference.
-      `*[_type == "conference" && defined(endDate) && endDate < $cutoff && ${HAS_DOCS}]{ _id }`,
-      { cutoff, type },
+      // conferences that still hold `type` documents; candidate conferences
+      // are filtered in code with merged D1 dates.
+      `*[_type == "conference" && defined(endDate) && ${HAS_DOCS}]{ _id, endDate, domains, organization }`,
+      { type },
       { cache: 'no-store' },
     )) ?? []
+
+  const merged = await mergeConferences(rawConferences)
+  const conferences = merged.filter((c, i) => {
+    const end = purgeEndDate(rawConferences[i].endDate, c.endDate)
+    return Boolean(end && end < cutoff)
+  })
 
   let deleted = 0
   for (const { _id: conferenceId } of conferences) {

@@ -41,6 +41,7 @@ import { deleteWallPost } from './delete'
 import {
   CLOSE_SETTLE_MS,
   POST_DELETE_CHUNK,
+  readUnpurgedWalls,
   runPhotoWallRetention,
   type RetentionReport,
 } from './retention'
@@ -229,6 +230,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
@@ -882,5 +885,125 @@ describe('the deduplicated asset is already gone after a crash past the chunk’
     const second = await run(clock(at('2026-11-27')))
     expect(second).toMatchObject({ purged: 1, posts: 0 })
     expect(store().doc(assetId('sx'))).toBeUndefined()
+  })
+})
+
+describe('D1 gateway values and fallbacks (#1997)', () => {
+  it('uses D1 endDate when tenant has apiRead enabled', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-A')
+
+    // conf-A in fixture has domains undefined; add domain so outbound origin resolves
+    store().put({
+      _id: 'conf-A',
+      _type: 'conference',
+      _rev: 'r',
+      title: 'conf-A',
+      endDate: '2026-10-27',
+      domains: ['conf-a.example.com'],
+    })
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conf-A',
+              title: 'conf-A D1',
+              endDate: '2026-11-15',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const walls = await readUnpurgedWalls(AbortSignal.timeout(5000))
+    const wallA = walls.find((w) => w.conferenceId === 'conf-A')
+    expect(wallA).toBeDefined()
+    expect(wallA?.endDate).toBe('2026-11-15')
+  })
+
+  it('an EARLIER D1 endDate never brings the deletion forward', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-A')
+    store().put({
+      _id: 'conf-A',
+      _type: 'conference',
+      _rev: 'r',
+      title: 'conf-A',
+      endDate: '2026-10-27',
+      domains: ['conf-a.example.com'],
+    })
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: { conference: { id: 'conf-A', endDate: '2026-01-01' } },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const walls = await readUnpurgedWalls(AbortSignal.timeout(5000))
+    expect(gatewayFetch).toHaveBeenCalled()
+    expect(walls.find((w) => w.conferenceId === 'conf-A')?.endDate).toBe(
+      '2026-10-27',
+    )
+  })
+
+  it('falls back to Sanity endDate when tenant is unflagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+
+    store().put({
+      _id: 'conf-A',
+      _type: 'conference',
+      _rev: 'r',
+      title: 'conf-A',
+      endDate: '2026-10-27',
+      domains: ['conf-a.example.com'],
+    })
+
+    const gatewayFetch = vi.fn()
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const walls = await readUnpurgedWalls(AbortSignal.timeout(5000))
+    const wallA = walls.find((w) => w.conferenceId === 'conf-A')
+    expect(wallA).toBeDefined()
+    expect(wallA?.endDate).toBe('2026-10-27')
+    expect(gatewayFetch).not.toHaveBeenCalled()
+  })
+
+  it('falls back to Sanity endDate when D1 returns nullish date (never to now)', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-A')
+
+    store().put({
+      _id: 'conf-A',
+      _type: 'conference',
+      _rev: 'r',
+      title: 'conf-A',
+      endDate: '2026-10-27',
+      domains: ['conf-a.example.com'],
+    })
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conf-A',
+              title: 'conf-A D1',
+              endDate: null,
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const walls = await readUnpurgedWalls(AbortSignal.timeout(5000))
+    const wallA = walls.find((w) => w.conferenceId === 'conf-A')
+    expect(wallA?.endDate).toBe('2026-10-27')
   })
 })
