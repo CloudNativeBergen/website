@@ -581,12 +581,16 @@ const OVERRIDERS = names.filter((n) =>
   compose().includes(`graph: ${n.toUpperCase().replace(/-/g, '_')}, override:`),
 )
 
-async function run(query: string, headers: Record<string, string>) {
+async function run(
+  query: string,
+  headers: Record<string, string>,
+  variables?: Record<string, unknown>,
+) {
   const res = await gateway.fetch(
     new Request('http://api.test/graphql', {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...headers },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, variables }),
     }),
     env,
   )
@@ -1454,6 +1458,107 @@ describe('operator lane: organizations (#1973)', () => {
     // Out-of-range first is clamped to 1..100, never unbounded.
     expect(await page('first: 0')).toEqual([all[0]])
     expect(await page('first: 100000')).toEqual(all)
+  })
+
+  // Kontroll's exact query (kontroll src/lib/portal/api.ts), with
+  // production-shaped rows: Sanity ids, NULL created_at, several domains.
+  it("answers Kontroll's organizations { domains } query in two D1 reads", async () => {
+    const KONTROLL = `query ($first: Int, $after: String) { organizations(first: $first, after: $after) { id name slug plan status createdAt domains { hostname verification kind } } }`
+    // The directory's D1 is the one with a `domains` table.
+    let db = dbs[0]
+    for (const d of dbs) {
+      const { results } = await d
+        .prepare("SELECT 1 FROM sqlite_master WHERE name = 'domains'")
+        .all()
+      if (results.length) db = d
+    }
+    const orgs = [
+      [
+        'organization-cloud-native-days',
+        'cloudnativedays',
+        'Cloud Native Days Norway',
+      ],
+      [
+        'organization-cloud-native-bergen',
+        'cloudnativebergen',
+        'Cloud Native Bergen',
+      ],
+      ['organization.kkdemo', 'kkdemo', 'kkdemo'],
+      ...Array.from({ length: 97 }, (_, i) => [
+        `organization.o${i}`,
+        `o${String(i).padStart(2, '0')}`,
+        `O${i}`,
+      ]),
+    ]
+    const stmts = orgs.flatMap(([id, slug, name]) => [
+      db
+        .prepare(
+          "INSERT INTO organizations (id, slug, name, status, plan, created_at) VALUES (?, ?, ?, 'active', 'free', NULL)",
+        )
+        .bind(id, slug, name),
+      db
+        .prepare(
+          "INSERT INTO conferences (id, org_id, slug, name, lifecycle) VALUES (?, ?, '2026', 'c', 'live')",
+        )
+        .bind(`conf-${slug}`, id),
+      ...[`${slug}-2026.konf.app`, `${slug}.konf.app`, `${slug}.example`].map(
+        (h, i) =>
+          db
+            .prepare(
+              "INSERT INTO domains (hostname, org_id, conference_id, kind, verification) VALUES (?, ?, ?, ?, 'verified')",
+            )
+            .bind(
+              h,
+              id,
+              `conf-${slug}`,
+              ['platform-edition', 'platform-alias', 'custom'][i],
+            ),
+      ),
+    ])
+    await db.batch(stmts)
+    try {
+      await setOperator(true)
+      const K = 'tenant-directory:organizations'
+      delete d1Calls[K]
+      const body = JSON.parse(
+        await run(KONTROLL, ops(), { first: 100, after: null }),
+      ) as {
+        data: {
+          organizations: {
+            id: string
+            createdAt: string | null
+            domains: { hostname: string }[]
+          }[]
+        }
+        errors?: unknown
+      }
+      expect(body.errors).toBeUndefined()
+      const got = body.data.organizations
+      expect(got).toHaveLength(100)
+      const cndn = got.find((o) => o.id === 'organization-cloud-native-days')!
+      expect(cndn.createdAt).toBeNull()
+      expect(cndn.domains.map((d) => d.hostname).sort()).toEqual([
+        'cloudnativedays-2026.konf.app',
+        'cloudnativedays.example',
+        'cloudnativedays.konf.app',
+      ])
+      for (const o of got) expect(o.domains.length, o.id).toBeGreaterThan(0)
+      expect(d1Calls[K]).toBe(2)
+    } finally {
+      const ids = orgs.map(([id]) => id)
+      const q = ids.map(() => '?').join(',')
+      await db.batch(
+        ['domains', 'conferences']
+          .map((t) =>
+            db.prepare(`DELETE FROM ${t} WHERE org_id IN (${q})`).bind(...ids),
+          )
+          .concat(
+            db
+              .prepare(`DELETE FROM organizations WHERE id IN (${q})`)
+              .bind(...ids),
+          ),
+      )
+    }
   })
 
   it('refuses an anonymous caller on the operator lane at the gateway', async () => {

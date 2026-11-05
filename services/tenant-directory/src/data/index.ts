@@ -2,7 +2,7 @@
 // tenancy: false: the directory is the registry every tenant is resolved
 // from, so its reads span Organizations. Who may call what is decided in
 // the resolvers (src/subgraph.ts).
-import { and, eq, gt, isNotNull, isNull, lt, or } from 'drizzle-orm'
+import { and, eq, gt, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm'
 import { createGraphQLError } from 'graphql-yoga'
 import { rawDb } from './db'
 import {
@@ -183,6 +183,22 @@ export function createData(
         where: eq(domains.orgId, orgId),
         orderBy: domains.hostname,
       }),
+
+    /**
+     * Every listed org's hostnames in one query, by org id. Operator-only:
+     * the platform lists (#1973, #1985) call it once per page, not per org.
+     */
+    async domainsOfOrgs(orgIds: string[]) {
+      const rows = orgIds.length
+        ? await db.query.domains.findMany({
+            where: inArray(domains.orgId, orgIds),
+            orderBy: domains.hostname,
+          })
+        : []
+      const byOrg = new Map(orgIds.map((id) => [id, [] as typeof rows]))
+      for (const r of rows) byOrg.get(r.orgId)?.push(r)
+      return byOrg
+    },
 
     /**
      * `trusted` (a PlatformContext) sees every row. Everyone else only gets

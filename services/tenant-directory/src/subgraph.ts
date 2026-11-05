@@ -117,6 +117,30 @@ const Domain = builder
 type OrgRow = Row<'id' | 'slug' | 'name' | 'status' | 'plan'> & {
   createdAt: string | null
 }
+type DomainRow = Awaited<
+  ReturnType<ResolverContext['data']['domainsOf']>
+>[number]
+/** An org from a platform list, with its page's one batched domains read. */
+type ListedOrg = OrgRow & { domains: () => Promise<DomainRow[]> }
+
+/**
+ * Attaches one lazy, shared domains read for the whole page: D1 is read once,
+ * and only if `domains` is selected. Callers have passed requirePlatform.
+ */
+function withDomains<T>(
+  ctx: ResolverContext,
+  items: T[],
+  orgOf: (t: T) => OrgRow,
+): T[] {
+  let all: ReturnType<ResolverContext['data']['domainsOfOrgs']> | undefined
+  const ids = [...new Set(items.map((i) => orgOf(i).id))]
+  return items.map((i) => {
+    const org = orgOf(i) as ListedOrg
+    org.domains = async () =>
+      (await (all ??= ctx.data.domainsOfOrgs(ids))).get(org.id) ?? []
+    return i
+  })
+}
 
 // After Domain: Organization.domains refers to it.
 const Organization = builder.objectRef<OrgRow>('Organization').implement({
@@ -128,10 +152,21 @@ const Organization = builder.objectRef<OrgRow>('Organization').implement({
     plan: t.exposeString('plan'),
     // ISO 8601; null for orgs provisioned before #1973.
     createdAt: t.exposeString('createdAt', { nullable: true }),
-    // Every hostname of this org, any verification state (#1969).
+    // Every hostname of this org, any verification state (#1969). From a
+    // platform list: the page's batched read. Otherwise only the session
+    // org's own, as `organization` returns.
     domains: t.field({
       type: [Domain],
-      resolve: (org, _, ctx) => ctx.data.domainsOf(org.id),
+      resolve: (org, _, ctx) => {
+        const listed = (org as Partial<ListedOrg>).domains
+        if (listed) return listed()
+        if (sessionOrgId(ctx) !== org.id) {
+          throw createGraphQLError('not your organization', {
+            extensions: { code: 'FORBIDDEN' },
+          })
+        }
+        return ctx.data.domainsOf(org.id)
+      },
     }),
   }),
 })
@@ -185,11 +220,12 @@ builder.queryType({
         first: t.arg.int({ defaultValue: ORGS_MAX }),
         after: t.arg.string(),
       },
-      resolve: (_, { first, after }, ctx) => {
+      resolve: async (_, { first, after }, ctx) => {
         // Guard before fetch: no D1 read for anyone else.
         requirePlatform(ctx)
         const n = Math.min(Math.max(first ?? ORGS_MAX, 1), ORGS_MAX)
-        return ctx.data.organizations(n, after)
+        const orgs = await ctx.data.organizations(n, after)
+        return withDomains(ctx, orgs, (o) => o)
       },
     }),
     conferences: t.field({
@@ -202,16 +238,17 @@ builder.queryType({
         lifecycle: t.arg({ type: Lifecycle }),
         flag: t.arg({ type: RolloutFlag }),
       },
-      resolve: (_, { first, after, lifecycle, flag }, ctx) => {
+      resolve: async (_, { first, after, lifecycle, flag }, ctx) => {
         // Guard before fetch: no D1 read for anyone else.
         requirePlatform(ctx)
         const n = Math.min(Math.max(first ?? ORGS_MAX, 1), ORGS_MAX)
-        return ctx.data.allConferences(
+        const rows = await ctx.data.allConferences(
           n,
           after == null ? after : String(after),
           lifecycle,
           flag,
         )
+        return withDomains(ctx, rows, (r) => r.org)
       },
     }),
     tenantByHost: t.field({
