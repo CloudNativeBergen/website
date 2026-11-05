@@ -27,6 +27,34 @@ import {
 } from '@/lib/sanity/helpers'
 import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 import { OFFICIAL_SCHEDULE_FILTER } from '@/lib/speaker/schedule-groq'
+import {
+  mergeConferences,
+  type ConferenceCandidate,
+} from '@/lib/conference/merge'
+
+/**
+ * Merge D1-owned conference fields (title, dates) over each proposal's
+ * dereferenced conference, once per distinct conference. Unflagged tenants
+ * and any gateway failure keep the Sanity values.
+ */
+async function withMergedConferences<P extends { conference?: unknown }>(
+  proposals: P[],
+): Promise<P[]> {
+  const byId = new Map<string, ConferenceCandidate>()
+  for (const p of proposals) {
+    const c = p.conference as ConferenceCandidate | null | undefined
+    if (c && typeof c === 'object' && '_id' in c && !byId.has(c._id))
+      byId.set(c._id, c)
+  }
+  if (byId.size === 0) return proposals
+  const merged = new Map(
+    (await mergeConferences([...byId.values()])).map((c) => [c._id, c]),
+  )
+  return proposals.map((p) => {
+    const c = p.conference as ConferenceCandidate | null | undefined
+    return c && merged.has(c._id) ? { ...p, conference: merged.get(c._id) } : p
+  })
+}
 
 /**
  * The `scheduleInfo` projection — where an accepted/confirmed talk landed on the
@@ -301,7 +329,7 @@ export async function getProposal({
         _id
       },
       conference-> {
-        _id, title, startDate, endDate, domains
+        _id, title, startDate, endDate, domains, organization
       },
       topics[]-> {
         _id, title, color, slug, description
@@ -333,6 +361,7 @@ export async function getProposal({
   }
 
   withEffectiveInvitationStatus(proposal)
+  if (proposal) [proposal] = await withMergedConferences([proposal])
 
   // @TODO - Check if the proposal is not found and return an error
   return { proposal, proposalError }
@@ -404,7 +433,7 @@ export async function getProposals({
       _id
     },
     conference-> {
-      _id, title, startDate, endDate
+      _id, title, startDate, endDate, domains, organization
     },
     topics[]-> {
       _id, title, color, slug, description
@@ -442,6 +471,7 @@ export async function getProposals({
     proposalsError = error as Error
   }
 
+  proposals = await withMergedConferences(proposals)
   proposals = proposals.map((proposal) => {
     if (proposal.description) {
       proposal.description = convertStringToPortableTextBlocks(

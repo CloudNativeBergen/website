@@ -15,6 +15,7 @@ import { ATTENDEE_PAGE_LIVE } from '@/lib/feedback'
 import { getSpeakerFeedbackChips } from '@/lib/feedback/server'
 import { findOutboundOrigin } from '@/lib/conference/baseUrl'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { gateEndDate, mergeConferences } from '@/lib/conference/merge'
 import { shareTags } from '@/lib/share/social'
 import { CompactConferenceCard } from '@/components/cfp/CompactConferenceCard'
 import { SpeakerShareSidebar } from '@/components/cfp/SpeakerShareSidebar'
@@ -121,7 +122,7 @@ export default async function SpeakerDashboard() {
     }
   `
 
-  const conferences = orgRef
+  const sanityConferences = orgRef
     ? await clientReadCached.fetch<CfpDashboardConference[]>(
         conferencesQuery,
         {
@@ -132,9 +133,19 @@ export default async function SpeakerDashboard() {
         { next: { revalidate: 300 } },
       )
     : []
+  // D1-owned fields (title, dates, venue) over Sanity for `apiRead` tenants.
+  const conferences = await mergeConferences(sanityConferences)
+  // Editing gates on the earlier end date, so D1 can never reopen it.
+  const isOverAt = (i: number) =>
+    isConferenceOver({
+      endDate: gateEndDate(
+        sanityConferences[i].endDate,
+        conferences[i].endDate,
+      ) as string,
+    })
 
   // Fetch data for each conference in parallel
-  const conferenceDataPromises = conferences.map(async (conference) => {
+  const conferenceDataPromises = conferences.map(async (conference, i) => {
     try {
       const [
         { proposals, proposalsError },
@@ -189,7 +200,7 @@ export default async function SpeakerDashboard() {
         }),
       ])
 
-      const isOver = isConferenceOver(conference)
+      const isOver = isOverAt(i)
       const canEditProposals = !isOver
 
       // Session Feedback chips (speaker feedback spec §9.4), read only for an
@@ -276,8 +287,8 @@ export default async function SpeakerDashboard() {
         workshopStats: [],
         travelSupport: null,
         badges: [],
-        isOver: isConferenceOver(conference),
-        canEditProposals: !isConferenceOver(conference),
+        isOver: isOverAt(i),
+        canEditProposals: !isOverAt(i),
       } as ConferenceWithSpeakerData
     }
   })

@@ -51,7 +51,7 @@ describe('/cfp/list conferences query', () => {
   })
 
   it('FAILS CLOSED: an unresolvable org yields an empty list instead of a query', () => {
-    expect(code).toMatch(/const conferences = orgRef\s*\?/)
+    expect(code).toMatch(/const sanityConferences = orgRef\s*\?/)
     expect(code).toMatch(/\)\s*:\s*\[\]/)
   })
 })

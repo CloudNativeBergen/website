@@ -16,7 +16,34 @@ vi.mock('@/lib/conference/konf-api', async (importOriginal) => {
   }
 })
 
-import { mergeConference, mergeConferences, purgeEndDate } from './merge'
+import {
+  gateEndDate,
+  mergeConference,
+  mergeConferences,
+  purgeEndDate,
+} from './merge'
+import { isConferenceOver } from './state'
+
+describe('gateEndDate (proposal editing gate)', () => {
+  it.each([
+    ['D1 missing', '2024-05-01', undefined, '2024-05-01'],
+    ['D1 null', '2024-05-01', null, '2024-05-01'],
+    ['D1 unparsable', '2024-05-01', 'soon', '2024-05-01'],
+    ['D1 invalid calendar date', '2024-05-01', '2024-13-45', '2024-05-01'],
+    ['D1 later: keep Sanity', '2024-05-01', '2099-01-01', '2024-05-01'],
+    ['D1 earlier: take D1', '2024-05-01', '2020-01-01', '2020-01-01'],
+    ['Sanity missing: take D1', null, '2020-01-01', '2020-01-01'],
+  ])('%s', (_name, sanity, d1, want) => {
+    expect(gateEndDate(sanity, d1)).toBe(want)
+  })
+
+  it('a later or bad D1 end date never reopens editing of an ended conference', () => {
+    for (const d1 of ['2099-12-31', 'soon', null, undefined]) {
+      const endDate = gateEndDate('2020-01-01', d1) as string
+      expect(isConferenceOver({ endDate })).toBe(true)
+    }
+  })
+})
 
 describe('purgeEndDate', () => {
   it.each([
