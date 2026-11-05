@@ -19,8 +19,3 @@ docs/
 # Commenting out potential cache ignores to ensure fresh CSS builds
 # .next/cache/
 # node_modules/.cache/
-
-# Cloudflare Workers code; not part of the site, and zero-config would deploy api/src/*.ts as functions
-/api/
-/services/
-/packages/
