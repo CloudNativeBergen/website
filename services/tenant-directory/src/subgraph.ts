@@ -1,6 +1,7 @@
 // tenant-directory: tenant resolution for the gateway, plus the provisioning
 // surface. Provisioning fields are @tag(internal), except
 // provisionOrganization (@tag(operator)); all need a PlatformContext.
+// `organization` is public and returns only the envelope's own org.
 import { createGraphQLError } from 'graphql-yoga'
 import { builder } from './builder'
 import type { ResolverContext } from './worker'
@@ -15,19 +16,19 @@ function requirePlatform(ctx: ResolverContext) {
   }
 }
 
-type Row<K extends string> = Record<K, string>
+/**
+ * The session org for `organization` (#1968, #1969): the envelope's own org,
+ * for a member with any role, or for an operator acting for it on the
+ * operator lane (OPERATOR_SCOPE). Anyone else, anonymous callers included,
+ * gets null. Never an argument, so no caller can name another org.
+ */
+function sessionOrgId(ctx: ResolverContext) {
+  const e = ctx.envelope
+  if (e?.typ !== 'tenant') return null
+  return e.orgRole || e.scopes.includes('platform:operator') ? e.orgId : null
+}
 
-const Organization = builder
-  .objectRef<Row<'id' | 'slug' | 'name' | 'status' | 'plan'>>('Organization')
-  .implement({
-    fields: (t) => ({
-      id: t.exposeID('id'),
-      slug: t.exposeString('slug'),
-      name: t.exposeString('name'),
-      status: t.exposeString('status'),
-      plan: t.exposeString('plan'),
-    }),
-  })
+type Row<K extends string> = Record<K, string>
 
 const Conference = builder
   .objectRef<Row<'id' | 'orgId' | 'slug' | 'name' | 'lifecycle'>>('Conference')
@@ -80,8 +81,36 @@ const Domain = builder
     }),
   })
 
+// After Domain: Organization.domains refers to it.
+const Organization = builder
+  .objectRef<Row<'id' | 'slug' | 'name' | 'status' | 'plan'>>('Organization')
+  .implement({
+    fields: (t) => ({
+      id: t.exposeID('id'),
+      slug: t.exposeString('slug'),
+      name: t.exposeString('name'),
+      status: t.exposeString('status'),
+      plan: t.exposeString('plan'),
+      // Every hostname of this org, any verification state (#1969).
+      domains: t.field({
+        type: [Domain],
+        resolve: (org, _, ctx) => ctx.data.domainsOf(org.id),
+      }),
+    }),
+  })
+
 builder.queryType({
   fields: (t) => ({
+    organization: t.field({
+      type: Organization,
+      nullable: true,
+      description:
+        "The session's Organization: members (any role) and operators acting for it. Null for everyone else.",
+      resolve: async (_, __, ctx) => {
+        const id = sessionOrgId(ctx)
+        return id ? ((await ctx.data.organization(id)) ?? null) : null
+      },
+    }),
     tenantByHost: t.field({
       type: Domain,
       nullable: true,
