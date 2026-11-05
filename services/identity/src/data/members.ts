@@ -297,5 +297,41 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
     }
   }
 
-  return { asMember, asOperator }
+  /**
+   * Read side (#1972). The caller has already decided access from the
+   * envelope; `orgId` is the envelope's, never an argument. Emails are read
+   * only when `withEmail` is set (owners, admins, operators).
+   */
+  const list = (orgId: string, withEmail: boolean) =>
+    db
+      .select({
+        userId: member.userId,
+        name: user.name,
+        role: member.role,
+        joinedAt: member.createdAt,
+        email: withEmail ? user.email : sql<null>`NULL`,
+      })
+      .from(member)
+      .innerJoin(user, eq(user.id, member.userId))
+      .where(eq(member.organizationId, orgId))
+      .orderBy(member.createdAt)
+  const pendingInvitations = (orgId: string) =>
+    db
+      .select({
+        id: invitation.id,
+        email: invitation.email,
+        role: invitation.role,
+        status: invitation.status,
+        expiresAt: invitation.expiresAt,
+      })
+      .from(invitation)
+      .where(
+        and(
+          eq(invitation.organizationId, orgId),
+          eq(invitation.status, 'pending'),
+        ),
+      )
+      .orderBy(invitation.expiresAt)
+
+  return { asMember, asOperator, list, pendingInvitations }
 }
