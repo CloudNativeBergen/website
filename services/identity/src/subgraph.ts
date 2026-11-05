@@ -58,6 +58,91 @@ const Invitation = builder
     }),
   })
 
+/**
+ * Who reads the session org's members (#1972), decided from the envelope
+ * alone, before any lookup: a member with any role, or an operator acting for
+ * the tenant (OPERATOR_SCOPE). Emails and invitations: owner, admin, operator.
+ * Anyone else gets null.
+ */
+const OPERATOR_SCOPE = 'platform:operator'
+const reader = (ctx: ResolverContext) => {
+  const e = ctx.envelope
+  if (e?.typ !== 'tenant' || !e.userId) return null
+  const operator = e.scopes.includes(OPERATOR_SCOPE)
+  const roles = (e.orgRole ?? '').split(',').map((r) => r.trim().toLowerCase())
+  if (!operator && !roles.some((r) => r)) return null
+  const manager = operator || roles.some((r) => r === 'owner' || r === 'admin')
+  return { orgId: e.orgId, manager }
+}
+
+const Member = builder
+  .objectRef<{
+    userId: string
+    name: string
+    role: string
+    joinedAt: Date
+    email: string | null
+  }>('OrganizationMember')
+  .implement({
+    fields: (t) => ({
+      userId: t.exposeID('userId'),
+      name: t.exposeString('name'),
+      role: t.exposeString('role'),
+      joinedAt: t.string({
+        resolve: (m) => new Date(m.joinedAt).toISOString(),
+      }),
+      email: t.exposeString('email', {
+        nullable: true,
+        description: 'Owners, admins and operators only; null otherwise.',
+      }),
+    }),
+  })
+
+const PendingInvitation = builder
+  .objectRef<{
+    id: string
+    email: string
+    role: string | null
+    expiresAt: Date
+  }>('PendingInvitation')
+  .implement({
+    fields: (t) => ({
+      id: t.exposeID('id'),
+      email: t.exposeString('email'),
+      role: t.exposeString('role', { nullable: true }),
+      expiresAt: t.string({
+        resolve: (i) => new Date(i.expiresAt).toISOString(),
+      }),
+    }),
+  })
+
+builder.queryType({
+  fields: (t) => ({
+    members: t.field({
+      type: [Member],
+      nullable: true,
+      description:
+        "The session org's members. Null unless the caller is a member or an operator acting for the tenant.",
+      resolve: (_, __, ctx) => {
+        const r = reader(ctx)
+        return r ? ctx.data.members().list(r.orgId, r.manager) : null
+      },
+    }),
+    invitations: t.field({
+      type: [PendingInvitation],
+      nullable: true,
+      description:
+        "The session org's pending invitations. Owners, admins and operators only; null otherwise.",
+      resolve: (_, __, ctx) => {
+        const r = reader(ctx)
+        return r?.manager
+          ? ctx.data.members().pendingInvitations(r.orgId)
+          : null
+      },
+    }),
+  }),
+})
+
 builder.mutationType({
   fields: (t) => {
     const orgId = () => t.arg.id({ required: true })

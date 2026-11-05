@@ -450,9 +450,14 @@ beforeAll(async () => {
   }
 
   for (const [i, name] of names.entries()) {
-    const db = (await mf.getD1Database(`DB${i}`)) as unknown as D1Database
+    // The identity subgraph and Membership share one D1, as deployed, so a
+    // membership change shows in both on the next request.
+    const db =
+      name === 'identity'
+        ? identityDb
+        : ((await mf.getD1Database(`DB${i}`)) as unknown as D1Database)
     const migrations = new URL(`${name}/migrations/`, services)
-    if (existsSync(migrations)) {
+    if (name !== 'identity' && existsSync(migrations)) {
       await migrate(db, migrations)
       await seed(db)
       dbs.push(db)
@@ -1225,5 +1230,158 @@ describe('negative control: the Sanity fixture follows the GROQ', () => {
 
   it('returns A with the production query', async () => {
     expect(await read((q) => q)).toMatch(/TENANT_A/)
+  })
+})
+
+describe('session org members (#1972)', () => {
+  const OPS = 'https://my.konf.app'
+  const Q =
+    '{ members { userId name role joinedAt email } invitations { id email role expiresAt } }'
+  const identityDb = () => dbs[0]
+  const sql = (q: string, ...args: unknown[]) =>
+    identityDb()
+      .prepare(q)
+      .bind(...args)
+      .run()
+  // INSERT OR REPLACE skips the LAST_OWNER triggers (see the operator lane).
+  const setRole = (role: string) =>
+    sql(
+      "INSERT OR REPLACE INTO member (id, organizationId, userId, role, createdAt) SELECT COALESCE((SELECT id FROM member WHERE userId = ?1 AND organizationId = ?2), 'member-ops'), ?2, ?1, ?3, 0",
+      USER.a,
+      ORG.a,
+      role,
+    )
+  const site = () => ({ origin: ORIGIN, authorization: `Bearer ${memberJwt}` })
+  let opsJwt: string
+  type Body = {
+    data?: {
+      members: { userId: string; email: string | null; role: string }[] | null
+      invitations: { email: string }[] | null
+    }
+    errors?: unknown[]
+  }
+  const read = async (headers: Record<string, string>) =>
+    JSON.parse(await run(Q, headers)) as Body
+
+  beforeAll(async () => {
+    env.OPERATOR_ORIGIN = OPS
+    const { createAuth } = await import('../../services/identity/src/data')
+    const auth = createAuth(identityDb(), IDENTITY_ENV)
+    const ctx = await auth.$context
+    const { token } = await ctx.internalAdapter.createSession(USER.a, false, {
+      origin: OPS,
+    })
+    const cookie = `${ctx.authCookies.sessionToken.name}=${token}.${await makeSignature(token, ctx.secret)}`
+    const res = await auth.handler(
+      new Request(`${IDENTITY_ENV.BETTER_AUTH_URL}/api/auth/token`, {
+        headers: { cookie },
+      }),
+    )
+    opsJwt = ((await res.json()) as { token: string }).token
+    // A pending invitation in each org; B's carries the marker.
+    for (const t of TENANTS)
+      await sql(
+        "INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt) VALUES (?, ?, ?, 'member', 'pending', ?, ?, 0)",
+        `inv-1972-${tag(t)}`,
+        ORG[t],
+        `invitee-${tag(t)}@example.com`,
+        Date.now() + 86_400_000,
+        USER[t],
+      )
+  })
+  afterAll(async () => {
+    delete (env as Partial<Env>).OPERATOR_ORIGIN
+    await sql("DELETE FROM invitation WHERE id LIKE 'inv-1972-%'")
+    await sql('UPDATE user SET platformOperator = 0 WHERE id = ?', USER.a)
+    await setRole('admin')
+  })
+  beforeEach(async () => {
+    env.OVERRIDE_TENANTS = {}
+    await setRole('admin')
+  })
+
+  it.each(['owner', 'admin'])(
+    "a %s reads A's members with emails and invitations, never B's",
+    async (role) => {
+      await setRole(role)
+      const raw = await run(Q, site())
+      expect(raw).not.toMatch(MARKER)
+      const { data } = JSON.parse(raw) as Body
+      expect(data!.members).toEqual([
+        expect.objectContaining({ userId: USER.a, role }),
+      ])
+      expect(data!.members![0].email).toBe('TENANT_A user.email')
+      expect(data!.invitations).toEqual([
+        expect.objectContaining({ email: 'invitee-TENANT_A@example.com' }),
+      ])
+    },
+  )
+
+  it("a member reads A's members without emails and gets no invitations", async () => {
+    await setRole('member')
+    const raw = await run(Q, site())
+    expect(raw).not.toMatch(MARKER)
+    expect(JSON.parse(raw)).toEqual({
+      data: {
+        members: [
+          {
+            userId: USER.a,
+            name: expect.any(String),
+            role: 'member',
+            joinedAt: expect.any(String),
+            email: null,
+          },
+        ],
+        invitations: null,
+      },
+    })
+  })
+
+  it("never reads B's members, from A's session on B's host or anonymously", async () => {
+    // A's session token is bound to A's host: B's origin refuses it outright.
+    expect(
+      await run(Q, { ...site(), origin: `https://${HOST.b}` }),
+    ).not.toMatch(MARKER)
+    for (const origin of [ORIGIN, `https://${HOST.b}`])
+      expect(await read({ origin })).toEqual({
+        data: { members: null, invitations: null },
+      })
+  })
+
+  it('a removed member gets null on the next request', async () => {
+    expect((await read(site())).data!.members).toHaveLength(1)
+    await sql(
+      'DELETE FROM member WHERE userId = ? AND organizationId = ?',
+      USER.a,
+      ORG.a,
+    )
+    expect(await read(site())).toEqual({
+      data: { members: null, invitations: null },
+    })
+  })
+
+  it('an operator acting for A reads its members with emails, as no member', async () => {
+    await sql('UPDATE user SET platformOperator = 1 WHERE id = ?', USER.a)
+    await sql(
+      'DELETE FROM member WHERE userId = ? AND organizationId = ?',
+      USER.a,
+      ORG.a,
+    )
+    try {
+      const raw = await run(Q, {
+        origin: OPS,
+        authorization: `Bearer ${opsJwt}`,
+        [OPERATOR_TENANT_HEADER]: HOST.a,
+      })
+      expect(raw).not.toMatch(MARKER)
+      const { data } = JSON.parse(raw) as Body
+      // A's only member was removed above; the invitation proves the org.
+      expect(data!.members).toEqual([])
+      expect(data!.invitations).toEqual([
+        expect.objectContaining({ email: 'invitee-TENANT_A@example.com' }),
+      ])
+    } finally {
+      await sql('UPDATE user SET platformOperator = 0 WHERE id = ?', USER.a)
+    }
   })
 })
