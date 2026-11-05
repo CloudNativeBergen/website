@@ -1023,6 +1023,175 @@ describe('operator lane: Kontroll members (#1956)', () => {
   })
 })
 
+describe('organization: session org, plan and domains (#1968, #1969)', () => {
+  const OPS = 'https://my.konf.app'
+  const ORGQ =
+    '{ organization { id name plan slug status domains { hostname verification kind } } }'
+  const own = {
+    id: ORG.a,
+    name: 'TENANT_A organizations.name',
+    plan: 'TENANT_A organizations.plan',
+    slug: 'TENANT_A organizations.slug',
+    status: 'active',
+    domains: [
+      { hostname: HOST.a, verification: 'verified', kind: 'platform-edition' },
+    ],
+  }
+  let opsJwt: string
+  const setOperator = (on: boolean) =>
+    dbs[0]
+      .prepare('UPDATE user SET platformOperator = ? WHERE id = ?')
+      .bind(on ? 1 : 0, USER.a)
+      .run()
+  const ops = (tenant?: string): Record<string, string> => ({
+    origin: OPS,
+    authorization: `Bearer ${opsJwt}`,
+    ...(tenant ? { [OPERATOR_TENANT_HEADER]: tenant } : {}),
+  })
+  const setRole = (role: string) =>
+    dbs[0]
+      .prepare(
+        'UPDATE member SET role = ? WHERE userId = ? AND organizationId = ?',
+      )
+      .bind(role, USER.a, ORG.a)
+      .run()
+
+  beforeAll(async () => {
+    env.OPERATOR_ORIGIN = OPS
+    const { createAuth } = await import('../../services/identity/src/data')
+    const auth = createAuth(dbs[0], IDENTITY_ENV)
+    const ctx = await auth.$context
+    const { token } = await ctx.internalAdapter.createSession(USER.a, false, {
+      origin: OPS,
+    })
+    const cookie = `${ctx.authCookies.sessionToken.name}=${token}.${await makeSignature(token, ctx.secret)}`
+    const res = await auth.handler(
+      new Request(`${IDENTITY_ENV.BETTER_AUTH_URL}/api/auth/token`, {
+        headers: { cookie },
+      }),
+    )
+    opsJwt = ((await res.json()) as { token: string }).token
+  })
+  afterAll(() => {
+    delete (env as Partial<Env>).OPERATOR_ORIGIN
+  })
+  beforeEach(() => {
+    env.OVERRIDE_TENANTS = {}
+  })
+
+  it("serves a member of A A's org, plan and domains on A's host, pending ones too", async () => {
+    let db: D1Database | undefined
+    for (const d of dbs) {
+      const { results } = await d
+        .prepare("SELECT 1 FROM sqlite_master WHERE name = 'domains'")
+        .all()
+      if (results.length) db = d
+    }
+    await db!
+      .prepare(
+        "INSERT INTO domains (hostname, org_id, conference_id, kind, verification) VALUES ('pending.example', ?, ?, 'custom', 'pending')",
+      )
+      .bind(ORG.a, CONF.a)
+      .run()
+    try {
+      const body = await run(ORGQ, {
+        origin: ORIGIN,
+        authorization: `Bearer ${memberJwt}`,
+      })
+      expect(JSON.parse(body)).toEqual({
+        data: {
+          organization: {
+            ...own,
+            domains: [
+              {
+                hostname: 'pending.example',
+                verification: 'pending',
+                kind: 'custom',
+              },
+              ...own.domains,
+            ],
+          },
+        },
+      })
+    } finally {
+      await db!
+        .prepare("DELETE FROM domains WHERE hostname = 'pending.example'")
+        .run()
+    }
+  })
+
+  it('serves a member with role member too (any role)', async () => {
+    await setRole('member')
+    try {
+      expect(JSON.parse(await run(ORGQ, ops(HOST.a)))).toEqual({
+        data: { organization: own },
+      })
+    } finally {
+      await setRole('admin')
+    }
+  })
+
+  it('gives an anonymous caller null, never the host org', async () => {
+    expect(JSON.parse(await run(ORGQ, { origin: ORIGIN }))).toEqual({
+      data: { organization: null },
+    })
+    expect(
+      JSON.parse(await run(ORGQ, { origin: `https://${HOST.b}` })),
+    ).toEqual({ data: { organization: null } })
+  })
+
+  it('never serves another org: no argument, and B selected is refused like a missing host', async () => {
+    const withArg = JSON.parse(
+      await run(`{ organization(id: "${ORG.b}") { id } }`, {
+        origin: ORIGIN,
+        authorization: `Bearer ${memberJwt}`,
+      }),
+    )
+    expect(withArg.errors[0].extensions.code).toBe('GRAPHQL_VALIDATION_FAILED')
+    const other = await run(ORGQ, ops(HOST.b))
+    expect(other).not.toMatch(MARKER)
+    expect(JSON.parse(other).errors[0].extensions.code).toBe('FORBIDDEN')
+    expect(await run(ORGQ, ops('nowhere.example'))).toBe(other)
+  })
+
+  it('serves a member with no tenant selected null', async () => {
+    expect(JSON.parse(await run(ORGQ, ops()))).toEqual({
+      data: { organization: null },
+    })
+  })
+
+  it('serves an operator the selected tenant, and null with none selected', async () => {
+    await setOperator(true)
+    // Not a member of B: OPERATOR_SCOPE alone admits the operator.
+    try {
+      const b = JSON.parse(
+        await run(
+          '{ organization { id plan domains { hostname } } }',
+          ops(HOST.b),
+        ),
+      )
+      expect(b.data.organization).toMatchObject({
+        id: ORG.b,
+        domains: [{ hostname: HOST.b }],
+      })
+      expect(JSON.parse(await run(ORGQ, ops()))).toEqual({
+        data: { organization: null },
+      })
+    } finally {
+      await setOperator(false)
+    }
+  })
+
+  it('keeps organization public and still cuts internal fields', () => {
+    const sdl = publicSdl()
+    expect(sdl).toMatch(/\borganization: Organization\b/)
+    expect(sdl).toMatch(/\bdomains: \[Domain!\]/)
+    expect(sdl).toMatch(/\bverification: String/)
+    expect(sdl).not.toMatch(/tenantByHost|repointAlias|addCustomDomain/)
+    expect(sdl).not.toMatch(/\bflags: RolloutFlags|d1Override/)
+  })
+})
+
 describe('negative control: the Sanity fixture follows the GROQ', () => {
   const read = async (rewrite: (q: string) => string) => {
     env.OVERRIDE_TENANTS = {}

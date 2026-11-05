@@ -61,3 +61,11 @@ The target is kontroll on the API.
 
 Update the row in the same PR that changes an owner, an adapter or a write
 mode.
+
+Tenants and domains reach kontroll through the public `organization` query
+(#1968, #1969): the session's own org (id, name, plan, slug, status) and its
+`domains { hostname verification kind }`. The org is always the gateway
+envelope's org, never an argument. Org members with any role get it, on a
+tenant host or on the operator lane with that tenant selected, and so do
+platform operators acting for a selected tenant. Everyone else, anonymous
+callers included, gets `null`.

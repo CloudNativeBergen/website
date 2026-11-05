@@ -135,6 +135,13 @@ export function createData(
     syncMembers: () => env.IDENTITY.syncMembers(),
     organization,
 
+    /** One org's hostnames; the caller already decided it may see them. */
+    domainsOf: (orgId: string) =>
+      db.query.domains.findMany({
+        where: eq(domains.orgId, orgId),
+        orderBy: domains.hostname,
+      }),
+
     /**
      * `trusted` (a PlatformContext) sees every row. Everyone else only gets
      * a verified hostname of an active Organization's non-draft Conference.
