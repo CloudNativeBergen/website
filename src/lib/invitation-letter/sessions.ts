@@ -1,6 +1,5 @@
 import { getProposals } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
-import type { ProposalExisting } from '@/lib/proposal/types'
 import type { ConfirmedSession } from './types'
 
 /**
