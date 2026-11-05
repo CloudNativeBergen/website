@@ -1166,8 +1166,25 @@ describe('crm.copyToNextYear with intoCurrent (board renewal strip)', () => {
       error: null,
     })
     h.renewalFetch = (query, params) => {
-      if (query.includes('order(startDate desc)[0]{ _id }'))
-        return { _id: PREV }
+      // Every org edition (superset); start dates are compared in code.
+      const allEditions = query.includes(
+        '{ _id, domains, organization, startDate }',
+      )
+      if (allEditions || query.includes('"organizers"'))
+        return [
+          {
+            _id: PREV,
+            title: 'Last year',
+            domains: [],
+            startDate: '2000-10-27',
+          },
+          {
+            _id: CONF_A,
+            title: 'This year',
+            domains: [],
+            startDate: '2099-10-27',
+          },
+        ]
       if (query.includes('_type == "conference" && _id == $conferenceId'))
         return {
           _id: PREV,
@@ -1179,8 +1196,6 @@ describe('crm.copyToNextYear with intoCurrent (board renewal strip)', () => {
         return params?.conferenceId === opts.sourceIn
           ? { _id: 'sfc-old', sponsor: { _ref: 'sp-A' }, tierTitle: 'Gold' }
           : null
-      if (query.includes('order(startDate asc)[0]'))
-        return { _id: CONF_A, title: 'This year', domains: [] }
       return undefined
     }
   }
