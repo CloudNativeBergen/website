@@ -20,6 +20,7 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { clientReadCached } from '@/lib/sanity/client'
 import { conferenceTag, domainTag } from '@/lib/cache/tags'
 import { normalizeDomain, wildcardFormForHost } from '@/lib/conference/domains'
+import { mergeConference } from '@/lib/conference/merge'
 
 export type ConferenceVisibility = 'unlisted' | 'live'
 
@@ -69,10 +70,12 @@ export async function getDiscoveryVisibilityForDomain(
     const row = await clientReadCached.fetch<{
       _id: string
       visibility?: string | null
+      domains?: readonly string[] | null
+      organization?: { _ref: string } | null
     } | null>(
       // groq-global: host-to-tenant resolution itself; there is no tenant yet
-      // to scope by. Returns only {_id, visibility}.
-      `*[_type == "conference" && ($domain in domains || $wildcardSubdomain in domains) && !(_id in path("drafts.**"))][0]{ _id, visibility }`,
+      // to scope by. Returns only {_id, visibility, domains, organization}.
+      `*[_type == "conference" && ($domain in domains || $wildcardSubdomain in domains) && !(_id in path("drafts.**"))][0]{ _id, visibility, domains, organization }`,
       {
         domain: normalizeDomain(host),
         wildcardSubdomain: wildcardFormForHost(normalizeDomain(host)) ?? '',
@@ -84,7 +87,17 @@ export async function getDiscoveryVisibilityForDomain(
     // THIS cached discovery read too. Without it, robots/sitemap stayed on
     // the old visibility for up to the cacheLife window after going live.
     cacheTag(conferenceTag(row._id))
-    return { discoverable: resolveConferenceVisibility(row) === 'live' }
+    const merged = await mergeConference(row)
+    // A D1 value outside the known set must not flip an unlisted conference
+    // to live (resolveConferenceVisibility treats anything else as live).
+    const visibility = CONFERENCE_VISIBILITY_VALUES.includes(
+      merged.visibility as ConferenceVisibility,
+    )
+      ? merged.visibility
+      : row.visibility
+    return {
+      discoverable: resolveConferenceVisibility({ visibility }) === 'live',
+    }
   } catch {
     return { discoverable: false }
   }

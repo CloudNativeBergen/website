@@ -40,10 +40,12 @@ import {
 } from '@/lib/domain-verification'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { domainEntriesOverlap, normalizeDomain } from './domains'
+import { mergeConferences } from './merge'
 
 /** One conference's hold on a platform host. */
 interface HostHolder {
   _id: string
+  organization?: { _ref: string } | null
   organizationId: string | null
   startDate: string | null
   domains: string[]
@@ -81,13 +83,14 @@ async function findHostHolders(hosts: string[]): Promise<HostHolder[]> {
     // foreign holder worth detecting.
     `*[_type == "conference" && count(domains[@ in $hosts]) > 0]{
       _id,
+      organization,
       "organizationId": organization._ref,
       "startDate": startDate,
       domains
     }`,
     { hosts },
   )
-  return rows ?? []
+  return mergeConferences(rows ?? [])
 }
 
 /**

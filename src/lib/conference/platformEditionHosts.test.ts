@@ -9,8 +9,12 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
+vi.mock('server-only', () => ({}))
+vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
+
 interface Holder {
   _id: string
+  organization?: { _ref: string } | null
   organizationId: string | null
   startDate: string | null
   domains: string[]
@@ -46,7 +50,9 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   vi.unstubAllEnvs()
+  vi.restoreAllMocks()
 })
 
 describe('a first claim (nobody holds the short address)', () => {
@@ -196,5 +202,140 @@ describe('nothing to mint', () => {
 
   it('mints nothing for a reserved org slug', async () => {
     expect((await plan({ orgSlug: 'admin' })).claim).toEqual([])
+  })
+})
+
+describe('D1 gateway values and fallbacks (#1997)', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  it('flagged: differing D1 startDate wins over Sanity (D1 later blocks transfer)', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conference-2025')
+
+    // In Sanity, conference-2025 starts 2025-06-01 (earlier than the new 2026-06-01 edition).
+    // In D1, conference-2025 starts 2027-06-01 (later than the new 2026-06-01 edition).
+    holders = [
+      {
+        _id: 'conference-2025',
+        organization: { _ref: ORG },
+        organizationId: ORG,
+        startDate: '2025-06-01',
+        domains: ['cnb.konf.run', 'cnb-2025.konf.run'],
+      },
+    ]
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conference-2025',
+              startDate: '2027-06-01',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await plan()
+    // Because D1 has startDate: '2027-06-01', the 2026 edition is earlier than the holder.
+    // Bare host cnb.konf.run should NOT be claimed or transferred!
+    expect(result.claim).toEqual(['cnb-2026.konf.run'])
+    expect(result.releaseFrom).toBeNull()
+    expect(result.transferring).toBeNull()
+    expect(gatewayFetch).toHaveBeenCalled()
+  })
+
+  it('flagged: differing D1 startDate wins over Sanity (D1 earlier enables transfer)', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conference-2025')
+
+    // In Sanity, conference-2025 starts 2027-06-01 (later than 2026-06-01).
+    // In D1, conference-2025 was rescheduled to 2025-06-01 (earlier than 2026-06-01).
+    holders = [
+      {
+        _id: 'conference-2025',
+        organization: { _ref: ORG },
+        organizationId: ORG,
+        startDate: '2027-06-01',
+        domains: ['cnb.konf.run', 'cnb-2025.konf.run'],
+      },
+    ]
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conference-2025',
+              startDate: '2025-06-01',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await plan()
+    // Because D1 has startDate: '2025-06-01', the 2026 edition is later than the holder.
+    // Bare host cnb.konf.run IS claimed and transferred from conference-2025!
+    expect(result.claim).toContain('cnb.konf.run')
+    expect(result.releaseFrom).toBe('conference-2025')
+    expect(result.transferring).toBe('cnb.konf.run')
+    expect(gatewayFetch).toHaveBeenCalled()
+  })
+
+  it('unflagged: gives Sanity with no gateway call', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+
+    holders = [
+      {
+        _id: 'conference-2025',
+        organization: { _ref: ORG },
+        organizationId: ORG,
+        startDate: '2025-06-01',
+        domains: ['cnb.konf.run', 'cnb-2025.konf.run'],
+      },
+    ]
+
+    const gatewayFetch = vi.fn()
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await plan()
+    expect(gatewayFetch).not.toHaveBeenCalled()
+    // Sanity's 2025-06-01 is earlier than 2026-06-01 -> transfers bare host
+    expect(result.claim).toContain('cnb.konf.run')
+    expect(result.releaseFrom).toBe('conference-2025')
+    expect(result.transferring).toBe('cnb.konf.run')
+  })
+
+  it('error: falls back to Sanity on gateway failure', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conference-2025')
+
+    holders = [
+      {
+        _id: 'conference-2025',
+        organization: { _ref: ORG },
+        organizationId: ORG,
+        startDate: '2025-06-01',
+        domains: ['cnb.konf.run', 'cnb-2025.konf.run'],
+      },
+    ]
+
+    const gatewayFetch = vi
+      .fn()
+      .mockRejectedValue(new DOMException('timed out', 'TimeoutError'))
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await plan()
+    // Falls back to Sanity startDate 2025-06-01 -> transfers bare host
+    expect(result.claim).toContain('cnb.konf.run')
+    expect(result.releaseFrom).toBe('conference-2025')
+    expect(result.transferring).toBe('cnb.konf.run')
   })
 })
