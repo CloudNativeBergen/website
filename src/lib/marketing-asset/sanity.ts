@@ -1,6 +1,7 @@
 import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { mergeConferences } from '@/lib/conference/merge'
 import { isSoftOnSocial } from './image-type'
 import { isAttachableToPost } from './post-attach'
 import { originalDownloadUrl } from './original'
@@ -40,6 +41,7 @@ const ROW_PROJECTION = `{
   scope,
   "conferenceId": select(scope == "edition" => conference._ref, null),
   "edition": select(scope == "edition" => conference->title, null),
+  "conference": select(scope == "edition" => conference->{ _id, title, domains, organization }, null),
   "subject": ${SUBJECT_PROJECTION},
   "tags": coalesce(tags, []),
   "credit": coalesce(credit, null),
@@ -117,6 +119,12 @@ export async function listMarketingAssets(
         'softOnSocial' | 'attachable' | 'usedInPosts' | 'downloadUrl'
       > & {
         mimeType: string | null
+        conference?: {
+          _id: string
+          title?: string | null
+          domains?: readonly string[] | null
+          organization?: { _ref: string } | null
+        } | null
       })[]
     | null
   >(
@@ -144,6 +152,23 @@ export async function listMarketingAssets(
     },
     { cache: 'no-store' },
   )
+  const confCache = new Map<
+    string,
+    {
+      _id: string
+      title?: string | null
+      domains?: readonly string[] | null
+      organization?: { _ref: string } | null
+    }
+  >()
+  for (const r of rows ?? []) {
+    if (r.conference && !confCache.has(r.conference._id)) {
+      confCache.set(r.conference._id, r.conference)
+    }
+  }
+  const mergedConfs = await mergeConferences(Array.from(confCache.values()))
+  const confMap = new Map(mergedConfs.map((c) => [c._id, c]))
+
   const used =
     options.countUsage !== true
       ? null
@@ -151,8 +176,11 @@ export async function listMarketingAssets(
           orgId,
           (rows ?? []).flatMap((row) => (row.assetId ? [row.assetId] : [])),
         )
-  return (rows ?? []).map(({ mimeType, ...row }) => ({
+  return (rows ?? []).map(({ mimeType, conference, ...row }) => ({
     ...row,
+    edition: conference
+      ? (confMap.get(conference._id)?.title ?? row.edition)
+      : row.edition,
     softOnSocial: isSoftOnSocial(row, row.studio?.format),
     attachable: isAttachableToPost({ ...row, mimeType }),
     downloadUrl: originalDownloadUrl(row),

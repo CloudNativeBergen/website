@@ -30,7 +30,11 @@ async function run(query: string, params: Record<string, unknown> = {}) {
 }
 
 const revalidateTag = vi.hoisted(() => vi.fn())
-vi.mock('next/cache', () => ({ revalidateTag }))
+vi.mock('next/cache', () => ({
+  revalidateTag,
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
+}))
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: { transaction: () => h.tx },
   clientReadUncached: { fetch: run },
@@ -531,5 +535,130 @@ describe('commitSeedPlan', () => {
     revalidateTag.mockClear()
     await commitSeedPlan(seed())
     expect(revalidateTag).not.toHaveBeenCalled()
+  })
+})
+
+describe('getPlanView D1 gateway values and fallbacks (#1997)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  it('uses merged D1 title for copiedFromTitle when flagged and values differ', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-prior')
+
+    h.dataset.length = 0
+    h.dataset.push(
+      {
+        _id: 'conf-prior',
+        _type: 'conference',
+        title: 'Sanity Prior Title',
+        domains: ['prior.example.com'],
+        organization: r('org-1'),
+      },
+      {
+        _id: 'marketingPlan.conf-prior',
+        _type: 'marketingPlan',
+        conference: r('conf-prior'),
+      },
+      {
+        _id: 'marketingPlan.conf-now',
+        _type: 'marketingPlan',
+        conference: r('conf-now'),
+        copiedFrom: r('marketingPlan.conf-prior'),
+      },
+    )
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conf-prior',
+              title: 'D1 Prior Title',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const view = await getPlanView('conf-now')
+    expect(view).not.toBeNull()
+    expect(view?.plan.copiedFromTitle).toBe('D1 Prior Title')
+  })
+
+  it('falls back to Sanity title for copiedFromTitle when unflagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+
+    h.dataset.length = 0
+    h.dataset.push(
+      {
+        _id: 'conf-prior',
+        _type: 'conference',
+        title: 'Sanity Prior Title',
+        domains: ['prior.example.com'],
+        organization: r('org-1'),
+      },
+      {
+        _id: 'marketingPlan.conf-prior',
+        _type: 'marketingPlan',
+        conference: r('conf-prior'),
+      },
+      {
+        _id: 'marketingPlan.conf-now',
+        _type: 'marketingPlan',
+        conference: r('conf-now'),
+        copiedFrom: r('marketingPlan.conf-prior'),
+      },
+    )
+
+    const gatewayFetch = vi.fn()
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const view = await getPlanView('conf-now')
+    expect(gatewayFetch).not.toHaveBeenCalled()
+    expect(view?.plan.copiedFromTitle).toBe('Sanity Prior Title')
+  })
+
+  it('falls back to Sanity title for copiedFromTitle on gateway error', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-prior')
+
+    h.dataset.length = 0
+    h.dataset.push(
+      {
+        _id: 'conf-prior',
+        _type: 'conference',
+        title: 'Sanity Prior Title',
+        domains: ['prior.example.com'],
+        organization: r('org-1'),
+      },
+      {
+        _id: 'marketingPlan.conf-prior',
+        _type: 'marketingPlan',
+        conference: r('conf-prior'),
+      },
+      {
+        _id: 'marketingPlan.conf-now',
+        _type: 'marketingPlan',
+        conference: r('conf-now'),
+        copiedFrom: r('marketingPlan.conf-prior'),
+      },
+    )
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ errors: [{ message: 'D1 error' }] }), {
+        status: 500,
+      }),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const view = await getPlanView('conf-now')
+    expect(view?.plan.copiedFromTitle).toBe('Sanity Prior Title')
   })
 })

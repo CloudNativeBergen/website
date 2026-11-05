@@ -8,9 +8,7 @@ import {
   VolunteerStatus,
   VolunteerWithConference,
 } from './types'
-import { findOutboundOrigin } from '@/lib/conference/baseUrl'
-import { mergeKonfApiConference, rolloutFlags } from '@/lib/conference/konf-api'
-import type { Conference } from '@/lib/conference/types'
+import { mergeConferences } from '@/lib/conference/merge'
 
 async function enrichVolunteersConference(
   volunteers: VolunteerWithConference[],
@@ -18,45 +16,29 @@ async function enrichVolunteersConference(
   if (!volunteers || volunteers.length === 0) return []
   const confCache = new Map<
     string,
-    Promise<VolunteerWithConference['conference']>
+    NonNullable<VolunteerWithConference['conference']>
   >()
-  return Promise.all(
-    volunteers.map(async (v) => {
-      const conf = v.conference
-      if (!conf?._id) return v
-      let promise = confCache.get(conf._id)
-      if (!promise) {
-        promise = (async () => {
-          const origin = findOutboundOrigin(conf)
-          const host = origin ? new URL(origin).host : null
-          if (
-            host &&
-            (
-              await rolloutFlags(
-                host,
-                conf as Pick<Conference, '_id' | 'organization'>,
-              )
-            ).apiRead
-          ) {
-            const merged = (await mergeKonfApiConference(
-              host,
-              conf as unknown as Conference,
-            )) as unknown as typeof conf
-            return {
-              ...conf,
-              ...merged,
-            }
-          }
-          return conf
-        })()
-        confCache.set(conf._id, promise)
-      }
-      return {
-        ...v,
-        conference: await promise,
-      }
-    }),
-  )
+  for (const v of volunteers) {
+    const conf = v.conference
+    if (conf?._id && !confCache.has(conf._id)) {
+      confCache.set(conf._id, conf)
+    }
+  }
+  const candidates = Array.from(confCache.values()).map((c) => ({
+    ...c,
+    organization: c.organization?._ref ? { _ref: c.organization._ref } : null,
+  }))
+  const mergedConfs = await mergeConferences(candidates)
+  const confMap = new Map(mergedConfs.map((c) => [c._id, c]))
+  return volunteers.map((v) => {
+    const conf = v.conference
+    if (!conf?._id) return v
+    const merged = confMap.get(conf._id)
+    return {
+      ...v,
+      conference: merged ? ({ ...conf, ...merged } as typeof conf) : conf,
+    }
+  })
 }
 
 async function enrichVolunteerConference(

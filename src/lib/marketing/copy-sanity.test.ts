@@ -174,6 +174,54 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
     expect(sources[0].startDate).toBe('2025-05-01')
   })
 
+  it('sorts getCopySources by merged D1 startDate descending when flagged and differing D1 dates change order', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-older')
+
+    const confOld = h.dataset.find((d) => d._id === 'conf-old')!
+    confOld.domains = ['old.example.com']
+    confOld.startDate = '2025-05-01'
+
+    h.dataset.push(
+      {
+        _id: 'conf-older',
+        _type: 'conference',
+        organization: r('org'),
+        title: 'Older conf',
+        startDate: '2025-04-01',
+        domains: ['older.example.com'],
+      },
+      {
+        _id: 'plan-older',
+        _type: 'marketingPlan',
+        conference: r('conf-older'),
+      },
+    )
+
+    // D1 moves conf-older ahead of conf-old (2025-06-01 > 2025-05-01)
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conf-older',
+              title: 'D1 Older Conf',
+              startDate: '2025-06-01',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const sources = await getCopySources('org', 'conf-now')
+    expect(sources).toHaveLength(2)
+    expect(sources[0].planId).toBe('plan-older')
+    expect(sources[0].startDate).toBe('2025-06-01')
+    expect(sources[1].planId).toBe('plan-old')
+    expect(sources[1].startDate).toBe('2025-05-01')
+  })
+
   it('uses merged D1 fields for getCopySource when flagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
     vi.stubEnv('KONF_API_TENANTS', 'conf-old')

@@ -25,6 +25,7 @@ async function run(query: string, params: Record<string, unknown> = {}) {
   return value.get()
 }
 
+vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: run },
   clientWrite: {},
@@ -1392,5 +1393,76 @@ describe('GIFs and videos (#1167)', () => {
       { byHand: true },
     )
     expect(byHand.map((r) => r._id)).toEqual(['wave', 'clip'])
+  })
+})
+
+describe('listMarketingAssets D1 gateway values and fallbacks (#1997)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  it('uses merged D1 edition title when flagged and values differ', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-a-2026')
+
+    const conf = h.dataset.find((d) => d._id === 'conf-a-2026')!
+    conf.domains = ['2026.example.com']
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conf-a-2026',
+              title: 'D1 Edition Title',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const rows = await listMarketingAssets('org-a', 'conf-a-2026', {})
+    const item = rows.find((r) => r._id === 'card-2026')
+    expect(item).toBeDefined()
+    expect(item?.edition).toBe('D1 Edition Title')
+  })
+
+  it('falls back to Sanity edition title when unflagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+
+    const conf = h.dataset.find((d) => d._id === 'conf-a-2026')!
+    conf.domains = ['2026.example.com']
+
+    const gatewayFetch = vi.fn()
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const rows = await listMarketingAssets('org-a', 'conf-a-2026', {})
+    const item = rows.find((r) => r._id === 'card-2026')
+    expect(gatewayFetch).not.toHaveBeenCalled()
+    expect(item?.edition).toBe('CND 2026')
+  })
+
+  it('falls back to Sanity edition title on gateway error', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-a-2026')
+
+    const conf = h.dataset.find((d) => d._id === 'conf-a-2026')!
+    conf.domains = ['2026.example.com']
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ errors: [{ message: 'D1 error' }] }), {
+        status: 500,
+      }),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const rows = await listMarketingAssets('org-a', 'conf-a-2026', {})
+    const item = rows.find((r) => r._id === 'card-2026')
+    expect(item?.edition).toBe('CND 2026')
   })
 })

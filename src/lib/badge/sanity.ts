@@ -4,9 +4,7 @@ import {
 } from '@/lib/sanity/client'
 import type { BadgeRecord, BadgeType } from './types'
 import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
-import { findOutboundOrigin } from '@/lib/conference/baseUrl'
-import { mergeKonfApiConference, rolloutFlags } from '@/lib/conference/konf-api'
-import type { Conference } from '@/lib/conference/types'
+import { mergeConferences } from '@/lib/conference/merge'
 
 const BADGE_FIELDS = `
   _id,
@@ -62,44 +60,31 @@ async function enrichBadgesConference(
   badges: BadgeRecord[],
 ): Promise<BadgeRecord[]> {
   if (!badges || badges.length === 0) return []
-  const confCache = new Map<string, Promise<BadgeRecord['conference']>>()
-  return Promise.all(
-    badges.map(async (badge) => {
-      const conf = badge.conference
-      if (!conf || !('_id' in conf)) return badge
-      let promise = confCache.get(conf._id)
-      if (!promise) {
-        promise = (async () => {
-          const origin = findOutboundOrigin(conf)
-          const host = origin ? new URL(origin).host : null
-          if (
-            host &&
-            (
-              await rolloutFlags(
-                host,
-                conf as Pick<Conference, '_id' | 'organization'>,
-              )
-            ).apiRead
-          ) {
-            const merged = await mergeKonfApiConference(
-              host,
-              conf as Conference,
-            )
-            return {
-              ...conf,
-              ...merged,
-            }
-          }
-          return conf
-        })()
-        confCache.set(conf._id, promise)
-      }
-      return {
-        ...badge,
-        conference: await promise,
-      }
-    }),
-  )
+  const confCache = new Map<
+    string,
+    {
+      _id: string
+      domains?: readonly string[] | null
+      organization?: { _ref: string } | null
+    }
+  >()
+  for (const badge of badges) {
+    const conf = badge.conference
+    if (conf && '_id' in conf && !confCache.has(conf._id)) {
+      confCache.set(conf._id, conf)
+    }
+  }
+  const mergedConfs = await mergeConferences(Array.from(confCache.values()))
+  const confMap = new Map(mergedConfs.map((c) => [c._id, c]))
+  return badges.map((badge) => {
+    const conf = badge.conference
+    if (!conf || !('_id' in conf)) return badge
+    const merged = confMap.get(conf._id)
+    return {
+      ...badge,
+      conference: merged ? ({ ...conf, ...merged } as typeof conf) : conf,
+    }
+  })
 }
 
 async function enrichBadgeConference(badge: BadgeRecord): Promise<BadgeRecord> {

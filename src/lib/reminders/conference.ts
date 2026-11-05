@@ -1,9 +1,7 @@
 import { clientReadUncached } from '@/lib/sanity/client'
 import { toDateString } from './dates'
 import type { ReminderConference } from './types'
-import { findOutboundOrigin } from '@/lib/conference/baseUrl'
-import { mergeKonfApiConference, rolloutFlags } from '@/lib/conference/konf-api'
-import type { Conference } from '@/lib/conference/types'
+import { mergeConferences } from '@/lib/conference/merge'
 
 /**
  * A hard cap on how many conferences one reminder run processes, so tenant growth
@@ -49,8 +47,7 @@ export async function resolveActiveReminderConferences(
   >(
     // groq-global: cron sweep over every tenant's active conferences; dedup
     // markers are per conference.
-    `*[_type == "conference" && defined(startDate) && defined(endDate) && endDate >= $today]
-      | order(startDate asc)[0...${MAX_CONFERENCES_PER_RUN}]{
+    `*[_type == "conference"]{
         _id,
         title,
         startDate,
@@ -60,37 +57,22 @@ export async function resolveActiveReminderConferences(
         domains,
         organization
       }`,
-    { today },
+    {},
     { cache: 'no-store' },
   )
   if (!conferences || conferences.length === 0) return []
 
-  return Promise.all(
-    conferences.map(async (conf) => {
-      const origin = findOutboundOrigin(conf)
-      const host = origin ? new URL(origin).host : null
-      if (host && (await rolloutFlags(host, conf)).apiRead) {
-        const merged = await mergeKonfApiConference(
-          host,
-          conf as unknown as Conference,
-        )
-        return {
-          _id: conf._id,
-          title: (merged.title as string | undefined) ?? conf.title,
-          startDate: (merged.startDate as string) ?? conf.startDate,
-          endDate: (merged.endDate as string) ?? conf.endDate,
-          programDate: conf.programDate,
-          travelSupportPaymentDate: conf.travelSupportPaymentDate,
-        }
-      }
-      return {
-        _id: conf._id,
-        title: conf.title,
-        startDate: conf.startDate,
-        endDate: conf.endDate,
-        programDate: conf.programDate,
-        travelSupportPaymentDate: conf.travelSupportPaymentDate,
-      }
-    }),
-  )
+  const merged = await mergeConferences(conferences)
+  return merged
+    .filter((c) => Boolean(c.startDate && c.endDate && c.endDate >= today))
+    .sort((a, b) => (a.startDate ?? '').localeCompare(b.startDate ?? ''))
+    .slice(0, MAX_CONFERENCES_PER_RUN)
+    .map((c) => ({
+      _id: c._id,
+      title: c.title,
+      startDate: c.startDate as string,
+      endDate: c.endDate as string,
+      programDate: c.programDate,
+      travelSupportPaymentDate: c.travelSupportPaymentDate,
+    }))
 }
