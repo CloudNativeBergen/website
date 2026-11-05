@@ -68,11 +68,13 @@ origin, #1803) whose host equals the resolved host (asserted host, else
 Unset secrets leave the old behaviour: anonymous, tenant from `Origin`.
 
 Operator lane (kontroll, #1892 phase 4): set the var `OPERATOR_ORIGIN` (e.g.
-`https://my.konf.app`). A request whose `Origin` is that origin, with no site
-assertion, is an operator request. It must carry an identity JWT whose `origin`
-claim is the same origin (identity hands that token only to platform operators
-and organization members, #1956); otherwise 401. Membership is re-read on every
-request.
+`https://my.konf.app`): exact origins, comma-separated, in the same format as
+identity's `OPERATOR_ORIGINS`. Keep the two lists equal (#1948). A request whose
+`Origin` exactly equals an entry, with no site assertion, is an operator
+request. It must carry an identity JWT whose `origin` claim is the same origin
+(identity hands that token only to platform operators and organization members,
+#1956); otherwise 401. The tenant header is resolved only after that JWT
+verifies (#1954). Membership is re-read on every request.
 
 - Platform operator, no `x-konf-operator-tenant`: a `PlatformContext`, which no
   Scoped repository accepts.
