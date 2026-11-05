@@ -425,11 +425,32 @@ describe('operator origins (#1922)', () => {
       env.OPERATOR_ORIGINS = saved
     }
   }
-  async function exchangeAt(origin: string, operator: boolean) {
-    const u = await newUser(`op${Math.random()}@x.test`)
-    if (operator) {
+  async function exchangeAt(
+    origin: string,
+    operator: boolean | 'member' | 'invited',
+  ) {
+    const email = `op${Math.random()}@x.test`
+    const u = await newUser(email)
+    if (operator === true) {
       await env.DB.prepare('UPDATE user SET platformOperator = 1 WHERE id = ?')
         .bind(u.id)
+        .run()
+    } else if (operator) {
+      const org = `org-${crypto.randomUUID()}`
+      await env.DB.prepare(
+        'INSERT INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, 0)',
+      )
+        .bind(org, org, org)
+        .run()
+      await env.DB.prepare(
+        operator === 'member'
+          ? "INSERT INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, 'member', 0)"
+          : "INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt) VALUES (?, ?, ?, 'member', 'pending', 9999999999999, ?, 0)",
+      )
+        .bind(
+          ...[crypto.randomUUID(), org],
+          ...(operator === 'member' ? [u.id] : [email, u.id]),
+        )
         .run()
     }
     const res = await start(origin, await cookieFor(u.id))
@@ -469,6 +490,18 @@ describe('operator origins (#1922)', () => {
         .bind(user.id)
         .all()
       expect(results).toEqual([])
+    })
+  })
+
+  it('gives an organization member an operator-origin token (#1956)', async () => {
+    await withOps(OPS, async () => {
+      expect((await exchangeAt(OPS, 'member')).res.status).toBe(200)
+    })
+  })
+
+  it('refuses a user with only a pending invitation (#1956)', async () => {
+    await withOps(OPS, async () => {
+      expect((await exchangeAt(OPS, 'invited')).res.status).toBe(403)
     })
   })
 

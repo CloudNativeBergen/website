@@ -87,10 +87,13 @@ export async function handoff(request: Request, env: HandoffEnv) {
   const url = new URL(request.url)
   const auth = createAuth(env.DB, env)
   const data = createData(env)
-  /** An operator origin is no tenant: only platform operators get its token. */
+  /**
+   * An operator origin is no tenant: only platform operators and organization
+   * members get its token (#1956). The gateway decides per request what for.
+   */
   const refused = async (userId: string, origin: string) =>
     isOperatorOrigin(env, origin) &&
-    !(await data.principal(userId, ''))?.platformOperator
+    !(await data.mayUseOperatorOrigin(userId))
 
   if (request.method === 'GET' && url.pathname === '/handoff') {
     const ip = request.headers.get('cf-connecting-ip') ?? 'unknown'

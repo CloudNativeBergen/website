@@ -127,6 +127,19 @@ export function createData(env: DataEnv) {
         .values({ id, slug, name: slug })
         .onConflictDoNothing({ target: organization.id })
     },
+    /**
+     * Kontroll (an operator origin) admits platform operators and members of
+     * at least one organization (#1956). A pending invitation is no member row.
+     */
+    async mayUseOperatorOrigin(userId: string): Promise<boolean> {
+      const [row] = await db
+        .select({ op: user.platformOperator, m: member.id })
+        .from(user)
+        .leftJoin(member, eq(member.userId, user.id))
+        .where(eq(user.id, userId))
+        .limit(1)
+      return !!row && (row.op || row.m !== null)
+    },
     /** Live membership; null for an unknown user. */
     async principal(userId: string, orgId: string): Promise<Principal | null> {
       const [row] = await db
