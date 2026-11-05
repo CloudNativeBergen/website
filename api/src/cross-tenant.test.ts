@@ -711,7 +711,12 @@ describe('cross-tenant mutation walk', () => {
   it("A's organizer on A's host changes A's rows and never a B row", async () => {
     const before = await snapshot()
     for (const body of await mutate({ ...organizer(), origin: ORIGIN })) {
-      expect(body.errors).toBeUndefined()
+      // Operator-only (#1924): refused to every tenant envelope.
+      if (JSON.stringify(body).includes('provisionOrganization'))
+        expect(body.errors).toMatchObject([
+          { extensions: { code: 'FORBIDDEN' } },
+        ])
+      else expect(body.errors).toBeUndefined()
       expect(JSON.stringify(body)).not.toMatch(MARKER)
     }
     const after = await snapshot()

@@ -1,5 +1,6 @@
 // tenant-directory: tenant resolution for the gateway, plus the provisioning
-// surface. Provisioning fields are @tag(internal) and need a PlatformContext.
+// surface. Provisioning fields are @tag(internal), except
+// provisionOrganization (@tag(operator)); all need a PlatformContext.
 import { createGraphQLError } from 'graphql-yoga'
 import { builder } from './builder'
 import type { ResolverContext } from './worker'
@@ -111,7 +112,8 @@ builder.mutationType({
   fields: (t) => ({
     provisionOrganization: t.field({
       type: Organization,
-      tag: 'internal',
+      // In the public schema; requirePlatform refuses everyone but an operator.
+      tag: 'operator',
       args: {
         idempotencyKey: t.arg.string({ required: true }),
         // Sanity `_id`s from the site's step 1 (docs/TENANT_PROVISIONING.md).

@@ -234,12 +234,17 @@ const conferenceOf = (orgId: string) =>
   ).id
 
 describe('provisioning', () => {
-  it('tags every mutation internal', async () => {
+  it('tags provisionOrganization operator and every other mutation internal', async () => {
     const { body } = await gql('{ _service { sdl } }')
     const mutation = /type Mutation[^}]*}/.exec(body.data._service.sdl)![0]
     const fields = mutation.split('\n').filter((l) => l.includes('('))
     expect(fields).toHaveLength(5)
-    for (const f of fields) expect(f).toContain('@tag(name: "internal")')
+    for (const f of fields)
+      expect(f).toContain(
+        f.includes('provisionOrganization(')
+          ? '@tag(name: "operator")'
+          : '@tag(name: "internal")',
+      )
   })
 
   it('creates the Organization with edition and alias hosts', async () => {
