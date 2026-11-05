@@ -96,7 +96,8 @@ export async function readVideoProject(
     const merged = await mergeConference(row.conference)
     edition = merged.title ?? edition
   }
-  const { conference: _, ...rest } = row
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- drop the raw projection from the result
+  const { conference: _conference, ...rest } = row
   return { ...rest, edition }
 }
 

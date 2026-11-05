@@ -22,7 +22,11 @@ vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: mocks.fetch },
   clientWrite: { patch: mocks.patch },
 }))
-vi.mock('next/cache', () => ({ unstable_noStore: vi.fn() }))
+vi.mock('next/cache', () => ({
+  unstable_noStore: vi.fn(),
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
+}))
 vi.mock('@/lib/time', () => ({ getCurrentDateTime: () => runNow }))
 vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: mocks.notify,
@@ -504,4 +508,100 @@ it('does not retry a failed delivery after the marker committed', async () => {
   await runMarketingReminders('a', NOW)
   expect(data[0].remindedAt).toBe(NOW)
   expect(mocks.notify).toHaveBeenCalledTimes(1)
+})
+
+describe('resolveReminderConferences D1 gateway values and fallbacks (#1997)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  const setupData = () => [
+    {
+      _id: 'conf-1',
+      _type: 'conference',
+      domains: ['conf1.example.com'],
+      organization: { _ref: 'org-1' },
+      startDate: '2026-10-01',
+    },
+    {
+      _id: 'conf-2',
+      _type: 'conference',
+      domains: ['conf2.example.com'],
+      organization: { _ref: 'org-1' },
+      startDate: '2026-09-01',
+    },
+    {
+      _id: 'plan-1',
+      _type: 'marketingPlan',
+      conference: { _ref: 'conf-1' },
+    },
+    {
+      _id: 'plan-2',
+      _type: 'marketingPlan',
+      conference: { _ref: 'conf-2' },
+    },
+  ]
+
+  it('uses merged D1 startDate for sorting when flagged and values differ', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    data = setupData()
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conf-1',
+              startDate: '2026-08-01',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await resolveReminderConferences()
+    expect(result).toHaveLength(2)
+    // In Sanity, plan-2 (2026-09-01) is before plan-1 (2026-10-01).
+    // D1 updates conf-1 to 2026-08-01, so plan-1 sorts first.
+    expect(result[0].planId).toBe('plan-1')
+    expect(result[1].planId).toBe('plan-2')
+  })
+
+  it('falls back to Sanity startDate for sorting when unflagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    data = setupData()
+
+    const gatewayFetch = vi.fn()
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await resolveReminderConferences()
+    expect(gatewayFetch).not.toHaveBeenCalled()
+    // In Sanity, plan-2 (2026-09-01) is before plan-1 (2026-10-01).
+    expect(result[0].planId).toBe('plan-2')
+    expect(result[1].planId).toBe('plan-1')
+  })
+
+  it('falls back to Sanity startDate for sorting on gateway error', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    data = setupData()
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ errors: [{ message: 'D1 error' }] }), {
+        status: 500,
+      }),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await resolveReminderConferences()
+    // Sanity fallback order: plan-2 then plan-1
+    expect(result[0].planId).toBe('plan-2')
+    expect(result[1].planId).toBe('plan-1')
+  })
 })

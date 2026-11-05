@@ -5,7 +5,6 @@ import {
 import type { BadgeRecord, BadgeType } from './types'
 import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 import { mergeConferences } from '@/lib/conference/merge'
-import type { Conference } from '@/lib/conference/types'
 
 const BADGE_FIELDS = `
   _id,
