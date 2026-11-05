@@ -1,6 +1,6 @@
 # Tenant provisioning on the API platform (design, #1924)
 
-Status: design only. No code changes in this PR. Part of #1772.
+Status: design only. No code changes in this PR. Part of #1772. Owner decisions of 2026-11-05 are folded in (one operator-tagged supergraph, no owner at provisioning, Sanity verification in step 2).
 
 ## Problem
 
@@ -40,48 +40,67 @@ The hostname needs no mapping. The site and the directory mint the same platform
 
 One idempotency key (kontroll's `provisioningKey`) drives every step. Each step is re-runnable with that key and returns the first result.
 
-| #   | Step                                                                                            | Where                                                            | Atomic unit                                     | On failure                                                                                                               |
-| --- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| 1   | Sanity org, conference, organizer speaker, receipt, platform hosts in `domains[]`, domain locks | site `provision.ts` (unchanged)                                  | one Sanity transaction (`provision.ts:535-574`) | Nothing written. Retry with the same key replays the receipt and returns the same ids (`provision.ts:418-421`).          |
-| 2   | Directory `organizations`, `conferences`, two platform `domains`, `provisioning_requests`       | tenant-directory `provisionOrganization` with the step-1 ids     | one D1 batch (`data/index.ts:165-189`)          | Nothing written. The Sanity tenant still works on the site, which does not need the directory until flags are on. Retry. |
-| 3   | identity organization                                                                           | `IDENTITY.ensure(id, slug)`, inside step 2 (`data/index.ts:143`) | one insert, `ON CONFLICT DO NOTHING`            | Step 2 rows stay. Every retry of step 2 calls `ensure` again and heals it (`data/index.ts:116-119`).                     |
-| 4   | Owner membership                                                                                | not written by provisioning (see below)                          | -                                               | -                                                                                                                        |
-| 5   | Custom domains                                                                                  | later, `addCustomDomain` per hostname (`subgraph.ts:136-147`)    | per hostname                                    | Per hostname; `hostname` is the primary key, so a claim can't be taken twice.                                            |
-| 6   | Rollout flags                                                                                   | default off (`docs/PLATFORM.md` "Rollout flags")                 | -                                               | Set by operator SQL when the tenant moves to the API.                                                                    |
+| #   | Step                                                                                            | Where                                                            | Atomic unit                                     | On failure                                                                                                                                                                                                                                        |
+| --- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Sanity org, conference, organizer speaker, receipt, platform hosts in `domains[]`, domain locks | site `provision.ts` (unchanged)                                  | one Sanity transaction (`provision.ts:535-574`) | Nothing written. Retry with the same key replays the receipt and returns the same ids (`provision.ts:418-421`), but only for 30 days: the receipt is purged after `PROVISIONING_RECEIPT_RETENTION_DAYS` (`src/lib/provisioning/constants.ts:38`). |
+| 2   | Directory `organizations`, `conferences`, two platform `domains`, `provisioning_requests`       | tenant-directory `provisionOrganization` with the step-1 ids     | one D1 batch (`data/index.ts:165-189`)          | Nothing written. Step 1 without step 2 is benign: the site serves the tenant from Sanity. Detection: the site logs `[konf-api] no rollout flags for <host>` (`src/lib/conference/konf-api.ts:105`). Retry.                                        |
+| 3   | identity organization                                                                           | `IDENTITY.ensure(id, slug)`, inside step 2 (`data/index.ts:143`) | one insert, `ON CONFLICT DO NOTHING`            | Step 2 rows stay. Every retry of step 2 calls `ensure` again and heals it (`data/index.ts:116-119`).                                                                                                                                              |
+| 4   | Owner membership                                                                                | not written by provisioning; operator SQL runbook (see below)    | one `UPDATE`                                    | Re-runnable; a zero-owner org is not locked, only unprotected.                                                                                                                                                                                    |
+| 5   | Custom domains                                                                                  | later, `addCustomDomain` per hostname (`subgraph.ts:136-147`)    | per hostname                                    | Per hostname; `hostname` is the primary key, so a claim can't be taken twice.                                                                                                                                                                     |
+| 6   | Rollout flags                                                                                   | default off (`docs/PLATFORM.md` "Rollout flags")                 | -                                               | Set by operator SQL when the tenant moves to the API.                                                                                                                                                                                             |
 
 **Who owns the transaction.** No step spans both stores. Sanity commits first because it holds the authorities that exist today: global slug uniqueness, routing-overlap domain checks, organizer matching. Step 2 cannot fail on a slug or host that step 1 accepted unless D1 and Sanity have drifted. That case is a `CONFLICT` for an operator, never an auto-suffix.
 
 **Step 2 changes** (tenant-directory only):
 
 - Required args `orgId` and `conferenceId`. Drop `crypto.randomUUID()`.
-- Guard before any write: `orgId === 'organization.' + orgSlug` for new orgs (the site's rule, `provision.ts:256`), and `conferenceId` matches the Sanity id charset `[A-Za-z0-9._-]{1,128}`. This stops an operator typo from creating an id that content can't serve.
+- Shape guards before any write: `orgId === 'organization.' + orgSlug` (the site's rule, `provision.ts:256`), and `conferenceId` matches the Sanity id charset `[A-Za-z0-9._-]{1,128}`. Legacy orgs such as `organization-cloud-native-days` fail this guard by design; they enter D1 through the backfill only.
+- **Verify against Sanity, before the D1 batch.** Shape guards alone allow a permanent squat: an operator (or a typo) can register a well-formed `orgId` and conference id that Sanity never minted, or pair a real conference with the wrong org. The backfill cannot repair it later, because its upserts never update `conferences.org_id` or a domain owned by another org (`services/tenant-directory/scripts/backfill.ts:239`, `:243`). So step 2 reads Sanity and refuses with `BAD_USER_INPUT` unless:
+  - the org `_id` exists with that slug;
+  - the conference `_id` exists with `organization._ref == orgId`;
+  - both platform hosts are in `conference.domains[]`;
+  - the conference has a `startDate`.
+- Take the edition year from the dated host found in Sanity, not by re-deriving it from `startDate`. The site minted the hosts once and never re-derives them (`provision.ts:186-191`, `:193-205`).
+- Fetch with the raw-GROQ pattern from `services/identity/src/data/member-sync.ts:48-62`. tenant-directory gets a read token named `SANITY_API_TOKEN_READ`, the same name conference and identity use; this shared name is the accepted exception. The owner sets it with a script. No token values go in chat, docs or PRs.
 - Idempotent by id as well as by key. If `organizations.id` exists with the same slug, return it and still `ensure`. This covers a retry with a new key after kontroll lost its key.
-- Store `sha256(key)` rather than the raw key, as the site does (`provision.ts:418`).
+- Store a hash of the key, not the raw key. The site stores `sha256(key + AUTH_SECRET)` (`provision.ts:418`); tenant-directory has no `AUTH_SECRET`, so it stores a plain `sha256(key)`. The two stores never compare hashes.
 
 **Domain-lock pattern.** Not needed in D1. The site's `provisioningDomainLock` documents (`provision.ts:239-256`) exist because Sanity has no unique index. In D1, `domains.hostname` is the primary key (`0001_init.sql:23`) and the batch is atomic, so the constraint is the lock.
 
-**Initial owner (#1941).** Provisioning writes no `member` row. The organizer usually has no identity user yet, and the hourly sync grants only `admin` (`member-sync.ts:2-7`). Proposed:
+**Initial owner (#1941, owner decision 2).** Provisioning writes no `member` row and names no owner. Until #1923 ships a member mutation, the owner grant is an SQL runbook run by an operator against identity D1:
 
-1. The sync grants `admin` after the organizer's first identity sign-in, as it does now.
-2. A platform operator promotes them to `owner` in the operator lane. Only owners and operators may grant `owner`.
-3. The org goes into `MEMBER_SOURCE_ORGS` (drift mode) only once it has two owners. The last-owner trigger then protects it.
+```sql
+UPDATE member SET role = 'owner,admin' WHERE organizationId = ? AND userId = ?;
+```
 
-**Orphans.** A Sanity tenant without directory rows is harmless: the site serves it from Sanity. A directory row without a Sanity org is the bad case, so it gets a check: run `scripts/backfill-tenant-directory.ts --dry-run` and compare its id set with `SELECT id FROM organizations`. Any id that exists only in D1 is an orphan. Delete it after confirming with the owner (production data).
+Facts that make this safe for now:
+
+- Customers are not blocked meanwhile. Site `/admin` access comes from the Sanity organizer list, not from identity membership (`src/lib/auth/identity-session.ts:126-133`).
+- The hourly sync grants `admin` only for orgs that already exist in identity, and only to users whose verified email matches an organizer (`member-sync.ts:137-147`, `:153-155`, `:184-194`). The row the runbook updates comes from that sync, so the organizer must have signed in once.
+- A zero-owner org is not locked. The last-owner triggers fire only when an `owner` row is deleted or demoted (`services/identity/migrations/0003_member_rules.sql:15`, `:21`); with no owner, the org is simply unprotected by them.
+- HTTP org writes are refused by the org write gate until #1923 (`services/identity/src/org-write-gate.ts:15`).
+
+The org goes into `MEMBER_SOURCE_ORGS` (drift mode) only once it has an owner.
+
+**Orphans.** A Sanity tenant without directory rows is harmless: the site serves it from Sanity. A directory row without a Sanity org is the bad case. The check needs a code change first: `scripts/backfill-tenant-directory.ts --dry-run` prints counts and anomalies, not ids (`scripts/backfill-tenant-directory.ts:37-41`). PR 5 adds an id listing, and lists anomaly-skipped orgs separately, since those exist in Sanity but would otherwise read as false orphans. Compare that set with `SELECT id FROM organizations`. Any id only in D1 is an orphan. Delete it after confirming with the owner (production data).
 
 ## 3. Who may call it
 
 Only operators. `provisionOrganization` already requires a `PlatformContext` (`subgraph.ts:9`, `:123`). The gateway mints one only in the operator lane, for a `platformOperator` user who names no tenant (`api/src/gateway.ts:466-487`). `packages/tenancy` lets no scoped repository accept it (`packages/tenancy/src/index.ts:38-44`, `:187-192`).
 
-**Exposure: a separate operator contract, not an un-tag.** Removing `internal` would publish the mutation in the one public supergraph. `requirePlatform` would still refuse it, but the operation and its args become public schema. Instead:
+**Exposure: one supergraph, operator-tagged (owner decision 1).** There is no second supergraph or runtime.
 
-- Add `tag: 'operator'` next to `internal` on `provisionOrganization` (and later the domain mutations).
-- `api/src/supergraph.ts`: an `operatorContract` filter that keeps `internal` fields only when they also carry `operator`. Compose a second supergraph `api/supergraph.operator.graphql`.
-- `api/src/gateway.ts`: a second runtime for that supergraph. Use it only when `operatorLane && envelope.typ === 'platform'`. Everyone else gets the public runtime and sees no operator fields, even in introspection.
-- Contract test: the public SDL has no `provisionOrganization`, and the operator SDL has nothing tagged only `internal` (for example, `tenantByHost`).
+- Tag `provisionOrganization` (and later the domain mutations) `operator` in place of `internal`. `publicContract` cuts only `internal` (`api/src/supergraph.ts:30-47`), so the mutation and its args become part of the one public schema.
+- Access rests on two existing checks: `requirePlatform` in the resolver (`services/tenant-directory/src/subgraph.ts:9-15`, `:123`), and the gateway minting a `PlatformContext` only for a platform operator who sends no tenant header (`api/src/gateway.ts:466-487`).
+- This changes the stated principle in `api/src/supergraph.ts:4-6` ("platform operations never reach the public gateway"). The owner approved that. PR 2 updates the comment.
+- **Required gateway test:** anonymous, tenant-member and operator-with-tenant calls to `provisionOrganization` each get `FORBIDDEN`, and `data.provision` is never called. The operator-without-tenant call succeeds.
+- Optional: turn introspection off for non-operator lanes.
 
 The gateway reads one `OPERATOR_ORIGIN` (`gateway.ts:50-53`). identity has a list, `OPERATOR_ORIGINS` (`services/identity/service.cue:16-19`). Not needed for this work; align them only if a second operator origin appears.
 
-**kontroll as caller.** The operator lane needs an identity token for a human `platformOperator` (`gateway.ts:466-473`). kontroll's setup form is filled in by the customer (`ONBOARDING_CHECKLIST.md` §3.1), who is not an operator. So step 2 starts as an operator action in kontroll: "Register on the API", using the operator's own session and the ids and key from the invite record. That matches when the rows are needed: only when the tenant moves to the API, which the operator already decides by setting flags. Automating it needs a machine principal (open question 1).
+**kontroll as caller.** The operator lane needs an identity token for a human `platformOperator` (`gateway.ts:466-473`). kontroll's setup form is filled in by the customer (`ONBOARDING_CHECKLIST.md` §3.1), who is not an operator. So step 2 starts as an operator action in kontroll: "Register on the API", using the operator's own session and the ids and key from the invite record. That matches when the rows are needed: only when the tenant moves to the API, which the operator already decides by setting flags. No machine principal for kontroll yet (owner decision 3); `PROVISIONING_API_TOKEN` stays for step 1.
+
+kontroll's own `KONF_PLATFORM_OPERATORS` list is not identity's `user.platformOperator` flag (`services/identity/src/data/schema.ts:28`). The gateway checks only the latter, so the button must call with the operator's identity session, obtained through the handoff (#1922).
 
 ## 4. The site's `provision.ts` and the route
 
@@ -97,28 +116,28 @@ To be added after Phase 6 once PRs 1-3 below have merged:
 >
 > **7.2 Domains.** For each custom domain verified in Phase 4, run `addCustomDomain` in kontroll. **Verify:** `SELECT hostname, verification FROM domains WHERE org_id = '<id>'` shows it `verified`.
 >
-> **7.3 Identity org and owners.** The organizer signs in through identity once; the hourly sync makes them `admin`. Promote them to `owner` in kontroll, and add a second owner. Do not put the org in `MEMBER_SOURCE_ORGS` until both exist.
+> **7.3 Owner.** The organizer signs in through identity once; the hourly sync makes them `admin`. Until #1923 ships a member mutation, an operator promotes them with SQL on identity D1: `UPDATE member SET role = 'owner,admin' WHERE organizationId = '<orgId>' AND userId = '<userId>'`. **Verify:** `SELECT role FROM member WHERE organizationId = '<orgId>'` shows `owner,admin`. Do not put the org in `MEMBER_SOURCE_ORGS` before this.
 >
-> **7.4 Flags.** Turn on `identity_login`, then `api_read`, then `d1_write`, one at a time, as in `docs/PLATFORM.md` "Rollout flags". **If it went wrong:** set the flag back to `0`. The site falls back to Sanity within 5 minutes.
+> **7.4 Flags.** Before `d1_write`: confirm the member row from 7.3 exists. Turn on `identity_login`, then `api_read`, then `d1_write`, one at a time, as in `docs/PLATFORM.md` "Rollout flags". **If it went wrong:** set the flag back to `0`. The site falls back to Sanity within 5 minutes.
 >
 > **If 7.1 fails:** `CONFLICT` means D1 already holds the slug or host under another id. Do not pick a new slug. Compare with the orphan check in `docs/TENANT_PROVISIONING.md` §2 and ask the owner.
 
 ## 6. Rollout
 
-| #   | PR                                                                                                     | Files                                                                                                   | API session     | Prod schema/data  | Auth                        |
-| --- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | --------------- | ----------------- | --------------------------- |
-| 1   | tenant-directory: caller-supplied ids, id guards, idempotent by id, hashed key                         | `services/tenant-directory/src/data/index.ts`, `src/subgraph.ts`, tests                                 | yes             | no (no migration) | no                          |
-| 2   | api: operator contract and second runtime, contract test                                               | `api/src/supergraph.ts`, `api/src/gateway.ts`, `services/tenant-directory/src/subgraph.ts` (tag), tests | yes             | no                | yes                         |
-| 3   | kontroll: "Register on the API" operator action                                                        | RunKonf/kontroll                                                                                        | no (other repo) | no                | yes (uses operator session) |
-| 4   | docs: Phase 7 in `docs/ONBOARDING_CHECKLIST.md`, link from `docs/PLATFORM.md`                          | docs only                                                                                               | no              | no                | no                          |
-| 5   | data: register tenants created in Sanity since the backfill (rerun backfill), and run the orphan check | SQL from `scripts/backfill-tenant-directory.ts`                                                         | no              | **yes, owner OK** | no                          |
+| #   | PR                                                                                                                                          | Files                                                                                                                      | API session     | Prod schema/data  | Auth |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------- | ----------------- | ---- |
+| 1   | tenant-directory: caller-supplied ids, shape guards, Sanity verification, idempotent by id, hashed key                                      | `services/tenant-directory/src/data/index.ts`, `src/subgraph.ts`, tests; `SANITY_API_TOKEN_READ` set by the owner's script | yes             | no (no migration) | no   |
+| 2   | api: `operator` tag replaces `internal` on provisioning, required gateway FORBIDDEN test, principle comment                                 | `api/src/supergraph.ts`, `api/src/gateway.ts` tests, `services/tenant-directory/src/subgraph.ts` (tag)                     | yes             | no                | yes  |
+| 3   | kontroll: "Register on the API" operator action, identity session via handoff (#1922)                                                       | RunKonf/kontroll                                                                                                           | no (other repo) | no                | yes  |
+| 4   | docs: Phase 7 in `docs/ONBOARDING_CHECKLIST.md` with the owner-grant SQL runbook (7.3) and the d1_write check, link from `docs/PLATFORM.md` | docs only                                                                                                                  | no              | no                | no   |
+| 5   | data: orphan-check id listing in `scripts/backfill-tenant-directory.ts`, rerun backfill for tenants created since, run the orphan check     | script change + SQL                                                                                                        | no              | **yes, owner OK** | no   |
 
-Order: 1 → 2 → 3 → 4. 5 can run any time after 1. PR 2 gets a second-model review (security boundary).
+Order: #1921 (operator writes, API session) merges first; then 1 → 2 → 3 → 4. PR 5 is independent of PR 1 and can run any time. PR 2 touches the gateway test and the `requirePlatform` boundary, so it needs a Fable review and the owner's OK before merging. The owner-grant runbook (7.3) is retired when #1923 ships the member mutation.
 
-## 7. Open questions for the owner
+## 7. Owner decisions (2026-11-05)
 
-1. **Should kontroll run step 2 itself, without an operator?** That needs a machine principal for the operator lane, which is an auth design of its own. _Recommendation:_ no, not now. Moving a tenant to the API is already an operator act.
-2. **What if a conference has no start date?** The directory needs the year as the conference slug; the site leaves the edition host out (`ONBOARDING_CHECKLIST.md` §3.2). _Recommendation:_ step 2 refuses with `BAD_USER_INPUT` until a start date is set.
-3. **Should step 2 write the first owner when the identity user already exists?** _Recommendation:_ no. Keep one path to `owner`, the operator lane, so the #1941 rules sit in one place.
-4. **Production check.** _Recommendation:_ run `SELECT count(*) FROM provisioning_requests` (read-only) before PR 1 merges. If it is not 0, decide before PR 5 whether to delete those rows.
-5. **Retire `PROVISIONING_API_TOKEN`?** _Recommendation:_ keep it. Step 1 still runs through it, and replacing it is part of the work that moves orgs off Sanity.
+1. **Exposure:** one supergraph, provisioning tagged `operator`; no second runtime. Approved change to the principle in `api/src/supergraph.ts:4-6`.
+2. **Owner:** none at provisioning. SQL runbook until #1923.
+3. **Accepted defaults:** step 2 verifies against Sanity; refuse until the conference has a start date, year from the Sanity host; no machine principal for kontroll, keep `PROVISIONING_API_TOKEN`; legacy orgs go through the backfill only.
+
+Still open: run `SELECT count(*) FROM provisioning_requests` (read-only) before PR 1 merges. If it is not 0, decide before PR 5 whether to delete those rows.
