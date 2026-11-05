@@ -21,6 +21,6 @@ docs/
 # node_modules/.cache/
 
 # Cloudflare Workers code; not part of the site, and zero-config would deploy api/src/*.ts as functions
-api/
-services/
-packages/
+/api/
+/services/
+/packages/
