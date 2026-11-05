@@ -1,4 +1,5 @@
 {
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . \":(exclude)services\" \":(exclude)api\" \":(exclude)packages\" \":(exclude)docs\" \":(exclude)**/*.md\" \":(exclude).github\" \":(exclude)evals\" \":(exclude)e2e\" \":(exclude)CODEOWNERS\"",
   "crons": [
     {
       "path": "/api/cron/overdue-invoices",
