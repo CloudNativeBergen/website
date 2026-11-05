@@ -88,7 +88,16 @@ export async function getDiscoveryVisibilityForDomain(
     // the old visibility for up to the cacheLife window after going live.
     cacheTag(conferenceTag(row._id))
     const merged = await mergeConference(row)
-    return { discoverable: resolveConferenceVisibility(merged) === 'live' }
+    // A D1 value outside the known set must not flip an unlisted conference
+    // to live (resolveConferenceVisibility treats anything else as live).
+    const visibility = CONFERENCE_VISIBILITY_VALUES.includes(
+      merged.visibility as ConferenceVisibility,
+    )
+      ? merged.visibility
+      : row.visibility
+    return {
+      discoverable: resolveConferenceVisibility({ visibility }) === 'live',
+    }
   } catch {
     return { discoverable: false }
   }

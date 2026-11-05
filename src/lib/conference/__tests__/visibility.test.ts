@@ -136,7 +136,34 @@ describe('getDiscoveryVisibilityForDomain D1 gateway values and fallbacks (#1997
     expect(gatewayFetch).toHaveBeenCalled()
   })
 
-  it('unflagged: gives Sanity with no gateway call', async () => {
+  it('flagged: a malformed D1 visibility keeps Sanity unlisted', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    sanityFetch.mockResolvedValueOnce({
+      ...structuredClone(sanityConf),
+      visibility: 'unlisted',
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              data: { conference: { id: 'conf-1', visibility: '' } },
+            }),
+          ),
+        ),
+    )
+
+    const result = await getDiscoveryVisibilityForDomain('conf.example.com')
+    expect(result).toEqual({ discoverable: false })
+  })
+
+  // Without KONF_SITE_SIGNING_KEY the flags read returns the env lists early,
+  // so this proves only that the conference read is skipped for an unflagged
+  // tenant, not that no flags request is ever made.
+  it('unflagged: gives Sanity with no conference read', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
     vi.stubEnv('KONF_API_TENANTS', 'other-conf')
     sanityFetch.mockResolvedValueOnce(structuredClone(sanityConf))
