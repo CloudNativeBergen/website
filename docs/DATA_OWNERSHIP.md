@@ -69,3 +69,19 @@ envelope's org, never an argument. Org members with any role get it, on a
 tenant host or on the operator lane with that tenant selected, and so do
 platform operators acting for a selected tenant. Everyone else, anonymous
 callers included, gets `null`.
+
+## Members read (identity subgraph)
+
+`members` and `invitations` (#1972) list the session org's members and pending
+invitations for kontroll. The org is the envelope's, never an argument. The
+subgraph decides access from the envelope before it reads anything.
+
+| Caller                                    | `members`                        | `email` on a member | `invitations` (with email) |
+| ----------------------------------------- | -------------------------------- | ------------------- | -------------------------- |
+| Anonymous, or signed in but not a member  | null                             | -                   | null                       |
+| Member with role `member`                 | user id, name, role, joined date | null                | null                       |
+| Owner or admin                            | as above                         | yes                 | yes                        |
+| Operator acting for the tenant (Kontroll) | as above                         | yes                 | yes                        |
+
+No other person fields are exposed. Membership is checked live on every
+request, so a removed member gets null on their next request.
