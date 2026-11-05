@@ -150,18 +150,28 @@ const jwt = (
 }
 
 describe('gateway', () => {
-  it('exposes updateConference as the only mutation, no @tag(internal) fields', async () => {
+  it('exposes updateConference and the operator-only provisionOrganization, no @tag(internal) fields', async () => {
     const { env } = makeEnv()
     const res = await gateway.fetch(
       post({ query: '{ __schema { mutationType { fields { name } } } }' }),
       env,
     )
-    expect(await res.json()).toEqual({
-      data: {
-        __schema: { mutationType: { fields: [{ name: 'updateConference' }] } },
-      },
-    })
-    expect(compose()).not.toMatch(/provision|internal"\)|type Organization/)
+    const names = (
+      (await res.json()) as {
+        data: { __schema: { mutationType: { fields: { name: string }[] } } }
+      }
+    ).data.__schema.mutationType.fields.map((f) => f.name)
+    expect(names.sort()).toEqual(['provisionOrganization', 'updateConference'])
+    // Still @tag(internal) in tenant-directory, so cut (#1924).
+    const sdl = compose()
+    for (const field of [
+      'repointAlias',
+      'addCustomDomain',
+      'removeCustomDomain',
+      'refreshCustomDomain',
+    ])
+      expect(sdl).not.toContain(field)
+    expect(sdl).not.toMatch(/internal"\)/)
   })
 
   it('exposes no conference(id:) field', async () => {
