@@ -65,3 +65,17 @@ export function purgeEndDate(
   if (!isDate(sanity)) return sanity
   return merged.slice(0, 10) > sanity.slice(0, 10) ? merged : sanity
 }
+
+/**
+ * The end date a GATE (proposal editing open or closed) may use: the earlier
+ * of Sanity's and D1's. D1 can only close editing sooner, never reopen it. A
+ * missing or unparsable D1 date falls back to Sanity.
+ */
+export function gateEndDate(
+  sanity: string | null | undefined,
+  merged: unknown,
+): string | null | undefined {
+  if (!isDate(merged)) return sanity
+  if (!isDate(sanity)) return merged
+  return merged.slice(0, 10) < sanity.slice(0, 10) ? merged : sanity
+}
