@@ -134,6 +134,10 @@ beforeEach(() => {
       readFileSync(
         new URL('../migrations/0002_rollout_flags.sql', import.meta.url),
         'utf8',
+      ) +
+      readFileSync(
+        new URL('../migrations/0004_org_created_at.sql', import.meta.url),
+        'utf8',
       ),
   )
   env = {
@@ -232,6 +236,72 @@ const conferenceOf = (orgId: string) =>
       .prepare('SELECT id FROM conferences WHERE org_id = ?')
       .get(orgId) as { id: string }
   ).id
+
+describe('organizations (#1973)', () => {
+  const ORGS = '{ organizations { id slug createdAt } }'
+  const page = async (args: string) =>
+    (
+      await gql(`{ organizations(${args}) { slug } }`, {}, operator)
+    ).body.data.organizations.map((o: { slug: string }) => o.slug)
+
+  it('is tagged operator', async () => {
+    const { body } = await gql('{ _service { sdl } }')
+    expect(body.data._service.sdl).toMatch(
+      /organizations\(first: Int = 100, after: String\): \[Organization!\] @tag\(name: "operator"\)/,
+    )
+  })
+
+  it('lists every org by slug, with createdAt, to a PlatformContext', async () => {
+    await provision('beta')
+    await provision('acme', 'k2')
+    const { body } = await gql(ORGS, {}, operator)
+    expect(
+      body.data.organizations.map((o: { slug: string }) => o.slug),
+    ).toEqual(['acme', 'beta'])
+    for (const o of body.data.organizations)
+      expect(new Date(o.createdAt).toISOString()).toBe(o.createdAt)
+  })
+
+  it('pages by slug and clamps first to 1..100', async () => {
+    await provision('beta')
+    await provision('acme', 'k2')
+    expect(await page('first: 1')).toEqual(['acme'])
+    expect(await page('first: 1, after: "acme"')).toEqual(['beta'])
+    expect(await page('after: "beta"')).toEqual([])
+    expect(await page('first: 0')).toEqual(['acme'])
+    expect(await page('first: -5')).toEqual(['acme'])
+    for (let i = 0; i < 101; i++)
+      sqlite
+        .prepare(
+          "INSERT INTO organizations (id, slug, name) VALUES (?, ?, 'x')",
+        )
+        .run(`o${i}`, `z${String(i).padStart(3, '0')}`)
+    expect(await page('first: 100000')).toHaveLength(100)
+    // No first: the default is the cap.
+    expect(await page('after: "a"')).toHaveLength(100)
+  })
+
+  it.each([
+    ['no envelope', undefined],
+    ['a tenant envelope', organizer],
+    [
+      'an operator acting for a tenant',
+      { ...organizer, orgRole: null, scopes: ['platform:operator'] },
+    ],
+  ] as [string, Envelope | undefined][])(
+    'refuses %s with FORBIDDEN before any D1 read',
+    async (_, as) => {
+      await provision()
+      // Sign first: only the request itself may touch D1.
+      const signed = as && (await signer.sign(as))
+      const prepare = vi.spyOn(env.DB, 'prepare')
+      const { body } = await gql(ORGS, {}, signed)
+      expect(body.data?.organizations ?? null).toBeNull()
+      expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
+      expect(prepare).not.toHaveBeenCalled()
+    },
+  )
+})
 
 describe('provisioning', () => {
   it('tags provisionOrganization operator and every other mutation internal', async () => {
