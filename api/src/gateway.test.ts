@@ -169,9 +169,12 @@ describe('gateway', () => {
     ])
     // Operator-only list (#1973): in the served schema, refused by
     // requirePlatform; introspection of it is operator-only (#1961).
-    expect(
-      buildSchema(publicSdl()).getQueryType()!.getFields().organizations,
-    ).toBeDefined()
+    // Same for the cross-org conferences list (#1985).
+    for (const f of ['organizations', 'conferences'])
+      expect(
+        buildSchema(publicSdl()).getQueryType()!.getFields()[f],
+        f,
+      ).toBeDefined()
     // Still @tag(internal) in tenant-directory, so cut (#1924).
     const sdl = compose()
     for (const field of [

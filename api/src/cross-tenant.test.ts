@@ -32,6 +32,7 @@ import {
   type GraphQLInputType,
   type GraphQLOutputType,
   type GraphQLNamedType,
+  type GraphQLObjectType,
 } from 'graphql'
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
 import {
@@ -348,7 +349,7 @@ function selection(
  * the Query field it calls.
  */
 /** Query fields tagged @tag(operator): requirePlatform refuses every walker. */
-const OPERATOR_QUERIES = new Set(['organizations'])
+const OPERATOR_QUERIES = new Set(['organizations', 'conferences'])
 
 function queries(tenants: T[]) {
   const roots = Object.values(schema.getQueryType()!.getFields()).flatMap(
@@ -416,6 +417,10 @@ let identityData: { isVerifiedOrigin(origin: string): Promise<boolean> }
 let forgedB: string
 let sign: (p: Record<string, unknown>) => Promise<string>
 let envelopePublicKey: string
+/** D1 calls since the last reset, by `subgraph:root fields` of the request. */
+const d1Calls: Record<string, number> = {}
+/** Root fields of the request each subgraph is serving. */
+const currentRoots: Record<string, string> = {}
 /** The envelope each subgraph binding last received. */
 const lastEnvelope: Record<string, string | null> = {}
 const gateway = createGateway(compose())
@@ -478,7 +483,18 @@ beforeAll(async () => {
     )) as { default: { fetch(r: Request, e: unknown): Promise<Response> } }
     const workerEnv = {
       ...IDENTITY_ENV,
-      DB: db,
+      // Counts every D1 call the worker makes, for the no-read guards.
+      DB: new Proxy(db, {
+        get: (target, key) => {
+          const v = Reflect.get(target, key)
+          if (typeof v !== 'function') return v
+          return (...a: unknown[]) => {
+            const k = `${name}:${currentRoots[name]}`
+            d1Calls[k] = (d1Calls[k] ?? 0) + 1
+            return v.apply(target, a)
+          }
+        },
+      }),
       GATEWAY_PUBLIC_KEY: keys.publicPem,
       CF_API_TOKEN: 'unused',
       CF_ZONE_ID: 'unused',
@@ -503,6 +519,7 @@ beforeAll(async () => {
         if (roots.some((f) => f !== '_entities' && f !== 'conferenceEditions'))
           calls.add(name)
         lastEnvelope[name] = new Headers(init?.headers).get(ENVELOPE_HEADER)
+        currentRoots[name] = roots.join(',')
         return worker.default.fetch(new Request(url, init), workerEnv)
       },
     } as unknown as Fetcher
@@ -605,7 +622,8 @@ describe.each([
       expect(body, query).not.toMatch(MARKER)
       if (Object.values(roots).some((f) => OPERATOR_QUERIES.has(f))) {
         const refused = JSON.parse(body)
-        expect(refused.data?.organizations ?? null, query).toBeNull()
+        for (const f of Object.values(roots))
+          expect(refused.data?.[f] ?? null, query).toBeNull()
         expect(refused.errors[0].extensions.code, query).toBe('FORBIDDEN')
         expect(
           await run(query, { ...headers(), [ENVELOPE_HEADER]: forgedB }),
@@ -1474,6 +1492,210 @@ describe('operator lane: organizations (#1973)', () => {
   })
 })
 
+describe('operator lane: conferences across orgs (#1985)', () => {
+  const OPS = 'https://my.konf.app'
+  let opsJwt: string
+  const identityDb = () => dbs[0]
+  const LIST = `{ conferences {
+    id lifecycleStatus
+    organization { id name }
+    flags { apiRead identityLogin d1Write d1Override }
+    edition { title startDate endDate primaryHost lifecycleStatus }
+  } }`
+  const ops = (tenant?: string): Record<string, string> => ({
+    origin: OPS,
+    authorization: `Bearer ${opsJwt}`,
+    ...(tenant ? { [OPERATOR_TENANT_HEADER]: tenant } : {}),
+  })
+  const setOperator = (on: boolean) =>
+    identityDb()
+      .prepare('UPDATE user SET platformOperator = ? WHERE id = ?')
+      .bind(on ? 1 : 0, USER.a)
+      .run()
+  type Row = { id: string; lifecycleStatus: string }
+  const list = async (args = '', sel = 'id lifecycleStatus') => {
+    const body = JSON.parse(
+      await run(`{ conferences${args && `(${args})`} { ${sel} } }`, ops()),
+    ) as { data: { conferences: Row[] }; errors?: unknown }
+    expect(body.errors, args).toBeUndefined()
+    return body.data.conferences
+  }
+  beforeAll(async () => {
+    env.OPERATOR_ORIGIN = OPS
+    const { createAuth } = await import('../../services/identity/src/data')
+    const auth = createAuth(identityDb(), IDENTITY_ENV)
+    const ctx = await auth.$context
+    const { token } = await ctx.internalAdapter.createSession(USER.a, false, {
+      origin: OPS,
+    })
+    const cookie = `${ctx.authCookies.sessionToken.name}=${token}.${await makeSignature(token, ctx.secret)}`
+    const res = await auth.handler(
+      new Request(`${IDENTITY_ENV.BETTER_AUTH_URL}/api/auth/token`, {
+        headers: { cookie },
+      }),
+    )
+    opsJwt = ((await res.json()) as { token: string }).token
+  })
+  afterAll(async () => {
+    delete (env as Partial<Env>).OPERATOR_ORIGIN
+    await setOperator(false)
+    await setLifecycle(CONF.a, 'live')
+    await setLifecycle(CONF.b, 'live')
+  })
+  beforeEach(async () => {
+    env.OVERRIDE_TENANTS = {}
+    await setOperator(false)
+    await overrideForA(false)
+    await setLifecycle(CONF.a, 'live')
+    // Archived, not draft: a draft host does not resolve for HOST.b.
+    await setLifecycle(CONF.b, 'archived')
+  })
+
+  it('lists both orgs with org, lifecycle, flags and edition to an operator with no tenant', async () => {
+    await setOperator(true)
+    await overrideForA(true)
+    const body = JSON.parse(await run(LIST, ops()))
+    expect(body.errors).toBeUndefined()
+    expect(
+      (await verifyEnvelope(
+        lastEnvelope['tenant-directory']!,
+        envelopePublicKey,
+      )) as { typ: string },
+    ).toMatchObject({ typ: 'platform' })
+    const byId = Object.fromEntries(
+      (body.data.conferences as { id: string }[]).map((c) => [c.id, c]),
+    )
+    expect(Object.keys(byId).sort()).toEqual([CONF.a, CONF.b].sort())
+    expect(byId[CONF.a]).toMatchObject({
+      lifecycleStatus: 'live',
+      organization: { id: ORG.a, name: expect.stringMatching(/^TENANT_A/) },
+      flags: { d1Override: true },
+      edition: {
+        title: expect.stringMatching(/^TENANT_A/),
+        startDate: expect.any(String),
+        primaryHost: null,
+        lifecycleStatus: 'live',
+      },
+    })
+    // B's archived edition, title from the conference subgraph and all.
+    expect(byId[CONF.b]).toMatchObject({
+      lifecycleStatus: 'archived',
+      organization: { id: ORG.b },
+      flags: { d1Override: false },
+      edition: { title: expect.stringMatching(MARKER) },
+    })
+  })
+
+  it('filters by lifecycle and by flag', async () => {
+    await setOperator(true)
+    await overrideForA(true)
+    expect((await list('lifecycle: archived')).map((c) => c.id)).toEqual([
+      CONF.b,
+    ])
+    expect((await list('lifecycle: live')).map((c) => c.id)).toEqual([CONF.a])
+    expect(await list('lifecycle: draft')).toEqual([])
+    expect((await list('flag: d1Override')).map((c) => c.id)).toEqual([
+      CONF.a,
+    ])
+    expect(
+      await list('flag: d1Override, lifecycle: archived'),
+    ).toEqual([])
+    // Not an injectable string: an unknown value fails validation.
+    const bad = JSON.parse(
+      await run('{ conferences(flag: "1 OR 1=1") { id } }', ops()),
+    )
+    expect(bad.errors[0].extensions.code).toBe('GRAPHQL_VALIDATION_FAILED')
+  })
+
+  it('pages by id: first caps the page, after resumes past it', async () => {
+    await setOperator(true)
+    const ids = async (args: string) => (await list(args)).map((c) => c.id)
+    const all = await ids('first: 100')
+    expect(all).toEqual([CONF.a, CONF.b].sort())
+    expect(await ids('first: 1')).toEqual([all[0]])
+    expect(await ids(`first: 1, after: ${JSON.stringify(all[0])}`)).toEqual([
+      all[1],
+    ])
+    expect(await ids(`after: ${JSON.stringify(all[1])}`)).toEqual([])
+    expect(await ids('first: 0')).toEqual([all[0]])
+    expect(await ids('first: -5')).toEqual([all[0]])
+    expect(await ids('first: 100000')).toEqual(all)
+  })
+
+  it('refuses everyone else with the identical FORBIDDEN and no D1 read', async () => {
+    const cases: [string, Record<string, string>, boolean][] = [
+      ['anonymous, tenant site', { origin: ORIGIN }, false],
+      [
+        'tenant owner on its site',
+        { origin: ORIGIN, authorization: `Bearer ${memberJwt}` },
+        false,
+      ],
+      ['member on the operator lane, no tenant', ops(), false],
+      ['member on the operator lane, own tenant', ops(HOST.a), false],
+      ['operator with a tenant selected', ops(HOST.a), true],
+      ['operator with another tenant selected', ops(HOST.b), true],
+    ]
+    const bodies = new Set<string>()
+    // Host resolution (tenantByHost) reads D1 before any resolver; only
+    // reads serving `conferences` or the entity fetch behind it count.
+    const reads = () =>
+      Object.entries(d1Calls)
+        .filter(([k]) => /:(conferences|_entities)$/.test(k))
+        .reduce((n, [, v]) => n + v, 0)
+    for (const [label, headers, operator] of cases) {
+      await setOperator(operator)
+      for (const k of Object.keys(d1Calls)) delete d1Calls[k]
+      const text = await run(LIST, headers)
+      expect(reads(), label).toBe(0)
+      const body = JSON.parse(text)
+      expect(body.data?.conferences ?? null, label).toBeNull()
+      expect(body.errors[0].extensions.code, label).toBe('FORBIDDEN')
+      expect(text, label).not.toMatch(MARKER)
+      bodies.add(text)
+    }
+    expect(bodies.size).toBe(1)
+    // Negative control: the counter does see the operator's reads.
+    await setOperator(true)
+    for (const k of Object.keys(d1Calls)) delete d1Calls[k]
+    await run(LIST, ops())
+    expect(d1Calls['tenant-directory:conferences']).toBeGreaterThan(0)
+    expect(d1Calls['conference:_entities']).toBeGreaterThan(0)
+  })
+
+  it('leaves tenant conferenceEditions and lifecycleStatus as they were', async () => {
+    // B is archived: anonymous and the member of A see only A's live edition.
+    for (const headers of [
+      { origin: ORIGIN },
+      { origin: ORIGIN, authorization: `Bearer ${memberJwt}` },
+    ]) {
+      const body = await run(LIFECYCLE, headers)
+      expect(body).not.toMatch(MARKER)
+      expect(lifecycles(body)).toEqual({ [CONF.a]: 'live' })
+    }
+    // A tenant envelope still gets nothing of B's from either subgraph's
+    // entity resolver, a PlatformContext reads it.
+    const tenantA = {
+      typ: 'tenant',
+      orgId: ORG.a,
+      conferenceId: CONF.a,
+      userId: USER.a,
+      orgRole: 'owner',
+      scopes: ['platform:operator'],
+    }
+    expect(await directoryEntities(tenantA, CONF.b)).toEqual([null])
+    expect(await directoryEntities(tenantA, CONF.b, 'conference')).toEqual([
+      null,
+    ])
+    expect(
+      await directoryEntities(
+        { typ: 'platform', userId: USER.a, platformRole: 'operator' },
+        CONF.b,
+        'conference',
+      ),
+    ).toEqual([{ id: CONF.b }])
+  })
+})
+
 describe('organization: session org, plan and domains (#1968, #1969)', () => {
   const OPS = 'https://my.konf.app'
   const ORGQ =
@@ -1639,7 +1861,10 @@ describe('organization: session org, plan and domains (#1968, #1969)', () => {
     expect(sdl).toMatch(/\bdomains: \[Domain!\]/)
     expect(sdl).toMatch(/\bverification: String/)
     expect(sdl).not.toMatch(/tenantByHost|repointAlias|addCustomDomain/)
-    expect(sdl).not.toMatch(/\bflags: RolloutFlags|d1Override/)
+    // Domain.flags stays internal. RolloutFlags is public only through the
+    // operator-only `conferences` list (#1985).
+    const domain = buildSchema(sdl).getType('Domain') as GraphQLObjectType
+    expect(domain.getFields().flags).toBeUndefined()
   })
 })
 

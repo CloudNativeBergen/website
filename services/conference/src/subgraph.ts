@@ -70,13 +70,17 @@ const ConferenceEdition = builder
   })
 
 // An entity so tenant-directory can add lifecycleStatus (#1971). Only an
-// edition this caller may list resolves.
+// edition this caller may list resolves. A PlatformContext (operator lane, no
+// tenant) resolves any org's: tenant-directory's operator `conferences` list
+// (#1985) needs title and dates. Tenant envelopes keep the scoped path.
 builder.asEntity(ConferenceEdition, {
   key: builder.selection<{ id: string }>('id'),
   resolveReference: async ({ id }, ctx) =>
-    (await ctx.data.conferences().editions()).find(
-      (e) => e.conferenceId === id,
-    ) ?? null,
+    ctx.envelope.typ === 'platform'
+      ? ((await ctx.data.platformEdition(id)) ?? null)
+      : ((await ctx.data.conferences().editions()).find(
+          (e) => e.conferenceId === id,
+        ) ?? null),
 })
 
 builder.asEntity(Conference, {
