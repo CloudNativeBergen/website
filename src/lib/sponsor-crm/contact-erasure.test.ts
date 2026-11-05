@@ -80,6 +80,19 @@ vi.mock('@/lib/sponsor-crm/activity', () => ({
   logSignatureStatusChange: signing.log,
 }))
 
+const konf = vi.hoisted(() => ({
+  rolloutFlags: vi.fn(async () => ({ apiRead: false })),
+  merge: vi.fn(async (_host: string, c: object) => ({
+    ...c,
+    title: 'D1 title',
+    endDate: '2099-01-01',
+  })),
+}))
+vi.mock('@/lib/conference/konf-api', () => ({
+  rolloutFlags: konf.rolloutFlags,
+  mergeKonfApiConference: konf.merge,
+}))
+
 import {
   eraseSponsorContactSendRecords,
   sponsorContactMatchSet,
@@ -126,6 +139,7 @@ beforeEach(() => {
   world = []
   signers = []
   audience.conferences = []
+  konf.rolloutFlags.mockResolvedValue({ apiRead: false })
   fetchMock.mockImplementation(
     (query: string, params: Record<string, unknown> = {}) => {
       if (query.startsWith('array::unique')) {
@@ -348,6 +362,34 @@ describe('the address leaves the sponsor audiences on Resend too (#1704)', () =>
       [{}, 'aud-conf-a', 'kari@sponsor.no'],
       [{}, 'aud-conf-b', 'kari@sponsor.no'],
     ])
+  })
+
+  it('D1 relabels the audiences but never changes which ones are erased (#1997)', async () => {
+    const withHost = (id: string) => ({
+      _id: id,
+      title: id,
+      domains: [`${id}.example.test`],
+      organization: { _ref: 'org-A' },
+    })
+    audience.conferences = [withHost('conf-a'), withHost('conf-b')]
+    const erase = () =>
+      eraseSponsorContactSendRecords({
+        emails: ['kari@sponsor.no'],
+        actor: 'op',
+      })
+
+    await erase()
+    expect(konf.merge).not.toHaveBeenCalled()
+    const unflagged = audience.remove.mock.calls.slice()
+
+    audience.remove.mockClear()
+    konf.rolloutFlags.mockResolvedValue({ apiRead: true })
+    await erase()
+    expect(audience.remove.mock.calls).toEqual(unflagged)
+    expect(audience.resolve).toHaveBeenLastCalledWith(
+      expect.objectContaining({ _id: 'conf-b', title: 'D1 title' }),
+      'sponsors',
+    )
   })
 
   it('a failed removal is reported and logged, and does not fail the erasure', async () => {

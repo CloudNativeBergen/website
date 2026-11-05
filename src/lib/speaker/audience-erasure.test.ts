@@ -4,6 +4,8 @@
 const h = vi.hoisted(() => ({
   resolveEmailSender: vi.fn(),
   fetch: vi.fn(),
+  rolloutFlags: vi.fn(),
+  merge: vi.fn(),
 }))
 
 vi.mock('@/lib/email/config', () => ({
@@ -12,6 +14,10 @@ vi.mock('@/lib/email/config', () => ({
   delay: async () => {},
   isRateLimitError: () => false,
   EMAIL_CONFIG: { RATE_LIMIT_DELAY: 0, MAX_RETRIES: 3 },
+}))
+vi.mock('@/lib/conference/konf-api', () => ({
+  rolloutFlags: h.rolloutFlags,
+  mergeKonfApiConference: h.merge,
 }))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: h.fetch },
@@ -33,6 +39,33 @@ describe('removeFromSpeakerAudiences (#1715)', () => {
 
     expect(failures).toEqual([])
     expect(h.fetch.mock.calls[0][1]).toEqual({ orgId: 'org-1' })
+    expect(account.contactsIn(data.id)).toEqual(['keep@a.test'])
+  })
+
+  it('D1 cannot change which audiences an erasure empties (#1997)', async () => {
+    const account = fakeAccount()
+    h.resolveEmailSender.mockResolvedValue({ client: account.client })
+    h.rolloutFlags.mockResolvedValue({ apiRead: true })
+    h.merge.mockImplementation(async (_host: string, c: object) => ({
+      ...c,
+      title: 'Renamed in D1',
+      startDate: '2099-01-01',
+      endDate: '2099-01-02',
+    }))
+    h.fetch.mockResolvedValue([
+      {
+        _id: 'c1',
+        title: 'Alpha',
+        domains: ['alpha.test'],
+        organization: { _ref: 'org-1' },
+      },
+    ])
+    const { data } = await account.create({ name: 'Alpha Speakers [c1]' })
+    account.fillWith(data.id, ['keep@a.test', 'gone@a.test'], ['gone@a.test'])
+
+    expect(await removeFromSpeakerAudiences('gone@a.test', 'org-1')).toEqual([])
+    expect(h.merge).toHaveBeenCalled()
+    // Matched on the `[c1]` key, not the D1 title: same audience emptied.
     expect(account.contactsIn(data.id)).toEqual(['keep@a.test'])
   })
 })

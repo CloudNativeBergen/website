@@ -118,9 +118,9 @@ describe('getRenewalContext', () => {
     fetchMock
       .mockResolvedValueOnce(source.conference)
       .mockResolvedValueOnce({ ...source, conference: undefined })
-      .mockResolvedValueOnce(next)
+      .mockResolvedValueOnce([{ ...next, startDate: '2026-10-26' }])
     const result = await getRenewalContext('org-a', 'conf-2025', 'sfc-old')
-    expect(result.next).toEqual(next)
+    expect(result.next).toMatchObject(next)
     const [, sourceParams] = fetchMock.mock.calls[1]
     expect(sourceParams).toEqual({ id: 'sfc-old', conferenceId: 'conf-2025' })
     const [query, params] = fetchMock.mock.calls[2]
@@ -128,7 +128,6 @@ describe('getRenewalContext', () => {
     expect(query).toContain('title == $tierTitle')
     expect(params).toMatchObject({
       orgId: 'org-a',
-      startDate: '2025-10-27',
       sponsorId: 's-1',
       tierTitle: 'Gold',
     })
@@ -138,7 +137,7 @@ describe('getRenewalContext', () => {
     fetchMock
       .mockResolvedValueOnce(source.conference)
       .mockResolvedValueOnce(source)
-      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce([])
     const result = await getRenewalContext('org-a', 'conf-2025', 'sfc-old')
     expect(result.next).toBeNull()
   })
@@ -347,10 +346,12 @@ describe('renewing into the current edition (board strip)', () => {
 
   it('finds last edition’s record when its next edition is this one', async () => {
     fetchMock
-      .mockResolvedValueOnce({ _id: 'conf-2025' })
+      .mockResolvedValueOnce([{ _id: 'conf-2025', startDate: '2025-10-27' }])
       .mockResolvedValueOnce(prev)
       .mockResolvedValueOnce(src)
-      .mockResolvedValueOnce({ _id: 'conf-2026', title: 'CNB 2026' })
+      .mockResolvedValueOnce([
+        { _id: 'conf-2026', title: 'CNB 2026', startDate: '2026-10-27' },
+      ])
     const ctx = await getRenewalContextIntoCurrent(
       'org-a',
       current,
@@ -365,7 +366,7 @@ describe('renewing into the current edition (board strip)', () => {
 
   it('is not found when the record belongs to another conference', async () => {
     fetchMock
-      .mockResolvedValueOnce({ _id: 'conf-2025' })
+      .mockResolvedValueOnce([{ _id: 'conf-2025', startDate: '2025-10-27' }])
       .mockResolvedValueOnce(prev)
       .mockResolvedValueOnce(null)
     const ctx = await getRenewalContextIntoCurrent(
@@ -379,7 +380,7 @@ describe('renewing into the current edition (board strip)', () => {
 
   it('hands back the source before last edition has ended, so the route can say why', async () => {
     fetchMock
-      .mockResolvedValueOnce({ _id: 'conf-2025' })
+      .mockResolvedValueOnce([{ _id: 'conf-2025', startDate: '2025-10-27' }])
       .mockResolvedValueOnce(prev)
       .mockResolvedValueOnce(src)
     const ctx = await getRenewalContextIntoCurrent(
@@ -394,10 +395,12 @@ describe('renewing into the current edition (board strip)', () => {
 
   it('is not found when the next edition is not this one', async () => {
     fetchMock
-      .mockResolvedValueOnce({ _id: 'conf-2025' })
+      .mockResolvedValueOnce([{ _id: 'conf-2025', startDate: '2025-10-27' }])
       .mockResolvedValueOnce(prev)
       .mockResolvedValueOnce(src)
-      .mockResolvedValueOnce({ _id: 'conf-2027', title: 'CNB 2027' })
+      .mockResolvedValueOnce([
+        { _id: 'conf-2027', title: 'CNB 2027', startDate: '2026-10-28' },
+      ])
     const ctx = await getRenewalContextIntoCurrent(
       'org-a',
       current,
@@ -408,7 +411,7 @@ describe('renewing into the current edition (board strip)', () => {
   })
 
   it('is not found without a previous edition', async () => {
-    fetchMock.mockResolvedValueOnce(null)
+    fetchMock.mockResolvedValueOnce([])
     const ctx = await getRenewalContextIntoCurrent(
       'org-a',
       current,
