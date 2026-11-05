@@ -1,17 +1,23 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mapBackfill, type SanityConference } from '../../scripts/backfill'
-import { findDrift, scheduled } from './parity'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  mapBackfill,
+  type Row,
+  type SanityConference,
+} from '../../scripts/backfill'
+import { findDrift, scheduled, window } from './parity'
 
+const SECRET = 'S3CRET-VALUE'
 const doc: SanityConference = {
   _id: 'c1',
   orgId: 'o1',
   title: 'Konf',
   city: 'Bergen',
   tagline: '',
+  startDate: '2026-10-01',
   socialLinks: ['https://x.test'],
 }
 // The D1 row as the site writes it: '' stored as null, links as JSON text.
-const d1 = (over = {}) => ({
+const d1 = (over: Partial<Row> = {}): Row => ({
   ...mapBackfill([doc], new Set(['c1'])).rows[0],
   tagline: null,
   ...over,
@@ -24,91 +30,180 @@ vi.mock('@sanity/client', () => ({
 
 describe('findDrift', () => {
   it('is clean when D1 equals Sanity after normalisation', () => {
-    expect(findDrift([d1()], [doc])).toEqual([])
+    expect(findDrift([d1({ city: ' Bergen ' })], [doc])).toEqual([])
   })
 
-  it('reports the drifting fields by value', () => {
-    expect(
-      findDrift([d1({ city: 'Oslo', social_links: '[]' })], [doc]),
-    ).toEqual([{ conferenceId: 'c1', fields: ['city', 'socialLinks'] }])
-  })
-
-  it('reports an unpublished D1 row whose Sanity doc is live', () => {
-    expect(findDrift([d1({ published: 0 })], [doc])).toEqual([
-      { conferenceId: 'c1', fields: ['(conference)'] },
+  // One seeded mismatch per column type: text, date, enum, boolean, JSON
+  // array, and the org key.
+  it.each([
+    ['title', { title: 'Old' }],
+    ['tagline', { tagline: 'set in D1 only' }],
+    ['start_date', { start_date: '2026-10-02' }],
+    ['end_date', { end_date: '2026-10-03' }],
+    ['visibility', { visibility: 'unlisted' as const }],
+    ['published', { published: 0 as const }],
+    ['social_links', { social_links: '[]' }],
+    ['org_id', { org_id: 'o2' }],
+    ['primary_color', { primary_color: '#fff' }],
+  ])('reports a mismatch in %s', (field, over) => {
+    expect(findDrift([d1(over)], [doc])).toEqual([
+      { conferenceId: 'c1', fields: [field] },
     ])
-    expect(
-      findDrift(
-        [d1({ published: 0 })],
-        [{ ...doc, lifecycleStatus: 'archived' }],
-      ),
-    ).toEqual([])
   })
 
-  it('reports a row Sanity no longer has, or a moved org', () => {
+  it('compares every column the backfill writes', () => {
+    const row = d1()
+    for (const col of Object.keys(row) as (keyof Row)[]) {
+      if (col === 'conference_id') continue
+      const v =
+        col === 'social_links' ? '["y"]' : col === 'published' ? 0 : 'zz'
+      expect(findDrift([{ ...row, [col]: v }], [doc])).toEqual([
+        { conferenceId: 'c1', fields: [col] },
+      ])
+    }
+  })
+
+  it('reports a row Sanity no longer has', () => {
     expect(findDrift([d1()], [])).toEqual([
-      { conferenceId: 'c1', fields: ['(conference)'] },
-    ])
-    expect(findDrift([d1({ org_id: 'o2' })], [doc])).toEqual([
-      { conferenceId: 'c1', fields: ['orgId'] },
+      { conferenceId: 'c1', fields: ['(missing in sanity)'] },
     ])
   })
 })
 
+describe('window', () => {
+  it('rotates through all ids across days, capped per run', () => {
+    const ids = [1, 2, 3, 4, 5]
+    const seen = new Set<number>()
+    for (let day = 0; day < 3; day++) {
+      const w = window(ids, day * 86_400_000, 2)
+      expect(w).toHaveLength(2)
+      w.forEach((i) => seen.add(i))
+    }
+    expect(seen.size).toBe(5)
+    expect(window(ids, 0, 10)).toEqual(ids)
+  })
+})
+
 describe('scheduled', () => {
+  let logs: string[]
+  beforeEach(() => {
+    fetchMock.mockReset()
+    logs = []
+    const keep = (m: string) => void logs.push(m)
+    vi.spyOn(console, 'error').mockImplementation(keep)
+    vi.spyOn(console, 'log').mockImplementation(keep)
+  })
   afterEach(() => vi.restoreAllMocks())
 
-  const envWith = (rows: unknown[], token = 't') => ({
+  const envWith = (rows: Row[], over = {}) => ({
     DB: {
-      prepare: () => ({ all: async () => ({ results: rows }) }),
+      prepare: vi.fn(() => ({ all: async () => ({ results: rows }) })),
     } as unknown as D1Database,
     SANITY_PROJECT_ID: 'p',
     SANITY_DATASET: 'd',
-    SANITY_API_TOKEN_READ: token,
+    SANITY_API_TOKEN_READ: 't',
+    ...over,
   })
+  const events = () => logs.map((l) => JSON.parse(l))
+  const summary = () =>
+    events().find((e) => e.event === 'conference.parity.sweep')
 
-  it('refuses to run without the read token', async () => {
-    await expect(scheduled(envWith([d1()], ''))).rejects.toThrow(
-      'SANITY_API_TOKEN_READ',
-    )
-  })
-
-  it('reports an empty Sanity read as an error, not as drift', async () => {
-    fetchMock.mockResolvedValue([])
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    await scheduled(envWith([d1()]))
-    expect(error.mock.calls.map((c) => JSON.parse(c[0]).event)).toEqual([
-      'conference.parity.error',
-    ])
-  })
-
-  it('logs one drift event and the sweep summary', async () => {
+  it('reports in_sync with zero diffs', async () => {
     fetchMock.mockResolvedValue([doc])
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const all = vi.fn().mockResolvedValue({ results: [d1({ title: 'Old' })] })
-    const prepare = vi.fn(() => ({ all }))
-    const env = {
-      DB: { prepare } as unknown as D1Database,
-      SANITY_PROJECT_ID: 'p',
-      SANITY_DATASET: 'd',
-      SANITY_API_TOKEN_READ: 't',
-    }
-    await scheduled(env)
-    // Unpublished rows too: a split cancel must not drop out of the sweep.
-    expect(prepare).toHaveBeenCalledWith('SELECT * FROM conferences')
-    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), { ids: ['c1'] })
-    expect(error.mock.calls.map((c) => JSON.parse(c[0]))).toEqual([
+    await scheduled(envWith([d1()]))
+    expect(events()).toEqual([
       {
-        event: 'conference.parity.drift',
-        conferenceId: 'c1',
-        fields: ['title'],
+        event: 'conference.parity.sweep',
+        status: 'in_sync',
+        checked: 1,
+        total: 1,
+        drifted: 0,
       },
     ])
-    expect(JSON.parse(log.mock.calls[0][0])).toEqual({
-      event: 'conference.parity.sweep',
-      checked: 1,
-      drifted: 1,
+  })
+
+  it.each([
+    ['an empty Sanity read', () => fetchMock.mockResolvedValue([]), [d1()], {}],
+    [
+      'a failed Sanity read',
+      () => fetchMock.mockRejectedValue(new Error(SECRET)),
+      [d1()],
+      {},
+    ],
+    ['an empty D1 read', () => fetchMock.mockResolvedValue([doc]), [], {}],
+    [
+      'a missing token',
+      () => fetchMock.mockResolvedValue([doc]),
+      [d1()],
+      { SANITY_API_TOKEN_READ: '' },
+    ],
+  ])('reports %s as unknown, never in sync', async (_, arrange, rows, over) => {
+    arrange()
+    await expect(scheduled(envWith(rows, over))).resolves.toBeUndefined()
+    expect(summary()).toBeUndefined()
+    expect(events()).toEqual([
+      expect.objectContaining({
+        event: 'conference.parity.error',
+        status: 'unknown',
+      }),
+    ])
+    expect(logs.join()).not.toContain(SECRET)
+  })
+
+  it('logs drift by column name, never by value', async () => {
+    fetchMock.mockResolvedValue([{ ...doc, title: SECRET }])
+    await scheduled(envWith([d1({ city: SECRET })]))
+    expect(events()[0]).toEqual({
+      event: 'conference.parity.drift',
+      conferenceId: 'c1',
+      fields: ['title', 'city'],
+    })
+    expect(summary()).toMatchObject({ status: 'drift', drifted: 1 })
+    expect(logs.join()).not.toContain(SECRET)
+  })
+
+  describe('Slack alert', () => {
+    const post = vi.fn()
+    beforeEach(() => {
+      post.mockReset()
+      vi.stubGlobal('fetch', post)
+    })
+    afterEach(() => vi.unstubAllGlobals())
+    const url = { SLACK_CONFERENCE_PARITY_WEBHOOK_URL: 'https://hooks.test' }
+
+    it('posts drift without values', async () => {
+      post.mockResolvedValue(new Response('ok'))
+      fetchMock.mockResolvedValue([doc])
+      await scheduled(envWith([d1({ city: SECRET })], url))
+      const text = JSON.parse(post.mock.calls[0][1].body).text
+      expect(text).toContain('c1: city')
+      expect(text).not.toContain(SECRET)
+    })
+
+    it('posts unknown on a failed read', async () => {
+      post.mockResolvedValue(new Response('ok'))
+      fetchMock.mockResolvedValue([])
+      await scheduled(envWith([d1()], url))
+      expect(JSON.parse(post.mock.calls[0][1].body).text).toContain('UNKNOWN')
+    })
+
+    it('stays silent when in sync or unset', async () => {
+      fetchMock.mockResolvedValue([doc])
+      await scheduled(envWith([d1()], url))
+      await scheduled(envWith([d1({ city: 'x' })]))
+      expect(post).not.toHaveBeenCalled()
+    })
+
+    it('a Slack failure does not fail the sweep or drop its log', async () => {
+      post.mockRejectedValue(new Error('down'))
+      fetchMock.mockResolvedValue([doc])
+      await expect(
+        scheduled(envWith([d1({ city: 'x' })], url)),
+      ).resolves.toBeUndefined()
+      expect(summary()).toMatchObject({ status: 'drift' })
+      expect(events().at(-1)).toMatchObject({
+        event: 'conference.parity.alert_failed',
+      })
     })
   })
 })
