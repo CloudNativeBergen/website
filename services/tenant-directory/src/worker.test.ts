@@ -90,6 +90,37 @@ const organizer: Envelope = {
   scopes: [],
 }
 
+/** Published Sanity documents by `_id`; what the GROQ stub answers from. */
+type Docs = {
+  orgs: Record<string, { slug: string | null; name: string | null }>
+  confs: Record<
+    string,
+    {
+      orgRef: string | null
+      title: string | null
+      startDate: string | null
+      domains: string[] | null
+    }
+  >
+}
+const tenantDocs = (): Docs => {
+  const docs: Docs = { orgs: {}, confs: {} }
+  for (const org of ['acme', 'beta', 'other']) {
+    docs.orgs[`organization.${org}`] = { slug: org, name: `Org ${org}` }
+    docs.confs[`conference-${org}`] = {
+      orgRef: `organization.${org}`,
+      title: 'Conf 2026',
+      startDate: '2026-10-01',
+      domains: [`${org}-2026.konf.run`, `${org}.konf.run`, `conf.${org}.org`],
+    }
+  }
+  return docs
+}
+let sanity: Docs
+const sanityFetch = vi.fn<typeof fetch>()
+let sanityRequests: Pick<Request, 'url' | 'headers' | 'json'>[] = []
+vi.stubGlobal('fetch', sanityFetch)
+
 let sqlite: DatabaseSync
 let env: Parameters<typeof worker.fetch>[1]
 
@@ -111,7 +142,24 @@ beforeEach(() => {
     CF_API_TOKEN: 'unused',
     CF_ZONE_ID: 'unused',
     IDENTITY: identity,
+    SANITY_PROJECT_ID: 'p',
+    SANITY_DATASET: 'd',
+    SANITY_API_TOKEN_READ: 'token',
   }
+  sanity = tenantDocs()
+  sanityFetch.mockReset()
+  sanityRequests = []
+  sanityFetch.mockImplementation(async (url, init) => {
+    // A Request at runtime; workers-types and Node disagree on its type.
+    const req = new Request(url as unknown as string, init)
+    sanityRequests.push(req.clone())
+    const { params } = (await req.json()) as {
+      params: { orgId: string; conferenceId: string }
+    }
+    const org = sanity.orgs[params.orgId] ?? null
+    const conf = sanity.confs[params.conferenceId] ?? null
+    return Response.json({ result: { org, conf } })
+  })
   hostnames.create.mockReset()
   hostnames.get.mockReset()
   hostnames.delete.mockReset()
@@ -140,15 +188,38 @@ async function gql(
   return { status: res.status, body: (await res.json()) as any }
 }
 
-const PROVISION = `mutation($key: String!, $org: String!) {
-  provisionOrganization(idempotencyKey: $key, orgSlug: $org, orgName: "Org",
-    conferenceSlug: "2026", conferenceName: "Conf 2026") { id slug status }
+const PROVISION = `mutation($key: String!, $org: String!, $orgId: ID!, $conf: ID!) {
+  provisionOrganization(idempotencyKey: $key, orgId: $orgId, orgSlug: $org,
+    conferenceId: $conf) { id slug status }
 }`
+const vars = (org = 'acme', key = 'k1', over: Record<string, string> = {}) => ({
+  key,
+  org,
+  orgId: `organization.${org}`,
+  conf: `conference-${org}`,
+  ...over,
+})
+const count = (table: string) =>
+  (sqlite.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number })
+    .n
+/** Provisions as an operator and expects a refusal with no D1 row written. */
+async function refused(v: ReturnType<typeof vars>, code = 'BAD_USER_INPUT') {
+  const { body } = await gql(PROVISION, v, operator)
+  expect(body.errors?.[0]?.extensions.code).toBe(code)
+  for (const t of [
+    'organizations',
+    'conferences',
+    'domains',
+    'provisioning_requests',
+  ])
+    expect(count(t)).toBe(0)
+  return body.errors[0].message as string
+}
 const RESOLVE = `query($host: String!) { tenantByHost(host: $host) { orgId conferenceId kind } }`
 
 /** Provisions, then publishes the Conference (provisioning leaves a draft). */
 async function provision(org = 'acme', key = 'k1') {
-  const { body } = await gql(PROVISION, { key, org }, operator)
+  const { body } = await gql(PROVISION, vars(org, key), operator)
   const created = body.data.provisionOrganization as { id: string }
   sqlite
     .prepare("UPDATE conferences SET lifecycle = 'live' WHERE org_id = ?")
@@ -183,6 +254,8 @@ describe('provisioning', () => {
     const a = await provision('acme', 'same')
     const b = await provision('acme', 'same')
     expect(b.id).toBe(a.id)
+    // A replay writes nothing and does not re-read Sanity.
+    expect(sanityFetch).toHaveBeenCalledTimes(1)
     // identity's ensure runs on the retry too, so a failed one heals.
     expect(identity.ensure.mock.calls).toEqual([
       [a.id, 'acme'],
@@ -193,9 +266,143 @@ describe('provisioning', () => {
     ).toEqual({ n: 1 })
   })
 
+  it('registers the Sanity ids, names and year, verified before writing', async () => {
+    const org = await provision()
+    expect(org.id).toBe('organization.acme')
+    expect(
+      sqlite.prepare('SELECT id, org_id, slug, name FROM conferences').all(),
+    ).toEqual([
+      {
+        id: 'conference-acme',
+        org_id: 'organization.acme',
+        slug: '2026',
+        name: 'Conf 2026',
+      },
+    ])
+    expect(
+      sqlite.prepare('SELECT hostname FROM domains ORDER BY hostname').all(),
+    ).toEqual([
+      { hostname: 'acme-2026.konf.run' },
+      { hostname: 'acme.konf.run' },
+    ])
+    // The raw key is never stored, only sha256(key).
+    const { idempotency_key } = sqlite
+      .prepare('SELECT idempotency_key FROM provisioning_requests')
+      .get() as { idempotency_key: string }
+    expect(idempotency_key).toMatch(/^[0-9a-f]{64}$/)
+    const [req] = sanityRequests
+    expect(req.url).toBe('https://p.api.sanity.io/v2023-05-03/data/query/d')
+    expect(req.headers.get('authorization')).toBe('Bearer token')
+    expect(((await req.json()) as { params: unknown }).params).toEqual({
+      orgId: 'organization.acme',
+      conferenceId: 'conference-acme',
+    })
+  })
+
+  it('takes the edition year from the Sanity host, not startDate', async () => {
+    sanity.confs['conference-acme'].startDate = '2027-01-15'
+    await provision()
+    expect(sqlite.prepare('SELECT slug FROM conferences').get()).toEqual({
+      slug: '2026',
+    })
+  })
+
+  it("refuses another org's conference", async () => {
+    expect(
+      await refused(vars('acme', 'k', { conf: 'conference-other' })),
+    ).toContain('in this organization')
+  })
+
+  it('refuses a platform host missing from conference.domains', async () => {
+    sanity.confs['conference-acme'].domains = ['acme-2026.konf.run']
+    expect(await refused(vars())).toContain(
+      'acme.konf.run is not in conference.domains',
+    )
+    sanity.confs['conference-acme'].domains = ['acme.konf.run']
+    await refused(vars())
+  })
+
+  it('refuses a draft org or conference', async () => {
+    // Only the drafts exist: the published-only query finds nothing.
+    sanity = tenantDocs()
+    delete sanity.orgs['organization.acme']
+    await refused(vars())
+    sanity = tenantDocs()
+    delete sanity.confs['conference-acme']
+    await refused(vars())
+    // A draft id is refused before Sanity is asked.
+    sanityFetch.mockClear()
+    await refused(vars('acme', 'k', { conf: 'drafts.conference-acme' }))
+    expect(sanityFetch).not.toHaveBeenCalled()
+  })
+
+  it('refuses an org whose Sanity slug differs', async () => {
+    sanity.orgs['organization.acme'].slug = 'acme-old'
+    await refused(vars())
+  })
+
+  it('fails closed on an empty, unauthorized or broken Sanity read', async () => {
+    // Unauthenticated GROQ answers 200 with nothing in it.
+    sanityFetch.mockResolvedValueOnce(
+      Response.json({ result: { org: null, conf: null } }),
+    )
+    await refused(vars())
+    sanityFetch.mockResolvedValueOnce(Response.json({ result: [] }))
+    await refused(vars())
+    sanityFetch.mockResolvedValueOnce(Response.json({}))
+    expect(await refused(vars(), 'INTERNAL_SERVER_ERROR')).toMatch(
+      /^Sanity read failed/,
+    )
+    sanityFetch.mockResolvedValueOnce(new Response('no', { status: 401 }))
+    expect(await refused(vars(), 'INTERNAL_SERVER_ERROR')).toMatch(
+      /^Sanity read failed/,
+    )
+    sanityFetch.mockRejectedValueOnce(new TypeError('network'))
+    expect(await refused(vars(), 'INTERNAL_SERVER_ERROR')).toMatch(
+      /^Sanity read failed/,
+    )
+  })
+
+  it('refuses without a read token, before asking Sanity', async () => {
+    delete env.SANITY_API_TOKEN_READ
+    expect(await refused(vars(), 'INTERNAL_SERVER_ERROR')).toContain(
+      'not configured',
+    )
+    expect(sanityFetch).not.toHaveBeenCalled()
+  })
+
+  it('refuses a conference without a start date', async () => {
+    sanity.confs['conference-acme'].startDate = null
+    expect(await refused(vars())).toContain('start date')
+  })
+
+  it('refuses an orgId that is not organization.<slug>', async () => {
+    // Legacy ids go through the backfill only.
+    await refused(
+      vars('cloud-native-days', 'k', {
+        orgId: 'organization-cloud-native-days',
+      }),
+    )
+    await refused(vars('acme', 'k', { orgId: 'organization.other' }))
+    expect(sanityFetch).not.toHaveBeenCalled()
+  })
+
+  it('refuses a replayed key with different arguments', async () => {
+    await provision('acme', 'same')
+    for (const v of [
+      vars('other', 'same'),
+      vars('acme', 'same', { conf: 'conference-other' }),
+    ]) {
+      const { body } = await gql(PROVISION, v, operator)
+      expect(body.errors[0].extensions.code).toBe('CONFLICT')
+    }
+    expect(count('organizations')).toBe(1)
+    expect(count('domains')).toBe(2)
+  })
+
   it('refuses callers without a PlatformContext', async () => {
     for (const as of [undefined, organizer]) {
-      const { body } = await gql(PROVISION, { key: 'k', org: 'acme' }, as)
+      const { body } = await gql(PROVISION, vars('acme', 'k'), as)
       expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
     }
     expect(
@@ -337,7 +544,7 @@ describe('custom domains', () => {
 
 describe('reserved slugs', () => {
   it.each(['auth', 'www', 'api'])('refuses org slug %s', async (org) => {
-    const { body } = await gql(PROVISION, { key: org, org }, operator)
+    const { body } = await gql(PROVISION, vars(org, org), operator)
     expect(body.errors[0]).toMatchObject({
       message: expect.stringContaining('reserved'),
       extensions: { code: 'BAD_USER_INPUT' },
