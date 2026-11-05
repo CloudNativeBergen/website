@@ -92,8 +92,7 @@ export async function handoff(request: Request, env: HandoffEnv) {
    * members get its token (#1956). The gateway decides per request what for.
    */
   const refused = async (userId: string, origin: string) =>
-    isOperatorOrigin(env, origin) &&
-    !(await data.mayUseOperatorOrigin(userId))
+    isOperatorOrigin(env, origin) && !(await data.mayUseOperatorOrigin(userId))
 
   if (request.method === 'GET' && url.pathname === '/handoff') {
     const ip = request.headers.get('cf-connecting-ip') ?? 'unknown'

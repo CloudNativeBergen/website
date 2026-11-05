@@ -802,7 +802,9 @@ describe('operator lane: Kontroll members (#1956)', () => {
     )
     opsJwt = ((await res.json()) as { token: string }).token
     // Distinct flags per tenant, so a test can tell whose it got.
-    await (await directoryDb())
+    await (
+      await directoryDb()
+    )
       .prepare(
         'UPDATE conferences SET api_read = (id = ?), identity_login = 1, d1_write = (id <> ?)',
       )
@@ -812,7 +814,9 @@ describe('operator lane: Kontroll members (#1956)', () => {
   afterAll(async () => {
     delete (env as Partial<Env>).OPERATOR_ORIGIN
     await setRole('admin')
-    await (await directoryDb())
+    await (
+      await directoryDb()
+    )
       .prepare(
         'UPDATE conferences SET api_read = 1, identity_login = 1, d1_write = 1',
       )
@@ -841,13 +845,16 @@ describe('operator lane: Kontroll members (#1956)', () => {
     })
   })
 
-  it.each(['owner', 'admin'])('lets a member with role %s write', async (role) => {
-    await setRole(role)
-    const before = await tenantRows()
-    const body = JSON.parse(await write())
-    expect(body).toEqual({ data: { updateConference: { id: CONF.a } } })
-    expect(await tenantRows()).not.toEqual(before)
-  })
+  it.each(['owner', 'admin'])(
+    'lets a member with role %s write',
+    async (role) => {
+      await setRole(role)
+      const before = await tenantRows()
+      const body = JSON.parse(await write())
+      expect(body).toEqual({ data: { updateConference: { id: CONF.a } } })
+      expect(await tenantRows()).not.toEqual(before)
+    },
+  )
 
   it('refuses a write by a member with role member, and applies a role change on the next request', async () => {
     await setRole('member')
@@ -892,8 +899,8 @@ describe('operator lane: Kontroll members (#1956)', () => {
       const body = JSON.parse(await run('{ conference { id } }', ops(HOST.a)))
       expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
       // Only the gateway's host lookup ran: no subgraph read, no envelope.
-    expect([...calls]).toEqual(['tenant-directory'])
-    expect(Object.values(lastEnvelope).filter(Boolean)).toEqual([])
+      expect([...calls]).toEqual(['tenant-directory'])
+      expect(Object.values(lastEnvelope).filter(Boolean)).toEqual([])
     } finally {
       await setRole('admin')
     }
