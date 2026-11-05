@@ -25,6 +25,9 @@ import {
   isNonNullType,
   isObjectType,
   buildSchema,
+  parse,
+  Kind,
+  type OperationDefinitionNode,
   type GraphQLArgument,
   type GraphQLInputType,
   type GraphQLOutputType,
@@ -478,8 +481,19 @@ beforeAll(async () => {
     }
     bindings[BINDINGS[name as keyof typeof BINDINGS]] = {
       fetch: (url: string, init?: RequestInit) => {
-        const entities = String(init?.body).includes('_entities')
-        calls.add(entities ? `${name}:_entities` : name)
+        const body = String(init?.body)
+        // Label each call by the root fields it sends; `name` alone means a
+        // root other than the entity path or the conference subgraph's own
+        // conferenceEditions, which is served whatever the label says.
+        const op = parse(JSON.parse(body).query).definitions.find(
+          (d) => d.kind === Kind.OPERATION_DEFINITION,
+        ) as OperationDefinitionNode
+        const roots = op.selectionSet.selections.flatMap((x) =>
+          x.kind === Kind.FIELD ? [x.name.value] : [],
+        )
+        for (const f of roots) calls.add(`${name}:${f}`)
+        if (roots.some((f) => f !== '_entities' && f !== 'conferenceEditions'))
+          calls.add(name)
         lastEnvelope[name] = new Headers(init?.headers).get(ENVELOPE_HEADER)
         return worker.default.fetch(new Request(url, init), workerEnv)
       },
@@ -604,6 +618,9 @@ describe.each([
     if (labelsOn && OVERRIDERS.length) {
       expect([...calls].some((c) => c.endsWith(':_entities'))).toBe(true)
     }
+    // The label moves `conference` only; editions is always served here.
+    expect(calls.has('conference:conference')).toBe(labelsOn)
+    expect(calls.has('conference:conferenceEditions')).toBe(true)
   })
 })
 
@@ -747,6 +764,94 @@ describe('cross-tenant mutation walk', () => {
     expect(after).not.toEqual(before)
     const b = (rows: string[]) => rows.filter((r) => MARKER.test(r))
     expect(b(after)).toEqual(b(before))
+  })
+})
+
+// --- conferenceEditions (#1970) ---------------------------------------------
+
+const EDITIONS = '{ conferenceEditions { id title visibility published } }'
+/** Org A's extra editions: a draft and a published, unlisted one. */
+const DRAFT_A = 'conf-tenant-a-draft'
+const UNLISTED_A = 'conf-tenant-a-unlisted'
+const conferenceDb = async () => {
+  for (const db of dbs) {
+    const { results } = await db
+      .prepare(
+        "SELECT 1 FROM pragma_table_info('conferences') WHERE name = 'published'",
+      )
+      .all()
+    if (results.length) return db
+  }
+  throw new Error('no conference D1')
+}
+async function addEditions() {
+  const db = await conferenceDb()
+  for (const [id, published, visibility] of [
+    [DRAFT_A, 0, 'live'],
+    [UNLISTED_A, 1, 'unlisted'],
+  ] as const)
+    await db
+      .prepare(
+        'INSERT OR REPLACE INTO conferences (conference_id, org_id, published, title, visibility) VALUES (?, ?, ?, ?, ?)',
+      )
+      .bind(id, ORG.a, published, `TENANT_A ${id}`, visibility)
+      .run()
+}
+async function dropEditions() {
+  await (
+    await conferenceDb()
+  )
+    .prepare('DELETE FROM conferences WHERE conference_id IN (?, ?)')
+    .bind(DRAFT_A, UNLISTED_A)
+    .run()
+}
+const editionIds = (body: string) => {
+  const json = JSON.parse(body) as {
+    data?: { conferenceEditions: { id: string }[] }
+    errors?: unknown
+  }
+  expect(json.errors).toBeUndefined()
+  return json.data!.conferenceEditions.map((e) => e.id).sort()
+}
+
+describe('conferenceEditions (#1970)', () => {
+  beforeAll(addEditions)
+  afterAll(dropEditions)
+  beforeEach(async () => {
+    env.OVERRIDE_TENANTS = {}
+    await overrideForA(false)
+  })
+  const member = () => ({ authorization: `Bearer ${memberJwt}` })
+
+  it("lists every edition of the member's own org, and no other org's", async () => {
+    const body = await run(EDITIONS, { ...member(), origin: ORIGIN })
+    expect(body).not.toMatch(MARKER)
+    expect(editionIds(body)).toEqual([CONF.a, DRAFT_A, UNLISTED_A].sort())
+  })
+
+  it('gives an anonymous caller published, live editions only, like conference', async () => {
+    const body = await run(EDITIONS, { origin: ORIGIN })
+    expect(editionIds(body)).toEqual([CONF.a])
+    // The same caller reads that edition through conference too.
+    expect(
+      JSON.parse(await run('{ conference { id } }', { origin: ORIGIN })),
+    ).toEqual({ data: { conference: { id: CONF.a } } })
+  })
+
+  it("never lists another org's editions, forged envelope or not", async () => {
+    // B's host lists B's, A's host A's, whatever envelope the caller sends:
+    // the gateway mints its own from the host.
+    expect(
+      editionIds(await run(EDITIONS, { origin: `https://${HOST.b}` })),
+    ).toEqual([CONF.b])
+    for (const headers of [
+      { ...member(), origin: ORIGIN, [ENVELOPE_HEADER]: forgedB },
+      { origin: ORIGIN, [ENVELOPE_HEADER]: forgedB },
+    ]) {
+      const body = await run(EDITIONS, headers)
+      expect(body).not.toMatch(MARKER)
+      expect(editionIds(body)).toContain(CONF.a)
+    }
   })
 })
 
@@ -902,7 +1007,10 @@ describe('operator lane: Kontroll members (#1956)', () => {
     expect(missing).toBe(otherBody)
     expect(otherBody).not.toMatch(MARKER)
     // Only the gateway's host lookup ran: no subgraph read, no envelope.
-    expect([...calls]).toEqual(['tenant-directory'])
+    expect([...calls].sort()).toEqual([
+      'tenant-directory',
+      'tenant-directory:tenantByHost',
+    ])
     expect(Object.values(lastEnvelope).filter(Boolean)).toEqual([])
   })
 
@@ -917,7 +1025,10 @@ describe('operator lane: Kontroll members (#1956)', () => {
       const body = JSON.parse(await run('{ conference { id } }', ops(HOST.a)))
       expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
       // Only the gateway's host lookup ran: no subgraph read, no envelope.
-      expect([...calls]).toEqual(['tenant-directory'])
+      expect([...calls].sort()).toEqual([
+        'tenant-directory',
+        'tenant-directory:tenantByHost',
+      ])
       expect(Object.values(lastEnvelope).filter(Boolean)).toEqual([])
     } finally {
       await setRole('admin')
@@ -1025,6 +1136,40 @@ describe('operator lane: Kontroll members (#1956)', () => {
         .bind(USER.a)
         .run()
     }
+  })
+  describe('conferenceEditions (#1970)', () => {
+    beforeAll(addEditions)
+    afterAll(dropEditions)
+
+    it("lists the selected tenant's editions to its member", async () => {
+      expect(editionIds(await run(EDITIONS, ops(HOST.a)))).toEqual(
+        [CONF.a, DRAFT_A, UNLISTED_A].sort(),
+      )
+    })
+
+    it("lists an operator the selected tenant's public editions, like conference", async () => {
+      await identityDb()
+        .prepare('UPDATE user SET platformOperator = 1 WHERE id = ?')
+        .bind(USER.a)
+        .run()
+      try {
+        // Operator of B, member of A: B's editions, no org role there.
+        const body = await run(EDITIONS, ops(HOST.b))
+        expect(editionIds(body)).toEqual([CONF.b])
+        expect(
+          await verifyEnvelope(lastEnvelope.conference!, envelopePublicKey),
+        ).toMatchObject({
+          orgId: ORG.b,
+          orgRole: null,
+          scopes: [OPERATOR_SCOPE],
+        })
+      } finally {
+        await identityDb()
+          .prepare('UPDATE user SET platformOperator = 0 WHERE id = ?')
+          .bind(USER.a)
+          .run()
+      }
+    })
   })
 })
 
