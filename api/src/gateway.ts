@@ -336,7 +336,8 @@ export function createGateway(supergraph: string) {
       progressiveOverride(label, context),
     // Kept from the skeleton: `{ health }` answers without any subgraph.
     // `rolloutFlags` (#1925): the resolved tenant's own flags, for the site's
-    // signed server lane only. Null for any other caller; it takes no argument.
+    // signed server lane and for the tenant an authorized operator-lane caller
+    // selected (#1956). Null for any other caller; it takes no argument.
     additionalTypeDefs: `
       type SiteRolloutFlags { apiRead: Boolean! identityLogin: Boolean! d1Write: Boolean! }
       extend type Query { health: String! rolloutFlags: SiteRolloutFlags }`,
@@ -423,12 +424,6 @@ export function createGateway(supergraph: string) {
       } catch {
         return reject(503, 'UNAVAILABLE', 'tenant lookup unavailable')
       }
-      if (
-        operatorLane &&
-        request.headers.has(OPERATOR_TENANT_HEADER) &&
-        !tenant
-      )
-        return reject(400, 'BAD_USER_INPUT', 'unknown tenant')
 
       // 3. Rate limit (#1790) before the identity and Membership work for
       // anonymous callers; signed-in callers are keyed on the verified sub.
@@ -464,31 +459,47 @@ export function createGateway(supergraph: string) {
       // 5 + 6. With a tenant: live orgRole, then one short-lived envelope.
       // Without one, subgraphs see an anonymous request with no envelope.
       if (operatorLane) {
-        // userId is set: anonymous callers were refused above.
+        // userId is set: anonymous callers were refused above. Kontroll admits
+        // platform operators and organization members (#1956).
         const principal = await env.MEMBERSHIP.principal(
           userId!,
           tenant?.orgId ?? '',
         )
-        if (!principal?.platformOperator)
-          return reject(403, 'FORBIDDEN', 'not a platform operator')
-        signer ??= await createSigner(env.ENVELOPE_PRIVATE_KEY)
+        const operator = !!principal?.platformOperator
+        // A non-operator gets one refusal for an unknown host and for an org
+        // they are not a member of: no existence oracle, and the envelope that
+        // would let a subgraph read the tenant is never minted.
+        const notAuthorized = () =>
+          reject(403, 'FORBIDDEN', 'not authorized for this tenant')
+        if (request.headers.has(OPERATOR_TENANT_HEADER) && !tenant)
+          return operator
+            ? reject(400, 'BAD_USER_INPUT', 'unknown tenant')
+            : notAuthorized()
+        if (tenant && !operator && !principal?.orgRole) return notAuthorized()
         // Acting for a tenant: an ordinary tenant envelope carrying the
-        // operator's own orgRole there, so writes still need owner/admin.
-        // Without one: a PlatformContext, which no Scoped repository accepts.
-        const envelope: Envelope = tenant
+        // caller's own live orgRole there, so writes still need owner/admin.
+        // Only an operator's carries OPERATOR_SCOPE. Without a tenant: a
+        // PlatformContext for an operator, which no Scoped repository accepts;
+        // nothing for a member, who is then anonymous to the subgraphs.
+        const envelope: Envelope | null = tenant
           ? {
               typ: 'tenant',
               orgId: tenant.orgId,
               conferenceId: tenant.conferenceId,
               userId,
-              orgRole: principal.orgRole,
-              scopes: [OPERATOR_SCOPE],
+              orgRole: principal!.orgRole,
+              scopes: operator ? [OPERATOR_SCOPE] : [],
             }
-          : { typ: 'platform', userId: userId!, platformRole: 'operator' }
-        forwarded.headers.set(
-          ENVELOPE_HEADER,
-          await signer.sign(envelope, ENVELOPE_TTL_SECONDS),
-        )
+          : operator
+            ? { typ: 'platform', userId: userId!, platformRole: 'operator' }
+            : null
+        if (envelope) {
+          signer ??= await createSigner(env.ENVELOPE_PRIVATE_KEY)
+          forwarded.headers.set(
+            ENVELOPE_HEADER,
+            await signer.sign(envelope, ENVELOPE_TTL_SECONDS),
+          )
+        }
       } else if (tenant) {
         let orgRole: string | null = null
         if (userId) {
@@ -519,7 +530,9 @@ export function createGateway(supergraph: string) {
         orgId: tenant?.orgId ?? null,
         limitKey: limitKey!,
         flags: tenant?.flags ?? null,
-        siteFlags: (siteHost && tenant?.flags) || null,
+        // The site's own tenant, or the one an authorized Kontroll caller
+        // selected (an unauthorized selection was refused above).
+        siteFlags: ((siteHost || operatorLane) && tenant?.flags) || null,
       })
     },
   }

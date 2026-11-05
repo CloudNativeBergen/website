@@ -1164,14 +1164,13 @@ describe('operator lane (#1892 phase 4)', () => {
     )
   })
 
-  it('refuses a non-operator: no platform envelope', async () => {
+  it('gives a non-operator with no tenant named no envelope (#1956)', async () => {
     const { env, envelopes } = opsEnv(false)
-    const res = await call(env, {
+    await call(env, {
       origin: OPS,
       authorization: `Bearer ${await opsJwt()}`,
     })
-    expect(res.status).toBe(403)
-    expect(envelopes).toEqual([])
+    expect(envelopes).toEqual([null])
   })
 
   it('refuses an anonymous caller', async () => {

@@ -46,7 +46,13 @@ import {
   verifyEnvelope,
   generateEnvelopeKeyPair,
 } from '@runkonf/tenancy'
-import { BINDINGS, createGateway, type Env } from './gateway'
+import {
+  BINDINGS,
+  OPERATOR_SCOPE,
+  OPERATOR_TENANT_HEADER,
+  createGateway,
+  type Env,
+} from './gateway'
 import { SUBGRAPHS, compose, publicSdl } from './supergraph'
 
 // vitest.config.ts aliases `jose` to a key-ignoring stub; load the real one.
@@ -723,6 +729,284 @@ describe('cross-tenant mutation walk', () => {
     expect(after).not.toEqual(before)
     const b = (rows: string[]) => rows.filter((r) => MARKER.test(r))
     expect(b(after)).toEqual(b(before))
+  })
+})
+
+describe('operator lane: Kontroll members (#1956)', () => {
+  const OPS = 'https://my.konf.app'
+  let opsJwt: string
+  const identityDb = () => dbs[0]
+  // INSERT OR REPLACE skips the LAST_OWNER triggers, so a test can demote
+  // the org's only owner back to the seeded admin.
+  const setRole = (role: string) =>
+    identityDb()
+      .prepare(
+        "INSERT OR REPLACE INTO member (id, organizationId, userId, role, createdAt) SELECT COALESCE((SELECT id FROM member WHERE userId = ?1 AND organizationId = ?2), 'member-ops'), ?2, ?1, ?3, 0",
+      )
+      .bind(USER.a, ORG.a, role)
+      .run()
+  const ops = (tenant?: string): Record<string, string> => ({
+    origin: OPS,
+    authorization: `Bearer ${opsJwt}`,
+    ...(tenant ? { [OPERATOR_TENANT_HEADER]: tenant } : {}),
+  })
+  /** Rows of every D1 except identity's, whose member table tests edit. */
+  const tenantRows = async () => {
+    const rows: string[] = []
+    for (const db of dbs.slice(1)) {
+      const { results } = await db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'",
+        )
+        .all<{ name: string }>()
+      for (const { name } of results) {
+        const all = await db.prepare(`SELECT * FROM "${name}"`).all()
+        rows.push(...all.results.map((r) => `${name} ${JSON.stringify(r)}`))
+      }
+    }
+    return rows.sort()
+  }
+  const directoryDb = async () => {
+    for (const db of dbs) {
+      const { results } = await db
+        .prepare(
+          "SELECT 1 FROM pragma_table_info('conferences') WHERE name = 'api_read'",
+        )
+        .all()
+      if (results.length) return db
+    }
+    throw new Error('no tenant-directory D1')
+  }
+  const FLAGS = '{ rolloutFlags { apiRead identityLogin d1Write } }'
+  // A fresh tagline each time: a repeat would be a no-op, not a write.
+  const write = () =>
+    run(
+      `mutation { updateConference(input: {tagline: "${crypto.randomUUID()}"}) { id } }`,
+      ops(HOST.a),
+    )
+
+  beforeAll(async () => {
+    env.OPERATOR_ORIGIN = OPS
+    // A's member (seeded role admin), handed off to Kontroll's origin.
+    const { createAuth } = await import('../../services/identity/src/data')
+    const auth = createAuth(identityDb(), IDENTITY_ENV)
+    const ctx = await auth.$context
+    const { token } = await ctx.internalAdapter.createSession(USER.a, false, {
+      origin: OPS,
+    })
+    const cookie = `${ctx.authCookies.sessionToken.name}=${token}.${await makeSignature(token, ctx.secret)}`
+    const res = await auth.handler(
+      new Request(`${IDENTITY_ENV.BETTER_AUTH_URL}/api/auth/token`, {
+        headers: { cookie },
+      }),
+    )
+    opsJwt = ((await res.json()) as { token: string }).token
+    // Distinct flags per tenant, so a test can tell whose it got.
+    await (
+      await directoryDb()
+    )
+      .prepare(
+        'UPDATE conferences SET api_read = (id = ?), identity_login = 1, d1_write = (id <> ?)',
+      )
+      .bind(CONF.a, CONF.a)
+      .run()
+  })
+  afterAll(async () => {
+    delete (env as Partial<Env>).OPERATOR_ORIGIN
+    await setRole('admin')
+    await (
+      await directoryDb()
+    )
+      .prepare(
+        'UPDATE conferences SET api_read = 1, identity_login = 1, d1_write = 1',
+      )
+      .run()
+  })
+  beforeEach(async () => {
+    env.OVERRIDE_TENANTS = {}
+    await overrideForA(false)
+    await setRole('admin')
+    for (const k of Object.keys(lastEnvelope)) lastEnvelope[k] = null
+    calls.clear()
+  })
+
+  it('gives a member their own org as a tenant envelope with their live role', async () => {
+    const body = JSON.parse(await run('{ conference { id } }', ops(HOST.a)))
+    expect(body).toEqual({ data: { conference: { id: CONF.a } } })
+    expect(
+      await verifyEnvelope(lastEnvelope.content!, envelopePublicKey),
+    ).toEqual({
+      typ: 'tenant',
+      orgId: ORG.a,
+      conferenceId: CONF.a,
+      userId: USER.a,
+      orgRole: 'admin',
+      scopes: [],
+    })
+  })
+
+  it.each(['owner', 'admin'])(
+    'lets a member with role %s write',
+    async (role) => {
+      await setRole(role)
+      const before = await tenantRows()
+      const body = JSON.parse(await write())
+      expect(body).toEqual({ data: { updateConference: { id: CONF.a } } })
+      expect(await tenantRows()).not.toEqual(before)
+    },
+  )
+
+  it('refuses a write by a member with role member, and applies a role change on the next request', async () => {
+    await setRole('member')
+    const before = await tenantRows()
+    const body = JSON.parse(await write())
+    expect(body.errors?.length).toBeGreaterThan(0)
+    expect(await tenantRows()).toEqual(before)
+    await setRole('admin')
+    expect(JSON.parse(await write())).toEqual({
+      data: { updateConference: { id: CONF.a } },
+    })
+  })
+
+  it('refuses another org and a nonexistent one with the same body, reading neither', async () => {
+    const other = await gateway.fetch(
+      new Request('http://api.test/graphql', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...ops(HOST.b) },
+        body: JSON.stringify({ query: '{ conference { id } }' }),
+      }),
+      env,
+    )
+    const missing = await run('{ conference { id } }', ops('nowhere.example'))
+    expect(other.status).toBe(403)
+    const otherBody = await other.text()
+    expect(JSON.parse(otherBody).errors[0].extensions.code).toBe('FORBIDDEN')
+    expect(missing).toBe(otherBody)
+    expect(otherBody).not.toMatch(MARKER)
+    // Only the gateway's host lookup ran: no subgraph read, no envelope.
+    expect([...calls]).toEqual(['tenant-directory'])
+    expect(Object.values(lastEnvelope).filter(Boolean)).toEqual([])
+  })
+
+  it('refuses the next request once the member is removed', async () => {
+    expect(JSON.parse(await run(FLAGS, ops(HOST.a))).data).toBeTruthy()
+    await identityDb()
+      .prepare('DELETE FROM member WHERE userId = ?')
+      .bind(USER.a)
+      .run()
+    calls.clear()
+    try {
+      const body = JSON.parse(await run('{ conference { id } }', ops(HOST.a)))
+      expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
+      // Only the gateway's host lookup ran: no subgraph read, no envelope.
+      expect([...calls]).toEqual(['tenant-directory'])
+      expect(Object.values(lastEnvelope).filter(Boolean)).toEqual([])
+    } finally {
+      await setRole('admin')
+    }
+  })
+
+  const PROVISION =
+    'mutation { provisionOrganization(idempotencyKey: "k", orgId: "org-new", orgSlug: "new", conferenceId: "conf-new") { id } }'
+  const minted = async () =>
+    lastEnvelope.content
+      ? ((await verifyEnvelope(lastEnvelope.content, envelopePublicKey)) as {
+          typ: string
+          scopes?: string[]
+        })
+      : null
+
+  it('never mints a member a platform envelope or operator scope', async () => {
+    // No tenant header: the member is anonymous, so no envelope at all.
+    await run('{ conference { id } }', ops())
+    expect(Object.values(lastEnvelope).filter(Boolean)).toEqual([])
+    // Own org: a tenant envelope without OPERATOR_SCOPE.
+    await run('{ conference { id } }', ops(HOST.a))
+    const own = await minted()
+    expect(own?.typ).toBe('tenant')
+    expect(own?.typ).not.toBe('platform')
+    expect(own?.scopes ?? []).not.toContain(OPERATOR_SCOPE)
+  })
+
+  it("refuses a member's provisionOrganization in requirePlatform, writing nothing", async () => {
+    const before = await tenantRows()
+    for (const headers of [ops(), ops(HOST.a)]) {
+      const body = JSON.parse(await run(PROVISION, headers))
+      expect(body.data?.provisionOrganization ?? null).toBeNull()
+      // The field exists (#1959): FORBIDDEN from requirePlatform, not a
+      // schema-validation error from a cut field.
+      expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
+    }
+    // provision never ran: no directory row appeared.
+    expect(await tenantRows()).toEqual(before)
+  })
+
+  it('positive control: an operator with no tenant reaches provision', async () => {
+    await identityDb()
+      .prepare('UPDATE user SET platformOperator = 1 WHERE id = ?')
+      .bind(USER.a)
+      .run()
+    try {
+      const body = JSON.parse(await run(PROVISION, ops()))
+      expect(
+        (await verifyEnvelope(
+          lastEnvelope['tenant-directory']!,
+          envelopePublicKey,
+        )) as { typ: string },
+      ).toMatchObject({ typ: 'platform' })
+      // Past requirePlatform: provision's own argument check answers.
+      expect(body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+      expect(body.errors[0].message).toBe(
+        'orgId must be "organization.<orgSlug>"',
+      )
+    } finally {
+      await identityDb()
+        .prepare('UPDATE user SET platformOperator = 0 WHERE id = ?')
+        .bind(USER.a)
+        .run()
+    }
+  })
+
+  it("serves the selected tenant's rolloutFlags to its member, null without one", async () => {
+    expect(JSON.parse(await run(FLAGS, ops(HOST.a)))).toEqual({
+      data: {
+        rolloutFlags: { apiRead: true, identityLogin: true, d1Write: false },
+      },
+    })
+    expect(JSON.parse(await run(FLAGS, ops()))).toEqual({
+      data: { rolloutFlags: null },
+    })
+    const other = JSON.parse(await run(FLAGS, ops(HOST.b)))
+    expect(other.data ?? null).toBeNull()
+    expect(other.errors[0].extensions.code).toBe('FORBIDDEN')
+  })
+
+  it("serves an operator the selected tenant's flags and keeps the operator envelope", async () => {
+    await identityDb()
+      .prepare('UPDATE user SET platformOperator = 1 WHERE id = ?')
+      .bind(USER.a)
+      .run()
+    try {
+      expect(JSON.parse(await run(FLAGS, ops(HOST.b)))).toEqual({
+        data: {
+          rolloutFlags: { apiRead: false, identityLogin: true, d1Write: true },
+        },
+      })
+      await run('{ conference { id } }', ops(HOST.b))
+      expect(
+        await verifyEnvelope(lastEnvelope.content!, envelopePublicKey),
+      ).toMatchObject({
+        typ: 'tenant',
+        orgId: ORG.b,
+        orgRole: null,
+        scopes: [OPERATOR_SCOPE],
+      })
+    } finally {
+      await identityDb()
+        .prepare('UPDATE user SET platformOperator = 0 WHERE id = ?')
+        .bind(USER.a)
+        .run()
+    }
   })
 })
 

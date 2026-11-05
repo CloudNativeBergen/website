@@ -14,7 +14,7 @@ service: #PlatformService & {
 		// LOGIN_TEST_PAGE serves the manual login test page at /test (preview only).
 		preview: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", LOGIN_TEST_PAGE: "1", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development", MEMBER_SOURCE_ORGS: ""}
 		// OPERATOR_ORIGINS: non-tenant origins whose token only platform
-		// operators get (#1922). None in preview: kontroll has no stable
+		// operators and organization members get (#1922, #1956). None in preview: kontroll has no stable
 		// preview origin.
 		production: {OPERATOR_ORIGINS: "https://my.konf.app", IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", MEMBER_SOURCE_ORGS: ""}
 	}
