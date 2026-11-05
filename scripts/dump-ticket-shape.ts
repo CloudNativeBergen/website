@@ -241,6 +241,7 @@ async function dumpConference(conference: ConferenceRow) {
 async function main() {
   const { clientReadUncached } = await import('../src/lib/sanity/client')
 
+  // #1997: stays on Sanity: merge.ts is server-only (throws under tsx) and these moved fields only label output here.
   const conferences = await clientReadUncached.fetch<ConferenceRow[]>(
     // groq-global: the tenant registry itself — this read RESOLVES the tenants
     // the rest of the run is scoped to, so it cannot be scoped by one.

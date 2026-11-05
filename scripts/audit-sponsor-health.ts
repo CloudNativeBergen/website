@@ -28,6 +28,7 @@ async function main() {
   const { auditSponsorHealth } = await import('../src/lib/sponsor-crm/health')
   const { clientReadUncached } = await import('../src/lib/sanity/client')
 
+  // #1997: stays on Sanity: merge.ts is server-only (throws under tsx) and these moved fields only label output here.
   const conferences = await clientReadUncached.fetch<
     { _id: string; title?: string }[]
   >(`*[_type == "conference"] | order(startDate desc){ _id, title }`)

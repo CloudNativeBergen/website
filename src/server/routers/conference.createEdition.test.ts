@@ -1,8 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { Context } from '@/server/trpc'
 import { DEFAULT_CLONE_FLAGS } from '@/lib/conference/edition'
 
-vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
+vi.mock('server-only', () => ({}))
+vi.mock('next/cache', () => ({
+  revalidateTag: vi.fn(),
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
+}))
 vi.mock('next/headers', () => ({
   headers: async () => ({ get: () => 'cloudnativebergen.no' }),
 }))
@@ -78,6 +83,7 @@ let platformHostHolders: Array<{
 }> = []
 /** The source conference's organization slug, minted hosts derive from it. */
 let sourceOrgSlug: string | null = null
+let sourceDoc: Record<string, unknown> = SOURCE_DOC
 
 const fetchMock = vi.fn(async (query: string) => {
   if (query.includes('_type == "sponsorTier"')) return SOURCE_TIERS
@@ -85,7 +91,7 @@ const fetchMock = vi.fn(async (query: string) => {
   if (query.includes('organization->slug.current')) return sourceOrgSlug
   if (query.includes('count(domains[@ in $hosts])')) return platformHostHolders
   if (query.includes('.domains[]')) return claimedDomains
-  if (query.includes('_id == $id')) return SOURCE_DOC
+  if (query.includes('_id == $id')) return sourceDoc
   return null
 })
 
@@ -169,6 +175,7 @@ beforeEach(() => {
   claimedDomains = ['cloudnativebergen.no', '2025.cnb.no']
   platformHostHolders = []
   sourceOrgSlug = null
+  sourceDoc = SOURCE_DOC
   commitMock.mockResolvedValue({})
   // The domain conference carries the org the authz waist gates on, so
   // `resolveOrganizationId()` yields ORG_ID for every request in this file.
@@ -482,5 +489,57 @@ describe('createEdition — platform hosts', () => {
     // next year's conference — the edition always carries a domain of its own.
     expect(createdConference().domains).toEqual(['2026.cnb.no'])
     expect(commitMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+// #1997: D1 owns the moved fields, so the clone takes the merged values.
+describe('createEdition — D1 merge of the source', () => {
+  const flaggedSource = { ...SOURCE_DOC, domains: ['cloudnativebergen.no'] }
+  const created = () =>
+    createSpy.mock.calls
+      .map((c) => c[0] as Record<string, unknown>)
+      .find((d) => d._type === 'conference')!
+
+  beforeEach(() => {
+    sourceDoc = flaggedSource
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  it('flagged: clones the D1 city', async () => {
+    vi.stubEnv('KONF_API_TENANTS', SOURCE_ID)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: { conference: { id: SOURCE_ID, city: 'Oslo' } },
+            }),
+          ),
+      ),
+    )
+    await makeCaller({ isOrganizer: true }).createEdition(input())
+    expect(created().city).toBe('Oslo')
+  })
+
+  it('unflagged: Sanity city, gateway never called', async () => {
+    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    const gw = vi.fn()
+    vi.stubGlobal('fetch', gw)
+    await makeCaller({ isOrganizer: true }).createEdition(input())
+    expect(created().city).toBe('Bergen')
+    expect(gw).not.toHaveBeenCalled()
+  })
+
+  it('gateway failure: Sanity city', async () => {
+    vi.stubEnv('KONF_API_TENANTS', SOURCE_ID)
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('D1 down')))
+    await makeCaller({ isOrganizer: true }).createEdition(input())
+    expect(created().city).toBe('Bergen')
   })
 })
