@@ -145,15 +145,13 @@ describe('getDiscoveryVisibilityForDomain D1 gateway values and fallbacks (#1997
     })
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(
-            JSON.stringify({
-              data: { conference: { id: 'conf-1', visibility: '' } },
-            }),
-          ),
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: { conference: { id: 'conf-1', visibility: '' } },
+          }),
         ),
+      ),
     )
 
     const result = await getDiscoveryVisibilityForDomain('conf.example.com')
