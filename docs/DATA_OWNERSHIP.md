@@ -84,8 +84,9 @@ tenant host or on the operator lane with that tenant selected, and so do
 platform operators acting for a selected tenant. Everyone else, anonymous
 callers included, gets `null`.
 
-The operator view of all orgs uses `organizations` (#1973), operator lane
-with no tenant selected only; see `api/README.md`.
+The operator view of all orgs uses `organizations` (#1973), and of all their
+conferences `conferences` (#1985), operator lane with no tenant selected only;
+see `api/README.md`.
 
 ## Members read (identity subgraph)
 

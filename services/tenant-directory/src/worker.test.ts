@@ -247,6 +247,9 @@ describe('organizations (#1973)', () => {
   it('is tagged operator', async () => {
     const { body } = await gql('{ _service { sdl } }')
     expect(body.data._service.sdl).toMatch(
+      /conferences\(first: Int = 100, after: ID, lifecycle: ConferenceLifecycle, flag: RolloutFlag\): \[OperatorConference!\] @tag\(name: "operator"\)/,
+    )
+    expect(body.data._service.sdl).toMatch(
       /organizations\(first: Int = 100, after: String\): \[Organization!\] @tag\(name: "operator"\)/,
     )
   })
@@ -295,9 +298,12 @@ describe('organizations (#1973)', () => {
       // Sign first: only the request itself may touch D1.
       const signed = as && (await signer.sign(as))
       const prepare = vi.spyOn(env.DB, 'prepare')
-      const { body } = await gql(ORGS, {}, signed)
-      expect(body.data?.organizations ?? null).toBeNull()
-      expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
+      // organizations (#1973) and the cross-org conferences list (#1985).
+      for (const q of [ORGS, '{ conferences { id } }']) {
+        const { body } = await gql(q, {}, signed)
+        expect(Object.values(body.data ?? {}).filter(Boolean), q).toEqual([])
+        expect(body.errors[0].extensions.code, q).toBe('FORBIDDEN')
+      }
       expect(prepare).not.toHaveBeenCalled()
     },
   )

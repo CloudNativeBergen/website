@@ -144,6 +144,31 @@ export function createData(
       }),
 
     /**
+     * Every org's conferences joined to their org, by conference id, `first`
+     * after the `after` id, optionally only one lifecycle or one flag on.
+     * Operator-only (#1985).
+     */
+    allConferences: (
+      first: number,
+      after?: string | null,
+      lifecycle?: 'draft' | 'live' | 'archived' | null,
+      flag?: 'apiRead' | 'identityLogin' | 'd1Write' | 'd1Override' | null,
+    ) =>
+      db
+        .select({ conf: conferences, org: organizations })
+        .from(conferences)
+        .innerJoin(organizations, eq(organizations.id, conferences.orgId))
+        .where(
+          and(
+            after ? gt(conferences.id, after) : undefined,
+            lifecycle ? eq(conferences.lifecycle, lifecycle) : undefined,
+            flag ? eq(conferences[flag], true) : undefined,
+          ),
+        )
+        .orderBy(conferences.id)
+        .limit(first),
+
+    /**
      * One of `orgId`'s conferences, by id. The org is part of the query, so
      * another org's id finds nothing (#1971).
      */

@@ -1,7 +1,8 @@
 // tenant-directory: tenant resolution for the gateway, plus the provisioning
 // surface. Provisioning fields are @tag(internal), except
 // provisionOrganization (@tag(operator)); all need a PlatformContext.
-// `organizations` (#1973) is @tag(operator) too: requirePlatform.
+// `organizations` (#1973) and `conferences` (#1985) are @tag(operator) too:
+// requirePlatform.
 // `organization` is public and returns only the envelope's own org.
 import { createGraphQLError } from 'graphql-yoga'
 import { builder } from './builder'
@@ -113,26 +114,53 @@ const Domain = builder
     }),
   })
 
+type OrgRow = Row<'id' | 'slug' | 'name' | 'status' | 'plan'> & {
+  createdAt: string | null
+}
+
 // After Domain: Organization.domains refers to it.
-const Organization = builder
-  .objectRef<
-    Row<'id' | 'slug' | 'name' | 'status' | 'plan'> & {
-      createdAt: string | null
-    }
-  >('Organization')
+const Organization = builder.objectRef<OrgRow>('Organization').implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    slug: t.exposeString('slug'),
+    name: t.exposeString('name'),
+    status: t.exposeString('status'),
+    plan: t.exposeString('plan'),
+    // ISO 8601; null for orgs provisioned before #1973.
+    createdAt: t.exposeString('createdAt', { nullable: true }),
+    // Every hostname of this org, any verification state (#1969).
+    domains: t.field({
+      type: [Domain],
+      resolve: (org, _, ctx) => ctx.data.domainsOf(org.id),
+    }),
+  }),
+})
+
+const Lifecycle = builder.enumType('ConferenceLifecycle', {
+  values: ['draft', 'live', 'archived'] as const,
+})
+const FLAGS = ['apiRead', 'identityLogin', 'd1Write', 'd1Override'] as const
+const RolloutFlag = builder.enumType('RolloutFlag', { values: FLAGS })
+
+type ConfRow = Row<'id' | 'orgId' | 'lifecycle'> & Flags
+
+// One row of the operator `conferences` list (#1985). Title, dates and
+// primaryHost come from the conference subgraph through `edition`.
+const OperatorConference = builder
+  .objectRef<{ conf: ConfRow; org: OrgRow }>('OperatorConference')
   .implement({
     fields: (t) => ({
-      id: t.exposeID('id'),
-      slug: t.exposeString('slug'),
-      name: t.exposeString('name'),
-      status: t.exposeString('status'),
-      plan: t.exposeString('plan'),
-      // ISO 8601; null for orgs provisioned before #1973.
-      createdAt: t.exposeString('createdAt', { nullable: true }),
-      // Every hostname of this org, any verification state (#1969).
-      domains: t.field({
-        type: [Domain],
-        resolve: (org, _, ctx) => ctx.data.domainsOf(org.id),
+      id: t.id({ resolve: ({ conf }) => conf.id }),
+      organization: t.field({ type: Organization, resolve: ({ org }) => org }),
+      lifecycleStatus: t.string({ resolve: ({ conf }) => conf.lifecycle }),
+      flags: t.field({
+        type: RolloutFlags,
+        resolve: ({ conf }) =>
+          Object.fromEntries(FLAGS.map((f) => [f, conf[f]])) as Flags,
+      }),
+      edition: t.field({
+        type: ConferenceEdition,
+        resolve: ({ conf }) => conf,
       }),
     }),
   })
@@ -162,6 +190,28 @@ builder.queryType({
         requirePlatform(ctx)
         const n = Math.min(Math.max(first ?? ORGS_MAX, 1), ORGS_MAX)
         return ctx.data.organizations(n, after)
+      },
+    }),
+    conferences: t.field({
+      type: [OperatorConference],
+      tag: 'operator',
+      description: `Every org's conferences, ordered by id. Platform operators only (operator lane, no tenant). At most ${ORGS_MAX} per page: pass the last id as \`after\` for the next. \`lifecycle\` and \`flag\` (that flag on) filter.`,
+      args: {
+        first: t.arg.int({ defaultValue: ORGS_MAX }),
+        after: t.arg.id(),
+        lifecycle: t.arg({ type: Lifecycle }),
+        flag: t.arg({ type: RolloutFlag }),
+      },
+      resolve: (_, { first, after, lifecycle, flag }, ctx) => {
+        // Guard before fetch: no D1 read for anyone else.
+        requirePlatform(ctx)
+        const n = Math.min(Math.max(first ?? ORGS_MAX, 1), ORGS_MAX)
+        return ctx.data.allConferences(
+          n,
+          after == null ? after : String(after),
+          lifecycle,
+          flag,
+        )
       },
     }),
     tenantByHost: t.field({

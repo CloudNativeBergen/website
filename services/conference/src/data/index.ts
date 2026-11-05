@@ -2,7 +2,12 @@
 // it returns Scoped repositories, never the raw handle.
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { createGraphQLError } from 'graphql-yoga'
-import { ScopedRepository, type Envelope } from '@runkonf/tenancy'
+import {
+  ScopedRepository,
+  unscopedForPlatformOps,
+  type Envelope,
+  type PlatformContext,
+} from '@runkonf/tenancy'
 import { rawDb } from './db'
 import { conferences } from './schema'
 
@@ -155,7 +160,31 @@ export function createData(d1: D1Database, envelope: Envelope) {
   const db = rawDb(d1)
   // Built on first use: the constructor refuses a PlatformContext, and that
   // should fail the resolver, not the whole request.
-  return { conferences: () => new Conferences(db, envelope) }
+  return {
+    conferences: () => new Conferences(db, envelope),
+    /**
+     * Any org's edition, by id, for the operator `conferences` list (#1985).
+     * unscopedForPlatformOps throws for anything but a PlatformContext.
+     */
+    platformEdition: (id: string) =>
+      unscopedForPlatformOps(
+        envelope as PlatformContext,
+        'operator conferences list (#1985)',
+        // ponytail: one log line per edition; batch if a page gets noisy.
+        (e) =>
+          console.log(
+            JSON.stringify({
+              event: 'operator.read',
+              ...e,
+              'konf.conference_id': id,
+            }),
+          ),
+        () =>
+          db.query.conferences.findFirst({
+            where: eq(conferences.conferenceId, id),
+          }),
+      ),
+  }
 }
 
 // The cron (#1892): the generated worker calls it with env, never a resolver.
