@@ -43,7 +43,7 @@ import { invitationLetterHref } from '@/lib/invitation-letter/prefill'
 import {
   hasConfirmedTalkAtConference,
   proposalConferenceId,
-} from '@/lib/invitation-letter/sessions'
+} from '@/lib/invitation-letter/talks'
 import { ProposalActionModal } from '@/components/admin/ProposalActionModal'
 import { RemoveSpeakerModal } from '@/components/admin/RemoveSpeakerModal'
 import { hasBlueskySocial, extractHandleFromUrl } from '@/lib/bluesky/utils'
