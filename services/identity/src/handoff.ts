@@ -109,10 +109,28 @@ export async function handoff(request: Request, env: HandoffEnv) {
       return fail(400)
     }
 
-    const session = await auth.api.getSession({ headers: request.headers })
+    const provider = url.searchParams.get('provider') ?? ''
+    if (provider && !PROVIDERS.has(provider)) return fail(400)
+    let session = await auth.api.getSession({ headers: request.headers })
+    // A session from another provider does not answer "Sign in with
+    // <provider>": the owner asked for GitHub and got his LinkedIn user. Run
+    // a fresh sign-in, so that provider's account decides who this is under
+    // the #807 rules every sign-in follows. No linkSocial: its callback skips
+    // requireLocalEmailVerified. No sign-out either: this GET is reachable by
+    // top-level navigation from any site, so ending the session here is a
+    // forced logout. The callback overwrites the cookie and never consults
+    // the old session; the old row just expires.
+    if (
+      session &&
+      provider &&
+      !(await auth.api.listUserAccounts({ headers: request.headers })).some(
+        (a) => a.providerId === provider,
+      )
+    ) {
+      session = null
+    }
     if (!session) {
-      const provider = url.searchParams.get('provider') ?? ''
-      if (!PROVIDERS.has(provider)) return fail(400)
+      if (!provider) return fail(400)
       // Social sign-in returns here (same origin as baseURL) with a session.
       const res = await auth.handler(
         new Request(`${env.BETTER_AUTH_URL}/api/auth/sign-in/social`, {

@@ -80,11 +80,23 @@ afterEach(() => vi.restoreAllMocks())
 
 const ctx = () => createAuth(env.DB, env).$context
 
-async function newUser(email: string, emailVerified = true) {
-  return (await ctx()).internalAdapter.createUser(
+/** With a GitHub account by default: `start` asks for GitHub. */
+async function newUser(
+  email: string,
+  emailVerified = true,
+  providerId = 'github',
+) {
+  const c = await ctx()
+  const u = await c.internalAdapter.createUser(
     { email, name: 'Test', emailVerified },
     { method: 'admin' },
   )
+  await c.internalAdapter.createAccount({
+    userId: u.id,
+    providerId,
+    accountId: crypto.randomUUID(),
+  })
+  return u
 }
 
 async function cookieFor(userId: string) {
@@ -93,10 +105,15 @@ async function cookieFor(userId: string) {
   return `${c.authCookies.sessionToken.name}=${token}.${await makeSignature(token, c.secret)}`
 }
 
-const start = (origin: string, cookie = '', state = STATE) =>
+const start = (
+  origin: string,
+  cookie = '',
+  state = STATE,
+  provider: string | null = 'github',
+) =>
   handoff(
     new Request(
-      `${BASE}/handoff?origin=${encodeURIComponent(origin)}&provider=github&state=${state}`,
+      `${BASE}/handoff?origin=${encodeURIComponent(origin)}${provider === null ? '' : `&provider=${provider}`}&state=${state}`,
       { headers: { cookie } },
     ),
     env,
@@ -185,6 +202,108 @@ describe('handoff start', () => {
     const to = new URL(cb.headers.get('location')!)
     expect(to.origin + to.pathname).toBe(`${BASE}/error`)
     expect(to.searchParams.get('origin')).toBeNull()
+  })
+})
+
+/** The session a handoff start leaves, as a cookie header. */
+const sessionCookie = (res: Response) =>
+  res.headers
+    .getSetCookie()
+    .map((c) => c.split(';')[0])
+    .join('; ')
+
+describe('handoff start with a session (production bug: GitHub gave LinkedIn)', () => {
+  const isHandoff = (res: Response) =>
+    res.headers.get('location')?.startsWith(`${SITE}/api/auth/handoff`)
+
+  it('sends a LinkedIn session asking for GitHub to GitHub, without reusing it', async () => {
+    const u = await newUser('li-only@x.test', true, 'linkedin')
+    const cookie = await cookieFor(u.id)
+    const res = await start(SITE, cookie)
+    expect(res.status).toBe(302)
+    expect(isHandoff(res)).toBe(false)
+    const to = new URL(res.headers.get('location')!)
+    expect(to.origin + to.pathname).toBe(
+      'https://github.com/login/oauth/authorize',
+    )
+    // No handoff code was issued for the LinkedIn session.
+    const codes = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM verification WHERE identifier LIKE 'handoff:%' AND value LIKE ?",
+    )
+      .bind(`%${u.id}%`)
+      .first<{ n: number }>()
+    expect(codes?.n).toBe(0)
+  })
+
+  it('leaves the old session row alone: a cross-site GET is no forced logout', async () => {
+    const u = await newUser('li-keep@x.test', true, 'linkedin')
+    const cookie = await cookieFor(u.id)
+    const res = await start(SITE, cookie, '0'.repeat(64))
+    expect(res.status).toBe(302)
+    const s = await createAuth(env.DB, env).api.getSession({
+      headers: new Headers({ cookie }),
+    })
+    expect(s?.user.id).toBe(u.id)
+  })
+
+  it('refuses an unknown or miscased provider instead of reusing the session', async () => {
+    const u = await newUser('gh-case@x.test')
+    const cookie = await cookieFor(u.id)
+    for (const p of ['GitHub', 'gitlab']) {
+      expect((await start(SITE, cookie, STATE, p)).status).toBe(400)
+    }
+  })
+
+  it('reuses a session that has the requested provider', async () => {
+    const u = await newUser('gh-has@x.test')
+    const res = await start(SITE, await cookieFor(u.id))
+    expect(isHandoff(res)).toBe(true)
+  })
+
+  it('reuses any session when no provider is given, as before', async () => {
+    const u = await newUser('no-provider@x.test', true, 'linkedin')
+    const res = await start(SITE, await cookieFor(u.id), STATE, null)
+    expect(isHandoff(res)).toBe(true)
+    expect((await start(SITE, '', STATE, null)).status).toBe(400)
+  })
+
+  it('never links a GitHub account with another email to the session user', async () => {
+    const a = await newUser('user-a@x.test', true, 'linkedin')
+    const res = await start(SITE, await cookieFor(a.id))
+    const state = new URL(res.headers.get('location')!).searchParams.get(
+      'state',
+    )
+    // GitHub's side only; Better Auth's callback and linking run for real.
+    const realFetch = globalThis.fetch
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const u = String(input instanceof Request ? input.url : input)
+      if (u.startsWith('https://github.com/login/oauth/access_token'))
+        return Response.json({ access_token: 't', token_type: 'bearer' })
+      if (u === 'https://api.github.com/user')
+        return Response.json({ id: 90001, login: 'b', email: 'user-b@x.test' })
+      if (u === 'https://api.github.com/user/emails')
+        return Response.json([{ email: 'user-b@x.test', verified: true }])
+      return realFetch(input, init)
+    })
+    const cb = await createAuth(env.DB, env).handler(
+      new Request(`${BASE}/api/auth/callback/github?state=${state}&code=c`, {
+        headers: { cookie: sessionCookie(res) },
+      }),
+    )
+    expect(cb.status).toBe(302)
+    const c = await ctx()
+    expect(
+      (await c.internalAdapter.findAccounts(a.id)).map((x) => x.providerId),
+    ).toEqual(['linkedin'])
+    // A separate GitHub user, not a merged identity.
+    const b = await c.internalAdapter.findUserByEmail('user-b@x.test')
+    expect(b?.user.id).toBeTruthy()
+    expect(b?.user.id).not.toBe(a.id)
+    expect(
+      (await c.internalAdapter.findAccounts(b!.user.id)).map(
+        (x) => x.providerId,
+      ),
+    ).toEqual(['github'])
   })
 })
 
