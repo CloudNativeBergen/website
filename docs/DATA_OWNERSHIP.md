@@ -88,3 +88,80 @@ subgraph decides access from the envelope before it reads anything.
 
 No other person fields are exposed. Membership is checked live on every
 request, so a removed member gets null on their next request.
+
+## Conference fields: inventory and phasing
+
+**16 of 131 fields in D1, 64 settings to move, 51 editorial.** The
+per-field table is in [CONFERENCE_FIELDS.md](./CONFERENCE_FIELDS.md).
+
+- **A, in D1 (16).** 14 in the conference D1 `conferences` table, served by
+  the conference subgraph and written by `updateConference` (title, tagline,
+  city, country, venue, dates, visibility, background pattern, two colours,
+  registration link, social links). Two in tenant-directory D1:
+  `organization` (`org_id`) and `domains`. Sanity still holds all 16, and
+  reads come from Sanity until `d1_override` is on (#1879).
+- **B, settings to move (64).** Dates, links, contacts and channels,
+  ticketing, CFP taxonomy and goals, organizer teams, feature flags and
+  workshop job state.
+- **C, editorial (51).** Description, logos, announcement, info-page text,
+  `speakerInfo`, ticket and sponsor page copy, featured speakers and talks,
+  schedules, homepage sections and the lifecycle banner copy.
+
+### Phasing for group B
+
+Each phase needs the same six things:
+
+1. a D1 migration in `services/conference/migrations/`,
+2. the mapping in `services/conference/scripts/backfill.ts` and the read in
+   `scripts/backfill-conference.ts`,
+3. subgraph fields and `ConferencePatch` input in
+   `services/conference/src/subgraph.ts`, replacing the content subgraph's
+   copy where it serves the field,
+4. the write path: the keys in `src/lib/konf-api/conference-write.ts` so
+   `applyConferencePatch` dual-writes them,
+5. parity coverage in `services/conference/scripts/parity.ts`, reading D1 (see
+   the caveat under rule 3),
+6. the read flip per #1879: `d1_override` per tenant, then Sanity read-only
+   for those fields, then delete them from the schema with a regenerated
+   baseline.
+
+| Phase | Fields                                                                                                                                                                         | Count | Shape                                                                                                       |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | ----------------------------------------------------------------------------------------------------------- |
+| 1     | Dates (10), `travelSupportBudget`, `registrationEnabled`, `lifecycleStatus`, `organizer*` (3), `socialHashtag`, `ticketCustomization.showVanityMetrics`, `analyticsPirschCode` | 19    | Scalar columns on `conferences`. Most are already served by the content subgraph, so only the source moves. |
+| 2     | Sponsor, speaker and volunteer registration links; contact, CFP and sponsor emails; notification and Slack channels; Slack invite URLs                                         | 11    | Scalar columns, or a `conference_contacts` table.                                                           |
+| 3     | Ticketing provider and ids, capacity, `ticketTargets.*`, `ticketTypeRoles`, `publicFreeTicketIds`, workshop registration windows and early-access types, reminder state        | 19    | Scalars plus child tables (ticket types, target milestones, reminder state).                                |
+| 4     | `formats`, `topics`, six CFP and sponsor goals, `crmInactivityThresholds`, `agentConfig.*`                                                                                     | 12    | Child tables and long text columns.                                                                         |
+| 5     | `organizers`, `teams`, `features`                                                                                                                                              | 3     | Identity memberships and roles, team tables, a features table.                                              |
+
+Phase 1 comes first because its fields are scalar, most are already in the
+patch inputs and the content subgraph already serves many of them. Phase 5
+comes last because it touches access control.
+
+### Hard parts
+
+- **References.** `organizers` and `teams[].members` point at `speaker`
+  documents, and `topics` at `topic` documents, which stay in Sanity. D1 can
+  store the ids, but nothing enforces them across stores. `organizers` should
+  become identity memberships rather than a copied ref list.
+- **Arrays of objects.** `ticketTypeRoles`, `ticketTargets.milestones`,
+  `crmInactivityThresholds` and `teams` need child tables, or JSON columns with
+  validation in the subgraph. The `_key` values must survive the dual-write
+  window so Studio edits still apply.
+- **kontroll reads Sanity directly.** The contract
+  (`src/lib/conference/contract.ts`) reads `title`, `organization`, `city`,
+  `country`, `startDate`, `endDate`, `domains`, `visibility` and
+  `lifecycleStatus`. All but `lifecycleStatus` are in D1, but kontroll still
+  reads Sanity, so none of these may be deleted from Sanity until kontroll is
+  on the API (rule 5). `lifecycleStatus` needs its own column: the
+  tenant-directory `lifecycle` (draft, live, archived) cannot hold
+  `cancelled`.
+- **GROQ filters across the site.** `organization._ref` (tenancy, ~100
+  sites), `$domain in domains` (routing), `startDate` comparisons (previous
+  and next edition), `$id in organizers[]._ref` (admin access) and
+  `checkinEventId == $eventId` (check-in webhook lookup). Each one needs an
+  API query or a D1 lookup before its field can leave Sanity.
+- **Job state, not settings.** `workshopReminderLastSentAt`, `...Count` and
+  `...ReservedAt` are written by `src/lib/workshop/reminder.ts`, and
+  `ReservedAt` works as a lock. In D1 that lock needs a conditional `UPDATE`.
+- **Possibly dead.** `analyticsPirschCode` has no consumer under `src/`;
+  delete it rather than move it.
