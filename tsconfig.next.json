@@ -1,8 +1,8 @@
 {
-  // Type-check project for `next build` only (#1960). Vercel drops api/,
-  // services/ and packages/ via .vercelignore; scripts and tests import from
-  // them, so they are left out here. `pnpm run typecheck` still runs tsc over
-  // the full tsconfig.json, which covers scripts and tests.
+  // Type-check project for `next build` only (#1960). .vercelignore drops
+  // api/, services/, packages/, tests and docs, so files that import them
+  // (scripts, tests, stories) are left out here. `pnpm run typecheck` still
+  // runs tsc over the full tsconfig.json, which covers all of them.
   "extends": "./tsconfig.json",
   "exclude": [
     "node_modules",
@@ -13,6 +13,13 @@
     "services",
     "scripts/**",
     "**/*.test.ts",
-    "**/*.test.tsx"
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/__tests__/**",
+    "**/*.stories.ts",
+    "**/*.stories.tsx",
+    "**/docs/**",
+    ".storybook/**",
+    "vitest.setup.ts"
   ]
 }
