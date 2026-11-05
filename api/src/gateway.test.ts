@@ -1313,4 +1313,69 @@ describe('operator lane (#1892 phase 4)', () => {
     expect(res.headers.get('access-control-allow-headers')).toBeNull()
     expect(res.headers.get('access-control-allow-credentials')).toBeNull()
   })
+
+  // #1954: a bad token never costs a directory read in the operator lane.
+  it.each([
+    ['missing', async () => 'Bearer'],
+    ['invalid', async () => 'Bearer not.a.jwt'],
+    [
+      'expired',
+      async () =>
+        `Bearer ${await jwt({ claims: { [SESSION_ORIGIN_CLAIM]: OPS }, iat: Math.floor(Date.now() / 1000) - 600 })}`,
+    ],
+  ])('resolves no operator tenant for a %s token', async (_, authorization) => {
+    const { env, envelopes } = opsEnv()
+    const res = await call(env, {
+      origin: OPS,
+      authorization: await authorization(),
+      [OPERATOR_TENANT_HEADER]: 'conf.example',
+    })
+    expect(res.status).toBe(401)
+    expect(env.DIRECTORY.fetch).not.toHaveBeenCalled()
+    expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+    expect(envelopes).toEqual([])
+  })
+
+  it('resolves the operator tenant after a valid token', async () => {
+    const { env } = opsEnv()
+    await call(env, {
+      origin: OPS,
+      authorization: `Bearer ${await opsJwt()}`,
+      [OPERATOR_TENANT_HEADER]: 'conf.example',
+    })
+    expect(env.DIRECTORY.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  // #1948: only the exact serialized origin is an operator origin.
+  it.each([
+    'https://my.konf.app.evil.example',
+    'https://MY.konf.app',
+    'https://my.konf.app/',
+    'https://my.konf.app:443',
+    'http://my.konf.app',
+    'https://my.konf.app.',
+  ])('does not treat %s as an operator origin', async (origin) => {
+    const { env, envelopes } = opsEnv()
+    const res = await gateway.fetch(
+      preflight(origin, `authorization, ${OPERATOR_TENANT_HEADER}`),
+      env,
+    )
+    expect(res.headers.get('access-control-allow-credentials')).toBeNull()
+    await call(env, {
+      origin,
+      authorization: `Bearer ${await opsJwt()}`,
+      [OPERATOR_TENANT_HEADER]: 'conf.example',
+    })
+    expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+    expect(envelopes.every((e) => e === null)).toBe(true)
+  })
+
+  it('accepts any exact entry of a comma-separated OPERATOR_ORIGIN', async () => {
+    const { env, envelopes } = opsEnv()
+    env.OPERATOR_ORIGIN = `https://other.example, ${OPS}`
+    await call(env, { origin: OPS, authorization: `Bearer ${await opsJwt()}` })
+    expect(await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem)).toEqual(
+      { typ: 'platform', userId: 'user_1', platformRole: 'operator' },
+    )
+  })
 })

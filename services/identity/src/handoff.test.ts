@@ -644,6 +644,19 @@ describe('operator origins (#1922)', () => {
     },
   )
 
+  it.each([
+    'https://my.konf.app.evil.example',
+    'https://MY.konf.app',
+    'https://my.konf.app/',
+    'https://my.konf.app:443',
+    'http://my.konf.app',
+    'https://my.konf.app.',
+  ])('refuses the near-miss origin %s (#1948)', async (origin) => {
+    await withOps(OPS, async () => {
+      expect((await exchangeAt(origin, true)).res.status).toBe(400)
+    })
+  })
+
   it('still refuses an unknown origin', async () => {
     await withOps(OPS, async () => {
       const { res } = await exchangeAt('https://evil.example', true)

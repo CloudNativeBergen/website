@@ -52,7 +52,10 @@ const b64 = async (s: string) => btoa(String.fromCharCode(...(await digest(s))))
 export const sha256hex = async (s: string) =>
   [...(await digest(s))].map((b) => b.toString(16).padStart(2, '0')).join('')
 
-const isOperatorOrigin = (env: HandoffEnv, origin: string) =>
+export const isOperatorOrigin = (
+  env: Pick<HandoffEnv, 'OPERATOR_ORIGINS'>,
+  origin: string,
+) =>
   !!origin &&
   (env.OPERATOR_ORIGINS ?? '').split(',').some((o) => o.trim() === origin)
 
