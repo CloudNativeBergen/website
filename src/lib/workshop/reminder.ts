@@ -47,7 +47,8 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import { readTicketHolders } from './holders'
 import { workshopRegistrationWindow } from './registration-window'
-import { workshopPortalUrl } from './sign-in'
+import { workshopMainHost, workshopPortalUrl } from './sign-in'
+import { mergeKonfApiConference, rolloutFlags } from '@/lib/conference/konf-api'
 
 export const REMINDER_WINDOW_MS = 60 * 60 * 1000
 /** Resend's batch API limit. */
@@ -80,6 +81,9 @@ export type ReminderOutcome =
   | { kind: 'rate-limited'; retryAfterMs: number }
 
 // groq-global-scoped: $id is the conference the caller already resolved
+// Note (#1997): workshopReminderReservedAt is Sanity CAS revision lock state (Phase B;
+// see docs/CONFERENCE_FIELDS.md §109), not a moved D1 conference field. Moved
+// conference fields (title, etc.) are merged from the gateway via mergeKonfApiConference.
 const RESERVATION = groq`*[_type == "conference" && _id == $id][0]{ _rev, workshopReminderReservedAt }`
 /** Bounded compare-and-swap rounds; a lost round re-reads the winner's write. */
 const RESERVE_ATTEMPTS = 3
@@ -141,12 +145,32 @@ async function releaseHour(id: string, now: number): Promise<void> {
  * organizer must not be told it would.
  */
 export async function reminderPortal(
-  conference: Pick<Conference, 'title' | 'domains' | 'workshopRegistrationEnd'>,
+  conference: Pick<
+    Conference,
+    'title' | 'domains' | 'workshopRegistrationEnd'
+  > &
+    Partial<Pick<Conference, '_id' | 'organization'>>,
   now: number = Date.now(),
 ): Promise<
   | { blocker: 'registration-closed' | 'portal-unavailable' }
   | { blocker: null; portalUrl: string }
 > {
+  const host = workshopMainHost(conference)
+  if (
+    host &&
+    conference._id &&
+    (
+      await rolloutFlags(
+        host,
+        conference as Pick<Conference, '_id' | 'organization'>,
+      )
+    ).apiRead
+  ) {
+    conference = (await mergeKonfApiConference(
+      host,
+      conference as Conference,
+    )) as typeof conference
+  }
   // The rule sign-up applies, and the one the email is worded by: an email
   // rendered for this moment never meets a window that has closed.
   const window = workshopRegistrationWindow(conference, {
@@ -165,6 +189,13 @@ export async function sendWorkshopReminder(
   { note }: { note?: string },
   now: number = Date.now(),
 ): Promise<ReminderOutcome> {
+  const host = workshopMainHost(conference)
+  if (host && (await rolloutFlags(host, conference)).apiRead) {
+    conference = (await mergeKonfApiConference(
+      host,
+      conference,
+    )) as Conference & { _id: string }
+  }
   const portal = await reminderPortal(conference, now)
   if (portal.blocker) return { kind: portal.blocker }
   const { portalUrl } = portal
