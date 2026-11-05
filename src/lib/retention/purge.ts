@@ -45,9 +45,9 @@ async function deleteForEndedConferences(
 
   const merged = await mergeConferences(rawConferences)
   const conferences = merged.filter((c, i) => {
-      const end = purgeEndDate(rawConferences[i].endDate, c.endDate)
-      return Boolean(end && end < cutoff)
-    })
+    const end = purgeEndDate(rawConferences[i].endDate, c.endDate)
+    return Boolean(end && end < cutoff)
+  })
 
   let deleted = 0
   for (const { _id: conferenceId } of conferences) {

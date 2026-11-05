@@ -136,12 +136,14 @@ describe('mergeConference & mergeConferences', () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
     vi.stubEnv('KONF_API_TENANTS', 'conf-test')
 
-    const gatewayFetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({ errors: [{ message: 'D1 unavailable' }] }),
-        { status: 500 },
-      ),
-    )
+    const gatewayFetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ errors: [{ message: 'D1 unavailable' }] }),
+          { status: 500 },
+        ),
+      )
     vi.stubGlobal('fetch', gatewayFetch)
 
     const result = await mergeConference(sanityConf)

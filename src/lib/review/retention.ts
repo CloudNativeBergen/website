@@ -108,9 +108,9 @@ export async function foldExpiredReviews(
 
   const merged = await mergeConferences(rawConferences)
   const conferences = merged.filter((c, i) => {
-      const end = purgeEndDate(rawConferences[i].endDate, c.endDate)
-      return Boolean(end && end < cutoff)
-    })
+    const end = purgeEndDate(rawConferences[i].endDate, c.endDate)
+    return Boolean(end && end < cutoff)
+  })
 
   const client = versionsClient()
   const result = { talks: 0, deleted: 0 }

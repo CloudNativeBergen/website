@@ -22,7 +22,10 @@ export async function mergeConference<T extends ConferenceCandidate>(
     const origin = findOutboundOrigin(conf)
     if (!origin) return conf
     const host = new URL(origin).host
-    const flags = await rolloutFlags(host, conf)
+    const flags = await rolloutFlags(host, {
+      _id: conf._id,
+      organization: conf.organization ?? undefined,
+    })
     if (!flags.apiRead) return conf
     const merged = await mergeKonfApiConference(
       host,

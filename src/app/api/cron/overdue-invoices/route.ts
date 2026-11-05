@@ -33,9 +33,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const cutoff = osloTodayDateString(
-      new Date(Date.now() - 90 * 86_400_000),
-    )
+    const cutoff = osloTodayDateString(new Date(Date.now() - 90 * 86_400_000))
     const rawConferences = await clientReadUncached.fetch<Conference[]>(
       // groq-global: a system sweep over every tenant; candidates are filtered
       // in code with merged D1 dates and fields.
@@ -48,9 +46,7 @@ export async function GET(request: NextRequest) {
     )
 
     const merged = await mergeConferences(rawConferences ?? [])
-    const conferences = merged.filter(
-      (c) => !c.endDate || c.endDate >= cutoff,
-    )
+    const conferences = merged.filter((c) => !c.endDate || c.endDate >= cutoff)
 
     const today = osloTodayDateString()
     let posted = 0
