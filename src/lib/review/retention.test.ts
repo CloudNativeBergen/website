@@ -188,7 +188,7 @@ describe('foldExpiredReviews', () => {
       expect(h.ops).toEqual([])
     })
 
-    it('uses D1 endDate when tenant has apiRead enabled (earlier ended edition is folded)', async () => {
+    it('uses D1 endDate when tenant has apiRead enabled (an EARLIER D1 date never widens the fold)', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
       vi.stubEnv('KONF_API_TENANTS', 'c1')
 
@@ -222,8 +222,9 @@ describe('foldExpiredReviews', () => {
       vi.stubGlobal('fetch', gatewayFetch)
 
       const result = await foldExpiredReviews()
-      expect(result).toEqual({ talks: 1, deleted: 1 })
-      expect(h.ops).toEqual(['patch:t1', 'patch:r1', 'delete:r1'])
+      expect(gatewayFetch).toHaveBeenCalled()
+      expect(result).toEqual({ talks: 0, deleted: 0 })
+      expect(h.ops).toEqual([])
     })
 
     it('falls back to Sanity endDate when tenant is unflagged', async () => {

@@ -120,7 +120,7 @@ describe('deleteExpiredReminderLogs', () => {
       expect(h.deleted).toEqual([])
     })
 
-    it('uses D1 endDate when tenant has apiRead enabled (earlier ended edition is purged)', async () => {
+    it('uses D1 endDate when tenant has apiRead enabled (an EARLIER D1 date never widens the purge)', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
       vi.stubEnv('KONF_API_TENANTS', 'c1')
 
@@ -151,8 +151,9 @@ describe('deleteExpiredReminderLogs', () => {
       vi.stubGlobal('fetch', gatewayFetch)
 
       const result = await deleteExpiredReminderLogs()
-      expect(result).toEqual({ deleted: 1 })
-      expect(h.deleted).toEqual(['log-1'])
+      expect(gatewayFetch).toHaveBeenCalled()
+      expect(result).toEqual({ deleted: 0 })
+      expect(h.deleted).toEqual([])
     })
 
     it('falls back to Sanity endDate when tenant is unflagged', async () => {
@@ -178,4 +179,36 @@ describe('deleteExpiredReminderLogs', () => {
       expect(h.deleted).toEqual(['log-1'])
     })
   })
+
+  it.each([
+    ['rejects (timeout)', () => Promise.reject(new Error('timeout'))],
+    ['answers 500', () => Promise.resolve(new Response('x', { status: 500 }))],
+    [
+      'answers an unparsable date',
+      () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              data: { conference: { id: 'c1', endDate: '0' } },
+            }),
+          ),
+        ),
+    ],
+  ])(
+    'a D1 path that %s purges only what Sanity alone would',
+    async (_n, gateway) => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'c1,c2')
+      h.fetch
+        .mockResolvedValueOnce([
+          { _id: 'c1', endDate: '2099-01-01', domains: ['c1.example.com'] },
+          { _id: 'c2', endDate: '2020-01-01', domains: ['c2.example.com'] },
+        ])
+        .mockResolvedValueOnce(['old-log'])
+      vi.stubGlobal('fetch', vi.fn(gateway))
+      expect(await deleteExpiredReminderLogs()).toEqual({ deleted: 1 })
+      expect(h.deleted).toEqual(['old-log'])
+      expect(h.fetch.mock.calls[1][1]).toMatchObject({ conferenceId: 'c2' })
+    },
+  )
 })

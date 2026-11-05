@@ -3,10 +3,40 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 vi.mock('server-only', () => ({}))
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 
-import { mergeConference, mergeConferences } from './merge'
+const h = vi.hoisted(() => ({ flagsThrow: false }))
+vi.mock('@/lib/conference/konf-api', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/conference/konf-api')>()
+  return {
+    ...actual,
+    rolloutFlags: (...args: Parameters<typeof actual.rolloutFlags>) =>
+      h.flagsThrow
+        ? Promise.reject(new Error('flags down'))
+        : actual.rolloutFlags(...args),
+  }
+})
+
+import { mergeConference, mergeConferences, purgeEndDate } from './merge'
+
+describe('purgeEndDate', () => {
+  it.each([
+    ['D1 missing', '2024-05-01', undefined, '2024-05-01'],
+    ['D1 null', '2024-05-01', null, '2024-05-01'],
+    ['D1 unparsable', '2024-05-01', 'soon', '2024-05-01'],
+    ['D1 empty', '2024-05-01', '', '2024-05-01'],
+    ['D1 not a string', '2024-05-01', 20240501, '2024-05-01'],
+    ['D1 invalid calendar date', '2024-05-01', '2024-13-45', '2024-05-01'],
+    ['D1 earlier: keep Sanity', '2024-05-01', '2020-01-01', '2024-05-01'],
+    ['D1 later: take D1', '2024-05-01', '2025-01-01', '2025-01-01'],
+    ['Sanity unparsable stays as before', 'x', '2025-01-01', 'x'],
+  ])('%s', (_name, sanity, d1, want) => {
+    expect(purgeEndDate(sanity, d1)).toBe(want)
+  })
+})
 
 describe('mergeConference & mergeConferences', () => {
   beforeEach(() => {
+    h.flagsThrow = false
     vi.clearAllMocks()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
@@ -120,31 +150,23 @@ describe('mergeConference & mergeConferences', () => {
     expect(result.endDate).toBe('2026-08-02')
   })
 
-  it('caches lookups across duplicates in mergeConferences', async () => {
+  it('falls back to Sanity when the gateway fetch rejects (timeout)', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
     vi.stubEnv('KONF_API_TENANTS', 'conf-test')
-
-    const gatewayFetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: {
-            conference: {
-              id: 'conf-test',
-              title: 'D1 Title',
-              startDate: '2026-08-10',
-              endDate: '2026-08-12',
-            },
-          },
-        }),
-      ),
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new DOMException('timed out', 'TimeoutError')),
     )
-    vi.stubGlobal('fetch', gatewayFetch)
+    expect(await mergeConference(sanityConf)).toEqual(sanityConf)
+  })
 
-    const results = await mergeConferences([sanityConf, { ...sanityConf }])
-    expect(results).toHaveLength(2)
-    expect(results[0].endDate).toBe('2026-08-12')
-    expect(results[1].endDate).toBe('2026-08-12')
-    // Gateway should be called only once despite two conference entries
-    expect(gatewayFetch).toHaveBeenCalledTimes(1)
+  it('falls back to Sanity when the flag lookup itself throws', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-test')
+    h.flagsThrow = true
+    const gatewayFetch = vi.fn()
+    vi.stubGlobal('fetch', gatewayFetch)
+    expect(await mergeConferences([sanityConf])).toEqual([sanityConf])
+    expect(gatewayFetch).not.toHaveBeenCalled()
   })
 })

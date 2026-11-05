@@ -299,7 +299,7 @@ describe('deleteExpiredMessagingData', () => {
   })
 
   describe('D1 gateway values and fallbacks (#1997)', () => {
-    it('uses D1 endDate and title when tenant has apiRead enabled', async () => {
+    it('an EARLIER D1 endDate never widens the purge', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
       vi.stubEnv('KONF_API_TENANTS', 'conf-d1')
 
@@ -350,12 +350,11 @@ describe('deleteExpiredMessagingData', () => {
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
       const summary = await deleteExpiredMessagingData()
 
-      expect(summary.conferences).toBe(1)
-      expect(summary.messages).toBe(1)
-      expect(committedBatches).toEqual([['msg-1'], ['conv-1']])
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining('D1 New Title'),
-      )
+      expect(gatewayFetch).toHaveBeenCalled()
+      expect(summary.conferences).toBe(0)
+      expect(summary.messages).toBe(0)
+      expect(committedBatches).toEqual([])
+      logSpy.mockRestore()
     })
 
     it('falls back to Sanity endDate when tenant is unflagged', async () => {

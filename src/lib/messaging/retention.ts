@@ -1,7 +1,7 @@
 import 'server-only'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { mergeConferences } from '@/lib/conference/merge'
+import { mergeConferences, purgeEndDate } from '@/lib/conference/merge'
 import { conversationLinkPath } from './links'
 
 /**
@@ -147,7 +147,10 @@ export async function deleteExpiredMessagingData(): Promise<MessagingRetentionSu
 
   const merged = await mergeConferences(rawConferences)
   const conferences = merged
-    .filter((c) => Boolean(c.endDate && c.endDate < cutoff))
+    .filter((c, i) => {
+      const end = purgeEndDate(rawConferences[i].endDate, c.endDate)
+      return Boolean(end && end < cutoff)
+    })
     .slice(0, MAX_CONFERENCES_PER_RUN)
 
   const summary: MessagingRetentionSummary = {

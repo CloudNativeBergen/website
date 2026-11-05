@@ -1,7 +1,7 @@
 import 'server-only'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { mergeConferences } from '@/lib/conference/merge'
+import { mergeConferences, purgeEndDate } from '@/lib/conference/merge'
 import {
   MARKETING_SNAPSHOT_RETENTION_MONTHS,
   osloDateCutoff,
@@ -44,9 +44,10 @@ async function deleteForEndedConferences(
     )) ?? []
 
   const merged = await mergeConferences(rawConferences)
-  const conferences = merged.filter((c) =>
-    Boolean(c.endDate && c.endDate < cutoff),
-  )
+  const conferences = merged.filter((c, i) => {
+      const end = purgeEndDate(rawConferences[i].endDate, c.endDate)
+      return Boolean(end && end < cutoff)
+    })
 
   let deleted = 0
   for (const { _id: conferenceId } of conferences) {

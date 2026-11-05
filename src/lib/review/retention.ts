@@ -1,7 +1,7 @@
 import 'server-only'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { mergeConferences } from '@/lib/conference/merge'
+import { mergeConferences, purgeEndDate } from '@/lib/conference/merge'
 import { PUBLISHED_ONLY, versionsClient } from '@/lib/feedback/sanity'
 import {
   lockRevision,
@@ -107,9 +107,10 @@ export async function foldExpiredReviews(
     )) ?? []
 
   const merged = await mergeConferences(rawConferences)
-  const conferences = merged.filter((c) =>
-    Boolean(c.endDate && c.endDate < cutoff),
-  )
+  const conferences = merged.filter((c, i) => {
+      const end = purgeEndDate(rawConferences[i].endDate, c.endDate)
+      return Boolean(end && end < cutoff)
+    })
 
   const client = versionsClient()
   const result = { talks: 0, deleted: 0 }

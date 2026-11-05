@@ -188,13 +188,9 @@ export async function GET(request: NextRequest) {
     })
 
     const today = now.toISOString().slice(0, 10)
-    const confCache = new Map<string, Promise<SweepConference>>()
     for (const row of rows) {
       if (row.sweepConference) {
-        row.sweepConference = await mergeConference(
-          row.sweepConference,
-          confCache,
-        )
+        row.sweepConference = await mergeConference(row.sweepConference)
       }
     }
 

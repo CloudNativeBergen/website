@@ -7,7 +7,7 @@ import { osloTodayDateString } from '@/lib/time'
 import { expireWallPost } from './cache'
 import { deleteWallAsset } from './delete'
 import { deletionDate, plusDays } from './deletion'
-import { mergeConference } from '@/lib/conference/merge'
+import { mergeConference, purgeEndDate } from '@/lib/conference/merge'
 
 /**
  * THE 30-DAY DELETION (Photo Wall spec §11.1): run daily by the retention
@@ -166,10 +166,6 @@ export async function readUnpurgedWalls(
   )
   if (!rows || rows.length === 0) return []
 
-  const confCache = new Map<
-    string,
-    Promise<NonNullable<UnpurgedWallRow['conference']>>
-  >()
   return Promise.all(
     rows.map(async (row) => {
       if (!row.conference) {
@@ -180,12 +176,12 @@ export async function readUnpurgedWalls(
           endDate: row.endDate,
         }
       }
-      const merged = await mergeConference(row.conference, confCache)
+      const merged = await mergeConference(row.conference)
       return {
         _id: row._id,
         closedAt: row.closedAt,
         conferenceId: row.conferenceId,
-        endDate: merged.endDate ?? row.conference.endDate ?? row.endDate,
+        endDate: purgeEndDate(row.endDate, merged.endDate) ?? null,
       }
     }),
   )
