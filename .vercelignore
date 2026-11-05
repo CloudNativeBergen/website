@@ -1,19 +1,25 @@
 # Development tools - exclude from production builds
 
 src/dev-tools/
-_.dev._
+*.dev.*
 
 # Test files
 
-**tests**/
-_.test._
-_.spec._
+__tests__/
+*.test.*
+*.spec.*
 
 # Documentation
 
 docs/
-\*.md
+*.md
 !README.md
+
+# Cloudflare gateway Worker and platform services: not part of the Next app.
+# A top-level api/ is otherwise deployed as Vercel Functions (#1960).
+/api/
+/services/
+/packages/
 
 # DO NOT ignore cache directories - we need Vercel to rebuild CSS
 # Commenting out potential cache ignores to ensure fresh CSS builds

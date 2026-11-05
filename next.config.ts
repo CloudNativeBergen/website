@@ -2,6 +2,8 @@ import { NextConfig } from 'next'
 import { POSTHOG_INGEST_PATH, posthogRewrites } from './src/lib/posthog/ingest'
 
 const config: NextConfig = {
+  // Narrower type-check project for next build; full tsc runs in typecheck (#1960).
+  typescript: { tsconfigPath: 'tsconfig.next.json' },
   reactStrictMode: false, // disabled due to https://github.com/vercel/next.js/issues/35822
   cacheComponents: true,
   // Stop `next dev` writing its own block into AGENTS.md (#968). The pointer to

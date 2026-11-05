@@ -11,3 +11,4 @@ cli
 .env*
 .env*
 src/lib/openbadges/spec/
+.vercelignore
