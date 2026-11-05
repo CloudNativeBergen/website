@@ -421,6 +421,28 @@ describe('operator path', () => {
     }
   })
 
+  it('refuses an invalid email and an existing member as clean BAD_USER_INPUT, writing nothing', async () => {
+    const { orgId, users } = await org('owner')
+    const ops = await newUser(`ops${n}`, true)
+    for (const [email, msg] of [
+      ['not-an-email', 'Invalid email address'],
+      [
+        `  ${users[0].toUpperCase()}@Example.com `,
+        'This address already belongs to a member',
+      ],
+    ]) {
+      const r = await asOps(
+        ops,
+        `operatorInviteMember(orgId: "${orgId}", email: "${email}", role: member) { id }`,
+      )
+      expect(code(r)).toBe('BAD_USER_INPUT')
+      expect(r.errors?.[0]?.message).toBe(msg)
+    }
+    expect(
+      await all('SELECT id FROM invitation WHERE organizationId = ?', orgId),
+    ).toEqual([])
+  })
+
   it('refuses every non-platform caller FORBIDDEN before identity reads anything', async () => {
     const { orgId, users } = await org('owner', 'member')
     const [owner, mem] = users

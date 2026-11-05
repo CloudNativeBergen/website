@@ -66,7 +66,7 @@ export default defineConfig({
     sequence: { shuffle: { tests: true } },
     include: ['**/__tests__/**/*.test.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
     exclude: [
-      'node_modules',
+      '**/node_modules/**',
       '.next',
       'storybook-static',
       // Ignore copies of the suite living inside git worktrees (e.g. those

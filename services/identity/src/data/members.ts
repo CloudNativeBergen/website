@@ -10,6 +10,7 @@
 import { runWithRequestState } from '@better-auth/core/context'
 import { isAPIError } from 'better-auth/api'
 import { and, eq, lte, sql } from 'drizzle-orm'
+import { z } from 'zod'
 import {
   INVITATION_EXPIRES_IN,
   actAs,
@@ -206,10 +207,30 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
 
     return {
       async invite(email: string, role: MemberRole): Promise<Invitation> {
+        // As the plugin's createInvitation: lowercase, then z.email().
+        const to = email.trim().toLowerCase()
+        if (!z.email().safeParse(to).success)
+          throw new MemberError('BAD_USER_INPUT', 'Invalid email address')
+        // Accepting would hit member(userId, organizationId) UNIQUE as a 500.
+        const [existing] = await db
+          .select({ id: member.id })
+          .from(member)
+          .innerJoin(user, eq(user.id, member.userId))
+          .where(
+            and(
+              eq(member.organizationId, orgId),
+              eq(sql`lower(${user.email})`, to),
+            ),
+          )
+        if (existing)
+          throw new MemberError(
+            'BAD_USER_INPUT',
+            'This address already belongs to a member',
+          )
         const row = {
           id: crypto.randomUUID(),
           organizationId: orgId,
-          email: email.trim().toLowerCase(),
+          email: to,
           role,
           status: 'pending',
           expiresAt: new Date(Date.now() + INVITATION_EXPIRES_IN * 1000),
