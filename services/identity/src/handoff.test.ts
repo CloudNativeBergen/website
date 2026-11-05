@@ -216,7 +216,7 @@ describe('handoff start with a session (production bug: GitHub gave LinkedIn)', 
   const isHandoff = (res: Response) =>
     res.headers.get('location')?.startsWith(`${SITE}/api/auth/handoff`)
 
-  it('sends a LinkedIn session asking for GitHub to GitHub, ending it', async () => {
+  it('sends a LinkedIn session asking for GitHub to GitHub, without reusing it', async () => {
     const u = await newUser('li-only@x.test', true, 'linkedin')
     const cookie = await cookieFor(u.id)
     const res = await start(SITE, cookie)
@@ -226,11 +226,32 @@ describe('handoff start with a session (production bug: GitHub gave LinkedIn)', 
     expect(to.origin + to.pathname).toBe(
       'https://github.com/login/oauth/authorize',
     )
-    // The LinkedIn session is gone, not just bypassed.
+    // No handoff code was issued for the LinkedIn session.
+    const codes = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM verification WHERE identifier LIKE 'handoff:%' AND value LIKE ?",
+    )
+      .bind(`%${u.id}%`)
+      .first<{ n: number }>()
+    expect(codes?.n).toBe(0)
+  })
+
+  it('leaves the old session row alone: a cross-site GET is no forced logout', async () => {
+    const u = await newUser('li-keep@x.test', true, 'linkedin')
+    const cookie = await cookieFor(u.id)
+    const res = await start(SITE, cookie, '0'.repeat(64))
+    expect(res.status).toBe(302)
     const s = await createAuth(env.DB, env).api.getSession({
       headers: new Headers({ cookie }),
     })
-    expect(s).toBeNull()
+    expect(s?.user.id).toBe(u.id)
+  })
+
+  it('refuses an unknown or miscased provider instead of reusing the session', async () => {
+    const u = await newUser('gh-case@x.test')
+    const cookie = await cookieFor(u.id)
+    for (const p of ['GitHub', 'gitlab']) {
+      expect((await start(SITE, cookie, STATE, p)).status).toBe(400)
+    }
   })
 
   it('reuses a session that has the requested provider', async () => {

@@ -110,34 +110,27 @@ export async function handoff(request: Request, env: HandoffEnv) {
     }
 
     const provider = url.searchParams.get('provider') ?? ''
+    if (provider && !PROVIDERS.has(provider)) return fail(400)
     let session = await auth.api.getSession({ headers: request.headers })
     // A session from another provider does not answer "Sign in with
-    // <provider>": the owner asked for GitHub and got his LinkedIn user. End
-    // it and run a fresh sign-in, so that provider's account decides who this
-    // is under the #807 rules every sign-in follows. No linkSocial: its
-    // callback skips requireLocalEmailVerified, and a refused link would
-    // leave the user stuck on the old session.
-    const signOut =
-      session && PROVIDERS.has(provider)
-        ? !(await auth.api.listUserAccounts({ headers: request.headers })).some(
-            (a) => a.providerId === provider,
-          )
-        : false
-    if (signOut) session = null
+    // <provider>": the owner asked for GitHub and got his LinkedIn user. Run
+    // a fresh sign-in, so that provider's account decides who this is under
+    // the #807 rules every sign-in follows. No linkSocial: its callback skips
+    // requireLocalEmailVerified. No sign-out either: this GET is reachable by
+    // top-level navigation from any site, so ending the session here is a
+    // forced logout. The callback overwrites the cookie and never consults
+    // the old session; the old row just expires.
+    if (
+      session &&
+      provider &&
+      !(await auth.api.listUserAccounts({ headers: request.headers })).some(
+        (a) => a.providerId === provider,
+      )
+    ) {
+      session = null
+    }
     if (!session) {
-      if (!PROVIDERS.has(provider)) return fail(400)
-      const out = signOut
-        ? await auth.handler(
-            new Request(`${env.BETTER_AUTH_URL}/api/auth/sign-out`, {
-              method: 'POST',
-              headers: {
-                origin: env.BETTER_AUTH_URL,
-                cookie: request.headers.get('cookie') ?? '',
-              },
-            }),
-          )
-        : null
-      if (out && !out.ok) return fail(502)
+      if (!provider) return fail(400)
       // Social sign-in returns here (same origin as baseURL) with a session.
       const res = await auth.handler(
         new Request(`${env.BETTER_AUTH_URL}/api/auth/sign-in/social`, {
@@ -159,10 +152,7 @@ export async function handoff(request: Request, env: HandoffEnv) {
       if (!res.ok) return fail(502)
       const { url: to } = (await res.json()) as { url: string }
       const headers = new Headers({ ...noStore, location: to })
-      for (const c of [
-        ...(out?.headers.getSetCookie() ?? []),
-        ...res.headers.getSetCookie(),
-      ])
+      for (const c of res.headers.getSetCookie())
         headers.append('set-cookie', c)
       return new Response(null, { status: 302, headers })
     }
