@@ -93,6 +93,8 @@
       // Identity has its own host: auth.konf.app is the NextAuth site today.
       "vars": {
         "IDENTITY_ISSUER": "https://id.konf.app",
+        // Operator lane (#1892 phase 4): kontroll. Preview leaves it unset.
+        "OPERATOR_ORIGIN": "https://my.konf.app",
         "OVERRIDE_TENANTS": {},
       },
       "ratelimits": [
