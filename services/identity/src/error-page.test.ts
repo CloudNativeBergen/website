@@ -46,6 +46,19 @@ describe('error page', () => {
     expect(html).toContain('<a class="btn" href="https://conf.example/">')
   })
 
+  it('links back to an operator origin without a directory call (#1948)', async () => {
+    env.OPERATOR_ORIGINS = 'https://my.konf.app'
+    try {
+      const { html } = await get(
+        'error=invalid_code&origin=https://my.konf.app',
+      )
+      expect(html).toContain('<a class="btn" href="https://my.konf.app/">')
+      expect(directory).not.toHaveBeenCalled()
+    } finally {
+      delete env.OPERATOR_ORIGINS
+    }
+  })
+
   it.each([
     'https://evil.example',
     'http://conf.example',
