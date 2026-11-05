@@ -1,6 +1,7 @@
 import { storedRenderFormat } from './render-format'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { mergeConference, mergeConferences } from '@/lib/conference/merge'
 import type { CopySource, CopySourceTask } from './copy'
 import type { Milestone } from './milestones'
 import {
@@ -57,7 +58,8 @@ export async function getCopySources(
     "planId": _id,
     "conferenceId": conference._ref,
     "conferenceTitle": conference->title,
-    "startDate": conference->startDate
+    "startDate": conference->startDate,
+    "conference": conference->{ _id, title, startDate, domains, organization }
   }`
   // groq-global-scoped: same org-scoped `$conferenceIds` as the plans read.
   const campaigns = `*[_type == "marketingCampaign" && conference._ref in $conferenceIds && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ "planId": plan._ref }`
@@ -70,6 +72,13 @@ export async function getCopySources(
           conferenceId: string | null
           conferenceTitle: string | null
           startDate: string | null
+          conference: {
+            _id: string
+            title: string | null
+            startDate: string | null
+            domains?: readonly string[] | null
+            organization?: { _ref: string } | null
+          } | null
         }[]
       | null
     campaigns: { planId: string | null }[] | null
@@ -81,23 +90,50 @@ export async function getCopySources(
   )
   const count = (rows: { planId: string | null }[] | null, planId: string) =>
     (rows ?? []).filter((r) => r.planId === planId).length
-  return (read?.plans ?? [])
-    .filter((r): r is typeof r & { conferenceId: string } => !!r.conferenceId)
-    .map((r) => ({
+  const rawPlans = (read?.plans ?? []).filter(
+    (r): r is typeof r & { conferenceId: string } => !!r.conferenceId,
+  )
+  const confCache = new Map<
+    string,
+    {
+      _id: string
+      title?: string | null
+      startDate?: string | null
+      domains?: readonly string[] | null
+      organization?: { _ref: string } | null
+    }
+  >()
+  for (const r of rawPlans) {
+    if (r.conference && !confCache.has(r.conference._id)) {
+      confCache.set(r.conference._id, r.conference)
+    }
+  }
+  const mergedConfs = await mergeConferences(Array.from(confCache.values()))
+  const confMap = new Map(mergedConfs.map((c) => [c._id, c]))
+  return rawPlans.map((r) => {
+    const conf = r.conference ? confMap.get(r.conference._id) : undefined
+    return {
       planId: r.planId,
       conferenceId: r.conferenceId,
-      conferenceTitle: r.conferenceTitle ?? 'Untitled edition',
-      startDate: r.startDate ?? null,
+      conferenceTitle: conf?.title ?? r.conferenceTitle ?? 'Untitled edition',
+      startDate: conf?.startDate ?? r.startDate ?? null,
       campaigns: count(read?.campaigns ?? null, r.planId),
       tasks: count(read?.tasks ?? null, r.planId),
-    }))
+    }
+  })
 }
 
 interface RawSource {
   _id: string
   deletingAt?: string | null
   conference:
-    (CopySource['conference'] & { ticketCapacity?: number | null }) | null
+    | (CopySource['conference'] & {
+        _id: string
+        domains?: readonly string[] | null
+        organization?: { _ref: string } | null
+        ticketCapacity?: number | null
+      })
+    | null
   campaigns:
     | {
         _id: string
@@ -168,6 +204,7 @@ export async function readPlanSource(
     `*[_type == "marketingPlan" && _id == $planId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
       _id, deletingAt,
       "conference": conference->{
+        _id, domains, organization,
         title, city, venueName, ticketCapacity, startDate, endDate,
         cfpStartDate, cfpEndDate, cfpNotifyDate, programDate,
         earlyBirdEndDate, registrationCloseDate, speakersAnnouncedDate,
@@ -191,11 +228,12 @@ export async function readPlanSource(
     { cache: 'no-store' },
   )
   if (!row?.conference) return null
+  const mergedConference = await mergeConference(row.conference)
   return {
-    ticketCapacity: row.conference.ticketCapacity ?? null,
+    ticketCapacity: mergedConference.ticketCapacity ?? null,
     deletingAt: row.deletingAt ?? null,
     plan: { _id: row._id },
-    conference: row.conference,
+    conference: mergedConference,
     campaigns: (row.campaigns ?? []).flatMap((c) =>
       c.key && c.startMilestone && c.endMilestone && c.primaryOutcome
         ? [

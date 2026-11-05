@@ -1,6 +1,7 @@
 import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { mergeConferences } from '@/lib/conference/merge'
 import { getCurrentDateTime } from '@/lib/time'
 import { OPEN_PROJECTION, VIDEO_PROJECT_FORMAT_VERSION } from './document'
 import type { ProjectRow } from './document'
@@ -21,7 +22,15 @@ const opts = { cache: 'no-store' } as const
 export async function listVideoProjects(
   orgId: string,
 ): Promise<VideoProjectRow[]> {
-  const rows = await scopedFetch<VideoProjectRow[] | null>(
+  type VideoProjectRowWithConference = VideoProjectRow & {
+    conference?: {
+      _id: string
+      title?: string | null
+      domains?: readonly string[] | null
+      organization?: { _ref: string } | null
+    } | null
+  }
+  const rows = await scopedFetch<VideoProjectRowWithConference[] | null>(
     clientReadUncached,
     { orgId },
     `*[_type == "videoProject" && _id in path("*")] | order(coalesce(updatedAt, _updatedAt) desc) {
@@ -29,13 +38,36 @@ export async function listVideoProjects(
       "title": coalesce(title, ""),
       "scope": coalesce(scope, "organization"),
       "edition": select(scope == "edition" && conference->organization._ref == organization._ref => conference->title, null),
+      "conference": select(scope == "edition" && conference->organization._ref == organization._ref => conference->{ _id, title, domains, organization }, null),
       "updatedAt": coalesce(updatedAt, _updatedAt),
       "scenes": count(scenes)
     }`,
     {},
     opts,
   )
-  return rows ?? []
+  if (!rows || rows.length === 0) return []
+  const confCache = new Map<
+    string,
+    {
+      _id: string
+      title?: string | null
+      domains?: readonly string[] | null
+      organization?: { _ref: string } | null
+    }
+  >()
+  for (const r of rows) {
+    if (r.conference && !confCache.has(r.conference._id)) {
+      confCache.set(r.conference._id, r.conference)
+    }
+  }
+  const mergedConfs = await mergeConferences(Array.from(confCache.values()))
+  const confMap = new Map(mergedConfs.map((c) => [c._id, c]))
+  return rows.map(({ conference, ...r }) => ({
+    ...r,
+    edition: conference
+      ? (confMap.get(conference._id)?.title ?? r.edition)
+      : r.edition,
+  }))
 }
 
 /** One of the organization's projects, as the studio opens it. */

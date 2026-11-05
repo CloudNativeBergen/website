@@ -81,6 +81,7 @@ export interface ConferenceReference {
   _id: string
   title: string
   domains?: string[]
+  organization?: { _ref: string } | null
 }
 
 export interface GalleryImageWithSpeakers extends Omit<

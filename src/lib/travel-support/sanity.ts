@@ -2,6 +2,7 @@ import {
   clientReadUncached as clientRead,
   clientWrite,
 } from '@/lib/sanity/client'
+import { mergeConference, mergeConferences } from '@/lib/conference/merge'
 import {
   TravelSupport,
   TravelSupportInput,
@@ -164,13 +165,25 @@ export async function getTravelSupportById(
         },
         conference-> {
           _id,
-          name
+          name,
+          title,
+          domains,
+          organization
         },
         "conferenceOrgId": conference->organization._ref,
         "expenses": ${EXPENSES_PROJECTION}
       }`,
       { id, ...requesterParams(requester) },
     )
+
+    if (travelSupport?.conference) {
+      const merged = await mergeConference(travelSupport.conference)
+      travelSupport.conference = {
+        ...merged,
+        name:
+          (merged as { title?: string }).title ?? travelSupport.conference.name,
+      }
+    }
 
     return { travelSupport, error: null }
   } catch (error) {
@@ -216,13 +229,43 @@ export async function getAllTravelSupport(conferenceId: string): Promise<{
         },
         conference-> {
           _id,
-          name
+          name,
+          title,
+          domains,
+          organization
         },
         "expenses": ${EXPENSES_PROJECTION}
       }`,
     )
 
-    return { travelSupports, error: null }
+    if (!travelSupports || travelSupports.length === 0) {
+      return { travelSupports: [], error: null }
+    }
+    const confCache = new Map<
+      string,
+      NonNullable<(typeof travelSupports)[number]['conference']>
+    >()
+    for (const ts of travelSupports) {
+      if (ts.conference && !confCache.has(ts.conference._id)) {
+        confCache.set(ts.conference._id, ts.conference)
+      }
+    }
+    const mergedConfs = await mergeConferences(Array.from(confCache.values()))
+    const confMap = new Map(mergedConfs.map((c) => [c._id, c]))
+    const enriched = travelSupports.map((ts) => {
+      if (!ts.conference) return ts
+      const merged = confMap.get(ts.conference._id)
+      return {
+        ...ts,
+        conference: merged
+          ? {
+              ...merged,
+              name: (merged as { title?: string }).title ?? ts.conference.name,
+            }
+          : ts.conference,
+      }
+    })
+    return { travelSupports: enriched, error: null }
   } catch (error) {
     return { travelSupports: [], error: error as Error }
   }

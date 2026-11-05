@@ -4,6 +4,7 @@ import {
   clientReadCached,
   clientReadUncached,
 } from '@/lib/sanity/client'
+import { mergeConference, mergeConferences } from '@/lib/conference/merge'
 import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
 import { createReference } from '@/lib/sanity/helpers'
 import { logger } from '@/lib/logger'
@@ -337,7 +338,8 @@ export async function getGalleryImage(
         conference->{
           _id,
           title,
-          domains
+          domains,
+          organization
         },
         speakers[]-> {
           _id,
@@ -348,7 +350,16 @@ export async function getGalleryImage(
       }
     `
 
-    return await clientReadUncached.fetch(query, { id, conferenceId })
+    const image =
+      await clientReadUncached.fetch<GalleryImageWithSpeakers | null>(query, {
+        id,
+        conferenceId,
+      })
+    if (!image) return null
+    if (image.conference) {
+      image.conference = await mergeConference(image.conference)
+    }
+    return image
   } catch (error) {
     logger.error('Error fetching gallery image', {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -525,7 +536,8 @@ export async function getGalleryImages(
         conference->{
           _id,
           title,
-          domains
+          domains,
+          organization
         },
         speakers[]-> {
           _id,
@@ -553,7 +565,28 @@ export async function getGalleryImages(
     }
 
     const client = useCache ? clientReadCached : clientReadUncached
-    return (await client.fetch(query, queryParams)) || []
+    const images =
+      (await client.fetch<GalleryImageWithSpeakers[]>(query, queryParams)) || []
+    if (images.length === 0) return []
+    const confCache = new Map<string, GalleryImageWithSpeakers['conference']>()
+    for (const img of images) {
+      if (img.conference && !confCache.has(img.conference._id)) {
+        confCache.set(img.conference._id, img.conference)
+      }
+    }
+    const mergedConfs = await mergeConferences(
+      Array.from(confCache.values()).filter(
+        (c): c is NonNullable<typeof c> => !!c,
+      ),
+    )
+    const confMap = new Map(mergedConfs.map((c) => [c._id, c]))
+    return images.map((img) => ({
+      ...img,
+      conference: img.conference
+        ? ((confMap.get(img.conference._id) as typeof img.conference) ??
+          img.conference)
+        : img.conference,
+    }))
   } catch (error) {
     logger.error('Error fetching gallery images', {
       error: error instanceof Error ? error.message : 'Unknown error',

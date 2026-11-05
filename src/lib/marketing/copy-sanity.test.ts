@@ -4,8 +4,10 @@
  * The copy source read EXECUTED with groq-js: a Campaign's stored Recipes
  * come back as the Recipes that were written (Templates spec §2.1).
  */
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { evaluate, parse } from 'groq-js'
+
+vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 
 const h = vi.hoisted(() => ({ dataset: [] as Record<string, unknown>[] }))
 vi.mock('@/lib/sanity/client', () => ({
@@ -15,7 +17,7 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-import { getCopySource } from './copy-sanity'
+import { getCopySource, getCopySources } from './copy-sanity'
 import { recipeToStored } from './recipes'
 import { BUILTIN_TEMPLATE } from './template'
 
@@ -94,4 +96,163 @@ it('reads a Campaign from before 053 as having no Recipes, not as broken', async
   delete h.dataset.find((d) => d._id === 'camp-old')!.recipes
   const source = await getCopySource('plan-old', 'org', 'conf-now')
   expect(source!.campaigns[0].recipes).toEqual([])
+})
+
+describe('D1 gateway values and fallbacks (#1997)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  it('uses merged D1 title and startDate for getCopySources when flagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-old')
+
+    const confOld = h.dataset.find((d) => d._id === 'conf-old')!
+    confOld.domains = ['old.example.com']
+    confOld.startDate = '2025-05-01'
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conf-old',
+              title: 'D1 Last Year',
+              startDate: '2025-06-01',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const sources = await getCopySources('org', 'conf-now')
+    expect(sources).toHaveLength(1)
+    expect(sources[0].conferenceTitle).toBe('D1 Last Year')
+    expect(sources[0].startDate).toBe('2025-06-01')
+  })
+
+  it('falls back to Sanity for getCopySources when unflagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+
+    const confOld = h.dataset.find((d) => d._id === 'conf-old')!
+    confOld.domains = ['old.example.com']
+    confOld.startDate = '2025-05-01'
+
+    const gatewayFetch = vi.fn()
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const sources = await getCopySources('org', 'conf-now')
+    expect(sources).toHaveLength(1)
+    expect(sources[0].conferenceTitle).toBe('Last year')
+    expect(sources[0].startDate).toBe('2025-05-01')
+    expect(gatewayFetch).not.toHaveBeenCalled()
+  })
+
+  it('falls back to Sanity for getCopySources on gateway error', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-old')
+
+    const confOld = h.dataset.find((d) => d._id === 'conf-old')!
+    confOld.domains = ['old.example.com']
+    confOld.startDate = '2025-05-01'
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ errors: [{ message: 'D1 down' }] }), {
+        status: 500,
+      }),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const sources = await getCopySources('org', 'conf-now')
+    expect(sources).toHaveLength(1)
+    expect(sources[0].conferenceTitle).toBe('Last year')
+    expect(sources[0].startDate).toBe('2025-05-01')
+  })
+
+  it('uses merged D1 fields for getCopySource when flagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-old')
+
+    const confOld = h.dataset.find((d) => d._id === 'conf-old')!
+    confOld.domains = ['old.example.com']
+    confOld.startDate = '2025-05-01'
+    confOld.endDate = '2025-05-02'
+    confOld.city = 'Sanity City'
+    confOld.venueName = 'Sanity Venue'
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conf-old',
+              title: 'D1 Last Year',
+              city: 'D1 City',
+              venueName: 'D1 Venue',
+              startDate: '2025-06-01',
+              endDate: '2025-06-03',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const source = await getCopySource('plan-old', 'org', 'conf-now')
+    expect(source).not.toBeNull()
+    expect(source!.conference.title).toBe('D1 Last Year')
+    expect(source!.conference.city).toBe('D1 City')
+    expect(source!.conference.venueName).toBe('D1 Venue')
+    expect(source!.conference.startDate).toBe('2025-06-01')
+    expect(source!.conference.endDate).toBe('2025-06-03')
+  })
+
+  it('falls back to Sanity for getCopySource when unflagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+
+    const confOld = h.dataset.find((d) => d._id === 'conf-old')!
+    confOld.domains = ['old.example.com']
+    confOld.startDate = '2025-05-01'
+    confOld.endDate = '2025-05-02'
+    confOld.city = 'Sanity City'
+
+    const gatewayFetch = vi.fn()
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const source = await getCopySource('plan-old', 'org', 'conf-now')
+    expect(gatewayFetch).not.toHaveBeenCalled()
+    expect(source!.conference.title).toBe('Last year')
+    expect(source!.conference.city).toBe('Sanity City')
+    expect(source!.conference.startDate).toBe('2025-05-01')
+  })
+
+  it('falls back to Sanity for getCopySource on gateway error', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-old')
+
+    const confOld = h.dataset.find((d) => d._id === 'conf-old')!
+    confOld.domains = ['old.example.com']
+    confOld.startDate = '2025-05-01'
+    confOld.endDate = '2025-05-02'
+    confOld.city = 'Sanity City'
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ errors: [{ message: 'D1 down' }] }), {
+        status: 500,
+      }),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const source = await getCopySource('plan-old', 'org', 'conf-now')
+    expect(source!.conference.title).toBe('Last year')
+    expect(source!.conference.city).toBe('Sanity City')
+    expect(source!.conference.startDate).toBe('2025-05-01')
+  })
 })

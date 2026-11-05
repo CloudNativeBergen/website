@@ -1,12 +1,21 @@
 /** @vitest-environment node */
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { evaluate, parse } from 'groq-js'
-import { commitGeneratedTasks, publishedTaskKeys } from './generation-sanity'
+import {
+  commitGeneratedTasks,
+  getGenerationContext,
+  getPlannedConferences,
+  publishedTaskKeys,
+} from './generation-sanity'
 import { emptyRecords } from './materialize'
 import { shortLinkIndexTag } from '@/lib/cache/tags'
 import { publishedPair } from './recipes'
 const revalidateTag = vi.hoisted(() => vi.fn())
-vi.mock('next/cache', () => ({ revalidateTag }))
+vi.mock('next/cache', () => ({
+  revalidateTag,
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
+}))
 const h = vi.hoisted(() => ({ dataset: [] as Record<string, unknown>[] }))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
@@ -93,5 +102,158 @@ it('commitGeneratedTasks expires the conference code index (short-links §2.4)',
   ).toBe(true)
   expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag('conf-A'), {
     expire: 0,
+  })
+})
+
+describe('D1 gateway values and fallbacks (#1997)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  const confA = {
+    _id: 'conf-A',
+    _type: 'conference',
+    title: 'Sanity Conference A',
+    city: 'Sanity City',
+    startDate: '2026-08-01',
+    endDate: '2026-08-02',
+    domains: ['2026.example.com'],
+    organization: { _ref: 'org-1' },
+  }
+
+  const planA = {
+    _id: 'plan-A',
+    _type: 'marketingPlan',
+    conference: { _type: 'reference', _ref: 'conf-A' },
+  }
+
+  it('uses merged D1 conference fields for getGenerationContext when flagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-A')
+
+    h.dataset = [structuredClone(confA), structuredClone(planA)]
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conf-A',
+              title: 'D1 Conference A',
+              city: 'D1 City',
+              startDate: '2026-08-10',
+              endDate: '2026-08-12',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await getGenerationContext('conf-A')
+    expect(result).not.toBeNull()
+    expect(result!.conference.title).toBe('D1 Conference A')
+    expect(result!.conference.city).toBe('D1 City')
+    expect(result!.conference.startDate).toBe('2026-08-10')
+    expect(result!.conference.endDate).toBe('2026-08-12')
+  })
+
+  it('falls back to Sanity for getGenerationContext when unflagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+
+    h.dataset = [structuredClone(confA), structuredClone(planA)]
+
+    const gatewayFetch = vi.fn()
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await getGenerationContext('conf-A')
+    expect(gatewayFetch).not.toHaveBeenCalled()
+    expect(result!.conference.title).toBe('Sanity Conference A')
+    expect(result!.conference.city).toBe('Sanity City')
+    expect(result!.conference.startDate).toBe('2026-08-01')
+  })
+
+  it('falls back to Sanity for getGenerationContext on gateway error', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-A')
+
+    h.dataset = [structuredClone(confA), structuredClone(planA)]
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ errors: [{ message: 'D1 error' }] }), {
+        status: 500,
+      }),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await getGenerationContext('conf-A')
+    expect(result!.conference.title).toBe('Sanity Conference A')
+    expect(result!.conference.city).toBe('Sanity City')
+    expect(result!.conference.startDate).toBe('2026-08-01')
+  })
+
+  it('uses merged D1 dates for getPlannedConferences when flagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-A')
+
+    h.dataset = [structuredClone(confA), structuredClone(planA)]
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conf-A',
+              startDate: '2026-08-10',
+              endDate: '2026-08-12',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await getPlannedConferences()
+    expect(result).toHaveLength(1)
+    expect(result[0].startDate).toBe('2026-08-10')
+    expect(result[0].endDate).toBe('2026-08-12')
+  })
+
+  it('falls back to Sanity dates for getPlannedConferences when unflagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+
+    h.dataset = [structuredClone(confA), structuredClone(planA)]
+
+    const gatewayFetch = vi.fn()
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await getPlannedConferences()
+    expect(gatewayFetch).not.toHaveBeenCalled()
+    expect(result[0].startDate).toBe('2026-08-01')
+    expect(result[0].endDate).toBe('2026-08-02')
+  })
+
+  it('falls back to Sanity dates for getPlannedConferences on gateway error', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-A')
+
+    h.dataset = [structuredClone(confA), structuredClone(planA)]
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ errors: [{ message: 'D1 error' }] }), {
+        status: 500,
+      }),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await getPlannedConferences()
+    expect(result[0].startDate).toBe('2026-08-01')
+    expect(result[0].endDate).toBe('2026-08-02')
   })
 })

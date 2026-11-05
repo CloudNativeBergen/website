@@ -9,8 +9,10 @@
  * current edition and holds gallery images titled to match, so a leak cannot
  * hide behind an empty other tenant.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { evaluate, parse } from 'groq-js'
+
+vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 
 const h = vi.hoisted(() => ({
   dataset: [] as Record<string, unknown>[],
@@ -179,5 +181,95 @@ describe('previous-edition reads carry BOTH the conference and the organization 
   it('the SINGLE-conference scope still reads the current edition (unchanged)', async () => {
     const images = await getGalleryImages({ conferenceId: 'conf-a-2026' })
     expect(images.map((i) => i._id)).toEqual(['img-a-2026'])
+  })
+})
+
+describe('getPreviousEditions D1 gateway values and fallbacks (#1997)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  it('uses merged D1 title and dates when tenant is flagged and values differ', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-a-2025')
+
+    const conf2025 = h.dataset.find((d) => d._id === 'conf-a-2025')!
+    conf2025.domains = ['2025.example.com']
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conf-a-2025',
+              title: 'D1 2025 Title',
+              startDate: '2025-11-01',
+              endDate: '2025-11-02',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const editions = await getPreviousEditions('org-a', {
+      _id: 'conf-a-2026',
+      startDate: '2026-10-01',
+    })
+    const ed2025 = editions.find((e) => e._id === 'conf-a-2025')
+    expect(ed2025).toBeDefined()
+    expect(ed2025!.title).toBe('D1 2025 Title')
+    expect(ed2025!.startDate).toBe('2025-11-01')
+    expect(ed2025!.endDate).toBe('2025-11-02')
+  })
+
+  it('falls back to Sanity values when tenant is unflagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+
+    const conf2025 = h.dataset.find((d) => d._id === 'conf-a-2025')!
+    conf2025.domains = ['2025.example.com']
+
+    const gatewayFetch = vi.fn()
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const editions = await getPreviousEditions('org-a', {
+      _id: 'conf-a-2026',
+      startDate: '2026-10-01',
+    })
+    expect(gatewayFetch).not.toHaveBeenCalled()
+    const ed2025 = editions.find((e) => e._id === 'conf-a-2025')
+    expect(ed2025).toBeDefined()
+    expect(ed2025!.title).toBe('conf-a-2025')
+    expect(ed2025!.startDate).toBe('2025-10-01')
+    expect(ed2025!.endDate).toBe('2025-10-02')
+  })
+
+  it('falls back to Sanity values on gateway error', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-a-2025')
+
+    const conf2025 = h.dataset.find((d) => d._id === 'conf-a-2025')!
+    conf2025.domains = ['2025.example.com']
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ errors: [{ message: 'D1 down' }] }), {
+        status: 500,
+      }),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const editions = await getPreviousEditions('org-a', {
+      _id: 'conf-a-2026',
+      startDate: '2026-10-01',
+    })
+    const ed2025 = editions.find((e) => e._id === 'conf-a-2025')
+    expect(ed2025).toBeDefined()
+    expect(ed2025!.title).toBe('conf-a-2025')
+    expect(ed2025!.startDate).toBe('2025-10-01')
+    expect(ed2025!.endDate).toBe('2025-10-02')
   })
 })
