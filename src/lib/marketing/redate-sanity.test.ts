@@ -1,6 +1,8 @@
 /** @vitest-environment node */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { evaluate, parse } from 'groq-js'
+
+vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 
 const h = vi.hoisted(() => {
   const ops: { id: string; rev?: string; set?: unknown }[] = []
@@ -268,5 +270,83 @@ describe('re-date persistence', () => {
     // unanchored Campaign has no Milestone to follow and is never moved.
     h.dataset.find((d) => d._id === 'variant-a')!.status = 'published'
     expect(await getRedateCandidates()).toEqual([])
+  })
+})
+
+describe('D1 gateway values and fallbacks (#1997)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  it('uses merged D1 dates for getRedatablePlan when flagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'a')
+
+    const confA = h.dataset.find((d) => d._id === 'a')!
+    confA.domains = ['a.example.com']
+    confA.startDate = '2027-02-01'
+    confA.endDate = '2027-02-02'
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'a',
+              startDate: '2027-03-01',
+              endDate: '2027-03-03',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const plan = await getRedatablePlan('a')
+    expect(plan).not.toBeNull()
+    expect(plan!.conference?.startDate).toBe('2027-03-01')
+    expect(plan!.conference?.endDate).toBe('2027-03-03')
+  })
+
+  it('falls back to Sanity for getRedatablePlan when unflagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'other')
+
+    const confA = h.dataset.find((d) => d._id === 'a')!
+    confA.domains = ['a.example.com']
+    confA.startDate = '2027-02-01'
+    confA.endDate = '2027-02-02'
+
+    const gatewayFetch = vi.fn()
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const plan = await getRedatablePlan('a')
+    expect(gatewayFetch).not.toHaveBeenCalled()
+    expect(plan!.conference?.startDate).toBe('2027-02-01')
+    expect(plan!.conference?.endDate).toBe('2027-02-02')
+  })
+
+  it('falls back to Sanity for getRedatablePlan on gateway error', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'a')
+
+    const confA = h.dataset.find((d) => d._id === 'a')!
+    confA.domains = ['a.example.com']
+    confA.startDate = '2027-02-01'
+    confA.endDate = '2027-02-02'
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ errors: [{ message: 'D1 down' }] }), {
+        status: 500,
+      }),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const plan = await getRedatablePlan('a')
+    expect(plan!.conference?.startDate).toBe('2027-02-01')
+    expect(plan!.conference?.endDate).toBe('2027-02-02')
   })
 })

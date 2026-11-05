@@ -1,6 +1,7 @@
 import { groq } from 'next-sanity'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch, scopedQuery } from '@/lib/sanity/scoped'
+import { mergeConference } from '@/lib/conference/merge'
 import { getCurrentDateTime } from '@/lib/time'
 import type { MilestoneSource } from './milestones'
 import { commitOrConflict } from './sanity'
@@ -44,13 +45,25 @@ export async function getRedatablePlan(
     startDate, endDate, provisional
   }`
   const campaigns = scopedQuery({ conferenceId }, campaignsQuery)
-  return scopedFetch(
+  const snapshot = await scopedFetch<
+    | (Omit<RedatablePlanSnapshot, 'conference'> & {
+        conference:
+          | (MilestoneSource & {
+              _id: string
+              domains?: readonly string[] | null
+              organization?: { _ref: string } | null
+            })
+          | null
+      })
+    | null
+  >(
     clientReadUncached,
     { conferenceId },
     `
     *[_type == "marketingPlan" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
       "planId": _id, "planRev": _rev,
       "conference": conference->{
+        _id, domains, organization,
         startDate, endDate, cfpStartDate, cfpEndDate, cfpNotifyDate, programDate,
         earlyBirdEndDate, registrationCloseDate, speakersAnnouncedDate,
         sponsorDeadlineDate, recordingsLiveDate, ticketTargets
@@ -62,6 +75,11 @@ export async function getRedatablePlan(
     {},
     { cache: 'no-store' },
   )
+  if (!snapshot) return null
+  if (snapshot.conference) {
+    snapshot.conference = await mergeConference(snapshot.conference)
+  }
+  return snapshot
 }
 
 /** One atomic write, including the plan CAS that serializes concurrent runs. */

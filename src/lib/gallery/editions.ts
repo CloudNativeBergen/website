@@ -1,5 +1,6 @@
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { mergeConferences } from '@/lib/conference/merge'
 import { logger } from '@/lib/logger'
 
 /** A past edition of the current conference's organization (#1191). */
@@ -33,15 +34,30 @@ export async function getPreviousEditions(
 ): Promise<GalleryEdition[]> {
   if (!current.startDate) return []
   try {
-    const editions = await scopedFetch<GalleryEdition[] | null>(
+    const rawEditions = await scopedFetch<
+      | (GalleryEdition & {
+          domains?: readonly string[] | null
+          organization?: { _ref: string } | null
+        })[]
+      | null
+    >(
       clientReadUncached,
       { orgId },
-      `*[_type == "conference" && _id != $currentId && defined(endDate) && endDate < $currentStart]
-        | order(startDate desc) { _id, title, startDate, endDate }`,
-      { currentId: current._id, currentStart: current.startDate },
+      `*[_type == "conference" && _id != $currentId && defined(endDate)]
+        | order(startDate desc) { _id, title, startDate, endDate, domains, organization }`,
+      { currentId: current._id },
       { cache: 'no-store' },
     )
-    return editions ?? []
+    const merged = await mergeConferences(rawEditions ?? [])
+    return merged
+      .filter((e) => Boolean(e.endDate && e.endDate < current.startDate!))
+      .sort((a, b) => (b.startDate ?? '').localeCompare(a.startDate ?? ''))
+      .map(({ _id, title, startDate, endDate }) => ({
+        _id,
+        title,
+        startDate,
+        endDate,
+      }))
   } catch (error) {
     logger.error('Error listing previous gallery editions', {
       error: error instanceof Error ? error.message : 'Unknown error',

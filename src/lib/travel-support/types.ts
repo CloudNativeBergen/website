@@ -123,6 +123,9 @@ export interface TravelSupportWithSpeaker extends Omit<
   conference: {
     _id: string
     name: string
+    title?: string
+    domains?: readonly string[] | null
+    organization?: { _ref: string } | null
   }
   /**
    * The org that owns this request's conference (projected from
@@ -171,6 +174,9 @@ export interface TravelSupportDetail {
   conference: {
     _id: string
     name: string
+    title?: string
+    domains?: readonly string[] | null
+    organization?: { _ref: string } | null
   }
   /** See {@link TravelSupportWithSpeaker.conferenceOrgId} — the tenant key. */
   conferenceOrgId?: string | null

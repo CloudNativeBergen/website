@@ -1,5 +1,6 @@
 import type { ConferenceTheme } from '@/lib/branding/theme'
 import { clientReadUncached } from '@/lib/sanity/client'
+import { mergeConference } from '@/lib/conference/merge'
 import type { ContractStatus, SponsorStatus } from '@/lib/sponsor-crm/types'
 
 export interface SigningContractData {
@@ -82,8 +83,27 @@ const SIGNING_CONTRACT_QUERY = `*[_type == "sponsorForConference" && signatureId
 export async function getSigningContract(
   token: string,
 ): Promise<SigningContractData | null> {
-  return clientReadUncached.fetch<SigningContractData | null>(
+  const contract = await clientReadUncached.fetch<SigningContractData | null>(
     SIGNING_CONTRACT_QUERY,
     { signingToken: token },
   )
+  if (!contract) return null
+  if (contract.conference?._id) {
+    const conf = contract.conference
+    const candidate = {
+      ...conf,
+      _id: conf._id as string,
+      domains: conf.domains,
+      organization: conf.organization?._ref
+        ? { _ref: conf.organization._ref }
+        : null,
+    }
+    const merged = await mergeConference(candidate)
+    contract.conference = {
+      ...conf,
+      ...merged,
+      domains: merged.domains ? [...merged.domains] : undefined,
+    }
+  }
+  return contract
 }

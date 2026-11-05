@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 
 /**
  * REGRESSION (#616): gallery reads were UNSCOPED BY CONSTRUCTION.
@@ -300,5 +302,133 @@ describe('by-id gallery reads carry the tenant predicate (#616)', () => {
     )
     expect(res).toEqual({ success: true })
     expect(patchMock).toHaveBeenCalledWith('img-1')
+  })
+})
+
+describe('gallery D1 gateway values and fallbacks (#1997)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  const sanityImage = {
+    _id: 'img-1',
+    _rev: 'rev-1',
+    date: '2026-08-01',
+    conference: {
+      _id: 'conf-1',
+      title: 'Sanity Gallery Conf',
+      domains: ['gallery.example.com'],
+      organization: { _ref: 'org-1' },
+    },
+    speakers: [],
+  }
+
+  it('getGalleryImage uses merged D1 title when flagged and value differs', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    fetchMock.mockResolvedValue(structuredClone(sanityImage))
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conf-1',
+              title: 'D1 Gallery Conf',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await getGalleryImage('img-1', 'conf-1')
+    expect(result?.conference?.title).toBe('D1 Gallery Conf')
+  })
+
+  it('getGalleryImage falls back to Sanity title when unflagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    fetchMock.mockResolvedValue(structuredClone(sanityImage))
+
+    const gatewayFetch = vi.fn()
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await getGalleryImage('img-1', 'conf-1')
+    expect(gatewayFetch).not.toHaveBeenCalled()
+    expect(result?.conference?.title).toBe('Sanity Gallery Conf')
+  })
+
+  it('getGalleryImage falls back to Sanity title on gateway error', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    fetchMock.mockResolvedValue(structuredClone(sanityImage))
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ errors: [{ message: 'D1 down' }] }), {
+        status: 500,
+      }),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await getGalleryImage('img-1', 'conf-1')
+    expect(result?.conference?.title).toBe('Sanity Gallery Conf')
+  })
+
+  it('getGalleryImages uses merged D1 title when flagged and value differs', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    fetchMock.mockResolvedValue([structuredClone(sanityImage)])
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'conf-1',
+              title: 'D1 Gallery Conf',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await getGalleryImages({ conferenceId: 'conf-1' })
+    expect(result).toHaveLength(1)
+    expect(result[0].conference?.title).toBe('D1 Gallery Conf')
+  })
+
+  it('getGalleryImages falls back to Sanity title when unflagged', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    fetchMock.mockResolvedValue([structuredClone(sanityImage)])
+
+    const gatewayFetch = vi.fn()
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await getGalleryImages({ conferenceId: 'conf-1' })
+    expect(gatewayFetch).not.toHaveBeenCalled()
+    expect(result[0].conference?.title).toBe('Sanity Gallery Conf')
+  })
+
+  it('getGalleryImages falls back to Sanity title on gateway error', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    fetchMock.mockResolvedValue([structuredClone(sanityImage)])
+
+    const gatewayFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ errors: [{ message: 'D1 down' }] }), {
+        status: 500,
+      }),
+    )
+    vi.stubGlobal('fetch', gatewayFetch)
+
+    const result = await getGalleryImages({ conferenceId: 'conf-1' })
+    expect(result[0].conference?.title).toBe('Sanity Gallery Conf')
   })
 })

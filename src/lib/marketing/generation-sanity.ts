@@ -1,5 +1,6 @@
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { mergeConference, mergeConferences } from '@/lib/conference/merge'
 import { getCurrentDateTime } from '@/lib/time'
 import type { Conference } from '@/lib/conference/types'
 import {
@@ -139,7 +140,7 @@ export async function getGenerationContext(
       _id,
       "ownerId": owner._ref,
       "conference": conference->{
-        _id, title, city, venueName, domains, startDate, endDate,
+        _id, domains, organization, title, city, venueName, startDate, endDate,
         cfpStartDate, cfpEndDate, cfpNotifyDate, programDate,
         earlyBirdEndDate, registrationCloseDate, speakersAnnouncedDate,
         sponsorDeadlineDate, recordingsLiveDate, ticketTargets, socialLinks
@@ -156,9 +157,10 @@ export async function getGenerationContext(
     { cache: 'no-store' },
   )
   if (!row?.conference?._id) return null
+  const mergedConference = await mergeConference(row.conference)
   return {
     plan: { _id: row._id, ownerId: row.ownerId ?? null },
-    conference: row.conference,
+    conference: mergedConference,
     campaigns: (row.campaigns ?? [])
       .filter((c): c is typeof c & { key: string } => !!c.key)
       .map((c) => ({
@@ -353,16 +355,52 @@ export async function getPlannedConferences(): Promise<PlannedConference[]> {
     "startDate": conference->startDate,
     "endDate": conference->endDate,
     "recordingsLiveDate": conference->recordingsLiveDate,
+    "conference": conference->{ _id, startDate, endDate, domains, organization },
     lastExpandedAt
   }`
   const rows = await clientReadUncached.fetch<
     (Omit<PlannedConference, 'conferenceId'> & {
       conferenceId: string | null
+      conference?: {
+        _id: string
+        startDate?: string | null
+        endDate?: string | null
+        domains?: readonly string[] | null
+        organization?: { _ref: string } | null
+      } | null
     })[]
   >(query, {}, { cache: 'no-store' })
-  return (rows ?? [])
-    .filter((r): r is typeof r & { conferenceId: string } => !!r.conferenceId)
-    .map((r) => ({ ...r, lastExpandedAt: r.lastExpandedAt ?? null }))
+  const rawRows = (rows ?? []).filter(
+    (r): r is typeof r & { conferenceId: string } => !!r.conferenceId,
+  )
+  const confCache = new Map<
+    string,
+    {
+      _id: string
+      startDate?: string | null
+      endDate?: string | null
+      domains?: readonly string[] | null
+      organization?: { _ref: string } | null
+    }
+  >()
+  for (const r of rawRows) {
+    if (r.conference && !confCache.has(r.conference._id)) {
+      confCache.set(r.conference._id, r.conference)
+    }
+  }
+  const mergedConfs = await mergeConferences(Array.from(confCache.values()))
+  const confMap = new Map(mergedConfs.map((c) => [c._id, c]))
+  return rawRows.map((r) => {
+    const conf = r.conference ? confMap.get(r.conference._id) : undefined
+    return {
+      planId: r.planId,
+      conferenceId: r.conferenceId,
+      startDate: conf?.startDate ?? r.startDate ?? null,
+      endDate: conf?.endDate ?? r.endDate ?? null,
+      recordingsLiveDate: r.recordingsLiveDate ?? null,
+      lastExpandedAt: r.lastExpandedAt ?? null,
+    }
+  })
 }
 
 /**

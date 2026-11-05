@@ -6,6 +6,7 @@
  */
 
 import { clientReadUncached } from '@/lib/sanity/client'
+import { mergeConference } from '@/lib/conference/merge'
 import { ownBlueskyHandle } from './lookup'
 
 /** `conferenceId` is the request's own, already resolved or guarded. */
@@ -14,13 +15,22 @@ export async function ownBlueskyAccount(
 ): Promise<string | null> {
   // NOT through `scopedFetch`: it prepends `conference._ref == $conferenceId`,
   // which a conference document never satisfies.
-  const links = await clientReadUncached.fetch<(string | null)[] | null>(
+  const conf = await clientReadUncached.fetch<{
+    _id: string
+    domains?: string[] | null
+    organization?: { _ref: string } | null
+    socialLinks?: (string | null)[] | null
+  } | null>(
     // groq-global-scoped: by-id read of the conference the request resolved.
-    `*[_type == "conference" && _id == $conferenceId][0].socialLinks`,
+    `*[_type == "conference" && _id == $conferenceId][0]{ _id, domains, organization, socialLinks }`,
     { conferenceId },
     { cache: 'no-store' },
   )
+  if (!conf) return null
+  const merged = await mergeConference(conf)
   return ownBlueskyHandle(
-    (links ?? []).filter((l): l is string => typeof l === 'string'),
+    (merged.socialLinks ?? []).filter(
+      (l): l is string => typeof l === 'string',
+    ),
   )
 }
