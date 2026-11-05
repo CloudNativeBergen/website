@@ -76,14 +76,39 @@ describe('KONF_API_TENANTS', () => {
     expect(conference.title).toBe('Sanity title')
   })
 
-  it('uncached (admin) reads stay on Sanity', async () => {
+  it('uncached plus flagged with differing D1 gives D1', async () => {
     vi.stubEnv('KONF_API_TENANTS', 'conf-1')
-    apiReply({ title: 'API title' })
+    apiReply({ title: 'API title', city: 'Trondheim' })
+    const { conference } = await getConferenceForDomain('2026.example.com', {
+      uncached: true,
+    })
+    expect(fetchMock).toHaveBeenCalled()
+    expect(conference.title).toBe('API title')
+    expect(conference.city).toBe('Trondheim')
+    expect(conference.cfpEmail).toBe('cfp@example.com')
+  })
+
+  it('uncached plus unflagged gives Sanity with no conference read', async () => {
+    vi.stubEnv('KONF_API_TENANTS', '')
     const { conference } = await getConferenceForDomain('2026.example.com', {
       uncached: true,
     })
     expect(fetchMock).not.toHaveBeenCalled()
     expect(conference.title).toBe('Sanity title')
+    expect(conference.city).toBe('Bergen')
+  })
+
+  it('uncached plus error gives Sanity', async () => {
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    fetchMock.mockResolvedValue(new Response('boom', { status: 502 }))
+    const { conference, status } = await getConferenceForDomain(
+      '2026.example.com',
+      { uncached: true },
+    )
+    expect(status).toBe('resolved')
+    expect(conference.title).toBe('Sanity title')
+    expect(conference.city).toBe('Bergen')
+    expect(console.warn).toHaveBeenCalled()
   })
 
   it('a title equal to the id is not merged', async () => {

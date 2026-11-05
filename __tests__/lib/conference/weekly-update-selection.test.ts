@@ -15,7 +15,7 @@
  * strictly LOOSER than `isConferenceOver` so it can never drop a conference the
  * JS filter would have kept.
  */
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
 const liveFetch = vi.fn()
 
@@ -61,6 +61,12 @@ function paramsOf(): Record<string, unknown> {
 beforeEach(() => {
   vi.clearAllMocks()
   liveFetch.mockResolvedValue([])
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+  vi.restoreAllMocks()
 })
 
 describe('getConferencesForWeeklyUpdate — bounded cron selection', () => {
@@ -115,5 +121,83 @@ describe('getConferencesForWeeklyUpdate — bounded cron selection', () => {
   it('still requires a non-empty sales notification channel', async () => {
     await getConferencesForWeeklyUpdate()
     expect(queryOf()).toContain('salesNotificationChannel != ""')
+  })
+})
+
+describe('getConferencesForWeeklyUpdate — D1 merge', () => {
+  it('flagged tenant with differing D1 merges D1 fields', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'c-live')
+    liveFetch.mockResolvedValue([
+      {
+        _id: 'c-live',
+        title: 'Sanity Title',
+        domains: ['live.example.com'],
+        endDate: '2999-01-01',
+      },
+    ])
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            conference: {
+              id: 'c-live',
+              title: 'D1 Title',
+              endDate: '2999-01-02',
+            },
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await getConferencesForWeeklyUpdate()
+    expect(result).toHaveLength(1)
+    expect(result[0].title).toBe('D1 Title')
+    expect(result[0].endDate).toBe('2999-01-02')
+  })
+
+  it('unflagged tenant keeps Sanity values with no gateway read', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', '')
+    liveFetch.mockResolvedValue([
+      {
+        _id: 'c-live',
+        title: 'Sanity Title',
+        domains: ['live.example.com'],
+        endDate: '2999-01-01',
+      },
+    ])
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await getConferencesForWeeklyUpdate()
+    expect(result).toHaveLength(1)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(result[0].title).toBe('Sanity Title')
+    expect(result[0].endDate).toBe('2999-01-01')
+  })
+
+  it('gateway error falls back to Sanity', async () => {
+    vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+    vi.stubEnv('KONF_API_TENANTS', 'c-live')
+    liveFetch.mockResolvedValue([
+      {
+        _id: 'c-live',
+        title: 'Sanity Title',
+        domains: ['live.example.com'],
+        endDate: '2999-01-01',
+      },
+    ])
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response('boom', { status: 502 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const result = await getConferencesForWeeklyUpdate()
+    expect(result).toHaveLength(1)
+    expect(result[0].title).toBe('Sanity Title')
+    expect(warnSpy).toHaveBeenCalled()
   })
 })

@@ -24,7 +24,7 @@ import { getPublicSponsorsForConference } from '@/lib/sponsor-crm/sanity'
 import { selectConferenceSections, type RawConferenceRead } from './sections'
 import { CONFERENCE_QUERY_CORE, CONFERENCE_QUERY_FULL } from './query'
 import { CONFERENCE_CACHE_LIFE } from './cache-life'
-import { mergeKonfApiConference, rolloutFlags } from './konf-api'
+import { mergeConference, mergeConferences } from './merge'
 
 /**
  * THE cached conference read.
@@ -329,10 +329,7 @@ export async function getConferenceForDomain(
         schedule,
         confirmedTalksOnly,
       })
-      // Spike (#1833): flagged tenants read core fields from the Konf API.
-      if (!uncached && (await rolloutFlags(host, conference)).apiRead) {
-        conference = await mergeKonfApiConference(host, conference)
-      }
+      conference = await mergeConference(conference)
       status = 'resolved'
 
       if (sponsors && conference._id) {
@@ -520,9 +517,9 @@ export async function getConferencesForWeeklyUpdate(): Promise<Conference[]> {
     { cache: 'no-store' },
   )
 
-  return (conferences ?? []).filter(
-    (conference) => !isConferenceOver(conference),
-  )
+  const merged = await mergeConferences(conferences ?? [])
+
+  return merged.filter((conference) => !isConferenceOver(conference))
 }
 
 /**
