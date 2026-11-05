@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
   fetch: vi.fn(),
@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
 }))
 
 vi.mock('server-only', () => ({}))
+vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: h.fetch },
 }))
@@ -94,9 +95,15 @@ describe('foldExpiredReviews', () => {
     h.ops.length = 0
   })
 
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
   const arrange = (reviews = [review('r1', 't1')]) =>
     h.fetch
-      .mockResolvedValueOnce([{ _id: 'c1' }])
+      .mockResolvedValueOnce([{ _id: 'c1', endDate: '2020-01-01' }])
       .mockResolvedValueOnce(['t1'])
       .mockResolvedValueOnce(reviews)
 
@@ -145,5 +152,99 @@ describe('foldExpiredReviews', () => {
     h.readTalkVersions.mockResolvedValueOnce(versionsOf())
     expect(await foldExpiredReviews(true)).toEqual({ talks: 1, deleted: 1 })
     expect(h.commit).not.toHaveBeenCalled()
+  })
+
+  describe('D1 gateway values and fallbacks (#1997)', () => {
+    it('uses D1 endDate when tenant has apiRead enabled (postponed edition is spared)', async () => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'c1')
+
+      // Sanity endDate is 2020-01-01, but D1 postponed to 2099-01-01
+      h.fetch.mockResolvedValueOnce([
+        {
+          _id: 'c1',
+          endDate: '2020-01-01',
+          domains: ['c1.example.com'],
+        },
+      ])
+
+      const gatewayFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              conference: {
+                id: 'c1',
+                title: 'CND 2099',
+                endDate: '2099-01-01',
+              },
+            },
+          }),
+        ),
+      )
+      vi.stubGlobal('fetch', gatewayFetch)
+
+      const result = await foldExpiredReviews()
+      expect(result).toEqual({ talks: 0, deleted: 0 })
+      expect(h.ops).toEqual([])
+    })
+
+    it('uses D1 endDate when tenant has apiRead enabled (earlier ended edition is folded)', async () => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'c1')
+
+      // Sanity endDate is 2099-01-01, but D1 ended 2020-01-01
+      h.fetch
+        .mockResolvedValueOnce([
+          {
+            _id: 'c1',
+            endDate: '2099-01-01',
+            domains: ['c1.example.com'],
+          },
+        ])
+        .mockResolvedValueOnce(['t1'])
+        .mockResolvedValueOnce([review('r1', 't1')])
+
+      h.readTalkVersions.mockResolvedValueOnce(versionsOf())
+
+      const gatewayFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              conference: {
+                id: 'c1',
+                title: 'CND 2020',
+                endDate: '2020-01-01',
+              },
+            },
+          }),
+        ),
+      )
+      vi.stubGlobal('fetch', gatewayFetch)
+
+      const result = await foldExpiredReviews()
+      expect(result).toEqual({ talks: 1, deleted: 1 })
+      expect(h.ops).toEqual(['patch:t1', 'patch:r1', 'delete:r1'])
+    })
+
+    it('falls back to Sanity endDate when tenant is unflagged', async () => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+
+      // Sanity endDate is 2099-01-01 (not expired)
+      h.fetch.mockResolvedValueOnce([
+        {
+          _id: 'c1',
+          endDate: '2099-01-01',
+          domains: ['c1.example.com'],
+        },
+      ])
+
+      const gatewayFetch = vi.fn()
+      vi.stubGlobal('fetch', gatewayFetch)
+
+      const result = await foldExpiredReviews()
+      expect(gatewayFetch).not.toHaveBeenCalled()
+      expect(result).toEqual({ talks: 0, deleted: 0 })
+    })
   })
 })

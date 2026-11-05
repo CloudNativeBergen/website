@@ -7,6 +7,7 @@ import { osloTodayDateString } from '@/lib/time'
 import { expireWallPost } from './cache'
 import { deleteWallAsset } from './delete'
 import { deletionDate, plusDays } from './deletion'
+import { mergeConference } from '@/lib/conference/merge'
 
 /**
  * THE 30-DAY DELETION (Photo Wall spec §11.1): run daily by the retention
@@ -133,18 +134,61 @@ const isVersionId = (id: string) => id.startsWith('versions.')
 /** `versions.<release>.<id>` → `<release>`. */
 const releaseOf = (id: string) => id.split('.')[1] ?? ''
 
+type UnpurgedWallRow = {
+  _id: string
+  closedAt: string | null
+  conferenceId: string | null
+  endDate: string | null
+  conference: {
+    _id: string
+    endDate?: string | null
+    domains?: string[] | null
+    organization?: { _ref: string } | null
+  } | null
+}
+
 /** Every wall with `purgedAt` unset. */
 export async function readUnpurgedWalls(
   signal: AbortSignal,
 ): Promise<UnpurgedWall[]> {
-  const rows = await clientReadUncached.fetch<UnpurgedWall[]>(
+  const rows = await clientReadUncached.fetch<UnpurgedWallRow[]>(
     // groq-global: the platform RETENTION CRON enumerates every tenant's
     // walls by design; each wall's purge below is scoped to its conference.
-    `*[_type == "photoWall" && !defined(purgedAt) && !(_id in path("drafts.**"))]{ _id, closedAt, "conferenceId": conference._ref, "endDate": conference->endDate }`,
+    `*[_type == "photoWall" && !defined(purgedAt) && !(_id in path("drafts.**"))]{
+      _id,
+      closedAt,
+      "conferenceId": conference._ref,
+      "endDate": conference->endDate,
+      "conference": conference->{ _id, endDate, domains, organization }
+    }`,
     {},
     { cache: 'no-store', signal },
   )
-  return rows ?? []
+  if (!rows || rows.length === 0) return []
+
+  const confCache = new Map<
+    string,
+    Promise<NonNullable<UnpurgedWallRow['conference']>>
+  >()
+  return Promise.all(
+    rows.map(async (row) => {
+      if (!row.conference) {
+        return {
+          _id: row._id,
+          closedAt: row.closedAt,
+          conferenceId: row.conferenceId,
+          endDate: row.endDate,
+        }
+      }
+      const merged = await mergeConference(row.conference, confCache)
+      return {
+        _id: row._id,
+        closedAt: row.closedAt,
+        conferenceId: row.conferenceId,
+        endDate: merged.endDate ?? row.conference.endDate ?? row.endDate,
+      }
+    }),
+  )
 }
 
 /**

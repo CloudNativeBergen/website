@@ -4,6 +4,7 @@ import { groq } from 'next-sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import { formatDate } from '@/lib/time'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { mergeConference } from '@/lib/conference/merge'
 import { emailBrandColor } from '@/lib/branding/theme'
 import { Status } from '@/lib/proposal/types'
 import {
@@ -115,8 +116,7 @@ const SWEEP_QUERY = groq`*[
   !(_id in path("drafts.**")) &&
   status in ["pending", "expired"] &&
   expiresAt < $nudgeCutoff &&
-  proposal->status in $chaseable &&
-  conference->endDate >= $today
+  proposal->status in $chaseable
 ] | order(expiresAt asc) {
   _id,
   _rev,
@@ -185,8 +185,18 @@ export async function GET(request: NextRequest) {
     const rows: SweepRow[] = await clientWrite.fetch(SWEEP_QUERY, {
       nudgeCutoff,
       chaseable: [...CHASEABLE_PROPOSAL_STATUSES],
-      today: now.toISOString().slice(0, 10),
     })
+
+    const today = now.toISOString().slice(0, 10)
+    const confCache = new Map<string, Promise<SweepConference>>()
+    for (const row of rows) {
+      if (row.sweepConference) {
+        row.sweepConference = await mergeConference(
+          row.sweepConference,
+          confCache,
+        )
+      }
+    }
 
     let nudged = 0
     let alerted = 0
@@ -207,6 +217,11 @@ export async function GET(request: NextRequest) {
         console.error(
           `Co-speaker sweep: invitation ${row._id} has no readable conference; skipping`,
         )
+        continue
+      }
+
+      // Filter in code using merged dates: conferences that have ended are skipped.
+      if (!conference.endDate || conference.endDate < today) {
         continue
       }
 

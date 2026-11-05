@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
+vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
+
 // --- Sanity client mock (transaction boundary) -----------------------------
 
 const fetchMock = vi.fn()
@@ -52,7 +54,13 @@ interface ConferenceThreads {
 }
 
 interface Routes {
-  conferences: { _id: string; title: string | null }[]
+  conferences: {
+    _id: string
+    title: string | null
+    endDate?: string | null
+    domains?: string[] | null
+    organization?: { _ref: string } | null
+  }[]
   // Keyed by conference _id.
   threads: Record<string, ConferenceThreads>
 }
@@ -60,7 +68,12 @@ interface Routes {
 function routeFetch(routes: Routes) {
   return (query: string, params: Record<string, unknown> = {}) => {
     if (query.includes('_type == "conference"')) {
-      return Promise.resolve(routes.conferences)
+      return Promise.resolve(
+        routes.conferences.map((c) => ({
+          endDate: '2020-01-01',
+          ...c,
+        })),
+      )
     }
     if (query.includes('_type == "conversation"')) {
       const conferenceId = params.conferenceId as string
@@ -104,6 +117,9 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+  vi.restoreAllMocks()
   vi.useRealTimers()
 })
 
@@ -280,5 +296,145 @@ describe('deleteExpiredMessagingData', () => {
     expect(summary.conferences).toBe(1)
     expect(summary.messages).toBe(1)
     expect(committedBatches).toEqual([['message.ok'], ['conversation.ok']])
+  })
+
+  describe('D1 gateway values and fallbacks (#1997)', () => {
+    it('uses D1 endDate and title when tenant has apiRead enabled', async () => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'conf-d1')
+
+      // Sanity endDate is 2026-01-01 (not expired for 24-mo cutoff in 2026),
+      // but D1 endDate is 2020-01-01 (expired).
+      fetchMock.mockImplementation(
+        routeFetch({
+          conferences: [
+            {
+              _id: 'conf-d1',
+              title: 'Sanity Old Title',
+              endDate: '2026-01-01',
+              domains: ['d1.example.com'],
+            },
+          ],
+          threads: {
+            'conf-d1': {
+              conversations: [
+                {
+                  _id: 'conv-1',
+                  conversationType: 'general',
+                  proposalId: null,
+                },
+              ],
+              messageIds: ['msg-1'],
+              preferenceIds: [],
+              notificationIds: [],
+            },
+          },
+        }),
+      )
+
+      const gatewayFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              conference: {
+                id: 'conf-d1',
+                title: 'D1 New Title',
+                endDate: '2020-01-01',
+              },
+            },
+          }),
+        ),
+      )
+      vi.stubGlobal('fetch', gatewayFetch)
+
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const summary = await deleteExpiredMessagingData()
+
+      expect(summary.conferences).toBe(1)
+      expect(summary.messages).toBe(1)
+      expect(committedBatches).toEqual([['msg-1'], ['conv-1']])
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('D1 New Title'),
+      )
+    })
+
+    it('falls back to Sanity endDate when tenant is unflagged', async () => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+
+      // Sanity endDate is 2026-01-01 (not expired); should not be purged
+      fetchMock.mockImplementation(
+        routeFetch({
+          conferences: [
+            {
+              _id: 'conf-d1',
+              title: 'Sanity Title',
+              endDate: '2026-01-01',
+              domains: ['d1.example.com'],
+            },
+          ],
+          threads: {},
+        }),
+      )
+
+      const gatewayFetch = vi.fn()
+      vi.stubGlobal('fetch', gatewayFetch)
+
+      const summary = await deleteExpiredMessagingData()
+      expect(gatewayFetch).not.toHaveBeenCalled()
+      expect(summary.conferences).toBe(0)
+    })
+
+    it('falls back to Sanity endDate when D1 returns nullish endDate', async () => {
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_API_TENANTS', 'conf-d1')
+
+      // Sanity endDate is 2020-01-01 (expired); D1 returns null endDate
+      fetchMock.mockImplementation(
+        routeFetch({
+          conferences: [
+            {
+              _id: 'conf-d1',
+              title: 'Sanity Title',
+              endDate: '2020-01-01',
+              domains: ['d1.example.com'],
+            },
+          ],
+          threads: {
+            'conf-d1': {
+              conversations: [
+                {
+                  _id: 'conv-1',
+                  conversationType: 'general',
+                  proposalId: null,
+                },
+              ],
+              messageIds: ['msg-1'],
+              preferenceIds: [],
+              notificationIds: [],
+            },
+          },
+        }),
+      )
+
+      const gatewayFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              conference: {
+                id: 'conf-d1',
+                title: 'D1 Title',
+                endDate: null,
+              },
+            },
+          }),
+        ),
+      )
+      vi.stubGlobal('fetch', gatewayFetch)
+
+      const summary = await deleteExpiredMessagingData()
+      expect(summary.conferences).toBe(1)
+      expect(summary.messages).toBe(1)
+    })
   })
 })

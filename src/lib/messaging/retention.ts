@@ -1,6 +1,7 @@
 import 'server-only'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { mergeConferences } from '@/lib/conference/merge'
 import { conversationLinkPath } from './links'
 
 /**
@@ -128,16 +129,26 @@ interface RetentionConversation {
 export async function deleteExpiredMessagingData(): Promise<MessagingRetentionSummary> {
   const cutoff = messagingRetentionCutoff()
 
-  const conferences =
-    (await clientReadUncached.fetch<{ _id: string; title: string | null }[]>(
+  type ConfRow = {
+    _id: string
+    title: string | null
+    endDate?: string | null
+    domains?: string[] | null
+    organization?: { _ref: string } | null
+  }
+  const rawConferences =
+    (await clientReadUncached.fetch<ConfRow[]>(
       // groq-global: platform RETENTION CRON — enumerates every tenant's
-      // expired conferences by design (the 24-month purge horizon documented
-      // above); each conference's actual deletion below is scoped to that one
-      // conference. The interpolation is the constant per-run cap in the slice.
-      `*[_type == "conference" && defined(endDate) && endDate < $cutoff][0...${MAX_CONFERENCES_PER_RUN}]{ _id, title }`,
-      { cutoff },
+      // conferences; candidates are filtered in code with merged D1 dates.
+      `*[_type == "conference" && defined(endDate)]{ _id, title, endDate, domains, organization }`,
+      {},
       { cache: 'no-store' },
     )) ?? []
+
+  const merged = await mergeConferences(rawConferences)
+  const conferences = merged
+    .filter((c) => Boolean(c.endDate && c.endDate < cutoff))
+    .slice(0, MAX_CONFERENCES_PER_RUN)
 
   const summary: MessagingRetentionSummary = {
     conferences: 0,

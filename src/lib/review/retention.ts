@@ -1,6 +1,7 @@
 import 'server-only'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { mergeConferences } from '@/lib/conference/merge'
 import { PUBLISHED_ONLY, versionsClient } from '@/lib/feedback/sanity'
 import {
   lockRevision,
@@ -89,15 +90,26 @@ export async function foldExpiredReviews(
   dryRun = false,
 ): Promise<{ talks: number; deleted: number }> {
   const cutoff = osloMonthsCutoff(REVIEW_RETENTION_MONTHS)
-  const conferences =
-    (await clientReadUncached.fetch<{ _id: string }[]>(
+  type ConfRow = {
+    _id: string
+    endDate?: string | null
+    domains?: string[] | null
+    organization?: { _ref: string } | null
+  }
+  const rawConferences =
+    (await clientReadUncached.fetch<ConfRow[]>(
       // groq-global: platform RETENTION CRON — enumerates every tenant's
-      // conferences past the review horizon that still have reviews; each
-      // fold below is scoped to that one conference.
-      `*[_type == "conference" && defined(endDate) && endDate < $cutoff && ${HAS_REVIEWS}]{ _id }`,
-      { cutoff },
+      // conferences that still have reviews; candidate conferences are
+      // filtered in code with merged D1 dates.
+      `*[_type == "conference" && defined(endDate) && ${HAS_REVIEWS}]{ _id, endDate, domains, organization }`,
+      {},
       { cache: 'no-store' },
     )) ?? []
+
+  const merged = await mergeConferences(rawConferences)
+  const conferences = merged.filter((c) =>
+    Boolean(c.endDate && c.endDate < cutoff),
+  )
 
   const client = versionsClient()
   const result = { talks: 0, deleted: 0 }
