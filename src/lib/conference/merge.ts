@@ -63,7 +63,10 @@ export function purgeEndDate(
 ): string | null | undefined {
   if (!isDate(merged)) return sanity
   if (!isDate(sanity)) return sanity
-  return merged.slice(0, 10) > sanity.slice(0, 10) ? merged : sanity
+  // Date part only: purge cutoffs compare `YYYY-MM-DD` strings.
+  return merged.slice(0, 10) > sanity.slice(0, 10)
+    ? merged.slice(0, 10)
+    : sanity
 }
 
 /**

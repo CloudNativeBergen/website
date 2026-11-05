@@ -45,6 +45,7 @@ import {
 } from './talk-versions'
 import { countColours, storedCount } from './totals'
 import { osloMonthsCutoff } from '@/lib/retention/cutoffs'
+import { mergeConference, purgeEndDate } from '@/lib/conference/merge'
 
 /** Responses per transaction (§12.2). */
 export const FOLD_CHUNK_SIZE = 100
@@ -384,12 +385,22 @@ async function pastRetention(
     _rev: string
     _type?: string
     endDate?: unknown
+    domains?: string[]
+    organization?: { _ref: string }
   }>(conferenceId, requestCap(REQUEST_TIMEOUT_MS))
+  // D1 may only delay a fold (later end date wins), never widen it (#1997).
+  const endDate =
+    conference && typeof conference.endDate === 'string'
+      ? purgeEndDate(
+          conference.endDate,
+          (await mergeConference(conference)).endDate,
+        )
+      : undefined
   // No revision, no guard: then it is not folded.
   return conference?._type === 'conference' &&
     typeof conference._rev === 'string' &&
-    typeof conference.endDate === 'string' &&
-    conference.endDate < cutoff
+    typeof endDate === 'string' &&
+    endDate < cutoff
     ? { guards: [{ id: conference._id, rev: conference._rev }] }
     : false
 }

@@ -27,7 +27,14 @@ const h = vi.hoisted(() => ({
   store: null as null | VersionedSanityStore,
   releases: [] as { name: string; state: string }[],
   releasesFail: false,
+  rolloutFlags: vi.fn(),
+  mergeKonfApiConference: vi.fn(),
   revalidateTag: vi.fn(),
+}))
+
+vi.mock('@/lib/conference/konf-api', () => ({
+  rolloutFlags: h.rolloutFlags,
+  mergeKonfApiConference: h.mergeKonfApiConference,
 }))
 
 vi.mock('next/cache', () => ({
@@ -690,6 +697,67 @@ describe('foldTalkFeedback: chunks and guards', () => {
     )
     await foldTalkFeedback('talk-1', { now: NOW })
     expect(counts('drafts.talk-1')).toEqual({ green: 1, yellow: 0, red: 0 })
+  })
+})
+
+describe('foldExpiredFeedback: D1 end date (#1997)', () => {
+  const d1Conf = () => ({
+    ...conference('conf-old', '2024-09-21'),
+    domains: ['old.example.com'],
+    organization: ref('org-1'),
+  })
+  const seed = () =>
+    store().reset([
+      d1Conf(),
+      talk('talk-1', 'conf-old'),
+      response('r-1', 'green'),
+    ])
+  beforeEach(() => {
+    h.rolloutFlags.mockResolvedValue({ apiRead: false })
+  })
+
+  it('an unflagged tenant folds on Sanity and never calls the gateway', async () => {
+    seed()
+    const report = await foldExpiredFeedback({ now: NOW })
+    expect(report).toMatchObject({ folded: 1, ineligible: 0 })
+    expect(h.rolloutFlags).toHaveBeenCalled()
+    expect(h.mergeKonfApiConference).not.toHaveBeenCalled()
+  })
+
+  it('a later D1 end date delays the fold', async () => {
+    seed()
+    h.rolloutFlags.mockResolvedValue({ apiRead: true })
+    h.mergeKonfApiConference.mockImplementation(async (_h, c) => ({
+      ...c,
+      endDate: '2024-12-01T09:00:00Z',
+    }))
+    const report = await foldExpiredFeedback({ now: NOW })
+    expect(report).toMatchObject({ folded: 0, ineligible: 1 })
+    expect(store().doc('r-1')).toBeDefined()
+  })
+
+  it('an earlier D1 end date does not widen the fold: Sanity still decides', async () => {
+    store().reset([
+      { ...d1Conf(), endDate: '2024-11-21' },
+      talk('talk-1', 'conf-old'),
+      response('r-1', 'green'),
+    ])
+    h.rolloutFlags.mockResolvedValue({ apiRead: true })
+    h.mergeKonfApiConference.mockImplementation(async (_h, c) => ({
+      ...c,
+      endDate: '2020-01-01',
+    }))
+    const report = await foldExpiredFeedback({ now: NOW })
+    expect(report.folded).toBe(0)
+    expect(store().doc('r-1')).toBeDefined()
+  })
+
+  it('a failing gateway falls back to Sanity', async () => {
+    seed()
+    h.rolloutFlags.mockResolvedValue({ apiRead: true })
+    h.mergeKonfApiConference.mockRejectedValue(new Error('gateway down'))
+    const report = await foldExpiredFeedback({ now: NOW })
+    expect(report).toMatchObject({ folded: 1, ineligible: 0 })
   })
 })
 
