@@ -114,14 +114,18 @@ builder.mutationType({
       tag: 'internal',
       args: {
         idempotencyKey: t.arg.string({ required: true }),
+        // Sanity `_id`s from the site's step 1 (docs/TENANT_PROVISIONING.md).
+        orgId: t.arg.id({ required: true }),
         orgSlug: t.arg.string({ required: true }),
-        orgName: t.arg.string({ required: true }),
-        conferenceSlug: t.arg.string({ required: true }),
-        conferenceName: t.arg.string({ required: true }),
+        conferenceId: t.arg.id({ required: true }),
       },
       resolve: (_, args, ctx) => {
         requirePlatform(ctx)
-        return ctx.data.provision(args)
+        return ctx.data.provision({
+          ...args,
+          orgId: String(args.orgId),
+          conferenceId: String(args.conferenceId),
+        })
       },
     }),
     repointAlias: t.field({

@@ -22,6 +22,10 @@
   "triggers": {
     "crons": ["*/5 * * * *"],
   },
+  "vars": {
+    "SANITY_PROJECT_ID": "mvzwvw14",
+    "SANITY_DATASET": "development",
+  },
   "workers_dev": false,
   "preview_urls": false,
   "env": {
@@ -42,6 +46,10 @@
           "service": "konf-identity-preview",
         },
       ],
+      "vars": {
+        "SANITY_PROJECT_ID": "mvzwvw14",
+        "SANITY_DATASET": "development",
+      },
     },
     "production": {
       "d1_databases": [
@@ -60,6 +68,10 @@
           "entrypoint": "Organizations",
         },
       ],
+      "vars": {
+        "SANITY_PROJECT_ID": "mvzwvw14",
+        "SANITY_DATASET": "production",
+      },
     },
   },
   "observability": {

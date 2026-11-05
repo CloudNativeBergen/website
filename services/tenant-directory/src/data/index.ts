@@ -36,6 +36,11 @@ export interface DataEnv extends CloudflareEnv {
     /** Organizer membership sync (#1907); identity has no cron of its own. */
     syncMembers(): Promise<unknown>
   }
+  /** Sanity ids as in services/identity; provisioning verifies against it. */
+  SANITY_PROJECT_ID?: string
+  SANITY_DATASET?: string
+  /** wrangler secret put SANITY_API_TOKEN_READ (per environment) */
+  SANITY_API_TOKEN_READ?: string
 }
 
 /** How often a verified custom domain is re-checked with Cloudflare. */
@@ -44,13 +49,76 @@ const RECHECK_VERIFIED_MS = 60 * 60 * 1000
 const fail = (code: string, message: string) =>
   createGraphQLError(message, { extensions: { code } })
 
+/** Sanity document ids: what the site mints for a conference. */
+const SANITY_ID = /^[A-Za-z0-9._-]{1,128}$/
+
 export interface ProvisionInput {
   idempotencyKey: string
+  /** Sanity `_id`s minted by the site (src/lib/onboarding/provision.ts). */
+  orgId: string
   orgSlug: string
-  orgName: string
-  conferenceSlug: string
-  conferenceName: string
+  conferenceId: string
 }
+
+interface SanityTenant {
+  org: { slug: string | null; name: string | null } | null
+  conf: {
+    orgRef: string | null
+    title: string | null
+    startDate: string | null
+    domains: string[] | null
+  } | null
+}
+
+// Published documents only: a draft id never equals a published `_id`, and
+// the path filter says so explicitly.
+const TENANT = `{
+  "org": *[_type == "organization" && _id == $orgId && !(_id in path("drafts.**"))][0]{ "slug": slug.current, name },
+  "conf": *[_type == "conference" && _id == $conferenceId && !(_id in path("drafts.**"))][0]{ "orgRef": organization._ref, title, startDate, domains }
+}`
+
+/** Raw GROQ, the same pattern as identity's member sync. Fails closed. */
+async function sanityTenant(env: DataEnv, params: Record<string, string>) {
+  if (
+    !env.SANITY_API_TOKEN_READ ||
+    !env.SANITY_PROJECT_ID ||
+    !env.SANITY_DATASET
+  ) {
+    throw fail('INTERNAL_SERVER_ERROR', 'Sanity read token is not configured')
+  }
+  let res: Response
+  try {
+    res = await fetch(
+      `https://${env.SANITY_PROJECT_ID}.api.sanity.io/v2023-05-03/data/query/${env.SANITY_DATASET}`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${env.SANITY_API_TOKEN_READ}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ query: TENANT, params }),
+      },
+    )
+  } catch {
+    throw fail('INTERNAL_SERVER_ERROR', 'Sanity read failed')
+  }
+  if (!res.ok)
+    throw fail('INTERNAL_SERVER_ERROR', `Sanity read failed (${res.status})`)
+  const body = (await res.json().catch(() => null)) as {
+    result?: SanityTenant
+  } | null
+  if (!body?.result) throw fail('INTERNAL_SERVER_ERROR', 'Sanity read failed')
+  return body.result
+}
+
+const sha256 = async (s: string) =>
+  [
+    ...new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)),
+    ),
+  ]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 
 export function createData(
   env: DataEnv,
@@ -114,87 +182,160 @@ export function createData(
     },
 
     /**
-     * Same key twice returns the first Organization; nothing is created
-     * twice. identity's ensure runs on every call, so a retry heals a
+     * Registers a tenant the site already created in Sanity (#1924), under
+     * the Sanity `_id`s. Every check runs before any D1 write; the hostname
+     * primary key is the final guard. Same key and same arguments returns
+     * the first Organization (a no-op); same key with other arguments is
+     * refused. identity's ensure runs on every call, so a retry heals a
      * failed ensure.
      */
     async provision(input: ProvisionInput) {
+      const { orgId, orgSlug, conferenceId } = input
       if (!input.idempotencyKey.trim()) {
         throw fail('BAD_USER_INPUT', 'idempotencyKey is required')
       }
-      if (!SLUG.test(input.orgSlug) || !SLUG.test(input.conferenceSlug)) {
+      if (!SLUG.test(orgSlug)) {
         throw fail('BAD_USER_INPUT', 'slugs are lowercase a-z, 0-9 and -')
       }
-      if (RESERVED_SLUGS.has(input.orgSlug)) {
+      if (RESERVED_SLUGS.has(orgSlug)) {
         throw fail(
           'BAD_USER_INPUT',
-          `"${input.orgSlug}" is reserved for a platform host`,
+          `"${orgSlug}" is reserved for a platform host`,
         )
       }
-      const earlier = async () => {
-        const req = await db.query.provisioningRequests.findFirst({
-          where: eq(provisioningRequests.idempotencyKey, input.idempotencyKey),
-        })
-        return req ? organization(req.orgId) : undefined
+      // The site's id rule (provision.ts orgIdForSlug). Legacy orgs such as
+      // `organization-cloud-native-days` fail this by design: they enter
+      // the directory through scripts/backfill.ts only.
+      if (orgId !== `organization.${orgSlug}`) {
+        throw fail('BAD_USER_INPUT', 'orgId must be "organization.<orgSlug>"')
       }
-      const ensured = async <T extends { id: string; slug: string }>(
-        org: T,
-      ) => {
+      if (
+        !SANITY_ID.test(conferenceId) ||
+        conferenceId.startsWith('drafts.') ||
+        conferenceId.startsWith('versions.')
+      ) {
+        throw fail(
+          'BAD_USER_INPUT',
+          'conferenceId is not a published Sanity id',
+        )
+      }
+
+      // sha256(key), not the raw key. The site hashes with AUTH_SECRET;
+      // tenant-directory has none, and the two hashes are never compared.
+      const keyHash = await sha256(input.idempotencyKey)
+      const earlier = () =>
+        db.query.provisioningRequests.findFirst({
+          where: eq(provisioningRequests.idempotencyKey, keyHash),
+        })
+      const replay = async (orgOfKey: string) => {
+        const [org, conf] = await Promise.all([
+          organization(orgOfKey),
+          conference(conferenceId),
+        ])
+        if (
+          !org ||
+          org.id !== orgId ||
+          org.slug !== orgSlug ||
+          conf?.orgId !== orgId
+        ) {
+          throw fail(
+            'CONFLICT',
+            'idempotencyKey was used with different arguments',
+          )
+        }
         await env.IDENTITY.ensure(org.id, org.slug)
         return org
       }
       const done = await earlier()
-      if (done) return ensured(done)
+      if (done) return replay(done.orgId)
 
-      const orgId = crypto.randomUUID()
-      const conferenceId = crypto.randomUUID()
-      const host = (
-        hostname: string,
-        kind: 'platform-edition' | 'platform-alias',
-      ) =>
-        db.insert(domains).values({
-          hostname,
-          kind,
-          orgId,
-          conferenceId,
-          // Platform hosts sit under the platform's own certificate.
-          verification: 'verified',
-        })
+      const { org, conf } = await sanityTenant(env, { orgId, conferenceId })
+      if (!org || org.slug !== orgSlug) {
+        throw fail(
+          'BAD_USER_INPUT',
+          'no published Sanity organization with that id and slug',
+        )
+      }
+      if (!conf || conf.orgRef !== orgId) {
+        throw fail(
+          'BAD_USER_INPUT',
+          'no published Sanity conference with that id in this organization',
+        )
+      }
+      if (!conf.startDate) {
+        throw fail('BAD_USER_INPUT', 'the conference has no start date yet')
+      }
+      const sanityHosts = new Set(
+        (conf.domains ?? []).map((d) => normalizeHost(d)),
+      )
+      // The edition year comes from the host the site minted, never from
+      // startDate: the site does not re-derive hosts either.
+      const dated = new RegExp(
+        `^${orgSlug}-(\\d{4})\\.${PLATFORM_DOMAIN.replace('.', '\\.')}$`,
+      )
+      const editions = [...sanityHosts].flatMap(
+        (h) => dated.exec(h ?? '')?.[1] ?? [],
+      )
+      if (editions.length !== 1) {
+        throw fail(
+          'BAD_USER_INPUT',
+          `conference.domains needs exactly one ${orgSlug}-<year>.${PLATFORM_DOMAIN} host`,
+        )
+      }
+      const year = editions[0]
+      const hosts = [
+        [editionHost(orgSlug, year), 'platform-edition'],
+        [aliasHost(orgSlug), 'platform-alias'],
+      ] as const
+      for (const [h] of hosts) {
+        if (!sanityHosts.has(h)) {
+          throw fail('BAD_USER_INPUT', `${h} is not in conference.domains`)
+        }
+      }
+
       try {
         // One D1 batch: all rows land, or none do.
         await db.batch([
           db.insert(organizations).values({
             id: orgId,
-            slug: input.orgSlug,
-            name: input.orgName,
+            slug: orgSlug,
+            name: org.name ?? orgSlug,
             status: 'active',
             plan: 'free',
           }),
           db.insert(conferences).values({
             id: conferenceId,
             orgId,
-            slug: input.conferenceSlug,
-            name: input.conferenceName,
+            slug: year,
+            name: conf.title ?? year,
             lifecycle: 'draft',
           }),
-          host(
-            editionHost(input.orgSlug, input.conferenceSlug),
-            'platform-edition',
+          ...hosts.map(([hostname, kind]) =>
+            db.insert(domains).values({
+              hostname,
+              kind,
+              orgId,
+              conferenceId,
+              // Platform hosts sit under the platform's own certificate.
+              verification: 'verified',
+            }),
           ),
-          host(aliasHost(input.orgSlug), 'platform-alias'),
           db.insert(provisioningRequests).values({
-            idempotencyKey: input.idempotencyKey,
+            idempotencyKey: keyHash,
             orgId,
           }),
         ])
       } catch (error) {
         // A concurrent request with the same key won the race.
         const raced = await earlier()
-        if (raced) return ensured(raced)
+        if (raced) return replay(raced.orgId)
         console.error(error)
-        throw fail('CONFLICT', 'organization slug or platform host is taken')
+        throw fail(
+          'CONFLICT',
+          'organization, conference or platform host is taken',
+        )
       }
-      return ensured((await organization(orgId))!)
+      return replay(orgId)
     },
 
     /** Points the Organization's latest-edition alias at this Conference. */

@@ -9,5 +9,12 @@ service: #PlatformService & {
 	// provisionOrganization creates the org in identity too.
 	// The Sanity backfill and register mappings (#1825).
 	tsInclude: ["scripts/**/*.ts"]
+	// provisionOrganization verifies org, conference and hosts against Sanity
+	// before any D1 write (#1924). Secret per env: SANITY_API_TOKEN_READ.
+	// Without it provisioning refuses. Preview reads development only.
+	vars: {
+		preview: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development"}
+		production: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production"}
+	}
 	serviceBindings: [{binding: "IDENTITY", service: "konf-identity", entrypoint: "Organizations"}]
 }
