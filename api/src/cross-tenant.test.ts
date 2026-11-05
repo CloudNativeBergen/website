@@ -906,22 +906,65 @@ describe('operator lane: Kontroll members (#1956)', () => {
     }
   })
 
-  it('never gives a member platform scope: provisionOrganization is refused', async () => {
-    const before = await tenantRows()
-    for (const headers of [ops(), ops(HOST.a)]) {
-      const body = JSON.parse(
-        await run(
-          'mutation { provisionOrganization(idempotencyKey: "k", orgId: "org-new", orgSlug: "new", conferenceId: "conf-new") { id } }',
-          headers,
-        ),
-      )
-      expect(body.data?.provisionOrganization ?? null).toBeNull()
-      expect(body.errors?.length).toBeGreaterThan(0)
-    }
-    expect(await tenantRows()).toEqual(before)
-    // With no tenant named a member is anonymous: no envelope at all.
+  const PROVISION =
+    'mutation { provisionOrganization(idempotencyKey: "k", orgId: "org-new", orgSlug: "new", conferenceId: "conf-new") { id } }'
+  const minted = async () =>
+    lastEnvelope.content
+      ? ((await verifyEnvelope(lastEnvelope.content, envelopePublicKey)) as {
+          typ: string
+          scopes?: string[]
+        })
+      : null
+
+  it('never mints a member a platform envelope or operator scope', async () => {
+    // No tenant header: the member is anonymous, so no envelope at all.
     await run('{ conference { id } }', ops())
     expect(Object.values(lastEnvelope).filter(Boolean)).toEqual([])
+    // Own org: a tenant envelope without OPERATOR_SCOPE.
+    await run('{ conference { id } }', ops(HOST.a))
+    const own = await minted()
+    expect(own?.typ).toBe('tenant')
+    expect(own?.typ).not.toBe('platform')
+    expect(own?.scopes ?? []).not.toContain(OPERATOR_SCOPE)
+  })
+
+  it("refuses a member's provisionOrganization in requirePlatform, writing nothing", async () => {
+    const before = await tenantRows()
+    for (const headers of [ops(), ops(HOST.a)]) {
+      const body = JSON.parse(await run(PROVISION, headers))
+      expect(body.data?.provisionOrganization ?? null).toBeNull()
+      // The field exists (#1959): FORBIDDEN from requirePlatform, not a
+      // schema-validation error from a cut field.
+      expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
+    }
+    // provision never ran: no directory row appeared.
+    expect(await tenantRows()).toEqual(before)
+  })
+
+  it('positive control: an operator with no tenant reaches provision', async () => {
+    await identityDb()
+      .prepare('UPDATE user SET platformOperator = 1 WHERE id = ?')
+      .bind(USER.a)
+      .run()
+    try {
+      const body = JSON.parse(await run(PROVISION, ops()))
+      expect(
+        (await verifyEnvelope(
+          lastEnvelope['tenant-directory']!,
+          envelopePublicKey,
+        )) as { typ: string },
+      ).toMatchObject({ typ: 'platform' })
+      // Past requirePlatform: provision's own argument check answers.
+      expect(body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+      expect(body.errors[0].message).toBe(
+        'orgId must be "organization.<orgSlug>"',
+      )
+    } finally {
+      await identityDb()
+        .prepare('UPDATE user SET platformOperator = 0 WHERE id = ?')
+        .bind(USER.a)
+        .run()
+    }
   })
 
   it("serves the selected tenant's rolloutFlags to its member, null without one", async () => {
