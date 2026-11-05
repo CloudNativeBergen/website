@@ -694,7 +694,8 @@ describe('gateway', () => {
         ),
         env,
       )
-      expect(res.status).toBe(200)
+      // `x` fails validation (400), but never the mutation budget (429).
+      expect(res.status).toBe(400)
       expect(keys(env)).toEqual(['user:user_1'])
       expect(mutationKeys(env)).toEqual([])
     })
