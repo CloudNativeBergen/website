@@ -42,6 +42,8 @@ service: #PlatformService & {
 				"better-auth": "1.7.14"
 				// Same pin: the request context the membership audit reads its actor from.
 				"@better-auth/core": "1.7.14"
+				// Validates operator invite emails as the plugin does (z.email()).
+				zod: "^4.6.7"
 			}
 			// A real D1 in tests, the same engine wrangler ships.
 			devDependencies: {
