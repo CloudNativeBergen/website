@@ -1,0 +1,301 @@
+// Membership writes for the identity subgraph (#1923 PR 3). Two paths:
+// - a member (owner/admin) acts through Better Auth's own endpoints, called
+//   in-process with their user as the session (`actAs` in auth.ts);
+// - a platform operator, who is never a member, writes `member` and
+//   `invitation` directly. The last-owner triggers and the pending-invite
+//   unique index (migrations/0003) are the backstop there.
+// Every target is looked up inside the caller's org before anything else, so
+// a foreign id and an unknown one get the same NOT_FOUND. Ids only in audit
+// rows and errors, never emails (#1310).
+import { runWithRequestState } from '@better-auth/core/context'
+import { isAPIError } from 'better-auth/api'
+import { and, eq, lte, sql } from 'drizzle-orm'
+import { z } from 'zod'
+import {
+  INVITATION_EXPIRES_IN,
+  actAs,
+  createAuth,
+  isOwner,
+  type AuthEnv,
+} from './auth'
+import { rawDb } from './db'
+import { auditEvent, invitation, member, organization, user } from './schema'
+
+export type MemberRole = 'owner' | 'admin' | 'member'
+
+/** A refusal the subgraph returns as is: its code and a fixed message. */
+export class MemberError extends Error {
+  constructor(
+    readonly code: 'NOT_FOUND' | 'FORBIDDEN' | 'BAD_USER_INPUT',
+    message: string,
+  ) {
+    super(message)
+  }
+}
+
+const notFound = () => new MemberError('NOT_FOUND', 'Not found.')
+const forbidden = () =>
+  new MemberError('FORBIDDEN', 'Not allowed to manage this member')
+const LAST_OWNER = 'An organization must keep at least one owner'
+
+/** Plugin and D1 failures as MemberErrors; anything else stays a 500. */
+function clean(e: unknown): never {
+  const text = (x: unknown): string =>
+    x instanceof Error ? `${x.message} ${text(x.cause)}` : ''
+  if (/LAST_OWNER/.test(text(e)))
+    throw new MemberError('BAD_USER_INPUT', LAST_OWNER)
+  if (
+    /UNIQUE constraint failed: index 'invitation_pending_org_email_idx'|invitation_pending_org_email_idx/.test(
+      text(e),
+    )
+  )
+    throw new MemberError(
+      'BAD_USER_INPUT',
+      'This address already has a pending invitation',
+    )
+  if (isAPIError(e)) {
+    if (e.statusCode === 401 || e.statusCode === 403) throw forbidden()
+    if (e.statusCode < 500)
+      throw new MemberError('BAD_USER_INPUT', e.message || 'Invalid request')
+  }
+  throw e
+}
+
+export interface Invitation {
+  id: string
+  role: string | null
+  status: string
+  expiresAt: Date
+}
+
+export function createMembers(env: AuthEnv & { DB: D1Database }) {
+  const db = rawDb(env.DB)
+
+  const memberOf = async (orgId: string, userId: string) =>
+    (
+      await db
+        .select({ id: member.id, role: member.role })
+        .from(member)
+        .where(and(eq(member.organizationId, orgId), eq(member.userId, userId)))
+    )[0]
+  const invitationIn = async (orgId: string, id: string) =>
+    (
+      await db
+        .select({
+          id: invitation.id,
+          role: invitation.role,
+          status: invitation.status,
+        })
+        .from(invitation)
+        .where(and(eq(invitation.organizationId, orgId), eq(invitation.id, id)))
+    )[0]
+
+  /**
+   * A member of `orgId` acting through Better Auth. The org is the envelope's,
+   * never an argument. Only owners and admins get past the first check, and
+   * only owners touch owners (owner members, owner invitations, the owner role).
+   */
+  async function asMember(actorId: string, orgId: string) {
+    const actor = await memberOf(orgId, actorId)
+    const [u] = await db.select().from(user).where(eq(user.id, actorId))
+    const roles = (actor?.role ?? '')
+      .split(',')
+      .map((r) => r.trim().toLowerCase())
+    if (!u || !roles.some((r) => r === 'owner' || r === 'admin'))
+      throw forbidden()
+    const owner = isOwner(actor!.role)
+    const auth = createAuth(env.DB, env)
+    // A server-side session for the actor: never stored, no active org (every
+    // call names the org), seen only by the calls made inside `run`.
+    const now = new Date()
+    const session = {
+      user: u,
+      session: {
+        id: `server:${actorId}`,
+        token: '',
+        userId: actorId,
+        activeOrganizationId: null,
+        expiresAt: new Date(now.getTime() + 60_000),
+        createdAt: now,
+        updatedAt: now,
+        ipAddress: null,
+        userAgent: null,
+      },
+    }
+    const run = <T>(call: () => Promise<T>) =>
+      runWithRequestState(new WeakMap(), async () => {
+        await actAs.set(session)
+        return call()
+      }).catch(clean)
+    const target = async (userId: string) => {
+      const m = await memberOf(orgId, userId)
+      if (!m) throw notFound()
+      return m
+    }
+
+    return {
+      async invite(email: string, role: MemberRole): Promise<Invitation> {
+        if (role === 'owner' && !owner) throw forbidden()
+        const inv = await run(() =>
+          auth.api.createInvitation({
+            headers: new Headers(),
+            body: { email, role, organizationId: orgId },
+          }),
+        )
+        return inv
+      },
+      async cancelInvitation(invitationId: string) {
+        const inv = await invitationIn(orgId, invitationId)
+        if (!inv) throw notFound()
+        if (isOwner(inv.role) && !owner) throw forbidden()
+        await run(() =>
+          auth.api.cancelInvitation({
+            headers: new Headers(),
+            body: { invitationId },
+          }),
+        )
+      },
+      async remove(userId: string) {
+        const m = await target(userId)
+        if (isOwner(m.role) && !owner) throw forbidden()
+        await run(() =>
+          auth.api.removeMember({
+            headers: new Headers(),
+            body: { memberIdOrEmail: m.id, organizationId: orgId },
+          }),
+        )
+      },
+      async changeRole(userId: string, role: MemberRole) {
+        const m = await target(userId)
+        if ((isOwner(m.role) || role === 'owner') && !owner) throw forbidden()
+        await run(() =>
+          auth.api.updateMemberRole({
+            headers: new Headers(),
+            body: { memberId: m.id, role, organizationId: orgId },
+          }),
+        )
+      },
+    }
+  }
+
+  /**
+   * A platform operator. `orgId` is an explicit argument (PlatformContext has
+   * none) and lands in every audit row with the actor and `operator: true`.
+   * Each write and its audit row go in one D1 batch: both or neither.
+   */
+  async function asOperator(actorId: string, orgId: string) {
+    const [org] = await db
+      .select({ id: organization.id })
+      .from(organization)
+      .where(eq(organization.id, orgId))
+    if (!org) throw new MemberError('BAD_USER_INPUT', 'Unknown organization')
+    const audit = (
+      action: string,
+      userId: string,
+      detail: Record<string, string | null | undefined>,
+    ) =>
+      db.insert(auditEvent).values({
+        action,
+        userId,
+        detail: JSON.stringify({ actorId, operator: true, orgId, ...detail }),
+      })
+    const target = async (userId: string) => {
+      const m = await memberOf(orgId, userId)
+      if (!m) throw notFound()
+      return m
+    }
+
+    return {
+      async invite(email: string, role: MemberRole): Promise<Invitation> {
+        // As the plugin's createInvitation: lowercase, then z.email().
+        const to = email.trim().toLowerCase()
+        if (!z.email().safeParse(to).success)
+          throw new MemberError('BAD_USER_INPUT', 'Invalid email address')
+        // Accepting would hit member(userId, organizationId) UNIQUE as a 500.
+        const [existing] = await db
+          .select({ id: member.id })
+          .from(member)
+          .innerJoin(user, eq(user.id, member.userId))
+          .where(
+            and(
+              eq(member.organizationId, orgId),
+              eq(sql`lower(${user.email})`, to),
+            ),
+          )
+        if (existing)
+          throw new MemberError(
+            'BAD_USER_INPUT',
+            'This address already belongs to a member',
+          )
+        const row = {
+          id: crypto.randomUUID(),
+          organizationId: orgId,
+          email: to,
+          role,
+          status: 'pending',
+          expiresAt: new Date(Date.now() + INVITATION_EXPIRES_IN * 1000),
+          inviterId: actorId,
+        }
+        await db
+          .batch([
+            // An expired invitation stays pending; retire it as the plugin does.
+            db
+              .update(invitation)
+              .set({ status: 'canceled' })
+              .where(
+                and(
+                  eq(invitation.organizationId, orgId),
+                  eq(sql`lower(${invitation.email})`, row.email),
+                  eq(invitation.status, 'pending'),
+                  lte(invitation.expiresAt, new Date()),
+                ),
+              ),
+            db.insert(invitation).values(row),
+            audit('invite.create', actorId, { invitationId: row.id, to: role }),
+          ])
+          .catch(clean)
+        return row
+      },
+      async cancelInvitation(invitationId: string) {
+        const inv = await invitationIn(orgId, invitationId)
+        if (!inv) throw notFound()
+        if (inv.status !== 'pending')
+          throw new MemberError(
+            'BAD_USER_INPUT',
+            'Only a pending invitation can be cancelled',
+          )
+        await db.batch([
+          db
+            .update(invitation)
+            .set({ status: 'canceled' })
+            .where(eq(invitation.id, inv.id)),
+          audit('invite.cancel', actorId, { invitationId: inv.id }),
+        ])
+      },
+      async remove(userId: string) {
+        const m = await target(userId)
+        await db
+          .batch([
+            db.delete(member).where(eq(member.id, m.id)),
+            audit('member.remove', userId, { memberId: m.id, from: m.role }),
+          ])
+          .catch(clean)
+      },
+      async changeRole(userId: string, role: MemberRole) {
+        const m = await target(userId)
+        await db
+          .batch([
+            db.update(member).set({ role }).where(eq(member.id, m.id)),
+            audit('member.role', userId, {
+              memberId: m.id,
+              from: m.role,
+              to: role,
+            }),
+          ])
+          .catch(clean)
+      },
+    }
+  }
+
+  return { asMember, asOperator }
+}

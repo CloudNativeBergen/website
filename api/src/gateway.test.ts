@@ -150,7 +150,7 @@ const jwt = (
 }
 
 describe('gateway', () => {
-  it('exposes updateConference and the operator-only provisionOrganization, no @tag(internal) fields', async () => {
+  it('exposes updateConference, the membership mutations and the operator-only fields, no @tag(internal) fields', async () => {
     const { env } = makeEnv()
     const res = await gateway.fetch(
       post({ query: '{ __schema { mutationType { fields { name } } } }' }),
@@ -161,7 +161,18 @@ describe('gateway', () => {
         data: { __schema: { mutationType: { fields: { name: string }[] } } }
       }
     ).data.__schema.mutationType.fields.map((f) => f.name)
-    expect(names.sort()).toEqual(['provisionOrganization', 'updateConference'])
+    expect(names.sort()).toEqual([
+      'cancelInvitation',
+      'changeMemberRole',
+      'inviteMember',
+      'operatorCancelInvitation',
+      'operatorChangeMemberRole',
+      'operatorInviteMember',
+      'operatorRemoveMember',
+      'provisionOrganization',
+      'removeMember',
+      'updateConference',
+    ])
     // Still @tag(internal) in tenant-directory, so cut (#1924).
     const sdl = compose()
     for (const field of [

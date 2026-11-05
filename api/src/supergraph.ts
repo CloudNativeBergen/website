@@ -16,17 +16,19 @@ import { composeServices } from '@theguild/federation-composition'
 import { parse, type GraphQLSchema } from 'graphql'
 import { schema as content } from '../../services/content/src/subgraph'
 import { schema as conference } from '../../services/conference/src/subgraph'
+import { schema as identity } from '../../services/identity/src/subgraph'
 import { schema as tenantDirectory } from '../../services/tenant-directory/src/subgraph'
 
 /**
  * Subgraph name -> schema. The name is the host of the subgraph URL in the
  * supergraph, which the gateway maps to a service binding (see BINDINGS in
- * gateway.ts). Identity has no public subgraph.
+ * gateway.ts).
  */
 export const SUBGRAPHS = {
   'tenant-directory': tenantDirectory,
   content,
   conference,
+  identity,
 }
 
 /** Drops @tag(internal) types, fields, args and enum values, then prunes. */

@@ -5,7 +5,7 @@ A short developer overview of the GraphQL API at `api.konf.app` and the services
 ## What it is
 
 - `api/` is the gateway: Hive Gateway on a Cloudflare Worker, serving `/graphql`. It composes a supergraph at build time from the subgraph schemas (`api/src/supergraph.ts`) and reaches each subgraph over a Worker service binding (`api/src/gateway.ts`).
-- `services/<name>` are the subgraphs, one Worker per domain, written with Pothos. On `main`: `tenant-directory` (which conference a host belongs to), `identity` (Better Auth; no public subgraph), `content` (editorial fields and homepage blocks, read from Sanity) and `conference` (structured fields, D1). Logos come from `content`, not D1. More come per domain.
+- `services/<name>` are the subgraphs, one Worker per domain, written with Pothos. On `main`: `tenant-directory` (which conference a host belongs to), `identity` (Better Auth; its `Graph` entrypoint is bound only by the gateway, as `IDENTITY_GRAPH`, and is not a public subgraph), `content` (editorial fields and homepage blocks, read from Sanity) and `conference` (structured fields, D1). Logos come from `content`, not D1. More come per domain.
 - `packages/tenancy` holds the code every subgraph uses to read the per-request tenant context and to keep data access scoped to one tenant.
 - The site still reads most data from Sanity. Reads move to the API one module at a time, behind flags.
 
