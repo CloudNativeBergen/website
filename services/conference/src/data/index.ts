@@ -16,6 +16,12 @@ export type ConferencePatch = Partial<
 /** Org roles that may write (#1881, owner decision 3). */
 const WRITERS = new Set(['owner', 'admin'])
 
+/**
+ * Minted by the gateway only on its operator lane (#1921); a tenant-site
+ * envelope always carries `scopes: []`, and the subgraph verifies the signature.
+ */
+const OPERATOR_SCOPE = 'platform:operator'
+
 const fail = (message: string, code: string) =>
   createGraphQLError(message, { extensions: { code } })
 
@@ -55,10 +61,11 @@ class Conferences extends ScopedRepository {
    * a refusal says nothing about whether the row exists.
    */
   async update(patch: ConferencePatch): Promise<ConferenceRow> {
-    const { userId, orgRole } = this.tenant
+    const { userId, orgRole, scopes } = this.tenant
     // better-auth stores several roles comma-separated.
     const roles = orgRole?.split(',').map((r) => r.trim()) ?? []
-    if (!userId || !roles.some((r) => WRITERS.has(r))) {
+    const operator = scopes.includes(OPERATOR_SCOPE)
+    if (!userId || !(operator || roles.some((r) => WRITERS.has(r)))) {
       throw fail(
         'updating the conference requires an org owner or admin',
         'FORBIDDEN',
@@ -102,6 +109,19 @@ class Conferences extends ScopedRepository {
         throw dateOrder()
       throw fail('conference not found', 'NOT_FOUND')
     }
+    // Every write on the operator lane is audited (#1921).
+    // ponytail: log only; a D1 audit table when someone needs to query it.
+    if (operator)
+      console.log(
+        JSON.stringify({
+          event: 'operator.write',
+          'konf.user_id': userId,
+          'konf.org_id': org_id,
+          'konf.conference_id': conference_id,
+          fields: Object.keys(patch),
+          at: new Date().toISOString(),
+        }),
+      )
     return updated
   }
 

@@ -1238,6 +1238,19 @@ describe('operator lane (#1892 phase 4)', () => {
     expect(envelopes).toEqual([])
   })
 
+  it('never puts the operator scope on a tenant-site envelope (#1921)', async () => {
+    // A platform operator signed in on the tenant site, naming a tenant.
+    const { env, envelopes } = opsEnv()
+    await call(env, {
+      origin: VERIFIED,
+      authorization: `Bearer ${await jwt()}`,
+      [OPERATOR_TENANT_HEADER]: 'conf.example',
+    })
+    expect(
+      await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem),
+    ).toMatchObject({ typ: 'tenant', scopes: [] })
+  })
+
   it('is off when OPERATOR_ORIGIN is unset', async () => {
     const { env, envelopes } = opsEnv()
     delete (env as Record<string, unknown>).OPERATOR_ORIGIN
