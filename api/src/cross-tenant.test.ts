@@ -908,10 +908,11 @@ const lifecycles = (body: string) => {
 async function directoryEntities(
   envelope: Record<string, unknown> | null,
   id: string,
+  subgraph: 'tenant-directory' | 'conference' = 'tenant-directory',
 ) {
   const res = await (
-    env[BINDINGS['tenant-directory'] as keyof Env] as unknown as Fetcher
-  ).fetch('https://tenant-directory.internal/graphql', {
+    env[BINDINGS[subgraph] as keyof Env] as unknown as Fetcher
+  ).fetch(`https://${subgraph}.internal/graphql`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -919,7 +920,9 @@ async function directoryEntities(
     },
     body: JSON.stringify({
       query:
-        'query($r: [_Any!]!) { _entities(representations: $r) { ... on ConferenceEdition { id lifecycleStatus } } }',
+        subgraph === 'conference'
+          ? 'query($r: [_Any!]!) { _entities(representations: $r) { ... on ConferenceEdition { id } } }'
+          : 'query($r: [_Any!]!) { _entities(representations: $r) { ... on ConferenceEdition { id lifecycleStatus } } }',
       variables: { r: [{ __typename: 'ConferenceEdition', id }] },
     }),
   })
@@ -999,6 +1002,21 @@ describe('lifecycleStatus (#1971)', () => {
       expect(await directoryEntities(e, UNLISTED_A)).toEqual([null])
     }
     expect(await directoryEntities(null, CONF.a)).toEqual([null])
+  })
+
+  // The conference subgraph's own ConferenceEdition reference resolver.
+  it('conference subgraph resolves only editions the caller may list, in their org', async () => {
+    const entity = (e: Record<string, unknown> | null, id: string) =>
+      directoryEntities(e, id, 'conference')
+    const anon = { ...tenantA, userId: null, orgRole: null }
+    // Positive control.
+    expect(await entity(tenantA, CONF.a)).toEqual([{ id: CONF.a }])
+    for (const e of [anon]) {
+      expect(await entity(e, DRAFT_A)).toEqual([null])
+      expect(await entity(e, UNLISTED_A)).toEqual([null])
+    }
+    // An A admin does not get B's edition.
+    expect(await entity(tenantA, CONF.b)).toEqual([null])
   })
 })
 
