@@ -45,6 +45,30 @@ const Conference = builder.objectRef<ConferenceRow>('Conference').implement({
   }),
 })
 
+// A plain type, not the Conference entity: entity fields come from content
+// until the `conference` label is on, and content resolves only the
+// envelope's own edition, so a list of Conference would null out (#1970).
+const ConferenceEdition = builder
+  .objectRef<ConferenceRow>('ConferenceEdition')
+  .implement({
+    fields: (t) => ({
+      id: t.exposeID('conferenceId'),
+      title: t.exposeString('title', { nullable: true }),
+      startDate: t.exposeString('startDate', { nullable: true }),
+      endDate: t.exposeString('endDate', { nullable: true }),
+      visibility: t.exposeString('visibility'),
+      published: t.exposeBoolean('published', {
+        description: 'False when the edition is cancelled or archived.',
+      }),
+      primaryHost: t.string({
+        nullable: true,
+        description:
+          'Always null for now: hostnames live in tenant-directory, which serves no tenant-scoped read yet (#1970).',
+        resolve: () => null,
+      }),
+    }),
+  })
+
 builder.asEntity(Conference, {
   key: builder.selection<{ id: string }>('id'),
   // Only the envelope's own Conference resolves, never an id a caller names.
@@ -158,6 +182,13 @@ builder.queryType({
       description:
         "The request's Conference. Null when the request has none, or it is unpublished and the caller is not an org member.",
       resolve: (_, __, ctx) => ctx.data.conferences().current(),
+    }),
+    conferenceEditions: t.field({
+      type: [ConferenceEdition],
+      nullable: false,
+      description:
+        "The request's organization's editions, newest first. Unpublished and unlisted editions only for org members.",
+      resolve: (_, __, ctx) => ctx.data.conferences().editions(),
     }),
   }),
 })

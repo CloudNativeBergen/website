@@ -1,6 +1,6 @@
 // Public data layer. createData is the ONLY export resolvers see:
 // it returns Scoped repositories, never the raw handle.
-import { and, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import { createGraphQLError } from 'graphql-yoga'
 import { ScopedRepository, type Envelope } from '@runkonf/tenancy'
 import { rawDb } from './db'
@@ -53,6 +53,26 @@ class Conferences extends ScopedRepository {
     })
     if (!row || (!row.published && !this.tenant.orgRole)) return null
     return row
+  }
+
+  /**
+   * The envelope org's editions, never another org's: the org comes from the
+   * envelope only (#1970). Members of the org see every edition; anyone else
+   * only published, live ones, since listing an unlisted edition would index
+   * it (`unlisted`: reachable by link, not indexed).
+   */
+  async editions(): Promise<ConferenceRow[]> {
+    const own = eq(conferences.orgId, this.columns.org_id)
+    return this.db.query.conferences.findMany({
+      where: this.tenant.orgRole
+        ? own
+        : and(
+            own,
+            eq(conferences.published, true),
+            eq(conferences.visibility, 'live'),
+          ),
+      orderBy: [desc(conferences.startDate), conferences.conferenceId],
+    })
   }
 
   /**
