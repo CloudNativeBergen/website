@@ -154,6 +154,15 @@ it, and `createEdition` stages both halves:
   and nothing else (a second provisioning under the same slug is refused by
   `isOrgSlugTaken`), so the short address is always claimed fresh there.
 
+### An edition's canonical host
+
+`ConferenceEdition.primaryHost` (#1977) picks one host per edition from
+tenant-directory's `domains`: a **verified custom domain** first, then the
+**verified platform-edition host** (`<org>-<year>`), else null. A pending or
+failed domain never counts, nor does the bare `<org>` alias (it moves between
+editions). The rule lives in `primaryHost` in
+`services/tenant-directory/src/data/index.ts`.
+
 ### The suffix is configuration
 
 `PLATFORM_DOMAIN_SUFFIX` follows the `PLATFORM_ORG_ID` contract — the platform

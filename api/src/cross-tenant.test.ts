@@ -37,6 +37,7 @@ import {
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -1057,6 +1058,103 @@ describe('lifecycleStatus (#1971)', () => {
   })
 })
 
+// --- primaryHost (#1977) ----------------------------------------------------
+
+describe('primaryHost (#1977)', () => {
+  const HOSTS = '{ conferenceEditions { id primaryHost } }'
+  const CUSTOM = 'conf.tenant-a.example'
+  const FOREIGN = 'foreign.tenant-b-marker.example'
+  const domain = async (
+    hostname: string,
+    org: string,
+    conf: string,
+    kind: string,
+    verification: string,
+  ) =>
+    (await directoryDomains())
+      .prepare(
+        'INSERT INTO domains (hostname, org_id, conference_id, kind, verification) VALUES (?, ?, ?, ?, ?)',
+      )
+      .bind(hostname, org, conf, kind, verification)
+      .run()
+  const directoryDomains = async () => {
+    for (const db of dbs) {
+      const { results } = await db
+        .prepare("SELECT 1 FROM sqlite_master WHERE name = 'domains'")
+        .all()
+      if (results.length) return db
+    }
+    throw new Error('no tenant-directory D1')
+  }
+  const hosts = async () => {
+    const body = await run(HOSTS, {
+      authorization: `Bearer ${memberJwt}`,
+      origin: ORIGIN,
+    })
+    expect(body).not.toMatch(MARKER)
+    const json = JSON.parse(body) as {
+      data?: { conferenceEditions: { id: string; primaryHost: string }[] }
+      errors?: unknown
+    }
+    expect(json.errors, body).toBeUndefined()
+    return Object.fromEntries(
+      json.data!.conferenceEditions.map((e) => [e.id, e.primaryHost]),
+    )
+  }
+  beforeAll(async () => {
+    await addEditions()
+    await setLifecycle(DRAFT_A, 'draft')
+    await setLifecycle(UNLISTED_A, 'live')
+  })
+  const dropDomains = async () =>
+    (await directoryDomains())
+      .prepare('DELETE FROM domains WHERE hostname IN (?, ?)')
+      .bind(CUSTOM, FOREIGN)
+      .run()
+  afterEach(dropDomains)
+  afterAll(async () => {
+    await dropEditions()
+    await (
+      await directoryConferences()
+    )
+      .prepare('DELETE FROM conferences WHERE id IN (?, ?)')
+      .bind(DRAFT_A, UNLISTED_A)
+      .run()
+  })
+  beforeEach(async () => {
+    env.OVERRIDE_TENANTS = {}
+    await overrideForA(false)
+    await setLifecycle(CONF.a, 'live')
+  })
+
+  it('serves the verified platform-edition host, and null with no domains', async () => {
+    expect(await hosts()).toEqual({
+      [CONF.a]: HOST.a,
+      [DRAFT_A]: null,
+      [UNLISTED_A]: null,
+    })
+  })
+
+  it('prefers a verified custom domain over the platform host', async () => {
+    await domain(CUSTOM, ORG.a, CONF.a, 'custom', 'verified')
+    expect((await hosts())[CONF.a]).toBe(CUSTOM)
+  })
+
+  it.each(['pending', 'failed'])(
+    'falls back to the platform host past a %s custom domain',
+    async (verification) => {
+      await domain(CUSTOM, ORG.a, CONF.a, 'custom', verification)
+      expect((await hosts())[CONF.a]).toBe(HOST.a)
+    },
+  )
+
+  it("never serves another org's domain, even one pointing at this edition", async () => {
+    await domain(FOREIGN, ORG.b, DRAFT_A, 'custom', 'verified')
+    // hosts() also asserts no B marker anywhere in the body.
+    expect((await hosts())[DRAFT_A]).toBeNull()
+  })
+})
+
 describe('operator lane: Kontroll members (#1956)', () => {
   const OPS = 'https://my.konf.app'
   let opsJwt: string
@@ -1592,7 +1690,7 @@ describe('operator lane: conferences across orgs (#1985)', () => {
       edition: {
         title: expect.stringMatching(/^TENANT_A/),
         startDate: expect.any(String),
-        primaryHost: null,
+        primaryHost: HOST.a,
         lifecycleStatus: 'live',
       },
     })

@@ -46,10 +46,10 @@ const Conference = builder
     }),
   })
 
-// Contributes lifecycleStatus to the conference subgraph's editions (#1971).
-// The source of truth for lifecycle is this D1.
+// Contributes lifecycleStatus (#1971) and primaryHost (#1977) to the
+// conference subgraph's editions. Lifecycle and hostnames live in this D1.
 const ConferenceEdition = builder
-  .objectRef<Row<'id' | 'lifecycle'>>('ConferenceEdition')
+  .objectRef<Row<'id' | 'orgId' | 'lifecycle'>>('ConferenceEdition')
   .implement({
     fields: (t) => ({
       id: t.exposeID('id'),
@@ -57,6 +57,12 @@ const ConferenceEdition = builder
         nullable: true,
         description:
           '`draft`, `live`, `cancelled` or `archived`. Org members see every value; anyone else only `live`, and null otherwise.',
+      }),
+      primaryHost: t.string({
+        nullable: true,
+        description:
+          "The edition's canonical host: a verified custom domain, else its verified platform-edition host, else null. Never pending or failed. Same visibility as lifecycleStatus.",
+        resolve: (c, _, ctx) => ctx.data.primaryHostOf(c.orgId, c.id),
       }),
     }),
   })
@@ -145,7 +151,7 @@ const RolloutFlag = builder.enumType('RolloutFlag', { values: FLAGS })
 type ConfRow = Row<'id' | 'orgId' | 'lifecycle'> & Flags
 
 // One row of the operator `conferences` list (#1985). Title, dates and
-// primaryHost come from the conference subgraph through `edition`.
+// dates come from the conference subgraph through `edition`.
 const OperatorConference = builder
   .objectRef<{ conf: ConfRow; org: OrgRow }>('OperatorConference')
   .implement({
