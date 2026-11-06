@@ -282,25 +282,42 @@ export interface PreviousEditionRenewals {
 }
 
 /**
- * The previous edition of `$orgId` before `$currentStartDate`, and its
- * closed-won sponsors with no deal (any status) in `$conferenceId`. A root of
- * its own, so the `/admin` dashboard composes it into its single query.
+ * Every edition of `$orgId` except `$conferenceId`, each with its closed-won
+ * sponsors that have no deal (any status) in `$conferenceId`. A root of its
+ * own, so the `/admin` dashboard composes it into its single query. No date
+ * filter here: Sanity's `startDate` may be stale, so `shapeRenewals` merges
+ * D1's dates and picks the previous edition in code (#2011).
  */
-export const PREVIOUS_EDITION_RENEWALS_ROOT = `*[_type == "conference" && organization._ref == $orgId && startDate < $currentStartDate && !(_id in path("drafts.**"))] | order(startDate desc)[0]{
-  _id, title, domains, endDate,
+export const PREVIOUS_EDITION_RENEWALS_ROOT = `*[_type == "conference" && organization._ref == $orgId && _id != $conferenceId && !(_id in path("drafts.**"))]{
+  _id, title, domains, organization, startDate, endDate,
   "candidates": *[_type == "sponsorForConference" && conference._ref == ^._id && conference->organization._ref == $orgId && status == "closed-won"
     && !(sponsor._ref in *[_type == "sponsorForConference" && conference._ref == $conferenceId].sponsor._ref)]{
     _id, "name": sponsor->name, "tierTitle": tier->title, assignedTo->{ _id, name, "image": ${SPEAKER_IMAGE_URL} }
   }
 }`
 
-export type PreviousEditionRenewalsRow =
-  (EditionRow & { endDate?: string; candidates?: RenewalCandidate[] }) | null
+export type PreviousEditionRenewalsRow = EditionRow & {
+  startDate?: string
+  endDate?: string
+  candidates?: RenewalCandidate[]
+}
 
-export function shapeRenewals(
-  row: PreviousEditionRenewalsRow | undefined,
+/** The latest edition starting before `currentStartDate`, on merged dates. */
+export async function shapeRenewals(
+  rows: PreviousEditionRenewalsRow[] | null | undefined,
+  currentStartDate: string | undefined,
   now = new Date(),
-): PreviousEditionRenewals | null {
+): Promise<PreviousEditionRenewals | null> {
+  if (!rows?.length || !currentStartDate) return null
+  const start = currentStartDate.slice(0, 10)
+  const row = (await mergeConferences(rows))
+    .filter(
+      (c) =>
+        typeof c.startDate === 'string' && c.startDate.slice(0, 10) < start,
+    )
+    .sort((a, b) =>
+      b.startDate!.slice(0, 10).localeCompare(a.startDate!.slice(0, 10)),
+    )[0]
   if (!row) return null
   return {
     edition: {
@@ -321,13 +338,9 @@ export async function getPreviousEditionRenewals(
 ): Promise<PreviousEditionRenewals | null> {
   if (!orgId || !conference._id) return null // FAIL CLOSED: no tenant.
   if (!isRenewalWindowOpen(conference, now)) return null
-  const row = await clientReadUncached.fetch<PreviousEditionRenewalsRow>(
+  const rows = await clientReadUncached.fetch<PreviousEditionRenewalsRow[]>(
     PREVIOUS_EDITION_RENEWALS_ROOT,
-    {
-      orgId,
-      conferenceId: conference._id,
-      currentStartDate: conference.startDate,
-    },
+    { orgId, conferenceId: conference._id },
   )
-  return shapeRenewals(row, now)
+  return shapeRenewals(rows, conference.startDate, now)
 }

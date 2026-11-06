@@ -1169,7 +1169,6 @@ export async function loadDashboardWidgetData(
   try {
     groqResult = await fetchDashboardGroq(ctx.conferenceId, sources, {
       orgId: ctx.conference.organization?._ref,
-      currentStartDate: ctx.conference.startDate,
     })
   } catch (error) {
     groqError = error instanceof Error ? error : new Error(String(error))
@@ -1212,11 +1211,11 @@ export async function loadDashboardWidgetData(
   add('marketing-due', () =>
     shapeMarketingDue(rows(groqResult.marketingDueTasks)),
   )
-  add('sponsors-waiting', () =>
+  add('sponsors-waiting', async () =>
     shapeSponsorsWaiting(
       rows(groqResult.sponsorActions),
       ctx.speakerId,
-      shapeRenewals(groqResult.renewals),
+      await shapeRenewals(groqResult.renewals, ctx.conference.startDate),
     ),
   )
   add('upcoming-deadlines', () => shapeDeadlines(ctx.conference))
