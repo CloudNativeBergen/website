@@ -197,9 +197,9 @@ function logEvent(event: string, fields: Record<string, unknown>) {
   console.error(JSON.stringify({ event, ...fields }))
 }
 
-const MAX_LOGGED = 64
+const MAX_LOGGED_CHARS = 64
 const capped = (v: unknown) =>
-  typeof v === 'string' && v ? v.slice(0, MAX_LOGGED) : undefined
+  typeof v === 'string' && v ? v.slice(0, MAX_LOGGED_CHARS) : undefined
 
 // Yoga logs the original whenever this returns a new error.
 export function maskError(error: unknown, message: string): Error {
@@ -239,6 +239,8 @@ function reject(
   code: string,
   message: string,
 ) {
+  // A 5xx is logged once, by the fetch wrapper.
+  if (status < 500) logEvent('gateway.rejected', { status, code })
   return Response.json(
     { errors: [{ message, extensions: { code } }] },
     { status },
@@ -370,10 +372,16 @@ const mutationBudget: GatewayPlugin<GatewayContext> = {
     if (
       !(await env.API_MUTATION_LIMITER.limit({ key: `${limitKey}:mutation` }))
         .success
-    )
+    ) {
+      logEvent('gateway.rejected', {
+        status: 429,
+        code: 'RATE_LIMITED',
+        limit: 'mutation',
+      })
       throw new GraphQLError('too many requests', {
         extensions: { code: 'RATE_LIMITED', http: { status: 429 } },
       })
+    }
   },
 }
 
@@ -462,7 +470,7 @@ export function createGateway(supergraph: string) {
     ],
   })
 
-  const inner = {
+  const handler = {
     async fetch(request: Request, env: Env, ctx?: ExecutionContext) {
       // 1. A client never supplies the envelope.
       const forwarded = new Request(request)
@@ -640,7 +648,14 @@ export function createGateway(supergraph: string) {
 
   return {
     async fetch(request: Request, env: Env, ctx?: ExecutionContext) {
-      const res = await inner.fetch(request, env, ctx)
+      let res: Response
+      try {
+        res = await handler.fetch(request, env, ctx)
+      } catch (e) {
+        // e.g. an unset ENVELOPE_PRIVATE_KEY: the runtime answers 500.
+        logEvent('gateway.response.5xx', { status: 500, uncaught: true })
+        throw e
+      }
       if (res.status >= 500)
         logEvent('gateway.response.5xx', { status: res.status })
       return res

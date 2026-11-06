@@ -641,7 +641,7 @@ describe('gateway', () => {
         expect(logged).toEqual([
           {
             event: 'gateway.error.masked',
-            subgraph: expect.any(String),
+            subgraph: 'content',
             path: 'conference',
             code: 'TENANT_MISMATCH',
           },
@@ -688,7 +688,98 @@ describe('gateway', () => {
       try {
         const res = await gateway.fetch(post(SUBGRAPH_QUERY), env)
         expect(res.status).toBe(200)
-        expect(events(error)).toMatchObject([{ event: 'gateway.error.masked' }])
+        expect(events(error)).toEqual([
+          {
+            event: 'gateway.error.masked',
+            subgraph: 'content',
+            path: 'conference',
+            code: 'TENANT_MISMATCH',
+          },
+        ])
+      } finally {
+        error.mockRestore()
+      }
+    })
+
+    it('logs gateway.response.5xx for an uncaught throw, then rethrows', async () => {
+      const { env } = makeEnv()
+      vi.mocked(env.API_IP_LIMITER.limit).mockRejectedValue(
+        new Error('secret detail'),
+      )
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        await expect(gateway.fetch(post(SUBGRAPH_QUERY), env)).rejects.toThrow(
+          'secret detail',
+        )
+        expect(events(error)).toEqual([
+          { event: 'gateway.response.5xx', status: 500, uncaught: true },
+        ])
+      } finally {
+        error.mockRestore()
+      }
+    })
+
+    it.each([
+      [
+        'the per-IP limit',
+        () => makeEnv(undefined, true, false),
+        {},
+        429,
+        'RATE_LIMITED',
+      ],
+      [
+        'the caller limit',
+        () => makeEnv(undefined, false),
+        {},
+        429,
+        'RATE_LIMITED',
+      ],
+      [
+        'an invalid identity token',
+        () => makeEnv(),
+        { authorization: 'Bearer nope' },
+        401,
+        'UNAUTHENTICATED',
+      ],
+    ] as const)(
+      'logs gateway.rejected for %s',
+      async (_, env, headers, status, code) => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+        try {
+          const res = await gateway.fetch(
+            post(SUBGRAPH_QUERY, { origin: VERIFIED, ...headers }),
+            env().env,
+          )
+          expect(res.status).toBe(status)
+          expect(events(error)).toEqual([
+            { event: 'gateway.rejected', status, code },
+          ])
+        } finally {
+          error.mockRestore()
+        }
+      },
+    )
+
+    it('logs gateway.rejected for the mutation budget', async () => {
+      const { env } = makeEnv(undefined, true, true, false)
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        const res = await gateway.fetch(
+          post(
+            { query: 'mutation { updateConference(input: {}) { id } }' },
+            { origin: VERIFIED, authorization: `Bearer ${await jwt()}` },
+          ),
+          env,
+        )
+        expect(res.status).toBe(429)
+        expect(events(error)).toEqual([
+          {
+            event: 'gateway.rejected',
+            status: 429,
+            code: 'RATE_LIMITED',
+            limit: 'mutation',
+          },
+        ])
       } finally {
         error.mockRestore()
       }
