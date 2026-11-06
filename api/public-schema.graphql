@@ -177,6 +177,7 @@ type Query {
   members: [OrganizationMember!]
   program: Program
   speaker(id: ID!): Speaker
+  speakerBySlug(slug: String!): Speaker
   speakers: [Speaker!]
   talk(id: ID!): Talk
 
@@ -375,6 +376,27 @@ type PendingInvitation {
   role: String
 }
 
+type Attachment {
+  attachmentType: String
+  description: String
+  filename: String
+
+  """file or url."""
+  kind: String
+  title: String
+  url: String
+}
+
+type GalleryImage {
+  alt: String
+  date: String
+  featured: Boolean
+  id: ID
+  location: String
+  photographer: String
+  url: String
+}
+
 type Program {
   """Empty until the program is published."""
   days: [ProgramDay!]
@@ -387,15 +409,37 @@ type ProgramDay {
 
 type ProgramSlot {
   end: String
+  placeholder: String
+
+  """The track title."""
+  room: String
   start: String
 
   """Null for a break or a talk not yet confirmed."""
   talk: Talk
+  track: ProgramTrack
+}
+
+type ProgramTrack {
+  description: String
+  name: String
+  sponsorId: String
+}
+
+type ScheduleInfo {
+  date: String
+  endTime: String
+  startTime: String
+  trackTitle: String
 }
 
 """The public profile of a speaker with a confirmed talk."""
 type Speaker {
   bio: String
+
+  """Public flags only: local."""
+  flags: [String!]
+  galleryImages: [GalleryImage!]
   id: ID
 
   """URL."""
@@ -403,23 +447,46 @@ type Speaker {
   links: [String!]
   name: String
   slug: String
+
+  """Confirmed talks in this conference."""
+  talks: [Talk!]
   title: String
 }
 
 """A confirmed talk."""
 type Talk {
+  attachments: [Attachment!]
+  audiences: [String!]
+
   """Portable Text as JSON (Sanity shape)."""
   description: String
   format: String
   id: ID
+  language: String
   level: String
+
+  """Null until the program is published (programDate)."""
+  scheduleInfo: ScheduleInfo
   speakers: [TalkSpeaker!]
   title: String
+  topics: [Topic!]
 }
 
 type TalkSpeaker {
   id: ID
+
+  """URL."""
+  image: String
   name: String
+  slug: String
+  title: String
+}
+
+type Topic {
+  color: String
+  id: ID
+  slug: String
+  title: String
 }
 
 type Domain {
