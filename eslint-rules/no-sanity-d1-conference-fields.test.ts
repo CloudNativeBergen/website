@@ -47,7 +47,7 @@ ruleTester.run('no-sanity-d1-conference-fields', asRule, {
     },
     {
       filename: SRC,
-      code: "import { mergeConference } from '@/lib/conference/merge'\nconst q = `*[_type == \"conference\"][0]{ title, city }`",
+      code: 'import { mergeConference } from \'@/lib/conference/merge\'\nconst q = `*[_type == "conference"][0]{ title, city }`',
     },
     {
       filename: SRC,
@@ -129,7 +129,7 @@ ruleTester.run('no-sanity-d1-conference-fields', asRule, {
     // (a) Deref conference->title flagged
     {
       filename: SRC,
-      code: "import { rolloutFlags } from '@/lib/conference/konf-api'\nconst q = `*[_type == \"conference\"][0]{ title, city }`",
+      code: 'import { rolloutFlags } from \'@/lib/conference/konf-api\'\nconst q = `*[_type == "conference"][0]{ title, city }`',
       errors: [
         { messageId: 'd1Field', data: { field: 'title' } },
         { messageId: 'd1Field', data: { field: 'city' } },
