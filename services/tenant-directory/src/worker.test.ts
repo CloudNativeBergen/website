@@ -33,6 +33,9 @@ const hostnames = {
 const identity = {
   ensure: vi.fn(async () => undefined),
   syncMembers: vi.fn(async (): Promise<unknown> => undefined),
+  memberships: vi.fn(
+    async (): Promise<{ orgId: string; role: string }[]> => [],
+  ),
 }
 vi.mock('./data/cloudflare', () => ({ cloudflareHostnames: () => hostnames }))
 
@@ -1019,5 +1022,102 @@ describe('migration 0005', () => {
     expect(db.prepare('SELECT hostname FROM domains_park').all()).toEqual([
       { hostname: 'only-copy' },
     ])
+  })
+})
+
+describe('primaryHost (#1977)', () => {
+  const domainReads = (prepare: { mock: { calls: unknown[][] } }) =>
+    prepare.mock.calls.filter(([q]) => /from "domains"/i.test(String(q))).length
+
+  it('reads domains once for a whole operator page, across orgs', async () => {
+    await provision('acme')
+    await provision('beta', 'k2')
+    const prepare = vi.spyOn(env.DB, 'prepare')
+    const { body } = await gql(
+      '{ conferences { id edition { primaryHost } } }',
+      {},
+      operator,
+    )
+    expect(body.errors).toBeUndefined()
+    expect(
+      body.data.conferences.map(
+        (c: { edition: { primaryHost: string } }) => c.edition.primaryHost,
+      ),
+    ).toEqual(['acme-2026.konf.run', 'beta-2026.konf.run'])
+    expect(domainReads(prepare)).toBe(1)
+  })
+
+  it('reads domains once for many editions of one org', async () => {
+    const { id } = await provision('acme')
+    const conf = conferenceOf(id)
+    sqlite
+      .prepare(
+        "INSERT INTO conferences (id, org_id, slug, name, lifecycle) VALUES ('c2', ?, 'c2', 'c2', 'live')",
+      )
+      .run(id)
+    const prepare = vi.spyOn(env.DB, 'prepare')
+    const { body } = await gql(
+      'query($r: [_Any!]!) { _entities(representations: $r) { ... on ConferenceEdition { id primaryHost } } }',
+      {
+        r: [conf, 'c2'].map((i) => ({
+          __typename: 'ConferenceEdition',
+          id: i,
+        })),
+      },
+      { ...organizer, orgId: id },
+    )
+    expect(body.errors).toBeUndefined()
+    expect(body.data._entities).toEqual([
+      { id: conf, primaryHost: 'acme-2026.konf.run' },
+      { id: 'c2', primaryHost: null },
+    ])
+    expect(domainReads(prepare)).toBe(1)
+  })
+})
+
+describe('myOrganizations (#2036, #2043)', () => {
+  it('chunks queries in batches of 90 and returns all 150 org memberships', async () => {
+    const userEnvelope: Envelope = { typ: 'user', userId: 'user-150' }
+    const memberships = Array.from({ length: 150 }, (_, i) => ({
+      orgId: `org-${String(i).padStart(3, '0')}`,
+      role: i % 2 === 0 ? 'admin' : 'member',
+    }))
+    identity.memberships.mockResolvedValueOnce(memberships)
+
+    const insertOrg = sqlite.prepare(
+      "INSERT INTO organizations (id, slug, name, status, plan) VALUES (?, ?, ?, 'active', 'free')",
+    )
+    for (const m of memberships) {
+      insertOrg.run(m.orgId, `slug-${m.orgId}`, `Name of ${m.orgId}`)
+    }
+
+    const prepare = vi.spyOn(env.DB, 'prepare')
+    const { body } = await gql(
+      '{ myOrganizations { id name role conferenceEditions { id } } }',
+      {},
+      userEnvelope,
+    )
+    expect(body.errors).toBeUndefined()
+    expect(body.data.myOrganizations).toHaveLength(150)
+    expect(body.data.myOrganizations[0]).toEqual({
+      id: 'org-000',
+      name: 'Name of org-000',
+      role: 'admin',
+      conferenceEditions: [],
+    })
+    expect(body.data.myOrganizations[149]).toEqual({
+      id: 'org-149',
+      name: 'Name of org-149',
+      role: 'member',
+      conferenceEditions: [],
+    })
+    const inQueries = prepare.mock.calls.filter(([sql]) =>
+      String(sql).includes(' in ('),
+    )
+    expect(inQueries.length).toBeGreaterThan(0)
+    for (const [sql] of inQueries) {
+      const count = (String(sql).match(/\?/g) || []).length
+      expect(count).toBeLessThanOrEqual(90)
+    }
   })
 })

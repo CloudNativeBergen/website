@@ -12,6 +12,9 @@ const MESSAGES: Record<string, string> = {
   invalid_code: 'Innloggingen kunne ikke fullføres. Prøv igjen.',
   invalid_client:
     'Innloggingen virker ikke akkurat nå. Prøv igjen senere, eller kontakt arrangøren.',
+  // Better Auth's callback turns "account not linked" into this code.
+  account_not_linked:
+    'Denne innloggingsmåten er ikke koblet til kontoen din. Logg inn med den du brukte før, og koble til den nye under <a href="/account">Koblede kontoer</a>.',
   access_denied: 'Du avbrøt innloggingen. Prøv igjen hvis du vil logge inn.',
 }
 

@@ -9,7 +9,7 @@
 // rows and errors, never emails (#1310).
 import { runWithRequestState } from '@better-auth/core/context'
 import { isAPIError } from 'better-auth/api'
-import { and, eq, inArray, lte, sql } from 'drizzle-orm'
+import { and, eq, lte, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   INVITATION_EXPIRES_IN,
@@ -19,6 +19,7 @@ import {
   type AuthEnv,
 } from './auth'
 import { rawDb } from './db'
+import { emit } from './push'
 import {
   account,
   auditEvent,
@@ -261,6 +262,12 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
             audit('invite.create', actorId, { invitationId: row.id, to: role }),
           ])
           .catch(clean)
+        emit({
+          type: 'member.invited',
+          organizationId: orgId,
+          invitationId: row.id,
+          actorId,
+        })
         return row
       },
       async cancelInvitation(invitationId: string) {
@@ -300,6 +307,12 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
             }),
           ])
           .catch(clean)
+        emit({
+          type: 'member.role_changed',
+          organizationId: orgId,
+          userId,
+          actorId,
+        })
       },
     }
   }
@@ -331,12 +344,9 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
           providerId: account.providerId,
         })
         .from(account)
-        .where(
-          inArray(
-            account.userId,
-            rows.map((r) => r.userId),
-          ),
-        )
+        // A join, not inArray: D1 caps bound parameters at 100 (#2018).
+        .innerJoin(member, eq(member.userId, account.userId))
+        .where(eq(member.organizationId, orgId))
         .orderBy(account.providerId)
       for (const a of linked)
         byUser.set(a.userId, [...(byUser.get(a.userId) ?? []), a.providerId])

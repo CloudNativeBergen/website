@@ -1559,7 +1559,8 @@ describe('conference router — D1 write path (#1881)', () => {
     })
     expect(init.headers.authorization).toBe('Bearer user-jwt')
     expect(init.headers.origin).toBe('https://cloudnativebergen.no')
-    expect(lastSet).toEqual({ organizer: 'Org', description: 'D' })
+    // organizer is a public phase 1 field (#2019): D1 only now.
+    expect(lastSet).toEqual({ description: 'D' })
     // city: null also unsets in Sanity so the frozen copy can't resurrect it.
     expect(lastUnset).toEqual(['city'])
     expect(commitMock).toHaveBeenCalledTimes(1)
@@ -1573,14 +1574,7 @@ describe('conference router — D1 write path (#1881)', () => {
     cfpNotifyDate: '2026-03-01',
     programDate: '2026-04-01',
   }
-  const SETTINGS_DATES = {
-    cfpStartDate: DATES.cfpStartDate,
-    cfpEndDate: DATES.cfpEndDate,
-    cfpNotifyDate: DATES.cfpNotifyDate,
-    programDate: DATES.programDate,
-  }
-
-  it('for a d1_write tenant, writes settings phase 1 fields to D1 and still to Sanity (#2019)', async () => {
+  it('for a d1_write tenant, writes public phase 1 fields to D1 only, members-only ones to both (#2019)', async () => {
     await makeCaller({ isOrganizer: true }).updateDates({
       ...DATES,
       travelSupportBudget: 5000,
@@ -1592,8 +1586,9 @@ describe('conference router — D1 write path (#1881)', () => {
       travelSupportBudget: 5000,
       sponsorDeadlineDate: null,
     })
-    // Core dates are D1-only (#1997); phase 1 keeps its Sanity copy.
-    expect(lastSet).toEqual({ ...SETTINGS_DATES, travelSupportBudget: 5000 })
+    // Core and public phase 1 dates are D1-only; the members-only budget
+    // keeps its Sanity copy, and an unset still reaches Sanity.
+    expect(lastSet).toEqual({ travelSupportBudget: 5000 })
     expect(lastUnset).toEqual(['sponsorDeadlineDate'])
   })
 
@@ -1605,6 +1600,44 @@ describe('conference router — D1 write path (#1881)', () => {
     })
     expect(apiCalls()).toHaveLength(0)
     expect(lastSet).toEqual({ ...DATES, travelSupportBudget: 5000 })
+  })
+
+  const COMMS = {
+    contactEmail: 'hi@acme.example',
+    cfpEmail: 'cfp@acme.example',
+    sponsorEmail: 'sponsor@acme.example',
+    salesNotificationChannel: '#sales',
+    cfpNotificationChannel: '#cfp',
+    speakerSlackChannel: '#speakers',
+    speakerSlackInviteUrl: 'https://join.slack.com/s',
+    volunteerSlackInviteUrl: 'https://join.slack.com/v',
+  }
+  it('for a d1_write tenant, writes settings phase 2 fields to D1 first, then Sanity (#2038)', async () => {
+    await makeCaller({ isOrganizer: true }).updateCommunication(COMMS)
+    const [[, init]] = apiCalls()
+    expect(JSON.parse(init.body).variables.input).toEqual(COMMS)
+    expect(lastSet).toEqual(COMMS)
+    const d1At =
+      fetchMock.mock.invocationCallOrder[
+        fetchMock.mock.calls.findIndex(([, i]) =>
+          String(i?.body).includes('updateConference'),
+        )
+      ]
+    expect(d1At).toBeLessThan(commitMock.mock.invocationCallOrder[0])
+  })
+
+  it('for a d1_write tenant, a failed D1 write of phase 2 fields leaves Sanity untouched (#2038)', async () => {
+    const base = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation(async (url: URL | string, init) =>
+      String(init?.body).includes('updateConference')
+        ? new Response('boom', { status: 500 })
+        : base(url, init),
+    )
+    await expect(
+      makeCaller({ isOrganizer: true }).updateCommunication(COMMS),
+    ).rejects.toThrow()
+    expect(apiCalls()).toHaveLength(1)
+    expect(commitMock).not.toHaveBeenCalled()
   })
 
   it('for a d1_write tenant with only moved fields, writes only to D1 and leaves Sanity untouched (#1997)', async () => {
@@ -1752,7 +1785,7 @@ describe('conference router — D1 write path (#1881)', () => {
     })
     expect(apiCalls()).toHaveLength(1)
     expect(commitMock).toHaveBeenCalledTimes(1)
-    expect(lastSet).toEqual({ organizer: 'Org', description: 'D' })
+    expect(lastSet).toEqual({ description: 'D' })
     expect(result).toMatchObject({ success: true, warning: expect.any(String) })
   })
 
@@ -1801,7 +1834,7 @@ describe('conference router — D1 write path (#1881)', () => {
       expect(flagCalls()).toHaveLength(2) // cached + exactly one direct
       expect(apiCalls()).toHaveLength(1)
       expect(commitMock).toHaveBeenCalledTimes(1)
-      expect(lastSet).toEqual({ organizer: 'Org', description: 'D' })
+      expect(lastSet).toEqual({ description: 'D' })
     })
 
     it('refuses when the direct read fails and there is no last good', async () => {

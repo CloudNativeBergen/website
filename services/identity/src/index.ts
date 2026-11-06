@@ -43,6 +43,14 @@ export class Organizations extends WorkerEntrypoint<Env> {
   }
 
   /**
+   * The orgs a user is a member of (#2036), for `myOrganizations`. The
+   * userId comes from tenant-directory's verified envelope, never a caller.
+   */
+  memberships(userId: string) {
+    return createData(this.env).memberships(userId)
+  }
+
+  /**
    * Organizer membership sync (#1907), run hourly by tenant-directory's cron.
    * No arguments: the caller cannot widen what it grants. The gateway binds
    * `Membership`, not this class, so it cannot trigger a sync.

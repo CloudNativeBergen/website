@@ -1,3 +1,4 @@
+import { PUBLIC_SPEAKER_GALLERY } from '@/lib/proposal/public-groq'
 import {
   Speaker,
   SpeakerAdminDetail,
@@ -1221,20 +1222,7 @@ export async function getPublicSpeaker(
       // $conferenceId matches (the nested count carries the tenant predicate).
       `*[ _type == "speaker" && slug.current == $speakerSlug && count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]) > 0][0]{
         _id, name, title, bio, links, flags, "image": ${SPEAKER_IMAGE_URL},
-        "galleryImages": *[_type == "imageGallery" && conference._ref == $conferenceId && ^._id in speakers[]._ref] {
-          _id,
-          _rev,
-          _createdAt,
-          _updatedAt,
-          image{asset, hotspot, crop, alt},
-          "imageUrl": image.asset->url,
-          "imageAlt": image.alt,
-          photographer,
-          date,
-          location,
-          featured,
-          speakers[]->{_id, name, "slug": slug.current, image}
-        } | order(featured desc, date desc)
+        "galleryImages": ${PUBLIC_SPEAKER_GALLERY}
       }`,
       { speakerSlug, conferenceId },
     )

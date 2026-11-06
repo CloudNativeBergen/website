@@ -3,6 +3,8 @@
 // demotes. Orgs in MEMBER_SOURCE_ORGS have identity as their source: they
 // get a drift check instead and are never granted (#1923). Matching and ids follow scripts/backfill-identity-members.ts (#1909).
 
+import { emit } from './push'
+
 /** Role every synced organizer gets. The owner decided this; see #1907. */
 export const ORGANIZER_ROLE = 'admin'
 
@@ -289,6 +291,8 @@ async function checkDrift(
   // Post when the drift set changes; while it stays the same, once a day.
   if (last?.hash === hash && now - last.postedAt < DAY_MS)
     return log('log', 'identity.membership.drift_deduped', { orgId })
+  // Same gate and dedupe as the Slack post: ids only (kontroll#61).
+  emit({ type: 'membership.drift', organizationId: orgId })
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

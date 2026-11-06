@@ -21,13 +21,41 @@ are reached over service bindings, never HTTP.
   (no `@tag(internal)`, no unreachable types); `pnpm compose` writes
   `supergraph.graphql` (not committed; `dev` and `build` run it)
 
+- `public-schema.graphql`: the schema clients see (public contract plus the
+  gateway's own `health` and `rolloutFlags`), checked in so schema changes show
+  in PR diffs. `pnpm run schema:update` (repo root) rewrites it and the site's
+  types; CI (`pnpm run schema:check`) fails when either is stale. It still
+  includes `@tag(operator)` fields, which only a platform operator may call.
+
+## Typed queries
+
+The site types its gateway queries with [gql.tada](https://gql-tada.0no.co):
+`src/lib/konf-api/graphql-env.d.ts` is generated from `public-schema.graphql`
+(`pnpm run codegen`), and `ResultOf<typeof graphql(QUERY)>` gives a query's
+`data` type. Query strings must be literals (`as const`) for this to work.
+
+kontroll (`RunKonf/kontroll`) does not build against this repo. It consumes the
+snapshot from `main` and generates its own types:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/CloudNativeBergen/website/main/api/public-schema.graphql -o schema.graphql
+```
+
+Point gql.tada (`schema` in its tsconfig plugin entry) or graphql-codegen
+(`schema: schema.graphql`) at that file and commit both, so a gateway change
+shows up as a diff there too. Fetching a pinned commit SHA instead of `main`
+makes the update deliberate.
+
 Domain code comes from the website's `src/lib` through the `@/*` path alias
 (`tsconfig.json`). Never copy it here.
 
 ## Commands
 
 ```sh
-pnpm --filter @runkonf/api dev        # wrangler dev, local
+mise run dev:api                      # gateway + every subgraph, seeded local D1 (see docs/PLATFORM.md)
+mise run dev:token                    # local dev identity JWT for the operator lane
+mise run dev:api:reset                # wipe local D1 state
+pnpm --filter @runkonf/api dev        # this Worker alone, wrangler dev, local
 pnpm --filter @runkonf/api test       # vitest (also part of root `pnpm test`)
 pnpm --filter @runkonf/api typecheck  # also part of root `pnpm typecheck`
 pnpm --filter @runkonf/api compose    # write supergraph.graphql
@@ -85,7 +113,9 @@ verifies (#1954). Membership is re-read on every request.
 - Member, naming a tenant host of an org they belong to: an ordinary tenant
   envelope with their own `orgRole` and no scope. An org they do not belong
   to, and an unknown host, both get the same 403 before any subgraph read.
-- Member, no header: no envelope, the same as anonymous.
+- Member, no header (user lane): a `UserContext` (`typ: 'user'`) carrying their
+  `userId` and no org, which reads `myOrganizations`. Plain members can manage
+  their own push subscriptions on the user lane.
 
 `organizations(first, after)` (#1973) lists every org, ordered by slug, with
 `createdAt` (null for orgs provisioned before it existed). Only a
@@ -99,9 +129,16 @@ FORBIDDEN before any D1 read for everyone else. tenant-directory serves the
 row (`id`, `lifecycleStatus`, `organization`, `flags`); `edition { title
 startDate endDate primaryHost }` comes from the conference subgraph, whose
 `ConferenceEdition` entity resolves any org's edition for a `PlatformContext`
-only (`unscopedForPlatformOps`, logged as `operator.read`). `primaryHost` is
-null until #1977. `lifecycle` and `flag` (that flag on) are enums. At most 100
+only (`unscopedForPlatformOps`, logged as `operator.read`). `primaryHost` comes from
+tenant-directory (see below). `lifecycle` and `flag` (that flag on) are enums. At most 100
 per page: pass the last id as `after` for the next.
+
+`ConferenceEdition.primaryHost` (#1977) is the edition's canonical host,
+served by tenant-directory from its `domains` table: a verified `custom`
+domain first, else the verified `platform-edition` host (`<org>-<year>`), else
+null. Pending and failed rows, the moving `<org>` alias and another org's rows
+never count; ties break by hostname. Visibility is `lifecycleStatus`'s. One D1
+read per request covers every edition (batched by org).
 
 `rolloutFlags` returns the selected tenant's flags to an operator or member who
 got its envelope, else null. Unset turns the lane off.

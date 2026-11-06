@@ -25,7 +25,33 @@ export const FIELDS = [
   'accentColor',
   'registrationLink',
   'socialLinks',
+  // Settings phase 1 (#2019), the public ones. organizerAddress,
+  // organizerOrgNumber, analyticsPirschCode and travelSupportBudget are org
+  // members only, so an anonymous read is always null: their parity is the
+  // D1 sweep (scripts/parity-d1.ts, src/data/parity-core.ts), which compares
+  // every column.
+  'cfpStartDate',
+  'cfpEndDate',
+  'cfpNotifyDate',
+  'programDate',
+  'travelSupportPaymentDate',
+  'earlyBirdEndDate',
+  'registrationCloseDate',
+  'speakersAnnouncedDate',
+  'sponsorDeadlineDate',
+  'recordingsLiveDate',
+  'registrationEnabled',
+  'organizer',
+  'socialHashtag',
+  'showVanityMetrics',
+  // Settings phase 2 (#2038), the public ones; the members-only eight are
+  // covered by the D1 sweep, as above.
+  'contactEmail',
+  'cfpEmail',
+  'sponsorEmail',
 ] as const
+
+const bool = (v: 0 | 1 | null) => (v === null ? null : v === 1)
 
 /** What the API should return for this row. Unpublished rows read as null. */
 export function expected(row: Row | undefined): ApiConference {
@@ -46,6 +72,23 @@ export function expected(row: Row | undefined): ApiConference {
     accentColor: row.accent_color,
     registrationLink: row.registration_link,
     socialLinks: JSON.parse(row.social_links),
+    cfpStartDate: row.cfp_start_date,
+    cfpEndDate: row.cfp_end_date,
+    cfpNotifyDate: row.cfp_notify_date,
+    programDate: row.program_date,
+    travelSupportPaymentDate: row.travel_support_payment_date,
+    earlyBirdEndDate: row.early_bird_end_date,
+    registrationCloseDate: row.registration_close_date,
+    speakersAnnouncedDate: row.speakers_announced_date,
+    sponsorDeadlineDate: row.sponsor_deadline_date,
+    recordingsLiveDate: row.recordings_live_date,
+    registrationEnabled: bool(row.registration_enabled),
+    organizer: row.organizer_name,
+    socialHashtag: row.social_hashtag,
+    showVanityMetrics: bool(row.show_vanity_metrics),
+    contactEmail: row.contact_email,
+    cfpEmail: row.cfp_email,
+    sponsorEmail: row.sponsor_email,
   }
 }
 

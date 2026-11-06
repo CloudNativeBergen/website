@@ -12,8 +12,9 @@ The target is kontroll on the API.
 1. **One owner per entity.** Editorial content (pages, rich text, images)
    stays in Sanity and is served by the content subgraph. Conference settings
    and tenants/domains live in D1. Users and memberships live in the D1 identity
-   database. Proposals, speakers and tickets are undecided and get decided one
-   entity at a time.
+   database (identity D1 is the source of truth; legacy Sanity `organizers[]` are
+   synced via an hourly projection). Proposals, speakers and tickets are
+   undecided and get decided one entity at a time.
 2. **The API is the only door.** The site and kontroll talk only to
    `api.konf.app`. Clients use no `@sanity/client` and no direct D1 access.
    Subgraph resolvers call a data-source adapter, either a Sanity adapter or a
@@ -63,18 +64,30 @@ The target is kontroll on the API.
 
 ## Entity table
 
-| Entity                                            | Owner                                       | Adapter                                                                                      | Write mode                                             | Window end    |
-| ------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------- |
-| Conference settings                               | D1                                          | D1 (reads from D1 for all 4 conferences since 2026-11-05; d1_override=1, parity in_sync 4/4) | D1 only for d1_write tenants, and Sanity copies frozen | Done          |
-| Tenants, domains and conference lifecycle (#1971) | D1 (tenant-directory)                       | D1                                                                                           | D1 only                                                | Done          |
-| Identity                                          | D1 (identity)                               | D1                                                                                           | D1 only                                                | Done          |
-| Editorial content                                 | Sanity (content subgraph)                   | Sanity                                                                                       | Sanity only                                            | Permanent     |
-| Proposals, speakers                               | Sanity, behind the site seam (#1876, #1887) | Sanity                                                                                       | Sanity only                                            | Undecided     |
-| Logos                                             | Sanity                                      | Sanity                                                                                       | Sanity only; R2 later (#1866)                          | Not scheduled |
-| Tickets                                           | Undecided                                   | -                                                                                            | -                                                      | Undecided     |
+| Entity                                                   | Owner                                       | Adapter                                                                                      | Write mode                                                                                                                                                             | Window end                           |
+| -------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| Conference settings                                      | D1                                          | D1 (reads from D1 for all 4 conferences since 2026-11-05; d1_override=1, parity in_sync 4/4) | D1 only for d1_write tenants, and Sanity copies frozen (core 14 fields; settings phase 1 writes 18 more fields, #2023)                                                 | Done                                 |
+| Tenants, domains and conference lifecycle (#1971, #2015) | D1 (tenant-directory)                       | D1                                                                                           | D1 only                                                                                                                                                                | Done                                 |
+| Identity (users, sessions, accounts)                     | D1 (identity)                               | D1                                                                                           | D1 only                                                                                                                                                                | Done                                 |
+| Memberships                                              | D1 (identity)                               | D1                                                                                           | Identity D1 is the source; hourly sync from Sanity `organizers[]` runs from tenant-directory cron (grants for legacy orgs, drift check for `MEMBER_SOURCE_ORGS` #1947) | Phase 5 (retire Sanity organizers[]) |
+| Editorial content                                        | Sanity (content subgraph)                   | Sanity                                                                                       | Sanity only                                                                                                                                                            | Permanent                            |
+| Proposals, speakers                                      | Sanity, behind the site seam (#1876, #1887) | Sanity                                                                                       | Sanity only                                                                                                                                                            | Undecided                            |
+| Logos                                                    | Sanity                                      | Sanity                                                                                       | Sanity only; R2 later (#1866)                                                                                                                                          | Not scheduled                        |
+| Tickets                                                  | Undecided                                   | -                                                                                            | -                                                                                                                                                                      | Undecided                            |
 
 Update the row in the same PR that changes an owner, an adapter or a write
 mode.
+
+## Tenant lifecycle and authoritative stores
+
+Which store is authoritative for each tenant entity today and in the target architecture:
+
+| Entity              | Store today                        | Store target                       | Authority & sync notes                                                                                                                                                                                                                        |
+| ------------------- | ---------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Organization        | D1 (tenant-directory)              | D1 (tenant-directory)              | Authoritative in D1. kontroll reads Sanity contract until moved to API (rule 5).                                                                                                                                                              |
+| Conference settings | D1 (conference / tenant-directory) | D1 (conference / tenant-directory) | All 4 conferences read and write D1 (`d1_override=1`). Core moved fields written to D1 only with Sanity copies frozen (#2013). Settings phase 1 (#2023) writes 18 more fields to D1. `lifecycleStatus` is in tenant-directory (#2015).        |
+| Domains             | D1 (tenant-directory)              | D1 (tenant-directory)              | Authoritative in D1 (`domains` table). Sanity copy is legacy, dropped when routing reads only D1.                                                                                                                                             |
+| Memberships         | D1 (identity)                      | D1 (identity)                      | Identity D1 is the source. Hourly sync from Sanity `organizers[]` runs from tenant-directory cron: grants missing `admin` rows for legacy orgs, drift check for `MEMBER_SOURCE_ORGS` (#1947). Target retires Sanity `organizers[]` (Phase 5). |
 
 Tenants and domains reach kontroll through the public `organization` query
 (#1968, #1969): the session's own org (id, name, plan, slug, status) and its
@@ -115,7 +128,8 @@ per-field table is in [CONFERENCE_FIELDS.md](./CONFERENCE_FIELDS.md).
   registration link, social links). Two in tenant-directory D1:
   `organization` (`org_id`) and `domains`. Since 2026-11-05 all 4 conferences
   have `d1_override` on, and since #2013 writes go to D1 only with Sanity
-  copies frozen.
+  copies frozen. `lifecycleStatus` moved to tenant-directory D1 (#2015), and
+  settings phase 1 (#2023) writes 18 more scalar fields to conference D1.
 - **B, settings to move (64).** Dates, links, contacts and channels,
   ticketing, CFP taxonomy and goals, organizer teams, feature flags and
   workshop job state.
@@ -133,25 +147,40 @@ Each phase needs the same six things:
 3. subgraph fields and `ConferencePatch` input in
    `services/conference/src/subgraph.ts`, replacing the content subgraph's
    copy where it serves the field,
-4. the write path: the keys in `src/lib/konf-api/conference-write.ts` so
-   `applyConferencePatch` dual-writes them,
+4. the write path: the keys in `src/lib/konf-api/conference-write.ts` (writes
+   to D1; dual-writes to Sanity only until the read flip),
 5. parity coverage in `services/conference/scripts/parity.ts`, reading D1 (see
    the caveat under rule 3),
 6. the read flip per #1879: `d1_override` per tenant, then Sanity read-only
    for those fields, then delete them from the schema with a regenerated
    baseline.
 
-| Phase | Fields                                                                                                                                                                         | Count | Shape                                                                                                       |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | ----------------------------------------------------------------------------------------------------------- |
-| 1     | Dates (10), `travelSupportBudget`, `registrationEnabled`, `lifecycleStatus`, `organizer*` (3), `socialHashtag`, `ticketCustomization.showVanityMetrics`, `analyticsPirschCode` | 19    | Scalar columns on `conferences`. Most are already served by the content subgraph, so only the source moves. |
-| 2     | Sponsor, speaker and volunteer registration links; contact, CFP and sponsor emails; notification and Slack channels; Slack invite URLs                                         | 11    | Scalar columns, or a `conference_contacts` table.                                                           |
-| 3     | Ticketing provider and ids, capacity, `ticketTargets.*`, `ticketTypeRoles`, `publicFreeTicketIds`, workshop registration windows and early-access types, reminder state        | 19    | Scalars plus child tables (ticket types, target milestones, reminder state).                                |
-| 4     | `formats`, `topics`, six CFP and sponsor goals, `crmInactivityThresholds`, `agentConfig.*`                                                                                     | 12    | Child tables and long text columns.                                                                         |
-| 5     | `organizers`, `teams`, `features`                                                                                                                                              | 3     | Identity memberships and roles, team tables, a features table.                                              |
+| Phase | Fields                                                                                                                                                                  | Count | Shape                                                                                                                                                           |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Dates (10), `travelSupportBudget`, `registrationEnabled`, `organizer*` (3), `socialHashtag`, `ticketCustomization.showVanityMetrics`, `analyticsPirschCode`             | 18    | Scalar columns on `conferences` (D1 write path in #2023). Most are already served by content subgraph. `lifecycleStatus` moved to tenant-directory D1 in #2015. |
+| 2     | Sponsor, speaker and volunteer registration links; contact, CFP and sponsor emails; notification and Slack channels; Slack invite URLs                                  | 11    | Scalar columns on `conferences` (D1 write path in #2038).                                                                                                       |
+| 3     | Ticketing provider and ids, capacity, `ticketTargets.*`, `ticketTypeRoles`, `publicFreeTicketIds`, workshop registration windows and early-access types, reminder state | 19    | Scalars plus child tables (ticket types, target milestones, reminder state).                                                                                    |
+| 4     | `formats`, `topics`, six CFP and sponsor goals, `crmInactivityThresholds`, `agentConfig.*`                                                                              | 12    | Child tables and long text columns.                                                                                                                             |
+| 5     | `organizers`, `teams`, `features`                                                                                                                                       | 3     | Identity memberships and roles, team tables, a features table.                                                                                                  |
 
 Phase 1 comes first because its fields are scalar, most are already in the
 patch inputs and the content subgraph already serves many of them. Phase 5
 comes last because it touches access control.
+
+### Running the conference backfill
+
+Run `pnpm run doctor` first: it checks node, pnpm, fnox, the Sanity read
+token, wrangler and gh.
+
+1. Generate: `fnox exec -- pnpm backfill:conference -- --only settings-phase2 --out tmp/backfill`.
+   The script stops early with a fix hint if `SANITY_API_TOKEN_READ` is not
+   set, and creates `--out` if needed. Writing needs `--only <phase>` or
+   `--all-columns`. `--all-columns` overwrites every column of existing rows
+   with frozen Sanity values, which reverts D1-owned fields; avoid it.
+2. Review the printed conference count and `ON CONFLICT UPDATE columns` list.
+3. Apply: `wrangler d1 execute <conference-db> --remote --file tmp/backfill/conference.sql`.
+4. Check: `pnpm tsx scripts/parity-conference.ts --all`.
+5. Delete `tmp/backfill/conference.sql`. It can hold Slack invite URLs.
 
 ### Hard parts
 

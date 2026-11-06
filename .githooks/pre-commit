@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Refuse commits on main/master: the checkout is shared, work in a worktree.
+[ -n "${CI:-}" ] && exit 0
+[ "${ALLOW_MAIN_COMMIT:-}" = 1 ] && exit 0
+case "$(git symbolic-ref --short -q HEAD)" in
+  main|master)
+    echo "Refusing to commit on the default branch. Use a worktree and a branch:" >&2
+    echo "  git worktree add ../<name> -b <branch>" >&2
+    echo "Owner override: ALLOW_MAIN_COMMIT=1 git commit ..." >&2
+    exit 1 ;;
+esac

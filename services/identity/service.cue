@@ -6,6 +6,11 @@ service: #PlatformService & {
 	name: "identity"
 	d1: {preview: "2192470e-1f18-40cc-813f-c18883237c78", production: "20c89ee4-f729-483b-8a0f-8fba00d4f411"}
 	tenancy: false
+	secrets: {
+		required: ["GATEWAY_PUBLIC_KEY", "BETTER_AUTH_SECRET", "BETTER_AUTH_URL", "IDENTITY_ISSUER", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET", "IDENTITY_EXCHANGE_SECRET", "IDENTITY_UPGRADE_SECRET", "SANITY_API_TOKEN_READ"]
+		// Push and drift alerts are a no-op without these.
+		optional: ["VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "PUSH_WEBHOOK_SECRET", "SLACK_MEMBER_DRIFT_WEBHOOK_URL"]
+	}
 	// The public host for sign-in and the login handoff (#1803).
 	routes: {preview: ["id-preview.konf.app"], production: ["id.konf.app"]}
 	// Last moment a NextAuth session may upgrade to an identity session (#1842).
@@ -16,7 +21,7 @@ service: #PlatformService & {
 		// OPERATOR_ORIGINS: non-tenant origins whose token only platform
 		// operators and organization members get (#1922, #1956). None in preview: kontroll has no stable
 		// preview origin.
-		production: {OPERATOR_ORIGINS: "https://my.konf.app", IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", MEMBER_SOURCE_ORGS: ""}
+		production: {OPERATOR_ORIGINS: "https://my.konf.app", PUSH_WEBHOOK_URL: "https://my.konf.app/api/push/events", IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", MEMBER_SOURCE_ORGS: ""}
 	}
 	// Organizer membership sync (#1907, src/data/member-sync.ts) has no cron
 	// here: the account allows 5. tenant-directory's cron calls
@@ -27,6 +32,9 @@ service: #PlatformService & {
 	// every org grants, as before. Optional secret per env:
 	// SLACK_MEMBER_DRIFT_WEBHOOK_URL (Slack incoming webhook for drift
 	// alerts); unset, drift is logged only.
+	// Push webhook (kontroll#61, packages/tenancy/src/push.ts): signed
+	// events to PUSH_WEBHOOK_URL, production only (kontroll has no stable
+	// preview origin). Secret per env: PUSH_WEBHOOK_SECRET; unset, nothing is sent.
 	// Verified origins for the login handoff (#688).
 	serviceBindings: [{binding: "DIRECTORY", service: "konf-tenant-directory"}]
 	// Handoff limits (src/handoff.ts): POSTs per tenant origin, GET per IP.

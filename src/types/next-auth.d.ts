@@ -18,6 +18,8 @@ declare module 'next-auth' {
      * fail closed. See `src/lib/auth/email-link/identity.ts`.
      */
     emailLinkIdentifier?: string
+    /** Set only on a session from an id.konf.app login (#2021). */
+    identity?: true
     isImpersonating?: boolean
     realAdmin?: Speaker
   }

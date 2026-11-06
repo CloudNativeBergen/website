@@ -9,6 +9,11 @@
 
 import { EXPANDED_SECTIONS_KEY } from './sections'
 import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
+import { SCHEDULE_TRACKS } from '@/lib/proposal/public-groq'
+import {
+  PUBLIC_SPONSOR_TIER_FIELDS,
+  PUBLIC_SPONSOR_TIER_ORDER,
+} from '@/lib/sponsor/public-groq'
 
 /*
  * ---------------------------------------------------------------------------
@@ -122,25 +127,8 @@ const EXPANDED_FEATURED_TALKS = `featuredTalks[]->{
 // `^` is the conference resolved by the `$domain`-filtered root this fragment is
 // interpolated into. (Verified against the production dataset that an
 // object-literal projection adds no `^` level, so this stays `^`, not `^.^`.)
-const EXPANDED_SPONSOR_TIERS = `*[_type == "sponsorTier" && conference._ref == ^._id] | order(tierType asc, title asc, price[0].amount desc){
-      _id,
-      _createdAt,
-      _updatedAt,
-      title,
-      tagline,
-      tierType,
-      price[]{
-        _key,
-        amount,
-        currency
-      },
-      perks[]{
-        _key,
-        label,
-        description
-      },
-      soldOut,
-      mostPopular,
+const EXPANDED_SPONSOR_TIERS = `*[_type == "sponsorTier" && conference._ref == ^._id] | ${PUBLIC_SPONSOR_TIER_ORDER}{
+      ${PUBLIC_SPONSOR_TIER_FIELDS},
       maxQuantity,
       ticketEntitlement
       }`
@@ -165,49 +153,7 @@ const EXPANDED_TOPICS = `topics[]->{
 const EXPANDED_SCHEDULES = `schedules[]-> {
       ...,
       _rev,
-      tracks[]{
-        trackTitle,
-        trackDescription,
-        sponsor,
-        talks[]{
-        startTime,
-        endTime,
-        placeholder,
-        "hasTalkRef": defined(talk),
-        talk->{
-          _id,
-          format,
-          level,
-          status,
-          // Whether, never which: the programme's "Give feedback" link looks
-          // the code up when followed (#1472), so it never rides this read.
-          "hasFeedbackCode": defined(feedbackCode),
-          audiences,
-          topics[]-> {
-            _id,
-            title,
-            color,
-            slug,
-            description
-          },
-          // Only a confirmed talk ships its title, description and speakers.
-          // Any other talk keeps its slot on the public programme (shown as
-          // TBA), but an unconfirmed proposal or a speaker who withdrew is
-          // never named.
-          status == "confirmed" => {
-            title,
-            description,
-            speakers[]->{
-            _id,
-            name,
-            "slug": slug.current,
-            title,
-            "image": ${SPEAKER_IMAGE_URL}
-            }
-          }
-        }
-        }
-      }
+      ${SCHEDULE_TRACKS}
       } | order(date asc)`
 
 function buildConferenceQuery(withSchedules: boolean): string {

@@ -7,24 +7,78 @@
  * #1800); the mapping itself is services/conference/scripts/backfill.ts.
  * It writes rows only for conferences the tenant-directory backfill routes.
  *
- * Usage:
- *   pnpm tsx scripts/backfill-conference.ts --dry-run
- *   pnpm tsx scripts/backfill-conference.ts [--out <dir>] [--only settings-phase1]
+ * Usage (see also docs/DATA_OWNERSHIP.md, "Running the conference backfill"):
+ *   pnpm backfill:conference -- --dry-run
+ *   pnpm backfill:conference -- --only settings-phase2 [--out <dir>]
+ *   pnpm backfill:conference -- --all-columns [--out <dir>]
  *
- * WARNING: without --only, existing rows get EVERY column from Sanity, which
- * reverts D1-owned fields edited by d1_write tenants since the freeze (#2013).
- * `--only settings-phase1` updates only the #2019 columns on existing rows.
+ * Needs SANITY_API_TOKEN_READ (`fnox exec -- pnpm backfill:conference ...`).
+ * Writing requires `--only <phase>` or `--all-columns`. `--all-columns` sets
+ * EVERY column on existing rows from Sanity, which reverts D1-owned fields
+ * edited by d1_write tenants since the freeze (#2013). Before writing it
+ * prints the conference count and the exact ON CONFLICT UPDATE columns.
  *
- * Writes <dir>/conference.sql (default: .). Apply it with
- * `wrangler d1 execute --file`; this script never does.
+ * Flow: generate, review the printed columns, apply with
+ * `wrangler d1 execute <db> --remote --file <dir>/conference.sql` (this
+ * script never applies), run `pnpm tsx scripts/parity-conference.ts --all`,
+ * then delete conference.sql: it can hold Slack invite URLs.
  */
 
 import { config } from 'dotenv'
-import { writeFileSync } from 'fs'
+import { mkdirSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
 import { pathToFileURL } from 'url'
 config({ path: resolve(process.cwd(), '.env') })
 config({ path: resolve(process.cwd(), '.env.local'), override: true })
+
+const TOKEN_HELP = `SANITY_API_TOKEN_READ is not set. Without it the Sanity client sends
+'invalid' and fails with an opaque 401 ("Session not found"). Set it with either:
+  fnox exec -- <your command>
+  export SANITY_API_TOKEN_READ=$(npx sanity debug --secrets | awk '/Auth token/{print $NF}')`
+
+/** Fails before any Sanity call when the read token is missing. */
+export function requireReadToken(
+  env: Record<string, string | undefined> = process.env,
+) {
+  if (!env.SANITY_API_TOKEN_READ) throw new Error(TOKEN_HELP)
+}
+
+export const ALL_COLUMNS_WARNING =
+  'WARNING: --all-columns overwrites EVERY column of existing rows with the frozen Sanity values, reverting D1-owned fields edited since the freeze (#2013). Prefer --only <phase>.'
+
+/** Parses the CLI. `only` undefined with `dryRun` false means --all-columns. */
+export function parseArgs<P extends string, C>(
+  args: string[],
+  phases: Record<P, readonly C[]>,
+) {
+  const names = Object.keys(phases).join(' or ')
+  const value = (flag: string) => {
+    const i = args.indexOf(flag)
+    if (i < 0) return undefined
+    const v = args[i + 1]
+    if (v === undefined || v.startsWith('--'))
+      throw new Error(`${flag} needs a value`)
+    return v
+  }
+  const dryRun = args.includes('--dry-run')
+  const allColumns = args.includes('--all-columns')
+  const phase = value('--only')
+  const outDir = value('--out') ?? '.'
+  if (phase !== undefined && !Object.hasOwn(phases, phase))
+    throw new Error(`unknown --only ${phase}; use ${names}`)
+  if (phase !== undefined && allColumns)
+    throw new Error('use --only or --all-columns, not both')
+  if (phase === undefined && !allColumns && !dryRun)
+    throw new Error(
+      `pass --only <phase> (${names}) or, to overwrite every column, --all-columns`,
+    )
+  return {
+    dryRun,
+    outDir,
+    only: phase === undefined ? undefined : phases[phase as P],
+    warning: allColumns ? ALL_COLUMNS_WARNING : undefined,
+  }
+}
 
 /** Sanity, mapped exactly as the backfill writes it. Also used by parity. */
 export async function loadBackfill() {
@@ -51,26 +105,34 @@ export async function loadBackfill() {
 }
 
 async function main() {
-  const args = process.argv.slice(2)
+  const {
+    toSql,
+    updateColumns,
+    SETTINGS_PHASE1_COLUMNS,
+    SETTINGS_PHASE2_COLUMNS,
+  } = await import('../services/conference/scripts/backfill')
+  const opts = parseArgs(process.argv.slice(2), {
+    'settings-phase1': SETTINGS_PHASE1_COLUMNS,
+    'settings-phase2': SETTINGS_PHASE2_COLUMNS,
+  })
+  requireReadToken()
+  if (opts.warning) console.warn(`\n${opts.warning}\n`)
   const b = await loadBackfill()
-  const { toSql, SETTINGS_PHASE1_COLUMNS } =
-    await import('../services/conference/scripts/backfill')
-  const o = args.indexOf('--only')
-  const only = o >= 0 ? args[o + 1] : undefined
-  if (only !== undefined && only !== 'settings-phase1')
-    throw new Error(`unknown --only ${only}; use settings-phase1`)
 
   console.log(`conferences ${b.rows.length}, anomalies ${b.anomalies.length}`)
   for (const a of b.anomalies) console.log(`  ${a}`)
-  if (args.includes('--dry-run')) return
+  if (opts.dryRun) return
 
-  const i = args.indexOf('--out')
-  const file = join(i >= 0 ? args[i + 1] : '.', 'conference.sql')
-  writeFileSync(
-    file,
-    toSql(b.rows, only ? { only: SETTINGS_PHASE1_COLUMNS } : {}),
+  if (b.rows.length > 0)
+    console.log(
+      `ON CONFLICT UPDATE columns: ${updateColumns(b.rows[0], opts.only).join(', ')}`,
+    )
+  mkdirSync(opts.outDir, { recursive: true })
+  const file = join(opts.outDir, 'conference.sql')
+  writeFileSync(file, toSql(b.rows, { only: opts.only }))
+  console.log(
+    `wrote ${file} (delete it after applying: may hold Slack invite URLs)`,
   )
-  console.log(`wrote ${file}`)
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href)

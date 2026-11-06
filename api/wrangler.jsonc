@@ -16,7 +16,7 @@
     "logs": { "enabled": true, "destinations": ["grafana-cloud-logs"] },
   },
   // Bindings do not inherit into envs, so each env lists its own.
-  // Secrets per env: ENVELOPE_PRIVATE_KEY, CLIENT_IP_SECRET.
+  // Secrets per env: declared in secrets.json (mise run secrets:sync).
   // OVERRIDE_TENANTS: @override label -> orgIds routed to the native subgraph.
   // Transition only (#1925): prefer the d1_override flag in tenant-directory D1.
   // API_LIMITER: per caller, 300 requests a minute (#1790);
@@ -42,11 +42,15 @@
   ],
   "vars": {
     "IDENTITY_ISSUER": "https://id-preview.konf.app",
-    "OVERRIDE_TENANTS": {},
+    "OVERRIDE_TENANTS": {
+      "conference-settings": ["organization-cloud-native-days", "kkdemo.org"],
+    },
   },
   "services": [
     { "binding": "DIRECTORY", "service": "konf-tenant-directory" },
     { "binding": "CONTENT", "service": "konf-content" },
+    { "binding": "PROGRAM", "service": "konf-program" },
+    { "binding": "SPONSORS", "service": "konf-sponsors" },
     { "binding": "CONFERENCE", "service": "konf-conference" },
     { "binding": "IDENTITY", "service": "konf-identity" },
     {
@@ -67,7 +71,12 @@
       // Placeholder until identity's preview host exists.
       "vars": {
         "IDENTITY_ISSUER": "https://id-preview.konf.app",
-        "OVERRIDE_TENANTS": {},
+        "OVERRIDE_TENANTS": {
+          "conference-settings": [
+            "organization-cloud-native-days",
+            "kkdemo.org",
+          ],
+        },
       },
       "ratelimits": [
         {
@@ -90,6 +99,8 @@
       "services": [
         { "binding": "DIRECTORY", "service": "konf-tenant-directory-preview" },
         { "binding": "CONTENT", "service": "konf-content-preview" },
+        { "binding": "PROGRAM", "service": "konf-program-preview" },
+        { "binding": "SPONSORS", "service": "konf-sponsors-preview" },
         { "binding": "CONFERENCE", "service": "konf-conference-preview" },
         { "binding": "IDENTITY", "service": "konf-identity-preview" },
         {
@@ -112,7 +123,12 @@
         "IDENTITY_ISSUER": "https://id.konf.app",
         // Operator lane (#1892 phase 4): kontroll. Preview leaves it unset.
         "OPERATOR_ORIGIN": "https://my.konf.app",
-        "OVERRIDE_TENANTS": {},
+        "OVERRIDE_TENANTS": {
+          "conference-settings": [
+            "organization-cloud-native-days",
+            "kkdemo.org",
+          ],
+        },
       },
       "ratelimits": [
         {
@@ -134,6 +150,8 @@
       "services": [
         { "binding": "DIRECTORY", "service": "konf-tenant-directory" },
         { "binding": "CONTENT", "service": "konf-content" },
+        { "binding": "PROGRAM", "service": "konf-program" },
+        { "binding": "SPONSORS", "service": "konf-sponsors" },
         { "binding": "CONFERENCE", "service": "konf-conference" },
         { "binding": "IDENTITY", "service": "konf-identity" },
         {

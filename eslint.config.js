@@ -164,12 +164,15 @@ const eslintConfig = [
   // and `.cjs` (webpack resolves them) and `.mts`/`.cts` (tsc compiles them).
   // Nothing mechanical stops someone adding one.
   // `api/**` is the api.konf.app Worker (#1772): it reads the same Sanity
-  // dataset, so the same tenancy rule applies, as does services/content (#1835).
+  // dataset, so the same tenancy rule applies, as does services/content (#1835) and
+  // services/program.
   {
     files: [
       'src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
       'api/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
       'services/content/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+      'services/program/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+      'services/sponsors/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
     ],
     plugins: {
       tenancy: { rules: { 'no-unscoped-groq': noUnscopedGroq } },
@@ -187,6 +190,8 @@ const eslintConfig = [
       'src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
       'api/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
       'services/content/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+      'services/program/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+      'services/sponsors/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
     ],
     plugins: {
       d1: {
@@ -295,8 +300,14 @@ const eslintConfig = [
   // with @override. Only its data layer, and only
   // `@sanity/client`, the Worker-safe client; the site's src/lib/sanity
   // (next-sanity, process.env) stays out. Its resolvers keep the rule above.
+  // services/program is the same, until a D1 ProgramSource replaces Sanity
+  // (DATA_OWNERSHIP rule 3, step 1).
   {
-    files: ['services/content/src/data/**/*.{ts,mts,cts,tsx,js,mjs}'],
+    files: [
+      'services/content/src/data/**/*.{ts,mts,cts,tsx,js,mjs}',
+      'services/program/src/data/**/*.{ts,mts,cts,tsx,js,mjs}',
+      'services/sponsors/src/data/**/*.{ts,mts,cts,tsx,js,mjs}',
+    ],
     rules: (() => {
       const rules = boundary({
         ...SANITY,

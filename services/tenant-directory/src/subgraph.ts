@@ -46,10 +46,10 @@ const Conference = builder
     }),
   })
 
-// Contributes lifecycleStatus to the conference subgraph's editions (#1971).
-// The source of truth for lifecycle is this D1.
+// Contributes lifecycleStatus (#1971) and primaryHost (#1977) to the
+// conference subgraph's editions. Lifecycle and hostnames live in this D1.
 const ConferenceEdition = builder
-  .objectRef<Row<'id' | 'lifecycle'>>('ConferenceEdition')
+  .objectRef<Row<'id' | 'orgId' | 'lifecycle'>>('ConferenceEdition')
   .implement({
     fields: (t) => ({
       id: t.exposeID('id'),
@@ -57,6 +57,12 @@ const ConferenceEdition = builder
         nullable: true,
         description:
           '`draft`, `live`, `cancelled` or `archived`. Org members see every value; anyone else only `live`, and null otherwise.',
+      }),
+      primaryHost: t.string({
+        nullable: true,
+        description:
+          "The edition's canonical host: a verified custom domain, else its verified platform-edition host, else null. Never pending or failed. Same visibility as lifecycleStatus.",
+        resolve: (c, _, ctx) => ctx.data.primaryHostOf(c.orgId, c.id),
       }),
     }),
   })
@@ -145,7 +151,7 @@ const RolloutFlag = builder.enumType('RolloutFlag', { values: FLAGS })
 type ConfRow = Row<'id' | 'orgId' | 'lifecycle'> & Flags
 
 // One row of the operator `conferences` list (#1985). Title, dates and
-// primaryHost come from the conference subgraph through `edition`.
+// dates come from the conference subgraph through `edition`.
 const OperatorConference = builder
   .objectRef<{ conf: ConfRow; org: OrgRow }>('OperatorConference')
   .implement({
@@ -161,6 +167,27 @@ const OperatorConference = builder
       edition: t.field({
         type: ConferenceEdition,
         resolve: ({ conf }) => conf,
+      }),
+    }),
+  })
+
+// The caller's own orgs (#2036). Built only by myOrganizations, from the
+// membership list identity returns for the envelope's userId.
+const MyOrganization = builder
+  .objectRef<{
+    id: string
+    name: string
+    role: string
+    editions: Row<'id' | 'orgId' | 'lifecycle'>[]
+  }>('MyOrganization')
+  .implement({
+    fields: (t) => ({
+      id: t.exposeID('id'),
+      name: t.exposeString('name'),
+      role: t.exposeString('role'),
+      conferenceEditions: t.field({
+        type: [ConferenceEdition],
+        resolve: (o) => o.editions,
       }),
     }),
   })
@@ -193,6 +220,24 @@ builder.queryType({
       resolve: async (_, __, ctx) => {
         const id = sessionOrgId(ctx)
         return id ? ((await ctx.data.organization(id)) ?? null) : null
+      },
+    }),
+    myOrganizations: t.field({
+      type: [MyOrganization],
+      description:
+        "The signed-in user's own organizations, with their role and every conference edition (#2036). Kontroll's member lane: a session with no tenant. Refused with a tenant envelope or none.",
+      resolve: (_, __, ctx) => {
+        const e = ctx.envelope
+        // Guard before fetch. A UserContext, or a PlatformContext for an
+        // operator, who still gets only their own memberships: the userId
+        // is the one the gateway verified, never an argument.
+        if (e?.typ !== 'user' && e?.typ !== 'platform') {
+          throw createGraphQLError(
+            'myOrganizations requires a session with no tenant',
+            { extensions: { code: 'FORBIDDEN' } },
+          )
+        }
+        return ctx.data.myOrganizations(e.userId)
       },
     }),
     organizations: t.field({

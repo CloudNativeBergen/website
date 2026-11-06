@@ -1,6 +1,6 @@
 # The Control Model — this app, kontroll, and one Sanity dataset
 
-> Amended by [DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md): the shared dataset is the starting point; the target is kontroll on the API.
+> Amended by [DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md): the shared dataset is the starting point; the target is kontroll on the API. Under the cutover in progress, core conference settings and lifecycle live in D1 (all 4 conferences read and write D1 via `d1_override=1`; Sanity copies frozen, #2013, #2015; settings phase 1 writes 18 more fields, #2023), tenant-directory D1 owns organizations and domains, and identity D1 owns users and memberships (Better Auth via `api.konf.app`, #1923; Sanity `organizers[]` is an hourly projection, #1907).
 
 Two applications share one Sanity dataset:
 
@@ -74,6 +74,9 @@ running the event.
 | `provisioningRequest`, `provisioningRateLimit`                               | this app only                                               | this app only | no                                             |
 | everything else (talk, proposal, schedule, sponsor, review, notification, …) | this app only                                               | this app only | per-page, `conferenceTag`                      |
 
+> [!NOTE]
+> Under the D1 cutover ([DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md)), conference core settings and lifecycle are written only to D1 with Sanity copies frozen (#2013, #2015), and settings phase 1 (#2023) writes 18 more fields to D1. Organizations and domains are authoritative in tenant-directory D1.
+
 The one type both applications write is `organization`, and it is the reason
 the whole cache-coherence section below exists.
 
@@ -81,12 +84,15 @@ the whole cache-coherence section below exists.
 straining it. Growing the organizer team is a _customer_ self-service action, so
 it looks like kontroll's job — but the grant it produces is a write to
 `conference.organizers[]`, and `conference` is off kontroll's partition by the
-rule above. The two applications also key membership on **disjoint identity
-spaces**: kontroll's `portalInvite` keys on `userKey`, while organizer standing
-keys on `speaker._id`. There is no shared user id and no join beyond heuristic
-email matching, so the invite lives here (`src/lib/organizer-invite`,
-`src/server/routers/organizerInvite.ts`) and kontroll links to it. See
-`docs/AUTH.md` for why acceptance requires an email magic-link sign-in.
+rule above. In the original Sanity design, the two applications keyed membership on **disjoint identity
+spaces**: kontroll's `portalInvite` keyed on `userKey`, while organizer standing
+keyed on `speaker._id`. There was no shared user id and no join beyond heuristic
+email matching, so the invite lived here (`src/lib/organizer-invite`,
+`src/server/routers/organizerInvite.ts`) and kontroll linked to it. See
+`docs/AUTH.md` for why acceptance required an email magic-link sign-in.
+
+> [!NOTE]
+> **Identity and memberships update (#1923):** Disjoint identity spaces have been superseded by unified users and memberships in identity D1 (`services/identity`). Memberships and invites are managed through `api.konf.app` (#1966). The Sanity `organizerInvitation` and `conference.organizers[]` path is legacy; an hourly sync runs from `tenant-directory` cron to project Sanity `organizers[]` into identity `member` rows (or drift-check for `MEMBER_SOURCE_ORGS` #1947) until Phase 5 retires `organizers[]`.
 
 ### The partition rule in force
 

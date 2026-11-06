@@ -52,7 +52,7 @@ describe('isMovedConferenceField (#1997)', () => {
 
   it.each([
     'description',
-    'organizer',
+    'organizerAddress',
     'contactEmail',
     'sponsorEmail',
     'volunteerRegistrationLink',
@@ -70,7 +70,7 @@ describe('isMovedConferenceField (#1997)', () => {
 })
 
 describe('movedConferencePatch settings phase 1 (#2019)', () => {
-  it('sends every phase 1 key to D1, keeps nulls, and leaves Sanity owning them', () => {
+  it('sends every phase 1 key to D1, keeps nulls, and moves only the public ones', () => {
     const input = {
       cfpStartDate: '2026-01-01',
       cfpEndDate: '2026-01-02',
@@ -91,9 +91,16 @@ describe('movedConferencePatch settings phase 1 (#2019)', () => {
       analyticsPirschCode: 'p',
     }
     expect(movedConferencePatch({ ...input, description: 'x' })).toEqual(input)
-    // Not read from D1 yet, so Sanity still gets them.
+    // Members-only fields have no member read path yet, so Sanity still
+    // gets them; the public ones are read from D1 and moved.
+    const privateKeys = [
+      'travelSupportBudget',
+      'organizerAddress',
+      'organizerOrgNumber',
+      'analyticsPirschCode',
+    ]
     for (const k of Object.keys(input))
-      expect(isMovedConferenceField(k)).toBe(false)
+      expect(isMovedConferenceField(k)).toBe(!privateKeys.includes(k))
   })
 
   it('maps ticketCustomization to showVanityMetrics, absent as an unset', () => {
@@ -105,5 +112,27 @@ describe('movedConferencePatch settings phase 1 (#2019)', () => {
     expect(
       movedConferencePatch({ ticketCustomization: { heroHeadline: 'h' } }),
     ).toEqual({ showVanityMetrics: null })
+  })
+})
+
+describe('movedConferencePatch settings phase 2 (#2038)', () => {
+  it('sends every phase 2 key to D1, keeps nulls, and leaves Sanity owning them', () => {
+    const input = {
+      sponsorRegistrationLink: 'https://t.example/s',
+      speakerRegistrationLink: 'https://t.example/sp',
+      volunteerRegistrationLink: null,
+      contactEmail: 'hi@acme.example',
+      cfpEmail: 'cfp@acme.example',
+      sponsorEmail: 'sponsor@acme.example',
+      salesNotificationChannel: '#sales',
+      cfpNotificationChannel: '#cfp',
+      speakerSlackChannel: '#speakers',
+      speakerSlackInviteUrl: 'https://join.slack.com/s',
+      volunteerSlackInviteUrl: 'https://join.slack.com/v',
+    }
+    expect(movedConferencePatch({ ...input, description: 'x' })).toEqual(input)
+    // Not read from D1 yet, so Sanity still gets them.
+    for (const k of Object.keys(input))
+      expect(isMovedConferenceField(k)).toBe(false)
   })
 })

@@ -34,3 +34,17 @@ describe('UserMenu admin links', () => {
     expect(screen.getByText('Tickets')).toBeTruthy()
   })
 })
+
+describe('UserMenu linked accounts (#2021)', () => {
+  it('links to id.konf.app/account only for an identity session', () => {
+    const { unmount } = render(<UserMenu speaker={organizer} />)
+    fireEvent.click(screen.getByRole('button'))
+    expect(screen.queryByText('Koblede kontoer')).toBeNull()
+    unmount()
+    render(<UserMenu speaker={organizer} identity />)
+    fireEvent.click(screen.getByRole('button'))
+    expect(screen.getByText('Koblede kontoer').closest('a')?.href).toBe(
+      'https://id.konf.app/account',
+    )
+  })
+})

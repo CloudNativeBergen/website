@@ -7,6 +7,7 @@
 // homepage blocks and the rest) stay in content and reach the caller through
 // the entity key.
 import { builder } from './builder'
+import { emit } from './push'
 import { createGraphQLError } from 'graphql-yoga'
 import type { ConferencePatch, ConferenceRow } from './data'
 import type { ResolverContext } from './worker'
@@ -62,6 +63,31 @@ const SETTINGS_PRIVATE = [
   'analyticsPirschCode',
 ] as const
 
+// Settings phase 2 (#2038). None is a secret (no webhook URLs; the channels
+// are names), so all are readable, some by org members only.
+/** Public: shown on the public site (footer, /cfp, /sponsor). */
+const CONTACT_EMAILS = ['contactEmail', 'cfpEmail', 'sponsorEmail'] as const
+/**
+ * Org members only: the registration and Slack invite links each let the
+ * holder claim a ticket or join a private workspace, and the channel names
+ * are internal. The registration links are content's fields too, so they
+ * move under the settings label. volunteerRegistrationLink is public (below).
+ */
+const SETTINGS_PHASE2_PRIVATE = [
+  'sponsorRegistrationLink',
+  'speakerRegistrationLink',
+  'salesNotificationChannel',
+  'cfpNotificationChannel',
+  'speakerSlackChannel',
+  'speakerSlackInviteUrl',
+  'volunteerSlackInviteUrl',
+] as const
+const IN_CONTENT = new Set<string>([
+  'sponsorRegistrationLink',
+  'speakerRegistrationLink',
+  'volunteerRegistrationLink',
+])
+
 /** A member of the envelope's org, or an operator acting for it. */
 const isMember = ({ envelope: e }: ResolverContext) =>
   e.typ === 'tenant' &&
@@ -115,6 +141,27 @@ const Conference = builder.objectRef<ConferenceRow>('Conference').implement({
       description: 'Org members only.',
       resolve: (c, _, ctx) => (isMember(ctx) ? c.travelSupportBudget : null),
     }),
+    ...Object.fromEntries(
+      CONTACT_EMAILS.map((k) => [k, t.exposeString(k, { nullable: true })]),
+    ),
+    // Public: the volunteer confirmation page shows it to anonymous
+    // visitors (src/app/(main)/volunteer/confirm/page.tsx).
+    volunteerRegistrationLink: t.string({
+      nullable: true,
+      ...settings,
+      resolve: (c) => c.volunteerRegistrationLink,
+    }),
+    ...Object.fromEntries(
+      SETTINGS_PHASE2_PRIVATE.map((k) => [
+        k,
+        t.string({
+          nullable: true,
+          description: 'Org members only.',
+          ...(IN_CONTENT.has(k) ? settings : {}),
+          resolve: (c, _, ctx) => (isMember(ctx) ? c[k] : null),
+        }),
+      ]),
+    ),
   }),
 })
 
@@ -132,12 +179,6 @@ const ConferenceEdition = builder
       visibility: t.exposeString('visibility'),
       published: t.exposeBoolean('published', {
         description: 'False when the edition is cancelled or archived.',
-      }),
-      primaryHost: t.string({
-        nullable: true,
-        description:
-          'Always null for now: hostnames live in tenant-directory, which serves no tenant-scoped read yet (#1970).',
-        resolve: () => null,
       }),
     }),
   })
@@ -174,10 +215,14 @@ const ConferencePatchInput = builder.inputType('ConferencePatch', {
         'False when Sanity marks the edition cancelled or archived. Not null.',
     }),
     ...Object.fromEntries(
-      [...SETTINGS_SHARED, ...SETTINGS_NEW, ...SETTINGS_PRIVATE].map((k) => [
-        k,
-        t.string(),
-      ]),
+      [
+        ...SETTINGS_SHARED,
+        ...SETTINGS_NEW,
+        ...SETTINGS_PRIVATE,
+        ...CONTACT_EMAILS,
+        'volunteerRegistrationLink',
+        ...SETTINGS_PHASE2_PRIVATE,
+      ].map((k) => [k, t.string()]),
     ),
     registrationEnabled: t.boolean(),
     showVanityMetrics: t.boolean(),
@@ -199,6 +244,18 @@ const isDate = (v: string) => {
     /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(+d) && d.toISOString().startsWith(v)
   )
 }
+const isHttps = (v: string) => {
+  try {
+    return new URL(v).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+// Pragmatic, as the site's zod .email(): one @, no spaces, a dotted domain.
+const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+// A Slack channel name, `#` optional: lowercase in Slack, but the site stores
+// what the organizer typed, so case is tolerated. No spaces.
+const isChannel = (v: string) => /^#?[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v)
 const isHex = (v: string) => /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(v)
 
 /** Max characters per string field; anything not listed gets 2,000. */
@@ -215,6 +272,13 @@ export const MAX_LEN: Record<string, number> = {
   organizerOrgNumber: 50,
   socialHashtag: 100,
   analyticsPirschCode: 100,
+  contactEmail: 254,
+  cfpEmail: 254,
+  sponsorEmail: 254,
+  // Slack's limit is 80, plus an optional `#`.
+  salesNotificationChannel: 81,
+  cfpNotificationChannel: 81,
+  speakerSlackChannel: 81,
 }
 export const MAX_DEFAULT = 2000
 export const MAX_SOCIAL_LINKS = 20
@@ -234,6 +298,18 @@ function validate(input: Record<string, unknown>): ConferencePatch {
     accentColor: isHex,
     registrationLink: isUrl,
     analyticsPirschCode: (v) => /^[A-Za-z0-9_-]{1,64}$/.test(v),
+    contactEmail: isEmail,
+    cfpEmail: isEmail,
+    sponsorEmail: isEmail,
+    salesNotificationChannel: isChannel,
+    cfpNotificationChannel: isChannel,
+    speakerSlackChannel: isChannel,
+    // The site accepts http(s) for this one (UpdateRegistrationSchema).
+    sponsorRegistrationLink: isUrl,
+    speakerRegistrationLink: isHttps,
+    volunteerRegistrationLink: isHttps,
+    speakerSlackInviteUrl: isHttps,
+    volunteerSlackInviteUrl: isHttps,
     ...Object.fromEntries(
       [...SETTINGS_SHARED, ...SETTINGS_NEW]
         .filter((k) => k.endsWith('Date'))
@@ -279,8 +355,19 @@ builder.mutationType({
       description:
         "Patches the request's Conference. Requires an org owner or admin.",
       args: { input: t.arg({ type: ConferencePatchInput, required: true }) },
-      resolve: (_, { input }, ctx) =>
-        ctx.data.conferences().update(validate(input)),
+      resolve: async (_, { input }, ctx) => {
+        const row = await ctx.data.conferences().update(validate(input))
+        const e = ctx.envelope
+        // The actor rides along so kontroll can leave them out (kontroll#61).
+        if (e.typ === 'tenant' && e.userId)
+          emit({
+            type: 'conference.settings_changed',
+            organizationId: e.orgId,
+            conferenceId: row.conferenceId,
+            actorId: e.userId,
+          })
+        return row
+      },
     }),
   }),
 })

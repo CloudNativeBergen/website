@@ -22,6 +22,16 @@ vi.mock('jose', async () => {
   return import(pathToFileURL(require.resolve('jose')).href)
 })
 
+// Push emits (kontroll#61): capture what reaches waitUntil.
+const cf = vi.hoisted(() => ({
+  env: {} as Record<string, string>,
+  pending: [] as Promise<unknown>[],
+}))
+vi.mock('cloudflare:workers', () => ({
+  env: cf.env,
+  waitUntil: (p: Promise<unknown>) => cf.pending.push(p),
+}))
+
 const { default: worker } = await import('./worker')
 
 /** The slice of D1 that drizzle-orm/d1 uses, over node:sqlite. */
@@ -584,5 +594,229 @@ describe('settings phase 1 (#2019)', () => {
       travel_support_budget: null,
       social_hashtag: null,
     })
+  })
+})
+
+describe('conference.settings_changed push event', () => {
+  // emit() loads cloudflare:workers lazily: let that import settle first.
+  const settled = async () => {
+    await new Promise((r) => setTimeout(r))
+    await Promise.all(cf.pending)
+  }
+  const MUTATION =
+    'mutation($input: ConferencePatch!) { updateConference(input: $input) { id title } }'
+  const sent: { body: string }[] = []
+  beforeEach(() => {
+    sent.length = 0
+    cf.pending.length = 0
+    cf.env.PUSH_WEBHOOK_URL = 'https://kontroll.test/api/push/events'
+    cf.env.PUSH_WEBHOOK_SECRET = 's'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_: string, init: RequestInit) => {
+        sent.push({ body: String(init.body) })
+        return new Response(null, { status: 204 })
+      }),
+    )
+    return () => {
+      delete cf.env.PUSH_WEBHOOK_URL
+      delete cf.env.PUSH_WEBHOOK_SECRET
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('carries ids and the actor, nothing else', async () => {
+    const { body } = await gql(tenant('org-a', 'conf-a', 'admin'), MUTATION, {
+      input: { title: 'New' },
+    })
+    expect(body.errors).toBeUndefined()
+    await settled()
+    expect(sent.map((s) => JSON.parse(s.body))).toEqual([
+      {
+        type: 'conference.settings_changed',
+        organizationId: 'org-a',
+        conferenceId: 'conf-a',
+        actorId: 'u',
+      },
+    ])
+  })
+
+  it('a failed send leaves the update applied', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('down')
+      }),
+    )
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { body } = await gql(tenant('org-a', 'conf-a', 'admin'), MUTATION, {
+      input: { title: 'Still saved' },
+    })
+    await settled()
+    expect(body.data.updateConference.title).toBe('Still saved')
+    expect(err).toHaveBeenCalledWith(
+      expect.stringContaining('push.webhook_failed'),
+    )
+  })
+
+  it('a refused update sends nothing', async () => {
+    await gql(tenant('org-a', 'conf-a', 'member'), MUTATION, {
+      input: { title: 'x' },
+    })
+    await settled()
+    expect(sent).toEqual([])
+  })
+})
+
+describe('settings phase 2 (#2038)', () => {
+  const PUBLIC = {
+    contactEmail: 'hi@acme.example',
+    cfpEmail: 'cfp@acme.example',
+    sponsorEmail: 'sponsor@acme.example',
+    volunteerRegistrationLink: 'https://t.example/v',
+  }
+  const PRIVATE = {
+    sponsorRegistrationLink: 'https://t.example/s',
+    speakerRegistrationLink: 'https://t.example/sp',
+    salesNotificationChannel: '#sales',
+    cfpNotificationChannel: '#cfp',
+    speakerSlackChannel: 'speakers',
+    speakerSlackInviteUrl: 'https://join.slack.com/s',
+    volunteerSlackInviteUrl: 'https://join.slack.com/v',
+  }
+  const ALL = { ...PUBLIC, ...PRIVATE }
+  const FIELDS = Object.keys(ALL).join(' ')
+  const MUTATION = `mutation($input: ConferencePatch!) { updateConference(input: $input) { ${FIELDS} } }`
+  const admin = tenant('org-a', 'conf-a', 'admin')
+  const nulls = Object.fromEntries(Object.keys(PRIVATE).map((k) => [k, null]))
+
+  it('an admin writes and reads back every field', async () => {
+    const { body } = await gql(admin, MUTATION, { input: ALL })
+    expect(body.errors).toBeUndefined()
+    expect(body.data.updateConference).toEqual(ALL)
+  })
+
+  it('shows the emails and volunteer link to anyone, the rest to org members only', async () => {
+    await gql(admin, MUTATION, { input: ALL })
+    const read = async (as: Envelope) =>
+      (await gql(as, `{ conference { ${FIELDS} } }`)).body.data.conference
+    expect(await read(tenant('org-a', 'conf-a'))).toEqual({
+      ...PUBLIC,
+      ...nulls,
+    })
+    expect(await read(tenant('org-a', 'conf-a', 'member'))).toEqual(ALL)
+    const entity = await gql(
+      tenant('org-a', 'conf-a'),
+      `{ _entities(representations: [{ __typename: "Conference", id: "conf-a" }]) { ... on Conference { ${Object.keys(PRIVATE).join(' ')} } } }`,
+    )
+    expect(entity.body.data._entities[0]).toEqual(nulls)
+  })
+
+  it('rejects each invalid value without writing', async () => {
+    for (const input of [
+      { contactEmail: 'not-an-email' },
+      { cfpEmail: 'a b@x.example' },
+      { sponsorEmail: `${'a'.repeat(250)}@x.example` },
+      { salesNotificationChannel: '#has space' },
+      { cfpNotificationChannel: `#${'a'.repeat(81)}` },
+      { speakerSlackChannel: '#' },
+      { sponsorRegistrationLink: 'javascript:alert(1)' },
+      { speakerRegistrationLink: 'http://t.example/sp' },
+      { volunteerRegistrationLink: 'http://t.example/v' },
+      { speakerSlackInviteUrl: 'http://join.slack.com/s' },
+      { volunteerSlackInviteUrl: '/relative' },
+    ]) {
+      const { body } = await gql(admin, MUTATION, { input })
+      expect(body.errors?.[0].extensions.code, JSON.stringify(input)).toBe(
+        'BAD_USER_INPUT',
+      )
+    }
+    const row = sqlite
+      .prepare(
+        'SELECT contact_email, cfp_email, sponsor_email, sales_notification_channel, cfp_notification_channel, speaker_slack_channel, sponsor_registration_link, speaker_registration_link, volunteer_registration_link, speaker_slack_invite_url, volunteer_slack_invite_url FROM conferences WHERE conference_id = ?',
+      )
+      .get('conf-a')
+    expect(Object.values(row as object).every((v) => v === null)).toBe(true)
+  })
+})
+
+describe('tenant span attributes (#1814)', () => {
+  /** An ExecutionContext whose active span records what is set on it. */
+  function traced() {
+    const setAttributes = vi.fn()
+    const ctx = {
+      tracing: { getActiveSpan: () => ({ setAttributes }) },
+    } as unknown as ExecutionContext
+    return { ctx, setAttributes }
+  }
+
+  async function fetchWith(ctx: ExecutionContext, as?: Envelope | string) {
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+    }
+    if (as)
+      headers[ENVELOPE_HEADER] =
+        typeof as === 'string' ? as : await signer.sign(as)
+    return worker.fetch(
+      new Request('http://conference/graphql', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ query: QUERY }),
+      }),
+      env,
+      ctx,
+    )
+  }
+
+  it("sets the envelope's org and conference on the request's span", async () => {
+    const { ctx, setAttributes } = traced()
+    const res = await fetchWith(ctx, tenant('org-a', 'conf-a'))
+    expect(res.status).toBe(200)
+    expect(setAttributes.mock.calls).toEqual([
+      [{ 'konf.org_id': 'org-a', 'konf.conference_id': 'conf-a' }],
+    ])
+  })
+
+  it('leaves the conference out for an org-level envelope', async () => {
+    const { ctx, setAttributes } = traced()
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await fetchWith(ctx, tenant('org-a', null))
+    // A span attribute cannot be null; the runtime drops undefined.
+    expect(setAttributes.mock.calls).toEqual([[{ 'konf.org_id': 'org-a' }]])
+    expect(log.mock.calls[0]).toEqual(['{"konf.org_id":"org-a"}'])
+    log.mockRestore()
+  })
+
+  it('sets the operator, not a tenant, for a PlatformContext', async () => {
+    const { ctx, setAttributes } = traced()
+    await fetchWith(ctx, {
+      typ: 'platform',
+      userId: 'op',
+      platformRole: 'operator',
+    })
+    expect(setAttributes.mock.calls).toEqual([[{ 'konf.platform_user': 'op' }]])
+  })
+
+  it('sets the user, not an operator, for a UserContext', async () => {
+    const { ctx, setAttributes } = traced()
+    await fetchWith(ctx, { typ: 'user', userId: 'u1' })
+    expect(setAttributes.mock.calls).toEqual([[{ 'konf.user_id': 'u1' }]])
+  })
+
+  it('sets nothing for a refused envelope', async () => {
+    const { ctx, setAttributes } = traced()
+    expect((await fetchWith(ctx, 'not-a-jwt')).status).toBe(403)
+    expect((await fetchWith(ctx)).status).toBe(401)
+    expect(setAttributes).not.toHaveBeenCalled()
+  })
+
+  it('serves the request when the runtime has no active span', async () => {
+    const ctx = {
+      tracing: { getActiveSpan: () => undefined },
+    } as unknown as ExecutionContext
+    const res = await fetchWith(ctx, tenant('org-a', 'conf-a'))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { data: { conference: { id: string } } }
+    expect(body.data.conference.id).toBe('conf-a')
   })
 })

@@ -15,6 +15,7 @@ import type { AuthEnv } from './auth'
 import { createMembers } from './members'
 export { MemberError, type MemberRole } from './members'
 import { syncMembers, type SyncEnv } from './member-sync'
+import { createPushSubscriptions } from './push-subscriptions'
 
 /** What the gateway needs per request to mint an envelope. */
 export interface Principal {
@@ -40,6 +41,8 @@ export function createData(env: DataEnv) {
     syncMembers: () => syncMembers(env),
     /** Membership writes for the subgraph (#1923): member and operator paths. */
     members: () => createMembers(env),
+    /** Web push subscriptions (kontroll#61). */
+    pushSubscriptions: () => createPushSubscriptions(env.DB),
     /**
      * True only for an exact `https://<host>` origin (no path, port or
      * userinfo) whose host the directory holds as verified for an active
@@ -145,6 +148,16 @@ export function createData(env: DataEnv) {
         .limit(1)
       return !!row && (row.op || row.m !== null)
     },
+    /**
+     * The orgs `userId` is a member of, with the role there (#2036). A pending
+     * invitation is no member row.
+     */
+    memberships: (userId: string) =>
+      db
+        .select({ orgId: member.organizationId, role: member.role })
+        .from(member)
+        .where(eq(member.userId, userId))
+        .orderBy(member.organizationId),
     /** Live membership; null for an unknown user. */
     async principal(userId: string, orgId: string): Promise<Principal | null> {
       const [row] = await db

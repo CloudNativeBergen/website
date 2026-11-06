@@ -54,6 +54,11 @@ vi.mock('@/lib/sanity/client', () => {
   }
 })
 vi.mock('@/lib/teams', () => ({ clearConferenceTeamsCache: vi.fn() }))
+// Not a d1_write tenant: the channel goes to Sanity only (#2038).
+vi.mock('@/lib/konf-api/conference-write', async (original) => ({
+  ...(await original<typeof import('@/lib/konf-api/conference-write')>()),
+  writeMovedToD1: vi.fn(async () => false),
+}))
 
 const b = vi.hoisted(() => ({
   load: vi.fn(),

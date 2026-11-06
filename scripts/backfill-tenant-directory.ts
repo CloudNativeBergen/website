@@ -15,13 +15,15 @@
  */
 
 import { config } from 'dotenv'
-import { writeFileSync } from 'fs'
+import { mkdirSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
 config({ path: resolve(process.cwd(), '.env') })
 config({ path: resolve(process.cwd(), '.env.local'), override: true })
 
 async function main() {
   const args = process.argv.slice(2)
+  const { requireReadToken } = await import('./backfill-conference')
+  requireReadToken()
   const { clientReadUncached } = await import('../src/lib/sanity/client')
   const { mapBackfill, toSql } =
     await import('../services/tenant-directory/scripts/backfill')
@@ -43,6 +45,7 @@ async function main() {
   const i = args.indexOf('--out')
   const dir = i >= 0 ? args[i + 1] : '.'
   const sql = toSql(b)
+  mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'tenant-directory.sql'), sql.directory)
   writeFileSync(join(dir, 'identity.sql'), sql.identity)
   console.log(

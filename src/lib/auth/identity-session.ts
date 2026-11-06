@@ -150,11 +150,12 @@ async function resolve(token: string, origin: string): Promise<Session | null> {
 
   const jwt: JWT = { sub: speaker._id, ...user, picture: user.image }
   applySpeakerToToken(jwt, speaker, account)
-  return sessionCallback({
+  const session = await sessionCallback({
     session: {
       expires:
         got.session.expiresAt ?? new Date(Date.now() + TTL_MS).toISOString(),
     } as Session,
     token: jwt,
   })
+  return { ...session, identity: true }
 }

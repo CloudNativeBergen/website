@@ -32,6 +32,12 @@ describe('error page', () => {
     expect(html).toContain('Prøv igjen i samme nettleser.')
   })
 
+  it('points an unlinked provider to the account page (#2021)', async () => {
+    const { html } = await get('error=account_not_linked')
+    expect(html).toContain('ikke koblet til kontoen din')
+    expect(html).toContain('<a href="/account">Koblede kontoer</a>')
+  })
+
   it.each(['nope', '<script>alert(1)</script>', 'toString', ''])(
     'shows the generic text for %j and never echoes it',
     async (code) => {

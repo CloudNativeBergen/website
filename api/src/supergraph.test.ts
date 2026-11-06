@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
-import { publicContract } from './supergraph'
+import { compose, publicContract, publicSdl } from './supergraph'
 
 // Node's graphql (CJS), the copy @graphql-tools/utils loads; Vite's ESM copy
 // would trip graphql's cross-realm check.
@@ -27,5 +27,52 @@ describe('publicContract', () => {
     for (const gone of ['secret', 'SECRET', 'Node', 'Hidden']) {
       expect(sdl).not.toContain(gone)
     }
+  })
+})
+
+describe('compose', () => {
+  it('composes the sponsors subgraph into the public supergraph', () => {
+    expect(compose()).toMatch(/SPONSORS @join__graph\(name: "sponsors"/)
+    const pub = buildSchema(publicSdl())
+    const query = pub.getQueryType()!.getFields()
+    expect(query.sponsors).toBeDefined()
+    expect(query.sponsorTiers).toBeDefined()
+    const fields = (name: string) =>
+      Object.keys(
+        (
+          pub.getType(name) as unknown as {
+            getFields(): Record<string, unknown>
+          }
+        ).getFields(),
+      ).sort()
+    expect(fields('Sponsor')).toEqual([
+      'id',
+      'logoBrightUrl',
+      'logoUrl',
+      'name',
+      'website',
+    ])
+  })
+
+  it('composes the program subgraph into the public supergraph', () => {
+    expect(compose()).toMatch(/PROGRAM @join__graph\(name: "program"/)
+    const query = buildSchema(publicSdl()).getQueryType()!.getFields()
+    for (const f of ['program', 'talk', 'speakers', 'speaker', 'speakerBySlug'])
+      expect(query[f]).toBeDefined()
+    const speaker = buildSchema(publicSdl()).getType('Speaker') as unknown as {
+      getFields(): Record<string, unknown>
+    }
+    expect(Object.keys(speaker.getFields()).sort()).toEqual([
+      'bio',
+      'flags',
+      'galleryImages',
+      'id',
+      'image',
+      'links',
+      'name',
+      'slug',
+      'talks',
+      'title',
+    ])
   })
 })

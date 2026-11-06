@@ -14,6 +14,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { bearer, jwt, organization } from 'better-auth/plugins'
 import { and, count, eq, gt, lte, sql } from 'drizzle-orm'
 import { rawDb } from './db'
+import { emit } from './push'
 import * as schema from './schema'
 
 /** Per environment (`wrangler secret put`); preview never gets production values. */
@@ -291,6 +292,12 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
               invitationId: i.id,
               to: i.role ?? undefined,
             })
+            emit({
+              type: 'member.invited',
+              organizationId: i.organizationId,
+              invitationId: i.id,
+              actorId: inviter.id,
+            })
           },
           beforeCancelInvitation: async ({ invitation: i, cancelledBy }) => {
             if (i.status !== 'pending')
@@ -325,6 +332,12 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
               memberId: m.id,
               to: m.role,
             })
+            emit({
+              type: 'invite.accepted',
+              organizationId: i.organizationId,
+              invitationId: i.id,
+              userId: m.userId,
+            })
           },
           afterRejectInvitation: async ({ invitation: i, user }) => {
             await auditMember('invite.reject', user.id, {
@@ -352,6 +365,13 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
               memberId: m.id,
               from: previousRole,
               to: m.role,
+            })
+            emit({
+              type: 'member.role_changed',
+              organizationId: m.organizationId,
+              userId: m.userId,
+              // The hook's `user` is the member changed; the actor is the session.
+              actorId: actorId() ?? null,
             })
           },
           // Slug and name mirror tenant-directory, which owns them.

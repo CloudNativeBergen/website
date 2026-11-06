@@ -24,6 +24,8 @@ const d1 = (over: Partial<Row> = {}): Row => ({
 })
 
 const fetchMock = vi.fn()
+const emit = vi.fn()
+vi.mock('../push', () => ({ emit: (e: unknown) => emit(e) }))
 vi.mock('@sanity/client', () => ({
   createClient: () => ({ fetch: fetchMock }),
 }))
@@ -45,6 +47,13 @@ describe('findDrift', () => {
     ['social_links', { social_links: '[]' }],
     ['org_id', { org_id: 'o2' }],
     ['primary_color', { primary_color: '#fff' }],
+    // Settings phase 1 (#2019): the members-only columns have no anonymous
+    // gateway parity, so this sweep is their only check.
+    ['organizer_address', { organizer_address: 'Gate 1' }],
+    ['organizer_org_number', { organizer_org_number: '999' }],
+    ['analytics_pirsch_code', { analytics_pirsch_code: 'abc' }],
+    ['travel_support_budget', { travel_support_budget: 5 }],
+    ['registration_enabled', { registration_enabled: 1 as const }],
   ])('reports a mismatch in %s', (field, over) => {
     expect(findDrift([d1(over)], [doc])).toEqual([
       { conferenceId: 'c1', fields: [field] },
@@ -107,6 +116,17 @@ describe('scheduled', () => {
   const events = () => logs.map((l) => JSON.parse(l))
   const summary = () =>
     events().find((e) => e.event === 'conference.parity.sweep')
+
+  it('emits parity.drift with conference ids only, and nothing in sync', async () => {
+    emit.mockReset()
+    fetchMock.mockResolvedValue([doc])
+    await scheduled(envWith([d1()]))
+    expect(emit).not.toHaveBeenCalled()
+    await scheduled(envWith([d1({ city: SECRET })]))
+    expect(emit.mock.calls).toEqual([
+      [{ type: 'parity.drift', conferenceIds: ['c1'] }],
+    ])
+  })
 
   it('reports in_sync with zero diffs', async () => {
     fetchMock.mockResolvedValue([doc])

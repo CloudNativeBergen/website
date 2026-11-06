@@ -39,16 +39,28 @@ export interface SanityConference {
   socialHashtag?: string | null
   ticketCustomization?: { showVanityMetrics?: boolean | null } | null
   analyticsPirschCode?: string | null
+  // Settings phase 2 (#2038).
+  sponsorRegistrationLink?: string | null
+  speakerRegistrationLink?: string | null
+  volunteerRegistrationLink?: string | null
+  contactEmail?: string | null
+  cfpEmail?: string | null
+  sponsorEmail?: string | null
+  salesNotificationChannel?: string | null
+  cfpNotificationChannel?: string | null
+  speakerSlackChannel?: string | null
+  speakerSlackInviteUrl?: string | null
+  volunteerSlackInviteUrl?: string | null
 }
 
-/** The GROQ projection of the phase-1 settings fields (#2019). */
+/** The GROQ projection of the settings fields, phase 1 (#2019) and 2 (#2038). */
 export const SETTINGS_PROJECTION = `cfpStartDate, cfpEndDate, cfpNotifyDate,
   programDate, travelSupportPaymentDate, earlyBirdEndDate,
   registrationCloseDate, speakersAnnouncedDate, sponsorDeadlineDate,
   recordingsLiveDate, travelSupportBudget, registrationEnabled, organizer,
   organizerAddress, organizerOrgNumber, socialHashtag,
   "ticketCustomization": ticketCustomization{ showVanityMetrics },
-  analyticsPirschCode`
+  analyticsPirschCode, sponsorRegistrationLink, speakerRegistrationLink, volunteerRegistrationLink, contactEmail, cfpEmail, sponsorEmail, salesNotificationChannel, cfpNotificationChannel, speakerSlackChannel, speakerSlackInviteUrl, volunteerSlackInviteUrl`
 
 export interface Row {
   conference_id: string
@@ -86,6 +98,17 @@ export interface Row {
   social_hashtag: string | null
   show_vanity_metrics: 0 | 1 | null
   analytics_pirsch_code: string | null
+  sponsor_registration_link: string | null
+  speaker_registration_link: string | null
+  volunteer_registration_link: string | null
+  contact_email: string | null
+  cfp_email: string | null
+  sponsor_email: string | null
+  sales_notification_channel: string | null
+  cfp_notification_channel: string | null
+  speaker_slack_channel: string | null
+  speaker_slack_invite_url: string | null
+  volunteer_slack_invite_url: string | null
 }
 
 const s = (v: string | null | undefined) => v?.trim() || null
@@ -150,6 +173,17 @@ export function mapBackfill(
       social_hashtag: s(c.socialHashtag),
       show_vanity_metrics: b(c.ticketCustomization?.showVanityMetrics),
       analytics_pirsch_code: s(c.analyticsPirschCode),
+      sponsor_registration_link: s(c.sponsorRegistrationLink),
+      speaker_registration_link: s(c.speakerRegistrationLink),
+      volunteer_registration_link: s(c.volunteerRegistrationLink),
+      contact_email: s(c.contactEmail),
+      cfp_email: s(c.cfpEmail),
+      sponsor_email: s(c.sponsorEmail),
+      sales_notification_channel: s(c.salesNotificationChannel),
+      cfp_notification_channel: s(c.cfpNotificationChannel),
+      speaker_slack_channel: s(c.speakerSlackChannel),
+      speaker_slack_invite_url: s(c.speakerSlackInviteUrl),
+      volunteer_slack_invite_url: s(c.volunteerSlackInviteUrl),
     })
     if (!c.title?.trim()) anomalies.push(`conference ${c._id}: no title`)
   }
@@ -185,6 +219,31 @@ export const SETTINGS_PHASE1_COLUMNS = [
   'analytics_pirsch_code',
 ] as const satisfies readonly (keyof Row)[]
 
+/** The settings phase 2 columns (#2038), for `toSql(rows, { only })`. */
+export const SETTINGS_PHASE2_COLUMNS = [
+  'sponsor_registration_link',
+  'speaker_registration_link',
+  'volunteer_registration_link',
+  'contact_email',
+  'cfp_email',
+  'sponsor_email',
+  'sales_notification_channel',
+  'cfp_notification_channel',
+  'speaker_slack_channel',
+  'speaker_slack_invite_url',
+  'volunteer_slack_invite_url',
+] as const satisfies readonly (keyof Row)[]
+
+/** The columns `toSql` puts in ON CONFLICT DO UPDATE SET for a row. */
+export function updateColumns(
+  row: Row,
+  only?: readonly (keyof Row)[],
+): (keyof Row)[] {
+  return (only ?? (Object.keys(row) as (keyof Row)[])).filter(
+    (c) => c !== 'conference_id' && c !== 'org_id',
+  )
+}
+
 /**
  * Idempotent upserts. A rerun never moves a row to another org. New rows are
  * inserted whole; with `only`, an existing row has ONLY those columns
@@ -198,8 +257,7 @@ export function toSql(
   return rows
     .map((r) => {
       const cols = Object.keys(r) as (keyof Row)[]
-      const set = (opts.only ?? cols)
-        .filter((c) => c !== 'conference_id' && c !== 'org_id')
+      const set = updateColumns(r, opts.only)
         .map((c) => `${c} = excluded.${c}`)
         .join(', ')
       return `INSERT INTO conferences (${cols.join(', ')}) VALUES (${cols.map((c) => q(r[c])).join(', ')}) ON CONFLICT (conference_id) DO UPDATE SET ${set} WHERE conferences.org_id = excluded.org_id;`

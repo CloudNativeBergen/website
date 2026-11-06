@@ -42,6 +42,20 @@ pnpm --filter @runkonf/api compose     # fails if the subgraphs do not compose
 pnpm --filter @runkonf/api dev         # compose, then wrangler dev
 ```
 
+## Local development
+
+`mise run dev:api` runs the gateway and all five subgraphs in one `wrangler dev` (one `-c` per Worker, so service bindings resolve locally) on `http://localhost:8787/graphql`. It first runs `dev:api:setup`:
+
+- generates local-only Ed25519 keys (gateway envelope and a dev identity key) into `.wrangler/dev-api/keys.json` and writes gitignored `.dev.vars` files for each Worker. No production secret is needed;
+- applies the D1 migrations locally and seeds `scripts/dev-seed/*.sql`: two orgs, two conferences with hosts `cndn.konf.localhost` and `kk.konf.localhost`, one conference row, a member (`user-dev-member`) and a platform operator (`user-dev-operator`);
+- composes the supergraph, then prints three example `curl` queries.
+
+It runs the `preview` environment of each config, because the top-level configs share one placeholder `database_id` and local D1 would merge their databases. Everything stays local (`--local`, `--persist-to .wrangler/dev-api`).
+
+`mise run dev:token -- [userId] [origin]` mints a 5-minute identity JWT, signed with the dev key, which is seeded into identity's `jwks` table. It defaults to the operator and the operator-lane origin `http://localhost:3000`. `mise run dev:api:reset` wipes the local D1 state; the keys stay.
+
+Limits: content and program read Sanity's private dataset, so without `SANITY_API_TOKEN_READ` in your shell, Sanity-backed fields come back empty. Cron triggers do not fire on their own (use `/cdn-cgi/local/scheduled`). OAuth login does not work; use `dev:token`.
+
 Identity tests run against a real local D1 through Miniflare. A cross-tenant test that walks the whole public schema with two tenants runs with them (#1837).
 
 ## Rollout flags
@@ -62,9 +76,9 @@ pnpm --filter @runkonf/tenant-directory exec wrangler d1 execute DB --remote --e
 
 How they travel: `tenantByHost` returns them, and the gateway reads them with its tenant lookup on every request. `d1_override` applies at once. The site asks the gateway's `rolloutFlags` query, which answers only on the site's signed server lane and only for the asserted host, so it takes no argument and no other caller sees a tenant's flags. The site caches the answer per host for 5 minutes (stale up to an hour), so a change in D1 reaches the site within minutes. The site needs `KONF_SITE_SIGNING_KEY` to read them.
 
-Fail safe: if the read fails or times out (2 seconds), the site uses the last flags it read for that host in the last 10 minutes (kept in memory per server instance). The age counts from when the gateway answered, not from a cache hit: a cached answer older than 10 minutes (the cache keeps serving one stale for up to an hour while revalidation fails) counts as a failed read. With none, API read and identity login are off for that request (the Sanity path), and a settings save that touches moved fields is refused with "try again" rather than written to Sanity alone (#1938). Fields that have not moved still save. Each failure is logged with the conference id.
+Fail safe: if the read fails or times out (500 ms), the site uses the last flags it read for that host in the last 10 minutes (kept in memory per server instance). The age counts from when the gateway answered, not from a cache hit: a cached answer older than 10 minutes (the cache keeps serving one stale for up to an hour while revalidation fails) counts as a failed read. With none, API read and identity login are off for that request (the Sanity path), and a settings save that touches moved fields is refused with "try again" rather than written to Sanity alone (#1938). Fields that have not moved still save. Each failure is logged with the conference id.
 
-Kill switch: `KONF_API_DISABLED=1` on Vercel turns all three site flags off for every tenant, env lists included, and stops identity sessions. The gateway has no switch; set `d1_override = 0` in D1 instead. While it is set, settings saves go to Sanity only, so D1 drifts. Before removing it, run `pnpm tsx scripts/parity-conference.ts --all` and fix every difference (it checks D1 only for tenants with `d1_override` on; see the caveat in [DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md)). For tenants with `d1_override` off (CNDN today) the script reads Sanity on both sides, so it cannot detect D1 drift; a clean result proves nothing about D1 there. Use the conference Worker's daily D1 sweep instead, which reads D1 directly (`conference.parity.sweep` logs; see [DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md)). A save made after the switch is off goes to D1 first and does not repair fields edited during the outage.
+Kill switch: `KONF_API_DISABLED=1` on Vercel turns all three site flags off for every tenant, env lists included, and stops identity sessions. The gateway has no switch; set `d1_override = 0` in D1 instead. While it is set, settings saves go to Sanity only, so D1 drifts. Before removing it, run `pnpm tsx scripts/parity-conference.ts --all` and fix every difference (it checks D1 only for tenants with `d1_override` on; see the caveat in [DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md)). All 4 conferences have `d1_override = 1` since 2026-11-05. For any tenant with `d1_override` off, the script reads Sanity on both sides, so it cannot detect D1 drift; a clean result proves nothing about D1 there. Use the conference Worker's daily D1 sweep instead, which reads D1 directly (`conference.parity.sweep` logs; see [DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md)). A save made after the switch is off goes to D1 first and does not repair fields edited during the outage.
 
 <a id="the-read-path-flag"></a>
 
@@ -76,15 +90,19 @@ Kill switch: `KONF_API_DISABLED=1` on Vercel turns all three site flags off for 
 
 ### Write path (`d1_write`)
 
-`src/lib/konf-api/conference-write.ts` sends each settings save's moved fields to `updateConference` in D1 (#1881). For `d1_write` tenants, moved fields go ONLY to D1 and Sanity copies are frozen (#1997); non-moved fields still go to Sanity. If the D1 write fails, the save fails and Sanity is not touched. If Sanity fails after D1 succeeded, the error is logged and the save returns a warning. An organizer without an identity session cannot save moved fields, so turn `d1_write` on only together with `identity_login`. Run `pnpm tsx scripts/parity-conference.ts --all` again after turning `d1_write` on, with the same caveat for tenants with `d1_override` off.
+`src/lib/konf-api/conference-write.ts` sends each settings save's moved fields to `updateConference` in D1 (#1881). For `d1_write` tenants, moved fields go ONLY to D1 and Sanity copies are frozen (#1997); non-moved fields still go to Sanity. If the D1 write fails, the save fails and Sanity is not touched. If Sanity fails after D1 succeeded, the error is logged and the save returns a warning. An organizer without an identity session cannot save moved fields, so turn `d1_write` on only together with `identity_login`. Run `pnpm tsx scripts/parity-conference.ts --all` again after turning `d1_write` on (all 4 conferences have both `d1_write` and `d1_override` on since 2026-11-05).
 
 ### Transition: the old env lists
 
-Until the D1 flags are backfilled (`services/tenant-directory/migrations/0003_backfill_cndn_2026_flags.sql`), the old lists still work and are OR'ed with the D1 flags: `KONF_API_TENANTS` and `KONF_IDENTITY_TENANTS` (conference or organization ids), `KONF_D1_WRITE_TENANTS` (conference ids) on Vercel, and `OVERRIDE_TENANTS` (organization ids per label) in `api/wrangler.jsonc`. To remove them:
+D1 flags for all 4 conferences are set in tenant-directory D1 (`d1_override = 1`, `d1_write = 1`, `api_read = 1`, `identity_login = 1`). The separate `conference-settings` override label is still enabled per tenant by `OVERRIDE_TENANTS` in `api/wrangler.jsonc` (#2029). The legacy env lists (`KONF_API_TENANTS`, `KONF_IDENTITY_TENANTS`, `KONF_D1_WRITE_TENANTS` on Vercel) still work and are OR'ed with the D1 flags until cleaned up (#1925). To remove them:
 
 1. Approve the production Workers deploy, which applies migrations 0002 and 0003. Check the CNDN 2026 row: `SELECT id, api_read, identity_login, d1_write, d1_override FROM conferences WHERE api_read OR identity_login OR d1_write OR d1_override`.
 2. Delete `KONF_API_TENANTS`, `KONF_IDENTITY_TENANTS` and `KONF_D1_WRITE_TENANTS` from every Vercel environment and redeploy. Check that sign-in through identity and the settings save still work on 2026.cloudnativedays.no.
 3. Delete `listed()` and its three calls in `src/lib/conference/konf-api.ts`, and the `OVERRIDE_TENANTS` var with its check in `progressiveOverride` (`api/src/gateway.ts`), in one PR.
+
+## Production deploys
+
+`deploy-workers.yml` deploys on every push to main that touches `api/`, `services/` or `packages/`. The job runs in the GitHub environment `workers-production`. With no required reviewers configured there, production deploys run automatically; with reviewers, each run waits for approval. The repository owner controls that setting. A first job cancels older runs that are still `waiting` or `queued`, so the newest run always deploys all of main and an unapproved run cannot block the queue. A run that is in progress (for example applying migrations) is never cancelled.
 
 ## Gateway URL
 

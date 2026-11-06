@@ -7,6 +7,9 @@ import { evaluate, parse } from 'groq-js'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { memberId, syncMembers, type SyncEnv } from './member-sync'
 
+const emit = vi.fn()
+vi.mock('./push', () => ({ emit: (e: unknown) => emit(e) }))
+
 const SLACK = 'https://hooks.slack.test/T/B/x'
 
 let mf: Miniflare | undefined
@@ -468,10 +471,15 @@ describe('syncMembers drift mode (MEMBER_SOURCE_ORGS)', () => {
     const t0 = Date.parse('2026-11-04T10:00:00Z')
     const now = vi.spyOn(Date, 'now').mockReturnValue(t0)
     try {
+      emit.mockReset()
       await syncMembers(env)
       now.mockReturnValue(t0 + 3600_000)
       await syncMembers(env)
       expect(slackPosts).toHaveLength(1)
+      // The push event follows the Slack post's dedupe: once, ids only.
+      expect(emit.mock.calls).toEqual([
+        [{ type: 'membership.drift', organizationId: 'org-a' }],
+      ])
       expect(events()).toContain('identity.membership.drift_deduped')
       // The drift set changes: post at once.
       await d1.prepare("DELETE FROM member WHERE id = 'm-stray'").run()

@@ -41,7 +41,18 @@ export interface PlatformContext {
   platformRole: string
 }
 
-export type Envelope = TenantEnvelope | PlatformContext
+/**
+ * A signed-in user with no tenant and no platform role (#2036): only the
+ * caller's own userId. No Scoped repository accepts it, and every guard that
+ * matches on `typ: 'tenant'` or `typ: 'platform'` refuses it; only
+ * `myOrganizations` reads it.
+ */
+export interface UserContext {
+  typ: 'user'
+  userId: string
+}
+
+export type Envelope = TenantEnvelope | PlatformContext | UserContext
 
 /** Signing lives in the gateway; exported here for the gateway and tests. */
 export async function createSigner(pkcs8Pem: string) {
@@ -108,13 +119,16 @@ export async function verifyEnvelope(
   if (p.typ === 'platform' && isString(p.userId) && isString(p.platformRole)) {
     return { typ: 'platform', userId: p.userId, platformRole: p.platformRole }
   }
+  if (p.typ === 'user' && isString(p.userId)) {
+    return { typ: 'user', userId: p.userId }
+  }
   throw new Error('envelope has no recognized context shape')
 }
 
 export function requireTenant(envelope: Envelope): TenantEnvelope {
   if (envelope.typ !== 'tenant') {
     throw new Error(
-      'tenant-scoped access requires a TenantEnvelope, got PlatformContext',
+      'tenant-scoped access requires a TenantEnvelope, not a PlatformContext or UserContext',
     )
   }
   if (!envelope.orgId) throw new Error('tenant envelope has no orgId')
@@ -262,3 +276,4 @@ export async function generateEnvelopeKeyPair(): Promise<{
     publicPem: await exportSPKI(publicKey),
   }
 }
+export * from './push'

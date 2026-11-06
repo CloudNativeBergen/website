@@ -148,6 +148,26 @@ builder.queryType({
   }),
 })
 
+const PushKeys = builder.inputType('PushSubscriptionKeys', {
+  fields: (t) => ({
+    p256dh: t.string({ required: true }),
+    auth: t.string({ required: true }),
+  }),
+})
+const PushSubscriptionInput = builder.inputType('PushSubscriptionInput', {
+  fields: (t) => ({
+    endpoint: t.string({ required: true }),
+    keys: t.field({ type: PushKeys, required: true }),
+  }),
+})
+
+/** The session user from the envelope, never an argument (kontroll#61). */
+const sessionUser = (ctx: ResolverContext) => {
+  const id = ctx.envelope?.userId
+  if (!id) throw refuse()
+  return id
+}
+
 builder.mutationType({
   fields: (t) => {
     const orgId = () => t.arg.id({ required: true })
@@ -156,6 +176,37 @@ builder.mutationType({
     const id = () => t.arg.id({ required: true })
     const op = { tag: 'operator' } as const
     return {
+      subscribePush: t.boolean({
+        description:
+          'Stores a web push subscription for the session user. An endpoint another user held moves to the caller.',
+        args: { input: t.arg({ type: PushSubscriptionInput, required: true }) },
+        resolve: (_, a, ctx) =>
+          answer(async () => {
+            await ctx.data
+              .pushSubscriptions()
+              .subscribe(sessionUser(ctx), a.input)
+            return true
+          }),
+      }),
+      unsubscribePush: t.boolean({
+        description:
+          "Removes the session user's subscription for the endpoint.",
+        args: { endpoint: t.arg.string({ required: true }) },
+        resolve: (_, a, ctx) =>
+          ctx.data
+            .pushSubscriptions()
+            .unsubscribe(sessionUser(ctx), a.endpoint),
+      }),
+      prunePushSubscriptions: t.int({
+        ...op,
+        description:
+          'Deletes endpoints the push service answered 404 or 410 for. Platform context only.',
+        args: { endpoints: t.arg.stringList({ required: true }) },
+        resolve: (_, a, ctx) => {
+          if (ctx.envelope?.typ !== 'platform') throw refuse()
+          return answer(() => ctx.data.pushSubscriptions().prune(a.endpoints))
+        },
+      }),
       inviteMember: t.field({
         type: Invitation,
         args: { email: email(), role: role() },

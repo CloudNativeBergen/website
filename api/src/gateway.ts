@@ -2,6 +2,7 @@
 // supergraph, subgraphs reached over service bindings. Per request it drops any
 // client envelope, resolves the tenant from Origin, verifies the identity JWT,
 // looks up orgRole live, and mints the one envelope the subgraphs trust.
+import { GATEWAY_TYPEDEFS } from './supergraph'
 import {
   createGatewayRuntime,
   type GatewayPlugin,
@@ -32,6 +33,10 @@ export interface Env {
   DIRECTORY: Fetcher
   /** konf-content: Sanity-backed editorial data (#1835) */
   CONTENT: Fetcher
+  /** konf-program: talks, schedule, public speakers (Sanity-backed, #1772) */
+  PROGRAM: Fetcher
+  /** konf-sponsors: public sponsors and tiers (Sanity-backed, #1772) */
+  SPONSORS: Fetcher
   /** konf-conference: its subgraph */
   CONFERENCE: Fetcher
   /** konf-identity default entrypoint: only /api/auth/* (JWKS) answers */
@@ -66,6 +71,8 @@ export interface Env {
 export const BINDINGS = {
   'tenant-directory': 'DIRECTORY',
   content: 'CONTENT',
+  program: 'PROGRAM',
+  sponsors: 'SPONSORS',
   conference: 'CONFERENCE',
   identity: 'IDENTITY_GRAPH',
 } as const
@@ -433,9 +440,7 @@ export function createGateway(supergraph: string) {
     // `rolloutFlags` (#1925): the resolved tenant's own flags, for the site's
     // signed server lane and for the tenant an authorized operator-lane caller
     // selected (#1956). Null for any other caller; it takes no argument.
-    additionalTypeDefs: `
-      type SiteRolloutFlags { apiRead: Boolean! identityLogin: Boolean! d1Write: Boolean! }
-      extend type Query { health: String! rolloutFlags: SiteRolloutFlags }`,
+    additionalTypeDefs: GATEWAY_TYPEDEFS,
     additionalResolvers: {
       Query: {
         health: () => 'ok',
@@ -587,7 +592,8 @@ export function createGateway(supergraph: string) {
         // caller's own live orgRole there, so writes still need owner/admin.
         // Only an operator's carries OPERATOR_SCOPE. Without a tenant: a
         // PlatformContext for an operator, which no Scoped repository accepts;
-        // nothing for a member, who is then anonymous to the subgraphs.
+        // a UserContext (#2036) for anyone else identity knows: their userId
+        // and no org, which only myOrganizations reads.
         const envelope: Envelope | null = tenant
           ? {
               typ: 'tenant',
@@ -599,7 +605,9 @@ export function createGateway(supergraph: string) {
             }
           : operator
             ? { typ: 'platform', userId: userId!, platformRole: 'operator' }
-            : null
+            : principal
+              ? { typ: 'user', userId: userId! }
+              : null
         platform = envelope?.typ === 'platform'
         if (envelope) {
           signer ??= await createSigner(env.ENVELOPE_PRIVATE_KEY)

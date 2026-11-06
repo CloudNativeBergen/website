@@ -8,6 +8,7 @@ import { IDENTITY_SESSION_COOKIE } from '@/lib/auth/identity-cookie'
 import { TRPCError } from '@trpc/server'
 import { rolloutFlags } from '@/lib/conference/konf-api'
 import { konfApiHeaders, konfApiUrl } from './client'
+import { graphql, type ResultOf } from './graphql'
 import {
   LIFECYCLE_STATUS_VALUES,
   type LifecycleStatus,
@@ -34,9 +35,10 @@ const MOVED = new Set([
 ])
 
 /**
- * Settings phase 1 (#2019): also in `ConferencePatch`, but not yet read from
- * D1, so a d1_write tenant writes them to D1 AND Sanity. They join MOVED (and
- * stop reaching Sanity) with the read flip.
+ * Settings phase 1 (#2019), public fields: read from D1 through the merge
+ * (src/lib/conference/konf-api.ts), so for a d1_write tenant they go to D1
+ * only. `ticketCustomization.showVanityMetrics` is handled in
+ * movedConferencePatch and stripped by the tickets router.
  */
 const SETTINGS = new Set([
   'cfpStartDate',
@@ -49,13 +51,41 @@ const SETTINGS = new Set([
   'speakersAnnouncedDate',
   'sponsorDeadlineDate',
   'recordingsLiveDate',
-  'travelSupportBudget',
   'registrationEnabled',
   'organizer',
+  'socialHashtag',
+])
+
+/**
+ * Settings phase 1, members-only fields: in `ConferencePatch`, but the site
+ * has no server-side member read for them (the site lane is not an org
+ * member, and their readers include jobs with no signed-in user). So a
+ * d1_write tenant still writes them to D1 AND Sanity, and readers stay on
+ * Sanity, until such a read path exists.
+ */
+const SETTINGS_PRIVATE = new Set([
+  'travelSupportBudget',
   'organizerAddress',
   'organizerOrgNumber',
-  'socialHashtag',
   'analyticsPirschCode',
+])
+
+/**
+ * Settings phase 2 (#2038): in `ConferencePatch`, not yet read from D1, so a
+ * d1_write tenant writes them to D1 AND Sanity until the read flip.
+ */
+const SETTINGS_PHASE2 = new Set([
+  'sponsorRegistrationLink',
+  'speakerRegistrationLink',
+  'volunteerRegistrationLink',
+  'contactEmail',
+  'cfpEmail',
+  'sponsorEmail',
+  'salesNotificationChannel',
+  'cfpNotificationChannel',
+  'speakerSlackChannel',
+  'speakerSlackInviteUrl',
+  'volunteerSlackInviteUrl',
 ])
 
 /**
@@ -66,7 +96,7 @@ const SETTINGS = new Set([
 export function isMovedConferenceField(key: string): boolean {
   // lifecycleStatus is NOT moved: D1 stores only the derived `published`
   // boolean, so cancelled vs archived lives in Sanity alone.
-  return MOVED.has(key) || key === 'theme'
+  return MOVED.has(key) || SETTINGS.has(key) || key === 'theme'
 }
 
 /**
@@ -112,7 +142,12 @@ export function movedConferencePatch(
       // Sanity replaces the whole object, so an absent flag is an unset.
       const t = v as { showVanityMetrics?: boolean } | null
       out.showVanityMetrics = t?.showVanityMetrics ?? null
-    } else if (MOVED.has(k) || SETTINGS.has(k)) {
+    } else if (
+      MOVED.has(k) ||
+      SETTINGS.has(k) ||
+      SETTINGS_PRIVATE.has(k) ||
+      SETTINGS_PHASE2.has(k)
+    ) {
       out[k] = v
     }
   }
@@ -199,7 +234,10 @@ export async function identityJwt(): Promise<string | null> {
   }
 }
 
-const MUTATION = `mutation($input: ConferencePatch!) { updateConference(input: $input) { id } }`
+const MUTATION =
+  `mutation($input: ConferencePatch!) { updateConference(input: $input) { id } }` as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
+const MUTATION_DOC = graphql(MUTATION)
 
 /** One gateway mutation as the signed-in user. Throws on HTTP or GraphQL errors. */
 async function mutate<T>(
@@ -238,7 +276,7 @@ export async function updateConferenceViaApi(
   patch: Record<string, unknown>,
   userJwt: string,
 ): Promise<void> {
-  const data = await mutate<{ updateConference?: { id?: string } | null }>(
+  const data = await mutate<ResultOf<typeof MUTATION_DOC>>(
     host,
     MUTATION,
     { input: patch },
@@ -248,7 +286,10 @@ export async function updateConferenceViaApi(
   if (id !== conferenceId) throw new Error(`conference id mismatch: ${id}`)
 }
 
-const LIFECYCLE_MUTATION = `mutation($s: ConferenceLifecycleOverride) { setConferenceLifecycle(status: $s) { id } }`
+const LIFECYCLE_MUTATION =
+  `mutation($s: ConferenceLifecycleOverride) { setConferenceLifecycle(status: $s) { id } }` as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
+const LIFECYCLE_DOC = graphql(LIFECYCLE_MUTATION)
 
 /**
  * Writes the homepage override to tenant-directory, its D1 home (#1997).
@@ -260,9 +301,12 @@ export async function setLifecycleViaApi(
   status: LifecycleStatus | null,
   userJwt: string,
 ): Promise<void> {
-  const data = await mutate<{
-    setConferenceLifecycle?: { id?: string } | null
-  }>(host, LIFECYCLE_MUTATION, { s: status }, userJwt)
+  const data = await mutate<ResultOf<typeof LIFECYCLE_DOC>>(
+    host,
+    LIFECYCLE_MUTATION,
+    { s: status },
+    userJwt,
+  )
   const id = data?.setConferenceLifecycle?.id
   if (id !== conferenceId) throw new Error(`conference id mismatch: ${id}`)
 }
