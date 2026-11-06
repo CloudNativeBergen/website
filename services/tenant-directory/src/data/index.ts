@@ -45,6 +45,8 @@ export interface DataEnv extends CloudflareEnv {
     ensure(orgId: string, slug: string): Promise<unknown>
     /** Organizer membership sync (#1907); identity has no cron of its own. */
     syncMembers(): Promise<unknown>
+    /** The orgs a user is a member of, with the role there (#2036). */
+    memberships(userId: string): Promise<{ orgId: string; role: string }[]>
   }
   /** Sanity ids as in services/identity; provisioning verifies against it. */
   SANITY_PROJECT_ID?: string
@@ -209,6 +211,36 @@ export function createData(
     primaryHostOf: async (orgId: string, conferenceId: string) =>
       primaryHost(await domainsByOrg(orgId), conferenceId),
     organization,
+
+    /**
+     * The orgs `userId` is a member of, by slug, each with the caller's role
+     * and its conferences (#2036). Membership comes from identity; the org
+     * ids it returns are the only ones read here.
+     */
+    async myOrganizations(userId: string) {
+      const mine = await env.IDENTITY.memberships(userId)
+      if (!mine.length) return []
+      const ids = mine.map((m) => m.orgId)
+      const role = new Map(mine.map((m) => [m.orgId, m.role]))
+      // ponytail: one IN list per table; D1 caps bound parameters at 100,
+      // so chunk if one user is ever a member of that many orgs.
+      const [orgs, confs] = await Promise.all([
+        db.query.organizations.findMany({
+          where: inArray(organizations.id, ids),
+          orderBy: organizations.slug,
+        }),
+        db.query.conferences.findMany({
+          where: inArray(conferences.orgId, ids),
+          orderBy: conferences.id,
+        }),
+      ])
+      return orgs.map((org) => ({
+        id: org.id,
+        name: org.name,
+        role: role.get(org.id)!,
+        editions: confs.filter((c) => c.orgId === org.id),
+      }))
+    },
 
     /** Every org, by slug, `first` after the `after` slug. Operator-only. */
     organizations: (first: number, after?: string | null) =>

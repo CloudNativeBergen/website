@@ -171,6 +171,27 @@ const OperatorConference = builder
     }),
   })
 
+// The caller's own orgs (#2036). Built only by myOrganizations, from the
+// membership list identity returns for the envelope's userId.
+const MyOrganization = builder
+  .objectRef<{
+    id: string
+    name: string
+    role: string
+    editions: Row<'id' | 'orgId' | 'lifecycle'>[]
+  }>('MyOrganization')
+  .implement({
+    fields: (t) => ({
+      id: t.exposeID('id'),
+      name: t.exposeString('name'),
+      role: t.exposeString('role'),
+      conferenceEditions: t.field({
+        type: [ConferenceEdition],
+        resolve: (o) => o.editions,
+      }),
+    }),
+  })
+
 const LifecycleOverride = builder.enumType('ConferenceLifecycleOverride', {
   values: ['cancelled', 'archived'] as const,
 })
@@ -199,6 +220,24 @@ builder.queryType({
       resolve: async (_, __, ctx) => {
         const id = sessionOrgId(ctx)
         return id ? ((await ctx.data.organization(id)) ?? null) : null
+      },
+    }),
+    myOrganizations: t.field({
+      type: [MyOrganization],
+      description:
+        "The signed-in user's own organizations, with their role and every conference edition (#2036). Kontroll's member lane: a session with no tenant. Refused with a tenant envelope or none.",
+      resolve: (_, __, ctx) => {
+        const e = ctx.envelope
+        // Guard before fetch. A UserContext, or a PlatformContext for an
+        // operator, who still gets only their own memberships: the userId
+        // is the one the gateway verified, never an argument.
+        if (e?.typ !== 'user' && e?.typ !== 'platform') {
+          throw createGraphQLError(
+            'myOrganizations requires a session with no tenant',
+            { extensions: { code: 'FORBIDDEN' } },
+          )
+        }
+        return ctx.data.myOrganizations(e.userId)
       },
     }),
     organizations: t.field({

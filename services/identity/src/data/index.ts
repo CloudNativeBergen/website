@@ -148,6 +148,16 @@ export function createData(env: DataEnv) {
         .limit(1)
       return !!row && (row.op || row.m !== null)
     },
+    /**
+     * The orgs `userId` is a member of, with the role there (#2036). A pending
+     * invitation is no member row.
+     */
+    memberships: (userId: string) =>
+      db
+        .select({ orgId: member.organizationId, role: member.role })
+        .from(member)
+        .where(eq(member.userId, userId))
+        .orderBy(member.organizationId),
     /** Live membership; null for an unknown user. */
     async principal(userId: string, orgId: string): Promise<Principal | null> {
       const [row] = await db
