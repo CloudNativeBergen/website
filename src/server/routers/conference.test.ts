@@ -1602,6 +1602,44 @@ describe('conference router — D1 write path (#1881)', () => {
     expect(lastSet).toEqual({ ...DATES, travelSupportBudget: 5000 })
   })
 
+  const COMMS = {
+    contactEmail: 'hi@acme.example',
+    cfpEmail: 'cfp@acme.example',
+    sponsorEmail: 'sponsor@acme.example',
+    salesNotificationChannel: '#sales',
+    cfpNotificationChannel: '#cfp',
+    speakerSlackChannel: '#speakers',
+    speakerSlackInviteUrl: 'https://join.slack.com/s',
+    volunteerSlackInviteUrl: 'https://join.slack.com/v',
+  }
+  it('for a d1_write tenant, writes settings phase 2 fields to D1 first, then Sanity (#2038)', async () => {
+    await makeCaller({ isOrganizer: true }).updateCommunication(COMMS)
+    const [[, init]] = apiCalls()
+    expect(JSON.parse(init.body).variables.input).toEqual(COMMS)
+    expect(lastSet).toEqual(COMMS)
+    const d1At =
+      fetchMock.mock.invocationCallOrder[
+        fetchMock.mock.calls.findIndex(([, i]) =>
+          String(i?.body).includes('updateConference'),
+        )
+      ]
+    expect(d1At).toBeLessThan(commitMock.mock.invocationCallOrder[0])
+  })
+
+  it('for a d1_write tenant, a failed D1 write of phase 2 fields leaves Sanity untouched (#2038)', async () => {
+    const base = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation(async (url: URL | string, init) =>
+      String(init?.body).includes('updateConference')
+        ? new Response('boom', { status: 500 })
+        : base(url, init),
+    )
+    await expect(
+      makeCaller({ isOrganizer: true }).updateCommunication(COMMS),
+    ).rejects.toThrow()
+    expect(apiCalls()).toHaveLength(1)
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
   it('for a d1_write tenant with only moved fields, writes only to D1 and leaves Sanity untouched (#1997)', async () => {
     await makeCaller({ isOrganizer: true }).updateVenue({
       venueName: 'Grieghallen',

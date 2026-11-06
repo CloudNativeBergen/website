@@ -44,6 +44,11 @@ export const FIELDS = [
   'organizer',
   'socialHashtag',
   'showVanityMetrics',
+  // Settings phase 2 (#2038), the public ones; the members-only eight are
+  // covered by the D1 sweep, as above.
+  'contactEmail',
+  'cfpEmail',
+  'sponsorEmail',
 ] as const
 
 const bool = (v: 0 | 1 | null) => (v === null ? null : v === 1)
@@ -81,6 +86,9 @@ export function expected(row: Row | undefined): ApiConference {
     organizer: row.organizer_name,
     socialHashtag: row.social_hashtag,
     showVanityMetrics: bool(row.show_vanity_metrics),
+    contactEmail: row.contact_email,
+    cfpEmail: row.cfp_email,
+    sponsorEmail: row.sponsor_email,
   }
 }
 
