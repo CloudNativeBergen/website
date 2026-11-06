@@ -1,5 +1,6 @@
-// Phase 2 of #1881: the admin's conference writes go to D1 through
-// api.konf.app before Sanity, per tenant, behind the d1Write rollout flag.
+// #1881 & #1997: the admin's conference writes for moved fields go ONLY to D1
+// through api.konf.app for d1_write tenants. Sanity copies are frozen and no
+// longer updated. Non-moved fields still go to Sanity.
 import 'server-only'
 import { cookies, headers } from 'next/headers'
 import { requestDomain } from '@/lib/conference/request-domain'
@@ -31,6 +32,17 @@ const MOVED = new Set([
   'visibility',
   'socialLinks',
 ])
+
+/**
+ * Whether a conference settings input key represents a field moved to D1 (#1997).
+ * Sanity groups primaryColor/accentColor under `theme`, and published is
+ * derived from `lifecycleStatus`.
+ */
+export function isMovedConferenceField(key: string): boolean {
+  // lifecycleStatus is NOT moved: D1 stores only the derived `published`
+  // boolean, so cancelled vs archived lives in Sanity alone.
+  return MOVED.has(key) || key === 'theme'
+}
 
 /**
  * The host's `d1Write` rollout flag (#1925). Throws when the flag cannot be

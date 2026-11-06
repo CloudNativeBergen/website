@@ -1,6 +1,7 @@
 import {
   identityJwt,
   isD1WriteTenant,
+  isMovedConferenceField,
   movedConferencePatch,
   requestHost,
   updateConferenceViaApi,
@@ -368,8 +369,11 @@ async function applyConferencePatch(
     })
   }
 
-  // #1881 phase 2: D1 first for flagged tenants. A failure here aborts before
-  // Sanity is touched. Prefixed (nested) fieldsets hold no moved fields.
+  // #1881 & #1997: For d1_write tenants, moved fields are written ONLY to D1
+  // through api.konf.app; Sanity copies are frozen and not updated. Non-moved fields
+  // still go to Sanity as before. Tenants without d1_write write all fields to
+  // Sanity unchanged. A failure writing D1 aborts before Sanity is touched.
+  // Prefixed (nested) fieldsets hold no moved fields.
   const moved = pathPrefix ? {} : movedConferencePatch(input)
   const hasMoved = Object.keys(moved).length > 0
   // Outside a request scope (jobs, tests) there is no host: env lists only.
@@ -402,12 +406,36 @@ async function applyConferencePatch(
     }
   }
 
+  // For d1_write tenants, omit moved fields from the Sanity patch (#1997).
+  const sanitySet: Record<string, unknown> = {}
+  const sanityUnset: string[] = []
+
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined) continue
+    // Unsets still reach Sanity: the read merge keeps a non-null Sanity value
+    // when D1 is null, so a frozen copy would otherwise resurrect a cleared field.
+    if (d1 && !pathPrefix && value !== null && isMovedConferenceField(key))
+      continue
+    const path = pathPrefix ? `${pathPrefix}.${key}` : key
+    if (value === null) {
+      sanityUnset.push(path)
+    } else {
+      sanitySet[path] = value
+    }
+  }
+
+  const hasSanityUpdates =
+    Object.keys(sanitySet).length > 0 || sanityUnset.length > 0
+
   try {
-    let patch = clientWrite.patch(conferenceId)
-    if (pathPrefix) patch = patch.setIfMissing({ [pathPrefix]: {} })
-    if (Object.keys(set).length > 0) patch = patch.set(set)
-    if (unset.length > 0) patch = patch.unset(unset)
-    const result = await patch.commit()
+    let result: unknown = null
+    if (hasSanityUpdates) {
+      let patch = clientWrite.patch(conferenceId)
+      if (pathPrefix) patch = patch.setIfMissing({ [pathPrefix]: {} })
+      if (Object.keys(sanitySet).length > 0) patch = patch.set(sanitySet)
+      if (sanityUnset.length > 0) patch = patch.unset(sanityUnset)
+      result = await patch.commit()
+    }
 
     // Bust the cached conference read so the server-rendered settings page (and
     // every other `getConferenceForCurrentDomain` consumer) reflects the change.

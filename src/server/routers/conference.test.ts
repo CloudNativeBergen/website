@@ -1539,7 +1539,7 @@ describe('conference router — D1 write path (#1881)', () => {
     vi.unstubAllEnvs()
   })
 
-  it('sends only moved keys to D1, with the user JWT, then all keys to Sanity', async () => {
+  it('for a d1_write tenant, sends moved keys to D1 only and non-moved keys to Sanity (#1997)', async () => {
     await makeCaller({ isOrganizer: true }).updateBasicInfo({
       title: 'T',
       organizer: 'Org',
@@ -1553,8 +1553,29 @@ describe('conference router — D1 write path (#1881)', () => {
     })
     expect(init.headers.authorization).toBe('Bearer user-jwt')
     expect(init.headers.origin).toBe('https://cloudnativebergen.no')
-    expect(lastSet).toEqual({ title: 'T', organizer: 'Org', description: 'D' })
+    expect(lastSet).toEqual({ organizer: 'Org', description: 'D' })
+    // city: null also unsets in Sanity so the frozen copy can't resurrect it.
     expect(lastUnset).toEqual(['city'])
+    expect(commitMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('for a d1_write tenant with only moved fields, writes only to D1 and leaves Sanity untouched (#1997)', async () => {
+    await makeCaller({ isOrganizer: true }).updateVenue({
+      venueName: 'Grieghallen',
+      venueAddress: 'Lars Hilles gate 3A',
+    })
+    const [[, init]] = apiCalls()
+    expect(JSON.parse(init.body).variables.input).toEqual({
+      venueName: 'Grieghallen',
+      venueAddress: 'Lars Hilles gate 3A',
+    })
+    expect(commitMock).not.toHaveBeenCalled()
+    expect(lastSet).toBeUndefined()
+    expect(lastUnset).toBeUndefined()
+    expect(revalidateTagMock).toHaveBeenCalledWith(
+      'sanity:conference-conf-1',
+      'default',
+    )
   })
 
   it('sends a lifecycle override to D1 as published (#1892)', async () => {
@@ -1563,6 +1584,8 @@ describe('conference router — D1 write path (#1881)', () => {
     })
     const [[, init]] = apiCalls()
     expect(JSON.parse(init.body).variables.input).toEqual({ published: false })
+    // cancelled vs archived exists only in Sanity, so it is still written there.
+    expect(lastSet).toEqual({ lifecycleStatus: 'cancelled' })
   })
 
   it('preview without KONF_API_URL: no gateway call, Sanity only (#1926)', async () => {
@@ -1585,6 +1608,8 @@ describe('conference router — D1 write path (#1881)', () => {
       primaryColor: null,
       accentColor: null,
     })
+    // The unset also reaches Sanity, so the frozen copy can't resurrect it.
+    expect(lastUnset).toEqual(['theme'])
   })
 
   it('never calls Sanity when the D1 write fails', async () => {
@@ -1594,9 +1619,15 @@ describe('conference router — D1 write path (#1881)', () => {
         : ok({ errors: [{ message: 'denied' }] }),
     )
     await expect(
-      makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' }),
+      makeCaller({ isOrganizer: true }).updateBasicInfo({
+        title: 'T',
+        organizer: 'Org',
+        city: null,
+      }),
     ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
     expect(commitMock).not.toHaveBeenCalled()
+    expect(lastSet).toBeUndefined()
+    expect(lastUnset).toBeUndefined()
   })
 
   // #1925: the env list still applies without a host, so the refusal holds.
@@ -1624,11 +1655,29 @@ describe('conference router — D1 write path (#1881)', () => {
 
   it('returns a warning, no rollback, when Sanity fails after D1', async () => {
     commitMock.mockRejectedValue(new Error('sanity down'))
-    const result = await makeCaller({ isOrganizer: true }).updateSocialLinks({
-      socialLinks: ['https://x.example'],
+    const result = await makeCaller({ isOrganizer: true }).updateBasicInfo({
+      title: 'T',
+      organizer: 'Org',
+      description: 'D',
     })
     expect(apiCalls()).toHaveLength(1)
+    expect(commitMock).toHaveBeenCalledTimes(1)
+    expect(lastSet).toEqual({ organizer: 'Org', description: 'D' })
     expect(result).toMatchObject({ success: true, warning: expect.any(String) })
+  })
+
+  it('for a non-d1_write tenant, leaves behaviour unchanged: all fields patched to Sanity and no D1 call (#1997)', async () => {
+    vi.stubEnv('KONF_D1_WRITE_TENANTS', '')
+    await makeCaller({ isOrganizer: true }).updateBasicInfo({
+      title: 'T',
+      organizer: 'Org',
+      city: null,
+      description: 'D',
+    })
+    expect(apiCalls()).toHaveLength(0)
+    expect(lastSet).toEqual({ title: 'T', organizer: 'Org', description: 'D' })
+    expect(lastUnset).toEqual(['city'])
+    expect(commitMock).toHaveBeenCalledTimes(1)
   })
 
   it('makes no API call with the flag off', async () => {
@@ -1654,9 +1703,15 @@ describe('conference router — D1 write path (#1881)', () => {
 
     it('saves after one direct gateway read', async () => {
       hostMock.mockReturnValue('idle-1938.example')
-      await makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' })
+      await makeCaller({ isOrganizer: true }).updateBasicInfo({
+        title: 'T',
+        organizer: 'Org',
+        description: 'D',
+      })
       expect(flagCalls()).toHaveLength(2) // cached + exactly one direct
-      expect(commitMock).toHaveBeenCalled()
+      expect(apiCalls()).toHaveLength(1)
+      expect(commitMock).toHaveBeenCalledTimes(1)
+      expect(lastSet).toEqual({ organizer: 'Org', description: 'D' })
     })
 
     it('refuses when the direct read fails and there is no last good', async () => {
