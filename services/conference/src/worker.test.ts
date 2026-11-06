@@ -810,6 +810,7 @@ describe('tenant span attributes (#1814)', () => {
     } as unknown as ExecutionContext
     const res = await fetchWith(ctx, tenant('org-a', 'conf-a'))
     expect(res.status).toBe(200)
-    expect((await res.json()).data.conference.id).toBe('conf-a')
+    const body = (await res.json()) as { data: { conference: { id: string } } }
+    expect(body.data.conference.id).toBe('conf-a')
   })
 })
