@@ -566,7 +566,8 @@ export function createGateway(supergraph: string) {
         // caller's own live orgRole there, so writes still need owner/admin.
         // Only an operator's carries OPERATOR_SCOPE. Without a tenant: a
         // PlatformContext for an operator, which no Scoped repository accepts;
-        // nothing for a member, who is then anonymous to the subgraphs.
+        // a UserContext (#2036) for anyone else identity knows: their userId
+        // and no org, which only myOrganizations reads.
         const envelope: Envelope | null = tenant
           ? {
               typ: 'tenant',
@@ -578,7 +579,9 @@ export function createGateway(supergraph: string) {
             }
           : operator
             ? { typ: 'platform', userId: userId!, platformRole: 'operator' }
-            : null
+            : principal
+              ? { typ: 'user', userId: userId! }
+              : null
         platform = envelope?.typ === 'platform'
         if (envelope) {
           signer ??= await createSigner(env.ENVELOPE_PRIVATE_KEY)

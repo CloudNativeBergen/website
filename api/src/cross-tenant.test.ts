@@ -417,8 +417,16 @@ function selection(
  * into queries of at most MAX_ALIASES aliased roots. `roots` maps alias to
  * the Query field it calls.
  */
-/** Query fields tagged @tag(operator): requirePlatform refuses every walker. */
-const OPERATOR_QUERIES = new Set(['organizations', 'conferences'])
+/**
+ * Query fields every walker (site lane, tenant envelope or none) is refused:
+ * the @tag(operator) ones by requirePlatform, myOrganizations (#2036) because
+ * it needs a session with no tenant.
+ */
+const OPERATOR_QUERIES = new Set([
+  'organizations',
+  'conferences',
+  'myOrganizations',
+])
 /** Public roots too costly to batch: each gets its own document. */
 const ALONE = new Set(['program'])
 
@@ -578,7 +586,12 @@ beforeAll(async () => {
       GATEWAY_PUBLIC_KEY: keys.publicPem,
       CF_API_TOKEN: 'unused',
       CF_ZONE_ID: 'unused',
-      IDENTITY: { ensure: async () => undefined },
+      // identity's real membership list, over the same D1 (#2036).
+      IDENTITY: {
+        ensure: async () => undefined,
+        memberships: (userId: string) =>
+          createData(identityEnv).memberships(userId),
+      },
       SANITY_PROJECT_ID: 'p',
       SANITY_DATASET: 'd',
       SANITY_API_TOKEN_READ: 't',
@@ -1417,9 +1430,14 @@ describe('operator lane: Kontroll members (#1956)', () => {
       : null
 
   it('never mints a member a platform envelope or operator scope', async () => {
-    // No tenant header: the member is anonymous, so no envelope at all.
+    // No tenant header: a UserContext only (#2036), no org, no scope.
+    for (const k of Object.keys(lastEnvelope)) delete lastEnvelope[k]
     await run('{ conference { id } }', ops())
-    expect(Object.values(lastEnvelope).filter(Boolean)).toEqual([])
+    for (const token of Object.values(lastEnvelope).filter(Boolean))
+      expect(await verifyEnvelope(token!, envelopePublicKey)).toEqual({
+        typ: 'user',
+        userId: USER.a,
+      })
     // Own org: a tenant envelope without OPERATOR_SCOPE.
     await run('{ conference { id } }', ops(HOST.a))
     const own = await minted()
@@ -2342,5 +2360,201 @@ describe('session org members (#1972)', () => {
         await sql('UPDATE user SET platformOperator = 0 WHERE id = ?', USER.a)
       }
     })
+  })
+})
+
+describe('myOrganizations: member lane, no tenant (#2036)', () => {
+  const OPS = 'https://my.konf.app'
+  const ORG_C = 'org-2036-c'
+  const CONF_C = 'conf-2036-c'
+  const LONER = 'user-2036-none'
+  const Q =
+    '{ myOrganizations { id name role conferenceEditions { id primaryHost lifecycleStatus } } }'
+  const identityDb = () => dbs[0]
+  const sql = (q: string, ...args: unknown[]) =>
+    identityDb()
+      .prepare(q)
+      .bind(...args)
+      .run()
+  const jwt: Record<string, string> = {}
+  const ops = (user = USER.a): Record<string, string> => ({
+    origin: OPS,
+    authorization: `Bearer ${jwt[user]}`,
+  })
+  const setOperator = (on: boolean) =>
+    sql('UPDATE user SET platformOperator = ? WHERE id = ?', on ? 1 : 0, USER.a)
+  const mine = async (user = USER.a) => {
+    const raw = await run(Q, ops(user))
+    expect(raw).not.toMatch(MARKER)
+    const body = JSON.parse(raw)
+    expect(body.errors).toBeUndefined()
+    return body.data.myOrganizations as { id: string }[]
+  }
+  const typ = async () =>
+    (
+      (await verifyEnvelope(
+        lastEnvelope['tenant-directory']!,
+        envelopePublicKey,
+      )) as { typ: string }
+    ).typ
+
+  beforeAll(async () => {
+    env.OPERATOR_ORIGIN = OPS
+    // A third org with one draft edition; A's member also belongs to it.
+    const directory = await directoryConferences()
+    await directory
+      .prepare(
+        "INSERT INTO organizations (id, slug, name) VALUES (?1, ?1, 'Org C')",
+      )
+      .bind(ORG_C)
+      .run()
+    await directory
+      .prepare(
+        "INSERT INTO conferences (id, org_id, slug, name, lifecycle) VALUES (?1, ?2, ?1, ?1, 'draft')",
+      )
+      .bind(CONF_C, ORG_C)
+      .run()
+    await sql(
+      "INSERT INTO organization (id, name, slug) VALUES (?1, 'Org C', ?1)",
+      ORG_C,
+    )
+    await sql(
+      "INSERT INTO member (id, organizationId, userId, role) VALUES ('member-2036', ?, ?, 'member')",
+      ORG_C,
+      USER.a,
+    )
+    await sql(
+      "INSERT INTO user (id, name, email) VALUES (?1, 'Loner', 'loner-2036@example.com')",
+      LONER,
+    )
+    const { createAuth } = await import('../../services/identity/src/data')
+    const auth = createAuth(identityDb(), IDENTITY_ENV)
+    const ctx = await auth.$context
+    for (const user of [USER.a, LONER]) {
+      const { token } = await ctx.internalAdapter.createSession(user, false, {
+        origin: OPS,
+      })
+      const cookie = `${ctx.authCookies.sessionToken.name}=${token}.${await makeSignature(token, ctx.secret)}`
+      const res = await auth.handler(
+        new Request(`${IDENTITY_ENV.BETTER_AUTH_URL}/api/auth/token`, {
+          headers: { cookie },
+        }),
+      )
+      jwt[user] = ((await res.json()) as { token: string }).token
+    }
+  })
+  afterAll(async () => {
+    delete (env as Partial<Env>).OPERATOR_ORIGIN
+    await setOperator(false)
+    await sql("DELETE FROM member WHERE id = 'member-2036'")
+    await sql('DELETE FROM organization WHERE id = ?', ORG_C)
+    await sql('DELETE FROM user WHERE id = ?', LONER)
+    const directory = await directoryConferences()
+    await directory
+      .prepare('DELETE FROM conferences WHERE id = ?')
+      .bind(CONF_C)
+      .run()
+    await directory
+      .prepare('DELETE FROM organizations WHERE id = ?')
+      .bind(ORG_C)
+      .run()
+  })
+  beforeEach(async () => {
+    env.OVERRIDE_TENANTS = {}
+    await setOperator(false)
+    await setLifecycle(CONF.a, 'live')
+  })
+
+  it('a member of two orgs sees exactly those, with roles and editions, never B', async () => {
+    expect(await mine()).toEqual([
+      {
+        id: ORG.a,
+        name: expect.stringMatching(/^TENANT_A/),
+        role: 'admin',
+        conferenceEditions: [
+          { id: CONF.a, primaryHost: HOST.a, lifecycleStatus: 'live' },
+        ],
+      },
+      {
+        id: ORG_C,
+        name: 'Org C',
+        role: 'member',
+        conferenceEditions: [
+          { id: CONF_C, primaryHost: null, lifecycleStatus: 'draft' },
+        ],
+      },
+    ])
+    // The envelope carries the user and no org.
+    expect(
+      await verifyEnvelope(
+        lastEnvelope['tenant-directory']!,
+        envelopePublicKey,
+      ),
+    ).toEqual({ typ: 'user', userId: USER.a })
+  })
+
+  it('a non-member gets an empty list', async () => {
+    expect(await mine(LONER)).toEqual([])
+    expect(await typ()).toBe('user')
+  })
+
+  it('an anonymous caller is refused before any subgraph', async () => {
+    lastEnvelope['tenant-directory'] = null
+    const res = await gateway.fetch(
+      new Request('http://api.test/graphql', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: OPS },
+        body: JSON.stringify({ query: Q }),
+      }),
+      env,
+    )
+    expect(res.status).toBe(401)
+    expect(lastEnvelope['tenant-directory']).toBeNull()
+  })
+
+  it('a tenant envelope is refused: the site lane gets FORBIDDEN', async () => {
+    const body = JSON.parse(
+      await run(Q, { origin: ORIGIN, authorization: `Bearer ${memberJwt}` }),
+    )
+    expect(body.data?.myOrganizations ?? null).toBeNull()
+    expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
+  })
+
+  it.each([
+    '{ organization { id name } }',
+    '{ members { userId } }',
+    '{ invitations { id } }',
+    '{ conferences { id } }',
+    '{ organizations { id } }',
+    '{ conferenceEditions { id lifecycleStatus } }',
+    '{ conference { id title } }',
+    '{ conferenceLifecycle }',
+    'mutation { inviteMember(email: "x@example.com", role: member) { id } }',
+    'mutation { setConferenceLifecycle(status: archived) { id } }',
+  ])('the user envelope reads nothing else: %s', async (query) => {
+    for (const user of [USER.a, LONER]) {
+      const raw = await run(query, ops(user))
+      expect(raw, query).not.toMatch(/TENANT_A|tenant-a|2036/)
+      expect(raw, query).not.toMatch(MARKER)
+      const { data, errors = [] } = JSON.parse(raw) as {
+        data?: Record<string, unknown> | null
+        errors?: { extensions?: { code?: string } }[]
+      }
+      for (const v of Object.values(data ?? {}))
+        expect([null, undefined, []], query).toContainEqual(v)
+      // The conference subgraph's Scoped repositories throw on a
+      // UserContext, as on a PlatformContext: a 500 there is the refusal.
+      for (const e of errors)
+        expect(
+          ['FORBIDDEN', 'UNAUTHENTICATED', 'INTERNAL_SERVER_ERROR'],
+          query,
+        ).toContain(e.extensions?.code)
+    }
+  })
+
+  it('an operator with no tenant gets only their own memberships', async () => {
+    await setOperator(true)
+    expect((await mine()).map((o) => o.id)).toEqual([ORG.a, ORG_C])
+    expect(await typ()).toBe('platform')
   })
 })

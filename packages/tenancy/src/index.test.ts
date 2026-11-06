@@ -13,6 +13,7 @@ import {
   type Envelope,
   type PlatformContext,
   type TenantEnvelope,
+  type UserContext,
 } from './index'
 
 // vitest.config.ts aliases `jose` to a stub that ignores keys. Load the real
@@ -38,6 +39,7 @@ const platform: PlatformContext = {
   userId: 'op_1',
   platformRole: 'operator',
 }
+const user: UserContext = { typ: 'user', userId: 'user_1' }
 
 let keys: { privatePem: string; publicPem: string }
 let otherKeys: { privatePem: string; publicPem: string }
@@ -116,6 +118,14 @@ describe('envelope verification', () => {
     await expect(verifyEnvelope(token, keys.publicPem)).rejects.toThrow(/shape/)
   })
 
+  it('round-trips a UserContext and drops any org it was signed with', async () => {
+    const signer = await createSigner(keys.privatePem)
+    const token = await signer.sign({ ...user, orgId: 'org_b' } as never)
+    expect(await verifyEnvelope(token, keys.publicPem)).toEqual(user)
+    const blank = await signer.sign({ typ: 'user', userId: '' } as never)
+    await expect(verifyEnvelope(blank, keys.publicPem)).rejects.toThrow(/shape/)
+  })
+
   it('drops claims outside the envelope shape', async () => {
     const signer = await createSigner(keys.privatePem)
     const token = await signer.sign({ ...platform, orgId: 'org_b' } as never)
@@ -151,6 +161,12 @@ describe('ScopedRepository', () => {
   it('refuses a PlatformContext', () => {
     expect(() => new TalksRepo(platform, { query: vi.fn() })).toThrow(
       /PlatformContext/,
+    )
+  })
+
+  it('refuses a UserContext (#2036)', () => {
+    expect(() => new TalksRepo(user, { query: vi.fn() })).toThrow(
+      /TenantEnvelope/,
     )
   })
 
@@ -224,6 +240,14 @@ describe('unscopedForPlatformOps', () => {
     const open = vi.fn()
     expect(() =>
       unscopedForPlatformOps(tenant as never, 'x', vi.fn(), open),
+    ).toThrow(/PlatformContext/)
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('refuses a UserContext without opening anything', () => {
+    const open = vi.fn()
+    expect(() =>
+      unscopedForPlatformOps(user as never, 'x', vi.fn(), open),
     ).toThrow(/PlatformContext/)
     expect(open).not.toHaveBeenCalled()
   })
@@ -306,6 +330,14 @@ describe('countAttempt', () => {
     const l = limiter(true)
     await expect(countAttempt(l, platform, 'invite', 'x')).rejects.toThrow(
       /PlatformContext/,
+    )
+    expect(l.limit).not.toHaveBeenCalled()
+  })
+
+  it('refuses a UserContext without spending an attempt', async () => {
+    const l = limiter(true)
+    await expect(countAttempt(l, user, 'invite', 'x')).rejects.toThrow(
+      /TenantEnvelope/,
     )
     expect(l.limit).not.toHaveBeenCalled()
   })

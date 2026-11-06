@@ -114,3 +114,25 @@ describe('movedConferencePatch settings phase 1 (#2019)', () => {
     ).toEqual({ showVanityMetrics: null })
   })
 })
+
+describe('movedConferencePatch settings phase 2 (#2038)', () => {
+  it('sends every phase 2 key to D1, keeps nulls, and leaves Sanity owning them', () => {
+    const input = {
+      sponsorRegistrationLink: 'https://t.example/s',
+      speakerRegistrationLink: 'https://t.example/sp',
+      volunteerRegistrationLink: null,
+      contactEmail: 'hi@acme.example',
+      cfpEmail: 'cfp@acme.example',
+      sponsorEmail: 'sponsor@acme.example',
+      salesNotificationChannel: '#sales',
+      cfpNotificationChannel: '#cfp',
+      speakerSlackChannel: '#speakers',
+      speakerSlackInviteUrl: 'https://join.slack.com/s',
+      volunteerSlackInviteUrl: 'https://join.slack.com/v',
+    }
+    expect(movedConferencePatch({ ...input, description: 'x' })).toEqual(input)
+    // Not read from D1 yet, so Sanity still gets them.
+    for (const k of Object.keys(input))
+      expect(isMovedConferenceField(k)).toBe(false)
+  })
+})

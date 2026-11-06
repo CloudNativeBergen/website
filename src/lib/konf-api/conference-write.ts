@@ -70,6 +70,24 @@ const SETTINGS_PRIVATE = new Set([
 ])
 
 /**
+ * Settings phase 2 (#2038): in `ConferencePatch`, not yet read from D1, so a
+ * d1_write tenant writes them to D1 AND Sanity until the read flip.
+ */
+const SETTINGS_PHASE2 = new Set([
+  'sponsorRegistrationLink',
+  'speakerRegistrationLink',
+  'volunteerRegistrationLink',
+  'contactEmail',
+  'cfpEmail',
+  'sponsorEmail',
+  'salesNotificationChannel',
+  'cfpNotificationChannel',
+  'speakerSlackChannel',
+  'speakerSlackInviteUrl',
+  'volunteerSlackInviteUrl',
+])
+
+/**
  * Whether a conference settings input key represents a field moved to D1 (#1997).
  * Sanity groups primaryColor/accentColor under `theme`, and published is
  * derived from `lifecycleStatus`.
@@ -123,7 +141,12 @@ export function movedConferencePatch(
       // Sanity replaces the whole object, so an absent flag is an unset.
       const t = v as { showVanityMetrics?: boolean } | null
       out.showVanityMetrics = t?.showVanityMetrics ?? null
-    } else if (MOVED.has(k) || SETTINGS.has(k) || SETTINGS_PRIVATE.has(k)) {
+    } else if (
+      MOVED.has(k) ||
+      SETTINGS.has(k) ||
+      SETTINGS_PRIVATE.has(k) ||
+      SETTINGS_PHASE2.has(k)
+    ) {
       out[k] = v
     }
   }

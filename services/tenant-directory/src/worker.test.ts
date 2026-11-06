@@ -33,6 +33,7 @@ const hostnames = {
 const identity = {
   ensure: vi.fn(async () => undefined),
   syncMembers: vi.fn(async (): Promise<unknown> => undefined),
+  memberships: vi.fn(async () => []),
 }
 vi.mock('./data/cloudflare', () => ({ cloudflareHostnames: () => hostnames }))
 
