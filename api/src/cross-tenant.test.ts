@@ -79,10 +79,10 @@ vi.mock('@sanity/client', () => ({
         : /_type == "(sponsorTier|sponsorForConference)"/.test(groq)
           ? (['b', 'a'] as T[]).flatMap(sponsorDocs)
           : (['b', 'a'] as T[]).map((t) => ({
-            ...sanityDoc(groq, t),
-            _type: 'conference',
-            organization: { _type: 'reference', _ref: ORG[t] },
-          }))
+              ...sanityDoc(groq, t),
+              _type: 'conference',
+              organization: { _type: 'reference', _ref: ORG[t] },
+            }))
       const { evaluate, parse } = await import('groq-js')
       return (await evaluate(parse(groq), { dataset, params })).get()
     },
