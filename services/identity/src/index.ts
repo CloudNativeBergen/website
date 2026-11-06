@@ -1,7 +1,9 @@
 // Identity entry: Better Auth under /api/auth, the login handoff under
 // /handoff, its error page at /error, the linked-accounts page at /account, the RPC entrypoints, and 404 for everything else.
 import { WorkerEntrypoint } from 'cloudflare:workers'
+import type { ConferencePushEvent } from '@runkonf/tenancy'
 import { createAuth, createData } from './data'
+import { notify, type PushEnv } from './data/push'
 import { accountPage } from './account-page'
 import { errorPage } from './error-page'
 import { handoff, type HandoffEnv } from './handoff'
@@ -10,7 +12,9 @@ import { orgWriteGate } from './org-write-gate'
 import graph, { type WorkerEnv } from './worker'
 
 /** LOGIN_TEST_PAGE: "1" on preview only (service.cue) serves GET /test. */
-type Env = WorkerEnv & HandoffEnv & { LOGIN_TEST_PAGE?: string }
+type Env = WorkerEnv &
+  HandoffEnv &
+  PushEnv & { LOGIN_TEST_PAGE?: string }
 
 /**
  * RPC for the gateway, reachable only over a service binding with
@@ -49,6 +53,22 @@ export class Organizations extends WorkerEntrypoint<Env> {
    */
   syncMembers() {
     return createData(this.env).syncMembers()
+  }
+}
+
+/**
+ * Web push for konf-conference (`"entrypoint": "Push"`, kontroll#61): identity
+ * resolves recipients and sends. Only the conference event types pass, so the
+ * binding cannot raise member events. Never rejects.
+ */
+export class Push extends WorkerEntrypoint<Env> {
+  send(event: ConferencePushEvent) {
+    if (
+      event?.type !== 'conference.settings_changed' &&
+      event?.type !== 'parity.drift'
+    )
+      return Promise.resolve()
+    return notify(this.env, event)
   }
 }
 
