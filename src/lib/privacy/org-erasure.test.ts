@@ -65,8 +65,8 @@ const workshops = async () =>
 
 beforeEach(() => {
   routeFetch()
-  flagsMock.mockImplementation(async (host: string) => ({
-    apiRead: host.startsWith('flagged-'),
+  flagsMock.mockImplementation(async (host) => ({
+    apiRead: !!host?.startsWith('flagged-'),
     identityLogin: false,
     d1Write: false,
   }))
