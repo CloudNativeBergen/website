@@ -4,6 +4,7 @@ const reactHooksPlugin = require('eslint-plugin-react-hooks')
 const importPlugin = require('eslint-plugin-import')
 const storybookPlugin = require('eslint-plugin-storybook')
 const noUnscopedGroq = require('./eslint-rules/no-unscoped-groq')
+const noSanityD1ConferenceFields = require('./eslint-rules/no-sanity-d1-conference-fields')
 const noBareAmountParse = require('./eslint-rules/no-bare-amount-parse')
 
 // Import boundaries for subgraph services and the gateway (#1800). Each entry
@@ -175,6 +176,25 @@ const eslintConfig = [
     },
     rules: {
       'tenancy/no-unscoped-groq': 'warn',
+    },
+  },
+
+  // D1-owned conference fields read from Sanity (epic #1997). WARN behind the
+  // same per-file ratchet (`pnpm run lint:d1-fields`), so existing reads are
+  // frozen and a NEW one fails CI. Heuristic and allowlist: see the rule file.
+  {
+    files: [
+      'src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+      'api/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+      'services/content/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+    ],
+    plugins: {
+      d1: {
+        rules: { 'no-sanity-d1-conference-fields': noSanityD1ConferenceFields },
+      },
+    },
+    rules: {
+      'd1/no-sanity-d1-conference-fields': 'warn',
     },
   },
 

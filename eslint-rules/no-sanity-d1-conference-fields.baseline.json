@@ -1,0 +1,11 @@
+{
+  "rule": "d1/no-sanity-d1-conference-fields",
+  "generatedBy": "pnpm run lint:d1-fields:update",
+  "note": "Per-file ceiling for pre-existing d1/no-sanity-d1-conference-fields warnings. A number may only go DOWN. See eslint-rules/tenancy-ratchet.js and the rule's header.",
+  "total": 17,
+  "files": {
+    "services/content/src/data/index.ts": 13,
+    "src/lib/speaker/sanity.ts": 3,
+    "src/lib/video-project/document.ts": 1
+  }
+}

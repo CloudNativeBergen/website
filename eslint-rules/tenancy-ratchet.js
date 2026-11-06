@@ -70,11 +70,26 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
-const RULE_ID = 'tenancy/no-unscoped-groq'
+// The same ratchet serves a second warn-level rule: `--rule d1` counts
+// `d1/no-sanity-d1-conference-fields` (epic #1997) against its own baseline.
+const RULES = {
+  tenancy: ['tenancy/no-unscoped-groq', 'no-unscoped-groq', 'lint:tenancy'],
+  d1: [
+    'd1/no-sanity-d1-conference-fields',
+    'no-sanity-d1-conference-fields',
+    'lint:d1-fields',
+  ],
+}
+const ruleArg = process.argv.indexOf('--rule')
+const [RULE_ID, BASELINE_NAME, SCRIPT] =
+  RULES[ruleArg === -1 ? 'tenancy' : process.argv[ruleArg + 1]] ??
+  (() => {
+    throw new Error(`Unknown --rule; expected one of ${Object.keys(RULES)}`)
+  })()
 const REPO_ROOT = path.resolve(__dirname, '..')
-const BASELINE_PATH = path.join(__dirname, 'no-unscoped-groq.baseline.json')
+const BASELINE_PATH = path.join(__dirname, `${BASELINE_NAME}.baseline.json`)
 const BASELINE_REL = path.relative(REPO_ROOT, BASELINE_PATH)
-const UPDATE_COMMAND = 'pnpm run lint:tenancy:update'
+const UPDATE_COMMAND = `pnpm run ${SCRIPT}:update`
 
 /** Sort keys so the committed baseline diffs line-by-line, not wholesale. */
 function sortByKey(counts) {
@@ -186,7 +201,7 @@ function writeBaseline(counts, baselinePath = BASELINE_PATH) {
   const body = {
     rule: RULE_ID,
     generatedBy: UPDATE_COMMAND,
-    note: 'Per-file ceiling for pre-existing unscoped GROQ reads. A number may only go DOWN. See eslint-rules/tenancy-ratchet.js and docs/TENANT_SCOPING.md.',
+    note: `Per-file ceiling for pre-existing ${RULE_ID} warnings. A number may only go DOWN. See eslint-rules/tenancy-ratchet.js and the rule's header.`,
     total: total(counts),
     files: counts,
   }
@@ -286,11 +301,19 @@ async function main() {
   console.error(
     [
       '',
-      'Each of these is a read of `*` that is not constrained to one tenant.',
-      'Fix it — scope the query (scopedFetch / CONFERENCE_FILTER / ORG_FILTER, see',
-      'docs/TENANT_SCOPING.md), or annotate the single read with `// groq-global: <reason>`',
-      'if it is genuinely cross-tenant, or `// groq-global-scoped: <how>` if it is scoped',
-      'by something the rule cannot see.',
+      ...(RULE_ID === RULES.tenancy[0]
+        ? [
+            'Each of these is a read of `*` that is not constrained to one tenant.',
+            'Fix it — scope the query (scopedFetch / CONFERENCE_FILTER / ORG_FILTER, see',
+            'docs/TENANT_SCOPING.md), or annotate the single read with `// groq-global: <reason>`',
+            'if it is genuinely cross-tenant, or `// groq-global-scoped: <how>` if it is scoped',
+            'by something the rule cannot see.',
+          ]
+        : [
+            'Each of these reads a D1-owned conference field straight from Sanity GROQ.',
+            'Read it through src/lib/conference (merge.ts / konf-api.ts) instead; see the',
+            `header of eslint-rules/${BASELINE_NAME}.js.`,
+          ]),
       '',
       `Raising the ceiling is a deliberate, reviewed act: \`${UPDATE_COMMAND}\` and commit`,
       `${BASELINE_REL}. A pure file rename lands here too — regenerate, and the diff should`,

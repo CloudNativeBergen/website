@@ -73,6 +73,12 @@ jobs:
       - name: Run tenancy lint ratchet
         run: pnpm run lint:tenancy
 
+      # Same ratchet, second rule: D1-owned conference fields read straight
+      # from Sanity GROQ (epic #1997). Baseline:
+      # eslint-rules/no-sanity-d1-conference-fields.baseline.json.
+      - name: Run D1 conference-field lint ratchet
+        run: pnpm run lint:d1-fields
+
       - name: Run type check
         run: pnpm run typecheck
 
