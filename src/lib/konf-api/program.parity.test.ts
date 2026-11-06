@@ -292,6 +292,19 @@ describe('public program seams through the API (#1772)', () => {
     expect(queries.filter((q) => q.includes('program'))).toHaveLength(1)
   })
 
+  it('schedule: admin reads (uncached, scheduleFromSanity) stay on Sanity', async () => {
+    const calls = h.apiCalls
+    for (const opts of [{ uncached: true }, { scheduleFromSanity: true }]) {
+      const r = await getConferenceForDomain('a.example', {
+        schedule: true,
+        confirmedTalksOnly: false,
+        ...opts,
+      })
+      expect(schedules(r.conference)[0]).toHaveProperty('_type', 'schedule')
+    }
+    expect(h.apiCalls).toBe(calls)
+  })
+
   it('schedule: no API days (before programDate) gives Sanity', async () => {
     h.apiRead = false
     const want = (await getConferenceForDomain('a.example', { schedule: true }))

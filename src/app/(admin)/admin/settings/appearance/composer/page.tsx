@@ -30,6 +30,7 @@ export default async function HomepageComposerPage({
   const { conference, error } = await getConferenceForCurrentDomain({
     organizers: true,
     schedule: true,
+    scheduleFromSanity: true,
     featuredSpeakers: true,
   })
 

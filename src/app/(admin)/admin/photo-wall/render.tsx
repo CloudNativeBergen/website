@@ -14,6 +14,7 @@ export async function renderPhotoWallAdmin(setup = false) {
   if (denied) return denied
   const { conference, error } = await getConferenceForCurrentDomain({
     schedule: true,
+    scheduleFromSanity: true,
   })
   if (error || !conference) {
     return (

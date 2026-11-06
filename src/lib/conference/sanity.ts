@@ -136,6 +136,7 @@ export async function getConferenceForCurrentDomain({
   includeSpeakerRegistrationLink = false,
   includeVolunteerRegistrationLink = false,
   uncached = false,
+  scheduleFromSanity = false,
 }: {
   organizers?: boolean
   schedule?: boolean
@@ -160,6 +161,8 @@ export async function getConferenceForCurrentDomain({
   includeVolunteerRegistrationLink?: boolean
   /** Fetch directly from the origin API instead of the CDN. Admin surfaces only. */
   uncached?: boolean
+  /** See {@link getConferenceForDomain}. Admin surfaces only. */
+  scheduleFromSanity?: boolean
 } = {}): Promise<{
   conference: Conference
   domain: string
@@ -182,6 +185,7 @@ export async function getConferenceForCurrentDomain({
       includeSpeakerRegistrationLink,
       includeVolunteerRegistrationLink,
       uncached,
+      scheduleFromSanity,
     })
   } catch (err) {
     const error = err as Error
@@ -234,6 +238,7 @@ export async function getConferenceForDomain(
     includeSponsorRegistrationLink = false,
     includeSpeakerRegistrationLink = false,
     includeVolunteerRegistrationLink = false,
+    scheduleFromSanity = false,
   }: {
     organizers?: boolean
     schedule?: boolean
@@ -294,6 +299,13 @@ export async function getConferenceForDomain(
      * OFF by default. Private volunteer onboarding links; admin/email surfaces only.
      */
     includeVolunteerRegistrationLink?: boolean
+    /**
+     * Keep the schedule on Sanity for an apiRead tenant (#1772). The API's
+     * schedule is the PUBLIC one: an unconfirmed talk has no `_id` and the
+     * schedule documents carry no `_rev` or `status`. Admin surfaces that
+     * count, edit or hash the schedule pass this; `uncached` implies it.
+     */
+    scheduleFromSanity?: boolean
   } = {},
 ): Promise<{
   conference: Conference
@@ -326,7 +338,7 @@ export async function getConferenceForDomain(
     // The public cached read of an apiRead tenant takes its schedule from the
     // gateway (#1772): the core read here, the program from the API below,
     // and the full read only as the fallback.
-    const scheduleFromApi = schedule && !uncached
+    const scheduleFromApi = schedule && !uncached && !scheduleFromSanity
     const query =
       schedule && !scheduleFromApi
         ? CONFERENCE_QUERY_FULL

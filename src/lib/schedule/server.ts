@@ -78,6 +78,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
       await getConferenceForCurrentDomain({
         schedule: true,
         confirmedTalksOnly: false,
+        scheduleFromSanity: true,
       })
 
     if (conferenceError || !conference) {

@@ -21,6 +21,7 @@ async function DashboardContent() {
     ? await getConferenceForCurrentDomain({
         topics: true,
         schedule: true,
+        scheduleFromSanity: true,
         // Same fields as the briefing send, so the briefing version matches.
         includeSpeakerRegistrationLink: true,
       })

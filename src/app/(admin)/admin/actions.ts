@@ -129,7 +129,11 @@ export async function fetchDashboardData(
   // `confirmedTalksOnly: false` every assigned slot counts toward fill,
   // regardless of the talk's status — this is an admin progress view.
   const conference = needsScheduleExpansion(keys)
-    ? await resolveConference({ schedule: true, confirmedTalksOnly: false })
+    ? await resolveConference({
+        schedule: true,
+        confirmedTalksOnly: false,
+        scheduleFromSanity: true,
+      })
     : await resolveConference()
 
   const session = await getAuthSession()
