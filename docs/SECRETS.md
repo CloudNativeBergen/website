@@ -41,7 +41,7 @@ mise run secrets:sync -- <api|SERVICE> <preview|production> --check  # list miss
 
 The sync reads each value with `fnox get` and pipes it to `wrangler secret put --env`; it prints only `ok <NAME>`. The fnox key is `KONF_<ENV>_<NAME>` unless `scripts/secrets-sync.ts` maps it: `ENVELOPE_PRIVATE_KEY` reads `KONF_<ENV>_GATEWAY_PRIVATE_KEY`, `SANITY_API_TOKEN_READ` reads `SANITY_API_TOKEN_READ_PROD`, and the OAuth client ids and secrets read `ID_KONF_APP_*`. `--check` compares the declared names with `wrangler secret list`, no values.
 
-After every production deploy, `deploy-workers.yml` runs `--check` for each Worker and fails the job when a declared secret is missing. Optional secrets (`PUSH_WEBHOOK_SECRET`, the Slack webhook URLs) are not declared, so they are neither synced nor checked; set them by hand:
+Names are `required` (the Worker cannot run without them) or `optional` (the code degrades, for example push is a no-op or registration refuses). After every production deploy, `deploy-workers.yml` runs `--check` for each Worker: a missing required secret fails the job, a missing optional one is a warning. The sync skips an optional secret fnox does not hold. Undeclared secrets (the conference parity Slack webhook) are set by hand:
 
 ```sh
 cd <api|services/NAME>

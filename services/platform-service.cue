@@ -52,12 +52,13 @@ package codegen
 		production: *{} | {[string]: string}
 	}
 
-	// Worker secret names per environment (names only, never values).
-	// Generated into secrets.json; `mise run secrets:sync` puts them from
-	// fnox and deploy-workers fails a production deploy when one is missing.
+	// Worker secret names (names only, never values), the same in both
+	// environments. Generated into secrets.json; `mise run secrets:sync` puts
+	// them from fnox. After a production deploy a missing `required` name
+	// fails the job; a missing `optional` one (the code degrades) warns.
 	secrets: {
-		preview:    *[] | [...string]
-		production: *[] | [...string]
+		required: *[] | [...string]
+		optional: *[] | [...string]
 	}
 
 	// D1 database ids per environment. The owner creates each database once
@@ -127,7 +128,7 @@ package codegen
 		"wrangler.jsonc": {
 			"name": _workerName
 			// Every service deploys to the RunKonf account.
-			"account_id": "eefa2cb5c8528a07d7bf8b00a6606dcd"
+			"account_id": "bf423d08017f82ace4019bc367338981"
 			// A service with its own HTTP surface (identity) points main at
 			// its own entry; src/worker.ts stays generated.
 			"main":               *"src/worker.ts" | string
@@ -221,7 +222,7 @@ package codegen
 				"logs": {"enabled": true, "destinations": ["grafana-cloud-logs"]}
 			}
 		}
-		"secrets.json": secrets
+		"secrets.json": {preview: secrets, production: secrets}
 		"tsconfig.json": {
 			"compilerOptions": {
 				"target":           "es2022"

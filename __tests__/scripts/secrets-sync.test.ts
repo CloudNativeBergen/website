@@ -32,7 +32,10 @@ const fnoxKeys = new Set(
 // secret, plus names written in scripts/*.sh (KONF_${upper}_X expanded).
 function scriptFnoxNames(): string[] {
   const names = services.flatMap((s) =>
-    envs.flatMap((e) => declaredSecrets(s, e).map((n) => fnoxName(n, e))),
+    envs.flatMap((e) => {
+      const d = declaredSecrets(s, e)
+      return [...d.required, ...d.optional].map((n) => fnoxName(n, e))
+    }),
   )
   for (const f of readdirSync(join(root, 'scripts')).filter((f) =>
     f.endsWith('.sh'),
@@ -62,7 +65,7 @@ describe('secrets', () => {
     )
     for (const s of services)
       for (const e of envs)
-        expect(declaredSecrets(s, e)).toContain(
+        expect(declaredSecrets(s, e).required).toContain(
           s === 'api' ? 'ENVELOPE_PRIVATE_KEY' : 'GATEWAY_PUBLIC_KEY',
         )
   })
@@ -94,10 +97,10 @@ describe('secrets', () => {
         ]),
       ),
     )
-    expect(missingSecrets('api', 'production', exec)).toEqual([
-      'SITE_PUBLIC_KEYS',
-      'CLIENT_IP_SECRET',
-    ])
+    expect(missingSecrets('api', 'production', exec)).toEqual({
+      required: ['SITE_PUBLIC_KEYS', 'CLIENT_IP_SECRET'],
+      optional: [],
+    })
     expect(exec).toHaveBeenCalledTimes(1)
     expect(exec.mock.calls[0][1]).toEqual([
       'exec',
@@ -109,6 +112,36 @@ describe('secrets', () => {
       '--format',
       'json',
     ])
+  })
+
+  it('--check separates missing optional from missing required', () => {
+    const exec = vi.fn((_cmd: string, _args: string[], _opts: Opts) =>
+      Buffer.from(JSON.stringify([{ name: 'GATEWAY_PUBLIC_KEY' }])),
+    )
+    expect(missingSecrets('tenant-directory', 'production', exec)).toEqual({
+      required: [],
+      optional: ['SANITY_API_TOKEN_READ', 'CF_API_TOKEN', 'CF_ZONE_ID'],
+    })
+  })
+
+  it('sync skips an optional secret fnox lacks but fails on a required one', () => {
+    const log = vi.fn()
+    const exec = vi.fn((cmd: string, args: string[], _opts: Opts) => {
+      if (cmd === 'fnox' && args[1] !== 'KONF_PREVIEW_GATEWAY_PUBLIC_KEY')
+        throw new Error('missing')
+      return Buffer.from('')
+    })
+    sync('tenant-directory', 'preview', exec, log)
+    expect(log.mock.calls.flat()).toEqual([
+      'ok GATEWAY_PUBLIC_KEY',
+      'skip SANITY_API_TOKEN_READ (optional, not in fnox)',
+      'skip CF_API_TOKEN (optional, not in fnox)',
+      'skip CF_ZONE_ID (optional, not in fnox)',
+    ])
+    exec.mockImplementation(() => {
+      throw new Error('missing')
+    })
+    expect(() => sync('content', 'preview', exec, log)).toThrow('missing')
   })
 
   it('sync pipes each fnox value to wrangler and logs only names', () => {

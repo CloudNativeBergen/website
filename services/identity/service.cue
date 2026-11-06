@@ -6,8 +6,11 @@ service: #PlatformService & {
 	name: "identity"
 	d1: {preview: "2192470e-1f18-40cc-813f-c18883237c78", production: "20c89ee4-f729-483b-8a0f-8fba00d4f411"}
 	tenancy: false
-	_secrets: ["GATEWAY_PUBLIC_KEY", "BETTER_AUTH_SECRET", "BETTER_AUTH_URL", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET", "IDENTITY_EXCHANGE_SECRET", "IDENTITY_UPGRADE_SECRET", "SANITY_API_TOKEN_READ"]
-	secrets: {preview: _secrets, production: _secrets}
+	secrets: {
+		required: ["GATEWAY_PUBLIC_KEY", "BETTER_AUTH_SECRET", "BETTER_AUTH_URL", "IDENTITY_ISSUER", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET", "IDENTITY_EXCHANGE_SECRET", "IDENTITY_UPGRADE_SECRET", "SANITY_API_TOKEN_READ"]
+		// Push and drift alerts are a no-op without these.
+		optional: ["VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "PUSH_WEBHOOK_SECRET", "SLACK_MEMBER_DRIFT_WEBHOOK_URL"]
+	}
 	// The public host for sign-in and the login handoff (#1803).
 	routes: {preview: ["id-preview.konf.app"], production: ["id.konf.app"]}
 	// Last moment a NextAuth session may upgrade to an identity session (#1842).

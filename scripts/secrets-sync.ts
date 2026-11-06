@@ -37,10 +37,15 @@ export function serviceDir(service: string): string {
   return service === 'api' ? join(root, 'api') : join(root, 'services', service)
 }
 
-export function declaredSecrets(service: string, env: Env): string[] {
+export interface Declared {
+  required: string[]
+  optional: string[]
+}
+
+export function declaredSecrets(service: string, env: Env): Declared {
   const json = JSON.parse(
     readFileSync(join(serviceDir(service), 'secrets.json'), 'utf8'),
-  ) as Record<Env, string[]>
+  ) as Record<Env, Declared>
   return json[env]
 }
 
@@ -58,18 +63,20 @@ export function missingSecrets(
   service: string,
   env: Env,
   exec: Run = run,
-): string[] {
+): Declared {
   const listed = JSON.parse(
     exec(
       'pnpm',
       ['exec', 'wrangler', 'secret', 'list', '--env', env, '--format', 'json'],
-      {
-        cwd: serviceDir(service),
-      },
+      { cwd: serviceDir(service) },
     ).toString(),
   ) as { name: string }[]
   const have = new Set(listed.map((s) => s.name))
-  return declaredSecrets(service, env).filter((n) => !have.has(n))
+  const { required, optional } = declaredSecrets(service, env)
+  return {
+    required: required.filter((n) => !have.has(n)),
+    optional: optional.filter((n) => !have.has(n)),
+  }
 }
 
 export function sync(
@@ -79,8 +86,17 @@ export function sync(
   log = console.log,
 ) {
   const cwd = serviceDir(service)
-  for (const name of declaredSecrets(service, env)) {
-    const value = exec('fnox', ['get', fnoxName(name, env)], { cwd: root })
+  const { required, optional } = declaredSecrets(service, env)
+  for (const name of [...required, ...optional]) {
+    let value: Buffer
+    try {
+      value = exec('fnox', ['get', fnoxName(name, env)], { cwd: root })
+    } catch (err) {
+      // An optional secret not in fnox yet is skipped, not fatal.
+      if (!optional.includes(name)) throw err
+      log(`skip ${name} (optional, not in fnox)`)
+      continue
+    }
     exec('pnpm', ['exec', 'wrangler', 'secret', 'put', name, '--env', env], {
       cwd,
       input: value,
@@ -106,10 +122,16 @@ if (
   }
   if (flag) {
     const missing = missingSecrets(service, env)
-    for (const n of missing)
-      console.error(`missing ${n} on ${service} (${env})`)
-    if (missing.length) process.exit(1)
-    console.log(`ok ${service} (${env}): all declared secrets present`)
+    for (const n of missing.optional)
+      console.log(
+        `::warning::optional secret ${n} missing on ${service} (${env})`,
+      )
+    for (const n of missing.required)
+      console.error(
+        `::error::required secret ${n} missing on ${service} (${env})`,
+      )
+    if (missing.required.length) process.exit(1)
+    console.log(`ok ${service} (${env}): all required secrets present`)
   } else {
     sync(service, env)
   }

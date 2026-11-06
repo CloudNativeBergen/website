@@ -8,7 +8,7 @@
     },
   ],
   "name": "konf-tenant-directory",
-  "account_id": "eefa2cb5c8528a07d7bf8b00a6606dcd",
+  "account_id": "bf423d08017f82ace4019bc367338981",
   "main": "src/worker.ts",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
