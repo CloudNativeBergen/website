@@ -8,6 +8,7 @@ import { IDENTITY_SESSION_COOKIE } from '@/lib/auth/identity-cookie'
 import { TRPCError } from '@trpc/server'
 import { rolloutFlags } from '@/lib/conference/konf-api'
 import { konfApiHeaders, konfApiUrl } from './client'
+import { graphql, type ResultOf } from './graphql'
 import {
   LIFECYCLE_STATUS_VALUES,
   type LifecycleStatus,
@@ -233,7 +234,10 @@ export async function identityJwt(): Promise<string | null> {
   }
 }
 
-const MUTATION = `mutation($input: ConferencePatch!) { updateConference(input: $input) { id } }`
+const MUTATION =
+  `mutation($input: ConferencePatch!) { updateConference(input: $input) { id } }` as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
+const MUTATION_DOC = graphql(MUTATION)
 
 /** One gateway mutation as the signed-in user. Throws on HTTP or GraphQL errors. */
 async function mutate<T>(
@@ -272,7 +276,7 @@ export async function updateConferenceViaApi(
   patch: Record<string, unknown>,
   userJwt: string,
 ): Promise<void> {
-  const data = await mutate<{ updateConference?: { id?: string } | null }>(
+  const data = await mutate<ResultOf<typeof MUTATION_DOC>>(
     host,
     MUTATION,
     { input: patch },
@@ -282,7 +286,10 @@ export async function updateConferenceViaApi(
   if (id !== conferenceId) throw new Error(`conference id mismatch: ${id}`)
 }
 
-const LIFECYCLE_MUTATION = `mutation($s: ConferenceLifecycleOverride) { setConferenceLifecycle(status: $s) { id } }`
+const LIFECYCLE_MUTATION =
+  `mutation($s: ConferenceLifecycleOverride) { setConferenceLifecycle(status: $s) { id } }` as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
+const LIFECYCLE_DOC = graphql(LIFECYCLE_MUTATION)
 
 /**
  * Writes the homepage override to tenant-directory, its D1 home (#1997).
@@ -294,9 +301,12 @@ export async function setLifecycleViaApi(
   status: LifecycleStatus | null,
   userJwt: string,
 ): Promise<void> {
-  const data = await mutate<{
-    setConferenceLifecycle?: { id?: string } | null
-  }>(host, LIFECYCLE_MUTATION, { s: status }, userJwt)
+  const data = await mutate<ResultOf<typeof LIFECYCLE_DOC>>(
+    host,
+    LIFECYCLE_MUTATION,
+    { s: status },
+    userJwt,
+  )
   const id = data?.setConferenceLifecycle?.id
   if (id !== conferenceId) throw new Error(`conference id mismatch: ${id}`)
 }

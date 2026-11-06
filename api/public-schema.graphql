@@ -1,0 +1,635 @@
+type Conference {
+  id: ID
+  accentColor: String
+
+  """Org members only."""
+  analyticsPirschCode: String
+  backgroundPattern: String
+  cfpEmail: String
+  cfpEndDate: String
+
+  """Org members only."""
+  cfpNotificationChannel: String
+  cfpNotifyDate: String
+  cfpStartDate: String
+  city: String
+  contactEmail: String
+  country: String
+  earlyBirdEndDate: String
+  endDate: String
+  organizer: String
+
+  """Org members only."""
+  organizerAddress: String
+
+  """Org members only."""
+  organizerOrgNumber: String
+  primaryColor: String
+  programDate: String
+  recordingsLiveDate: String
+  registrationCloseDate: String
+  registrationEnabled: Boolean
+  registrationLink: String
+
+  """Org members only."""
+  salesNotificationChannel: String
+
+  """ticketCustomization.showVanityMetrics in Sanity."""
+  showVanityMetrics: Boolean
+  socialHashtag: String
+  socialLinks: [String!]
+
+  """Org members only."""
+  speakerRegistrationLink: String
+
+  """Org members only."""
+  speakerSlackChannel: String
+
+  """Org members only."""
+  speakerSlackInviteUrl: String
+  speakersAnnouncedDate: String
+  sponsorDeadlineDate: String
+  sponsorEmail: String
+
+  """Org members only."""
+  sponsorRegistrationLink: String
+  startDate: String
+  tagline: String
+  title: String
+
+  """Org members only."""
+  travelSupportBudget: Float
+  travelSupportPaymentDate: String
+  venueAddress: String
+  venueName: String
+
+  """`unlisted`: reachable by link, not indexed."""
+  visibility: String
+  volunteerRegistrationLink: String
+
+  """Org members only."""
+  volunteerSlackInviteUrl: String
+
+  """Portable Text as JSON (Sanity shape)."""
+  announcement: String
+  description: String
+  formats: [String!]
+
+  """The homepage sections in order. Hidden ones only for org members."""
+  homepageBlocks: [HomepageSection!]
+
+  """The homepage section list as JSON (Sanity shape)."""
+  homepageSections: String @deprecated(reason: "Use homepageBlocks.")
+  lifecycleHeadline: String
+  lifecycleMessage: String
+  localRecommendations: String
+  logoBright: String
+  logoDark: String
+  logomarkBright: String
+  logomarkDark: String
+
+  """
+  The speaker information object as JSON (Sanity shape). Non-members get what /info shows: no on-site phone, no dinner RSVP note.
+  """
+  speakerInfo: String
+
+  """The sponsorship page copy as JSON (Sanity shape)."""
+  sponsorshipCustomization: String
+  ticketCustomization: TicketCustomization
+  ticketFaqs: [Faq!]
+  ticketInclusions: [TicketInclusion!]
+  vanityMetrics: [VanityMetric!]
+  venueTravelInfo: String
+}
+
+type ConferenceEdition {
+  id: ID
+  endDate: String
+
+  """False when the edition is cancelled or archived."""
+  published: Boolean
+  startDate: String
+  title: String
+  visibility: String
+
+  """
+  `draft`, `live`, `cancelled` or `archived`. Org members see every value; anyone else only `live`, and null otherwise.
+  """
+  lifecycleStatus: String
+
+  """
+  The edition's canonical host: a verified custom domain, else its verified platform-edition host, else null. Never pending or failed. Same visibility as lifecycleStatus.
+  """
+  primaryHost: String
+}
+
+type Mutation {
+  """Patches the request's Conference. Requires an org owner or admin."""
+  updateConference(input: ConferencePatch!): Conference!
+  cancelInvitation(invitationId: ID!): Boolean
+  changeMemberRole(role: MemberRole!, userId: ID!): Boolean
+  inviteMember(email: String!, role: MemberRole!): MemberInvitation
+  operatorCancelInvitation(invitationId: ID!, orgId: ID!): Boolean
+  operatorChangeMemberRole(orgId: ID!, role: MemberRole!, userId: ID!): Boolean
+  operatorInviteMember(email: String!, orgId: ID!, role: MemberRole!): MemberInvitation
+  operatorRemoveMember(orgId: ID!, userId: ID!): Boolean
+
+  """
+  Deletes endpoints the push service answered 404 or 410 for. Platform context only.
+  """
+  prunePushSubscriptions(endpoints: [String!]!): Int
+  removeMember(userId: ID!): Boolean
+
+  """
+  Stores a web push subscription for the session user. An endpoint another user held moves to the caller.
+  """
+  subscribePush(input: PushSubscriptionInput!): Boolean
+
+  """Removes the session user's subscription for the endpoint."""
+  unsubscribePush(endpoint: String!): Boolean
+  provisionOrganization(conferenceId: ID!, idempotencyKey: String!, orgId: ID!, orgSlug: String!): Organization
+
+  """
+  Sets the request's Conference homepage override, or clears it with null (back to `live`; a draft stays draft). Org owner or admin, or an operator acting for the org (#1997).
+  """
+  setConferenceLifecycle(status: ConferenceLifecycleOverride): ConferenceEdition
+}
+
+type Query {
+  """
+  The request's Conference. Null when the request has none, or it is unpublished and the caller is not an org member.
+  """
+  conference: Conference
+
+  """
+  The request's organization's editions, newest first. Unpublished and unlisted editions only for org members.
+  """
+  conferenceEditions: [ConferenceEdition!]!
+
+  """
+  The session org's pending invitations. Owners, admins and operators only; null otherwise.
+  """
+  invitations: [PendingInvitation!]
+
+  """
+  The session org's members. Null unless the caller is a member or an operator acting for the tenant.
+  """
+  members: [OrganizationMember!]
+  program: Program
+  speaker(id: ID!): Speaker
+  speakerBySlug(slug: String!): Speaker
+  speakers: [Speaker!]
+  talk(id: ID!): Talk
+
+  """
+  The request's Conference lifecycle: `live`, `cancelled` or `archived` for anyone, `draft` only for org members. Public because a cancelled or archived homepage says so to every visitor (#1997).
+  """
+  conferenceLifecycle: String
+
+  """
+  Every org's conferences, ordered by id. Platform operators only (operator lane, no tenant). At most 100 per page: pass the last id as `after` for the next. `lifecycle` and `flag` (that flag on) filter.
+  """
+  conferences(after: ID, first: Int = 100, flag: RolloutFlag, lifecycle: ConferenceLifecycle): [OperatorConference!]
+
+  """
+  The signed-in user's own organizations, with their role and every conference edition (#2036). Kontroll's member lane: a session with no tenant. Refused with a tenant envelope or none.
+  """
+  myOrganizations: [MyOrganization!]
+
+  """
+  The session's Organization: members (any role) and operators acting for it. Null for everyone else.
+  """
+  organization: Organization
+
+  """
+  Every Organization, ordered by slug. Platform operators only (operator lane, no tenant). At most 100 per page: pass the last slug as `after` for the next.
+  """
+  organizations(after: String, first: Int = 100): [Organization!]
+  health: String!
+  rolloutFlags: SiteRolloutFlags
+}
+
+type Faq {
+  answer: String
+  question: String
+}
+
+type HeroCta {
+  href: String
+  label: String
+}
+
+type HomepageCountdown implements HomepageSection {
+  heading: String
+  hidden: Boolean
+  key: String
+  liveMessage: String
+  targetOverride: String
+  variant: String
+}
+
+type HomepageCtaBanner implements HomepageSection {
+  body: String
+  buttonHref: String
+  buttonLabel: String
+  heading: String
+  hidden: Boolean
+  key: String
+  variant: String
+}
+
+type HomepageFaq implements HomepageSection {
+  heading: String
+  hidden: Boolean
+  items: [Faq!]
+  key: String
+  source: String
+  variant: String
+}
+
+type HomepageFeaturedSpeakers implements HomepageSection {
+  description: String
+  heading: String
+  hidden: Boolean
+  key: String
+  variant: String
+}
+
+type HomepageGallery implements HomepageSection {
+  description: String
+  heading: String
+  hidden: Boolean
+  key: String
+  variant: String
+}
+
+type HomepageHero implements HomepageSection {
+  ctaOverrides: [HeroCta!]
+  heroHeadline: String
+  heroSubheadline: String
+  hidden: Boolean
+  key: String
+  variant: String
+}
+
+type HomepageMetrics implements HomepageSection {
+  heading: String
+  hidden: Boolean
+  key: String
+  variant: String
+}
+
+type HomepageOrganizers implements HomepageSection {
+  description: String
+  heading: String
+  hidden: Boolean
+  key: String
+  variant: String
+}
+
+type HomepageProgramHighlights implements HomepageSection {
+  hidden: Boolean
+  key: String
+  variant: String
+}
+
+type HomepageRichText implements HomepageSection {
+  """Portable Text as JSON (Sanity shape)."""
+  content: String
+  heading: String
+  hidden: Boolean
+  key: String
+  variant: String
+}
+
+type HomepageSaveTheDate implements HomepageSection {
+  description: String
+  heading: String
+  hidden: Boolean
+  key: String
+  variant: String
+}
+
+type HomepageSponsors implements HomepageSection {
+  ctaDescription: String
+  ctaHeading: String
+  description: String
+  heading: String
+  hidden: Boolean
+  key: String
+  showCta: Boolean
+  variant: String
+}
+
+type HomepageVenue implements HomepageSection {
+  description: String
+  heading: String
+  hidden: Boolean
+  key: String
+  variant: String
+}
+
+type TicketCustomization {
+  ctaButtonText: String
+  groupDiscountInfo: String
+  heroHeadline: String
+  heroSubheadline: String
+  showVanityMetrics: Boolean
+}
+
+type TicketInclusion {
+  description: String
+  icon: String
+  title: String
+}
+
+type VanityMetric {
+  label: String
+  value: String
+}
+
+type MemberInvitation {
+  expiresAt: String
+  id: ID
+  role: String
+  status: String
+}
+
+type OrganizationMember {
+  """Owners, admins and operators only; null otherwise."""
+  email: String
+  joinedAt: String
+  name: String
+
+  """
+  Linked sign-in provider names, sorted. Owners, admins and operators only; empty otherwise.
+  """
+  providers: [String!]
+  role: String
+  userId: ID
+}
+
+type PendingInvitation {
+  email: String
+  expiresAt: String
+  id: ID
+  role: String
+}
+
+type Attachment {
+  attachmentType: String
+  description: String
+  filename: String
+
+  """file or url."""
+  kind: String
+  title: String
+  url: String
+}
+
+type GalleryImage {
+  alt: String
+  date: String
+  featured: Boolean
+  id: ID
+  location: String
+  photographer: String
+  url: String
+}
+
+type Program {
+  """Empty until the program is published."""
+  days: [ProgramDay!]
+}
+
+type ProgramDay {
+  date: String
+  slots: [ProgramSlot!]
+}
+
+type ProgramSlot {
+  end: String
+  placeholder: String
+
+  """The track title."""
+  room: String
+  start: String
+
+  """Null for a break or a talk not yet confirmed."""
+  talk: Talk
+  track: ProgramTrack
+}
+
+type ProgramTrack {
+  description: String
+  name: String
+  sponsorId: String
+}
+
+type ScheduleInfo {
+  date: String
+  endTime: String
+  startTime: String
+  trackTitle: String
+}
+
+"""The public profile of a speaker with a confirmed talk."""
+type Speaker {
+  bio: String
+
+  """Public flags only: local."""
+  flags: [String!]
+  galleryImages: [GalleryImage!]
+  id: ID
+
+  """URL."""
+  image: String
+  links: [String!]
+  name: String
+  slug: String
+
+  """Confirmed talks in this conference."""
+  talks: [Talk!]
+  title: String
+}
+
+"""A confirmed talk."""
+type Talk {
+  attachments: [Attachment!]
+  audiences: [String!]
+
+  """Portable Text as JSON (Sanity shape)."""
+  description: String
+  format: String
+  id: ID
+  language: String
+  level: String
+
+  """Null until the program is published (programDate)."""
+  scheduleInfo: ScheduleInfo
+  speakers: [TalkSpeaker!]
+  title: String
+  topics: [Topic!]
+}
+
+type TalkSpeaker {
+  id: ID
+
+  """URL."""
+  image: String
+  name: String
+  slug: String
+  title: String
+}
+
+type Topic {
+  color: String
+  id: ID
+  slug: String
+  title: String
+}
+
+type Domain {
+  conferenceId: ID
+  hostname: String
+  kind: String
+  orgId: ID
+  verification: String
+}
+
+type MyOrganization {
+  conferenceEditions: [ConferenceEdition!]
+  id: ID
+  name: String
+  role: String
+}
+
+type OperatorConference {
+  edition: ConferenceEdition
+  flags: RolloutFlags
+  id: ID
+  lifecycleStatus: String
+  organization: Organization
+}
+
+type Organization {
+  createdAt: String
+  domains: [Domain!]
+  id: ID
+  name: String
+  plan: String
+  slug: String
+  status: String
+}
+
+type RolloutFlags {
+  apiRead: Boolean
+  d1Override: Boolean
+  d1Write: Boolean
+  identityLogin: Boolean
+}
+
+interface HomepageSection {
+  hidden: Boolean
+  key: String
+  variant: String
+}
+
+enum MemberRole {
+  admin
+  member
+  owner
+}
+
+enum ConferenceLifecycle {
+  archived
+  cancelled
+  draft
+  live
+}
+
+enum ConferenceLifecycleOverride {
+  archived
+  cancelled
+}
+
+enum RolloutFlag {
+  apiRead
+  d1Override
+  d1Write
+  identityLogin
+}
+
+"""
+The moved Conference fields. An omitted field is left as it is; null unsets it.
+"""
+input ConferencePatch {
+  accentColor: String
+  analyticsPirschCode: String
+  backgroundPattern: String
+  cfpEmail: String
+  cfpEndDate: String
+  cfpNotificationChannel: String
+  cfpNotifyDate: String
+  cfpStartDate: String
+  city: String
+  contactEmail: String
+  country: String
+  earlyBirdEndDate: String
+  endDate: String
+  organizer: String
+  organizerAddress: String
+  organizerOrgNumber: String
+  primaryColor: String
+  programDate: String
+
+  """False when Sanity marks the edition cancelled or archived. Not null."""
+  published: Boolean
+  recordingsLiveDate: String
+  registrationCloseDate: String
+  registrationEnabled: Boolean
+  registrationLink: String
+  salesNotificationChannel: String
+  showVanityMetrics: Boolean
+  socialHashtag: String
+
+  """http(s) URLs. Not null."""
+  socialLinks: [String!]
+  speakerRegistrationLink: String
+  speakerSlackChannel: String
+  speakerSlackInviteUrl: String
+  speakersAnnouncedDate: String
+  sponsorDeadlineDate: String
+  sponsorEmail: String
+  sponsorRegistrationLink: String
+  startDate: String
+  tagline: String
+  title: String
+
+  """Zero or more."""
+  travelSupportBudget: Float
+  travelSupportPaymentDate: String
+  venueAddress: String
+  venueName: String
+
+  """`live` or `unlisted`. Not null."""
+  visibility: String
+  volunteerRegistrationLink: String
+  volunteerSlackInviteUrl: String
+}
+
+input PushSubscriptionInput {
+  endpoint: String!
+  keys: PushSubscriptionKeys!
+}
+
+input PushSubscriptionKeys {
+  auth: String!
+  p256dh: String!
+}
+
+type SiteRolloutFlags {
+  apiRead: Boolean!
+  identityLogin: Boolean!
+  d1Write: Boolean!
+}

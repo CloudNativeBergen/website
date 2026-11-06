@@ -48,7 +48,10 @@
     "doctor": "tsx scripts/doctor.ts",
     "backfill:conference": "tsx scripts/backfill-conference.ts",
     "scaffold:service": "tsx scripts/scaffold-service.ts",
-    "scaffold:check": "bash scripts/scaffold-check.sh"
+    "scaffold:check": "bash scripts/scaffold-check.sh",
+    "schema:update": "pnpm --filter @runkonf/api schema && gql.tada generate output",
+    "codegen": "gql.tada generate output",
+    "schema:check": "pnpm run schema:update && git diff --exit-code -- api/public-schema.graphql src/lib/konf-api/graphql-env.d.ts"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {
@@ -154,6 +157,7 @@
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-storybook": "^10.6.5",
+    "gql.tada": "^1.11.4",
     "groq-js": "2.0.1",
     "http-server": "^14.1.1",
     "jsdom": "^30.1.3",

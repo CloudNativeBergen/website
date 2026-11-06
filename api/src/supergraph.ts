@@ -13,7 +13,13 @@ import {
   pruneSchema,
 } from '@graphql-tools/utils'
 import { composeServices } from '@theguild/federation-composition'
-import { parse, type GraphQLSchema } from 'graphql'
+import {
+  buildSchema,
+  extendSchema,
+  parse,
+  printSchema,
+  type GraphQLSchema,
+} from 'graphql'
 import { schema as content } from '../../services/content/src/subgraph'
 import { schema as conference } from '../../services/conference/src/subgraph'
 import { schema as program } from '../../services/program/src/subgraph'
@@ -70,3 +76,12 @@ export const compose = (): string => composeAll().supergraphSdl!
 
 /** The client-facing schema the gateway serves (no join directives). */
 export const publicSdl = (): string => composeAll().publicSdl!
+
+/** Fields the gateway itself serves (see gateway.ts), outside any subgraph. */
+export const GATEWAY_TYPEDEFS = `
+  type SiteRolloutFlags { apiRead: Boolean! identityLogin: Boolean! d1Write: Boolean! }
+  extend type Query { health: String! rolloutFlags: SiteRolloutFlags }`
+
+/** What a client sees: the public SDL plus the gateway's own fields. */
+export const clientSdl = (): string =>
+  printSchema(extendSchema(buildSchema(publicSdl()), parse(GATEWAY_TYPEDEFS)))

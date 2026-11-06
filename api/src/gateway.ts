@@ -2,6 +2,7 @@
 // supergraph, subgraphs reached over service bindings. Per request it drops any
 // client envelope, resolves the tenant from Origin, verifies the identity JWT,
 // looks up orgRole live, and mints the one envelope the subgraphs trust.
+import { GATEWAY_TYPEDEFS } from './supergraph'
 import {
   createGatewayRuntime,
   type GatewayPlugin,
@@ -412,9 +413,7 @@ export function createGateway(supergraph: string) {
     // `rolloutFlags` (#1925): the resolved tenant's own flags, for the site's
     // signed server lane and for the tenant an authorized operator-lane caller
     // selected (#1956). Null for any other caller; it takes no argument.
-    additionalTypeDefs: `
-      type SiteRolloutFlags { apiRead: Boolean! identityLogin: Boolean! d1Write: Boolean! }
-      extend type Query { health: String! rolloutFlags: SiteRolloutFlags }`,
+    additionalTypeDefs: GATEWAY_TYPEDEFS,
     additionalResolvers: {
       Query: {
         health: () => 'ok',

@@ -5,6 +5,7 @@ import { konfApiHeaders, konfApiUrl } from '@/lib/konf-api/client'
 import { CONFERENCE_CACHE_LIFE } from './cache-life'
 import { normalizeDomain } from './domains'
 import type { Conference } from './types'
+import { graphql, type ResultOf } from '@/lib/konf-api/graphql'
 
 // Spike for #1772 (#1833): read core conference fields from the Konf GraphQL
 // gateway. The gateway resolves the tenant from the signed site assertion
@@ -39,16 +40,23 @@ const isDay = (v: unknown) =>
   !Number.isNaN(Date.parse(v)) &&
   new Date(`${v}T00:00:00Z`).toISOString().startsWith(v)
 
+// Literal (not built from SETTINGS_DATES) so gql.tada can type it; the
+// settings dates are listed in the same order.
 const QUERY = `{ conference {
   id title tagline description city country venueName venueAddress startDate endDate
   visibility logoBright logoDark logomarkBright logomarkDark backgroundPattern
   primaryColor accentColor registrationLink socialLinks homepageSections
-  ${SETTINGS_DATES.join(' ')} registrationEnabled organizer socialHashtag showVanityMetrics
-} conferenceLifecycle }`
+  cfpStartDate cfpEndDate cfpNotifyDate programDate travelSupportPaymentDate
+  earlyBirdEndDate registrationCloseDate speakersAnnouncedDate sponsorDeadlineDate
+  recordingsLiveDate registrationEnabled organizer socialHashtag showVanityMetrics
+} conferenceLifecycle }` as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
+const QUERY_DOC = graphql(QUERY)
+type QueryData = ResultOf<typeof QUERY_DOC>
 
-type ApiConference = Record<string, unknown> & {
-  primaryColor?: string | null
-  accentColor?: string | null
+type ApiConference = Partial<
+  Omit<NonNullable<QueryData['conference']>, 'homepageSections'>
+> & {
   /** A JSON string from the API, an array once fetchKonfApiConference returns. */
   homepageSections?: string | unknown[] | null
   /** tenant-directory's lifecycle (#1997); see mergeKonfApiConference. */
@@ -66,7 +74,10 @@ const OFF: RolloutFlags = {
   identityLogin: false,
   d1Write: false,
 }
-const FLAGS_QUERY = '{ rolloutFlags { apiRead identityLogin d1Write } }'
+const FLAGS_QUERY =
+  '{ rolloutFlags { apiRead identityLogin d1Write } }' as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
+const FLAGS_DOC = graphql(FLAGS_QUERY)
 // Every uncached render waits on this read, so keep it short (#1939).
 const FLAGS_TIMEOUT_MS = 500
 // Short, so a flag flipped in D1 lands within minutes.
@@ -128,7 +139,7 @@ async function readRolloutFlags(
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = (await res.json()) as {
-    data?: { rolloutFlags?: Partial<RolloutFlags> | null }
+    data?: ResultOf<typeof FLAGS_DOC>
     errors?: unknown[]
   }
   if (json.errors?.length) throw new Error(JSON.stringify(json.errors))
@@ -253,10 +264,7 @@ async function readKonfApiConference(
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = (await res.json()) as {
-    data?: {
-      conference?: ApiConference | null
-      conferenceLifecycle?: string | null
-    }
+    data?: QueryData
     errors?: unknown[]
   }
   if (json.errors?.length) throw new Error(JSON.stringify(json.errors))
@@ -269,7 +277,7 @@ async function readKonfApiConference(
     (lifecycle === 'cancelled' || lifecycle === 'archived')
   )
     return { id: conferenceId, conferenceLifecycle: lifecycle }
-  const api = json.data?.conference
+  const api: ApiConference | null | undefined = json.data?.conference
   if (!api) throw new Error('conference is null')
   if (lifecycle) api.conferenceLifecycle = lifecycle
   // Thrown inside the cached body so a wrong-tenant answer is never stored.
