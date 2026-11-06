@@ -59,6 +59,7 @@ const h = vi.hoisted(() => ({
   commit: vi.fn(),
   sanityFetch: vi.fn(),
   writeD1: vi.fn(),
+  set: vi.fn(),
 }))
 
 vi.mock('@/lib/konf-api/conference-write', () => ({
@@ -74,7 +75,9 @@ vi.mock('@/lib/organization/sanity', () => ({
 }))
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
-    patch: () => ({ set: () => ({ commit: h.commit }) }),
+    patch: () => ({
+      set: (u: unknown) => (h.set(u), { commit: h.commit }),
+    }),
     fetch: h.sanityFetch,
   },
   clientReadUncached: { fetch: vi.fn() },
@@ -402,6 +405,25 @@ describe('updatePageContent settings phase 1 (#2019)', () => {
     await tickets().admin.updatePageContent({ ticketCustomization })
     expect(h.writeD1).toHaveBeenCalledWith(CONF, { ticketCustomization })
     expect(order).toEqual(['d1', 'sanity'])
+  })
+
+  it('for a d1_write tenant, drops the flag from the Sanity object', async () => {
+    h.writeD1.mockResolvedValue(true)
+    h.commit.mockResolvedValue({})
+    await tickets().admin.updatePageContent({
+      ticketCustomization: { showVanityMetrics: true, heroHeadline: 'H' },
+    })
+    expect(h.set).toHaveBeenCalledWith({
+      ticketCustomization: { heroHeadline: 'H' },
+    })
+  })
+
+  it('for other tenants, Sanity keeps the whole object', async () => {
+    h.writeD1.mockResolvedValue(false)
+    h.commit.mockResolvedValue({})
+    const ticketCustomization = { showVanityMetrics: true, heroHeadline: 'H' }
+    await tickets().admin.updatePageContent({ ticketCustomization })
+    expect(h.set).toHaveBeenCalledWith({ ticketCustomization })
   })
 
   it('never touches Sanity when the D1 write refuses', async () => {

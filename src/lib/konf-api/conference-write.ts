@@ -34,9 +34,10 @@ const MOVED = new Set([
 ])
 
 /**
- * Settings phase 1 (#2019): also in `ConferencePatch`, but not yet read from
- * D1, so a d1_write tenant writes them to D1 AND Sanity. They join MOVED (and
- * stop reaching Sanity) with the read flip.
+ * Settings phase 1 (#2019), public fields: read from D1 through the merge
+ * (src/lib/conference/konf-api.ts), so for a d1_write tenant they go to D1
+ * only. `ticketCustomization.showVanityMetrics` is handled in
+ * movedConferencePatch and stripped by the tickets router.
  */
 const SETTINGS = new Set([
   'cfpStartDate',
@@ -49,12 +50,22 @@ const SETTINGS = new Set([
   'speakersAnnouncedDate',
   'sponsorDeadlineDate',
   'recordingsLiveDate',
-  'travelSupportBudget',
   'registrationEnabled',
   'organizer',
+  'socialHashtag',
+])
+
+/**
+ * Settings phase 1, members-only fields: in `ConferencePatch`, but the site
+ * has no server-side member read for them (the site lane is not an org
+ * member, and their readers include jobs with no signed-in user). So a
+ * d1_write tenant still writes them to D1 AND Sanity, and readers stay on
+ * Sanity, until such a read path exists.
+ */
+const SETTINGS_PRIVATE = new Set([
+  'travelSupportBudget',
   'organizerAddress',
   'organizerOrgNumber',
-  'socialHashtag',
   'analyticsPirschCode',
 ])
 
@@ -66,7 +77,7 @@ const SETTINGS = new Set([
 export function isMovedConferenceField(key: string): boolean {
   // lifecycleStatus is NOT moved: D1 stores only the derived `published`
   // boolean, so cancelled vs archived lives in Sanity alone.
-  return MOVED.has(key) || key === 'theme'
+  return MOVED.has(key) || SETTINGS.has(key) || key === 'theme'
 }
 
 /**
@@ -112,7 +123,7 @@ export function movedConferencePatch(
       // Sanity replaces the whole object, so an absent flag is an unset.
       const t = v as { showVanityMetrics?: boolean } | null
       out.showVanityMetrics = t?.showVanityMetrics ?? null
-    } else if (MOVED.has(k) || SETTINGS.has(k)) {
+    } else if (MOVED.has(k) || SETTINGS.has(k) || SETTINGS_PRIVATE.has(k)) {
       out[k] = v
     }
   }

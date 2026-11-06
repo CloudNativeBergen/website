@@ -11,10 +11,39 @@ import type { Conference } from './types'
 // (else Origin); anonymous is enough for public fields.
 const TIMEOUT_MS = 2000
 
+/**
+ * Settings phase 1 (#2019) dates. Several gate things (CFP open, registration,
+ * early bird), so only a real `YYYY-MM-DD` date from D1 is merged; null or
+ * anything else keeps Sanity's. The four members-only settings
+ * (organizerAddress, organizerOrgNumber, analyticsPirschCode,
+ * travelSupportBudget) are not read here: this read is cached across
+ * visitors and the site lane is not an org member, so they read as null.
+ */
+const SETTINGS_DATES = [
+  'cfpStartDate',
+  'cfpEndDate',
+  'cfpNotifyDate',
+  'programDate',
+  'travelSupportPaymentDate',
+  'earlyBirdEndDate',
+  'registrationCloseDate',
+  'speakersAnnouncedDate',
+  'sponsorDeadlineDate',
+  'recordingsLiveDate',
+] as const
+const DATE_KEYS = new Set<string>(SETTINGS_DATES)
+const BOOL_KEYS = new Set(['registrationEnabled'])
+const isDay = (v: unknown) =>
+  typeof v === 'string' &&
+  /^\d{4}-\d{2}-\d{2}$/.test(v) &&
+  !Number.isNaN(Date.parse(v)) &&
+  new Date(`${v}T00:00:00Z`).toISOString().startsWith(v)
+
 const QUERY = `{ conference {
   id title tagline description city country venueName venueAddress startDate endDate
   visibility logoBright logoDark logomarkBright logomarkDark backgroundPattern
   primaryColor accentColor registrationLink socialLinks homepageSections
+  ${SETTINGS_DATES.join(' ')} registrationEnabled organizer socialHashtag showVanityMetrics
 } conferenceLifecycle }`
 
 type ApiConference = Record<string, unknown> & {
@@ -277,12 +306,24 @@ export async function mergeKonfApiConference(
       accentColor,
       homepageSections,
       conferenceLifecycle: lc,
+      showVanityMetrics,
       ...rest
     } = api
     // Legacy rows fall back to the id for a blank title; keep Sanity's then.
     if (rest.title === id) delete rest.title
     const merged = { ...conference } as Record<string, unknown>
-    for (const [k, v] of Object.entries(rest)) if (v != null) merged[k] = v
+    for (const [k, v] of Object.entries(rest)) {
+      if (v == null) continue
+      // Conservative for gates: a bad D1 value keeps Sanity's, never opens.
+      if (DATE_KEYS.has(k) && !isDay(v)) continue
+      if (BOOL_KEYS.has(k) && typeof v !== 'boolean') continue
+      merged[k] = v
+    }
+    if (typeof showVanityMetrics === 'boolean')
+      merged.ticketCustomization = {
+        ...conference.ticketCustomization,
+        showVanityMetrics,
+      }
     if (lc === 'cancelled' || lc === 'archived') merged.lifecycleStatus = lc
     else if (lc === 'live') delete merged.lifecycleStatus
     if (primaryColor != null || accentColor != null) {
