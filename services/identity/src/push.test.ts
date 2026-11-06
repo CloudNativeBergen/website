@@ -51,7 +51,9 @@ vi.mock('cloudflare:workers', () => ({
 let mf: Miniflare
 let d1: D1Database
 let env: DataEnv
-let vapid: Required<Pick<PushEnv, 'VAPID_PUBLIC_KEY' | 'VAPID_PRIVATE_KEY' | 'VAPID_SUBJECT'>>
+let vapid: Required<
+  Pick<PushEnv, 'VAPID_PUBLIC_KEY' | 'VAPID_PRIVATE_KEY' | 'VAPID_SUBJECT'>
+>
 let vapidPublic: CryptoKey
 
 const b64u = (b: ArrayBuffer | Uint8Array) =>
@@ -87,8 +89,7 @@ beforeAll(async () => {
   vapidPublic = kp.publicKey
   vapid = {
     VAPID_PUBLIC_KEY: b64u(await crypto.subtle.exportKey('raw', kp.publicKey)),
-    VAPID_PRIVATE_KEY: (await crypto.subtle.exportKey('jwk', kp.privateKey))
-      .d!,
+    VAPID_PRIVATE_KEY: (await crypto.subtle.exportKey('jwk', kp.privateKey)).d!,
     VAPID_SUBJECT: 'mailto:hei@konf.app',
   }
   env = {
@@ -136,7 +137,11 @@ let n = 0
 async function newUser() {
   const ctx = await (await auth()).$context
   const u = await ctx.internalAdapter.createUser(
-    { email: `push-${++n}@example.com`, name: `User ${n}`, emailVerified: true },
+    {
+      email: `push-${++n}@example.com`,
+      name: `User ${n}`,
+      emailVerified: true,
+    },
     { method: 'admin' },
   )
   return u.id
@@ -219,7 +224,7 @@ async function browserKeys() {
 
 /** RFC 8291 §3.4 + RFC 8188, receiver side, in WebCrypto. */
 async function decrypt(
-  body: Uint8Array,
+  body: Uint8Array<ArrayBuffer>,
   k: Awaited<ReturnType<typeof browserKeys>>,
 ) {
   const salt = body.slice(0, 16)
@@ -241,9 +246,9 @@ async function decrypt(
     256,
   )
   const hkdf = async (
-    s: Uint8Array,
-    ikm: ArrayBuffer | Uint8Array,
-    info: Uint8Array,
+    s: BufferSource,
+    ikm: BufferSource,
+    info: BufferSource,
     len: number,
   ) =>
     new Uint8Array(
@@ -404,10 +409,15 @@ describe('encryption and VAPID', () => {
     )
     const h = sent[0].init.headers as Record<string, string>
     expect(h['content-encoding']).toBe('aes128gcm')
-    expect(await decrypt(sent[0].init.body as Uint8Array, k)).toEqual(data)
+    expect(
+      await decrypt(sent[0].init.body as Uint8Array<ArrayBuffer>, k),
+    ).toEqual(data)
     // Another browser's keys cannot open it.
     await expect(
-      decrypt(sent[0].init.body as Uint8Array, await browserKeys()),
+      decrypt(
+        sent[0].init.body as Uint8Array<ArrayBuffer>,
+        await browserKeys(),
+      ),
     ).rejects.toThrow()
   })
 
@@ -448,7 +458,11 @@ describe('recipients', () => {
   /** Every user gets one real subscription at FCM/<userId>. */
   async function subscribed(userId: string) {
     const k = await browserKeys()
-    await gql(tenant(userId), SUB, input(`${FCM}${userId}`, k.p256dh, k.authB64))
+    await gql(
+      tenant(userId),
+      SUB,
+      input(`${FCM}${userId}`, k.p256dh, k.authB64),
+    )
     return userId
   }
   const recipients = async () =>
@@ -523,7 +537,9 @@ describe('recipients', () => {
         .prepare(`SELECT name FROM ${t} WHERE id = ?`)
         .bind(id)
         .first<{ name: string }>())!.name
-    expect(await decrypt(sent[0].init.body as Uint8Array, k)).toEqual({
+    expect(
+      await decrypt(sent[0].init.body as Uint8Array<ArrayBuffer>, k),
+    ).toEqual({
       title: 'New member',
       body: `${await name('user', u)} joined ${await name('organization', orgId)}`,
       url: `https://my.konf.app/orgs/${orgId}/members`,
@@ -548,7 +564,7 @@ describe('recipients', () => {
   it('conference.settings_changed: org members except the actor, via the Push entrypoint', async () => {
     const { orgId, users } = await org('owner', 'admin', 'member')
     await org('owner') // another org's member hears nothing
-    await new Push().send({
+    await new Push({} as never, cf.env as never).send({
       type: 'conference.settings_changed',
       organizationId: orgId,
       conferenceId: 'c',
@@ -563,7 +579,7 @@ describe('recipients', () => {
       orgId,
       users: [u],
     } = await org('owner')
-    await new Push().send({
+    await new Push({} as never, cf.env as never).send({
       type: 'member.role_changed',
       organizationId: orgId,
       userId: u,
@@ -581,9 +597,7 @@ describe('recipients', () => {
         users: [owner],
       } = await org('owner')
       const op = await subscribed(await newUser())
-      await d1
-        .prepare('UPDATE user SET platformOperator = 0')
-        .run()
+      await d1.prepare('UPDATE user SET platformOperator = 0').run()
       await d1
         .prepare('UPDATE user SET platformOperator = 1 WHERE id = ?')
         .bind(op)

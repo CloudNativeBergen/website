@@ -34,8 +34,8 @@ export function isAllowedPushEndpoint(raw: string): boolean {
   // URL drops a default :443, so any port left is another one.
   if (url.protocol !== 'https:' || url.port || url.username || url.password)
     return false
+  // Names only: an IP literal (normalized by URL) never matches the list.
   const host = url.hostname
-  if (host.startsWith('[') || /^[\d.]+$/.test(host)) return false
   return HOSTS.includes(host) || SUFFIXES.some((s) => host.endsWith(s))
 }
 

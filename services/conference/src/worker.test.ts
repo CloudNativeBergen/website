@@ -617,7 +617,7 @@ describe('conference.settings_changed push event', () => {
     }
   })
 
-  it('carries ids, the title and the actor to identity\'s Push binding', async () => {
+  it("carries ids, the title and the actor to identity's Push binding", async () => {
     const { body } = await gql(tenant('org-a', 'conf-a', 'admin'), MUTATION, {
       input: { title: 'New' },
     })

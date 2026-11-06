@@ -12,9 +12,7 @@ import { orgWriteGate } from './org-write-gate'
 import graph, { type WorkerEnv } from './worker'
 
 /** LOGIN_TEST_PAGE: "1" on preview only (service.cue) serves GET /test. */
-type Env = WorkerEnv &
-  HandoffEnv &
-  PushEnv & { LOGIN_TEST_PAGE?: string }
+type Env = WorkerEnv & HandoffEnv & PushEnv & { LOGIN_TEST_PAGE?: string }
 
 /**
  * RPC for the gateway, reachable only over a service binding with

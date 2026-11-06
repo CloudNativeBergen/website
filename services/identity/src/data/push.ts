@@ -5,11 +5,7 @@
 // `cloudflare:workers` is imported lazily: api/scripts/compose.ts loads the
 // subgraph schema under Node, where the module does not exist.
 import type { PushEvent } from '@runkonf/tenancy'
-import {
-  sendWebPush,
-  type StoredSubscription,
-  type VapidEnv,
-} from './web-push'
+import { sendWebPush, type StoredSubscription, type VapidEnv } from './web-push'
 
 export interface PushEnv extends VapidEnv {
   DB: D1Database
@@ -45,7 +41,11 @@ function recipients(e: PushEvent): [string, unknown[]] {
   }
 }
 
-async function nameOf(db: D1Database, table: 'user' | 'organization', id: string) {
+async function nameOf(
+  db: D1Database,
+  table: 'user' | 'organization',
+  id: string,
+) {
   const row = await db
     .prepare(`SELECT name FROM ${table} WHERE id = ?1`)
     .bind(id)
@@ -112,7 +112,9 @@ export async function notify(env: PushEnv, e: PushEvent): Promise<void> {
     )
     for (const [i, o] of outcomes.entries()) {
       if (o.status === 'fulfilled' && o.value === 'gone')
-        await env.DB.prepare('DELETE FROM push_subscription WHERE endpoint = ?1')
+        await env.DB.prepare(
+          'DELETE FROM push_subscription WHERE endpoint = ?1',
+        )
           .bind(results[i].endpoint)
           .run()
       else if (o.status === 'rejected' || o.value === 'failed')
