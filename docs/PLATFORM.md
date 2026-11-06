@@ -86,6 +86,10 @@ D1 flags for all 4 conferences are set in tenant-directory D1 (`d1_override = 1`
 2. Delete `KONF_API_TENANTS`, `KONF_IDENTITY_TENANTS` and `KONF_D1_WRITE_TENANTS` from every Vercel environment and redeploy. Check that sign-in through identity and the settings save still work on 2026.cloudnativedays.no.
 3. Delete `listed()` and its three calls in `src/lib/conference/konf-api.ts`, and the `OVERRIDE_TENANTS` var with its check in `progressiveOverride` (`api/src/gateway.ts`), in one PR.
 
+## Production deploys
+
+`deploy-workers.yml` deploys on every push to main that touches `api/`, `services/` or `packages/`. The job runs in the GitHub environment `workers-production`. With no required reviewers configured there, production deploys run automatically; with reviewers, each run waits for approval. The repository owner controls that setting. A first job cancels older runs that are still `waiting` or `queued`, so the newest run always deploys all of main and an unapproved run cannot block the queue. A run that is in progress (for example applying migrations) is never cancelled.
+
 ## Gateway URL
 
 `KONF_API_URL` is the gateway the site calls, read in one place (`konfApiUrl()` in `src/lib/konf-api/client.ts`). Unset, it defaults to `https://api.konf.app/graphql` only when `VERCEL_ENV` is `production` or unset (local). On a Vercel preview or development deploy with it unset, the API is treated as off and the site reads and writes Sanity only, so a preview never reaches production. Any other non-Vercel runtime (Docker, `next start` in CI) counts as unset and defaults to production, so set `KONF_API_URL` there if you also set the tenant flags. Set it on Vercel Preview to the preview gateway: `https://konf-api-preview.<account>.workers.dev/graphql` (Worker `konf-api-preview`, `api/wrangler.jsonc` `env.preview`; the account subdomain is in the Cloudflare dashboard).
