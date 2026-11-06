@@ -133,6 +133,12 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
             await audit(action, a.userId, a.providerId)
           },
         },
+        // Unlink (#1981; /unlink-account refuses the last account itself).
+        delete: {
+          after: async (a) => {
+            await audit('account.unlinked', a.userId, a.providerId)
+          },
+        },
       },
       session: {
         create: {
@@ -149,6 +155,18 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
       before: createAuthMiddleware(async (ctx) => {
         const actor = await actAs.get()
         if (actor) ctx.context.session = actor as never
+        // Linking follows the sign-in rule (#807, #1981): it joins only onto a
+        // local email we hold as verified. Better Auth checks the provider
+        // side (verified, same email, not another user's account) itself.
+        if (ctx.path === '/link-social') {
+          const session = await getSessionFromCtx(ctx)
+          if (!session) throw new APIError('UNAUTHORIZED')
+          if (!session.user.emailVerified)
+            throw new APIError('FORBIDDEN', {
+              message: 'Verify your email before linking another account',
+            })
+          return
+        }
         if (ctx.path !== '/organization/invite-member' || !ctx.body?.resend)
           return
         // Fail closed: every early exit refuses rather than skipping the check.
