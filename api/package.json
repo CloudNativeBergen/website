@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "compose": "tsx scripts/compose.ts",
+    "schema": "tsx scripts/schema.ts",
     "dev": "pnpm compose && wrangler dev",
     "build": "pnpm compose && wrangler deploy --dry-run --outdir dist",
     "test": "vitest run --root .. api/src/",

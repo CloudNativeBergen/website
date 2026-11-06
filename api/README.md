@@ -21,6 +21,31 @@ are reached over service bindings, never HTTP.
   (no `@tag(internal)`, no unreachable types); `pnpm compose` writes
   `supergraph.graphql` (not committed; `dev` and `build` run it)
 
+- `public-schema.graphql`: the schema clients see (public contract plus the
+  gateway's own `health` and `rolloutFlags`), checked in so schema changes show
+  in PR diffs. `pnpm run schema:update` (repo root) rewrites it and the site's
+  types; CI (`pnpm run schema:check`) fails when either is stale. It still
+  includes `@tag(operator)` fields, which only a platform operator may call.
+
+## Typed queries
+
+The site types its gateway queries with [gql.tada](https://gql-tada.0no.co):
+`src/lib/konf-api/graphql-env.d.ts` is generated from `public-schema.graphql`
+(`pnpm run codegen`), and `ResultOf<typeof graphql(QUERY)>` gives a query's
+`data` type. Query strings must be literals (`as const`) for this to work.
+
+kontroll (`RunKonf/kontroll`) does not build against this repo. It consumes the
+snapshot from `main` and generates its own types:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/CloudNativeBergen/website/main/api/public-schema.graphql -o schema.graphql
+```
+
+Point gql.tada (`schema` in its tsconfig plugin entry) or graphql-codegen
+(`schema: schema.graphql`) at that file and commit both, so a gateway change
+shows up as a diff there too. Fetching a pinned commit SHA instead of `main`
+makes the update deliberate.
+
 Domain code comes from the website's `src/lib` through the `@/*` path alias
 (`tsconfig.json`). Never copy it here.
 
