@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
   apiRead: true,
   apiCalls: 0,
   apiFails: false,
+  noDays: false,
 }))
 
 vi.mock('@/lib/conference/konf-api', async (importOriginal) => {
@@ -191,7 +192,8 @@ const t = { orgId: 'org', conferenceId: 'conf' }
 const context = {
   data: {
     program: () => ({
-      program: () => source.program(t),
+      // Before programDate the API serves no days.
+      program: async () => (h.noDays ? [] : source.program(t)),
       talk: (id: string) => source.talk(t, id),
       speakers: () => source.speakers(t),
       speaker: (id: string) => source.speaker(t, id),
@@ -235,6 +237,7 @@ async function both<T>(fn: () => Promise<T>) {
 beforeEach(() => {
   h.apiRead = true
   h.apiFails = false
+  h.noDays = false
   queries.length = 0
   delete process.env.KONF_API_DISABLED
   process.env.KONF_API_URL = 'https://gateway.test/graphql'
@@ -275,6 +278,20 @@ describe('public program seams through the API (#1772)', () => {
     )
     // One root per query.
     expect(queries.filter((q) => q.includes('program'))).toHaveLength(1)
+  })
+
+  it('schedule: no API days (before programDate) gives Sanity', async () => {
+    h.apiRead = false
+    const want = (await getConferenceForDomain('a.example', { schedule: true }))
+      .conference
+    h.apiRead = true
+    h.noDays = true
+    const calls = h.apiCalls
+    const got = (await getConferenceForDomain('a.example', { schedule: true }))
+      .conference
+    expect(h.apiCalls).toBeGreaterThan(calls)
+    expect(got).toEqual(want)
+    expect(schedules(got)).toHaveLength(1)
   })
 
   it('schedule: the confirmed-only view narrows the API days alike', async () => {
