@@ -9,6 +9,8 @@ import {
   type Env,
 } from '../../scripts/secrets-sync'
 
+type Opts = { cwd: string; input?: Buffer }
+
 const root = join(__dirname, '..', '..')
 const envs: Env[] = ['preview', 'production']
 const services = [
@@ -84,7 +86,7 @@ describe('secrets', () => {
   })
 
   it('--check reports only declared names missing from wrangler secret list', () => {
-    const exec = vi.fn(() =>
+    const exec = vi.fn((_cmd: string, _args: string[], _opts: Opts) =>
       Buffer.from(
         JSON.stringify([
           { name: 'ENVELOPE_PRIVATE_KEY', type: 'secret_text' },
@@ -110,7 +112,7 @@ describe('secrets', () => {
   })
 
   it('sync pipes each fnox value to wrangler and logs only names', () => {
-    const exec = vi.fn((cmd: string, args: string[]) =>
+    const exec = vi.fn((cmd: string, args: string[], _opts: Opts) =>
       Buffer.from(cmd === 'fnox' ? `value-of-${args[1]}` : ''),
     )
     const log = vi.fn()
@@ -120,7 +122,7 @@ describe('secrets', () => {
       'GATEWAY_PUBLIC_KEY',
       'SANITY_API_TOKEN_READ',
     ])
-    expect(String(puts[0][2].input)).toBe(
+    expect(String(puts[0]?.[2].input)).toBe(
       'value-of-KONF_PREVIEW_GATEWAY_PUBLIC_KEY',
     )
     expect(puts[0][1]).toContain('preview')
