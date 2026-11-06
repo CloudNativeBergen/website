@@ -387,6 +387,52 @@ describe('SSRF guard', () => {
     expect(sent[0].init.signal).toBeInstanceOf(AbortSignal)
   })
 
+  it('a slow endpoint is aborted by the 5 s timeout (assert the fetch received an AbortSignal that aborts, using fake timers)', async () => {
+    vi.useFakeTimers()
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, 'timeout')
+      .mockImplementation((ms) => {
+        const c = new AbortController()
+        setTimeout(
+          () => c.abort(new DOMException('TimeoutError', 'TimeoutError')),
+          ms,
+        )
+        return c.signal
+      })
+    try {
+      let receivedSignal: AbortSignal | undefined
+      let onFetchCalled!: () => void
+      const fetchCalled = new Promise<void>((r) => {
+        onFetchCalled = r
+      })
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((_url: string, init: RequestInit) => {
+          receivedSignal = init.signal as AbortSignal
+          onFetchCalled()
+          return new Promise((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () =>
+              reject(init.signal?.reason),
+            )
+          })
+        }),
+      )
+      const pushPromise = sendWebPush(vapid, sub, data)
+      await fetchCalled
+      expect(timeoutSpy).toHaveBeenCalledWith(5000)
+      expect(receivedSignal).toBeInstanceOf(AbortSignal)
+      expect(receivedSignal?.aborted).toBe(false)
+
+      const advancePromise = vi.advanceTimersByTimeAsync(5000)
+      await expect(pushPromise).rejects.toThrow()
+      await advancePromise
+      expect(receivedSignal?.aborted).toBe(true)
+    } finally {
+      timeoutSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
   it.each([
     [201, 'ok'],
     [404, 'gone'],
@@ -660,5 +706,115 @@ describe('recipients', () => {
       expect.stringContaining('push.send_failed'),
     )
     err.mockRestore()
+  })
+
+  async function seedPlatformOperators(count: number, prefix: string) {
+    await d1.prepare('UPDATE user SET platformOperator = 0').run()
+    const k = await browserKeys()
+    const stmts: D1PreparedStatement[] = []
+    for (let i = 0; i < count; i++) {
+      const uid = `${prefix}-u-${i}`
+      const ep = `${FCM}${prefix}-${i}`
+      stmts.push(
+        d1
+          .prepare(
+            'INSERT INTO user (id, name, email, platformOperator) VALUES (?1, ?1, ?2, 1)',
+          )
+          .bind(uid, `${uid}@test.example`),
+        d1
+          .prepare(
+            'INSERT INTO push_subscription (id, user_id, endpoint, p256dh, auth, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
+          )
+          .bind(`sub-${uid}`, uid, ep, k.p256dh, k.authB64, Date.now()),
+      )
+    }
+    for (let i = 0; i < stmts.length; i += 100) {
+      await d1.batch(stmts.slice(i, i + 100))
+    }
+  }
+
+  it('120 recipients are all sent in chunks of at most 50', async () => {
+    await seedPlatformOperators(120, 'bulk120')
+    let active = 0
+    let maxConcurrent = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        active++
+        maxConcurrent = Math.max(maxConcurrent, active)
+        sent.push({ url, init })
+        await new Promise((r) => setTimeout(r, 1))
+        active--
+        return new Response(null, { status: 201 })
+      }),
+    )
+    await notify(cf.env as unknown as PushEnv, {
+      type: 'parity.drift',
+      conferenceIds: ['c1'],
+    })
+    expect(sent).toHaveLength(120)
+    expect(maxConcurrent).toBeLessThanOrEqual(50)
+  })
+
+  it('the 500 cap drops the rest and warns', async () => {
+    await seedPlatformOperators(550, 'bulk550')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await notify(cf.env as unknown as PushEnv, {
+      type: 'parity.drift',
+      conferenceIds: ['c1'],
+    })
+    expect(sent).toHaveLength(500)
+    expect(warn).toHaveBeenCalledTimes(1)
+    const warnArg = warn.mock.calls[0][0]
+    expect(JSON.parse(warnArg)).toMatchObject({
+      type: 'parity.drift',
+      dropped: 50,
+    })
+    expect(warnArg).not.toContain(FCM)
+    expect(warnArg).not.toContain(P256DH)
+    expect(warnArg).not.toContain(AUTH)
+    warn.mockRestore()
+  })
+
+  it('three 410 endpoints are deleted with a single statement (assert the rows are gone and the number of DELETE statements)', async () => {
+    await seedPlatformOperators(3, 'gone3')
+    const ep1 = `${FCM}gone3-0`
+    const ep2 = `${FCM}gone3-1`
+    const ep3 = `${FCM}gone3-2`
+    expect(await rows(ep1)).toHaveLength(1)
+    expect(await rows(ep2)).toHaveLength(1)
+    expect(await rows(ep3)).toHaveLength(1)
+
+    const deleteStatements: string[] = []
+    const dbProxy = new Proxy(d1, {
+      get(target, prop, receiver) {
+        if (prop === 'prepare') {
+          return (sql: string) => {
+            if (sql.includes('DELETE FROM push_subscription')) {
+              deleteStatements.push(sql)
+            }
+            return target.prepare(sql)
+          }
+        }
+        return Reflect.get(target, prop, receiver)
+      },
+    })
+
+    status = 410
+    await notify({ ...cf.env, DB: dbProxy } as unknown as PushEnv, {
+      type: 'parity.drift',
+      conferenceIds: ['c1'],
+    })
+
+    // Assert the rows are gone
+    expect(await rows(ep1)).toEqual([])
+    expect(await rows(ep2)).toEqual([])
+    expect(await rows(ep3)).toEqual([])
+
+    // Assert the number of DELETE statements is exactly 1
+    expect(deleteStatements).toHaveLength(1)
+    expect(deleteStatements[0]).toMatch(
+      /DELETE FROM push_subscription WHERE endpoint IN \(\?1,\?2,\?3\)/,
+    )
   })
 })

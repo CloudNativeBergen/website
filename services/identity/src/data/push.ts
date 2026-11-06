@@ -94,6 +94,13 @@ export async function message(db: D1Database, e: PushEvent) {
 const log = (event: string, e: PushEvent, extra?: object) =>
   console.error(JSON.stringify({ event, type: e.type, ...extra }))
 
+const warn = (event: string, e: PushEvent, extra?: object) =>
+  console.warn(JSON.stringify({ event, type: e.type, ...extra }))
+
+export const MAX_RECIPIENTS = 500
+export const CHUNK_SIZE = 50
+export const MAX_DELETE_CHUNK = 90
+
 /** Never rejects. Deletes subscriptions the push service calls gone (404/410). */
 export async function notify(env: PushEnv, e: PushEvent): Promise<void> {
   try {
@@ -105,27 +112,41 @@ export async function notify(env: PushEnv, e: PushEvent): Promise<void> {
       .bind(...binds)
       .all<StoredSubscription>()
     if (!results.length) return
+    let targets = results
+    if (targets.length > MAX_RECIPIENTS) {
+      const dropped = targets.length - MAX_RECIPIENTS
+      warn('push.recipients_capped', e, { dropped })
+      targets = targets.slice(0, MAX_RECIPIENTS)
+    }
     const data = await message(env.DB, e)
-    // ponytail: unbounded fan-out; batch if an org grows past a few hundred devices.
-    const outcomes = await Promise.allSettled(
-      results.map((s) => sendWebPush(vapid, s, data)),
-    )
-    for (const [i, o] of outcomes.entries()) {
-      if (o.status === 'fulfilled' && o.value === 'gone')
-        await env.DB.prepare(
-          'DELETE FROM push_subscription WHERE endpoint = ?1',
-        )
-          .bind(results[i].endpoint)
-          .run()
-      else if (o.status === 'rejected' || o.value === 'failed')
-        log('push.send_failed', e, {
-          error:
-            o.status === 'rejected'
-              ? o.reason instanceof Error
-                ? o.reason.message
-                : 'unknown'
-              : 'status',
-        })
+    const gone: string[] = []
+    for (let i = 0; i < targets.length; i += CHUNK_SIZE) {
+      const chunk = targets.slice(i, i + CHUNK_SIZE)
+      const outcomes = await Promise.allSettled(
+        chunk.map((s) => sendWebPush(vapid, s, data)),
+      )
+      for (const [ci, o] of outcomes.entries()) {
+        if (o.status === 'fulfilled' && o.value === 'gone')
+          gone.push(chunk[ci].endpoint)
+        else if (o.status === 'rejected' || o.value === 'failed')
+          log('push.send_failed', e, {
+            error:
+              o.status === 'rejected'
+                ? o.reason instanceof Error
+                  ? o.reason.message
+                  : 'unknown'
+                : 'status',
+          })
+      }
+    }
+    for (let i = 0; i < gone.length; i += MAX_DELETE_CHUNK) {
+      const chunk = gone.slice(i, i + MAX_DELETE_CHUNK)
+      const placeholders = chunk.map((_, idx) => `?${idx + 1}`).join(',')
+      await env.DB.prepare(
+        `DELETE FROM push_subscription WHERE endpoint IN (${placeholders})`,
+      )
+        .bind(...chunk)
+        .run()
     }
   } catch (err) {
     log('push.send_failed', e, {
