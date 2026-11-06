@@ -93,6 +93,59 @@ run = "fnox exec -- pnpm run manage-orphaned-files"
 description = "Install dependencies"
 run = "pnpm install"
 
+# Local API (#1772): gateway + every subgraph in one wrangler dev, local D1
+# with a seeded fixture, local-only keys. docs/PLATFORM.md "Local development".
+[tasks."dev:api:setup"]
+description = "Local API: dev keys, D1 migrations and seed fixture (local only)"
+run = '''
+set -e
+W=api/node_modules/.bin/wrangler
+P=.wrangler/dev-api
+node scripts/dev-api.mjs setup
+for s in identity tenant-directory conference; do
+  CI=1 $W d1 migrations apply DB --local -e preview -c services/$s/wrangler.jsonc --persist-to $P >/dev/null
+  $W d1 execute DB --local -e preview -c services/$s/wrangler.jsonc --persist-to $P --file scripts/dev-seed/$s.sql >/dev/null
+done
+$W d1 execute DB --local -e preview -c services/identity/wrangler.jsonc --persist-to $P --file $P/jwks.sql >/dev/null
+pnpm --filter @runkonf/api -s compose
+'''
+
+[tasks."dev:api"]
+description = "Run the gateway and every subgraph locally on http://localhost:8787"
+depends = ["dev:api:setup"]
+run = '''
+cat <<'MSG'
+
+Local gateway: http://localhost:8787/graphql
+
+  # health, anonymous
+  curl -s localhost:8787/graphql -H 'content-type: application/json' -d '{"query":"{ health }"}'
+
+  # tenant read, tenant resolved from Origin
+  curl -s localhost:8787/graphql -H 'content-type: application/json' \
+    -H 'origin: https://cndn.konf.localhost' \
+    -d '{"query":"{ conferenceLifecycle rolloutFlags { apiRead } conference { title city } }"}'
+
+  # operator lane: myOrganizations with a dev token
+  curl -s localhost:8787/graphql -H 'content-type: application/json' \
+    -H 'origin: http://localhost:3000' -H "authorization: Bearer $(mise run -q dev:token)" \
+    -d '{"query":"{ myOrganizations { name role conferenceEditions { id } } }"}'
+
+MSG
+exec api/node_modules/.bin/wrangler dev -e preview --persist-to .wrangler/dev-api --port 8787 \
+  -c api/wrangler.jsonc -c services/identity/wrangler.jsonc \
+  -c services/tenant-directory/wrangler.jsonc -c services/content/wrangler.jsonc \
+  -c services/conference/wrangler.jsonc -c services/program/wrangler.jsonc
+'''
+
+[tasks."dev:token"]
+description = "Local API: mint a 5-minute dev identity JWT (args: [userId] [origin])"
+run = "node scripts/dev-api.mjs token"
+
+[tasks."dev:api:reset"]
+description = "Local API: wipe the local D1 state (dev keys stay)"
+run = "rm -rf .wrangler/dev-api/v3"
+
 [env]
 NEXT_TELEMETRY_DISABLED = "1"
 NEXT_PUBLIC_SANITY_PROJECT_ID = "mvzwvw14"

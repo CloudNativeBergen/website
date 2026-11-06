@@ -62,3 +62,7 @@ certificates
 # Vitest blob reports (`--reporter=blob`, merged in CI)
 .vitest/
 evals/content-judgement/.image-cache/
+
+# Local API (mise run dev:api): wrangler state and local-only dev keys
+.wrangler/
+.dev.vars*
