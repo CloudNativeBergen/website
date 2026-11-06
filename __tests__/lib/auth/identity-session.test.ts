@@ -6,6 +6,11 @@
  * NextAuth session.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../helpers/rolloutFlags')).fakeRolloutFlags,
+}))
+import { flagTenants } from '../../helpers/rolloutFlags'
 
 const h = vi.hoisted(() => {
   const nextAuthSession = { value: null as unknown }
@@ -126,7 +131,7 @@ beforeEach(() => {
   // A fresh cookie per test, so the per-instance memo never carries over.
   h.cookie.value = `tok-${++n}`
   h.host.value = 'conf.example'
-  vi.stubEnv('KONF_IDENTITY_TENANTS', 'org-1')
+  flagTenants('identityLogin', 'org-1')
   vi.stubEnv('IDENTITY_URL', 'https://id.test')
   vi.stubGlobal('fetch', h.fetch)
   h.nextAuthSession.value = null
@@ -161,13 +166,13 @@ describe('getAuthSession with an identity session', () => {
   })
 
   it('ignores the cookie when the tenant is not flagged', async () => {
-    vi.stubEnv('KONF_IDENTITY_TENANTS', 'org-other')
+    flagTenants('identityLogin', 'org-other')
     expect(await getAuthSession()).toBeNull()
     expect(h.fetch).not.toHaveBeenCalled()
   })
 
   it('ignores the cookie when the flag is unset', async () => {
-    vi.stubEnv('KONF_IDENTITY_TENANTS', '')
+    flagTenants('identityLogin', '')
     expect(await getAuthSession()).toBeNull()
     expect(h.fetch).not.toHaveBeenCalled()
   })
@@ -294,7 +299,7 @@ describe('/signin with an identity session', () => {
   })
 
   it('renders the page with the flag unset', async () => {
-    vi.stubEnv('KONF_IDENTITY_TENANTS', '')
+    flagTenants('identityLogin', '')
     await expect(render('/cfp/list')).resolves.toBeTruthy()
   })
 })
@@ -314,7 +319,7 @@ describe('GET /api/auth/session with an identity session', () => {
   })
 
   it('answers null when the tenant is not flagged', async () => {
-    vi.stubEnv('KONF_IDENTITY_TENANTS', 'org-other')
+    flagTenants('identityLogin', 'org-other')
     expect(await (await sessionRequest()).json()).toBeNull()
     expect(h.fetch).not.toHaveBeenCalled()
   })

@@ -1,5 +1,11 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 
 const getAuthSession = vi.fn()
 const testMode = { value: false }
@@ -25,7 +31,7 @@ const SITE = 'https://conf.example'
 const fetchMock = vi.fn()
 
 beforeEach(() => {
-  vi.stubEnv('KONF_IDENTITY_TENANTS', 'org-1')
+  flagTenants('identityLogin', 'org-1')
   vi.stubEnv('IDENTITY_URL', 'https://id.test')
   vi.stubEnv('IDENTITY_EXCHANGE_SECRET', 'x-secret')
   vi.stubEnv('IDENTITY_UPGRADE_SECRET', 'u-secret')
@@ -65,9 +71,9 @@ const SESSION = { session: 'tok.sig', expiresAt: '2030-01-01T00:00:00Z' }
 
 describe('flag off', () => {
   it.each(['', 'conf-other'])(
-    'KONF_IDENTITY_TENANTS=%j: 404, no identity call, no session read',
+    'identityLogin for %j: 404, no identity call, no session read',
     async (v) => {
-      vi.stubEnv('KONF_IDENTITY_TENANTS', v)
+      flagTenants('identityLogin', v)
       expect((await get('token=t')).status).toBe(404)
       expect((await get('provider=github')).status).toBe(404)
       expect((await token()).status).toBe(404)

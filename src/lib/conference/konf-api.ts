@@ -38,6 +38,8 @@ const OFF: RolloutFlags = {
   d1Write: false,
 }
 const FLAGS_QUERY = '{ rolloutFlags { apiRead identityLogin d1Write } }'
+// Every uncached render waits on this read, so keep it short (#1939).
+const FLAGS_TIMEOUT_MS = 500
 // Short, so a flag flipped in D1 lands within minutes.
 const FLAGS_CACHE_LIFE = { stale: 60, revalidate: 300, expire: 3600 } as const
 
@@ -92,7 +94,7 @@ async function readRolloutFlags(
     method: 'POST',
     headers: await konfApiHeaders(host),
     body: JSON.stringify({ query: FLAGS_QUERY }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(FLAGS_TIMEOUT_MS),
     cache: 'no-store',
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)

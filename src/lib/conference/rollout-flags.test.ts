@@ -55,6 +55,13 @@ describe('rolloutFlags (#1925)', () => {
     expect(init.headers['x-konf-service']).toBe('signed:a.example')
   })
 
+  it('gives the read 500 ms (#1939)', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    reply(null)
+    await rolloutFlags('a.example', conf)
+    expect(timeout).toHaveBeenCalledWith(500)
+  })
+
   it('counts only a literal true', async () => {
     reply({ apiRead: 'true', identityLogin: 1, d1Write: null })
     expect(await rolloutFlags('a.example', conf)).toEqual(off)
