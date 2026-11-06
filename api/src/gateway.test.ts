@@ -785,6 +785,35 @@ describe('gateway', () => {
       }
     })
 
+    // Hive fills data: { conference: null }, so a 5xx alert alone sees nothing.
+    it('answers 200 with only the masked event when a subgraph sends no data', async () => {
+      const { env } = makeEnv()
+      ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+        Response.json({
+          errors: [{ message: 'secret detail', extensions: { code: 'X' } }],
+        })
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        const res = await gateway.fetch(
+          post({ query: '{ conference { id } }' }),
+          env,
+        )
+        expect({ status: res.status, events: events(error) }).toEqual({
+          status: 200,
+          events: [
+            {
+              event: 'gateway.error.masked',
+              subgraph: 'content',
+              path: 'conference',
+              code: 'X',
+            },
+          ],
+        })
+      } finally {
+        error.mockRestore()
+      }
+    })
+
     it('caps a subgraph code in the masked event', () => {
       const error = vi.spyOn(console, 'error').mockImplementation(() => {})
       try {

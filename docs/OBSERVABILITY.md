@@ -187,46 +187,25 @@ Workers check for optional incoming webhook secrets in code. If unset, events ar
 
 ### Gateway Events (`konf-api`)
 
-Both are JSON lines on `console.error`, emitted from `api/src/gateway.ts`. String fields are capped at 64 characters; no message, stack or request body is logged.
+All three are JSON lines on `console.error`, emitted from `api/src/gateway.ts`. String fields are capped at 64 characters, and the events carry no message, stack, token or request body. Yoga still logs every masked error's original (message and stack) on `console.error`, and with the `observability` block those lines reach Grafana too.
 
 #### `gateway.response.5xx`
 
-- **When it fires:** The gateway answers with a status of 500 or more, e.g. the 503 `UNAVAILABLE` when tenant-directory fails.
-- **Fields:** `event`, `status`
+- **When it fires:** The gateway answers 500 or more, e.g. the 503 `UNAVAILABLE` when tenant-directory fails, or an uncaught throw such as an unset `ENVELOPE_PRIVATE_KEY` (logged with `uncaught: true`, then rethrown; the runtime answers 500).
+- **Fields:** `event`, `status`, `uncaught` (only for a throw)
 - **Suggested alert:** Critical (condition: `count > 0` over 5 min).
 
 #### `gateway.error.masked`
 
-- **When it fires:** For each error masked to `Unexpected error.` / `INTERNAL_SERVER_ERROR`: a subgraph error outside the safe codes, a subgraph that answered non-2xx (including a 403 `TENANT_MISMATCH` from a stale `GATEWAY_PUBLIC_KEY`), or an unexpected gateway error. These responses are HTTP 200, so `gateway.response.5xx` does not see them. Safe codes (`BAD_USER_INPUT`, `NOT_FOUND`, `FORBIDDEN`, `UNAUTHENTICATED`) do not log it.
+- **When it fires:** Once per error masked to `Unexpected error.` / `INTERNAL_SERVER_ERROR`: a subgraph error outside the safe codes, a subgraph that answered non-2xx (including the 403 `TENANT_MISMATCH` a subgraph without the current `GATEWAY_PUBLIC_KEY` answers), or an unexpected gateway error. The response is HTTP 200 (Hive fills `data` with nulls even when a subgraph sends none), so `gateway.response.5xx` does not see it. Safe codes (`BAD_USER_INPUT`, `NOT_FOUND`, `FORBIDDEN`, `UNAUTHENTICATED`) do not log it. One query touching N failing fields logs N events.
 - **Fields:** `event`, `subgraph` (Hive `serviceName`, when the error came from a subgraph), `path` (dot-joined), `code` (the original code, when it had one)
 - **Suggested alert:** Critical (condition: `count > 0` over 5 min). This is the signal the 2026-11-04 missing-key incident produced.
 
-### Gateway Responses Without an Event (inferred)
+#### `gateway.rejected`
 
-These are status responses or GraphQL errors with no structured log line:
-
-#### Gateway Rate Limits (`rate limits`) (inferred)
-
-- **Emitting Worker:** `konf-api` ([api/src/gateway.ts:353](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L353), [L458](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L458), [L512](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L512))
-- **When it fires:**
-  - IP pre-check rate limit (`API_IP_LIMITER`, 1200 req/min).
-  - Caller rate limit (`API_LIMITER`, 300 req/min).
-  - Mutation rate limit (`API_MUTATION_LIMITER`, 60 mut/min).
-- **Emitted format:** (inferred) Returns HTTP 429 response body `{ errors: [{ message: "too many requests", extensions: { code: "RATE_LIMITED" } }] }` or GraphQL error with `RATE_LIMITED` code and status 429. Also recorded in Cloudflare Rate Limiting metrics.
-- **Fields:** (inferred) HTTP status 429, error `message`, `extensions.code`
-- **Suggested alert:** Warning / High (condition: 429 rate > 5/min).
-
-#### Gateway Authz / Authentication Failures (`authz`) (inferred)
-
-- **Emitting Worker:** `konf-api` ([api/src/gateway.ts:307](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L307), [L487](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L487), [L533](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L533), [L554](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L554), [L590](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L590))
-- **When it fires:**
-  - Unauthenticated operator lane access or malformed token (HTTP 401 `UNAUTHENTICATED`).
-  - Unknown user ID (HTTP 401 `UNAUTHENTICATED`).
-  - Caller not authorized for tenant (HTTP 403 `FORBIDDEN`).
-  - Unauthorized GraphQL introspection attempt (HTTP 403 `FORBIDDEN`).
-- **Emitted format:** (inferred) Returns HTTP 401 / 403 JSON responses or GraphQL errors with extension codes `UNAUTHENTICATED` or `FORBIDDEN`.
-- **Fields:** (inferred) HTTP status 401/403, error `message`, `extensions.code`
-- **Suggested alert:** Warning (condition: 401/403 rate spike above baseline).
+- **When it fires:** The gateway refuses a request itself, before any subgraph: 429 `RATE_LIMITED` (per IP, 1200/min; per caller, 300/min; mutation budget, 60/min, with `limit: "mutation"`), 401 `UNAUTHENTICATED` (operator lane without a session, invalid identity token, unknown user), 403 `FORBIDDEN` (not authorized for the tenant) and 400 `BAD_USER_INPUT` (unknown operator tenant). The introspection refusal (403) does not log it.
+- **Fields:** `event`, `status`, `code`, `limit` (mutation budget only)
+- **Suggested alert:** Warning on `status = 429` above 5/min; Warning on a 401/403 spike over baseline. Cloudflare's rate limiting metrics count the 429s too.
 
 #### Domain & Hostname Reconciliation Errors (inferred)
 
