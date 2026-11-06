@@ -1,30 +1,30 @@
 # Edition Lifecycle: Next Edition, Archiving, and Triggers (#1990)
 
-Status: Design doc only (part of #1772, resolving #1990). No code changes.
+Status: Design doc (part of #1772, resolving #1990). Decisions ratified 2026-11-06.
 
 ## 1. Current State
 
-Today, lifecycle state is fragmented across stores and largely manual:
+Lifecycle state is split across stores:
 
-- **D1 lifecycle is derived only from Sanity `lifecycleStatus`:** Tenant-directory D1 stores `conferences.lifecycle` (`draft | live | archived`, `services/tenant-directory/migrations/0001_init.sql:17`). In `services/tenant-directory/scripts/backfill.ts:124-130`, `cancelled` and `archived` map to `archived`, and everything else maps to `live`. Conference `endDate` is completely ignored.
-- **No archiving job exists:** Ended editions (e.g., CNDN 2024 and 2025) remain `lifecycleStatus: null` in Sanity and `lifecycle: 'live'` in D1 indefinitely (#1990).
-- **Sanity homepage override vs D1 lifecycle:** Sanity `lifecycleStatus` (`cancelled | archived`, `sanity/schemaTypes/conference.ts:2229-2248`) is merely a homepage presentation override (`src/lib/homepage/lifecycle.ts:25-50, 331-332`) toggled via `updateLifecycleStatus` (`src/server/routers/conference.ts:465-477`). It is not an engine state. Tenant-directory exposes its D1 `lifecycle` as `lifecycleStatus` to GraphQL (`services/tenant-directory/src/subgraph.ts:50-58`), but Kontroll also reads Sanity directly (`src/lib/conference/contract.ts:54, 88`), seeing the stale status.
-- **Existing new-edition flow is Sanity-only:** The site wizard (`src/app/(admin)/admin/settings/new-edition/page.tsx:1-85`) calls `api.conference.createEdition` (`src/server/routers/conference.ts:1520-1685`). It clones settings into a new Sanity document (`src/lib/conference/edition.ts:305-380`), sets `registrationEnabled: false` and `visibility: 'unlisted'` (`edition.ts:347-353`), and transfers the bare platform alias (`<org>.konf.run`) in Sanity. **It writes nothing to tenant-directory D1, nothing to conference D1, sets no rollout flags, and does not archive edition N.**
-- **Tenant provisioning (#1924) creates draft editions:** `registerTenant` (`services/tenant-directory/src/data/index.ts:356-368`) inserts conferences with `lifecycle: 'draft'`. In tenant-directory, public requests for `draft` editions return `null` (`services/tenant-directory/src/data/index.ts:217, 228`), hiding unpublished editions until promoted.
+- **Tenant-directory D1:** Stores `conferences.lifecycle` (`draft | live | cancelled | archived`, updated in PR #2015).
+- **Sanity homepage override:** Sanity `lifecycleStatus` (`cancelled | archived`, `sanity/schemaTypes/conference.ts:2229-2248`) acts as a homepage presentation toggle (`src/lib/homepage/lifecycle.ts:25-50`). Tenant-directory D1 `lifecycle` is the authoritative source of truth.
+- **Ended editions:** Editions whose `endDate` has passed remain `live` indefinitely until archived. There is no auto-archive timer.
+- **Existing create-edition flow:** The new-edition wizard (`src/app/(admin)/admin/settings/new-edition/page.tsx`) calls `api.conference.createEdition` (`src/server/routers/conference.ts:1520-1685`), cloning Sanity settings into a new document with `visibility: 'unlisted'`. It does not yet provision tenant-directory D1 or conference D1 rows.
+- **Tenant provisioning (#1924):** Inserts conferences with `lifecycle: 'draft'`, hiding them from public routing until published.
 
-## 2. Proposed Lifecycle State Machine
+## 2. Lifecycle State Machine
 
 ```
                ┌─────────────┐
                │    Draft    │
                └──────┬──────┘
-                      │ Organizer / Operator publishes
+                      │ Publish (checks live-edition quota)
                       ▼
                ┌─────────────┐
         ┌─────►│    Live     ├─────┐
         │      └──────┬──────┘     │
-        │             │            │ Auto: N+1 goes live OR endDate + 30d
-Manual  │             │ Cancelled  │ Manual: Operator / Organizer button
+        │             │            │ Start guided archive workflow
+Manual  │             │ Cancel     │ (checklist + confirmation)
 reopen  │             │            ▼
 (op only)             │     ┌──────────────┐
         │             │     │   Archived   │
@@ -36,71 +36,69 @@ reopen  │             │            ▼
 ```
 
 - **States:**
-  - `draft`: In preparation. Blocked from public routing unless signed-in org member (`tenant-directory/src/data/index.ts:217`). Registration closed; CFP/programme unlisted.
-  - `live`: Active edition. Publicly routed. Exactly one edition per org holds the bare `<org>.konf.run` alias.
-  - `archived`: Ended edition. Permanent historical record at `<org>-<year>.konf.run` and `<year>.<customDomain>`. Admin is read-only; programme and content frozen.
-  - `cancelled`: Explicit abort before or during event. Public homepage replaced with cancellation notice.
+  - `draft`: In preparation. Hidden from public routing unless signed in as org member. Registration closed; CFP/programme unlisted.
+  - `live`: Active edition. Publicly routed. Exactly one edition holds the bare `<org>.konf.run` alias unless extra concurrent live editions are licensed.
+  - `archived`: Ended edition. Permanent historical record at `<org>-<year>.konf.run` and `<year>.<customDomain>`. Admin is read-only; programme and content frozen. Stores `archived_by` and `archived_at`.
+  - `cancelled`: Explicit abort before or during event. Public homepage shows cancellation notice.
 - **Transitions and Drivers:**
-  - `draft -> live`: Manual action in Kontroll or `/admin`. Guardrails: valid dates, contact email, and verified edition domain. If org has an active `live` edition N, publishing N+1 triggers archiving of N.
-  - `live -> archived`: Dual-trigger. **Scheduled:** Daily cron checks `endDate + 30 days` and transitions edition. **Event-driven:** Automatically triggered when edition N+1 transitions `draft -> live`. **Manual:** "Archive edition" button in admin/Kontroll for immediate wrap-up.
-  - `live -> cancelled` / `draft -> cancelled`: Explicit manual action with type-to-confirm dialog (`src/server/routers/conference.ts:471`).
-  - `archived -> live`: Restricted to platform operators to prevent accidental alias hijacking.
-- **Guardrails:**
-  - Only ONE edition per org may hold `kind = 'platform-alias'` (`services/tenant-directory/migrations/0001_init.sql:28`).
-  - Archived editions never hold the bare platform alias; they route strictly on permanent year hostnames.
-  - Tenant-directory D1 `conferences.lifecycle` is the authoritative source of truth.
+  - `draft -> live`: Manual action in Kontroll or `/admin`. Guardrails: valid dates, contact email, verified domain, and quota check against the org's live-edition allowance. If ready, bare platform alias points here.
+  - `live -> archived`: Deliberate guided workflow initiated by an organizer or operator in Kontroll or `/admin`. Never automatic. Requires completing a checklist and explicit confirmation. Records `archived_by` and `archived_at`.
+  - `live -> cancelled` / `draft -> cancelled`: Manual action with type-to-confirm dialog (`src/server/routers/conference.ts:471`).
+  - `archived -> live`: Restricted to platform operators. Re-evaluates subscription live-edition quota before reopening.
+- **Gap Period & Bare Host Routing:**
+  - When an event ends, the bare `<org>.konf.run` host (and root custom domain) continues serving the ended edition with a "Conference ended — see you next year" banner until the next edition goes `live`.
+  - Archiving edition N locks its content but keeps serving the ended-edition banner on the bare host until edition N+1 transitions from `draft` to `live`.
 
 ## 3. The 'Create Next Edition' Flow
 
-A single idempotent operation callable by organizers or operators in Kontroll or `/admin`:
+A single idempotent operation callable by organizers or operators:
 
-1. **Sanity write:** Creates `conference` document using Sanity `_id = generateKey('conference')` (`src/server/routers/conference.ts:1570`), copies configured families, sets `registrationEnabled: false`, `visibility: 'unlisted'`, and `lifecycleStatus: null`.
-2. **Tenant-directory D1:** Inserts `conferences` row with `lifecycle: 'draft'`, `slug: <year>`, and inherits org rollout flags (`api_read`, `identity_login`, `d1_write`, `docs/PLATFORM.md:70-76`). Inserts permanent domain `<org>-<year>.konf.run` (`kind: 'platform-edition'`, `verification: 'verified'`). **Does not transfer bare `<org>.konf.run` alias yet**; the alias remains on edition N until N+1 becomes `live`.
-3. **Conference D1:** Inserts core row if `d1_write` is enabled (`src/lib/konf-api/conference-write.ts:70`).
+1. **Sanity write:** Creates `conference` document with `registrationEnabled: false`, `visibility: 'unlisted'`, and `lifecycleStatus: null`.
+2. **Tenant-directory D1:** Inserts `conferences` row with `lifecycle: 'draft'`, `slug: <year>`, and inherits org rollout flags. Adds permanent edition domain `<org>-<year>.konf.run`. The bare alias `<org>.konf.run` stays on the previous edition until edition N+1 goes `live`.
+3. **Conference D1:** Inserts core row if `d1_write` is enabled.
 4. **Settings copied vs reset:**
-   - _Copied:_ Title/slug formatted with year, branding (logos, theme, colors), organizers/roles, topics, formats, sponsor tiers, contract templates, sponsor benefits, and notification channels (`src/lib/conference/edition.ts:316-368`).
-   - _Reset:_ Event & CFP dates, ticket integrations/provider keys, proposals, talks, schedule, messages/conversations, photo wall, reminders, and notifications.
-5. **Idempotency:** Accepts an `Idempotency-Key` recorded in `provisioning_requests` (`services/tenant-directory/migrations/0001_init.sql:30-33`). Retries return the existing conference `_id`.
+   - _Copied:_ Branding, themes, organizers/roles, topics, formats, sponsor tiers, contract templates, and notification channels.
+   - _Reset:_ Dates, ticket integrations, proposals, talks, schedule, messages, and reminders.
+5. **Idempotency:** Accepts an `Idempotency-Key` stored in `provisioning_requests`.
 
-## 4. What Archiving Triggers
+## 4. Archiving Guided Workflow
 
-| Candidate                   | Recommendation    | Rationale                                                                                                                                                                                                                                                                                                             |
-| --------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Read-only admin**         | **Yes**           | Freeze conference settings, CFP submissions, review scoring, and ticket setups. Organizers retain export and view permissions. Break-glass edit requires platform operator.                                                                                                                                           |
-| **Frozen programme**        | **Yes**           | Schedule and talk listings lock permanently. Prevents accidental retro-edits to historical records.                                                                                                                                                                                                                   |
-| **Retention clocks**        | **Yes**           | Anchors GDPR/privacy cleanup clocks (#254): reminder logs purged 60d post-event (`docs/SPEAKER_REMINDERS.md:146`), persistent notifications purged 90d (`docs/MESSAGING_SYSTEM.md:517`), and talk reviews / speaker messages purged 24mo (`docs/MESSAGING_SYSTEM.md:595`, `docs/SPEAKER_ERASURE_RUNBOOK.md:742-743`). |
-| **Sponsor / CRM roll-over** | **Opt-in**        | Do not mutate edition N. Offer an organizer action in Kontroll to copy sponsor contacts and lead statuses into edition N+1's CRM pipeline as renewal leads.                                                                                                                                                           |
-| **Domain alias handover**   | **Yes (on live)** | When N archives and N+1 is `live`, bare `<org>.konf.run` and root custom domain move to N+1. Edition N stays at `<org>-<year>.konf.run`. If N archives while N+1 is still `draft`, bare alias serves an archive banner.                                                                                               |
-| **Search & SEO**            | **Yes**           | Updates JSON-LD `eventStatus` to `EventEnded` (`src/lib/seo/eventJsonLd.ts:155-156`). Sets canonical URL to permanent year domain so search engines index N+1 on the main domain.                                                                                                                                     |
-| **Notifications**           | **Yes**           | Emits persistent notification to org admins: "Edition [N] has been archived." Closes open speaker-organizer message threads (`docs/MESSAGING_SYSTEM.md:50`).                                                                                                                                                          |
+Archiving is a deliberate, manual process rather than an automated cron job. An organizer or operator launches the workflow in Kontroll or `/admin` and steps through a mandatory checklist:
+
+1. **Data exports:** Prompt to download attendee lists, financial reports, CFP submissions, and receipts.
+2. **Retention clocks:** Triggers privacy cleanup timers (#254): reminder logs purged after 60 days (`docs/SPEAKER_REMINDERS.md:146`), persistent notifications purged after 90 days (`docs/MESSAGING_SYSTEM.md:517`), and talk reviews/messages purged after 24 months (`docs/SPEAKER_ERASURE_RUNBOOK.md:742`).
+3. **Sponsor / CRM roll-over:** Opt-in action to copy sponsor contacts and lead statuses into edition N+1's CRM pipeline as renewal leads.
+4. **Domain alias hand-over:** Confirms routing. If edition N+1 is already `live`, the bare `<org>.konf.run` alias moves to N+1; otherwise, the bare alias continues serving edition N with the "Conference ended" banner. Permanent year domain `<org>-<year>.konf.run` remains unchanged.
+5. **Read-only freeze:** Locks settings, CFP submissions, speaker scoring, and ticket sales. Organizers retain view and export access; edits require operator intervention. Sets JSON-LD `eventStatus` to `EventEnded` and canonical URL to the permanent year host.
+6. **Explicit confirmation:** Final confirmation step requiring explicit operator/organizer sign-off. Records `archived_by` (user ID) and `archived_at` (timestamp) in D1 and Sanity.
 
 ## 5. Billing Model & Transition Hooks
 
-_Note: Billing structure is an owner decision. The options below identify architectural hook points without prescribing pricing._
+- **Subscription structure:** Per-organization subscription.
+  - Unlimited archived editions included.
+  - 1 concurrent `live` edition included.
+  - Additional concurrent `live` editions require a paid subscription add-on.
+- **Transition hooks:**
+  - `draft -> live`: Validates active live editions for the org. If `live_count >= allowed_live_editions`, promotion is blocked until an existing live edition is archived or the org upgrades its plan.
+  - `live -> archived`: Decrements active live-edition count, freeing capacity under the subscription quota.
+  - `archived -> live`: Requires quota check before allowing an operator to restore an archived edition to `live`.
 
-- **Tenant-directory schema today:** Organizations have a `plan` column (`organizations.plan`, default `'free'`, `services/tenant-directory/migrations/0001_init.sql:8`). Conferences have no billing columns.
-- **Architectural options:**
-  1. _Per-organization subscription (flat fee):_ Plan covers the org. Edition creation and archiving are purely operational; no billing mutations on transition.
-  2. _Per-edition fee (event credit):_ Billing mutation hooks into `draft -> live`. Creating a draft is free; publishing `live` consumes an edition credit or charges the org.
-  3. _Per-active-edition (concurrency cap):_ Org plan allows $K$ concurrent `live` editions. Hook at `draft -> live` checks active count; `live -> archived` decrements count and frees capacity.
-- **Transition enforcement points:** `canPublishEdition(orgId)` evaluates `plan` in tenant-directory before promoting `draft -> live`. Archiving triggers a quota release webhook if usage-metered.
+## 6. Phased Rollout
 
-## 6. Phased Rollout & Open Questions for the Owner
+1. **Phase 1 (Data & Schema):** Enum updated in PR #2015 (`conferences.lifecycle` allows `draft | live | cancelled | archived`). Add `archived_by` and `archived_at` columns. Backfill past editions (CNDN 2024, 2025) to `archived`.
+2. **Phase 2 (Create Flow Alignment):** Update `createEdition` to orchestrate Sanity, tenant-directory D1, and conference D1 atomically. Keep bare alias on edition N while N+1 is in `draft`.
+3. **Phase 3 (Guided Archiving Workflow):** Build the archiving wizard in Kontroll/admin with the checklist, audit fields (`archived_by`, `archived_at`), and retention clock triggers.
+4. **Phase 4 (Billing Enforcement):** Hook concurrent live-edition quota checks into the `draft -> live` transition.
+5. **Phase 5 (Gap Period Banner):** Render the "Conference ended — see you next year" banner on the bare host when an edition's `endDate` has passed or when archived without a successor.
 
-### Phased Rollout
+## 7. Decisions (2026-11-06)
 
-1. **Phase 1 (Data & Schema):** Update D1 enum to include `cancelled` in `conferences.lifecycle`. Backfill ended editions (CNDN 2024, 2025) to `archived`. Expose `lifecycle` mutation in tenant-directory GraphQL.
-2. **Phase 2 (Create Flow Alignment):** Update `createEdition` to orchestrate Sanity + tenant-directory D1 + conference D1 + rollout flags atomically with idempotency. Keep bare alias on edition N while N+1 is `draft`.
-3. **Phase 3 (Archiving Engine):** Implement daily archiving cron (`endDate + 30d`) and trigger archiving when N+1 promotes to `live`. Enforce read-only admin and trigger retention clocks (#254).
-4. **Phase 4 (Kontroll & UI):** Add "Publish edition" and "Archive edition" controls in Kontroll and site `/admin`. Wire sponsor CRM roll-over.
+1. **Deliberate archiving process:** No auto-archive timer, cron job, or warning email cadence. Archiving is a guided workflow with a checklist and explicit confirmation, recording `archived_by` and `archived_at`.
+2. **Gap period routing:** The bare `<org>` host keeps serving the last edition with a "Conference ended — see you next year" banner until the next edition is published `live`.
+3. **Subscription billing:** Per-org subscription includes unlimited archived editions and 1 live edition; extra concurrent live editions cost extra. `draft -> live` enforces the active live-edition count.
+4. **Lifecycle enum in D1:** Completed in PR #2015 (`draft | live | cancelled | archived`).
 
-### Open Questions for the Owner
+### Remaining Open Questions
 
-1. **Archiving trigger default:** _Auto-archive 30 days after `endDate`, or require human confirmation?_
-   - _Recommendation:_ Auto-archive 30 days after `endDate` with email warning at 14 days, plus immediate auto-archive when edition N+1 goes `live`. Provide an organizer "Extend wrap-up (+30d)" button.
-2. **Bare domain behavior when N archives before N+1 is live:** _What should `<org>.konf.run` serve during the gap?_
-   - _Recommendation:_ Keep routing bare alias to edition N (displaying a "Conference ended — see you next year!" banner) until edition N+1 is published `live`.
-3. **Billing model selection:** _Per-org subscription or per-edition fee?_
-   - _Recommendation:_ Per-organization subscription with unlimited archived editions and 1 active edition included (charging for additional concurrent live editions).
-4. **Aligning D1 and Sanity enums:** _Should tenant-directory `conferences.lifecycle` add `cancelled`?_
-   - _Recommendation:_ Yes. Add `cancelled` to D1 `conferences.lifecycle` (`draft | live | archived | cancelled`) so D1 models all non-derivable homepage states without mapping workarounds.
+1. **Retention clock start if archiving is deferred:** If an organizer delays the manual archiving workflow for several months post-event, should GDPR data retention clocks start automatically from `endDate`, or only upon explicit archiving?
+2. **Gap banner customization:** Should the "Conference ended" banner be purely automatic, or should organizers be able to customize copy and attach an email signup form for the next edition?
