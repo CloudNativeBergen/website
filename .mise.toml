@@ -95,7 +95,7 @@ run = "fnox exec -- pnpm run manage-orphaned-files"
 
 [tasks."secrets:sync"]
 description = "Put a Worker's declared secrets from fnox (usage: mise run secrets:sync -- <service> <preview|production> [--check])"
-run = "pnpm exec tsx scripts/secrets-sync.ts {{args}}"
+run = "pnpm exec tsx scripts/secrets-sync.ts"
 
 [tasks.install]
 description = "Install dependencies"
