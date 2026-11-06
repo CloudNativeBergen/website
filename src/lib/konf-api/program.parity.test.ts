@@ -19,6 +19,7 @@ const h = vi.hoisted(() => ({
   apiCalls: 0,
   apiFails: false,
   noDays: false,
+  fullReads: 0,
 }))
 
 vi.mock('@/lib/conference/konf-api', async (importOriginal) => {
@@ -38,7 +39,10 @@ vi.mock('@/lib/conference/konf-api', async (importOriginal) => {
 vi.mock('@/lib/sanity/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/sanity/client')>()
   const client = {
-    fetch: (q: string, p: Record<string, unknown>) => groq(q, p),
+    fetch: (q: string, p: Record<string, unknown>) => {
+      if (q.includes('"schedules":')) h.fullReads++
+      return groq(q, p)
+    },
   }
   return {
     ...actual,
@@ -49,7 +53,8 @@ vi.mock('@/lib/sanity/client', async (importOriginal) => {
 })
 
 import { SanityProgramSource } from '../../../services/program/src/data/source'
-import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { getEditableSchedule, getPublicSchedule } from '@/lib/conference/sanity'
+import { CONFERENCE_QUERY_FULL } from '@/lib/conference/query'
 import { listPublicTalks } from '@/lib/proposal/server'
 import {
   getPublicSpeakerProfile,
@@ -261,8 +266,7 @@ const schedules = (c: { schedules?: unknown }) => c.schedules as Raw[]
 describe('public program seams through the API (#1772)', () => {
   it('schedule: the same days, tracks and slots, TBA slots unnamed', async () => {
     const { sanity, api } = await both(async () => {
-      const r = await getConferenceForDomain('a.example', {
-        schedule: true,
+      const r = await getPublicSchedule('a.example', {
         confirmedTalksOnly: false,
       })
       expect(r.error).toBeNull()
@@ -292,28 +296,33 @@ describe('public program seams through the API (#1772)', () => {
     expect(queries.filter((q) => q.includes('program'))).toHaveLength(1)
   })
 
-  it('schedule: admin reads (uncached, scheduleFromSanity) stay on Sanity', async () => {
+  it('schedule: the editable and uncached reads stay on Sanity', async () => {
     const calls = h.apiCalls
-    for (const opts of [{ uncached: true }, { scheduleFromSanity: true }]) {
-      const r = await getConferenceForDomain('a.example', {
-        schedule: true,
-        confirmedTalksOnly: false,
-        ...opts,
-      })
+    for (const r of [
+      await getEditableSchedule('a.example', { confirmedTalksOnly: false }),
+      await getPublicSchedule('a.example', { uncached: true }),
+    ])
       expect(schedules(r.conference)[0]).toHaveProperty('_type', 'schedule')
-    }
     expect(h.apiCalls).toBe(calls)
+  })
+
+  it('schedule: the API path skips the full Sanity read', async () => {
+    const full = h.fullReads
+    await getPublicSchedule('a.example')
+    expect(h.fullReads).toBe(full)
+    h.apiFails = true
+    await getPublicSchedule('a.example')
+    expect(h.fullReads).toBe(full + 1)
+    expect(CONFERENCE_QUERY_FULL).toContain('"schedules":')
   })
 
   it('schedule: no API days (before programDate) gives Sanity', async () => {
     h.apiRead = false
-    const want = (await getConferenceForDomain('a.example', { schedule: true }))
-      .conference
+    const want = (await getPublicSchedule('a.example')).conference
     h.apiRead = true
     h.noDays = true
     const calls = h.apiCalls
-    const got = (await getConferenceForDomain('a.example', { schedule: true }))
-      .conference
+    const got = (await getPublicSchedule('a.example')).conference
     expect(h.apiCalls).toBeGreaterThan(calls)
     expect(got).toEqual(want)
     expect(schedules(got)).toHaveLength(1)
@@ -321,9 +330,7 @@ describe('public program seams through the API (#1772)', () => {
 
   it('schedule: the confirmed-only view narrows the API days alike', async () => {
     const { sanity, api } = await both(
-      async () =>
-        (await getConferenceForDomain('a.example', { schedule: true }))
-          .conference,
+      async () => (await getPublicSchedule('a.example')).conference,
     )
     const slots = (c: { schedules?: unknown }) =>
       schedules(c).flatMap((d) =>
@@ -407,14 +414,14 @@ describe('public program seams through the API (#1772)', () => {
         talks: await listPublicTalks('conf', { speakerId: 'sp' }),
         profile: await getPublicSpeakerProfile('conf', 'ada'),
         speakers: await getPublicSpeakers('conf'),
-        conf: await getConferenceForDomain('a.example', { schedule: true }),
+        conf: await getPublicSchedule('a.example'),
       }
     })()
     const run = async () => ({
       talks: await listPublicTalks('conf', { speakerId: 'sp' }),
       profile: await getPublicSpeakerProfile('conf', 'ada'),
       speakers: await getPublicSpeakers('conf'),
-      conf: await getConferenceForDomain('a.example', { schedule: true }),
+      conf: await getPublicSchedule('a.example'),
     })
 
     h.apiRead = true

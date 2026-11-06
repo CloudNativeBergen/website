@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { getSpeakerBriefing } from '@/lib/speaker/briefing'
 import { denyNonOrganizer } from '@/lib/authz/page-guard'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getEditableScheduleForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveConferenceVisibility } from '@/lib/conference/visibility'
 import { buildSystemChecks } from '@/lib/system-status/checks'
 import { formatTeamSummary } from '@/lib/teams'
@@ -129,10 +129,9 @@ export default async function AdminSettings() {
   // READ LIVE (#1345, as on the workshops page): this page reloads straight
   // after a save, and the cached read serves the old values once
   // (`revalidateTag(tag, 'default')` is stale-while-revalidate).
-  const { conference, domain, error } = await getConferenceForCurrentDomain({
+  const { conference, domain, error } = await getEditableScheduleForCurrentDomain({
     uncached: true,
     organizers: true,
-    schedule: true,
     topics: true,
     featuredSpeakers: true,
     // This page EDITS the links, so it has to read the stored values back.
