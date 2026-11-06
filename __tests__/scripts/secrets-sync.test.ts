@@ -6,11 +6,12 @@ import {
   fnoxName,
   missingSecrets,
   RUNKONF_ACCOUNT_ID,
+  SHARED_ACROSS_ENVS,
   sync,
   type Env,
 } from '../../scripts/secrets-sync'
 
-type Opts = { cwd: string; input?: Buffer }
+type Opts = { cwd: string; input?: Buffer; env?: NodeJS.ProcessEnv }
 
 const root = join(__dirname, '..', '..')
 const envs: Env[] = ['preview', 'production']
@@ -130,7 +131,7 @@ describe('secrets', () => {
     const exec = vi.fn((cmd: string, args: string[], _opts: Opts) => {
       if (cmd === 'fnox' && args[1] !== 'KONF_PREVIEW_GATEWAY_PUBLIC_KEY')
         throw new Error('missing')
-      return Buffer.from(args[2] === 'whoami' ? RUNKONF_ACCOUNT_ID : '')
+      return Buffer.from(args[2] === 'whoami' ? RUNKONF_ACCOUNT_ID : 'v')
     })
     sync('tenant-directory', 'preview', exec, log)
     expect(log.mock.calls.flat()).toEqual([
@@ -182,5 +183,87 @@ describe('secrets', () => {
       /RunKonf account/,
     )
     expect(exec).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses an exported other account before any fnox read', () => {
+    vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'bf000000personal')
+    try {
+      const exec = vi.fn((_c: string, _a: string[], _o: Opts) =>
+        Buffer.from(RUNKONF_ACCOUNT_ID),
+      )
+      expect(() => sync('content', 'production', exec, vi.fn())).toThrow(
+        /another account/,
+      )
+      expect(() => missingSecrets('content', 'production', exec)).toThrow(
+        /another account/,
+      )
+      expect(exec).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('every wrangler call carries the RunKonf account in its env', () => {
+    const exec = vi.fn((cmd: string, args: string[], _o: Opts) =>
+      Buffer.from(
+        cmd === 'fnox' ? 'v' : args[2] === 'whoami' ? RUNKONF_ACCOUNT_ID : '[]',
+      ),
+    )
+    sync('content', 'production', exec, vi.fn())
+    missingSecrets('content', 'production', exec)
+    const calls = exec.mock.calls.filter(([c]) => c === 'pnpm')
+    expect(calls.length).toBe(4)
+    for (const [, , o] of calls)
+      expect(o.env?.CLOUDFLARE_ACCOUNT_ID).toBe(RUNKONF_ACCOUNT_ID)
+  })
+
+  it('only the accepted exceptions share one fnox key across envs', () => {
+    const names = new Set(
+      services.flatMap((s) =>
+        envs.flatMap((e) => {
+          const d = declaredSecrets(s, e)
+          return [...d.required, ...d.optional]
+        }),
+      ),
+    )
+    const shared = [...names].filter(
+      (n) => fnoxName(n, 'preview') === fnoxName(n, 'production'),
+    )
+    expect(shared.sort()).toEqual(
+      Object.keys(SHARED_ACROSS_ENVS)
+        .filter((n) => names.has(n))
+        .sort(),
+    )
+    expect(Object.keys(SHARED_ACROSS_ENVS).sort()).toEqual([
+      'GITHUB_CLIENT_ID',
+      'GITHUB_CLIENT_SECRET',
+      'LINKEDIN_CLIENT_ID',
+      'LINKEDIN_CLIENT_SECRET',
+      'SANITY_API_TOKEN_READ',
+    ])
+  })
+
+  it('rejects an empty fnox value: required fails, optional is skipped', () => {
+    const log = vi.fn()
+    const exec = vi.fn((cmd: string, args: string[], _o: Opts) =>
+      Buffer.from(
+        cmd === 'fnox'
+          ? args[1] === 'KONF_PREVIEW_GATEWAY_PUBLIC_KEY'
+            ? 'v'
+            : '  \n'
+          : args[2] === 'whoami'
+            ? RUNKONF_ACCOUNT_ID
+            : '',
+      ),
+    )
+    sync('tenant-directory', 'preview', exec, log)
+    expect(log.mock.calls.flat()).toContain(
+      '::warning::skip CF_API_TOKEN (optional, empty in fnox)',
+    )
+    const puts = exec.mock.calls.filter(([, a]) => a[3] === 'put')
+    expect(puts.map(([, a]) => a[4])).toEqual(['GATEWAY_PUBLIC_KEY'])
+    expect(() => sync('content', 'preview', exec, vi.fn())).toThrow(
+      /required SANITY_API_TOKEN_READ is empty/,
+    )
   })
 })

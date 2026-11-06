@@ -12,10 +12,17 @@ export type Env = 'preview' | 'production'
 
 const root = join(import.meta.dirname, '..')
 
-// Worker secret -> fnox key where the KONF_<ENV>_<NAME> convention does not
-// hold. A string is shared by both environments.
-const FNOX_NAMES: Record<string, string | ((upper: string) => string)> = {
-  ENVELOPE_PRIVATE_KEY: (u) => `KONF_${u}_GATEWAY_PRIVATE_KEY`,
+// The RunKonf Cloudflare account (production). Every wrangler call targets it
+// explicitly; any other account a login can reach (a personal one with PoC
+// Workers) must never receive these secrets.
+export const RUNKONF_ACCOUNT_ID = 'eefa2cb5c8528a07d7bf8b00a6606dcd'
+
+// The owner's ACCEPTED exceptions to preview/production separation: one fnox
+// key serves both environments. The Sanity read token (preview Workers read
+// the development dataset with the production token) and the GitHub and
+// LinkedIn OAuth apps (one app each). Nothing else may be shared; a test
+// enforces it.
+export const SHARED_ACROSS_ENVS: Record<string, string> = {
   SANITY_API_TOKEN_READ: 'SANITY_API_TOKEN_READ_PROD',
   GITHUB_CLIENT_ID: 'ID_KONF_APP_GH_CLIENT_ID',
   GITHUB_CLIENT_SECRET: 'ID_KONF_APP_GH_CLIENT_SECRET',
@@ -23,12 +30,15 @@ const FNOX_NAMES: Record<string, string | ((upper: string) => string)> = {
   LINKEDIN_CLIENT_SECRET: 'ID_KONF_APP_LI_CLIENT_SECRET',
 }
 
+// Per-env renames where the KONF_<ENV>_<NAME> convention does not hold.
+const RENAMED: Record<string, string> = {
+  ENVELOPE_PRIVATE_KEY: 'GATEWAY_PRIVATE_KEY',
+}
+
 export function fnoxName(secret: string, env: Env): string {
-  const upper = env.toUpperCase()
-  const mapped = FNOX_NAMES[secret]
-  if (typeof mapped === 'string') return mapped
-  if (mapped) return mapped(upper)
-  return `KONF_${upper}_${secret}`
+  const shared = SHARED_ACROSS_ENVS[secret]
+  if (shared) return shared
+  return `KONF_${env.toUpperCase()}_${RENAMED[secret] ?? secret}`
 }
 
 export function serviceDir(service: string): string {
@@ -49,14 +59,35 @@ export function declaredSecrets(service: string, env: Env): Declared {
   return json[env]
 }
 
-type Run = (
+export type Run = (
   cmd: string,
   args: string[],
-  opts: { cwd: string; input?: Buffer },
+  opts: { cwd: string; input?: Buffer; env?: NodeJS.ProcessEnv },
 ) => Buffer
 
-const run: Run = (cmd, args, { cwd, input }) =>
-  execFileSync(cmd, args, { cwd, input, stdio: ['pipe', 'pipe', 'inherit'] })
+const run: Run = (cmd, args, opts) =>
+  execFileSync(cmd, args, { ...opts, stdio: ['pipe', 'pipe', 'inherit'] })
+
+/** Refuses when the caller exported a different Cloudflare account. */
+export function assertAccountEnv(env: NodeJS.ProcessEnv = process.env) {
+  const id = env.CLOUDFLARE_ACCOUNT_ID
+  if (id && id !== RUNKONF_ACCOUNT_ID)
+    throw new Error(
+      `CLOUDFLARE_ACCOUNT_ID is set to another account; secrets go only to the RunKonf account ${RUNKONF_ACCOUNT_ID}. Unset it or set it to that id.`,
+    )
+}
+
+const wrangler = (
+  exec: Run,
+  cwd: string,
+  args: string[],
+  input?: Buffer,
+): Buffer =>
+  exec('pnpm', ['exec', 'wrangler', ...args], {
+    cwd,
+    input,
+    env: { ...process.env, CLOUDFLARE_ACCOUNT_ID: RUNKONF_ACCOUNT_ID },
+  })
 
 /** Declared names missing from `wrangler secret list --format json`. */
 export function missingSecrets(
@@ -64,12 +95,16 @@ export function missingSecrets(
   env: Env,
   exec: Run = run,
 ): Declared {
+  assertAccountEnv()
   const listed = JSON.parse(
-    exec(
-      'pnpm',
-      ['exec', 'wrangler', 'secret', 'list', '--env', env, '--format', 'json'],
-      { cwd: serviceDir(service) },
-    ).toString(),
+    wrangler(exec, serviceDir(service), [
+      'secret',
+      'list',
+      '--env',
+      env,
+      '--format',
+      'json',
+    ]).toString(),
   ) as { name: string }[]
   const have = new Set(listed.map((s) => s.name))
   const { required, optional } = declaredSecrets(service, env)
@@ -79,13 +114,9 @@ export function missingSecrets(
   }
 }
 
-// The RunKonf Cloudflare account (production). Any other account a login can
-// reach (a personal one with PoC Workers) must never receive these secrets.
-export const RUNKONF_ACCOUNT_ID = 'eefa2cb5c8528a07d7bf8b00a6606dcd'
-
 /** Refuses unless `wrangler whoami` lists the RunKonf account. */
 export function assertRunKonfAccount(cwd: string, exec: Run = run) {
-  const who = exec('pnpm', ['exec', 'wrangler', 'whoami'], { cwd }).toString()
+  const who = wrangler(exec, cwd, ['whoami']).toString()
   if (!who.includes(RUNKONF_ACCOUNT_ID))
     throw new Error(
       `wrangler is not logged in with access to the RunKonf account ${RUNKONF_ACCOUNT_ID}; refusing to write`,
@@ -98,23 +129,28 @@ export function sync(
   exec: Run = run,
   log = console.log,
 ) {
+  assertAccountEnv()
   const cwd = serviceDir(service)
   assertRunKonfAccount(cwd, exec)
   const { required, optional } = declaredSecrets(service, env)
   for (const name of [...required, ...optional]) {
+    const isOptional = optional.includes(name)
     let value: Buffer
     try {
       value = exec('fnox', ['get', fnoxName(name, env)], { cwd: root })
     } catch (err) {
       // An optional secret not in fnox yet is skipped, not fatal.
-      if (!optional.includes(name)) throw err
+      if (!isOptional) throw err
       log(`skip ${name} (optional, not in fnox)`)
       continue
     }
-    exec('pnpm', ['exec', 'wrangler', 'secret', 'put', name, '--env', env], {
-      cwd,
-      input: value,
-    })
+    if (value.toString().trim() === '') {
+      if (!isOptional)
+        throw new Error(`fnox value for required ${name} is empty; not put`)
+      log(`::warning::skip ${name} (optional, empty in fnox)`)
+      continue
+    }
+    wrangler(exec, cwd, ['secret', 'put', name, '--env', env], value)
     log(`ok ${name}`)
   }
 }
