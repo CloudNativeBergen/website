@@ -514,6 +514,7 @@ export function DashboardLayout({
               picture={getAvatarUrl()}
               speaker={session?.speaker}
               account={session?.account}
+              identity={session?.identity}
               enabledFeatures={enabledFeatures}
             />
           </div>
@@ -561,6 +562,7 @@ export function DashboardLayout({
                 picture={getAvatarUrl()}
                 speaker={session?.speaker}
                 account={session?.account}
+                identity={session?.identity}
                 enabledFeatures={enabledFeatures}
               />
             </div>

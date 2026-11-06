@@ -60,6 +60,6 @@ describe('identitySessionFor', () => {
       provider: 'linkedin',
       providerAccountId: 'li1',
     })
-    expect(s).toEqual({ speakerId: 'spk-li' })
+    expect(s).toEqual({ speakerId: 'spk-li', identity: true })
   })
 })

@@ -82,6 +82,7 @@ export function Header({
                   picture={session.user.picture}
                   speaker={session.speaker}
                   account={session.account}
+                  identity={session.identity}
                   photoWall={photoWall}
                   enabledFeatures={enabledFeatures}
                 />

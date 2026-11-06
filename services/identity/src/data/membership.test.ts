@@ -7,6 +7,7 @@ import { makeSignature } from 'better-auth/crypto'
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { INVITATION_EXPIRES_IN, createAuth, type AuthEnv } from './auth'
+import { createMembers } from './members'
 
 const env: AuthEnv = {
   BETTER_AUTH_URL: 'http://identity.test',
@@ -709,5 +710,32 @@ describe('membership audit', () => {
       ],
     )
     expect(JSON.stringify(rows)).not.toContain('@')
+  })
+})
+
+describe('members list above the D1 parameter cap (#2018)', () => {
+  it('returns every provider for 150 members in at most 2 queries', async () => {
+    const { orgId, members } = await org(
+      'owner',
+      ...Array<string>(149).fill('member'),
+    )
+    for (const m of members)
+      await run(
+        "INSERT INTO account (id, accountId, providerId, userId) VALUES (?, ?, 'github', ?)",
+        `a-${m.userId}`,
+        `gh-${m.userId}`,
+        m.userId,
+      )
+    let queries = 0
+    const DB = new Proxy(d1, {
+      get: (t, k) =>
+        k === 'prepare'
+          ? (q: string) => (queries++, t.prepare(q))
+          : (Reflect.get(t, k).bind?.(t) ?? Reflect.get(t, k)),
+    })
+    const rows = await createMembers({ ...env, DB }).list(orgId, true)
+    expect(rows).toHaveLength(150)
+    expect(rows.every((r) => r.providers.join() === 'github')).toBe(true)
+    expect(queries).toBeLessThanOrEqual(2)
   })
 })

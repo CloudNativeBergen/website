@@ -337,6 +337,16 @@ describe('linked accounts (#1981)', () => {
     expect(signedIn).toContain('data-link="linkedin"')
     expect(signedIn).not.toContain('data-link="github"')
     expect(signedIn).toContain('annen e-postadresse')
+    const signedInUnknown = await (
+      await accountPage(
+        new Request(`${BASE}/account?error=<x>`, {
+          headers: { cookie: await sessionCookie(u.id) },
+        }),
+        pageEnv,
+      )
+    ).text()
+    expect(signedInUnknown).toContain('<span>GitHub</span>')
+    expect(signedInUnknown).not.toContain('<x>')
     const anon = await (
       await accountPage(new Request(`${BASE}/account?error=<x>`), pageEnv)
     ).text()
