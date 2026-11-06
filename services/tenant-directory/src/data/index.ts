@@ -222,18 +222,29 @@ export function createData(
       if (!mine.length) return []
       const ids = mine.map((m) => m.orgId)
       const role = new Map(mine.map((m) => [m.orgId, m.role]))
-      // ponytail: one IN list per table; D1 caps bound parameters at 100,
-      // so chunk if one user is ever a member of that many orgs.
-      const [orgs, confs] = await Promise.all([
-        db.query.organizations.findMany({
-          where: inArray(organizations.id, ids),
-          orderBy: organizations.slug,
-        }),
-        db.query.conferences.findMany({
-          where: inArray(conferences.orgId, ids),
-          orderBy: conferences.id,
-        }),
-      ])
+      // D1 caps bound parameters at 100: chunk in batches of 90 (#2043).
+      const CHUNK_SIZE = 90
+      const chunks: string[][] = []
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        chunks.push(ids.slice(i, i + CHUNK_SIZE))
+      }
+      const results = await Promise.all(
+        chunks.map((batch) =>
+          Promise.all([
+            db.query.organizations.findMany({
+              where: inArray(organizations.id, batch),
+              orderBy: organizations.slug,
+            }),
+            db.query.conferences.findMany({
+              where: inArray(conferences.orgId, batch),
+              orderBy: conferences.id,
+            }),
+          ]),
+        ),
+      )
+      const orgs = results.flatMap(([batchOrgs]) => batchOrgs)
+      const confs = results.flatMap(([, batchConfs]) => batchConfs)
+      orgs.sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0))
       return orgs.map((org) => ({
         id: org.id,
         name: org.name,
