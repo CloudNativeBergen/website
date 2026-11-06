@@ -1,5 +1,6 @@
 import { clientReadUncached } from '@/lib/sanity/client'
 import type { Conference } from '@/lib/conference/types'
+import { mergeConferences } from '@/lib/conference/merge'
 import {
   getOrCreateConferenceAudienceByType,
   removeContactFromAudience,
@@ -23,14 +24,16 @@ export async function removeFromSpeakerAudiences(
   try {
     conferences =
       (await clientReadUncached.fetch<Conference[]>(
-        `*[_type == "conference" && organization._ref == $orgId]{ _id, title, organization }`,
+        `*[_type == "conference" && organization._ref == $orgId]{ _id, title, domains, organization }`,
         { orgId },
       )) ?? []
   } catch (error) {
     console.warn('[speaker-erasure] listing conferences failed:', error)
     return ['*: could not list conferences']
   }
-  for (const conference of conferences) {
+  // The title is only a label in the audience name written on create; the
+  // lookup keys on `_id`, and the conference SET is Sanity's (#1997).
+  for (const conference of await mergeConferences(conferences)) {
     try {
       const { audienceId, client, error } =
         await getOrCreateConferenceAudienceByType(conference, 'speakers')

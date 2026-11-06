@@ -24,6 +24,7 @@ import {
   removeContactFromAudience,
 } from '@/lib/email/audience'
 import type { Conference } from '@/lib/conference/types'
+import { mergeConferences } from '@/lib/conference/merge'
 import { getSigningProvider } from '@/lib/contract-signing'
 import { logSignatureStatusChange } from '@/lib/sponsor-crm/activity'
 import { COUNT_API_VERSION } from '@/lib/sanity/orphaned-asset'
@@ -367,7 +368,7 @@ async function removeFromSponsorAudiences(
     if (organizationId !== undefined) {
       conferences =
         (await clientReadUncached.fetch<Conference[]>(
-          `*[_type == "conference" && organization._ref == $orgId && !(_id in path("drafts.**"))]{ _id, title, organization }`,
+          `*[_type == "conference" && organization._ref == $orgId && !(_id in path("drafts.**"))]{ _id, title, domains, organization }`,
           { orgId: organizationId },
         )) ?? []
       return removeFromAudiences(conferences, emails, failures)
@@ -380,7 +381,7 @@ async function removeFromSponsorAudiences(
     conferences =
       (await clientReadUncached.fetch<Conference[]>(
         // groq-global: the conferences named by the read above, by id.
-        `*[_type == "conference" && _id in $ids]{ _id, title, organization }`,
+        `*[_type == "conference" && _id in $ids]{ _id, title, domains, organization }`,
         { ids: ids ?? [] },
       )) ?? []
   } catch (error) {
@@ -395,7 +396,9 @@ async function removeFromAudiences(
   emails: string[],
   failures: string[],
 ): Promise<string[]> {
-  for (const conference of conferences) {
+  // The title is only a label in the audience name written on create; the
+  // lookup keys on `_id`, and the conference SET is Sanity's (#1997).
+  for (const conference of await mergeConferences(conferences)) {
     try {
       const { audienceId, client, error } =
         await getOrCreateConferenceAudienceByType(conference, 'sponsors')

@@ -28,6 +28,10 @@
  * erase step re-runs it and never takes a plan from the client.
  */
 
+import {
+  mergeConference,
+  type ConferenceCandidate,
+} from '@/lib/conference/merge'
 import { groq } from 'next-sanity'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { normalizeEmail } from '@/lib/speaker/email'
@@ -167,23 +171,36 @@ async function workosUserIds(email: string): Promise<string[]> {
 
 async function orgRecords({ email, orgId }: Scope, workosIds: string[]) {
   const params = { email, orgId, workosIds }
-  return (
-    (await clientReadUncached.fetch<{
-      invitations: ErasureItem[]
-      signups: (ErasureItem & { workosId?: string | null })[]
-    }>(
-      groq`{
+  const records = (await clientReadUncached.fetch<{
+    invitations: ErasureItem[]
+    signups: (ErasureItem & {
+      workosId?: string | null
+      workshop?: string | null
+      conference?: ConferenceCandidate & { title?: string | null }
+    })[]
+  }>(
+    groq`{
         "invitations": *[_type == "coSpeakerInvitation" && lower(invitedEmail) == $email && conference->organization._ref == $orgId]{
           "id": _id, "label": coalesce(proposal->title, "Invitation") + " (" + coalesce(status, "unknown") + ")"
         },
         "signups": *[_type == "workshopSignup" && (lower(userEmail) == $email || userWorkOSId in $workosIds) && conference->organization._ref == $orgId]{
-          "id": _id, "label": coalesce(workshop->title, "Workshop") + " (" + coalesce(conference->title, "") + ")", "workosId": userWorkOSId
+          "id": _id, "workshop": workshop->title, "conference": conference->{ _id, title, domains, organization }, "workosId": userWorkOSId
         }
       }`,
-      params,
-      { cache: 'no-store' },
-    )) ?? { invitations: [], signups: [] }
+    params,
+    { cache: 'no-store' },
+  )) ?? { invitations: [], signups: [] }
+  // The conference title is only a label in the erasure report: D1's when
+  // the tenant is flagged (#1997). Which signups are erased stays Sanity's.
+  const signups = await Promise.all(
+    records.signups.map(async ({ workshop, conference, ...s }) => {
+      const title = conference
+        ? ((await mergeConference(conference)).title ?? '')
+        : ''
+      return { ...s, label: `${workshop ?? 'Workshop'} (${title})` }
+    }),
   )
+  return { invitations: records.invitations, signups }
 }
 
 /**

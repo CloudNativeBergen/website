@@ -1,6 +1,7 @@
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { findOutboundOrigin } from '@/lib/conference/baseUrl'
+import { mergeConference, mergeConferences } from '@/lib/conference/merge'
 import { osloTodayDateString } from '@/lib/time'
 import { createSponsorActivity } from './activity'
 import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
@@ -52,6 +53,38 @@ interface EditionRow {
   _id: string
   title: string
   domains?: string[]
+  organization?: { _ref: string }
+}
+
+/**
+ * The org's editions with D1's dates merged over Sanity's, then filtered and
+ * sorted in code (#1997): a GROQ `startDate` filter would compare Sanity's
+ * value, which D1 may have moved. The read is the org's whole edition list,
+ * a superset of any date window.
+ */
+async function orgEditionsBy<T extends { _id: string; startDate?: string }>(
+  orgId: string,
+  projection: string,
+  params: Record<string, unknown>,
+  keep: (startDate: string) => boolean,
+  order: 1 | -1,
+): Promise<T | null> {
+  const rows =
+    (await scopedFetch<(T & EditionRow)[]>(
+      clientReadUncached,
+      { orgId },
+      `*[_type == "conference" && !(_id in path("drafts.**"))]{ ${projection} }`,
+      params,
+    )) ?? []
+  const merged = (await mergeConferences(rows)).filter(
+    (c) => typeof c.startDate === 'string' && keep(c.startDate.slice(0, 10)),
+  )
+  merged.sort(
+    (a, b) =>
+      order *
+      a.startDate!.slice(0, 10).localeCompare(b.startDate!.slice(0, 10)),
+  )
+  return merged[0] ?? null
 }
 
 export interface RenewalSource {
@@ -84,15 +117,18 @@ export async function getRenewalContext(
   sponsorForConferenceId: string,
   now = new Date(),
 ): Promise<{ source: RenewalSource | null; next: NextEdition | null }> {
-  const conference = await scopedFetch<
+  const row = await scopedFetch<
     (EditionRow & { startDate: string; endDate?: string }) | null
   >(
     clientReadUncached,
     { orgId },
-    `*[_type == "conference" && _id == $conferenceId][0]{ _id, title, startDate, endDate, domains }`,
+    `*[_type == "conference" && _id == $conferenceId][0]{ _id, title, startDate, endDate, domains, organization }`,
     { conferenceId },
   )
-  if (!conference) return { source: null, next: null }
+  if (!row) return { source: null, next: null }
+  // Title (activity label), end date and start date come from D1 when the
+  // tenant is flagged. Nothing here deletes: the end date only gates copying.
+  const conference = await mergeConference(row)
 
   const source = await clientReadUncached.fetch<Omit<
     RenewalSource,
@@ -111,19 +147,15 @@ export async function getRenewalContext(
     return { source: { ...source, conference }, next: null }
   }
 
-  const next = await scopedFetch<NextEdition | null>(
-    clientReadUncached,
-    { orgId },
-    `*[_type == "conference" && startDate > $startDate && !(_id in path("drafts.**"))] | order(startDate asc)[0]{
-      _id, title, domains, "organizers": organizers[]._ref,
+  const start = conference.startDate.slice(0, 10)
+  const next = await orgEditionsBy<NextEdition & { startDate?: string }>(
+    orgId,
+    `_id, title, domains, organization, startDate, "organizers": organizers[]._ref,
       "existingId": *[_type == "sponsorForConference" && conference._ref == ^._id && conference->organization._ref == $orgId && sponsor._ref == $sponsorId][0]._id,
-      "tierId": *[_type == "sponsorTier" && conference._ref == ^._id && conference->organization._ref == $orgId && title == $tierTitle][0]._id
-    }`,
-    {
-      startDate: conference.startDate,
-      sponsorId: source.sponsor._ref,
-      tierTitle: source.tierTitle ?? '',
-    },
+      "tierId": *[_type == "sponsorTier" && conference._ref == ^._id && conference->organization._ref == $orgId && title == $tierTitle][0]._id`,
+    { sponsorId: source.sponsor._ref, tierTitle: source.tierTitle ?? '' },
+    (d) => d > start,
+    1,
   )
   return { source: { ...source, conference }, next }
 }
@@ -141,11 +173,13 @@ export async function getRenewalContextIntoCurrent(
 ): Promise<{ source: RenewalSource | null; next: NextEdition | null }> {
   const none = { source: null, next: null }
   if (!current.startDate) return none
-  const previous = await scopedFetch<{ _id: string } | null>(
-    clientReadUncached,
-    { orgId },
-    `*[_type == "conference" && startDate < $startDate && !(_id in path("drafts.**"))] | order(startDate desc)[0]{ _id }`,
-    { startDate: current.startDate },
+  const start = current.startDate.slice(0, 10)
+  const previous = await orgEditionsBy<{ _id: string; startDate?: string }>(
+    orgId,
+    `_id, domains, organization, startDate`,
+    {},
+    (d) => d < start,
+    -1,
   )
   if (!previous) return none
   const context = await getRenewalContext(
