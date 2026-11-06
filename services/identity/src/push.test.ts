@@ -95,6 +95,8 @@ beforeEach(() => {
   return () => vi.unstubAllGlobals()
 })
 const flushed = async () => {
+  // emit() loads cloudflare:workers lazily: let that import settle first.
+  await new Promise((r) => setTimeout(r))
   await Promise.all(cf.pending)
   return sent
 }

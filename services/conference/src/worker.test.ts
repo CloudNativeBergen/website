@@ -598,6 +598,11 @@ describe('settings phase 1 (#2019)', () => {
 })
 
 describe('conference.settings_changed push event', () => {
+  // emit() loads cloudflare:workers lazily: let that import settle first.
+  const settled = async () => {
+    await new Promise((r) => setTimeout(r))
+    await Promise.all(cf.pending)
+  }
   const MUTATION =
     'mutation($input: ConferencePatch!) { updateConference(input: $input) { id title } }'
   const sent: { body: string }[] = []
@@ -625,7 +630,7 @@ describe('conference.settings_changed push event', () => {
       input: { title: 'New' },
     })
     expect(body.errors).toBeUndefined()
-    await Promise.all(cf.pending)
+    await settled()
     expect(sent.map((s) => JSON.parse(s.body))).toEqual([
       {
         type: 'conference.settings_changed',
@@ -647,7 +652,7 @@ describe('conference.settings_changed push event', () => {
     const { body } = await gql(tenant('org-a', 'conf-a', 'admin'), MUTATION, {
       input: { title: 'Still saved' },
     })
-    await Promise.all(cf.pending)
+    await settled()
     expect(body.data.updateConference.title).toBe('Still saved')
     expect(err).toHaveBeenCalledWith(
       expect.stringContaining('push.webhook_failed'),
@@ -658,7 +663,7 @@ describe('conference.settings_changed push event', () => {
     await gql(tenant('org-a', 'conf-a', 'member'), MUTATION, {
       input: { title: 'x' },
     })
-    await Promise.all(cf.pending)
+    await settled()
     expect(sent).toEqual([])
   })
 })
