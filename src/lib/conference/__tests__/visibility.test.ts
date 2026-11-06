@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../../__tests__/helpers/rolloutFlags'
 
 vi.mock('server-only', () => ({}))
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
@@ -87,7 +93,7 @@ describe('getDiscoveryVisibilityForDomain D1 gateway values and fallbacks (#1997
 
   it('flagged: differing D1 unlisted wins over Sanity live', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     sanityFetch.mockResolvedValueOnce(structuredClone(sanityConf))
 
     const gatewayFetch = vi.fn().mockResolvedValue(
@@ -111,7 +117,7 @@ describe('getDiscoveryVisibilityForDomain D1 gateway values and fallbacks (#1997
 
   it('flagged: differing D1 live wins over Sanity unlisted', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     sanityFetch.mockResolvedValueOnce({
       ...structuredClone(sanityConf),
       visibility: 'unlisted',
@@ -138,7 +144,7 @@ describe('getDiscoveryVisibilityForDomain D1 gateway values and fallbacks (#1997
 
   it('flagged: a malformed D1 visibility keeps Sanity unlisted', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     sanityFetch.mockResolvedValueOnce({
       ...structuredClone(sanityConf),
       visibility: 'unlisted',
@@ -163,7 +169,7 @@ describe('getDiscoveryVisibilityForDomain D1 gateway values and fallbacks (#1997
   // tenant, not that no flags request is ever made.
   it('unflagged: gives Sanity with no conference read', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
     sanityFetch.mockResolvedValueOnce(structuredClone(sanityConf))
 
     const gatewayFetch = vi.fn()
@@ -176,7 +182,7 @@ describe('getDiscoveryVisibilityForDomain D1 gateway values and fallbacks (#1997
 
   it('unflagged: keeps unlisted Sanity conference unlisted with no gateway call', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
     sanityFetch.mockResolvedValueOnce({
       ...structuredClone(sanityConf),
       visibility: 'unlisted',
@@ -192,7 +198,7 @@ describe('getDiscoveryVisibilityForDomain D1 gateway values and fallbacks (#1997
 
   it('error: falls back to Sanity on gateway 500 response', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     sanityFetch.mockResolvedValueOnce(structuredClone(sanityConf))
 
     const gatewayFetch = vi
@@ -211,7 +217,7 @@ describe('getDiscoveryVisibilityForDomain D1 gateway values and fallbacks (#1997
 
   it('never makes an unpublished conference public by accident on gateway error', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     sanityFetch.mockResolvedValueOnce({
       ...structuredClone(sanityConf),
       visibility: 'unlisted',
@@ -229,7 +235,7 @@ describe('getDiscoveryVisibilityForDomain D1 gateway values and fallbacks (#1997
 
   it('never makes an unpublished conference public by accident when unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
     sanityFetch.mockResolvedValueOnce({
       ...structuredClone(sanityConf),
       visibility: 'unlisted',
@@ -259,7 +265,7 @@ describe('getDiscoveryVisibilityForDomain D1 gateway values and fallbacks (#1997
 
   it('preserves exact cache tags and cacheLife', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     sanityFetch.mockResolvedValueOnce(structuredClone(sanityConf))
 
     const gatewayFetch = vi.fn().mockResolvedValue(

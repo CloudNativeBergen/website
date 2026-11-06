@@ -5,7 +5,7 @@ const BUTTON =
 
 /**
  * OAuth sign-in buttons. `handoff` (decided server-side from
- * KONF_IDENTITY_TENANTS) sends the browser to the first-party identity
+ * the identity_login rollout flag) sends the browser to the first-party identity
  * handoff; otherwise each button posts `signInAction` (NextAuth).
  */
 export function SignInProviderButtons({

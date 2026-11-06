@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 import type { Context } from '@/server/trpc'
 import { DEFAULT_CLONE_FLAGS } from '@/lib/conference/edition'
 
@@ -511,7 +517,7 @@ describe('createEdition — D1 merge of the source', () => {
   })
 
   it('flagged: clones the D1 city', async () => {
-    vi.stubEnv('KONF_API_TENANTS', SOURCE_ID)
+    flagTenants('apiRead', SOURCE_ID)
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation(
@@ -528,7 +534,7 @@ describe('createEdition — D1 merge of the source', () => {
   })
 
   it('unflagged: Sanity city, gateway never called', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
     const gw = vi.fn()
     vi.stubGlobal('fetch', gw)
     await makeCaller({ isOrganizer: true }).createEdition(input())
@@ -537,7 +543,7 @@ describe('createEdition — D1 merge of the source', () => {
   })
 
   it('gateway failure: Sanity city', async () => {
-    vi.stubEnv('KONF_API_TENANTS', SOURCE_ID)
+    flagTenants('apiRead', SOURCE_ID)
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('D1 down')))
     await makeCaller({ isOrganizer: true }).createEdition(input())
     expect(created().city).toBe('Bergen')

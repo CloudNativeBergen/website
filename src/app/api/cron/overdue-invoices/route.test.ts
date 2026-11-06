@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../../../__tests__/helpers/rolloutFlags'
 
 vi.mock('next/cache', () => ({
   unstable_noStore: () => {},
@@ -95,7 +101,7 @@ describe('/api/cron/overdue-invoices', () => {
   describe('D1 gateway values and fallbacks (#1997)', () => {
     it('uses D1 title and endDate when tenant has apiRead enabled', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'c1')
+      flagTenants('apiRead', 'c1')
 
       fetch
         .mockResolvedValueOnce([
@@ -144,7 +150,7 @@ describe('/api/cron/overdue-invoices', () => {
 
     it('excludes conference when D1 endDate is older than 90 days', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'c1')
+      flagTenants('apiRead', 'c1')
 
       fetch.mockResolvedValueOnce([
         {

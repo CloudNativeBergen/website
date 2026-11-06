@@ -137,18 +137,6 @@ const lastGood = new Map<string, { flags: RolloutFlags; at: number }>()
 export type MaybeUnverified = RolloutFlags & { unverified?: true }
 
 /**
- * Transition (#1925): the old comma-separated env lists, OR'ed with the D1
- * flags until those are backfilled. Remove with the lists (docs/PLATFORM.md).
- */
-function listed(name: string, conferenceId: string, orgId?: string): boolean {
-  const ids = (process.env[name] ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-  return ids.includes(conferenceId) || (!!orgId && ids.includes(orgId))
-}
-
-/**
  * The tenant's rollout flags from tenant-directory, through the gateway.
  * The gateway answers only the signed site lane and only for the asserted
  * host, so there is no tenant argument. Throws on failure (not cached).
@@ -200,8 +188,9 @@ async function readRolloutFlags(
  * Flags for this host's conference. `KONF_API_DISABLED=1` turns everything
  * off. With `verify` (D1 writes only), a cached entry older than LAST_GOOD_MS
  * is replaced by one direct, uncached read. Without it, a stale entry is
- * returned at once, marked `unverified`, so page renders never block on it. A read failure uses the host's last good flags if under LAST_GOOD_MS
- * old; else the env lists, marked `unverified` so a D1 write can refuse.
+ * returned at once, marked `unverified`, so page renders never block on it.
+ * A read failure uses the host's last good flags if under LAST_GOOD_MS old;
+ * else all off, marked `unverified` so a D1 write can refuse.
  */
 export async function rolloutFlags(
   host: string | null,
@@ -209,20 +198,12 @@ export async function rolloutFlags(
   { verify = false }: { verify?: boolean } = {},
 ): Promise<MaybeUnverified> {
   if (process.env.KONF_API_DISABLED === '1') return OFF
-  const org = conference.organization?._ref
-  // No gateway on this environment (#1926): API read and D1 write are off.
-  const api = konfApiUrl() !== null
-  const env: RolloutFlags = {
-    apiRead: api && listed('KONF_API_TENANTS', conference._id, org),
-    identityLogin: listed('KONF_IDENTITY_TENANTS', conference._id, org),
-    d1Write: api && listed('KONF_D1_WRITE_TENANTS', conference._id),
-  }
-  // No gateway: nothing to read.
-  if (!api) return env
+  // No gateway on this environment (#1926): nothing to read, all off.
+  if (konfApiUrl() === null) return OFF
   // Gateway set but unreadable (no host or signing key) is a misconfiguration:
   // refuse moved-field saves rather than fall to Sanity-only (#1938).
   if (!host || !process.env.KONF_SITE_SIGNING_KEY)
-    return { ...env, unverified: true }
+    return { ...OFF, unverified: true }
   // One cache entry per tenant, whatever port or case the Host header had.
   host = normalizeDomain(host)
   try {
@@ -232,7 +213,7 @@ export async function rolloutFlags(
     // the last good value below.
     const stale = Date.now() - read.at >= LAST_GOOD_MS
     if (stale && verify) read = await readRolloutFlags(host)
-    else if (stale) return { ...or(env, read.flags), unverified: true }
+    else if (stale) return { ...read.flags, unverified: true }
     const prev = lastGood.get(host)
     if (!prev || read.at >= prev.at) {
       lastGood.delete(host) // re-insert at the end: oldest first
@@ -240,7 +221,7 @@ export async function rolloutFlags(
       if (lastGood.size > LAST_GOOD_MAX)
         lastGood.delete(lastGood.keys().next().value!)
     }
-    return or(env, read.flags)
+    return read.flags
   } catch (err) {
     const good = lastGood.get(host)
     const fresh = good && Date.now() - good.at < LAST_GOOD_MS
@@ -249,15 +230,9 @@ export async function rolloutFlags(
         (fresh ? ', using last good' : ', none recent') +
         `: ${(err as Error).message}`,
     )
-    return fresh ? or(env, good.flags) : { ...env, unverified: true }
+    return fresh ? good.flags : { ...OFF, unverified: true }
   }
 }
-
-const or = (a: RolloutFlags, b: RolloutFlags): RolloutFlags => ({
-  apiRead: a.apiRead || b.apiRead,
-  identityLogin: a.identityLogin || b.identityLogin,
-  d1Write: a.d1Write || b.d1Write,
-})
 
 /**
  * Cached on the same model and tags as the Sanity conference read

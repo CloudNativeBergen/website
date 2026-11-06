@@ -1497,6 +1497,8 @@ describe('conference router — updateVolunteerLinks', () => {
 // #1881 phase 2: moved fields go to D1 (api.konf.app) before Sanity.
 describe('conference router — D1 write path (#1881)', () => {
   const fetchMock = vi.fn()
+  // This tenant's d1_write flag, as the gateway's rolloutFlags answers it.
+  let d1Write = true
   const apiCalls = () =>
     fetchMock.mock.calls.filter(
       ([url, init]) =>
@@ -1514,7 +1516,7 @@ describe('conference router — D1 write path (#1881)', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.stubEnv('VERCEL_ENV', 'production')
     vi.stubEnv('KONF_SITE_SIGNING_KEY', 'k')
-    vi.stubEnv('KONF_D1_WRITE_TENANTS', CONFERENCE_ID)
+    d1Write = true
     vi.stubEnv('IDENTITY_URL', 'https://id.example')
     sessionCookieMock.mockReturnValue('sess')
     fetchMock.mockImplementation(async (url: URL | string, init) =>
@@ -1526,7 +1528,7 @@ describe('conference router — D1 write path (#1881)', () => {
                 rolloutFlags: {
                   apiRead: false,
                   identityLogin: false,
-                  d1Write: false,
+                  d1Write,
                 },
               },
             })
@@ -1593,7 +1595,7 @@ describe('conference router — D1 write path (#1881)', () => {
   })
 
   it('for a non-d1_write tenant, writes settings phase 1 fields to Sanity only (#2019)', async () => {
-    vi.stubEnv('KONF_D1_WRITE_TENANTS', '')
+    d1Write = false
     await makeCaller({ isOrganizer: true }).updateDates({
       ...DATES,
       travelSupportBudget: 5000,
@@ -1775,9 +1777,11 @@ describe('conference router — D1 write path (#1881)', () => {
     fetchMock.mockImplementation(async (url: URL | string, init) =>
       String(url).includes('/api/auth/token')
         ? ok({ token: 'user-jwt' })
-        : String(init?.body).includes('setConferenceLifecycle')
-          ? ok({ errors: [{ message: 'denied' }] })
-          : ok({ data: { updateConference: { id: CONFERENCE_ID } } }),
+        : String(init?.body).includes('rolloutFlags')
+          ? ok({ data: { rolloutFlags: { d1Write: true } } })
+          : String(init?.body).includes('setConferenceLifecycle')
+            ? ok({ errors: [{ message: 'denied' }] })
+            : ok({ data: { updateConference: { id: CONFERENCE_ID } } }),
     )
     await expect(
       makeCaller({ isOrganizer: true }).updateLifecycleStatus({
@@ -1822,10 +1826,12 @@ describe('conference router — D1 write path (#1881)', () => {
   })
 
   it('never calls Sanity when the D1 write fails', async () => {
-    fetchMock.mockImplementation(async (url: URL | string) =>
+    fetchMock.mockImplementation(async (url: URL | string, init) =>
       String(url).includes('/api/auth/token')
         ? ok({ token: 'user-jwt' })
-        : ok({ errors: [{ message: 'denied' }] }),
+        : String(init?.body).includes('rolloutFlags')
+          ? ok({ data: { rolloutFlags: { d1Write: true } } })
+          : ok({ errors: [{ message: 'denied' }] }),
     )
     await expect(
       makeCaller({ isOrganizer: true }).updateBasicInfo({
@@ -1842,11 +1848,12 @@ describe('conference router — D1 write path (#1881)', () => {
   // #1925: the env list still applies without a host, so the refusal holds.
   it('refuses, without touching Sanity, when the request has no host', async () => {
     hostMock.mockReturnValue(null)
+    // No host means the flags cannot be read: unverified, so refused (#1938).
     await expect(
       makeCaller({ isOrganizer: true }).updateVisibility({
         visibility: 'unlisted',
       }),
-    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' })
+    ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' })
     expect(apiCalls()).toHaveLength(0)
     expect(commitMock).not.toHaveBeenCalled()
   })
@@ -1876,7 +1883,7 @@ describe('conference router — D1 write path (#1881)', () => {
   })
 
   it('for a non-d1_write tenant, leaves behaviour unchanged: all fields patched to Sanity and no D1 call (#1997)', async () => {
-    vi.stubEnv('KONF_D1_WRITE_TENANTS', '')
+    d1Write = false
     await makeCaller({ isOrganizer: true }).updateBasicInfo({
       title: 'T',
       organizer: 'Org',
@@ -1890,7 +1897,7 @@ describe('conference router — D1 write path (#1881)', () => {
   })
 
   it('makes no API call with the flag off', async () => {
-    vi.stubEnv('KONF_D1_WRITE_TENANTS', '')
+    d1Write = false
     await makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' })
     expect(apiCalls()).toHaveLength(0)
     expect(lastSet).toEqual({ venueName: 'X' })
@@ -1933,7 +1940,6 @@ describe('conference router — D1 write path (#1881)', () => {
             : new Response('', { status: 503 })
           : ok({ data: { updateConference: { id: CONFERENCE_ID } } }),
       )
-      vi.stubEnv('KONF_D1_WRITE_TENANTS', '')
       await expect(
         makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' }),
       ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' })
@@ -1945,7 +1951,6 @@ describe('conference router — D1 write path (#1881)', () => {
   // #1938: an unreadable d1Write flag must not fall to "off" and Sanity-only.
   describe('when the rollout flags cannot be read', () => {
     beforeEach(() => {
-      vi.stubEnv('KONF_D1_WRITE_TENANTS', '')
       vi.stubEnv('KONF_SITE_SIGNING_KEY', 'k')
       vi.spyOn(console, 'warn').mockImplementation(() => {})
       fetchMock.mockImplementation(async (url: URL | string, init) =>
