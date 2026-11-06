@@ -66,6 +66,11 @@ const SFC: Row[] = [
   // closed-won but tierless: the site never shows it (groupSponsorsByTier).
   { conf: 'conf_a', status: 'closed-won', tier: null, s: 'notier' },
   { conf: 'conf_b', status: 'closed-won', tier: 'tier_b', s: 'initech' },
+  // conf_b's sponsorship pointing at conf_a's tier: only its own
+  // conference predicate keeps it out of conf_a.
+  { conf: 'conf_b', status: 'closed-won', tier: 'tier_gold', s: 'crossref' },
+  // conf_a's sponsorship pointing at conf_b's tier: never shown.
+  { conf: 'conf_a', status: 'closed-won', tier: 'tier_b', s: 'foreigntier' },
 ]
 
 type P = { orgId: string; conferenceId: string }
@@ -196,6 +201,8 @@ describe('sponsors subgraph', () => {
       'NOK',
       'secret',
       'notier',
+      'crossref',
+      'foreigntier',
     ])
       expect(body).not.toContain(leak)
   })

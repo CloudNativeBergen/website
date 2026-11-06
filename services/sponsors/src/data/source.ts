@@ -66,13 +66,14 @@ export interface SponsorSource {
 
 // Public visibility is the site's own: a sponsorship is public once
 // `status == "closed-won"` (getPublicSponsorsForConference), and a tierless
-// one is never shown (groupSponsorsByTier). Every root filter carries
+// one is never shown (groupSponsorsByTier). A sponsorship keeps only a tier
+// from the tenant's own tier list, so a reference to a foreign tier drops it. Every root filter carries
 // `conference._ref == $conferenceId && conference->organization._ref ==
 // $orgId` literally, so review and tenancy/no-unscoped-groq both see it.
 const TIERS = `*[_type == "sponsorTier" && conference._ref == $conferenceId && conference->organization._ref == $orgId] | ${PUBLIC_SPONSOR_TIER_ORDER}{
       ${PUBLIC_SPONSOR_TIER_FIELDS}
     }`
-const SPONSORS = `*[_type == "sponsorForConference" && conference._ref == $conferenceId && conference->organization._ref == $orgId && status == "closed-won" && tier->conference._ref == $conferenceId] | ${PUBLIC_SPONSOR_ORDER}{
+const SPONSORS = `*[_type == "sponsorForConference" && conference._ref == $conferenceId && conference->organization._ref == $orgId && status == "closed-won"] | ${PUBLIC_SPONSOR_ORDER}{
       ${PUBLIC_SPONSOR_FIELDS}
     }`
 const BOTH = `{ "tiers": ${TIERS}, "sponsors": ${SPONSORS} }`
