@@ -740,9 +740,10 @@ describe('cross-tenant mutation walk', () => {
     env.OVERRIDE_TENANTS = {}
     await overrideForA(false)
   })
-  const mutate = async (headers: Record<string, string>) => {
+  const mutate = async (headers: Record<string, string>, skip?: RegExp) => {
     const bodies: { data?: unknown; errors?: unknown[] }[] = []
-    for (const m of mutations()) bodies.push(JSON.parse(await run(m, headers)))
+    for (const m of mutations())
+      if (!skip?.test(m)) bodies.push(JSON.parse(await run(m, headers)))
     return bodies
   }
   const organizer = () => ({ authorization: `Bearer ${memberJwt}` })
@@ -781,7 +782,12 @@ describe('cross-tenant mutation walk', () => {
       .run()
     try {
       const before = await snapshot()
-      for (const body of await mutate({ ...organizer(), origin: ORIGIN })) {
+      // Push subscriptions belong to the signed-in user, not the org, so any
+      // member may write their own (services/identity/src/push.test.ts).
+      for (const body of await mutate(
+        { ...organizer(), origin: ORIGIN },
+        /^mutation \{ (subscribePush|unsubscribePush)\b/,
+      )) {
         expect(body.errors?.length ?? 0).toBeGreaterThan(0)
       }
       expect(await snapshot()).toEqual(before)
@@ -798,14 +804,19 @@ describe('cross-tenant mutation walk', () => {
     for (const body of await mutate({ ...organizer(), origin: ORIGIN })) {
       const json = JSON.stringify(body)
       // Operator-only (#1924, #1923): refused to every tenant envelope.
-      if (/"(provisionOrganization|operator\w+)"/.test(json))
+      if (
+        /"(provisionOrganization|operator\w+|prunePushSubscriptions)"/.test(
+          json,
+        )
+      )
         expect(body.errors).toMatchObject([
           { extensions: { code: 'FORBIDDEN' } },
         ])
       // Membership (#1923): probe ids name no member or invitation of A, and
       // probe emails are no address, so these refuse; the snapshot holds B.
       else if (
-        /"(inviteMember|cancelInvitation|removeMember|changeMemberRole)"/.test(
+        // subscribePush: the probe endpoint is not https.
+        /"(inviteMember|cancelInvitation|removeMember|changeMemberRole|subscribePush)"/.test(
           json,
         )
       )

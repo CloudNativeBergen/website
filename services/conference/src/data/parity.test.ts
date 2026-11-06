@@ -24,6 +24,8 @@ const d1 = (over: Partial<Row> = {}): Row => ({
 })
 
 const fetchMock = vi.fn()
+const emit = vi.fn()
+vi.mock('../push', () => ({ emit: (e: unknown) => emit(e) }))
 vi.mock('@sanity/client', () => ({
   createClient: () => ({ fetch: fetchMock }),
 }))
@@ -107,6 +109,17 @@ describe('scheduled', () => {
   const events = () => logs.map((l) => JSON.parse(l))
   const summary = () =>
     events().find((e) => e.event === 'conference.parity.sweep')
+
+  it('emits parity.drift with conference ids only, and nothing in sync', async () => {
+    emit.mockReset()
+    fetchMock.mockResolvedValue([doc])
+    await scheduled(envWith([d1()]))
+    expect(emit).not.toHaveBeenCalled()
+    await scheduled(envWith([d1({ city: SECRET })]))
+    expect(emit.mock.calls).toEqual([
+      [{ type: 'parity.drift', conferenceIds: ['c1'] }],
+    ])
+  })
 
   it('reports in_sync with zero diffs', async () => {
     fetchMock.mockResolvedValue([doc])

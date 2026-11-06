@@ -7,6 +7,7 @@
 // homepage blocks and the rest) stay in content and reach the caller through
 // the entity key.
 import { builder } from './builder'
+import { emit } from './push'
 import { createGraphQLError } from 'graphql-yoga'
 import type { ConferencePatch, ConferenceRow } from './data'
 import type { ResolverContext } from './worker'
@@ -273,8 +274,19 @@ builder.mutationType({
       description:
         "Patches the request's Conference. Requires an org owner or admin.",
       args: { input: t.arg({ type: ConferencePatchInput, required: true }) },
-      resolve: (_, { input }, ctx) =>
-        ctx.data.conferences().update(validate(input)),
+      resolve: async (_, { input }, ctx) => {
+        const row = await ctx.data.conferences().update(validate(input))
+        const e = ctx.envelope
+        // The actor rides along so kontroll can leave them out (kontroll#61).
+        if (e.typ === 'tenant' && e.userId)
+          emit({
+            type: 'conference.settings_changed',
+            organizationId: e.orgId,
+            conferenceId: row.conferenceId,
+            actorId: e.userId,
+          })
+        return row
+      },
     }),
   }),
 })
