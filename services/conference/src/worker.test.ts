@@ -777,6 +777,16 @@ describe('tenant span attributes (#1814)', () => {
     ])
   })
 
+  it('leaves the conference out for an org-level envelope', async () => {
+    const { ctx, setAttributes } = traced()
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await fetchWith(ctx, tenant('org-a', null))
+    // A span attribute cannot be null; the runtime drops undefined.
+    expect(setAttributes.mock.calls).toEqual([[{ 'konf.org_id': 'org-a' }]])
+    expect(log.mock.calls[0]).toEqual(['{"konf.org_id":"org-a"}'])
+    log.mockRestore()
+  })
+
   it('sets the operator, not a tenant, for a PlatformContext', async () => {
     const { ctx, setAttributes } = traced()
     await fetchWith(ctx, {

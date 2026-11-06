@@ -31,10 +31,11 @@ export default {
       envelope.typ === 'tenant'
         ? {
             'konf.org_id': envelope.orgId,
-            'konf.conference_id': envelope.conferenceId,
+            'konf.conference_id': envelope.conferenceId ?? undefined,
           }
         : { 'konf.platform_user': envelope.userId }
-    // On the log line and on the request's span, so traces filter by tenant (#1814).
+    // On the log line and on the request's span, so traces filter by tenant
+    // (#1814). An org-level envelope has no conference: the key is left out.
     console.log(JSON.stringify(tenant))
     ctx?.tracing.getActiveSpan()?.setAttributes(tenant)
     return yoga.fetch(request, { envelope, data: createData(env, envelope) })
