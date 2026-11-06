@@ -39,10 +39,22 @@ const SPEAKERS: Row[] = [
     image: 'https://cdn/ada.png',
     email: 'ada@private.example',
     phone: '+47 111',
+    // Only `local` is shown publicly; the others are organizer-only.
+    flags: ['local', 'requires-funding', 'diverse'],
+    galleryImages: [
+      {
+        _id: 'g1',
+        image: { asset: { _ref: 'image-private-asset' } },
+        imageUrl: 'https://cdn/g1.jpg',
+        imageAlt: 'On stage',
+        photographer: 'Pat',
+        featured: true,
+      },
+    ],
   },
-  { _id: 'sp_acc', name: 'Accepted Only', email: 'acc@private.example' },
-  { _id: 'sp_b', name: 'Bob', email: 'bob@private.example' },
-  { _id: 'sp_c', name: 'Cy' },
+  { _id: 'sp_acc', name: 'Accepted Only', slug: 'acc', email: 'acc@private.example' },
+  { _id: 'sp_b', name: 'Bob', slug: 'bob', email: 'bob@private.example' },
+  { _id: 'sp_c', name: 'Cy', slug: 'cy' },
 ]
 const TALKS: Row[] = [
   {
@@ -53,6 +65,25 @@ const TALKS: Row[] = [
     description: [{ _type: 'block', children: [{ text: 'About' }] }],
     format: 'presentation_25',
     level: 'beginner',
+    language: 'english',
+    audiences: ['developer'],
+    topics: [{ _id: 'tp', title: 'K8s', slug: 'k8s', color: '#00f' }],
+    attachments: [
+      {
+        _type: 'fileAttachment',
+        _key: 'k1',
+        file: { asset: { _ref: 'file-private-asset' } },
+        attachmentType: 'slides',
+        title: 'Slides',
+        filename: 'a.pdf',
+        url: 'https://cdn/a.pdf',
+      },
+    ],
+    scheduleInfo: {
+      date: '2026-05-02',
+      trackTitle: 'Main',
+      timeSlot: { startTime: '09:00', endTime: '09:45' },
+    },
     speakers: ['sp_a'],
   },
   {
@@ -81,6 +112,11 @@ const TALKS: Row[] = [
     conf: 'conf_c',
     status: 'confirmed',
     title: 'C talk',
+    scheduleInfo: {
+      date: '2999-05-02',
+      trackTitle: 'Main',
+      timeSlot: { startTime: '09:00' },
+    },
     speakers: ['sp_c'],
   },
 ]
@@ -95,7 +131,11 @@ const SCHEDULES: Row[] = [
     conf: 'conf_a',
     date: '2026-05-02',
     tracks: [
-      { talks: slots(['09:00', 't_a'], ['08:00', null], ['10:00', 't_acc']) },
+      {
+        trackTitle: 'Main',
+        sponsor: { _ref: 'sponsor_x' },
+        talks: slots(['09:00', 't_a'], ['08:00', null], ['10:00', 't_acc']),
+      },
     ],
   },
   {
@@ -117,7 +157,7 @@ const SCHEDULES: Row[] = [
   },
 ]
 
-type P = { orgId: string; conferenceId: string; id?: string }
+type P = { orgId: string; conferenceId: string; id?: string; slug?: string }
 const inTenant = (conf: unknown, q: string, p: P) =>
   (!q.includes('conference._ref == $conferenceId') ||
     conf === p.conferenceId) &&
@@ -130,8 +170,17 @@ const deref = (t: Row) => ({
   ...t,
   speakers: (t.speakers as string[]).map((id) => {
     const s = SPEAKERS.find((s) => s._id === id)!
-    return { _id: s._id, name: s.name }
+    // email rides along to prove the mapper drops it.
+    const { _id, name, slug, title, image, email } = s
+    return { _id, name, slug, title, image, email }
   }),
+})
+const withTalks = (s: Row, q: string, p: P) => ({
+  ...s,
+  talks: TALKS.filter(
+    (t) =>
+      (t.speakers as string[]).includes(s._id as string) && publicTalk(t, q, p),
+  ).map(deref),
 })
 
 const fetch = vi.fn(async (q: string, p: P) => {
@@ -145,10 +194,12 @@ const fetch = vi.fn(async (q: string, p: P) => {
     ).map((s) => ({
       date: s.date,
       tracks: (s.tracks as Row[]).map((tr) => ({
+        ...tr,
         talks: (tr.talks as Row[]).map((sl) => {
           const t = TALKS.find((t) => t._id === sl.talk)
           return {
             ...sl,
+            placeholder: sl.talk ? undefined : 'Coffee',
             talk: t
               ? t.status === 'confirmed'
                 ? deref(t)
@@ -171,9 +222,11 @@ const fetch = vi.fn(async (q: string, p: P) => {
         publicTalk(t, q, p),
     ),
   )
-  return q.includes('_id == $id')
-    ? (found.find((s) => s._id === p.id) ?? null)
-    : found
+  if (q.includes('_id == $id') || q.includes('slug.current == $slug')) {
+    const one = found.find((s) => (p.id ? s._id === p.id : s.slug === p.slug))
+    return one ? withTalks(one, q, p) : null
+  }
+  return found.map((s) => withTalks(s, q, p))
 })
 vi.mock('@sanity/client', () => ({ createClient: () => ({ fetch }) }))
 
@@ -223,6 +276,20 @@ const ALL = `{
   speakers { id name slug title bio image links }
   ta: talk(id: "t_a") { id } tb: talk(id: "t_b") { id }
   sa: speaker(id: "sp_a") { id } sb: speaker(id: "sp_b") { id }
+}`
+
+const PROFILE = `{
+  p: speakerBySlug(slug: "ada") {
+    id name slug title bio image links flags
+    galleryImages { id url alt photographer date location featured }
+    talks { id title language audiences topics { id title slug color }
+      speakers { id name slug title image }
+      attachments { kind attachmentType title description filename url }
+      scheduleInfo { date trackTitle startTime endTime } }
+  }
+  b: speakerBySlug(slug: "bob") { id }
+  acc: speakerBySlug(slug: "acc") { id }
+  all: speakers { id flags galleryImages { url } talks { id attachments { url } } }
 }`
 
 describe('program subgraph', () => {
@@ -301,17 +368,157 @@ describe('program subgraph', () => {
       expect(body).not.toContain(leak)
   })
 
-  it('serves no private speaker field', async () => {
-    const body = JSON.stringify(await post(ALL, tenant('org_a', 'conf_a')))
-    expect(body).not.toContain('private.example')
-    expect(body).not.toContain('+47')
+  it('pins the exact public field list of every type', async () => {
+    const PUBLIC: Record<string, string[]> = {
+      Speaker: ['bio', 'flags', 'galleryImages', 'id', 'image', 'links', 'name', 'slug', 'talks', 'title'],
+      Talk: ['attachments', 'audiences', 'description', 'format', 'id', 'language', 'level', 'scheduleInfo', 'speakers', 'title', 'topics'],
+      TalkSpeaker: ['id', 'image', 'name', 'slug', 'title'],
+      Topic: ['color', 'id', 'slug', 'title'],
+      Attachment: ['attachmentType', 'description', 'filename', 'kind', 'title', 'url'],
+      ScheduleInfo: ['date', 'endTime', 'startTime', 'trackTitle'],
+      GalleryImage: ['alt', 'date', 'featured', 'id', 'location', 'photographer', 'url'],
+      ProgramSlot: ['end', 'placeholder', 'room', 'start', 'talk', 'track'],
+      ProgramTrack: ['description', 'name', 'sponsorId'],
+    }
+    for (const [type, fields] of Object.entries(PUBLIC)) {
+      const { data } = await post(
+        `{ __type(name: "${type}") { fields { name } } }`,
+        tenant('org_a', 'conf_a'),
+      )
+      expect(
+        data.__type.fields.map((f: { name: string }) => f.name).sort(),
+      ).toEqual(fields)
+    }
+  })
+
+  it('serves no private speaker field, flag or attachment asset', async () => {
+    const { data } = await post(PROFILE, tenant('org_a', 'conf_a'))
+    const body = JSON.stringify(data)
+    for (const leak of [
+      'private.example', // email, also on the talk's speaker refs
+      '+47', // phone
+      'requires-funding', // private flags
+      'diverse',
+      'private-asset', // raw file and image asset refs
+    ])
+      expect(body).not.toContain(leak)
+    expect(data.p.flags).toEqual(['local'])
+    expect(data.p.galleryImages).toEqual([
+      {
+        id: 'g1',
+        url: 'https://cdn/g1.jpg',
+        alt: 'On stage',
+        photographer: 'Pat',
+        date: null,
+        location: null,
+        featured: true,
+      },
+    ])
+    expect(data.p.talks[0].attachments).toEqual([
+      {
+        kind: 'file',
+        attachmentType: 'slides',
+        title: 'Slides',
+        description: null,
+        filename: 'a.pdf',
+        url: 'https://cdn/a.pdf',
+      },
+    ])
+    // The list carries the same public fields.
+    expect(data.all[0].flags).toEqual(['local'])
+  })
+
+  it('serves speakerBySlug with its confirmed talks, in the tenant only', async () => {
+    const { data } = await post(PROFILE, tenant('org_a', 'conf_a'))
+    expect(data.p).toMatchObject({ id: 'sp_a', name: 'Ada', slug: 'ada' })
+    expect(data.p.talks).toEqual([
+      {
+        id: 't_a',
+        title: 'A talk',
+        language: 'english',
+        audiences: ['developer'],
+        topics: [{ id: 'tp', title: 'K8s', slug: 'k8s', color: '#00f' }],
+        speakers: [
+          {
+            id: 'sp_a',
+            name: 'Ada',
+            slug: 'ada',
+            title: 'Engineer',
+            image: 'https://cdn/ada.png',
+          },
+        ],
+        attachments: expect.any(Array),
+        scheduleInfo: {
+          date: '2026-05-02',
+          trackTitle: 'Main',
+          startTime: '09:00',
+          endTime: '09:45',
+        },
+      },
+    ])
+    expect(data.b).toBeNull() // Bob speaks at conf_b
+    expect(data.acc).toBeNull() // accepted, not confirmed
+    // Bob's own envelope does find him.
+    expect((await post(PROFILE, tenant('org_b', 'conf_b'))).data.b.id).toBe(
+      'sp_b',
+    )
+  })
+
+  it('serves track, room and placeholder on program slots', async () => {
     const { data } = await post(
-      '{ __type(name: "Speaker") { fields { name } } }',
+      '{ program { days { slots { start placeholder room track { name sponsorId } talk { id } } } } }',
       tenant('org_a', 'conf_a'),
     )
-    expect(
-      data.__type.fields.map((f: { name: string }) => f.name).sort(),
-    ).toEqual(['bio', 'id', 'image', 'links', 'name', 'slug', 'title'])
+    expect(data.program.days[0].slots.slice(0, 2)).toEqual([
+      {
+        start: '08:00',
+        placeholder: 'Coffee',
+        room: 'Main',
+        track: { name: 'Main', sponsorId: 'sponsor_x' },
+        talk: null,
+      },
+      {
+        start: '09:00',
+        placeholder: null,
+        room: 'Main',
+        track: { name: 'Main', sponsorId: 'sponsor_x' },
+        talk: { id: 't_a' },
+      },
+    ])
+  })
+
+  it('hides scheduleInfo before the D1 programDate, and when the read fails', async () => {
+    const q = `{ t: talk(id: "t_c") { id scheduleInfo { date } }
+      p: speakerBySlug(slug: "cy") { talks { id scheduleInfo { date } } }
+      all: speakers { talks { scheduleInfo { date } } } }`
+    // conf_c opens in 2999: the talk and speaker are public, the slot is not.
+    const before = await post(q, tenant('org_a', 'conf_c'))
+    expect(before.errors).toBeUndefined()
+    expect(before.data).toEqual({
+      t: { id: 't_c', scheduleInfo: null },
+      p: { talks: [{ id: 't_c', scheduleInfo: null }] },
+      all: [{ talks: [{ scheduleInfo: null }] }],
+    })
+    expect(JSON.stringify(before)).not.toContain('2999-05-02')
+    // Past programDate it shows.
+    const open = await post(
+      '{ t: talk(id: "t_a") { scheduleInfo { date } } }',
+      tenant('org_a', 'conf_a'),
+    )
+    expect(open.data.t.scheduleInfo).toEqual({ date: '2026-05-02' })
+    // A failed read fails closed, and the date is read once per request.
+    env.CONFERENCE.programDate.mockClear()
+    env.CONFERENCE.programDate.mockRejectedValueOnce(new Error('D1 down'))
+    const failed = await post(
+      `{ t: talk(id: "t_a") { scheduleInfo { date } }
+         p: speakerBySlug(slug: "ada") { talks { scheduleInfo { date } } } }`,
+      tenant('org_a', 'conf_a'),
+    )
+    expect(failed.data).toEqual({
+      t: { scheduleInfo: null },
+      p: { talks: [{ scheduleInfo: null }] },
+    })
+    expect(env.CONFERENCE.programDate).toHaveBeenCalledTimes(1)
   })
 
   it('serves no program before the D1 programDate, and nothing without a conference', async () => {
