@@ -70,22 +70,27 @@ export interface ProgramSource {
 // src/lib/conference/query.ts EXPANDED_SCHEDULES); an accepted talk is not
 // until the speaker confirms. The org predicate pins the conference to the
 // envelope's org, so a conference id from another org matches nothing.
-const TENANT = `conference._ref == $conferenceId && conference->organization._ref == $orgId`
-const PUBLIC_TALK = `_type == "talk" && status == "confirmed" && ${TENANT}`
+// Every root filter carries `conference._ref == $conferenceId &&
+// conference->organization._ref == $orgId` literally, so review and
+// tenancy/no-unscoped-groq both see it.
 const TALK_FIELDS = `_id, title, format, level, speakers[]->{_id, name}`
+// Explicit projection: only these fields ever leave Sanity.
+const SPEAKER_FIELDS = `_id, name, title, bio, links, "image": ${SPEAKER_IMAGE_URL}`
 
 const PROGRAM = `{
   "programDate": *[_type == "conference" && _id == $conferenceId && organization._ref == $orgId][0].programDate,
-  "days": *[_type == "schedule" && ${TENANT} && ${OFFICIAL_SCHEDULE_FILTER}] | order(date asc) {
+  "days": *[_type == "schedule" && conference._ref == $conferenceId && conference->organization._ref == $orgId && ${/* groq-global-scoped: the tenant predicate is literal beside it; this is a status constant */ OFFICIAL_SCHEDULE_FILTER}] | order(date asc) {
     date,
     tracks[]{ talks[]{ startTime, endTime, talk->{ status, status == "confirmed" => { ${TALK_FIELDS} } } } }
   }
 }`
-const TALK = `*[${PUBLIC_TALK} && _id == $id][0]{ ${TALK_FIELDS} }`
-// Explicit projection: only these fields ever leave Sanity.
-const SPEAKER_FIELDS = `_id, name, title, bio, links, "image": ${SPEAKER_IMAGE_URL}`
-const SPEAKERS = `*[_type == "speaker" && count(*[${PUBLIC_TALK} && references(^._id)]) > 0] | order(name asc) { ${SPEAKER_FIELDS} }`
-const SPEAKER = `*[_type == "speaker" && _id == $id && count(*[${PUBLIC_TALK} && references(^._id)]) > 0][0]{ ${SPEAKER_FIELDS} }`
+const TALK = `*[_type == "talk" && _id == $id && status == "confirmed" && conference._ref == $conferenceId && conference->organization._ref == $orgId][0]{ ${TALK_FIELDS} }`
+// groq-global-scoped: only a speaker with a confirmed talk in $conferenceId
+// of $orgId matches (the nested count carries the tenant predicate).
+const SPEAKERS = `*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId && conference->organization._ref == $orgId]) > 0] | order(name asc) { ${SPEAKER_FIELDS} }`
+// groq-global-scoped: only a speaker with a confirmed talk in $conferenceId
+// of $orgId matches (the nested count carries the tenant predicate).
+const SPEAKER = `*[_type == "speaker" && _id == $id && count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId && conference->organization._ref == $orgId]) > 0][0]{ ${SPEAKER_FIELDS} }`
 
 type Row = Record<string, unknown>
 const s = (v: unknown) => (typeof v === 'string' && v.trim()) || null
