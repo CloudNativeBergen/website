@@ -2127,7 +2127,9 @@ describe('session org members (#1972)', () => {
       })
       // One batched read for both members, not one per member.
       expect(accountReads).toHaveLength(1)
-      expect(accountReads[0]).toMatch(/\bin\s*\(/i)
+      // Org-scoped join, no parameter list: D1 caps bound parameters (#2018).
+      expect(accountReads[0]).not.toMatch(/\bin\s*\(/i)
+      expect(accountReads[0]).toMatch(/join "member".*"organizationId" = \?/i)
       // Only providerId (and the join key) leave the account table.
       const cols = /^select (?:distinct )?(.*?) from "account"/i.exec(
         accountReads[0],
