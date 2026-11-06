@@ -6,7 +6,8 @@
  *
  * `price` is read because the site orders tiers by it and the /sponsor
  * prospectus shows it; the subgraph uses it only to rank tiers and never
- * returns it.
+ * returns it. Site-only fields the subgraph never needs (maxQuantity,
+ * ticketEntitlement) are appended by the site's own queries.
  */
 
 /** A published sponsorship (getPublicSponsorsForConference). */
@@ -17,9 +18,10 @@ export const PUBLIC_SPONSOR_FIELDS = `"_sfcId": _id,
         website,
         logo,
         logoBright,
-      },
-      tier->{
-        _id,
+      }`
+
+/** A sponsorship's tier, inside `tier->{ ... }`. */
+export const PUBLIC_SPONSORSHIP_TIER_FIELDS = `_id,
         title,
         tagline,
         tierType,
@@ -27,9 +29,7 @@ export const PUBLIC_SPONSOR_FIELDS = `"_sfcId": _id,
           _key,
           amount,
           currency
-        },
-        ticketEntitlement
-      }`
+        }`
 
 /** The order the site lists sponsorships in. */
 export const PUBLIC_SPONSOR_ORDER = `order(tier->tierType asc, tier->price[0].amount desc, tier->title asc)`
@@ -52,9 +52,7 @@ export const PUBLIC_SPONSOR_TIER_FIELDS = `_id,
         description
       },
       soldOut,
-      mostPopular,
-      maxQuantity,
-      ticketEntitlement`
+      mostPopular`
 
 /** The order the site's tier query returns tiers in. */
 export const PUBLIC_SPONSOR_TIER_ORDER = `order(tierType asc, title asc, price[0].amount desc)`

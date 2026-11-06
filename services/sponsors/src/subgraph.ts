@@ -40,10 +40,13 @@ const SponsorType = builder.objectRef<Sponsor>('Sponsor').implement({
     id: t.exposeID('id'),
     name: t.exposeString('name', str),
     website: t.exposeString('website', str),
-    logo: t.exposeString('logo', { ...str, description: 'Inline SVG.' }),
-    logoBright: t.exposeString('logoBright', {
+    logoUrl: t.exposeString('logoUrl', {
       ...str,
-      description: 'Inline SVG for dark backgrounds.',
+      description: 'data:image/svg+xml;base64 URL. Render with <img>.',
+    }),
+    logoBrightUrl: t.exposeString('logoBrightUrl', {
+      ...str,
+      description: 'The same, for dark backgrounds.',
     }),
   }),
 })

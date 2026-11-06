@@ -47,8 +47,8 @@ describe('compose', () => {
       ).sort()
     expect(fields('Sponsor')).toEqual([
       'id',
-      'logo',
-      'logoBright',
+      'logoBrightUrl',
+      'logoUrl',
       'name',
       'website',
     ])

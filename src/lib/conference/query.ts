@@ -128,7 +128,9 @@ const EXPANDED_FEATURED_TALKS = `featuredTalks[]->{
 // interpolated into. (Verified against the production dataset that an
 // object-literal projection adds no `^` level, so this stays `^`, not `^.^`.)
 const EXPANDED_SPONSOR_TIERS = `*[_type == "sponsorTier" && conference._ref == ^._id] | ${PUBLIC_SPONSOR_TIER_ORDER}{
-      ${PUBLIC_SPONSOR_TIER_FIELDS}
+      ${PUBLIC_SPONSOR_TIER_FIELDS},
+      maxQuantity,
+      ticketEntitlement
       }`
 
 const EXPANDED_TOPICS = `topics[]->{

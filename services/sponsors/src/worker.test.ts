@@ -55,7 +55,7 @@ const sponsor = (_id: string, name: string) => ({
   name,
   website: `https://${_id}.example`,
   logo: `<svg>${name}</svg>`,
-  logoBright: null,
+  logoBright: `<svg><script>alert('${name}')</script></svg>`,
   ...PRIVATE,
 })
 const SFC: Row[] = [
@@ -85,7 +85,9 @@ const sponsorsFor = (q: string, p: P) =>
   SFC.filter(
     (r) =>
       inTenant(r.conf, q, p) &&
-      (!q.includes('status == "closed-won"') || r.status === 'closed-won'),
+      (!q.includes('status == "closed-won"') || r.status === 'closed-won') &&
+      (!q.includes('tier->conference._ref == $conferenceId') ||
+        TIERS.find((t) => t._id === r.tier)?.conf === p.conferenceId),
   ).map((r) => ({
     _sfcId: `sfc_${r.s}`,
     contractValue: 123456,
@@ -96,8 +98,10 @@ const sponsorsFor = (q: string, p: P) =>
 
 const fetch = vi.fn(async (q: string, p: P) => {
   if (q.startsWith('{ "tiers"')) {
-    const [tq, sq] = q.split('"sponsors":')
-    return { tiers: tiersFor(tq, p), sponsors: sponsorsFor(sq, p) }
+    // The tier half is deliberately unfiltered, so only the sponsorship
+    // query's own predicates keep other tenants out.
+    const sq = q.split('"sponsors":')[1]
+    return { tiers: TIERS, sponsors: sponsorsFor(sq, p) }
   }
   return tiersFor(q, p)
 })
@@ -141,7 +145,7 @@ async function post(query: string, as: Envelope) {
 
 const TIER_FIELDS = `id name tagline tierType level soldOut mostPopular perks { label description }`
 const ALL = `{
-  sponsors { tier { ${TIER_FIELDS} } sponsor { id name website logo logoBright } }
+  sponsors { tier { ${TIER_FIELDS} } sponsor { id name website logoUrl logoBrightUrl } }
   sponsorTiers { ${TIER_FIELDS} }
 }`
 
@@ -151,16 +155,18 @@ describe('sponsors subgraph', () => {
     expect(errors).toBeUndefined()
     expect(
       data.sponsors.map(
-        (x: Row) =>
-          `${(x.sponsor as Row).id}:${(x.tier as Row).name}:${(x.tier as Row).level}`,
+        (x: Row) => `${(x.sponsor as Row).id}:${(x.tier as Row).name}`,
       ),
-    ).toEqual(['globex:Gold:1', 'acme:Silver:2'])
+    ).toEqual(['globex:Gold', 'acme:Silver'])
+    const b64 = (v: string) =>
+      `data:image/svg+xml;base64,${Buffer.from(v).toString('base64')}`
     expect(data.sponsors[0].sponsor).toEqual({
       id: 'globex',
       name: 'GLOBEX',
       website: 'https://globex.example',
-      logo: '<svg>GLOBEX</svg>',
-      logoBright: null,
+      logoUrl: b64('<svg>GLOBEX</svg>'),
+      // A script in the SVG stays inside the base64 payload.
+      logoBrightUrl: b64(`<svg><script>alert('GLOBEX')</script></svg>`),
     })
     expect(
       data.sponsorTiers.map((t: Row) => [t.name, t.level, t.tierType]),
@@ -203,8 +209,17 @@ describe('sponsors subgraph', () => {
       'notier',
       'crossref',
       'foreigntier',
+      '<svg',
+      '<script',
     ])
       expect(body).not.toContain(leak)
+  })
+
+  it('the sponsorship query carries both tenant predicates itself', async () => {
+    const { SPONSORS } = await import('./data/source')
+    expect(SPONSORS).toContain('conference._ref == $conferenceId')
+    expect(SPONSORS).toContain('conference->organization._ref == $orgId')
+    expect(SPONSORS).toContain('status == "closed-won"')
   })
 
   it('exposes exactly the public field list per type', () => {
@@ -215,8 +230,8 @@ describe('sponsors subgraph', () => {
     expect(fields('Sponsorship')).toEqual(['sponsor', 'tier'])
     expect(fields('Sponsor')).toEqual([
       'id',
-      'logo',
-      'logoBright',
+      'logoBrightUrl',
+      'logoUrl',
       'name',
       'website',
     ])

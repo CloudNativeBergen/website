@@ -5,6 +5,7 @@ import type { SanityClient } from '@sanity/client'
 import {
   PUBLIC_SPONSOR_FIELDS,
   PUBLIC_SPONSOR_ORDER,
+  PUBLIC_SPONSORSHIP_TIER_FIELDS,
   PUBLIC_SPONSOR_TIER_FIELDS,
   PUBLIC_SPONSOR_TIER_ORDER,
 } from '../../../../src/lib/sponsor/public-groq'
@@ -46,10 +47,10 @@ export interface Sponsor {
   id: string
   name: string | null
   website: string | null
-  /** Inline SVG markup. */
-  logo: string | null
-  /** Inline SVG markup for dark backgrounds. */
-  logoBright: string | null
+  /** The SVG logo as a base64 data: URL, for <img> (scripts never run). */
+  logoUrl: string | null
+  /** The same for dark backgrounds. */
+  logoBrightUrl: string | null
 }
 export interface Sponsorship {
   tier: Tier
@@ -66,19 +67,30 @@ export interface SponsorSource {
 
 // Public visibility is the site's own: a sponsorship is public once
 // `status == "closed-won"` (getPublicSponsorsForConference), and a tierless
-// one is never shown (groupSponsorsByTier). A sponsorship keeps only a tier
-// from the tenant's own tier list, so a reference to a foreign tier drops it. Every root filter carries
+// one is never shown (groupSponsorsByTier), nor one whose tier belongs to
+// another conference. Every root filter carries
 // `conference._ref == $conferenceId && conference->organization._ref ==
 // $orgId` literally, so review and tenancy/no-unscoped-groq both see it.
 const TIERS = `*[_type == "sponsorTier" && conference._ref == $conferenceId && conference->organization._ref == $orgId] | ${PUBLIC_SPONSOR_TIER_ORDER}{
       ${PUBLIC_SPONSOR_TIER_FIELDS}
     }`
-const SPONSORS = `*[_type == "sponsorForConference" && conference._ref == $conferenceId && conference->organization._ref == $orgId && status == "closed-won"] | ${PUBLIC_SPONSOR_ORDER}{
-      ${PUBLIC_SPONSOR_FIELDS}
+export const SPONSORS = `*[_type == "sponsorForConference" && conference._ref == $conferenceId && conference->organization._ref == $orgId && status == "closed-won" && tier->conference._ref == $conferenceId] | ${PUBLIC_SPONSOR_ORDER}{
+      ${PUBLIC_SPONSOR_FIELDS},
+      tier->{ ${PUBLIC_SPONSORSHIP_TIER_FIELDS} }
     }`
 const BOTH = `{ "tiers": ${TIERS}, "sponsors": ${SPONSORS} }`
 
 type Row = Record<string, unknown>
+
+/**
+ * Raw inline SVG never leaves the subgraph: a client that injected it into
+ * the DOM would run any script in it. Base64 in a data: URL renders only
+ * through <img>, where SVG scripts do not run.
+ */
+export const svgDataUrl = (v: unknown) =>
+  typeof v === 'string' && v.trim()
+    ? `data:image/svg+xml;base64,${Buffer.from(v, 'utf8').toString('base64')}`
+    : null
 const s = (v: unknown) => (typeof v === 'string' && v.trim()) || null
 const list = (v: unknown) =>
   Array.isArray(v) ? (v as Row[]).filter((x) => x != null) : []
@@ -129,8 +141,8 @@ export class SanitySponsorSource implements SponsorSource {
               id: sp._id as string,
               name: s(sp.name),
               website: s(sp.website),
-              logo: s(sp.logo),
-              logoBright: s(sp.logoBright),
+              logoUrl: svgDataUrl(sp.logo),
+              logoBrightUrl: svgDataUrl(sp.logoBright),
             },
           },
         ]
