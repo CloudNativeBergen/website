@@ -34,7 +34,10 @@ vi.mock('@/lib/conference/sanity', () => {
   }
   // The explicit schedule seams (#1772) read through the same mock.
   const withSchedule = (o: object = {}) =>
-    m.getConferenceForCurrentDomain({ ...o, schedule: true } as never)
+    (m.getConferenceForCurrentDomain as (o: object) => unknown)({
+      ...o,
+      schedule: true,
+    })
   return {
     ...m,
     getEditableScheduleForCurrentDomain: withSchedule,
