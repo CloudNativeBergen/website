@@ -27,7 +27,10 @@ Domain code comes from the website's `src/lib` through the `@/*` path alias
 ## Commands
 
 ```sh
-pnpm --filter @runkonf/api dev        # wrangler dev, local
+mise run dev:api                      # gateway + every subgraph, seeded local D1 (see docs/PLATFORM.md)
+mise run dev:token                    # local dev identity JWT for the operator lane
+mise run dev:api:reset                # wipe local D1 state
+pnpm --filter @runkonf/api dev        # this Worker alone, wrangler dev, local
 pnpm --filter @runkonf/api test       # vitest (also part of root `pnpm test`)
 pnpm --filter @runkonf/api typecheck  # also part of root `pnpm typecheck`
 pnpm --filter @runkonf/api compose    # write supergraph.graphql

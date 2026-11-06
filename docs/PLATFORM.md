@@ -42,6 +42,20 @@ pnpm --filter @runkonf/api compose     # fails if the subgraphs do not compose
 pnpm --filter @runkonf/api dev         # compose, then wrangler dev
 ```
 
+## Local development
+
+`mise run dev:api` runs the gateway and all five subgraphs in one `wrangler dev` (one `-c` per Worker, so service bindings resolve locally) on `http://localhost:8787/graphql`. It first runs `dev:api:setup`:
+
+- generates local-only Ed25519 keys (gateway envelope and a dev identity key) into `.wrangler/dev-api/keys.json` and writes gitignored `.dev.vars` files for each Worker. No production secret is needed;
+- applies the D1 migrations locally and seeds `scripts/dev-seed/*.sql`: two orgs, two conferences with hosts `cndn.konf.localhost` and `kk.konf.localhost`, one conference row, a member (`user-dev-member`) and a platform operator (`user-dev-operator`);
+- composes the supergraph, then prints three example `curl` queries.
+
+It runs the `preview` environment of each config, because the top-level configs share one placeholder `database_id` and local D1 would merge their databases. Everything stays local (`--local`, `--persist-to .wrangler/dev-api`).
+
+`mise run dev:token -- [userId] [origin]` mints a 5-minute identity JWT, signed with the dev key, which is seeded into identity's `jwks` table. It defaults to the operator and the operator-lane origin `http://localhost:3000`. `mise run dev:api:reset` wipes the local D1 state; the keys stay.
+
+Limits: content and program read Sanity's private dataset, so without `SANITY_API_TOKEN_READ` in your shell, Sanity-backed fields come back empty. Cron triggers do not fire on their own (use `/cdn-cgi/local/scheduled`). OAuth login does not work; use `dev:token`.
+
 Identity tests run against a real local D1 through Miniflare. A cross-tenant test that walks the whole public schema with two tenants runs with them (#1837).
 
 ## Rollout flags
