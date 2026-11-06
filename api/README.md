@@ -113,7 +113,9 @@ verifies (#1954). Membership is re-read on every request.
 - Member, naming a tenant host of an org they belong to: an ordinary tenant
   envelope with their own `orgRole` and no scope. An org they do not belong
   to, and an unknown host, both get the same 403 before any subgraph read.
-- Member, no header: no envelope, the same as anonymous.
+- Member, no header (user lane): a `UserContext` (`typ: 'user'`) carrying their
+  `userId` and no org, which reads `myOrganizations`. Plain members can manage
+  their own push subscriptions on the user lane.
 
 `organizations(first, after)` (#1973) lists every org, ordered by slug, with
 `createdAt` (null for orgs provisioned before it existed). Only a
