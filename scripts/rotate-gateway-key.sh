@@ -3,7 +3,7 @@
 #   scripts/rotate-gateway-key.sh <preview|production>
 # Generates an Ed25519 pair, stores both halves in fnox, then sets
 #   ENVELOPE_PRIVATE_KEY on the gateway (api/) and
-#   GATEWAY_PUBLIC_KEY on conference, content, identity and tenant-directory.
+#   GATEWAY_PUBLIC_KEY on conference, content, identity, program and tenant-directory.
 # Key material goes only through pipes and temp files in a 0700 dir; it is
 # never printed or passed as an argument. Run from the repo root.
 #
@@ -42,7 +42,7 @@ put() { # dir secret file
 }
 
 put api ENVELOPE_PRIVATE_KEY "$tmp/priv.pem"
-for svc in conference content identity tenant-directory; do
+for svc in conference content identity program tenant-directory; do
   put "services/$svc" GATEWAY_PUBLIC_KEY "$tmp/pub.pem"
 done
 
