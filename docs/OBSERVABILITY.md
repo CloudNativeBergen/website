@@ -39,7 +39,7 @@ Workers check for optional incoming webhook secrets in code. If unset, events ar
 #### `conference.parity.drift`
 
 - **Emitting Worker:** `konf-conference` ([services/conference/src/data/parity.ts:111](file:///Users/hans/go/src/github.com/RunKonf/website-obs/services/conference/src/data/parity.ts#L111))
-- **When it fires:** Emitted for each conference where column values in D1 differ from Sanity during the daily parity sweep.
+- **When it fires:** Emitted for each conference where a column still written to both D1 and Sanity (`PARITY_COLUMNS` in `services/conference/src/data/parity-core.ts`) differs during the daily parity sweep, or where Sanity no longer has the D1 row. Frozen moved fields (#2013) are not compared, so an organizer edit to one is not drift (#1917).
 - **Fields:** `event`, `conferenceId`, `fields`
 - **Suggested alert:** High (condition: `count > 0` over 24h).
 
