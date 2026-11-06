@@ -22,6 +22,10 @@ const TalkType = builder.objectRef<Talk>('Talk').implement({
   fields: (t) => ({
     id: t.exposeID('id'),
     title: t.exposeString('title', { nullable: true }),
+    description: t.exposeString('description', {
+      nullable: true,
+      description: 'Portable Text as JSON (Sanity shape).',
+    }),
     format: t.exposeString('format', { nullable: true }),
     level: t.exposeString('level', { nullable: true }),
     speakers: t.field({
@@ -72,6 +76,7 @@ const SpeakerType = builder.objectRef<Speaker>('Speaker').implement({
   fields: (t) => ({
     id: t.exposeID('id'),
     name: t.exposeString('name', { nullable: true }),
+    slug: t.exposeString('slug', { nullable: true }),
     title: t.exposeString('title', { nullable: true }),
     bio: t.exposeString('bio', { nullable: true }),
     image: t.exposeString('image', { nullable: true, description: 'URL.' }),

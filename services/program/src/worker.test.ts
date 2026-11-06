@@ -32,6 +32,7 @@ const SPEAKERS: Row[] = [
   {
     _id: 'sp_a',
     name: 'Ada',
+    slug: 'ada', // as projected by "slug": slug.current
     title: 'Engineer',
     bio: 'Bio',
     links: ['https://ada.dev'],
@@ -49,6 +50,7 @@ const TALKS: Row[] = [
     conf: 'conf_a',
     status: 'confirmed',
     title: 'A talk',
+    description: [{ _type: 'block', children: [{ text: 'About' }] }],
     format: 'presentation_25',
     level: 'beginner',
     speakers: ['sp_a'],
@@ -133,33 +135,29 @@ const deref = (t: Row) => ({
 })
 
 const fetch = vi.fn(async (q: string, p: P) => {
-  if (q.trimStart().startsWith('{')) {
-    const conf = CONFS[p.conferenceId]
-    return {
-      programDate: conf?.org === p.orgId ? conf.programDate : undefined,
-      days: SCHEDULES.filter(
-        (s) =>
-          inTenant(s.conf, q, p) &&
-          (!s.status ||
-            s.status === 'official' ||
-            !q.includes('status == "official"')),
-      ).map((s) => ({
-        date: s.date,
-        tracks: (s.tracks as Row[]).map((tr) => ({
-          talks: (tr.talks as Row[]).map((sl) => {
-            const t = TALKS.find((t) => t._id === sl.talk)
-            return {
-              ...sl,
-              talk: t
-                ? t.status === 'confirmed'
-                  ? deref(t)
-                  : { status: t.status }
-                : null,
-            }
-          }),
-        })),
+  if (q.startsWith('*[_type == "schedule"')) {
+    return SCHEDULES.filter(
+      (s) =>
+        inTenant(s.conf, q, p) &&
+        (!s.status ||
+          s.status === 'official' ||
+          !q.includes('status == "official"')),
+    ).map((s) => ({
+      date: s.date,
+      tracks: (s.tracks as Row[]).map((tr) => ({
+        talks: (tr.talks as Row[]).map((sl) => {
+          const t = TALKS.find((t) => t._id === sl.talk)
+          return {
+            ...sl,
+            talk: t
+              ? t.status === 'confirmed'
+                ? deref(t)
+                : { status: t.status }
+              : null,
+          }
+        }),
       })),
-    }
+    }))
   }
   if (q.startsWith('*[_type == "talk"')) {
     const t = TALKS.find((t) => t._id === p.id && publicTalk(t, q, p))
@@ -188,6 +186,13 @@ const env = {
   SANITY_PROJECT_ID: 'p',
   SANITY_DATASET: 'd',
   SANITY_API_TOKEN_READ: 't',
+  // D1 stand-in: conference's ProgramDate entrypoint, both ids must match.
+  CONFERENCE: {
+    programDate: vi.fn(async (orgId: string, conferenceId: string) => {
+      const c = CONFS[conferenceId]
+      return c?.org === orgId ? (c.programDate ?? null) : null
+    }),
+  },
 }
 const tenant = (orgId: string, conferenceId: string | null): Envelope => ({
   typ: 'tenant',
@@ -214,8 +219,8 @@ async function post(query: string, as: Envelope) {
   return (await res.json()) as any
 }
 const ALL = `{
-  program { days { date slots { start end talk { id title format level speakers { id name } } } } }
-  speakers { id name title bio image links }
+  program { days { date slots { start end talk { id title description format level speakers { id name } } } } }
+  speakers { id name slug title bio image links }
   ta: talk(id: "t_a") { id } tb: talk(id: "t_b") { id }
   sa: speaker(id: "sp_a") { id } sb: speaker(id: "sp_b") { id }
 }`
@@ -235,6 +240,9 @@ describe('program subgraph', () => {
             talk: {
               id: 't_a',
               title: 'A talk',
+              description: JSON.stringify([
+                { _type: 'block', children: [{ text: 'About' }] },
+              ]),
               format: 'presentation_25',
               level: 'beginner',
               speakers: [{ id: 'sp_a', name: 'Ada' }],
@@ -249,6 +257,7 @@ describe('program subgraph', () => {
       {
         id: 'sp_a',
         name: 'Ada',
+        slug: 'ada',
         title: 'Engineer',
         bio: 'Bio',
         image: 'https://cdn/ada.png',
@@ -302,13 +311,15 @@ describe('program subgraph', () => {
     )
     expect(
       data.__type.fields.map((f: { name: string }) => f.name).sort(),
-    ).toEqual(['bio', 'id', 'image', 'links', 'name', 'title'])
+    ).toEqual(['bio', 'id', 'image', 'links', 'name', 'slug', 'title'])
   })
 
-  it('serves no program before programDate, and nothing without a conference', async () => {
+  it('serves no program before the D1 programDate, and nothing without a conference', async () => {
+    // conf_c has a published schedule; D1 says the program opens in 2999.
     expect(
       (await post(ALL, tenant('org_a', 'conf_c'))).data.program.days,
     ).toEqual([])
+    expect(env.CONFERENCE.programDate).toHaveBeenCalledWith('org_a', 'conf_c')
     const { data } = await post(ALL, tenant('org_a', null))
     expect(data).toEqual({
       program: { days: [] },
@@ -318,5 +329,15 @@ describe('program subgraph', () => {
       sa: null,
       sb: null,
     })
+  })
+
+  it('hides the program when the programDate read fails', async () => {
+    env.CONFERENCE.programDate.mockRejectedValueOnce(new Error('D1 down'))
+    const { data, errors } = await post(
+      '{ program { days { date } } }',
+      tenant('org_a', 'conf_a'),
+    )
+    expect(errors).toBeUndefined()
+    expect(data.program.days).toEqual([])
   })
 })

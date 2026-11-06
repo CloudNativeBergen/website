@@ -16,6 +16,10 @@ export interface DataEnv {
   SANITY_DATASET: string
   /** wrangler secret put SANITY_API_TOKEN_READ (per environment) */
   SANITY_API_TOKEN_READ: string
+  /** konf-conference's ProgramDate entrypoint: programDate is D1-owned (#2023). */
+  CONFERENCE: {
+    programDate(orgId: string, conferenceId: string): Promise<string | null>
+  }
 }
 
 export interface SpeakerRef {
@@ -25,6 +29,8 @@ export interface SpeakerRef {
 export interface Talk {
   id: string
   title: string | null
+  /** Portable Text as JSON (Sanity shape). */
+  description: string | null
   format: string | null
   level: string | null
   speakers: SpeakerRef[]
@@ -43,6 +49,7 @@ export interface Day {
 export interface Speaker {
   id: string
   name: string | null
+  slug: string | null
   title: string | null
   bio: string | null
   image: string | null
@@ -56,7 +63,7 @@ export interface Tenant {
 
 /** Where program data comes from. Every read is for one tenant. */
 export interface ProgramSource {
-  /** Official schedule days, in date order. Empty before `programDate`. */
+  /** Official schedule days, in date order. The caller gates on programDate. */
   program(t: Tenant): Promise<Day[]>
   /** A confirmed talk of the tenant's conference, else null. */
   talk(t: Tenant, id: string): Promise<Talk | null>
@@ -73,17 +80,14 @@ export interface ProgramSource {
 // Every root filter carries `conference._ref == $conferenceId &&
 // conference->organization._ref == $orgId` literally, so review and
 // tenancy/no-unscoped-groq both see it.
-const TALK_FIELDS = `_id, title, format, level, speakers[]->{_id, name}`
+const TALK_FIELDS = `_id, title, description, format, level, speakers[]->{_id, name}`
 // Explicit projection: only these fields ever leave Sanity.
-const SPEAKER_FIELDS = `_id, name, title, bio, links, "image": ${SPEAKER_IMAGE_URL}`
+const SPEAKER_FIELDS = `_id, name, "slug": slug.current, title, bio, links, "image": ${SPEAKER_IMAGE_URL}`
 
-const PROGRAM = `{
-  "programDate": *[_type == "conference" && _id == $conferenceId && organization._ref == $orgId][0].programDate,
-  "days": *[_type == "schedule" && conference._ref == $conferenceId && conference->organization._ref == $orgId && ${/* groq-global-scoped: the tenant predicate is literal beside it; this is a status constant */ OFFICIAL_SCHEDULE_FILTER}] | order(date asc) {
+const PROGRAM = `*[_type == "schedule" && conference._ref == $conferenceId && conference->organization._ref == $orgId && ${/* groq-global-scoped: the tenant predicate is literal beside it; this is a status constant */ OFFICIAL_SCHEDULE_FILTER}] | order(date asc) {
     date,
     tracks[]{ talks[]{ startTime, endTime, talk->{ status, status == "confirmed" => { ${TALK_FIELDS} } } } }
-  }
-}`
+  }`
 const TALK = `*[_type == "talk" && _id == $id && status == "confirmed" && conference._ref == $conferenceId && conference->organization._ref == $orgId][0]{ ${TALK_FIELDS} }`
 // groq-global-scoped: only a speaker with a confirmed talk in $conferenceId
 // of $orgId matches (the nested count carries the tenant predicate).
@@ -99,6 +103,7 @@ const list = (v: unknown) => (Array.isArray(v) ? (v as Row[]) : [])
 const toTalk = (r: Row): Talk => ({
   id: r._id as string,
   title: s(r.title),
+  description: r.description ? JSON.stringify(r.description) : null,
   format: s(r.format),
   level: s(r.level),
   speakers: list(r.speakers)
@@ -108,6 +113,7 @@ const toTalk = (r: Row): Talk => ({
 const toSpeaker = (r: Row): Speaker => ({
   id: r._id as string,
   name: s(r.name),
+  slug: s(r.slug),
   title: s(r.title),
   bio: s(r.bio),
   image: s(r.image),
@@ -126,21 +132,11 @@ const osloToday = (now: Date) =>
   }).format(now)
 
 export class SanityProgramSource implements ProgramSource {
-  constructor(
-    private readonly sanity: Pick<SanityClient, 'fetch'>,
-    private readonly now: () => Date = () => new Date(),
-  ) {}
+  constructor(private readonly sanity: Pick<SanityClient, 'fetch'>) {}
 
   async program(t: Tenant): Promise<Day[]> {
-    const r = await this.sanity.fetch<{ programDate?: string; days?: Row[] }>(
-      PROGRAM,
-      { ...t },
-    )
-    // src/lib/conference/state.ts isProgramPublished: nothing before programDate.
-    // ponytail: reads Sanity's programDate; a tenant whose dates moved to D1
-    // (#2019) needs the conference subgraph's value here.
-    if (!r?.programDate || osloToday(this.now()) < r.programDate) return []
-    return list(r.days).map((d) => ({
+    const days = await this.sanity.fetch<Row[]>(PROGRAM, { ...t })
+    return list(days).map((d) => ({
       date: d.date as string,
       slots: list(d.tracks)
         .flatMap((tr) => list(tr.talks))
@@ -177,6 +173,7 @@ export class SanityProgramSource implements ProgramSource {
 class Program extends ScopedRepository {
   constructor(
     private readonly source: ProgramSource,
+    private readonly programDate: DataEnv['CONFERENCE']['programDate'],
     envelope: Envelope,
   ) {
     super(envelope)
@@ -187,8 +184,22 @@ class Program extends ScopedRepository {
     return conference_id ? { orgId: org_id, conferenceId: conference_id } : null
   }
 
-  program() {
-    return this.t ? this.source.program(this.t) : Promise.resolve([])
+  /**
+   * Nothing before programDate (src/lib/conference/state.ts
+   * isProgramPublished), read from D1 whatever the source. Fails closed: no
+   * date, or a failed read, hides the program rather than show it early.
+   */
+  async program(): Promise<Day[]> {
+    const t = this.t
+    if (!t) return []
+    const date = await this.programDate(t.orgId, t.conferenceId).catch(
+      (e: unknown) => {
+        console.error('program: programDate read failed', e)
+        return null
+      },
+    )
+    if (!date || osloToday(new Date()) < date) return []
+    return this.source.program(t)
   }
   talk(id: string) {
     return this.t ? this.source.talk(this.t, id) : Promise.resolve(null)
@@ -215,5 +226,8 @@ export function createData(env: DataEnv, envelope: Envelope) {
   )
   // Built on first use: the constructor refuses a PlatformContext, and that
   // should fail the resolver, not the whole request.
-  return { program: () => new Program(source, envelope) }
+  // async: a missing binding rejects, so program() fails closed.
+  const programDate: DataEnv['CONFERENCE']['programDate'] = async (o, c) =>
+    env.CONFERENCE.programDate(o, c)
+  return { program: () => new Program(source, programDate, envelope) }
 }

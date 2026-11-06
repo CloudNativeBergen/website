@@ -13,5 +13,8 @@ service: #PlatformService & {
 		preview: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development"}
 		production: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production"}
 	}
+	// programDate is D1-owned (#2023): read from conference's ProgramDate
+	// entrypoint, never from Sanity.
+	serviceBindings: [{binding: "CONFERENCE", service: "konf-conference", entrypoint: "ProgramDate"}]
 	files: "package.json": dependencies: "@sanity/client": "^7.28.0"
 }

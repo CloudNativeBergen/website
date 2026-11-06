@@ -45,6 +45,7 @@ describe('compose', () => {
       'image',
       'links',
       'name',
+      'slug',
       'title',
     ])
   })
