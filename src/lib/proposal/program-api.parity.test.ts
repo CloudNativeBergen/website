@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { evaluate, parse } from 'groq-js'
-import { SanityProgramSource } from '../../../services/program/src/data'
+import { SanityProgramSource } from '../../../services/program/src/data/source'
 import { CONFERENCE_QUERY_FULL } from '@/lib/conference/query'
 import { EXPANDED_SECTIONS_KEY } from '@/lib/conference/sections'
 import { PUBLIC_TALK_FIELDS } from './public-groq'
