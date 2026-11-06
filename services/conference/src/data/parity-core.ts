@@ -2,6 +2,7 @@
 // (parity.ts) and the operator CLI (scripts/parity-d1.ts). No Worker types.
 import {
   mapBackfill,
+  SETTINGS_PROJECTION,
   type Row,
   type SanityConference,
 } from '../../scripts/backfill'
@@ -10,7 +11,8 @@ import {
 export const QUERY = `*[_type == "conference" && _id in $ids]{
   _id, "orgId": organization._ref, title, tagline, city, country,
   venueName, venueAddress, startDate, endDate, lifecycleStatus, visibility,
-  backgroundPattern, theme, registrationLink, socialLinks
+  backgroundPattern, theme, registrationLink, socialLinks,
+  ${SETTINGS_PROJECTION}
 }`
 
 // The backfill's normalisation: trimmed, '' / null / absent are one value,

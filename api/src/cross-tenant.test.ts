@@ -151,7 +151,7 @@ function value(
     return /INT/i.test(col.type) ? Number(pick) : pick
   }
   if (n === 'role') return 'admin'
-  if (/INT/i.test(col.type)) return 0
+  if (/INT|REAL|FLOA|DOUB/i.test(col.type)) return 0
   const text = `${tag(t)} ${table}.${n}`
   if (col.dflt_value === "'[]'") return JSON.stringify([text])
   if (col.dflt_value === "'{}'") return JSON.stringify({ v: text })

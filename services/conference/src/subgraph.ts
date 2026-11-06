@@ -9,6 +9,7 @@
 import { builder } from './builder'
 import { createGraphQLError } from 'graphql-yoga'
 import type { ConferencePatch, ConferenceRow } from './data'
+import type { ResolverContext } from './worker'
 
 const moved = { override: { from: 'content', label: 'conference' } } as const
 
@@ -27,6 +28,42 @@ const STRINGS = [
   'registrationLink',
 ] as const
 
+// Settings phase 1 (#2019). Fields content also serves move under their own
+// label, so the D1 read flips per tenant separately from the core fields:
+// only OVERRIDE_TENANTS turns `conference-settings` on, never d1_override.
+const settings = {
+  override: { from: 'content', label: 'conference-settings' },
+} as const
+/** Public, and served by content today. */
+const SETTINGS_SHARED = [
+  'cfpStartDate',
+  'cfpEndDate',
+  'cfpNotifyDate',
+  'programDate',
+  'earlyBirdEndDate',
+  'registrationCloseDate',
+  'speakersAnnouncedDate',
+  'recordingsLiveDate',
+  'socialHashtag',
+  'organizer',
+] as const
+/** Public, not served by content. */
+const SETTINGS_NEW = ['sponsorDeadlineDate', 'travelSupportPaymentDate'] as const
+/**
+ * Org members only: null for anyone else. Content serves organizerAddress
+ * publicly today; the gate applies once a tenant's label flips.
+ */
+const SETTINGS_PRIVATE = [
+  'organizerAddress',
+  'organizerOrgNumber',
+  'analyticsPirschCode',
+] as const
+
+/** A member of the envelope's org, or an operator acting for it. */
+const isMember = ({ envelope: e }: ResolverContext) =>
+  e.typ === 'tenant' &&
+  (!!e.orgRole?.trim() || e.scopes.includes('platform:operator'))
+
 const Conference = builder.objectRef<ConferenceRow>('Conference').implement({
   fields: (t) => ({
     id: t.exposeID('conferenceId'),
@@ -42,6 +79,39 @@ const Conference = builder.objectRef<ConferenceRow>('Conference').implement({
       ...moved,
     }),
     socialLinks: t.exposeStringList('socialLinks', moved),
+    ...Object.fromEntries(
+      SETTINGS_SHARED.map((k) => [
+        k,
+        t.exposeString(k, { nullable: true, ...settings }),
+      ]),
+    ),
+    ...Object.fromEntries(
+      SETTINGS_NEW.map((k) => [k, t.exposeString(k, { nullable: true })]),
+    ),
+    registrationEnabled: t.exposeBoolean('registrationEnabled', {
+      nullable: true,
+      ...settings,
+    }),
+    showVanityMetrics: t.exposeBoolean('showVanityMetrics', {
+      nullable: true,
+      description: 'ticketCustomization.showVanityMetrics in Sanity.',
+    }),
+    ...Object.fromEntries(
+      SETTINGS_PRIVATE.map((k) => [
+        k,
+        t.string({
+          nullable: true,
+          description: 'Org members only.',
+          ...(k === 'organizerAddress' ? settings : {}),
+          resolve: (c, _, ctx) => (isMember(ctx) ? c[k] : null),
+        }),
+      ]),
+    ),
+    travelSupportBudget: t.float({
+      nullable: true,
+      description: 'Org members only.',
+      resolve: (c, _, ctx) => (isMember(ctx) ? c.travelSupportBudget : null),
+    }),
   }),
 })
 
@@ -100,6 +170,15 @@ const ConferencePatchInput = builder.inputType('ConferencePatch', {
       description:
         'False when Sanity marks the edition cancelled or archived. Not null.',
     }),
+    ...Object.fromEntries(
+      [...SETTINGS_SHARED, ...SETTINGS_NEW, ...SETTINGS_PRIVATE].map((k) => [
+        k,
+        t.string(),
+      ]),
+    ),
+    registrationEnabled: t.boolean(),
+    showVanityMetrics: t.boolean(),
+    travelSupportBudget: t.float({ description: 'Zero or more.' }),
   }),
 })
 
@@ -128,6 +207,11 @@ export const MAX_LEN: Record<string, number> = {
   venueName: 200,
   venueAddress: 500,
   backgroundPattern: 100,
+  organizer: 200,
+  organizerAddress: 500,
+  organizerOrgNumber: 50,
+  socialHashtag: 100,
+  analyticsPirschCode: 100,
 }
 export const MAX_DEFAULT = 2000
 export const MAX_SOCIAL_LINKS = 20
@@ -146,6 +230,11 @@ function validate(input: Record<string, unknown>): ConferencePatch {
     primaryColor: isHex,
     accentColor: isHex,
     registrationLink: isUrl,
+    ...Object.fromEntries(
+      [...SETTINGS_SHARED, ...SETTINGS_NEW]
+        .filter((k) => k.endsWith('Date'))
+        .map((k) => [k, isDate]),
+    ),
   }
   for (const [k, v] of Object.entries(input)) {
     if (v == null) {
@@ -168,6 +257,11 @@ function validate(input: Record<string, unknown>): ConferencePatch {
     if (k === 'socialLinks' && !(v as string[]).every(isUrl)) {
       bad(k, 'must be http(s) URLs')
     }
+    if (
+      k === 'travelSupportBudget' &&
+      !(Number.isFinite(v) && (v as number) >= 0)
+    )
+      bad(k, 'must be zero or more')
     if (checks[k] && !checks[k](v as string)) bad(k, 'invalid format')
   }
   return input as ConferencePatch

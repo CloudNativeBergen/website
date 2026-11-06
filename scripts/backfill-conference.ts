@@ -25,7 +25,7 @@ config({ path: resolve(process.cwd(), '.env.local'), override: true })
 /** Sanity, mapped exactly as the backfill writes it. Also used by parity. */
 export async function loadBackfill() {
   const { clientReadUncached } = await import('../src/lib/sanity/client')
-  const { mapBackfill } =
+  const { mapBackfill, SETTINGS_PROJECTION } =
     await import('../services/conference/scripts/backfill')
   const directory =
     await import('../services/tenant-directory/scripts/backfill')
@@ -38,7 +38,7 @@ export async function loadBackfill() {
     _id, "orgId": organization._ref, title, tagline, city, country,
     venueName, venueAddress, startDate, endDate, lifecycleStatus, domains, visibility,
     backgroundPattern, theme,
-    registrationLink, socialLinks
+    registrationLink, socialLinks, ${SETTINGS_PROJECTION}
   }
   }`)
   const dir = directory.mapBackfill(orgs, docs, verifications)
