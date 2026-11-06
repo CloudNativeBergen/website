@@ -29,7 +29,7 @@
  */
 
 import {
-  mergeConference,
+  mergeConferences,
   type ConferenceCandidate,
 } from '@/lib/conference/merge'
 import { groq } from 'next-sanity'
@@ -192,14 +192,20 @@ async function orgRecords({ email, orgId }: Scope, workosIds: string[]) {
   )) ?? { invitations: [], signups: [] }
   // The conference title is only a label in the erasure report: D1's when
   // the tenant is flagged (#1997). Which signups are erased stays Sanity's.
-  const signups = await Promise.all(
-    records.signups.map(async ({ workshop, conference, ...s }) => {
-      const title = conference
-        ? ((await mergeConference(conference)).title ?? '')
-        : ''
-      return { ...s, label: `${workshop ?? 'Workshop'} (${title})` }
-    }),
-  )
+  // One merge per distinct conference, not per signup.
+  const distinct = new Map<
+    string,
+    ConferenceCandidate & { title?: string | null }
+  >()
+  for (const { conference } of records.signups) {
+    if (conference) distinct.set(conference._id, conference)
+  }
+  const merged = await mergeConferences([...distinct.values()])
+  const titles = new Map(merged.map((c) => [c._id, c.title ?? '']))
+  const signups = records.signups.map(({ workshop, conference, ...s }) => ({
+    ...s,
+    label: `${workshop ?? 'Workshop'} (${conference ? (titles.get(conference._id) ?? '') : ''})`,
+  }))
   return { invitations: records.invitations, signups }
 }
 

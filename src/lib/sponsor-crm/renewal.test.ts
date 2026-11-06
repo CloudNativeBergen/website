@@ -16,12 +16,23 @@ import {
 } from './renewal'
 import { generateRenewalItems } from './action-items'
 import { createSponsorActivity } from './activity'
+import { mergeConference } from '@/lib/conference/merge'
 
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: vi.fn() },
   clientWrite: { create: vi.fn() },
 }))
 vi.mock('./activity', () => ({ createSponsorActivity: vi.fn() }))
+// Passthrough by default; a test overrides it to stand in for D1's dates.
+vi.mock('@/lib/conference/merge', () => {
+  const mergeConference = vi.fn(async (c: unknown) => c)
+  return {
+    mergeConference,
+    mergeConferences: vi.fn((cs: unknown[]) =>
+      Promise.all(cs.map((c) => mergeConference(c))),
+    ),
+  }
+})
 
 const fetchMock = vi.mocked(clientReadUncached.fetch) as unknown as ReturnType<
   typeof vi.fn
@@ -279,6 +290,7 @@ describe('renewal reminders (R2)', () => {
   const row = {
     _id: 'conf-2025',
     title: 'CNB 2025',
+    startDate: '2025-10-27',
     domains: ['*.example.test', '2025.example.test'],
     candidates: [{ _id: 'sfc-old', name: 'Acme' }],
   }
@@ -294,8 +306,8 @@ describe('renewal reminders (R2)', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('is one org-scoped query bound to the current start date', async () => {
-    fetchMock.mockResolvedValueOnce(row)
+  it('is one org-scoped query, with no date filter in GROQ', async () => {
+    fetchMock.mockResolvedValueOnce([row])
     const result = await getPreviousEditionRenewals(
       'org-a',
       current,
@@ -306,15 +318,29 @@ describe('renewal reminders (R2)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [query, params] = fetchMock.mock.calls[0]
     expect(query).toContain('organization._ref == $orgId')
-    expect(params).toEqual({
-      orgId: 'org-a',
-      conferenceId: 'conf-2026',
-      currentStartDate: '2026-10-27',
-    })
+    expect(query).not.toContain('startDate <')
+    expect(params).toEqual({ orgId: 'org-a', conferenceId: 'conf-2026' })
   })
 
-  it('maps candidates to items linking to the old record', () => {
-    const renewals = shapeRenewals(row)
+  it('picks the previous edition on merged dates, not Sanity dates', async () => {
+    // Sanity says conf-moved starts after the current edition; D1 moved it
+    // to before, which makes it the latest previous edition.
+    const moved = { ...row, _id: 'conf-moved', startDate: '2027-01-01' }
+    vi.mocked(mergeConference).mockImplementation(async (c) =>
+      c._id === 'conf-moved' ? { ...c, startDate: '2026-05-01' } : c,
+    )
+    const r = await shapeRenewals([row, moved], current.startDate)
+    expect(r?.edition._id).toBe('conf-moved')
+    // And a D1 date moved past the current edition drops it.
+    vi.mocked(mergeConference).mockImplementation(async (c) =>
+      c._id === 'conf-2025' ? { ...c, startDate: '2026-12-01' } : c,
+    )
+    expect(await shapeRenewals([row], current.startDate)).toBeNull()
+    vi.mocked(mergeConference).mockImplementation(async (c) => c)
+  })
+
+  it('maps candidates to items linking to the old record', async () => {
+    const renewals = await shapeRenewals([row], current.startDate)
     expect(generateRenewalItems(renewals)).toEqual([
       expect.objectContaining({
         id: 'sfc-old-renewal',
@@ -326,8 +352,11 @@ describe('renewal reminders (R2)', () => {
     expect(generateRenewalItems(null)).toEqual([])
   })
 
-  it('leaves the link empty when no domain gives a usable origin', () => {
-    const renewals = shapeRenewals({ ...row, domains: ['*.example.test'] })
+  it('leaves the link empty when no domain gives a usable origin', async () => {
+    const renewals = await shapeRenewals(
+      [{ ...row, domains: ['*.example.test'] }],
+      current.startDate,
+    )
     expect(renewals?.edition.origin).toBeNull()
     expect(generateRenewalItems(renewals)[0].link).toBe('')
   })

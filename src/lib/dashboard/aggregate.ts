@@ -154,7 +154,7 @@ export interface DashboardGroqResult {
   /** Lean rows for `generateActionItems` (see SPONSOR_ACTION_ITEM_FIELDS). */
   sponsorActions?: SponsorForConferenceExpanded[] | null
   /** Previous-edition sponsors to renew (R2, #1687). */
-  renewals?: PreviousEditionRenewalsRow
+  renewals?: PreviousEditionRenewalsRow[]
   activities?: DashboardActivityRow[] | null
   recentProposals?: DashboardRecentProposalRow[] | null
   travelSupports?: DashboardTravelSupportRow[] | null
@@ -293,7 +293,7 @@ export function dashboardQueryParams(
   now = new Date(),
   // For the `renewals` root. '' matches no organization, so a conference
   // without one reads nothing.
-  renewal: { orgId?: string; currentStartDate?: string } = {},
+  renewal: { orgId?: string } = {},
 ) {
   const today = osloTodayDateString(now)
   const tomorrow = new Date(`${today}T12:00:00Z`)
@@ -304,7 +304,6 @@ export function dashboardQueryParams(
     ),
     conferenceId,
     orgId: renewal.orgId ?? '',
-    currentStartDate: renewal.currentStartDate ?? '',
     draftStatus: Status.draft,
     pendingVolunteerStatus: VolunteerStatus.PENDING,
   }
@@ -319,7 +318,7 @@ export function dashboardQueryParams(
 export async function fetchDashboardGroq(
   conferenceId: string,
   sources: Iterable<DashboardGroqSource>,
-  renewal?: { orgId?: string; currentStartDate?: string },
+  renewal?: { orgId?: string },
 ): Promise<DashboardGroqResult> {
   const query = buildDashboardQuery(sources)
   if (!query) return {}

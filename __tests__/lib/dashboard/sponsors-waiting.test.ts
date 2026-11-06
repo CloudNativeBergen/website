@@ -6,6 +6,7 @@ import {
   dashboardQueryParams,
 } from '@/lib/dashboard/aggregate'
 import { shapeSponsorsWaiting } from '@/lib/dashboard/widget-data'
+import { shapeRenewals } from '@/lib/sponsor-crm/renewal'
 
 const sfc = (id: string, conference: string, fields = {}) => ({
   _id: id,
@@ -96,32 +97,25 @@ describe('renewal reminders in the composed query (R2, #1687)', () => {
     const query = buildDashboardQuery(['renewals'])!
     const result = await evaluate(parse(query), {
       dataset: data,
-      params: dashboardQueryParams('y2026', new Date(), {
-        orgId,
-        currentStartDate: '2026-10-27',
-      }),
+      params: dashboardQueryParams('y2026', new Date(), { orgId }),
     })
-    return (await result.get()).renewals
+    return shapeRenewals((await result.get()).renewals, '2026-10-27')
   }
 
   it('lists previous-edition sponsors with no deal this year, same org only', async () => {
-    const row = await run('org-a')
-    expect(row).toMatchObject({
+    const r = await run('org-a')
+    expect(r?.edition).toMatchObject({
       _id: 'y2025',
       title: 'y2025',
-      domains: ['y2025.test'],
+      origin: 'https://y2025.test',
     })
-    expect(row.candidates.map((c: { _id: string }) => c._id)).toEqual([
-      'old-acme',
-    ])
+    expect(r?.candidates.map((c) => c._id)).toEqual(['old-acme'])
   })
 
   it("never reads another organization's editions, and nothing for none", async () => {
     const other = await run('org-b')
-    expect(other._id).toBe('other')
-    expect(other.candidates.map((c: { _id: string }) => c._id)).toEqual([
-      'foreign',
-    ])
+    expect(other?.edition._id).toBe('other')
+    expect(other?.candidates.map((c) => c._id)).toEqual(['foreign'])
     expect(await run('')).toBeNull()
   })
 
