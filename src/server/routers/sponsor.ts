@@ -1,3 +1,4 @@
+import { writeMovedToD1 } from '@/lib/konf-api/conference-write'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { revalidateTag } from 'next/cache'
@@ -4365,6 +4366,8 @@ export const sponsorRouter = router({
             message: 'No fields to update',
           })
         }
+        // Settings phase 1 (#2019): D1 first for d1_write tenants, then Sanity.
+        await writeMovedToD1(conferenceId, fields)
         await clientWrite.patch(conferenceId).set(fields).commit()
         // `organizerOrgNumber`/`organizerAddress` are CONFERENCE-document
         // fields, and they are read back out of the cached conference to fill

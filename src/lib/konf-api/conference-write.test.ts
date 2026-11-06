@@ -68,3 +68,42 @@ describe('isMovedConferenceField (#1997)', () => {
     expect(isMovedConferenceField(key)).toBe(false)
   })
 })
+
+describe('movedConferencePatch settings phase 1 (#2019)', () => {
+  it('sends every phase 1 key to D1, keeps nulls, and leaves Sanity owning them', () => {
+    const input = {
+      cfpStartDate: '2026-01-01',
+      cfpEndDate: '2026-01-02',
+      cfpNotifyDate: '2026-01-03',
+      programDate: '2026-01-04',
+      travelSupportPaymentDate: '2026-01-05',
+      earlyBirdEndDate: '2026-01-06',
+      registrationCloseDate: '2026-01-07',
+      speakersAnnouncedDate: '2026-01-08',
+      sponsorDeadlineDate: null,
+      recordingsLiveDate: '2026-01-10',
+      travelSupportBudget: 5000,
+      registrationEnabled: false,
+      organizer: 'Acme',
+      organizerAddress: 'Street 1',
+      organizerOrgNumber: '123',
+      socialHashtag: '#acme',
+      analyticsPirschCode: 'p',
+    }
+    expect(movedConferencePatch({ ...input, description: 'x' })).toEqual(input)
+    // Not read from D1 yet, so Sanity still gets them.
+    for (const k of Object.keys(input))
+      expect(isMovedConferenceField(k)).toBe(false)
+  })
+
+  it('maps ticketCustomization to showVanityMetrics, absent as an unset', () => {
+    expect(
+      movedConferencePatch({
+        ticketCustomization: { showVanityMetrics: true, heroHeadline: 'h' },
+      }),
+    ).toEqual({ showVanityMetrics: true })
+    expect(
+      movedConferencePatch({ ticketCustomization: { heroHeadline: 'h' } }),
+    ).toEqual({ showVanityMetrics: null })
+  })
+})
