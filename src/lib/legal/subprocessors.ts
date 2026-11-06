@@ -52,6 +52,7 @@ export type SubprocessorId =
   | 'sanity'
   | 'vercel'
   | 'resend'
+  | 'grafana'
   | 'checkin'
   | 'tito'
   | 'posthog'
@@ -140,6 +141,17 @@ export const SUBPROCESSOR_CATALOGUE: Record<SubprocessorId, CatalogueEntry> = {
     chosenBy: 'platform',
     location: 'United States',
   },
+  // The conference API's Workers export their logs and traces to Grafana
+  // Cloud (#1895), on the EU cluster prod-eu-west-4: no `location`, so this
+  // row does not drive the international-transfer section.
+  grafana: {
+    id: 'grafana',
+    name: 'Grafana Labs (Grafana Cloud, EU)',
+    purpose:
+      'Error and performance diagnostics for the conference API, hosted in the EU: request logs and traces (request path, response status, timing, organization and conference ids, the signed-in user id, and error messages with their stack traces)',
+    group: 'infrastructure',
+    chosenBy: 'platform',
+  },
   checkin: {
     id: 'checkin',
     name: 'Checkin.no',
@@ -221,6 +233,7 @@ const DISCLOSURE_ORDER: readonly SubprocessorId[] = [
   'sanity',
   'vercel',
   'resend',
+  'grafana',
   'checkin',
   'tito',
   'posthog',
@@ -389,6 +402,7 @@ export function subprocessorSignals(
     sanity: 'yes',
     vercel: 'yes',
     resend: 'yes',
+    grafana: 'yes',
     'oauth-providers': 'yes',
 
     checkin: facts.tenantKnown

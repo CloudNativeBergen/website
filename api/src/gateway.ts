@@ -199,6 +199,15 @@ const isGraphQLError = (e: unknown): e is GraphQLError =>
 const isOriginal = (e: unknown): boolean =>
   isGraphQLError(e) && (e.originalError == null || isOriginal(e.originalError))
 
+/** One JSON line per event; the Grafana alerts match `event` (#1895). */
+function logEvent(event: string, fields: Record<string, unknown>) {
+  console.error(JSON.stringify({ event, ...fields }))
+}
+
+const MAX_LOGGED_CHARS = 64
+const capped = (v: unknown) =>
+  typeof v === 'string' && v ? v.slice(0, MAX_LOGGED_CHARS) : undefined
+
 // Yoga logs the original whenever this returns a new error.
 export function maskError(error: unknown, message: string): Error {
   const gql = isGraphQLError(error) ? error : null
@@ -206,6 +215,13 @@ export function maskError(error: unknown, message: string): Error {
   if (gql && !fromSubgraph && isOriginal(gql)) return gql
   const code = gql?.extensions?.code
   const safe = typeof code === 'string' && SAFE_CODES.has(code)
+  // Masked errors still answer 200, so a 5xx alert alone misses them.
+  if (!safe)
+    logEvent('gateway.error.masked', {
+      subgraph: capped(gql?.extensions?.serviceName),
+      path: capped(gql?.path?.join('.')),
+      code: capped(code),
+    })
   const detail = gql && code === 'BAD_USER_INPUT' ? inputDetail(gql) : null
   return new GraphQLError(
     detail?.message ?? (safe ? SAFE_CODES.get(code) : null) ?? message,
@@ -233,6 +249,8 @@ function reject(
   code: string,
   message: string,
 ) {
+  // A 5xx is logged once, by the fetch wrapper.
+  if (status < 500) logEvent('gateway.rejected', { status, code })
   return Response.json(
     { errors: [{ message, extensions: { code } }] },
     { status },
@@ -364,10 +382,16 @@ const mutationBudget: GatewayPlugin<GatewayContext> = {
     if (
       !(await env.API_MUTATION_LIMITER.limit({ key: `${limitKey}:mutation` }))
         .success
-    )
+    ) {
+      logEvent('gateway.rejected', {
+        status: 429,
+        code: 'RATE_LIMITED',
+        limit: 'mutation',
+      })
       throw new GraphQLError('too many requests', {
         extensions: { code: 'RATE_LIMITED', http: { status: 429 } },
       })
+    }
   },
 }
 
@@ -454,7 +478,7 @@ export function createGateway(supergraph: string) {
     ],
   })
 
-  return {
+  const handler = {
     async fetch(request: Request, env: Env, ctx?: ExecutionContext) {
       // 1. A client never supplies the envelope.
       const forwarded = new Request(request)
@@ -630,6 +654,22 @@ export function createGateway(supergraph: string) {
         siteFlags: ((siteHost || operatorLane) && tenant?.flags) || null,
         platform,
       })
+    },
+  }
+
+  return {
+    async fetch(request: Request, env: Env, ctx?: ExecutionContext) {
+      let res: Response
+      try {
+        res = await handler.fetch(request, env, ctx)
+      } catch (e) {
+        // e.g. an unset ENVELOPE_PRIVATE_KEY: the runtime answers 500.
+        logEvent('gateway.response.5xx', { status: 500, uncaught: true })
+        throw e
+      }
+      if (res.status >= 500)
+        logEvent('gateway.response.5xx', { status: res.status })
+      return res
     },
   }
 }
