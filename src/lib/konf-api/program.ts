@@ -149,7 +149,6 @@ const present = (o: Record<string, unknown>) =>
 
 const STATUS = {
   CONFIRMED: 'confirmed',
-  WITHDRAWN: 'withdrawn',
   PENDING: 'accepted',
 } as const
 

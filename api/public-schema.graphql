@@ -852,7 +852,6 @@ enum ProfileVisibility {
 enum TalkStatus {
   CONFIRMED
   PENDING
-  WITHDRAWN
 }
 
 enum ConferenceLifecycle {

@@ -118,7 +118,7 @@ const TalkType = builder.objectRef<Talk>('Talk').implement({
 
 const TalkStatusType = builder.enumType('TalkStatus', {
   description: 'Public status class of a scheduled talk.',
-  values: ['CONFIRMED', 'WITHDRAWN', 'PENDING'] as const,
+  values: ['CONFIRMED', 'PENDING'] as const,
 })
 
 const TrackType = builder.objectRef<Track>('ProgramTrack').implement({

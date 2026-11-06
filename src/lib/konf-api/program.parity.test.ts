@@ -273,7 +273,7 @@ describe('public program seams through the API (#1772)', () => {
       return r.conference
     })
     // Known differences: the schedule document's other `...` fields, and an
-    // unconfirmed talk's `_id` (withheld by the API).
+    // unconfirmed talk's `_id` (withheld by the API) and `status` (folded).
     const want = schedules(sanity).map((d) => ({
       _id: d._id,
       date: d.date,
@@ -284,7 +284,8 @@ describe('public program seams through the API (#1772)', () => {
           if (!talk || talk.status === 'confirmed') return sl
           const { _id, ...rest } = talk
           void _id
-          return { ...sl, talk: rest }
+          // The API folds every unconfirmed status into "accepted".
+          return { ...sl, talk: { ...rest, status: 'accepted' } }
         }),
       })),
     }))

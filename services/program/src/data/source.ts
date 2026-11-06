@@ -100,8 +100,11 @@ export interface Slot {
   trackIndex: number
   position: number
 }
-/** confirmed; withdrawn, canceled or rejected; anything else. */
-export type TalkStatus = 'CONFIRMED' | 'WITHDRAWN' | 'PENDING'
+/**
+ * confirmed; anything else, withdrawn included: the public API never reveals
+ * that a speaker dropped out before the replacement is announced.
+ */
+export type TalkStatus = 'CONFIRMED' | 'PENDING'
 export interface Day {
   /** The schedule document id. */
   id: string | null
@@ -260,11 +263,7 @@ const toTalk = (r: Row): Talk => ({
     typeof r.hasFeedbackCode === 'boolean' ? r.hasFeedbackCode : null,
 })
 const talkStatus = (v: unknown): TalkStatus =>
-  v === 'confirmed'
-    ? 'CONFIRMED'
-    : v === 'withdrawn' || v === 'canceled' || v === 'rejected'
-      ? 'WITHDRAWN'
-      : 'PENDING'
+  v === 'confirmed' ? 'CONFIRMED' : 'PENDING'
 const toSpeaker = (r: Row): Speaker => ({
   ...toSpeakerRef(r),
   bio: s(r.bio),
@@ -326,13 +325,21 @@ export class SanityProgramSource implements ProgramSource {
               room: track.name,
               track,
               // An unconfirmed talk arrives without title, description,
-              // language and speakers (SCHEDULE_TRACKS), so toTalk gives null.
-              // Its id is withheld too: the talk(id) root and the profile
-              // never know an unconfirmed talk, so no id leads anywhere.
+              // language and speakers (SCHEDULE_TRACKS). Null them here too,
+              // independent of the projection (second layer). The id goes as
+              // well: the talk(id) root and the profile never know an
+              // unconfirmed talk, so no id leads anywhere.
               talk: talk
                 ? talk.status === 'confirmed'
                   ? toTalk(talk)
-                  : { ...toTalk(talk), id: null }
+                  : {
+                      ...toTalk(talk),
+                      id: null,
+                      title: null,
+                      description: null,
+                      language: null,
+                      speakers: null,
+                    }
                 : null,
               hasTalkRef: sl.hasTalkRef === true,
               talkStatus: talk ? talkStatus(talk.status) : null,
