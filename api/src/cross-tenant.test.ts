@@ -2113,10 +2113,10 @@ describe('session org members (#1972)', () => {
       expect(accountReads).toHaveLength(1)
       expect(accountReads[0]).toMatch(/\bin\s*\(/i)
       // Only providerId (and the join key) leave the account table.
-      const cols = accountReads[0].match(/"account"\."(\w+)"/g) ?? []
-      expect(new Set(cols)).toEqual(
-        new Set(['"account"."userId"', '"account"."providerId"']),
-      )
+      const cols = /^select (?:distinct )?(.*?) from "account"/i.exec(
+        accountReads[0],
+      )?.[1]
+      expect(cols?.replace(/"account"\./g, '')).toBe('"userId", "providerId"')
     })
 
     it('a plain member gets an empty list, as email is null, and no account read', async () => {
