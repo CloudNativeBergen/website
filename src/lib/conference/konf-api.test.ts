@@ -298,20 +298,17 @@ describe('fetchKonfApiConference caching', () => {
 })
 
 describe('lifecycleStatus from tenant-directory (#1997)', () => {
-  /** Answers the conference and lifecycle queries separately. */
+  /** One gateway answer carrying both root fields, as the gateway sends it. */
   function reply(lifecycle: unknown, conference: unknown = { id: 'conf-1' }) {
-    fetchMock.mockImplementation(async (_: string, init: RequestInit) => {
-      const q = JSON.parse(String(init.body)).query as string
-      if (lifecycle instanceof Response && q.includes('conferenceLifecycle'))
-        return lifecycle
-      return new Response(
-        JSON.stringify({
-          data: q.includes('conferenceLifecycle')
-            ? { conferenceLifecycle: lifecycle }
-            : { conference },
-        }),
-      )
-    })
+    fetchMock.mockImplementation(async () =>
+      lifecycle instanceof Response
+        ? lifecycle
+        : new Response(
+            JSON.stringify({
+              data: { conference, conferenceLifecycle: lifecycle },
+            }),
+          ),
+    )
   }
   const withSanity = (lifecycleStatus?: string) =>
     sanityFetch.mockResolvedValue({
@@ -345,10 +342,25 @@ describe('lifecycleStatus from tenant-directory (#1997)', () => {
     reply('cancelled', null)
     const { conference } = await getConferenceForDomain('2026.example.com')
     expect(conference.lifecycleStatus).toBe('cancelled')
+    expect(conference.title).toBe('Sanity title')
+    // One gateway call: the lifecycle rides the conference query.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('flagged: a null conference and a live lifecycle still falls back', async () => {
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    withSanity('cancelled')
+    reply('live', null)
+    const { conference } = await getConferenceForDomain('2026.example.com')
+    expect(conference.lifecycleStatus).toBe('cancelled')
   })
 
   it.each([
     ['an HTTP error', new Response('boom', { status: 502 })],
+    [
+      'a GraphQL error',
+      new Response(JSON.stringify({ errors: [{ message: 'x' }] })),
+    ],
     ['a null (draft) answer', null],
     ['an unknown value', 'bogus'],
   ])('flagged: %s keeps Sanity', async (_, d1) => {

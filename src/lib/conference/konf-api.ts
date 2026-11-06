@@ -15,13 +15,15 @@ const QUERY = `{ conference {
   id title tagline description city country venueName venueAddress startDate endDate
   visibility logoBright logoDark logomarkBright logomarkDark backgroundPattern
   primaryColor accentColor registrationLink socialLinks homepageSections
-} }`
+} conferenceLifecycle }`
 
 type ApiConference = Record<string, unknown> & {
   primaryColor?: string | null
   accentColor?: string | null
   /** A JSON string from the API, an array once fetchKonfApiConference returns. */
   homepageSections?: string | unknown[] | null
+  /** tenant-directory's lifecycle (#1997); see mergeKonfApiConference. */
+  conferenceLifecycle?: string | null
 }
 
 /** Per-conference rollout flags (#1925), as the gateway's `rolloutFlags`. */
@@ -220,12 +222,25 @@ async function readKonfApiConference(
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = (await res.json()) as {
-    data?: { conference?: ApiConference | null }
+    data?: {
+      conference?: ApiConference | null
+      conferenceLifecycle?: string | null
+    }
     errors?: unknown[]
   }
   if (json.errors?.length) throw new Error(JSON.stringify(json.errors))
+  const lifecycle = json.data?.conferenceLifecycle ?? null
+  // `conference` is null to the public for a cancelled or archived edition;
+  // the lifecycle alone still overrides the homepage (#1997). Both come from
+  // the same host-derived envelope, so the id is the one asked for.
+  if (
+    !json.data?.conference &&
+    (lifecycle === 'cancelled' || lifecycle === 'archived')
+  )
+    return { id: conferenceId, conferenceLifecycle: lifecycle }
   const api = json.data?.conference
   if (!api) throw new Error('conference is null')
+  if (lifecycle) api.conferenceLifecycle = lifecycle
   // Thrown inside the cached body so a wrong-tenant answer is never stored.
   if (api.id !== conferenceId) {
     throw new Error(`conference id mismatch: ${String(api.id)}`)
@@ -240,92 +255,34 @@ async function readKonfApiConference(
   return api
 }
 
-const LIFECYCLE_QUERY = '{ conferenceLifecycle }'
-
-/**
- * The tenant's lifecycle from tenant-directory (#1997): `live`, `cancelled`,
- * `archived`, or null (a draft, to anyone not a member). A separate read
- * because `conference` is null to the public for a cancelled or archived
- * edition. Cached like the conference read; throws on any failure.
- */
-export async function fetchKonfApiLifecycle(
-  host: string,
-  conferenceId: string,
-): Promise<string | null> {
-  'use cache: remote'
-  cacheLife(CONFERENCE_CACHE_LIFE)
-  cacheTag('content:conferences')
-  cacheTag(domainTag(host))
-  cacheTag(conferenceTag(conferenceId))
-  const url = konfApiUrl()
-  if (!url) throw new Error('KONF_API_URL is not set on this environment')
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: await konfApiHeaders(host),
-    body: JSON.stringify({ query: LIFECYCLE_QUERY }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const json = (await res.json()) as {
-    data?: { conferenceLifecycle?: string | null }
-    errors?: unknown[]
-  }
-  if (json.errors?.length) throw new Error(JSON.stringify(json.errors))
-  return json.data?.conferenceLifecycle ?? null
-}
-
-/**
- * The D1 lifecycle as the Sanity `lifecycleStatus` override: `cancelled` and
- * `archived` set it, `live` clears it. Null, a draft or a failed read keep
- * Sanity's value.
- */
-async function mergeLifecycle(
-  host: string,
-  conference: Conference,
-): Promise<Conference> {
-  try {
-    const lc = await fetchKonfApiLifecycle(host, conference._id)
-    if (lc === 'cancelled' || lc === 'archived')
-      return { ...conference, lifecycleStatus: lc }
-    if (lc === 'live') {
-      const rest = { ...conference }
-      delete rest.lifecycleStatus
-      return rest
-    }
-    return conference
-  } catch (err) {
-    console.warn(
-      `[konf-api] lifecycle falling back to Sanity for ${host}:`,
-      (err as Error).message,
-    )
-    return conference
-  }
-}
-
 /**
  * Merge the API's fields over the Sanity conference. Returns the Sanity
- * conference untouched on any error, timeout or null, except for the
- * lifecycle, which is read and merged on its own.
+ * conference untouched on any error, timeout or null.
+ *
+ * The lifecycle (#1997) maps onto Sanity's `lifecycleStatus` override:
+ * `cancelled` and `archived` set it, `live` clears it, and null (a draft, to
+ * a non-member) or an unknown value keeps Sanity's.
  */
 export async function mergeKonfApiConference(
   host: string,
   conference: Conference,
 ): Promise<Conference> {
-  return mergeLifecycle(host, await mergeCoreFields(host, conference))
-}
-
-async function mergeCoreFields(
-  host: string,
-  conference: Conference,
-): Promise<Conference> {
   try {
     const api = await fetchKonfApiConference(host, conference._id)
-    const { id, primaryColor, accentColor, homepageSections, ...rest } = api
+    const {
+      id,
+      primaryColor,
+      accentColor,
+      homepageSections,
+      conferenceLifecycle: lc,
+      ...rest
+    } = api
     // Legacy rows fall back to the id for a blank title; keep Sanity's then.
     if (rest.title === id) delete rest.title
     const merged = { ...conference } as Record<string, unknown>
     for (const [k, v] of Object.entries(rest)) if (v != null) merged[k] = v
+    if (lc === 'cancelled' || lc === 'archived') merged.lifecycleStatus = lc
+    else if (lc === 'live') delete merged.lifecycleStatus
     if (primaryColor != null || accentColor != null) {
       merged.theme = {
         ...conference.theme,
