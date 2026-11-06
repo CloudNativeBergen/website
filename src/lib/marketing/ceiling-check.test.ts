@@ -1,5 +1,11 @@
 /** @vitest-environment node */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 
@@ -51,7 +57,7 @@ describe('ceiling-check D1 gateway values and fallbacks (#1997)', () => {
 
   it('uses merged D1 dates when flagged and differing D1 dates silence event-week ceiling warnings', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
 
     fetchMock.mockResolvedValue({
       conference: structuredClone(sanityConference),
@@ -81,7 +87,7 @@ describe('ceiling-check D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity dates when unflagged, issuing ceiling warnings', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
 
     fetchMock.mockResolvedValue({
       conference: structuredClone(sanityConference),
@@ -101,7 +107,7 @@ describe('ceiling-check D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity dates on gateway error', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
 
     fetchMock.mockResolvedValue({
       conference: structuredClone(sanityConference),

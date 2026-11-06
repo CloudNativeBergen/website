@@ -12,6 +12,12 @@
  * endpoint. The join, the rate limit and the email rendering run for real.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 import type { TicketCandidate } from '@/lib/tickets/speakerStatus'
 import type { HolderSignup } from './holders'
 
@@ -809,7 +815,7 @@ describe('sendWorkshopReminder', () => {
   describe('D1 gateway values and fallbacks (#1997)', () => {
     it('uses D1-owned fields when the gateway returns values that differ from Sanity', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'conference-1')
+      flagTenants('apiRead', 'conference-1')
 
       const gatewayFetch = vi.fn().mockResolvedValue(
         new Response(
@@ -835,7 +841,7 @@ describe('sendWorkshopReminder', () => {
 
     it('falls back to Sanity when KONF_API_DISABLED=1', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'conference-1')
+      flagTenants('apiRead', 'conference-1')
       vi.stubEnv('KONF_API_DISABLED', '1')
 
       const gatewayFetch = vi.fn()
@@ -854,7 +860,7 @@ describe('sendWorkshopReminder', () => {
 
     it('falls back to Sanity when the gateway errors', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'conference-1')
+      flagTenants('apiRead', 'conference-1')
 
       const gatewayFetch = vi.fn().mockResolvedValue(
         new Response(

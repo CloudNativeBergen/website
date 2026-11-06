@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 
@@ -301,7 +307,7 @@ describe('deleteExpiredMessagingData', () => {
   describe('D1 gateway values and fallbacks (#1997)', () => {
     it('an EARLIER D1 endDate never widens the purge', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'conf-d1')
+      flagTenants('apiRead', 'conf-d1')
 
       // Sanity endDate is 2026-01-01 (not expired for 24-mo cutoff in 2026),
       // but D1 endDate is 2020-01-01 (expired).
@@ -359,7 +365,7 @@ describe('deleteExpiredMessagingData', () => {
 
     it('falls back to Sanity endDate when tenant is unflagged', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+      flagTenants('apiRead', 'other-conf')
 
       // Sanity endDate is 2026-01-01 (not expired); should not be purged
       fetchMock.mockImplementation(
@@ -386,7 +392,7 @@ describe('deleteExpiredMessagingData', () => {
 
     it('falls back to Sanity endDate when D1 returns nullish endDate', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'conf-d1')
+      flagTenants('apiRead', 'conf-d1')
 
       // Sanity endDate is 2020-01-01 (expired); D1 returns null endDate
       fetchMock.mockImplementation(

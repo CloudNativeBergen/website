@@ -13,7 +13,7 @@ import { composeServices } from '@theguild/federation-composition'
 import { parse } from 'graphql'
 import { schema as conference } from '../../services/conference/src/subgraph'
 import { schema as content } from '../../services/content/src/subgraph'
-import { progressiveOverride } from './gateway'
+import { D1_OVERRIDE_LABELS, progressiveOverride } from './gateway'
 import { compose, publicContract } from './supergraph'
 
 const sdl = (s: Parameters<typeof publicContract>[0]) =>
@@ -54,9 +54,11 @@ describe('content in the supergraph', () => {
 })
 
 describe('progressive override', () => {
-  // The gateway's handler; the label is on for org_a only.
-  const env = { OVERRIDE_TENANTS: { conference: ['org_a'] } }
-  const runtime = createGatewayRuntime<{ env: typeof env; orgId: string }>({
+  // The gateway's handler; d1_override is on for org_a's conference only.
+  const runtime = createGatewayRuntime<{
+    orgId: string
+    flags: { d1Override: boolean }
+  }>({
     supergraph: supergraph!,
     transports: { http: httpTransport },
     progressiveOverride: (label, ctx) => progressiveOverride(label, ctx),
@@ -89,7 +91,7 @@ describe('progressive override', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ query: '{ conference { title description } }' }),
       },
-      { env, orgId },
+      { orgId, flags: { d1Override: orgId === 'org_a' } },
     )
     return ((await res.json()) as { data: { conference: unknown } }).data
       .conference
@@ -107,33 +109,37 @@ describe('progressive override', () => {
     })
   })
 
-  it('keeps everyone on content while OVERRIDE_TENANTS is empty', () => {
-    const empty = { env: { OVERRIDE_TENANTS: {} }, orgId: 'org_a' }
-    expect(progressiveOverride('conference', empty)).toBe(false)
-    expect(progressiveOverride('conference', { env, orgId: null })).toBe(false)
+  it('keeps a tenant on content without d1_override or flags', () => {
+    for (const label of ['conference', 'conference-settings']) {
+      for (const flags of [{ d1Override: false }, null, undefined])
+        expect(progressiveOverride(label, { orgId: 'org_a', flags })).toBe(
+          false,
+        )
+      expect(
+        progressiveOverride(label, {
+          orgId: null,
+          flags: { d1Override: true },
+        }),
+      ).toBe(false)
+    }
   })
 
-  it('turns conference-settings on only through OVERRIDE_TENANTS, never d1_override (#2019)', () => {
+  it('turns conference-settings on with d1_override, as conference (#2019)', () => {
     const flags = { d1Override: true }
-    const listed = { OVERRIDE_TENANTS: { 'conference-settings': ['org_a'] } }
+    expect(progressiveOverride('conference', { orgId: 'org_a', flags })).toBe(
+      true,
+    )
     expect(
-      progressiveOverride('conference-settings', {
-        env,
-        orgId: 'org_a',
-        flags,
-      }),
-    ).toBe(false)
-    expect(
-      progressiveOverride('conference-settings', {
-        env: listed,
-        orgId: 'org_a',
-      }),
+      progressiveOverride('conference-settings', { orgId: 'org_a', flags }),
     ).toBe(true)
-    expect(
-      progressiveOverride('conference-settings', {
-        env: listed,
-        orgId: 'org_b',
-      }),
-    ).toBe(false)
+    expect(progressiveOverride('unknown', { orgId: 'org_a', flags })).toBe(
+      false,
+    )
+  })
+
+  it('switches every @override label in the supergraph by d1_override', () => {
+    // A new label missing from D1_OVERRIDE_LABELS would never turn on.
+    const labels = new Set(compose().match(/(?<=overrideLabel: ")[^"]+/g))
+    expect([...labels].sort()).toEqual([...D1_OVERRIDE_LABELS].sort())
   })
 })

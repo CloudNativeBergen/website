@@ -2,6 +2,12 @@
  * @vitest-environment node
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 
 const h = vi.hoisted(() => ({
   fetch: vi.fn(),
@@ -89,7 +95,7 @@ describe('deleteExpiredReminderLogs', () => {
   describe('D1 gateway values and fallbacks (#1997)', () => {
     it('uses D1 endDate when tenant has apiRead enabled (postponed edition is spared)', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'c1')
+      flagTenants('apiRead', 'c1')
 
       // Sanity endDate is old (2020-01-01), but D1 postponed to 2099-01-01
       h.fetch.mockResolvedValueOnce([
@@ -122,7 +128,7 @@ describe('deleteExpiredReminderLogs', () => {
 
     it('uses D1 endDate when tenant has apiRead enabled (an EARLIER D1 date never widens the purge)', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'c1')
+      flagTenants('apiRead', 'c1')
 
       // Sanity endDate is future (2099-01-01), but D1 ended 2020-01-01
       h.fetch
@@ -158,7 +164,7 @@ describe('deleteExpiredReminderLogs', () => {
 
     it('falls back to Sanity endDate when tenant is unflagged', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+      flagTenants('apiRead', 'other-conf')
 
       h.fetch
         .mockResolvedValueOnce([
@@ -198,7 +204,7 @@ describe('deleteExpiredReminderLogs', () => {
     'a D1 path that %s purges only what Sanity alone would',
     async (_n, gateway) => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'c1,c2')
+      flagTenants('apiRead', 'c1,c2')
       h.fetch
         .mockResolvedValueOnce([
           { _id: 'c1', endDate: '2099-01-01', domains: ['c1.example.com'] },

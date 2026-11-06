@@ -48,12 +48,12 @@ Identity tests run against a real local D1 through Miniflare. A cross-tenant tes
 
 Each conference has four rollout flags in tenant-directory D1 (`conferences` table, #1925). They default to off. No GraphQL mutation writes them; an operator sets them with SQL:
 
-| Column           | Effect                                                       |
-| ---------------- | ------------------------------------------------------------ |
-| `api_read`       | The site reads core conference fields from `api.konf.app`.   |
-| `identity_login` | The site signs in through identity (`id.konf.app`).          |
-| `d1_write`       | The admin writes moved conference fields to D1 only (#1997). |
-| `d1_override`    | The gateway routes the `conference` `@override` label to D1. |
+| Column           | Effect                                                                                  |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| `api_read`       | The site reads core conference fields from `api.konf.app`.                              |
+| `identity_login` | The site signs in through identity (`id.konf.app`).                                     |
+| `d1_write`       | The admin writes moved conference fields to D1 only (#1997).                            |
+| `d1_override`    | The gateway routes the `conference` and `conference-settings` `@override` labels to D1. |
 
 ```sh
 pnpm --filter @runkonf/tenant-directory exec wrangler d1 execute DB --remote --env production \
@@ -64,7 +64,7 @@ How they travel: `tenantByHost` returns them, and the gateway reads them with it
 
 Fail safe: if the read fails or times out (500 ms), the site uses the last flags it read for that host in the last 10 minutes (kept in memory per server instance). The age counts from when the gateway answered, not from a cache hit: a cached answer older than 10 minutes (the cache keeps serving one stale for up to an hour while revalidation fails) counts as a failed read. With none, API read and identity login are off for that request (the Sanity path), and a settings save that touches moved fields is refused with "try again" rather than written to Sanity alone (#1938). Fields that have not moved still save. Each failure is logged with the conference id.
 
-Kill switch: `KONF_API_DISABLED=1` on Vercel turns all three site flags off for every tenant, env lists included, and stops identity sessions. The gateway has no switch; set `d1_override = 0` in D1 instead. While it is set, settings saves go to Sanity only, so D1 drifts. Before removing it, run `pnpm tsx scripts/parity-conference.ts --all` and fix every difference (it checks D1 only for tenants with `d1_override` on; see the caveat in [DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md)). All 4 conferences have `d1_override = 1` since 2026-11-05. For any tenant with `d1_override` off, the script reads Sanity on both sides, so it cannot detect D1 drift; a clean result proves nothing about D1 there. Use the conference Worker's daily D1 sweep instead, which reads D1 directly (`conference.parity.sweep` logs; see [DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md)). A save made after the switch is off goes to D1 first and does not repair fields edited during the outage.
+Kill switch: `KONF_API_DISABLED=1` on Vercel turns all three site flags off for every tenant and stops identity sessions. The gateway has no switch; set `d1_override = 0` in D1 instead. While it is set, settings saves go to Sanity only, so D1 drifts. Before removing it, run `pnpm tsx scripts/parity-conference.ts --all` and fix every difference (it checks D1 only for tenants with `d1_override` on; see the caveat in [DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md)). All 4 conferences have `d1_override = 1` since 2026-11-05. For any tenant with `d1_override` off, the script reads Sanity on both sides, so it cannot detect D1 drift; a clean result proves nothing about D1 there. Use the conference Worker's daily D1 sweep instead, which reads D1 directly (`conference.parity.sweep` logs; see [DATA_OWNERSHIP.md](./DATA_OWNERSHIP.md)). A save made after the switch is off goes to D1 first and does not repair fields edited during the outage.
 
 <a id="the-read-path-flag"></a>
 
@@ -78,13 +78,19 @@ Kill switch: `KONF_API_DISABLED=1` on Vercel turns all three site flags off for 
 
 `src/lib/konf-api/conference-write.ts` sends each settings save's moved fields to `updateConference` in D1 (#1881). For `d1_write` tenants, moved fields go ONLY to D1 and Sanity copies are frozen (#1997); non-moved fields still go to Sanity. If the D1 write fails, the save fails and Sanity is not touched. If Sanity fails after D1 succeeded, the error is logged and the save returns a warning. An organizer without an identity session cannot save moved fields, so turn `d1_write` on only together with `identity_login`. Run `pnpm tsx scripts/parity-conference.ts --all` again after turning `d1_write` on (all 4 conferences have both `d1_write` and `d1_override` on since 2026-11-05).
 
-### Transition: the old env lists
+### The old env lists (removed)
 
-D1 flags for all 4 conferences are set in tenant-directory D1 (`d1_override = 1`, `d1_write = 1`, `api_read = 1`, `identity_login = 1`). The separate `conference-settings` override label is still enabled per tenant by `OVERRIDE_TENANTS` in `api/wrangler.jsonc` (#2029). The legacy env lists (`KONF_API_TENANTS`, `KONF_IDENTITY_TENANTS`, `KONF_D1_WRITE_TENANTS` on Vercel) still work and are OR'ed with the D1 flags until cleaned up (#1925). To remove them:
+The transition lists are gone (#1939). The site reads `api_read`, `identity_login` and `d1_write` only from D1 through `rolloutFlags`, and the gateway switches both `@override` labels, `conference` and `conference-settings` (#2019), only by `d1_override`. A failed flag read or tenant lookup means off: the Sanity path, never on. Without a gateway URL every site flag is off, identity login included.
 
-1. Approve the production Workers deploy, which applies migrations 0002 and 0003. Check the CNDN 2026 row: `SELECT id, api_read, identity_login, d1_write, d1_override FROM conferences WHERE api_read OR identity_login OR d1_write OR d1_override`.
-2. Delete `KONF_API_TENANTS`, `KONF_IDENTITY_TENANTS` and `KONF_D1_WRITE_TENANTS` from every Vercel environment and redeploy. Check that sign-in through identity and the settings save still work on 2026.cloudnativedays.no.
-3. Delete `listed()` and its three calls in `src/lib/conference/konf-api.ts`, and the `OVERRIDE_TENANTS` var with its check in `progressiveOverride` (`api/src/gateway.ts`), in one PR.
+Before the deploy, check in D1 that every conference of an organization that had `conference-settings` through `OVERRIDE_TENANTS` (`organization-cloud-native-days`, `kkdemo.org`) has `d1_override = 1`; a conference without it falls back to content for the settings fields. Since 2026-11-05 all 4 conferences have it.
+
+After the site deploy, delete these from every Vercel environment. Nothing reads them:
+
+- `KONF_API_TENANTS`
+- `KONF_IDENTITY_TENANTS`
+- `KONF_D1_WRITE_TENANTS`
+
+`OVERRIDE_TENANTS` was a Worker var in `api/wrangler.jsonc`; the API deploy removes it, nothing to delete by hand.
 
 ## Gateway URL
 

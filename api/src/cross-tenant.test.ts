@@ -595,7 +595,6 @@ afterAll(() => mf?.dispose())
 /** Subgraph calls of the current walk; `name:_entities` for entity fetches. */
 const calls = new Set<string>()
 /** Every @override label in the supergraph. */
-const LABELS = [...new Set(compose().match(/(?<=overrideLabel: ")[^"]+/g))]
 /** Subgraphs that take fields over with @override(from:, label:). */
 const OVERRIDERS = names.filter((n) =>
   compose().includes(`graph: ${n.toUpperCase().replace(/-/g, '_')}, override:`),
@@ -627,9 +626,6 @@ describe.each([
 ])('cross-tenant walk: %s', (_, signedIn, tenants) => {
   // Each @override label off, then on for org A (progressive override).
   it.each([false, true])('labels on for A: %s', async (labelsOn) => {
-    env.OVERRIDE_TENANTS = Object.fromEntries(
-      LABELS.map((l) => [l, labelsOn ? [ORG.a] : []]),
-    )
     await overrideForA(labelsOn)
     calls.clear()
     const headers = (): Record<string, string> => ({
@@ -701,7 +697,6 @@ it('resolves each origin over DIRECTORY and forwards its envelope to CONTENT', a
   )
   // The gateway's own lookup per origin, then content over CONTENT with the
   // envelope the gateway minted for that tenant.
-  env.OVERRIDE_TENANTS = {}
   await overrideForA(false)
   for (const t of TENANTS) {
     const body = await run('{ conference { id title } }', {
@@ -737,7 +732,6 @@ describe('cross-tenant mutation walk', () => {
   }
   // Before the tests' snapshots, so the reset is not counted as a write.
   beforeEach(async () => {
-    env.OVERRIDE_TENANTS = {}
     await overrideForA(false)
   })
   const mutate = async (headers: Record<string, string>, skip?: RegExp) => {
@@ -885,7 +879,6 @@ describe('conferenceEditions (#1970)', () => {
   beforeAll(addEditions)
   afterAll(dropEditions)
   beforeEach(async () => {
-    env.OVERRIDE_TENANTS = {}
     await overrideForA(false)
   })
   const member = () => ({ authorization: `Bearer ${memberJwt}` })
@@ -996,7 +989,6 @@ describe('lifecycleStatus (#1971)', () => {
     await setLifecycle(CONF.a, 'live')
   })
   beforeEach(async () => {
-    env.OVERRIDE_TENANTS = {}
     await overrideForA(false)
     await setLifecycle(CONF.a, 'live')
   })
@@ -1133,7 +1125,6 @@ describe('primaryHost (#1977)', () => {
       .run()
   })
   beforeEach(async () => {
-    env.OVERRIDE_TENANTS = {}
     await overrideForA(false)
     await setLifecycle(CONF.a, 'live')
   })
@@ -1257,7 +1248,6 @@ describe('operator lane: Kontroll members (#1956)', () => {
       .run()
   })
   beforeEach(async () => {
-    env.OVERRIDE_TENANTS = {}
     await overrideForA(false)
     await setRole('admin')
     for (const k of Object.keys(lastEnvelope)) lastEnvelope[k] = null
@@ -1542,7 +1532,6 @@ describe('operator lane: organizations (#1973)', () => {
     await setOperator(false)
   })
   beforeEach(async () => {
-    env.OVERRIDE_TENANTS = {}
     await setOperator(false)
   })
 
@@ -1671,7 +1660,6 @@ describe('operator lane: conferences across orgs (#1985)', () => {
     await setLifecycle(CONF.b, 'live')
   })
   beforeEach(async () => {
-    env.OVERRIDE_TENANTS = {}
     await setOperator(false)
     await overrideForA(false)
     await setLifecycle(CONF.a, 'live')
@@ -1872,9 +1860,7 @@ describe('organization: session org, plan and domains (#1968, #1969)', () => {
   afterAll(() => {
     delete (env as Partial<Env>).OPERATOR_ORIGIN
   })
-  beforeEach(() => {
-    env.OVERRIDE_TENANTS = {}
-  })
+  beforeEach(() => {})
 
   it("serves a member of A A's org, plan and domains on A's host, pending ones too", async () => {
     let db: D1Database | undefined
@@ -1994,7 +1980,6 @@ describe('organization: session org, plan and domains (#1968, #1969)', () => {
 
 describe('negative control: the Sanity fixture follows the GROQ', () => {
   const read = async (rewrite: (q: string) => string) => {
-    env.OVERRIDE_TENANTS = {}
     await overrideForA(false)
     rewriteGroq = rewrite
     try {
@@ -2091,7 +2076,6 @@ describe('session org members (#1972)', () => {
     await setRole('admin')
   })
   beforeEach(async () => {
-    env.OVERRIDE_TENANTS = {}
     await setRole('admin')
   })
 

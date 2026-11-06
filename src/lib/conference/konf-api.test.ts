@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('server-only', () => ({}))
+vi.mock('./konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 const sanityFetch = vi.fn()
 vi.mock('../sanity/client', () => ({
   clientWrite: { fetch: (...a: unknown[]) => sanityFetch(...a) },
@@ -69,16 +75,16 @@ const apiReply = (conference: Record<string, unknown> | null) =>
     ),
   )
 
-describe('KONF_API_TENANTS', () => {
+describe('api_read', () => {
   it('flag off: Sanity only, no fetch', async () => {
-    vi.stubEnv('KONF_API_TENANTS', '')
+    flagTenants('apiRead', '')
     const { conference } = await getConferenceForDomain('2026.example.com')
     expect(fetchMock).not.toHaveBeenCalled()
     expect(conference.title).toBe('Sanity title')
   })
 
   it('uncached plus flagged with differing D1 gives D1', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     apiReply({ title: 'API title', city: 'Trondheim' })
     const { conference } = await getConferenceForDomain('2026.example.com', {
       uncached: true,
@@ -90,7 +96,7 @@ describe('KONF_API_TENANTS', () => {
   })
 
   it('uncached plus unflagged gives Sanity with no conference read', async () => {
-    vi.stubEnv('KONF_API_TENANTS', '')
+    flagTenants('apiRead', '')
     const { conference } = await getConferenceForDomain('2026.example.com', {
       uncached: true,
     })
@@ -100,7 +106,7 @@ describe('KONF_API_TENANTS', () => {
   })
 
   it('uncached plus error gives Sanity', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     fetchMock.mockResolvedValue(new Response('boom', { status: 502 }))
     const { conference, status } = await getConferenceForDomain(
       '2026.example.com',
@@ -113,7 +119,7 @@ describe('KONF_API_TENANTS', () => {
   })
 
   it('a title equal to the id is not merged', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     apiReply({ title: 'conf-1', city: 'Oslo' })
     const { conference } = await getConferenceForDomain('2026.example.com')
     expect(conference.title).toBe('Sanity title')
@@ -121,7 +127,7 @@ describe('KONF_API_TENANTS', () => {
   })
 
   it('an id mismatch falls back to Sanity', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     apiReply({ id: 'conf-other', title: 'API title' })
     const { conference } = await getConferenceForDomain('2026.example.com')
     expect(conference.title).toBe('Sanity title')
@@ -129,7 +135,7 @@ describe('KONF_API_TENANTS', () => {
   })
 
   it('preview without KONF_API_URL: no fetch, Sanity only', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'org-1')
+    flagTenants('apiRead', 'org-1')
     vi.stubEnv('VERCEL_ENV', 'preview')
     vi.stubEnv('KONF_API_URL', '')
     const { conference } = await getConferenceForDomain('2026.example.com')
@@ -138,7 +144,7 @@ describe('KONF_API_TENANTS', () => {
   })
 
   it('preview with KONF_API_URL: calls it', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'org-1')
+    flagTenants('apiRead', 'org-1')
     vi.stubEnv('VERCEL_ENV', 'preview')
     vi.stubEnv('KONF_API_URL', 'https://preview.example/graphql')
     apiReply({ title: 'API title' })
@@ -147,13 +153,13 @@ describe('KONF_API_TENANTS', () => {
   })
 
   it('other tenant listed: no fetch', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-other')
+    flagTenants('apiRead', 'conf-other')
     await getConferenceForDomain('2026.example.com')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('flag on: merges API fields over Sanity', async () => {
-    vi.stubEnv('KONF_API_TENANTS', ' org-1 ')
+    flagTenants('apiRead', ' org-1 ')
     apiReply({
       title: 'API title',
       city: null,
@@ -180,7 +186,7 @@ describe('KONF_API_TENANTS', () => {
   })
 
   it('an empty block list keeps the Sanity composition', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     const stored = [{ _type: 'homepageHero', _key: 'h', hidden: true }]
     sanityFetch.mockResolvedValue({ ...sanityDoc, homepageSections: stored })
     apiReply({ homepageSections: '[]' })
@@ -189,7 +195,7 @@ describe('KONF_API_TENANTS', () => {
   })
 
   it('API error falls back to Sanity', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     fetchMock.mockResolvedValue(new Response('boom', { status: 502 }))
     const { conference, status } =
       await getConferenceForDomain('2026.example.com')
@@ -199,14 +205,14 @@ describe('KONF_API_TENANTS', () => {
   })
 
   it('null conference falls back to Sanity', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     apiReply(null)
     const { conference } = await getConferenceForDomain('2026.example.com')
     expect(conference.title).toBe('Sanity title')
   })
 
   it('timeout falls back to Sanity', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     fetchMock.mockImplementation(
       (_: string, init: RequestInit) =>
         new Promise((_r, reject) =>
@@ -330,7 +336,7 @@ describe('lifecycleStatus from tenant-directory (#1997)', () => {
     ['archived', 'cancelled', 'archived'],
     ['live', 'archived', undefined],
   ])('flagged: D1 %s over Sanity %s gives %s', async (d1, sanity, want) => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     withSanity(sanity)
     reply(d1)
     const { conference } = await getConferenceForDomain('2026.example.com')
@@ -338,7 +344,7 @@ describe('lifecycleStatus from tenant-directory (#1997)', () => {
   })
 
   it('flagged: merges even when the public conference read is null', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     withSanity(undefined)
     reply('cancelled', null)
     const { conference } = await getConferenceForDomain('2026.example.com')
@@ -349,7 +355,7 @@ describe('lifecycleStatus from tenant-directory (#1997)', () => {
   })
 
   it('flagged: a null conference and a live lifecycle still falls back', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     withSanity('cancelled')
     reply('live', null)
     const { conference } = await getConferenceForDomain('2026.example.com')
@@ -365,7 +371,7 @@ describe('lifecycleStatus from tenant-directory (#1997)', () => {
     ['a null (draft) answer', null],
     ['an unknown value', 'bogus'],
   ])('flagged: %s keeps Sanity', async (_, d1) => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     withSanity('archived')
     reply(d1)
     const { conference } = await getConferenceForDomain('2026.example.com')
@@ -383,7 +389,7 @@ describe('settings phase 1 read flip (#2019)', () => {
     ticketCustomization: { heroHeadline: 'H', showVanityMetrics: false },
   }
   beforeEach(() => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     sanityFetch.mockResolvedValue(structuredClone(closed))
   })
 

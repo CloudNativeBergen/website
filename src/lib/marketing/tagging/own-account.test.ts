@@ -1,5 +1,11 @@
 /** @vitest-environment node */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../../__tests__/helpers/rolloutFlags'
 
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 
@@ -33,7 +39,7 @@ describe('ownBlueskyAccount D1 gateway values and fallbacks (#1997)', () => {
 
   it('uses merged D1 socialLinks when tenant is flagged and D1 value differs', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-a')
+    flagTenants('apiRead', 'conf-a')
     fetchMock.mockResolvedValue(structuredClone(sanityConf))
 
     const gatewayFetch = vi.fn().mockResolvedValue(
@@ -56,7 +62,7 @@ describe('ownBlueskyAccount D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity socialLinks when tenant is unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
     fetchMock.mockResolvedValue(structuredClone(sanityConf))
 
     const gatewayFetch = vi.fn()
@@ -69,7 +75,7 @@ describe('ownBlueskyAccount D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity socialLinks on gateway error', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-a')
+    flagTenants('apiRead', 'conf-a')
     fetchMock.mockResolvedValue(structuredClone(sanityConf))
 
     const gatewayFetch = vi.fn().mockResolvedValue(

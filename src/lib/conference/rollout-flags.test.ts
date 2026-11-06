@@ -24,13 +24,7 @@ const reply = (rolloutFlags: unknown) =>
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
   vi.stubEnv('KONF_SITE_SIGNING_KEY', 'k')
-  for (const n of [
-    'KONF_API_TENANTS',
-    'KONF_IDENTITY_TENANTS',
-    'KONF_D1_WRITE_TENANTS',
-    'KONF_API_DISABLED',
-  ])
-    vi.stubEnv(n, '')
+  vi.stubEnv('KONF_API_DISABLED', '')
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(() => {
@@ -67,16 +61,27 @@ describe('rolloutFlags (#1925)', () => {
     expect(await rolloutFlags('a.example', conf)).toEqual(off)
   })
 
-  it('ORs the transition env lists in', async () => {
+  // The old transition env lists (#1925) are gone: D1 is the only source.
+  const oldLists = () => {
+    for (const n of [
+      'KONF_API_TENANTS',
+      'KONF_IDENTITY_TENANTS',
+      'KONF_D1_WRITE_TENANTS',
+    ])
+      vi.stubEnv(n, 'conf-1,org-1')
+  }
+
+  it('ignores the old env lists', async () => {
     reply(null)
-    vi.stubEnv('KONF_API_TENANTS', 'org-1')
-    vi.stubEnv('KONF_IDENTITY_TENANTS', ' conf-1 ')
-    vi.stubEnv('KONF_D1_WRITE_TENANTS', 'org-1') // conference ids only
-    expect(await rolloutFlags('a.example', conf)).toEqual({
-      apiRead: true,
-      identityLogin: true,
-      d1Write: false,
-    })
+    oldLists()
+    expect(await rolloutFlags('a.example', conf)).toEqual(off)
+  })
+
+  it('gives the read 500 ms (#1939)', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    reply(null)
+    await rolloutFlags('a.example', conf)
+    expect(timeout).toHaveBeenCalledWith(500)
   })
 
   it.each([
@@ -90,7 +95,7 @@ describe('rolloutFlags (#1925)', () => {
     ],
     ['a network error', () => fetchMock.mockRejectedValue(new Error('down'))],
   ])(
-    'with no last good value, fails to the env lists, unverified, on %s',
+    'with no last good value, fails closed to off, unverified, on %s',
     async (_, fail) => {
       fail()
       const host = `fail-${Math.random()}.example`
@@ -98,10 +103,9 @@ describe('rolloutFlags (#1925)', () => {
         ...off,
         unverified: true,
       })
-      vi.stubEnv('KONF_D1_WRITE_TENANTS', 'conf-1')
+      oldLists()
       expect(await rolloutFlags(host, conf)).toEqual({
         ...off,
-        d1Write: true,
         unverified: true,
       })
     },
@@ -254,22 +258,16 @@ describe('rolloutFlags (#1925)', () => {
 
   it('KONF_API_DISABLED=1 turns everything off without a call', async () => {
     reply({ apiRead: true, identityLogin: true, d1Write: true })
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
     vi.stubEnv('KONF_API_DISABLED', '1')
     expect(await rolloutFlags('a.example', conf)).toEqual(off)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('turns API read and D1 write off without a gateway URL (#1926)', async () => {
+  it('turns every flag off without a gateway URL (#1926)', async () => {
     reply({ apiRead: true, identityLogin: true, d1Write: true })
     vi.stubEnv('VERCEL_ENV', 'preview')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
-    vi.stubEnv('KONF_IDENTITY_TENANTS', 'conf-1')
-    vi.stubEnv('KONF_D1_WRITE_TENANTS', 'conf-1')
-    expect(await rolloutFlags('a.example', conf)).toEqual({
-      ...off,
-      identityLogin: true,
-    })
+    oldLists()
+    expect(await rolloutFlags('a.example', conf)).toEqual(off)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
