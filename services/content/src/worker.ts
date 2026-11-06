@@ -27,17 +27,19 @@ export default {
     const result = await envelopeFromRequest(request, env.GATEWAY_PUBLIC_KEY)
     if ('response' in result) return result.response
     const envelope = result.envelope
-    const tenant =
+    const caller =
       envelope.typ === 'tenant'
         ? {
             'konf.org_id': envelope.orgId,
             'konf.conference_id': envelope.conferenceId ?? undefined,
           }
-        : { 'konf.platform_user': envelope.userId }
+        : envelope.typ === 'platform'
+          ? { 'konf.platform_user': envelope.userId }
+          : { 'konf.user_id': envelope.userId }
     // On the log line and on the request's span, so traces filter by tenant
     // (#1814). An org-level envelope has no conference: the key is left out.
-    console.log(JSON.stringify(tenant))
-    ctx?.tracing.getActiveSpan()?.setAttributes(tenant)
+    console.log(JSON.stringify(caller))
+    ctx?.tracing.getActiveSpan()?.setAttributes(caller)
     return yoga.fetch(request, { envelope, data: createData(env, envelope) })
   },
 } satisfies ExportedHandler<WorkerEnv>

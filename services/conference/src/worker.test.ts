@@ -797,6 +797,12 @@ describe('tenant span attributes (#1814)', () => {
     expect(setAttributes.mock.calls).toEqual([[{ 'konf.platform_user': 'op' }]])
   })
 
+  it('sets the user, not an operator, for a UserContext', async () => {
+    const { ctx, setAttributes } = traced()
+    await fetchWith(ctx, { typ: 'user', userId: 'u1' })
+    expect(setAttributes.mock.calls).toEqual([[{ 'konf.user_id': 'u1' }]])
+  })
+
   it('sets nothing for a refused envelope', async () => {
     const { ctx, setAttributes } = traced()
     expect((await fetchWith(ctx, 'not-a-jwt')).status).toBe(403)
