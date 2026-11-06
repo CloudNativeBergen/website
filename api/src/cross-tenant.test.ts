@@ -184,7 +184,23 @@ async function seed(db: D1Database) {
       "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name <> 'd1_migrations' ORDER BY rowid",
     )
     .all<{ name: string; sql: string }>()
-  for (const { name, sql } of tables) {
+  // Creation order is not parent order once a migration rebuilds a parent
+  // table (tenant-directory 0005): put every table after the ones it references.
+  const refs = (sql: string) =>
+    [...sql.matchAll(/REFERENCES\s+"?(\w+)"?/gi)].map((m) => m[1])
+  const ordered: typeof tables = []
+  while (ordered.length < tables.length) {
+    const next = tables.find(
+      (t) =>
+        !ordered.includes(t) &&
+        refs(t.sql).every(
+          (r) => r === t.name || ordered.some((o) => o.name === r),
+        ),
+    )
+    if (!next) throw new Error('foreign key cycle between tables')
+    ordered.push(next)
+  }
+  for (const { name, sql } of ordered) {
     const { results: cols } = await db
       .prepare(`SELECT * FROM pragma_table_info('${name}')`)
       .all<{

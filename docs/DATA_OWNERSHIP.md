@@ -165,11 +165,10 @@ comes last because it touches access control.
 - **kontroll reads Sanity directly.** The contract
   (`src/lib/conference/contract.ts`) reads `title`, `organization`, `city`,
   `country`, `startDate`, `endDate`, `domains`, `visibility` and
-  `lifecycleStatus`. All but `lifecycleStatus` are in D1, but kontroll still
-  reads Sanity, so none of these may be deleted from Sanity until kontroll is
-  on the API (rule 5). `lifecycleStatus` needs its own column: the
-  tenant-directory `lifecycle` (draft, live, archived) cannot hold
-  `cancelled`.
+  `lifecycleStatus`. All are in D1 (`lifecycleStatus` as tenant-directory
+  `lifecycle`, which holds `cancelled` since its migration 0005), but kontroll
+  still reads Sanity, so none of these may be deleted from Sanity until
+  kontroll is on the API (rule 5).
 - **GROQ filters across the site.** `organization._ref` (tenancy, ~100
   sites), `$domain in domains` (routing), `startDate` comparisons (previous
   and next edition), `$id in organizers[]._ref` (admin access) and

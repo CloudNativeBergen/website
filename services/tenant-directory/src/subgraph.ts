@@ -261,7 +261,7 @@ builder.queryType({
 builder.mutationType({
   fields: (t) => ({
     setConferenceLifecycle: t.field({
-      type: Conference,
+      type: ConferenceEdition,
       nullable: true,
       description:
         "Sets the request's Conference homepage override, or clears it with null (back to `live`; a draft stays draft). Org owner or admin, or an operator acting for the org (#1997).",

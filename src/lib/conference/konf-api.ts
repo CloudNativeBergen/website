@@ -289,8 +289,9 @@ async function mergeLifecycle(
     if (lc === 'cancelled' || lc === 'archived')
       return { ...conference, lifecycleStatus: lc }
     if (lc === 'live') {
-      const { lifecycleStatus: _, ...rest } = conference
-      return rest as Conference
+      const rest = { ...conference }
+      delete rest.lifecycleStatus
+      return rest
     }
     return conference
   } catch (err) {

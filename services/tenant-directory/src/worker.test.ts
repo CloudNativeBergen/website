@@ -872,7 +872,7 @@ describe('rollout flags (#1925)', () => {
 })
 
 describe('lifecycle override (#1997)', () => {
-  const SET = `mutation($s: ConferenceLifecycleOverride) { setConferenceLifecycle(status: $s) { id lifecycle } }`
+  const SET = `mutation($s: ConferenceLifecycleOverride) { setConferenceLifecycle(status: $s) { id lifecycleStatus } }`
   const READ = `{ conferenceLifecycle }`
   const lifecycle = (id: string) =>
     (
@@ -885,11 +885,15 @@ describe('lifecycle override (#1997)', () => {
   async function setup() {
     const org = await provision()
     const confId = conferenceOf(org.id)
-    return {
-      org,
-      confId,
-      as: { ...organizer, orgId: org.id, conferenceId: confId },
+    const as: Envelope = {
+      typ: 'tenant',
+      orgId: org.id,
+      conferenceId: confId,
+      userId: 'u',
+      orgRole: 'admin',
+      scopes: [],
     }
+    return { org, confId, as }
   }
 
   it('lets an org admin cancel, archive and clear back to live', async () => {
@@ -898,7 +902,7 @@ describe('lifecycle override (#1997)', () => {
       const { body } = await gql(SET, { s }, as)
       expect(body.data.setConferenceLifecycle).toEqual({
         id: confId,
-        lifecycle: s ?? 'live',
+        lifecycleStatus: s ?? 'live',
       })
       expect(lifecycle(confId)).toBe(s ?? 'live')
     }

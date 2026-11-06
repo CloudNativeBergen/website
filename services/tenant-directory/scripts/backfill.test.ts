@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { lifecycleOf, mapBackfill, toSql } from './backfill'
 
@@ -168,11 +169,19 @@ describe('mapBackfill', () => {
 })
 
 describe('lifecycleOf (#1997)', () => {
-  it('maps every Sanity lifecycleStatus losslessly; absent is live', async () => {
-    // The site's list is the Sanity schema's option list; a new value fails here.
-    const { LIFECYCLE_STATUS_VALUES } =
-      await import('../../../src/lib/homepage/lifecycle')
-    for (const v of LIFECYCLE_STATUS_VALUES) expect(lifecycleOf(v)).toBe(v)
+  it('maps every Sanity lifecycleStatus losslessly; absent is live', () => {
+    // Read from the Sanity schema's option list, so a new value fails here.
+    const schema = readFileSync(
+      new URL('../../../sanity/schemaTypes/conference.ts', import.meta.url),
+      'utf8',
+    )
+    const field = schema.slice(
+      schema.indexOf("name: 'lifecycleStatus'"),
+      schema.indexOf("name: 'lifecycleHeadline'"),
+    )
+    const values = [...field.matchAll(/value: '([^']+)'/g)].map((m) => m[1])
+    expect(values).toEqual(['cancelled', 'archived'])
+    for (const v of values) expect(lifecycleOf(v)).toBe(v)
     for (const v of [undefined, null, '', 'bogus'])
       expect(lifecycleOf(v)).toBe('live')
   })
