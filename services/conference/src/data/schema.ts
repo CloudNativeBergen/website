@@ -1,5 +1,5 @@
-// Drizzle mirror of migrations/ (0001-0003).
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+// Drizzle mirror of migrations/ (0001-0004).
+import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const conferences = sqliteTable('conferences', {
   conferenceId: text('conference_id').primaryKey(),
@@ -22,4 +22,23 @@ export const conferences = sqliteTable('conferences', {
     .$type<string[]>()
     .notNull(),
   updatedAt: text('updated_at'),
+  // 0004, settings phase 1 (#2019).
+  cfpStartDate: text('cfp_start_date'),
+  cfpEndDate: text('cfp_end_date'),
+  cfpNotifyDate: text('cfp_notify_date'),
+  programDate: text('program_date'),
+  travelSupportPaymentDate: text('travel_support_payment_date'),
+  earlyBirdEndDate: text('early_bird_end_date'),
+  registrationCloseDate: text('registration_close_date'),
+  speakersAnnouncedDate: text('speakers_announced_date'),
+  sponsorDeadlineDate: text('sponsor_deadline_date'),
+  recordingsLiveDate: text('recordings_live_date'),
+  travelSupportBudget: real('travel_support_budget'),
+  registrationEnabled: integer('registration_enabled', { mode: 'boolean' }),
+  organizer: text('organizer_name'),
+  organizerAddress: text('organizer_address'),
+  organizerOrgNumber: text('organizer_org_number'),
+  socialHashtag: text('social_hashtag'),
+  showVanityMetrics: integer('show_vanity_metrics', { mode: 'boolean' }),
+  analyticsPirschCode: text('analytics_pirsch_code'),
 })

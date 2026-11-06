@@ -1,3 +1,4 @@
+import { writeMovedToD1 } from '@/lib/konf-api/conference-write'
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
@@ -1497,6 +1498,11 @@ export const ticketsRouter = router({
             message: 'No updates provided',
           })
         }
+
+        // Settings phase 1 (#2019): showVanityMetrics goes to D1 first for
+        // d1_write tenants, then the whole object to Sanity.
+        if (ticketCustomization !== undefined)
+          await writeMovedToD1(conferenceId, { ticketCustomization })
 
         try {
           const result = await clientWrite

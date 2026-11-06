@@ -112,4 +112,28 @@ describe('progressive override', () => {
     expect(progressiveOverride('conference', empty)).toBe(false)
     expect(progressiveOverride('conference', { env, orgId: null })).toBe(false)
   })
+
+  it('turns conference-settings on only through OVERRIDE_TENANTS, never d1_override (#2019)', () => {
+    const flags = { d1Override: true }
+    const listed = { OVERRIDE_TENANTS: { 'conference-settings': ['org_a'] } }
+    expect(
+      progressiveOverride('conference-settings', {
+        env,
+        orgId: 'org_a',
+        flags,
+      }),
+    ).toBe(false)
+    expect(
+      progressiveOverride('conference-settings', {
+        env: listed,
+        orgId: 'org_a',
+      }),
+    ).toBe(true)
+    expect(
+      progressiveOverride('conference-settings', {
+        env: listed,
+        orgId: 'org_b',
+      }),
+    ).toBe(false)
+  })
 })

@@ -1,13 +1,7 @@
 import {
-  identityJwt,
-  isD1WriteTenant,
   isMovedConferenceField,
-  movedConferencePatch,
-  requestHost,
-  setLifecycleViaApi,
-  updateConferenceViaApi,
+  writeMovedToD1,
 } from '@/lib/konf-api/conference-write'
-import type { LifecycleStatus } from '@/lib/homepage/lifecycle'
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
@@ -375,47 +369,9 @@ async function applyConferencePatch(
   // through api.konf.app; Sanity copies are frozen and not updated. Non-moved fields
   // still go to Sanity as before. Tenants without d1_write write all fields to
   // Sanity unchanged. A failure writing D1 aborts before Sanity is touched.
-  // Prefixed (nested) fieldsets hold no moved fields.
-  const moved = pathPrefix ? {} : movedConferencePatch(input)
-  const hasMoved = Object.keys(moved).length > 0
-  // Outside a request scope (jobs, tests) there is no host: env lists only.
-  const host = hasMoved ? await requestHost().catch(() => null) : null
-  // A null host still honours the env list, so the refusal below holds.
-  const d1 = hasMoved && (await isD1WriteTenant(host, conferenceId))
-  if (d1) {
-    const jwt = host && (await identityJwt())
-    // Refuse rather than write Sanity alone: that would leave D1 stale with
-    // nothing to flag it until parity runs.
-    if (!host || !jwt) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message:
-          'Saving these settings needs a Konf sign-in. Sign out and in again, then retry.',
-      })
-    }
-    try {
-      // The override's D1 home is tenant-directory (#1997); written first, as
-      // the source of truth. `published` below is the conference gate.
-      if (input.lifecycleStatus !== undefined)
-        await setLifecycleViaApi(
-          host,
-          conferenceId,
-          input.lifecycleStatus as LifecycleStatus | null,
-          jwt,
-        )
-      await updateConferenceViaApi(host, conferenceId, moved, jwt)
-    } catch (error) {
-      console.error(
-        `[conference] D1 write failed for ${conferenceId}; Sanity untouched`,
-        error,
-      )
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to update conference settings',
-        cause: error,
-      })
-    }
-  }
+  // Settings phase 1 fields (#2019) go to D1 and still to Sanity until their
+  // read flips. Prefixed (nested) fieldsets hold no moved fields.
+  const d1 = !pathPrefix && (await writeMovedToD1(conferenceId, input))
 
   // For d1_write tenants, omit moved fields from the Sanity patch (#1997).
   const sanitySet: Record<string, unknown> = {}

@@ -489,3 +489,100 @@ describe('updateConference', () => {
     expect((r.start_date as string) <= (r.end_date as string)).toBe(true)
   })
 })
+
+describe('settings phase 1 (#2019)', () => {
+  const PRIVATE = {
+    organizerAddress: 'Street 1',
+    organizerOrgNumber: '123 456 789',
+    analyticsPirschCode: 'pirsch-1',
+    travelSupportBudget: 12500.5,
+  }
+  const PUBLIC = {
+    cfpStartDate: '2026-01-01',
+    cfpEndDate: '2026-02-01',
+    cfpNotifyDate: '2026-03-01',
+    programDate: '2026-04-01',
+    travelSupportPaymentDate: '2026-05-01',
+    earlyBirdEndDate: '2026-06-01',
+    registrationCloseDate: '2026-07-01',
+    speakersAnnouncedDate: '2026-08-01',
+    sponsorDeadlineDate: '2026-09-01',
+    recordingsLiveDate: '2026-10-01',
+    registrationEnabled: true,
+    organizer: 'Acme AS',
+    socialHashtag: '#acme',
+    showVanityMetrics: false,
+  }
+  const ALL = { ...PUBLIC, ...PRIVATE }
+  const FIELDS = Object.keys(ALL).join(' ')
+  const MUTATION = `mutation($input: ConferencePatch!) { updateConference(input: $input) { ${FIELDS} } }`
+  const admin = tenant('org-a', 'conf-a', 'admin')
+
+  it('an admin writes and reads back every field', async () => {
+    const { body } = await gql(admin, MUTATION, { input: ALL })
+    expect(body.errors).toBeUndefined()
+    expect(body.data.updateConference).toEqual(ALL)
+  })
+
+  it('hides organizer-only fields from anonymous callers, not from members', async () => {
+    await gql(admin, MUTATION, { input: ALL })
+    const read = async (as: Envelope) =>
+      (await gql(as, `{ conference { ${FIELDS} } }`)).body.data.conference
+    expect(await read(tenant('org-a', 'conf-a'))).toEqual({
+      ...PUBLIC,
+      ...Object.fromEntries(Object.keys(PRIVATE).map((k) => [k, null])),
+    })
+    expect(await read(tenant('org-a', 'conf-a', 'member'))).toEqual(ALL)
+    // The entity path too: same gate.
+    const entity = await gql(
+      tenant('org-a', 'conf-a'),
+      `{ _entities(representations: [{ __typename: "Conference", id: "conf-a" }]) { ... on Conference { ${Object.keys(PRIVATE).join(' ')} } } }`,
+    )
+    expect(entity.body.data._entities[0]).toEqual(
+      Object.fromEntries(Object.keys(PRIVATE).map((k) => [k, null])),
+    )
+  })
+
+  it('refuses a non-writer on each organizer-only field, and leaves it unset', async () => {
+    for (const [k, v] of Object.entries(PRIVATE))
+      for (const as of [
+        tenant('org-a', 'conf-a'),
+        tenant('org-a', 'conf-a', 'member'),
+      ]) {
+        const { body } = await gql(as, MUTATION, { input: { [k]: v } })
+        expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
+        const row = sqlite
+          .prepare(
+            'SELECT organizer_address, organizer_org_number, analytics_pirsch_code, travel_support_budget FROM conferences WHERE conference_id = ?',
+          )
+          .get('conf-a')
+        expect(Object.values(row as object)).toEqual([null, null, null, null])
+      }
+  })
+
+  it('rejects bad dates and a negative budget without writing', async () => {
+    for (const input of [
+      { cfpEndDate: '2026-02-30' },
+      { sponsorDeadlineDate: 'soon' },
+      { travelSupportBudget: -1 },
+      { socialHashtag: 'x'.repeat(101) },
+      { analyticsPirschCode: '<script>' },
+      { analyticsPirschCode: 'a'.repeat(65) },
+    ]) {
+      const { body } = await gql(admin, MUTATION, { input })
+      expect(body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    }
+    expect(
+      sqlite
+        .prepare(
+          'SELECT cfp_end_date, sponsor_deadline_date, travel_support_budget, social_hashtag FROM conferences WHERE conference_id = ?',
+        )
+        .get('conf-a'),
+    ).toEqual({
+      cfp_end_date: null,
+      sponsor_deadline_date: null,
+      travel_support_budget: null,
+      social_hashtag: null,
+    })
+  })
+})

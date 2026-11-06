@@ -20,7 +20,35 @@ export interface SanityConference {
   theme?: { primaryColor?: string | null; accentColor?: string | null } | null
   registrationLink?: string | null
   socialLinks?: string[] | null
+  // Settings phase 1 (#2019).
+  cfpStartDate?: string | null
+  cfpEndDate?: string | null
+  cfpNotifyDate?: string | null
+  programDate?: string | null
+  travelSupportPaymentDate?: string | null
+  earlyBirdEndDate?: string | null
+  registrationCloseDate?: string | null
+  speakersAnnouncedDate?: string | null
+  sponsorDeadlineDate?: string | null
+  recordingsLiveDate?: string | null
+  travelSupportBudget?: number | null
+  registrationEnabled?: boolean | null
+  organizer?: string | null
+  organizerAddress?: string | null
+  organizerOrgNumber?: string | null
+  socialHashtag?: string | null
+  ticketCustomization?: { showVanityMetrics?: boolean | null } | null
+  analyticsPirschCode?: string | null
 }
+
+/** The GROQ projection of the phase-1 settings fields (#2019). */
+export const SETTINGS_PROJECTION = `cfpStartDate, cfpEndDate, cfpNotifyDate,
+  programDate, travelSupportPaymentDate, earlyBirdEndDate,
+  registrationCloseDate, speakersAnnouncedDate, sponsorDeadlineDate,
+  recordingsLiveDate, travelSupportBudget, registrationEnabled, organizer,
+  organizerAddress, organizerOrgNumber, socialHashtag,
+  "ticketCustomization": ticketCustomization{ showVanityMetrics },
+  analyticsPirschCode`
 
 export interface Row {
   conference_id: string
@@ -40,9 +68,31 @@ export interface Row {
   accent_color: string | null
   registration_link: string | null
   social_links: string
+  cfp_start_date: string | null
+  cfp_end_date: string | null
+  cfp_notify_date: string | null
+  program_date: string | null
+  travel_support_payment_date: string | null
+  early_bird_end_date: string | null
+  registration_close_date: string | null
+  speakers_announced_date: string | null
+  sponsor_deadline_date: string | null
+  recordings_live_date: string | null
+  travel_support_budget: number | null
+  registration_enabled: 0 | 1 | null
+  organizer_name: string | null
+  organizer_address: string | null
+  organizer_org_number: string | null
+  social_hashtag: string | null
+  show_vanity_metrics: 0 | 1 | null
+  analytics_pirsch_code: string | null
 }
 
 const s = (v: string | null | undefined) => v?.trim() || null
+const b = (v: boolean | null | undefined) =>
+  typeof v === 'boolean' ? (v ? 1 : 0) : null
+const n = (v: number | null | undefined) =>
+  typeof v === 'number' && Number.isFinite(v) ? v : null
 
 /**
  * Drafts are never passed in. `routable` is the set of conference ids the
@@ -82,6 +132,24 @@ export function mapBackfill(
       accent_color: s(c.theme?.accentColor),
       registration_link: s(c.registrationLink),
       social_links: JSON.stringify(c.socialLinks ?? []),
+      cfp_start_date: s(c.cfpStartDate),
+      cfp_end_date: s(c.cfpEndDate),
+      cfp_notify_date: s(c.cfpNotifyDate),
+      program_date: s(c.programDate),
+      travel_support_payment_date: s(c.travelSupportPaymentDate),
+      early_bird_end_date: s(c.earlyBirdEndDate),
+      registration_close_date: s(c.registrationCloseDate),
+      speakers_announced_date: s(c.speakersAnnouncedDate),
+      sponsor_deadline_date: s(c.sponsorDeadlineDate),
+      recordings_live_date: s(c.recordingsLiveDate),
+      travel_support_budget: n(c.travelSupportBudget),
+      registration_enabled: b(c.registrationEnabled),
+      organizer_name: s(c.organizer),
+      organizer_address: s(c.organizerAddress),
+      organizer_org_number: s(c.organizerOrgNumber),
+      social_hashtag: s(c.socialHashtag),
+      show_vanity_metrics: b(c.ticketCustomization?.showVanityMetrics),
+      analytics_pirsch_code: s(c.analyticsPirschCode),
     })
     if (!c.title?.trim()) anomalies.push(`conference ${c._id}: no title`)
   }
@@ -95,12 +163,42 @@ const q = (v: string | number | null) =>
       ? String(v)
       : `'${v.replace(/'/g, "''")}'`
 
-/** Idempotent upserts. A rerun never moves a row to another org. */
-export function toSql(rows: Row[]): string {
+/** The settings phase 1 columns (#2019), for `toSql(rows, { only })`. */
+export const SETTINGS_PHASE1_COLUMNS = [
+  'cfp_start_date',
+  'cfp_end_date',
+  'cfp_notify_date',
+  'program_date',
+  'travel_support_payment_date',
+  'early_bird_end_date',
+  'registration_close_date',
+  'speakers_announced_date',
+  'sponsor_deadline_date',
+  'recordings_live_date',
+  'travel_support_budget',
+  'registration_enabled',
+  'organizer_name',
+  'organizer_address',
+  'organizer_org_number',
+  'social_hashtag',
+  'show_vanity_metrics',
+  'analytics_pirsch_code',
+] as const satisfies readonly (keyof Row)[]
+
+/**
+ * Idempotent upserts. A rerun never moves a row to another org. New rows are
+ * inserted whole; with `only`, an existing row has ONLY those columns
+ * updated. Without it every column is overwritten from Sanity, which reverts
+ * D1-owned fields that d1_write tenants edited after the freeze (#2013).
+ */
+export function toSql(
+  rows: Row[],
+  opts: { only?: readonly (keyof Row)[] } = {},
+): string {
   return rows
     .map((r) => {
       const cols = Object.keys(r) as (keyof Row)[]
-      const set = cols
+      const set = (opts.only ?? cols)
         .filter((c) => c !== 'conference_id' && c !== 'org_id')
         .map((c) => `${c} = excluded.${c}`)
         .join(', ')

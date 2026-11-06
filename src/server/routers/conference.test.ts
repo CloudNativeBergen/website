@@ -1554,6 +1554,7 @@ describe('conference router — D1 write path (#1881)', () => {
     const [[, init]] = apiCalls()
     expect(JSON.parse(init.body).variables.input).toEqual({
       title: 'T',
+      organizer: 'Org',
       city: null,
     })
     expect(init.headers.authorization).toBe('Bearer user-jwt')
@@ -1562,6 +1563,48 @@ describe('conference router — D1 write path (#1881)', () => {
     // city: null also unsets in Sanity so the frozen copy can't resurrect it.
     expect(lastUnset).toEqual(['city'])
     expect(commitMock).toHaveBeenCalledTimes(1)
+  })
+
+  const DATES = {
+    startDate: '2026-10-01',
+    endDate: '2026-10-02',
+    cfpStartDate: '2026-01-01',
+    cfpEndDate: '2026-02-01',
+    cfpNotifyDate: '2026-03-01',
+    programDate: '2026-04-01',
+  }
+  const SETTINGS_DATES = {
+    cfpStartDate: DATES.cfpStartDate,
+    cfpEndDate: DATES.cfpEndDate,
+    cfpNotifyDate: DATES.cfpNotifyDate,
+    programDate: DATES.programDate,
+  }
+
+  it('for a d1_write tenant, writes settings phase 1 fields to D1 and still to Sanity (#2019)', async () => {
+    await makeCaller({ isOrganizer: true }).updateDates({
+      ...DATES,
+      travelSupportBudget: 5000,
+      sponsorDeadlineDate: null,
+    })
+    const [[, init]] = apiCalls()
+    expect(JSON.parse(init.body).variables.input).toEqual({
+      ...DATES,
+      travelSupportBudget: 5000,
+      sponsorDeadlineDate: null,
+    })
+    // Core dates are D1-only (#1997); phase 1 keeps its Sanity copy.
+    expect(lastSet).toEqual({ ...SETTINGS_DATES, travelSupportBudget: 5000 })
+    expect(lastUnset).toEqual(['sponsorDeadlineDate'])
+  })
+
+  it('for a non-d1_write tenant, writes settings phase 1 fields to Sanity only (#2019)', async () => {
+    vi.stubEnv('KONF_D1_WRITE_TENANTS', '')
+    await makeCaller({ isOrganizer: true }).updateDates({
+      ...DATES,
+      travelSupportBudget: 5000,
+    })
+    expect(apiCalls()).toHaveLength(0)
+    expect(lastSet).toEqual({ ...DATES, travelSupportBudget: 5000 })
   })
 
   it('for a d1_write tenant with only moved fields, writes only to D1 and leaves Sanity untouched (#1997)', async () => {

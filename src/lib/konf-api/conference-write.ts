@@ -34,6 +34,31 @@ const MOVED = new Set([
 ])
 
 /**
+ * Settings phase 1 (#2019): also in `ConferencePatch`, but not yet read from
+ * D1, so a d1_write tenant writes them to D1 AND Sanity. They join MOVED (and
+ * stop reaching Sanity) with the read flip.
+ */
+const SETTINGS = new Set([
+  'cfpStartDate',
+  'cfpEndDate',
+  'cfpNotifyDate',
+  'programDate',
+  'travelSupportPaymentDate',
+  'earlyBirdEndDate',
+  'registrationCloseDate',
+  'speakersAnnouncedDate',
+  'sponsorDeadlineDate',
+  'recordingsLiveDate',
+  'travelSupportBudget',
+  'registrationEnabled',
+  'organizer',
+  'organizerAddress',
+  'organizerOrgNumber',
+  'socialHashtag',
+  'analyticsPirschCode',
+])
+
+/**
  * Whether a conference settings input key represents a field moved to D1 (#1997).
  * Sanity groups primaryColor/accentColor under `theme`, and published is
  * derived from `lifecycleStatus`.
@@ -83,11 +108,66 @@ export function movedConferencePatch(
       // D1 `published` follows the Sanity override, as the backfill derives it
       // (services/conference/scripts/backfill.ts). null clears it: public.
       out.published = !LIFECYCLE_STATUS_VALUES.includes(v as LifecycleStatus)
-    } else if (MOVED.has(k)) {
+    } else if (k === 'ticketCustomization') {
+      // Sanity replaces the whole object, so an absent flag is an unset.
+      const t = v as { showVanityMetrics?: boolean } | null
+      out.showVanityMetrics = t?.showVanityMetrics ?? null
+    } else if (MOVED.has(k) || SETTINGS.has(k)) {
       out[k] = v
     }
   }
   return out
+}
+
+/**
+ * For a d1_write tenant, writes the D1 keys of `input` through the gateway
+ * as the signed-in user, before any Sanity write. Returns whether it did.
+ * Throws a TRPCError, leaving Sanity for the caller to skip, when the save
+ * must not go to Sanity alone.
+ */
+export async function writeMovedToD1(
+  conferenceId: string,
+  input: Record<string, unknown>,
+): Promise<boolean> {
+  const moved = movedConferencePatch(input)
+  if (Object.keys(moved).length === 0) return false
+  // Outside a request scope (jobs, tests) there is no host: env lists only.
+  const host = await requestHost().catch(() => null)
+  // A null host still honours the env list, so the refusal below holds.
+  if (!(await isD1WriteTenant(host, conferenceId))) return false
+  const jwt = host && (await identityJwt())
+  // Refuse rather than write Sanity alone: that would leave D1 stale with
+  // nothing to flag it until parity runs.
+  if (!host || !jwt) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'Saving these settings needs a Konf sign-in. Sign out and in again, then retry.',
+    })
+  }
+  try {
+    // The override's D1 home is tenant-directory (#1997); written first, as
+    // the source of truth. `published` below is the conference gate.
+    if (input.lifecycleStatus !== undefined)
+      await setLifecycleViaApi(
+        host,
+        conferenceId,
+        input.lifecycleStatus as LifecycleStatus | null,
+        jwt,
+      )
+    await updateConferenceViaApi(host, conferenceId, moved, jwt)
+  } catch (error) {
+    console.error(
+      `[conference] D1 write failed for ${conferenceId}; Sanity untouched`,
+      error,
+    )
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to update conference settings',
+      cause: error,
+    })
+  }
+  return true
 }
 
 /** The tenant's host: the same source resolveConferenceId uses. */
