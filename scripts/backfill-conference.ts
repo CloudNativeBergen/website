@@ -9,11 +9,12 @@
  *
  * Usage:
  *   pnpm tsx scripts/backfill-conference.ts --dry-run
- *   pnpm tsx scripts/backfill-conference.ts [--out <dir>] [--only settings-phase1]
+ *   pnpm tsx scripts/backfill-conference.ts [--out <dir>] [--only settings-phase1|settings-phase2]
  *
  * WARNING: without --only, existing rows get EVERY column from Sanity, which
  * reverts D1-owned fields edited by d1_write tenants since the freeze (#2013).
- * `--only settings-phase1` updates only the #2019 columns on existing rows.
+ * `--only settings-phase1` updates only the #2019 columns on existing rows,
+ * `--only settings-phase2` only the #2038 ones.
  *
  * Writes <dir>/conference.sql (default: .). Apply it with
  * `wrangler d1 execute --file`; this script never does.
@@ -53,12 +54,18 @@ export async function loadBackfill() {
 async function main() {
   const args = process.argv.slice(2)
   const b = await loadBackfill()
-  const { toSql, SETTINGS_PHASE1_COLUMNS } =
+  const { toSql, SETTINGS_PHASE1_COLUMNS, SETTINGS_PHASE2_COLUMNS } =
     await import('../services/conference/scripts/backfill')
+  const phases = {
+    'settings-phase1': SETTINGS_PHASE1_COLUMNS,
+    'settings-phase2': SETTINGS_PHASE2_COLUMNS,
+  }
   const o = args.indexOf('--only')
   const only = o >= 0 ? args[o + 1] : undefined
-  if (only !== undefined && only !== 'settings-phase1')
-    throw new Error(`unknown --only ${only}; use settings-phase1`)
+  if (only !== undefined && !Object.hasOwn(phases, only))
+    throw new Error(
+      `unknown --only ${only}; use ${Object.keys(phases).join(' or ')}`,
+    )
 
   console.log(`conferences ${b.rows.length}, anomalies ${b.anomalies.length}`)
   for (const a of b.anomalies) console.log(`  ${a}`)
@@ -68,7 +75,7 @@ async function main() {
   const file = join(i >= 0 ? args[i + 1] : '.', 'conference.sql')
   writeFileSync(
     file,
-    toSql(b.rows, only ? { only: SETTINGS_PHASE1_COLUMNS } : {}),
+    toSql(b.rows, only ? { only: phases[only as keyof typeof phases] } : {}),
   )
   console.log(`wrote ${file}`)
 }

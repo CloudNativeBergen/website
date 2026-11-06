@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   mapBackfill,
   SETTINGS_PHASE1_COLUMNS,
+  SETTINGS_PHASE2_COLUMNS,
   SETTINGS_PROJECTION,
   toSql,
 } from './backfill'
@@ -197,4 +198,102 @@ describe('mapBackfill', () => {
         .get(),
     ).toEqual({ title: 'New' })
   })
+
+  const PHASE2 = {
+    sponsorRegistrationLink: 'https://t.example/s',
+    speakerRegistrationLink: 'https://t.example/sp',
+    volunteerRegistrationLink: 'https://t.example/v',
+    contactEmail: ' hi@acme.example ',
+    cfpEmail: 'cfp@acme.example',
+    sponsorEmail: 'sponsor@acme.example',
+    salesNotificationChannel: '#sales',
+    cfpNotificationChannel: '#cfp',
+    speakerSlackChannel: '#speakers',
+    speakerSlackInviteUrl: 'https://join.slack.com/s',
+    volunteerSlackInviteUrl: 'https://join.slack.com/v',
+  }
+  const PHASE2_ROW = {
+    sponsor_registration_link: 'https://t.example/s',
+    speaker_registration_link: 'https://t.example/sp',
+    volunteer_registration_link: 'https://t.example/v',
+    contact_email: 'hi@acme.example',
+    cfp_email: 'cfp@acme.example',
+    sponsor_email: 'sponsor@acme.example',
+    sales_notification_channel: '#sales',
+    cfp_notification_channel: '#cfp',
+    speaker_slack_channel: '#speakers',
+    speaker_slack_invite_url: 'https://join.slack.com/s',
+    volunteer_slack_invite_url: 'https://join.slack.com/v',
+  }
+
+  it('maps every settings phase 2 field (#2038)', () => {
+    const [full, empty] = mapBackfill(
+      [
+        { _id: 'x', orgId: 'o', ...PHASE2 },
+        { _id: 'y', orgId: 'o', contactEmail: '  ' },
+      ],
+      new Set(['x', 'y']),
+    ).rows
+    expect(full).toMatchObject(PHASE2_ROW)
+    expect(empty).toMatchObject(
+      Object.fromEntries(Object.keys(PHASE2_ROW).map((k) => [k, null])),
+    )
+    expect([...SETTINGS_PHASE2_COLUMNS].sort()).toEqual(
+      Object.keys(PHASE2_ROW).sort(),
+    )
+    for (const k of Object.keys(PHASE2))
+      expect(SETTINGS_PROJECTION).toContain(k)
+    const db = migrated()
+    db.exec(toSql([full]))
+    expect(
+      db.prepare("SELECT * FROM conferences WHERE conference_id = 'x'").get(),
+    ).toMatchObject(PHASE2_ROW)
+  })
+
+  it('migrates a populated phase 1 database without touching its rows (#2038)', () => {
+    const dir = new URL('../migrations/', import.meta.url)
+    const files = readdirSync(dir).sort()
+    const last = files.pop()
+    expect(last).toBe('0005_settings_phase2.sql')
+    const db = new DatabaseSync(':memory:')
+    for (const f of files) db.exec(readFileSync(new URL(f, dir), 'utf8'))
+    // Rows as phase 1 wrote them: no phase 2 columns.
+    const phase1 = b.rows.map(
+      (r) =>
+        Object.fromEntries(
+          Object.entries(r).filter(([k]) => !(k in PHASE2_NULLS)),
+        ) as unknown as typeof r,
+    )
+    db.exec(toSql(phase1))
+    const before = db.prepare('SELECT * FROM conferences').all()
+    db.exec(readFileSync(new URL(last!, dir), 'utf8'))
+    const after = db.prepare('SELECT * FROM conferences').all()
+    expect(after).toEqual(
+      before.map((r) => ({ ...(r as object), ...PHASE2_NULLS })),
+    )
+  })
+
+  it('with only settings-phase2, keeps a D1-edited title and phase 1 field (#2038)', () => {
+    const db = migrated()
+    db.exec(toSql(b.rows))
+    db.exec(
+      "UPDATE conferences SET title = 'D1 edit', social_hashtag = '#d1' WHERE conference_id = 'conf-b'",
+    )
+    const [row] = mapBackfill(
+      [{ ...docs[0], socialHashtag: '#sanity', ...PHASE2 }],
+      routable,
+    ).rows
+    db.exec(toSql([row], { only: SETTINGS_PHASE2_COLUMNS }))
+    expect(
+      db
+        .prepare(
+          `SELECT title, social_hashtag, ${SETTINGS_PHASE2_COLUMNS.join(', ')} FROM conferences WHERE conference_id = 'conf-b'`,
+        )
+        .get(),
+    ).toEqual({ title: 'D1 edit', social_hashtag: '#d1', ...PHASE2_ROW })
+  })
 })
+
+const PHASE2_NULLS = Object.fromEntries(
+  SETTINGS_PHASE2_COLUMNS.map((k) => [k, null]),
+)

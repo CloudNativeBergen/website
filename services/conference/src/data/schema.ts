@@ -1,4 +1,4 @@
-// Drizzle mirror of migrations/ (0001-0004).
+// Drizzle mirror of migrations/ (0001-0005).
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const conferences = sqliteTable('conferences', {
@@ -41,4 +41,16 @@ export const conferences = sqliteTable('conferences', {
   socialHashtag: text('social_hashtag'),
   showVanityMetrics: integer('show_vanity_metrics', { mode: 'boolean' }),
   analyticsPirschCode: text('analytics_pirsch_code'),
+  // 0005, settings phase 2 (#2038).
+  sponsorRegistrationLink: text('sponsor_registration_link'),
+  speakerRegistrationLink: text('speaker_registration_link'),
+  volunteerRegistrationLink: text('volunteer_registration_link'),
+  contactEmail: text('contact_email'),
+  cfpEmail: text('cfp_email'),
+  sponsorEmail: text('sponsor_email'),
+  salesNotificationChannel: text('sales_notification_channel'),
+  cfpNotificationChannel: text('cfp_notification_channel'),
+  speakerSlackChannel: text('speaker_slack_channel'),
+  speakerSlackInviteUrl: text('speaker_slack_invite_url'),
+  volunteerSlackInviteUrl: text('volunteer_slack_invite_url'),
 })
