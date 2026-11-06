@@ -167,6 +167,21 @@ Phase 1 comes first because its fields are scalar, most are already in the
 patch inputs and the content subgraph already serves many of them. Phase 5
 comes last because it touches access control.
 
+### Running the conference backfill
+
+Run `pnpm run doctor` first: it checks node, pnpm, fnox, the Sanity read
+token, wrangler and gh.
+
+1. Generate: `fnox exec -- pnpm backfill:conference -- --only settings-phase2 --out tmp/backfill`.
+   The script stops early with a fix hint if `SANITY_API_TOKEN_READ` is not
+   set, and creates `--out` if needed. Writing needs `--only <phase>` or
+   `--all-columns`. `--all-columns` overwrites every column of existing rows
+   with frozen Sanity values, which reverts D1-owned fields; avoid it.
+2. Review the printed conference count and `ON CONFLICT UPDATE columns` list.
+3. Apply: `wrangler d1 execute <conference-db> --remote --file tmp/backfill/conference.sql`.
+4. Check: `pnpm tsx scripts/parity-conference.ts --all`.
+5. Delete `tmp/backfill/conference.sql`. It can hold Slack invite URLs.
+
 ### Hard parts
 
 - **References.** `organizers` and `teams[].members` point at `speaker`

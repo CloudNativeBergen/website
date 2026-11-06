@@ -21,6 +21,10 @@ run = "fnox exec -- pnpm run dev"
 description = "Build the application for production"
 run = "fnox exec -- pnpm run build"
 
+[tasks.doctor]
+description = "Check toolchain and credentials (node, pnpm, fnox, Sanity token, wrangler, gh)"
+run = "pnpm run -s doctor"
+
 [tasks.clean]
 description = "Remove build artifacts and cached files"
 run = "rm -rf .next storybook-static dist"

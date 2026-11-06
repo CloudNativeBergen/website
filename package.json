@@ -45,6 +45,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "shoot": "node scripts/shoot-story.mjs",
+    "doctor": "tsx scripts/doctor.ts",
+    "backfill:conference": "tsx scripts/backfill-conference.ts",
     "scaffold:service": "tsx scripts/scaffold-service.ts",
     "scaffold:check": "bash scripts/scaffold-check.sh"
   },

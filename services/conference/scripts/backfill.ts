@@ -234,6 +234,16 @@ export const SETTINGS_PHASE2_COLUMNS = [
   'volunteer_slack_invite_url',
 ] as const satisfies readonly (keyof Row)[]
 
+/** The columns `toSql` puts in ON CONFLICT DO UPDATE SET for a row. */
+export function updateColumns(
+  row: Row,
+  only?: readonly (keyof Row)[],
+): (keyof Row)[] {
+  return (only ?? (Object.keys(row) as (keyof Row)[])).filter(
+    (c) => c !== 'conference_id' && c !== 'org_id',
+  )
+}
+
 /**
  * Idempotent upserts. A rerun never moves a row to another org. New rows are
  * inserted whole; with `only`, an existing row has ONLY those columns
@@ -247,8 +257,7 @@ export function toSql(
   return rows
     .map((r) => {
       const cols = Object.keys(r) as (keyof Row)[]
-      const set = (opts.only ?? cols)
-        .filter((c) => c !== 'conference_id' && c !== 'org_id')
+      const set = updateColumns(r, opts.only)
         .map((c) => `${c} = excluded.${c}`)
         .join(', ')
       return `INSERT INTO conferences (${cols.join(', ')}) VALUES (${cols.map((c) => q(r[c])).join(', ')}) ON CONFLICT (conference_id) DO UPDATE SET ${set} WHERE conferences.org_id = excluded.org_id;`
