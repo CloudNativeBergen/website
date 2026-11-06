@@ -6,6 +6,8 @@ package codegen
 // Secret per env: SANITY_API_TOKEN_READ (the site's read token name).
 service: #PlatformService & {
 	name: "content"
+	_secrets: ["GATEWAY_PUBLIC_KEY", "SANITY_API_TOKEN_READ"]
+	secrets: {preview: _secrets, production: _secrets}
 	db:   false
 	// Preview never reads production data (epic #1772, req. 8).
 	vars: {

@@ -95,6 +95,13 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
+          # Production only: fail when a secret declared in secrets.json is
+          # missing on the Worker (names only, scripts/secrets-sync.ts).
+          check_secrets() {
+            if [ "$DEPLOY_ENV" = production ]; then
+              pnpm exec tsx scripts/secrets-sync.ts "$1" production --check
+            fi
+          }
           for pkg in identity tenant-directory content conference program; do
             echo "::group::$pkg ($DEPLOY_ENV)"
             # `db: false` services (content, program) have no D1 and no migrations.
@@ -102,6 +109,8 @@ jobs:
               pnpm --filter "@runkonf/$pkg" exec wrangler d1 migrations apply DB --remote --env "$DEPLOY_ENV"
             fi
             pnpm --filter "@runkonf/$pkg" exec wrangler deploy --env "$DEPLOY_ENV"
+            check_secrets "$pkg"
             echo "::endgroup::"
           done
           pnpm --filter @runkonf/api exec wrangler deploy --env "$DEPLOY_ENV"
+          check_secrets api

@@ -52,6 +52,14 @@ package codegen
 		production: *{} | {[string]: string}
 	}
 
+	// Worker secret names per environment (names only, never values).
+	// Generated into secrets.json; `mise run secrets:sync` puts them from
+	// fnox and deploy-workers fails a production deploy when one is missing.
+	secrets: {
+		preview:    *[] | [...string]
+		production: *[] | [...string]
+	}
+
 	// D1 database ids per environment. The owner creates each database once
 	// (`wrangler d1 create konf-<name>[-preview]`) and commits the id in
 	// service.cue. CI dry-runs an environment while its id is TO_BE_CREATED.
@@ -213,6 +221,7 @@ package codegen
 				"logs": {"enabled": true, "destinations": ["grafana-cloud-logs"]}
 			}
 		}
+		"secrets.json": secrets
 		"tsconfig.json": {
 			"compilerOptions": {
 				"target":           "es2022"
