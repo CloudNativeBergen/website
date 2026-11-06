@@ -82,6 +82,7 @@ const Member = builder
     role: string
     joinedAt: Date
     email: string | null
+    providers: string[]
   }>('OrganizationMember')
   .implement({
     fields: (t) => ({
@@ -94,6 +95,10 @@ const Member = builder
       email: t.exposeString('email', {
         nullable: true,
         description: 'Owners, admins and operators only; null otherwise.',
+      }),
+      providers: t.exposeStringList('providers', {
+        description:
+          'Linked sign-in provider names, sorted. Owners, admins and operators only; empty otherwise.',
       }),
     }),
   })
