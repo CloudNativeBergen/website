@@ -884,11 +884,7 @@ describe('cross-tenant mutation walk', () => {
     for (const body of await mutate({ ...organizer(), origin: ORIGIN })) {
       const json = JSON.stringify(body)
       // Operator-only (#1924, #1923): refused to every tenant envelope.
-      if (
-        /"(provisionOrganization|operator\w+|prunePushSubscriptions)"/.test(
-          json,
-        )
-      )
+      if (/"(provisionOrganization|operator\w+)"/.test(json))
         expect(body.errors).toMatchObject([
           { extensions: { code: 'FORBIDDEN' } },
         ])

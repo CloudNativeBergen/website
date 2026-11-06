@@ -17,11 +17,11 @@ service: #PlatformService & {
 	// Sanity ids as in services/content; preview reads development only.
 	vars: {
 		// LOGIN_TEST_PAGE serves the manual login test page at /test (preview only).
-		preview: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", LOGIN_TEST_PAGE: "1", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development", MEMBER_SOURCE_ORGS: ""}
+		preview: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", LOGIN_TEST_PAGE: "1", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development", MEMBER_SOURCE_ORGS: "", VAPID_SUBJECT: "mailto:hei@konf.app"}
 		// OPERATOR_ORIGINS: non-tenant origins whose token only platform
 		// operators and organization members get (#1922, #1956). None in preview: kontroll has no stable
 		// preview origin.
-		production: {OPERATOR_ORIGINS: "https://my.konf.app", PUSH_WEBHOOK_URL: "https://my.konf.app/api/push/events", IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", MEMBER_SOURCE_ORGS: ""}
+		production: {OPERATOR_ORIGINS: "https://my.konf.app", IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", MEMBER_SOURCE_ORGS: "", VAPID_SUBJECT: "mailto:hei@konf.app"}
 	}
 	// Organizer membership sync (#1907, src/data/member-sync.ts) has no cron
 	// here: the account allows 5. tenant-directory's cron calls
@@ -32,9 +32,9 @@ service: #PlatformService & {
 	// every org grants, as before. Optional secret per env:
 	// SLACK_MEMBER_DRIFT_WEBHOOK_URL (Slack incoming webhook for drift
 	// alerts); unset, drift is logged only.
-	// Push webhook (kontroll#61, packages/tenancy/src/push.ts): signed
-	// events to PUSH_WEBHOOK_URL, production only (kontroll has no stable
-	// preview origin). Secret per env: PUSH_WEBHOOK_SECRET; unset, nothing is sent.
+	// Web push (kontroll#61, src/push): identity sends it. Secrets per env:
+	// VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY; unset, nothing is sent.
+	// conference reaches it over the `Push` entrypoint.
 	// Verified origins for the login handoff (#688).
 	serviceBindings: [{binding: "DIRECTORY", service: "konf-tenant-directory"}]
 	// Handoff limits (src/handoff.ts): POSTs per tenant origin, GET per IP.
@@ -52,6 +52,8 @@ service: #PlatformService & {
 				"@better-auth/core": "1.7.14"
 				// Validates operator invite emails as the plugin does (z.email()).
 				zod: "^4.6.7"
+				// RFC 8291 aes128gcm + VAPID over WebCrypto (no Node crypto).
+				"@block65/webcrypto-web-push": "^2.0.0"
 			}
 			// A real D1 in tests, the same engine wrangler ships.
 			devDependencies: {
