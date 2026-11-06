@@ -1,0 +1,24 @@
+{
+  "name": "@runkonf/program",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --root ../.. services/program/",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@runkonf/tenancy": "workspace:*",
+    "@apollo/subgraph": "~2.14.3",
+    "@pothos/core": "^4",
+    "@pothos/plugin-directives": "^4",
+    "@pothos/plugin-federation": "^4",
+    "graphql": "16.14.2",
+    "graphql-yoga": "^5",
+    "@sanity/client": "^7.28.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261101.1",
+    "wrangler": "^4.156.0"
+  }
+}
