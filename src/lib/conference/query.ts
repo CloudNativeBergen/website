@@ -10,6 +10,10 @@
 import { EXPANDED_SECTIONS_KEY } from './sections'
 import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
 import { SCHEDULE_TRACKS } from '@/lib/proposal/public-groq'
+import {
+  PUBLIC_SPONSOR_TIER_FIELDS,
+  PUBLIC_SPONSOR_TIER_ORDER,
+} from '@/lib/sponsor/public-groq'
 
 /*
  * ---------------------------------------------------------------------------
@@ -123,27 +127,8 @@ const EXPANDED_FEATURED_TALKS = `featuredTalks[]->{
 // `^` is the conference resolved by the `$domain`-filtered root this fragment is
 // interpolated into. (Verified against the production dataset that an
 // object-literal projection adds no `^` level, so this stays `^`, not `^.^`.)
-const EXPANDED_SPONSOR_TIERS = `*[_type == "sponsorTier" && conference._ref == ^._id] | order(tierType asc, title asc, price[0].amount desc){
-      _id,
-      _createdAt,
-      _updatedAt,
-      title,
-      tagline,
-      tierType,
-      price[]{
-        _key,
-        amount,
-        currency
-      },
-      perks[]{
-        _key,
-        label,
-        description
-      },
-      soldOut,
-      mostPopular,
-      maxQuantity,
-      ticketEntitlement
+const EXPANDED_SPONSOR_TIERS = `*[_type == "sponsorTier" && conference._ref == ^._id] | ${PUBLIC_SPONSOR_TIER_ORDER}{
+      ${PUBLIC_SPONSOR_TIER_FIELDS}
       }`
 
 const EXPANDED_TOPICS = `topics[]->{

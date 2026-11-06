@@ -31,6 +31,29 @@ describe('publicContract', () => {
 })
 
 describe('compose', () => {
+  it('composes the sponsors subgraph into the public supergraph', () => {
+    expect(compose()).toMatch(/SPONSORS @join__graph\(name: "sponsors"/)
+    const pub = buildSchema(publicSdl())
+    const query = pub.getQueryType()!.getFields()
+    expect(query.sponsors).toBeDefined()
+    expect(query.sponsorTiers).toBeDefined()
+    const fields = (name: string) =>
+      Object.keys(
+        (
+          pub.getType(name) as unknown as {
+            getFields(): Record<string, unknown>
+          }
+        ).getFields(),
+      ).sort()
+    expect(fields('Sponsor')).toEqual([
+      'id',
+      'logo',
+      'logoBright',
+      'name',
+      'website',
+    ])
+  })
+
   it('composes the program subgraph into the public supergraph', () => {
     expect(compose()).toMatch(/PROGRAM @join__graph\(name: "program"/)
     const query = buildSchema(publicSdl()).getQueryType()!.getFields()

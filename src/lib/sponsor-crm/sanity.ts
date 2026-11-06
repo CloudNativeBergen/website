@@ -14,6 +14,10 @@ import { scopedFetch } from '@/lib/sanity/scoped'
 import { mergeConference, mergeConferences } from '@/lib/conference/merge'
 import { tierExistenceQuery } from './tier-validation'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
+import {
+  PUBLIC_SPONSOR_FIELDS,
+  PUBLIC_SPONSOR_ORDER,
+} from '@/lib/sponsor/public-groq'
 import type {
   SponsorForConferenceExpanded,
   SponsorForConferenceInput,
@@ -213,27 +217,8 @@ export async function getPublicSponsorsForConference(
   const client = (options?.useCache ?? true) ? clientReadCached : clientRead
   return client.fetch<ConferenceSponsor[]>(
     `*[_type == "sponsorForConference" && conference._ref == $conferenceId && status == "closed-won"]
-      | order(tier->tierType asc, tier->price[0].amount desc, tier->title asc){
-      "_sfcId": _id,
-      sponsor->{
-        _id,
-        name,
-        website,
-        logo,
-        logoBright,
-      },
-      tier->{
-        _id,
-        title,
-        tagline,
-        tierType,
-        price[]{
-          _key,
-          amount,
-          currency
-        },
-        ticketEntitlement
-      }
+      | ${PUBLIC_SPONSOR_ORDER}{
+      ${PUBLIC_SPONSOR_FIELDS}
     }`,
     { conferenceId },
   )
