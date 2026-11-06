@@ -498,11 +498,11 @@ type Topic {
 type Sponsor {
   id: ID
 
-  """Inline SVG."""
-  logo: String
+  """The same, for dark backgrounds."""
+  logoBrightUrl: String
 
-  """Inline SVG for dark backgrounds."""
-  logoBright: String
+  """data:image/svg+xml;base64 URL. Render with <img>."""
+  logoUrl: String
   name: String
   website: String
 }
