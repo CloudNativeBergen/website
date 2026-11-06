@@ -70,11 +70,26 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
-const RULE_ID = 'tenancy/no-unscoped-groq'
+// The same ratchet serves a second warn-level rule: `--rule d1` counts
+// `d1/no-sanity-d1-conference-fields` (epic #1997) against its own baseline.
+const RULES = {
+  tenancy: ['tenancy/no-unscoped-groq', 'no-unscoped-groq', 'lint:tenancy'],
+  d1: [
+    'd1/no-sanity-d1-conference-fields',
+    'no-sanity-d1-conference-fields',
+    'lint:d1-fields',
+  ],
+}
+const ruleArg = process.argv.indexOf('--rule')
+const [RULE_ID, BASELINE_NAME, SCRIPT] =
+  RULES[ruleArg === -1 ? 'tenancy' : process.argv[ruleArg + 1]] ??
+  (() => {
+    throw new Error(`Unknown --rule; expected one of ${Object.keys(RULES)}`)
+  })()
 const REPO_ROOT = path.resolve(__dirname, '..')
-const BASELINE_PATH = path.join(__dirname, 'no-unscoped-groq.baseline.json')
+const BASELINE_PATH = path.join(__dirname, `${BASELINE_NAME}.baseline.json`)
 const BASELINE_REL = path.relative(REPO_ROOT, BASELINE_PATH)
-const UPDATE_COMMAND = 'pnpm run lint:tenancy:update'
+const UPDATE_COMMAND = `pnpm run ${SCRIPT}:update`
 
 /** Sort keys so the committed baseline diffs line-by-line, not wholesale. */
 function sortByKey(counts) {
@@ -186,7 +201,7 @@ function writeBaseline(counts, baselinePath = BASELINE_PATH) {
   const body = {
     rule: RULE_ID,
     generatedBy: UPDATE_COMMAND,
-    note: 'Per-file ceiling for pre-existing unscoped GROQ reads. A number may only go DOWN. See eslint-rules/tenancy-ratchet.js and docs/TENANT_SCOPING.md.',
+    note: `Per-file ceiling for pre-existing ${RULE_ID} warnings. A number may only go DOWN. See eslint-rules/tenancy-ratchet.js and the rule's header.`,
     total: total(counts),
     files: counts,
   }
