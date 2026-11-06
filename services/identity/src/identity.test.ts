@@ -2,12 +2,13 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeSignature } from 'better-auth/crypto'
-import { handleOAuthUserInfo } from 'better-auth/oauth2'
+import { handleOAuthUserInfo, linkOAuthAccount } from 'better-auth/oauth2'
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from 'jose'
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createAuth, createData, type AuthEnv, type DataEnv } from './data'
 import { JWT_AUDIENCE, JWT_TTL_SECONDS } from './data/auth'
+import { accountPage } from './account-page'
 
 // vitest.config.ts aliases `jose` to a key-ignoring stub; load the real one
 // so the signature check below proves something (as in packages/tenancy).
@@ -205,6 +206,154 @@ describe('account linking (#807)', () => {
       { action: 'account.linked', userId, providerId: 'linkedin' },
     ])
     expect(JSON.stringify(results)).not.toContain('@')
+  })
+})
+
+describe('linked accounts (#1981)', () => {
+  const signIn = async (email: string, accountId: string, providerId: string) =>
+    handleOAuthUserInfo({ context: await auth.$context } as never, {
+      userInfo: { id: accountId, email, name: 'Test', emailVerified: true },
+      account: { providerId, accountId },
+      callbackURL: '/',
+    })
+  const link = async (
+    user: { id: string; email: string },
+    email: string,
+    accountId: string,
+    providerId = 'linkedin',
+  ) =>
+    linkOAuthAccount(
+      { context: await auth.$context } as never,
+      {
+        link: { userId: user.id, email: user.email },
+        userInfo: { id: accountId, email, name: 'Test', emailVerified: true },
+        account: { providerId, accountId },
+      } as never,
+    )
+  const post = async (userId: string, path: string, body: unknown) =>
+    auth.handler(
+      new Request(`${BASE}/api/auth/${path}`, {
+        method: 'POST',
+        headers: {
+          cookie: await sessionCookie(userId),
+          origin: BASE,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      }),
+    )
+  const accounts = async (userId: string) =>
+    (
+      await d1
+        .prepare(
+          'SELECT id, providerId FROM account WHERE userId = ? ORDER BY providerId',
+        )
+        .bind(userId)
+        .all<{ id: string; providerId: string }>()
+    ).results
+
+  it('links a second provider with the same verified email; it signs in to the same user, audited', async () => {
+    const first = await signIn('both@example.com', 'gh-both', 'github')
+    const u = first.data!.user
+    expect(await link(u, 'BOTH@example.com', 'li-both')).toMatchObject({
+      linked: true,
+    })
+    const second = await signIn('both@example.com', 'li-both', 'linkedin')
+    expect(second.data!.user.id).toBe(u.id)
+    const { results } = await d1
+      .prepare(
+        "SELECT action, providerId FROM audit_event WHERE action LIKE 'account.%' AND userId = ? ORDER BY id",
+      )
+      .bind(u.id)
+      .all()
+    expect(results).toEqual([
+      { action: 'account.created', providerId: 'github' },
+      { action: 'account.linked', providerId: 'linkedin' },
+    ])
+  })
+
+  it("refuses to link another user's account or another user's email", async () => {
+    const other = await signIn('other@example.com', 'li-other', 'linkedin')
+    const me = (await signIn('me@example.com', 'gh-me', 'github')).data!.user
+    expect(await link(me, 'me@example.com', 'li-other')).toMatchObject({
+      linked: false,
+      error: { code: 'account_already_linked_to_different_user' },
+    })
+    expect(await link(me, 'other@example.com', 'li-new')).toMatchObject({
+      linked: false,
+      error: { code: 'email_does_not_match' },
+    })
+    expect(await accounts(me.id)).toHaveLength(1)
+    expect(await accounts(other.data!.user.id)).toHaveLength(1)
+  })
+
+  it('refuses /link-social for a session whose own email is not verified', async () => {
+    const unverified = await newUser('unverified-link@example.com', false)
+    const verified = await newUser('verified-link@example.com', true)
+    const body = {
+      provider: 'linkedin',
+      callbackURL: '/account',
+      disableRedirect: true,
+    }
+    expect((await post(unverified.id, 'link-social', body)).status).toBe(403)
+    const ok = await post(verified.id, 'link-social', body)
+    expect(ok.status).toBe(200)
+    expect(((await ok.json()) as { url: string }).url).toContain('linkedin.com')
+  })
+
+  it('unlinks one account with an audit row, and refuses the last one', async () => {
+    const u = (await signIn('unlink@example.com', 'gh-unlink', 'github')).data!
+      .user
+    await link(u, 'unlink@example.com', 'li-unlink')
+    const [gh, li] = await accounts(u.id)
+    expect(
+      (await post(u.id, 'unlink-account', { accountId: li.id })).status,
+    ).toBe(200)
+    const last = await post(u.id, 'unlink-account', { accountId: gh.id })
+    expect(last.status).toBe(400)
+    expect(await accounts(u.id)).toEqual([gh])
+    const { results } = await d1
+      .prepare(
+        "SELECT providerId FROM audit_event WHERE action = 'account.unlinked' AND userId = ?",
+      )
+      .bind(u.id)
+      .all()
+    expect(results).toEqual([{ providerId: 'linkedin' }])
+  })
+
+  it('renders the account page: linked providers, link buttons, sign-in when anonymous', async () => {
+    const u = (await signIn('page@example.com', 'gh-page', 'github')).data!.user
+    const pageEnv = { ...env, DB: d1 }
+    const signedIn = await (
+      await accountPage(
+        new Request(`${BASE}/account?error=email_does_not_match`, {
+          headers: { cookie: await sessionCookie(u.id) },
+        }),
+        pageEnv,
+      )
+    ).text()
+    expect(signedIn).toContain('<span>GitHub</span>')
+    expect(signedIn).toContain('Siste konto')
+    expect(signedIn).toContain('data-link="linkedin"')
+    expect(signedIn).not.toContain('data-link="github"')
+    expect(signedIn).toContain('annen e-postadresse')
+    const anon = await (
+      await accountPage(new Request(`${BASE}/account?error=<x>`), pageEnv)
+    ).text()
+    expect(anon).toContain('data-signin="github"')
+    expect(anon).not.toContain('<x>')
+    if (process.env.ACCOUNT_PAGE_OUT) {
+      const { writeFileSync } = await import('node:fs')
+      await link(u, 'page@example.com', 'li-page')
+      const two = await accountPage(
+        new Request(`${BASE}/account`, {
+          headers: { cookie: await sessionCookie(u.id) },
+        }),
+        pageEnv,
+      )
+      writeFileSync(process.env.ACCOUNT_PAGE_OUT, await two.text())
+      writeFileSync(process.env.ACCOUNT_PAGE_OUT + '.one.html', signedIn)
+    }
   })
 })
 

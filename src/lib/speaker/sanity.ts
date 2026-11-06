@@ -331,7 +331,7 @@ export async function findSpeakerByEmailForOrganizerCreate(
     : { inCurrentOrg: false }
 }
 
-async function findSpeakerByProvider(
+export async function findSpeakerByProvider(
   id: string,
 ): Promise<{ speaker: Speaker; err: Error | null }> {
   let speaker = {} as Speaker

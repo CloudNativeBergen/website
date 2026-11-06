@@ -1,7 +1,8 @@
 // Identity entry: Better Auth under /api/auth, the login handoff under
-// /handoff, its error page at /error, the RPC entrypoints, and 404 for everything else.
+// /handoff, its error page at /error, the linked-accounts page at /account, the RPC entrypoints, and 404 for everything else.
 import { WorkerEntrypoint } from 'cloudflare:workers'
 import { createAuth, createData } from './data'
+import { accountPage } from './account-page'
 import { errorPage } from './error-page'
 import { handoff, type HandoffEnv } from './handoff'
 import { loginTestPage } from './login-test'
@@ -61,6 +62,9 @@ export default {
       return handoff(request, env)
     }
     if (pathname === '/error') return errorPage(request, env)
+    if (pathname === '/account' && request.method === 'GET') {
+      return accountPage(request, env)
+    }
     if (
       pathname === '/test' &&
       request.method === 'GET' &&

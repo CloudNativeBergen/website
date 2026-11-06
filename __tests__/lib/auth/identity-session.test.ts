@@ -56,6 +56,8 @@ vi.mock('@/lib/environment/config', () => ({
 vi.mock('@/lib/speaker/sanity', () => ({
   getSpeaker: vi.fn(),
   getOrCreateSpeaker: h.getOrCreateSpeaker,
+  findSpeakerByProvider: async () => ({ speaker: {}, err: null }),
+  providerAccount: (p: string, id: string) => `${p}:${id}`,
 }))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForDomain: h.getConferenceForDomain,
