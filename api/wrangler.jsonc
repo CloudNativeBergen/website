@@ -8,6 +8,13 @@
   "workers_dev": false,
   // supergraph.graphql (pnpm compose) is bundled as a string.
   "rules": [{ "type": "Text", "globs": ["**/*.graphql"], "fallthrough": true }],
+  // OTLP export to Grafana Cloud, as the services (#1895). The destinations are
+  // configured once per account in the Cloudflare dashboard. Inherited by envs.
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true, "destinations": ["grafana-cloud-traces"] },
+    "logs": { "enabled": true, "destinations": ["grafana-cloud-logs"] },
+  },
   // Bindings do not inherit into envs, so each env lists its own.
   // Secrets per env: ENVELOPE_PRIVATE_KEY, CLIENT_IP_SECRET.
   // OVERRIDE_TENANTS: @override label -> orgIds routed to the native subgraph.

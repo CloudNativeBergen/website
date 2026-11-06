@@ -192,6 +192,15 @@ const isGraphQLError = (e: unknown): e is GraphQLError =>
 const isOriginal = (e: unknown): boolean =>
   isGraphQLError(e) && (e.originalError == null || isOriginal(e.originalError))
 
+/** One JSON line per event; the Grafana alerts match `event` (#1895). */
+function logEvent(event: string, fields: Record<string, unknown>) {
+  console.error(JSON.stringify({ event, ...fields }))
+}
+
+const MAX_LOGGED = 64
+const capped = (v: unknown) =>
+  typeof v === 'string' && v ? v.slice(0, MAX_LOGGED) : undefined
+
 // Yoga logs the original whenever this returns a new error.
 export function maskError(error: unknown, message: string): Error {
   const gql = isGraphQLError(error) ? error : null
@@ -199,6 +208,13 @@ export function maskError(error: unknown, message: string): Error {
   if (gql && !fromSubgraph && isOriginal(gql)) return gql
   const code = gql?.extensions?.code
   const safe = typeof code === 'string' && SAFE_CODES.has(code)
+  // Masked errors still answer 200, so a 5xx alert alone misses them.
+  if (!safe)
+    logEvent('gateway.error.masked', {
+      subgraph: capped(gql?.extensions?.serviceName),
+      path: capped(gql?.path?.join('.')),
+      code: capped(code),
+    })
   const detail = gql && code === 'BAD_USER_INPUT' ? inputDetail(gql) : null
   return new GraphQLError(
     detail?.message ?? (safe ? SAFE_CODES.get(code) : null) ?? message,
@@ -446,179 +462,189 @@ export function createGateway(supergraph: string) {
     ],
   })
 
-  return {
-    async fetch(request: Request, env: Env, ctx?: ExecutionContext) {
-      // 1. A client never supplies the envelope.
-      const forwarded = new Request(request)
-      forwarded.headers.delete(ENVELOPE_HEADER)
+  const handle = async (
+    request: Request,
+    env: Env,
+    ctx?: ExecutionContext,
+  ): Promise<Response> => {
+    // 1. A client never supplies the envelope.
+    const forwarded = new Request(request)
+    forwarded.headers.delete(ENVELOPE_HEADER)
 
-      // Subgraphs trust the envelope, never the caller's token.
-      forwarded.headers.delete('authorization')
+    // Subgraphs trust the envelope, never the caller's token.
+    forwarded.headers.delete('authorization')
 
-      // Coarse per-IP pre-check, so a flood never reaches tenant-directory.
-      const ip = await clientIp(request, env.CLIENT_IP_SECRET)
-      if (!(await env.API_IP_LIMITER.limit({ key: `ip:${ip}` })).success)
-        return reject(429, 'RATE_LIMITED', 'too many requests')
+    // Coarse per-IP pre-check, so a flood never reaches tenant-directory.
+    const ip = await clientIp(request, env.CLIENT_IP_SECRET)
+    if (!(await env.API_IP_LIMITER.limit({ key: `ip:${ip}` })).success)
+      return reject(429, 'RATE_LIMITED', 'too many requests')
 
-      // 2. Tenant from Origin, never from an argument. The site's server lane
-      // asserts its host instead; that wins only when the assertion verifies.
-      const siteHost = await verifySiteAssertion(
-        request.headers.get(SITE_ASSERTION_HEADER),
-        env.SITE_PUBLIC_KEYS,
-      )
-      forwarded.headers.delete(SITE_ASSERTION_HEADER)
-      forwarded.headers.delete(OPERATOR_TENANT_HEADER)
-      const host = hostOf(
-        siteHost ? `https://${siteHost}` : request.headers.get('origin'),
-      )
-      // Operator lane (#1892 phase 4): the browser Origin is exactly an
-      // OPERATOR_ORIGIN entry and no site assertion is present. Its tenant is
-      // only ever the one the operator names, never the Origin's.
-      const operatorLane =
-        !siteHost && isOperatorOrigin(env, request.headers.get('origin'))
-      // A browser preflight carries no credentials: answer it with the CORS
-      // policy before any auth, tenant or Membership work.
-      if (operatorLane && request.method === 'OPTIONS')
-        return runtime(forwarded, {
+    // 2. Tenant from Origin, never from an argument. The site's server lane
+    // asserts its host instead; that wins only when the assertion verifies.
+    const siteHost = await verifySiteAssertion(
+      request.headers.get(SITE_ASSERTION_HEADER),
+      env.SITE_PUBLIC_KEYS,
+    )
+    forwarded.headers.delete(SITE_ASSERTION_HEADER)
+    forwarded.headers.delete(OPERATOR_TENANT_HEADER)
+    const host = hostOf(
+      siteHost ? `https://${siteHost}` : request.headers.get('origin'),
+    )
+    // Operator lane (#1892 phase 4): the browser Origin is exactly an
+    // OPERATOR_ORIGIN entry and no site assertion is present. Its tenant is
+    // only ever the one the operator names, never the Origin's.
+    const operatorLane =
+      !siteHost && isOperatorOrigin(env, request.headers.get('origin'))
+    // A browser preflight carries no credentials: answer it with the CORS
+    // policy before any auth, tenant or Membership work.
+    if (operatorLane && request.method === 'OPTIONS')
+      return runtime(forwarded, {
+        env,
+        ctx,
+        orgId: null,
+        limitKey: `ip:${ip}`,
+      })
+    // Guard before fetch: no anonymous tenant lookup in the operator lane.
+    if (operatorLane && !request.headers.has('authorization'))
+      return reject(401, 'UNAUTHENTICATED', 'operator lane needs a session')
+    // The operator lane resolves its tenant only after the JWT verifies
+    // (#1954): a bad token never costs a directory read.
+    let tenant = null as Tenant | null
+    const lookup = async () => {
+      try {
+        tenant = await resolveTenant(
+          operatorLane ? request.headers.get(OPERATOR_TENANT_HEADER) : host,
           env,
-          ctx,
-          orgId: null,
-          limitKey: `ip:${ip}`,
-        })
-      // Guard before fetch: no anonymous tenant lookup in the operator lane.
-      if (operatorLane && !request.headers.has('authorization'))
-        return reject(401, 'UNAUTHENTICATED', 'operator lane needs a session')
-      // The operator lane resolves its tenant only after the JWT verifies
-      // (#1954): a bad token never costs a directory read.
-      let tenant = null as Tenant | null
-      const lookup = async () => {
-        try {
-          tenant = await resolveTenant(
-            operatorLane ? request.headers.get(OPERATOR_TENANT_HEADER) : host,
-            env,
-          )
-          return true
-        } catch {
-          return false
-        }
-      }
-      const unavailable = () =>
-        reject(503, 'UNAVAILABLE', 'tenant lookup unavailable')
-      if (!operatorLane && !(await lookup())) return unavailable()
-
-      // 3. Rate limit (#1790) before the identity and Membership work for
-      // anonymous callers; signed-in callers are keyed on the verified sub.
-      // Mutations also spend their own budget, keyed the same (mutationBudget).
-      let limitKey: string
-      const limited = async (key: string) =>
-        !(await env.API_LIMITER.limit({ key: (limitKey = key) })).success
-      const tooMany = () => reject(429, 'RATE_LIMITED', 'too many requests')
-
-      // 4. Identity: optional, but a header that is present must verify.
-      let userId: string | null = null
-      const auth = request.headers.get('authorization')
-      if (auth === null) {
-        if (await limited(`anon:${tenant?.orgId ?? null}:${ip}`))
-          return tooMany()
-      } else {
-        const token = /^Bearer +(\S+)$/i.exec(auth.trim())?.[1]
-        try {
-          if (!token) throw new Error('malformed authorization header')
-          const payload = await verifyIdentity(token, env)
-          userId = payload.sub!
-          // In both lanes the resolved host must be the origin the session
-          // was handed off to; a token without that claim is refused.
-          const claimed = hostOf(payload[SESSION_ORIGIN_CLAIM])
-          if (!claimed || claimed !== host)
-            throw new Error('host is not the session origin')
-        } catch {
-          return reject(401, 'UNAUTHENTICATED', 'invalid identity token')
-        }
-        if (await limited(`user:${userId}`)) return tooMany()
-      }
-
-      // 5 + 6. With a tenant: live orgRole, then one short-lived envelope.
-      // Without one, subgraphs see an anonymous request with no envelope.
-      let platform = false
-      if (operatorLane) {
-        if (!(await lookup())) return unavailable()
-        // userId is set: anonymous callers were refused above. Kontroll admits
-        // platform operators and organization members (#1956).
-        const principal = await env.MEMBERSHIP.principal(
-          userId!,
-          tenant?.orgId ?? '',
         )
-        const operator = !!principal?.platformOperator
-        // A non-operator gets one refusal for an unknown host and for an org
-        // they are not a member of: no existence oracle, and the envelope that
-        // would let a subgraph read the tenant is never minted.
-        const notAuthorized = () =>
-          reject(403, 'FORBIDDEN', 'not authorized for this tenant')
-        if (request.headers.has(OPERATOR_TENANT_HEADER) && !tenant)
-          return operator
-            ? reject(400, 'BAD_USER_INPUT', 'unknown tenant')
-            : notAuthorized()
-        if (tenant && !operator && !principal?.orgRole) return notAuthorized()
-        // Acting for a tenant: an ordinary tenant envelope carrying the
-        // caller's own live orgRole there, so writes still need owner/admin.
-        // Only an operator's carries OPERATOR_SCOPE. Without a tenant: a
-        // PlatformContext for an operator, which no Scoped repository accepts;
-        // nothing for a member, who is then anonymous to the subgraphs.
-        const envelope: Envelope | null = tenant
-          ? {
-              typ: 'tenant',
-              orgId: tenant.orgId,
-              conferenceId: tenant.conferenceId,
-              userId,
-              orgRole: principal!.orgRole,
-              scopes: operator ? [OPERATOR_SCOPE] : [],
-            }
-          : operator
-            ? { typ: 'platform', userId: userId!, platformRole: 'operator' }
-            : null
-        platform = envelope?.typ === 'platform'
-        if (envelope) {
-          signer ??= await createSigner(env.ENVELOPE_PRIVATE_KEY)
-          forwarded.headers.set(
-            ENVELOPE_HEADER,
-            await signer.sign(envelope, ENVELOPE_TTL_SECONDS),
-          )
-        }
-      } else if (tenant) {
-        let orgRole: string | null = null
-        if (userId) {
-          const principal = await env.MEMBERSHIP.principal(userId, tenant.orgId)
-          if (!principal) {
-            return reject(401, 'UNAUTHENTICATED', 'unknown user')
+        return true
+      } catch {
+        return false
+      }
+    }
+    const unavailable = () =>
+      reject(503, 'UNAVAILABLE', 'tenant lookup unavailable')
+    if (!operatorLane && !(await lookup())) return unavailable()
+
+    // 3. Rate limit (#1790) before the identity and Membership work for
+    // anonymous callers; signed-in callers are keyed on the verified sub.
+    // Mutations also spend their own budget, keyed the same (mutationBudget).
+    let limitKey: string
+    const limited = async (key: string) =>
+      !(await env.API_LIMITER.limit({ key: (limitKey = key) })).success
+    const tooMany = () => reject(429, 'RATE_LIMITED', 'too many requests')
+
+    // 4. Identity: optional, but a header that is present must verify.
+    let userId: string | null = null
+    const auth = request.headers.get('authorization')
+    if (auth === null) {
+      if (await limited(`anon:${tenant?.orgId ?? null}:${ip}`)) return tooMany()
+    } else {
+      const token = /^Bearer +(\S+)$/i.exec(auth.trim())?.[1]
+      try {
+        if (!token) throw new Error('malformed authorization header')
+        const payload = await verifyIdentity(token, env)
+        userId = payload.sub!
+        // In both lanes the resolved host must be the origin the session
+        // was handed off to; a token without that claim is refused.
+        const claimed = hostOf(payload[SESSION_ORIGIN_CLAIM])
+        if (!claimed || claimed !== host)
+          throw new Error('host is not the session origin')
+      } catch {
+        return reject(401, 'UNAUTHENTICATED', 'invalid identity token')
+      }
+      if (await limited(`user:${userId}`)) return tooMany()
+    }
+
+    // 5 + 6. With a tenant: live orgRole, then one short-lived envelope.
+    // Without one, subgraphs see an anonymous request with no envelope.
+    let platform = false
+    if (operatorLane) {
+      if (!(await lookup())) return unavailable()
+      // userId is set: anonymous callers were refused above. Kontroll admits
+      // platform operators and organization members (#1956).
+      const principal = await env.MEMBERSHIP.principal(
+        userId!,
+        tenant?.orgId ?? '',
+      )
+      const operator = !!principal?.platformOperator
+      // A non-operator gets one refusal for an unknown host and for an org
+      // they are not a member of: no existence oracle, and the envelope that
+      // would let a subgraph read the tenant is never minted.
+      const notAuthorized = () =>
+        reject(403, 'FORBIDDEN', 'not authorized for this tenant')
+      if (request.headers.has(OPERATOR_TENANT_HEADER) && !tenant)
+        return operator
+          ? reject(400, 'BAD_USER_INPUT', 'unknown tenant')
+          : notAuthorized()
+      if (tenant && !operator && !principal?.orgRole) return notAuthorized()
+      // Acting for a tenant: an ordinary tenant envelope carrying the
+      // caller's own live orgRole there, so writes still need owner/admin.
+      // Only an operator's carries OPERATOR_SCOPE. Without a tenant: a
+      // PlatformContext for an operator, which no Scoped repository accepts;
+      // nothing for a member, who is then anonymous to the subgraphs.
+      const envelope: Envelope | null = tenant
+        ? {
+            typ: 'tenant',
+            orgId: tenant.orgId,
+            conferenceId: tenant.conferenceId,
+            userId,
+            orgRole: principal!.orgRole,
+            scopes: operator ? [OPERATOR_SCOPE] : [],
           }
-          orgRole = principal.orgRole
-        }
+        : operator
+          ? { typ: 'platform', userId: userId!, platformRole: 'operator' }
+          : null
+      platform = envelope?.typ === 'platform'
+      if (envelope) {
         signer ??= await createSigner(env.ENVELOPE_PRIVATE_KEY)
-        const envelope: TenantEnvelope = {
-          typ: 'tenant',
-          orgId: tenant.orgId,
-          conferenceId: tenant.conferenceId,
-          userId,
-          orgRole,
-          scopes: [],
-        }
         forwarded.headers.set(
           ENVELOPE_HEADER,
           await signer.sign(envelope, ENVELOPE_TTL_SECONDS),
         )
       }
+    } else if (tenant) {
+      let orgRole: string | null = null
+      if (userId) {
+        const principal = await env.MEMBERSHIP.principal(userId, tenant.orgId)
+        if (!principal) {
+          return reject(401, 'UNAUTHENTICATED', 'unknown user')
+        }
+        orgRole = principal.orgRole
+      }
+      signer ??= await createSigner(env.ENVELOPE_PRIVATE_KEY)
+      const envelope: TenantEnvelope = {
+        typ: 'tenant',
+        orgId: tenant.orgId,
+        conferenceId: tenant.conferenceId,
+        userId,
+        orgRole,
+        scopes: [],
+      }
+      forwarded.headers.set(
+        ENVELOPE_HEADER,
+        await signer.sign(envelope, ENVELOPE_TTL_SECONDS),
+      )
+    }
 
-      return runtime(forwarded, {
-        env,
-        ctx,
-        orgId: tenant?.orgId ?? null,
-        limitKey: limitKey!,
-        flags: tenant?.flags ?? null,
-        // The site's own tenant, or the one an authorized Kontroll caller
-        // selected (an unauthorized selection was refused above).
-        siteFlags: ((siteHost || operatorLane) && tenant?.flags) || null,
-        platform,
-      })
+    return runtime(forwarded, {
+      env,
+      ctx,
+      orgId: tenant?.orgId ?? null,
+      limitKey: limitKey!,
+      flags: tenant?.flags ?? null,
+      // The site's own tenant, or the one an authorized Kontroll caller
+      // selected (an unauthorized selection was refused above).
+      siteFlags: ((siteHost || operatorLane) && tenant?.flags) || null,
+      platform,
+    })
+  }
+
+  return {
+    async fetch(request: Request, env: Env, ctx?: ExecutionContext) {
+      const res = await handle(request, env, ctx)
+      if (res.status >= 500)
+        logEvent('gateway.response.5xx', { status: res.status })
+      return res
     },
   }
 }
