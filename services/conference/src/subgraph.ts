@@ -133,12 +133,6 @@ const ConferenceEdition = builder
       published: t.exposeBoolean('published', {
         description: 'False when the edition is cancelled or archived.',
       }),
-      primaryHost: t.string({
-        nullable: true,
-        description:
-          'Always null for now: hostnames live in tenant-directory, which serves no tenant-scoped read yet (#1970).',
-        resolve: () => null,
-      }),
     }),
   })
 

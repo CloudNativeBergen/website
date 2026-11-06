@@ -2,7 +2,17 @@
 // tenancy: false: the directory is the registry every tenant is resolved
 // from, so its reads span Organizations. Who may call what is decided in
 // the resolvers (src/subgraph.ts).
-import { and, eq, gt, isNotNull, isNull, lt, or, sql } from 'drizzle-orm'
+import {
+  and,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  sql,
+} from 'drizzle-orm'
 import { createGraphQLError } from 'graphql-yoga'
 import { rawDb } from './db'
 import {
@@ -120,6 +130,32 @@ const sha256 = async (s: string) =>
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
 
+type DomainRow = typeof domains.$inferSelect
+
+/**
+ * THE canonical host of one edition (#1977): its verified custom domain,
+ * else its verified platform-edition host (`<org>-<year>`), else null. Never
+ * a pending or failed row, never the moving `<org>` alias. `rows` must be
+ * the edition's own org's (domainsByOrg scopes the read). Ties break by
+ * hostname so the answer is stable.
+ */
+function primaryHost(
+  rows: readonly DomainRow[],
+  conferenceId: string,
+): string | null {
+  const ok = rows.filter(
+    (d) => d.conferenceId === conferenceId && d.verification === 'verified',
+  )
+  for (const kind of ['custom', 'platform-edition'] as const) {
+    const hit = ok
+      .filter((d) => d.kind === kind)
+      .map((d) => d.hostname)
+      .sort()[0]
+    if (hit) return hit
+  }
+  return null
+}
+
 export function createData(
   env: DataEnv,
   hostnames: CustomHostnames = cloudflareHostnames(env),
@@ -131,8 +167,47 @@ export function createData(
   const conference = (id: string) =>
     db.query.conferences.findFirst({ where: eq(conferences.id, id) })
 
+  // Domains by org, one D1 query per batch of orgs (#1977): every
+  // primaryHost asked in the same tick shares it, and an org already loaded
+  // in this request is not read again.
+  const byOrg = new Map<string, Promise<DomainRow[]>>()
+  let batch: Map<
+    string,
+    { resolve: (r: DomainRow[]) => void; reject: (e: unknown) => void }
+  > | null = null
+  const domainsByOrg = (orgId: string) => {
+    let p = byOrg.get(orgId)
+    if (!p) {
+      if (!batch) {
+        const b = (batch = new Map())
+        queueMicrotask(() => {
+          batch = null
+          db.query.domains
+            .findMany({
+              where: inArray(domains.orgId, [...b.keys()]),
+            })
+            .then(
+              (rows) =>
+                b.forEach((w, org) =>
+                  w.resolve(rows.filter((d) => d.orgId === org)),
+                ),
+              (e) => b.forEach((w) => w.reject(e)),
+            )
+        })
+      }
+      const b = batch
+      p = new Promise((resolve, reject) => b.set(orgId, { resolve, reject }))
+      byOrg.set(orgId, p)
+    }
+    return p
+  }
+
   return {
     syncMembers: () => env.IDENTITY.syncMembers(),
+
+    /** {@link primaryHost} of one edition; the caller decided it may see it. */
+    primaryHostOf: async (orgId: string, conferenceId: string) =>
+      primaryHost(await domainsByOrg(orgId), conferenceId),
     organization,
 
     /** Every org, by slug, `first` after the `after` slug. Operator-only. */

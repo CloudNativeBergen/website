@@ -1021,3 +1021,53 @@ describe('migration 0005', () => {
     ])
   })
 })
+
+describe('primaryHost (#1977)', () => {
+  const domainReads = (prepare: { mock: { calls: unknown[][] } }) =>
+    prepare.mock.calls.filter(([q]) => /from "domains"/i.test(String(q))).length
+
+  it('reads domains once for a whole operator page, across orgs', async () => {
+    await provision('acme')
+    await provision('beta', 'k2')
+    const prepare = vi.spyOn(env.DB, 'prepare')
+    const { body } = await gql(
+      '{ conferences { id edition { primaryHost } } }',
+      {},
+      operator,
+    )
+    expect(body.errors).toBeUndefined()
+    expect(
+      body.data.conferences.map(
+        (c: { edition: { primaryHost: string } }) => c.edition.primaryHost,
+      ),
+    ).toEqual(['acme-2026.konf.run', 'beta-2026.konf.run'])
+    expect(domainReads(prepare)).toBe(1)
+  })
+
+  it('reads domains once for many editions of one org', async () => {
+    const { id } = await provision('acme')
+    const conf = conferenceOf(id)
+    sqlite
+      .prepare(
+        "INSERT INTO conferences (id, org_id, slug, name, lifecycle) VALUES ('c2', ?, 'c2', 'c2', 'live')",
+      )
+      .run(id)
+    const prepare = vi.spyOn(env.DB, 'prepare')
+    const { body } = await gql(
+      'query($r: [_Any!]!) { _entities(representations: $r) { ... on ConferenceEdition { id primaryHost } } }',
+      {
+        r: [conf, 'c2'].map((i) => ({
+          __typename: 'ConferenceEdition',
+          id: i,
+        })),
+      },
+      { ...organizer, orgId: id },
+    )
+    expect(body.errors).toBeUndefined()
+    expect(body.data._entities).toEqual([
+      { id: conf, primaryHost: 'acme-2026.konf.run' },
+      { id: 'c2', primaryHost: null },
+    ])
+    expect(domainReads(prepare)).toBe(1)
+  })
+})
