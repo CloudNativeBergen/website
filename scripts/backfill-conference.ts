@@ -9,7 +9,11 @@
  *
  * Usage:
  *   pnpm tsx scripts/backfill-conference.ts --dry-run
- *   pnpm tsx scripts/backfill-conference.ts [--out <dir>]
+ *   pnpm tsx scripts/backfill-conference.ts [--out <dir>] [--only settings-phase1]
+ *
+ * WARNING: without --only, existing rows get EVERY column from Sanity, which
+ * reverts D1-owned fields edited by d1_write tenants since the freeze (#2013).
+ * `--only settings-phase1` updates only the #2019 columns on existing rows.
  *
  * Writes <dir>/conference.sql (default: .). Apply it with
  * `wrangler d1 execute --file`; this script never does.
@@ -49,7 +53,12 @@ export async function loadBackfill() {
 async function main() {
   const args = process.argv.slice(2)
   const b = await loadBackfill()
-  const { toSql } = await import('../services/conference/scripts/backfill')
+  const { toSql, SETTINGS_PHASE1_COLUMNS } =
+    await import('../services/conference/scripts/backfill')
+  const o = args.indexOf('--only')
+  const only = o >= 0 ? args[o + 1] : undefined
+  if (only !== undefined && only !== 'settings-phase1')
+    throw new Error(`unknown --only ${only}; use settings-phase1`)
 
   console.log(`conferences ${b.rows.length}, anomalies ${b.anomalies.length}`)
   for (const a of b.anomalies) console.log(`  ${a}`)
@@ -57,7 +66,10 @@ async function main() {
 
   const i = args.indexOf('--out')
   const file = join(i >= 0 ? args[i + 1] : '.', 'conference.sql')
-  writeFileSync(file, toSql(b.rows))
+  writeFileSync(
+    file,
+    toSql(b.rows, only ? { only: SETTINGS_PHASE1_COLUMNS } : {}),
+  )
   console.log(`wrote ${file}`)
 }
 

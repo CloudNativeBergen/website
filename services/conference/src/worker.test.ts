@@ -566,6 +566,8 @@ describe('settings phase 1 (#2019)', () => {
       { sponsorDeadlineDate: 'soon' },
       { travelSupportBudget: -1 },
       { socialHashtag: 'x'.repeat(101) },
+      { analyticsPirschCode: '<script>' },
+      { analyticsPirschCode: 'a'.repeat(65) },
     ]) {
       const { body } = await gql(admin, MUTATION, { input })
       expect(body.errors[0].extensions.code).toBe('BAD_USER_INPUT')

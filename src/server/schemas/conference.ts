@@ -62,7 +62,7 @@ const dateString = z
 // === Basic Information ===
 export const UpdateBasicInfoSchema = z.object({
   title: z.string().trim().min(1, 'Title is required'),
-  organizer: z.string().trim().min(1, 'Organizer is required'),
+  organizer: z.string().trim().min(1, 'Organizer is required').max(200),
   city: z.string().trim().nullable().optional(),
   country: z.string().trim().nullable().optional(),
   tagline: z.string().trim().nullable().optional(),
@@ -744,7 +744,7 @@ const CloneFlagsSchema = z.object(
 export const CreateEditionSchema = z
   .object({
     title: z.string().trim().min(1, 'Title is required'),
-    organizer: z.string().trim().min(1).nullable().optional(),
+    organizer: z.string().trim().min(1).max(200).nullable().optional(),
     startDate: dateString,
     endDate: dateString,
     cfpStartDate: optionalDateString,

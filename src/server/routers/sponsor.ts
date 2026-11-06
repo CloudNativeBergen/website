@@ -4346,8 +4346,8 @@ export const sponsorRouter = router({
     updateConferenceOrgInfo: adminProcedure
       .input(
         z.object({
-          organizerOrgNumber: z.string().optional(),
-          organizerAddress: z.string().optional(),
+          organizerOrgNumber: z.string().max(50).optional(),
+          organizerAddress: z.string().max(500).optional(),
         }),
       )
       .mutation(async ({ input }) => {

@@ -233,6 +233,7 @@ function validate(input: Record<string, unknown>): ConferencePatch {
     primaryColor: isHex,
     accentColor: isHex,
     registrationLink: isUrl,
+    analyticsPirschCode: (v) => /^[A-Za-z0-9_-]{1,64}$/.test(v),
     ...Object.fromEntries(
       [...SETTINGS_SHARED, ...SETTINGS_NEW]
         .filter((k) => k.endsWith('Date'))

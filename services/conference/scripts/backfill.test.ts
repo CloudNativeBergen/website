@@ -1,7 +1,12 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
-import { mapBackfill, SETTINGS_PROJECTION, toSql } from './backfill'
+import {
+  mapBackfill,
+  SETTINGS_PHASE1_COLUMNS,
+  SETTINGS_PROJECTION,
+  toSql,
+} from './backfill'
 
 const docs = [
   {
@@ -157,5 +162,39 @@ describe('mapBackfill', () => {
         )
         .get(),
     ).toEqual({ org_id: 'org-x', city: 'Bergen' })
+  })
+
+  it('with only, updates just those columns and keeps D1-edited ones (#2019)', () => {
+    const db = migrated()
+    db.exec(toSql(b.rows))
+    // A d1_write tenant edited the title after the Sanity freeze.
+    db.exec(
+      "UPDATE conferences SET title = 'D1 edit' WHERE conference_id = 'conf-b'",
+    )
+    const [row] = mapBackfill(
+      [{ ...docs[0], socialHashtag: '#new' }],
+      routable,
+    ).rows
+    db.exec(toSql([row], { only: SETTINGS_PHASE1_COLUMNS }))
+    expect(
+      db
+        .prepare(
+          "SELECT title, social_hashtag FROM conferences WHERE conference_id = 'conf-b'",
+        )
+        .get(),
+    ).toEqual({ title: 'D1 edit', social_hashtag: '#new' })
+    // A new row is still inserted whole.
+    const [fresh] = mapBackfill(
+      [{ _id: 'conf-new', orgId: 'org-a', title: 'New' }],
+      new Set(['conf-new']),
+    ).rows
+    db.exec(toSql([fresh], { only: SETTINGS_PHASE1_COLUMNS }))
+    expect(
+      db
+        .prepare(
+          "SELECT title FROM conferences WHERE conference_id = 'conf-new'",
+        )
+        .get(),
+    ).toEqual({ title: 'New' })
   })
 })
