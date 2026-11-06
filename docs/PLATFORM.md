@@ -42,6 +42,20 @@ pnpm --filter @runkonf/api compose     # fails if the subgraphs do not compose
 pnpm --filter @runkonf/api dev         # compose, then wrangler dev
 ```
 
+## Local development
+
+`mise run dev:api` runs the gateway and all five subgraphs in one `wrangler dev` (one `-c` per Worker, so service bindings resolve locally) on `http://localhost:8787/graphql`. It first runs `dev:api:setup`:
+
+- generates local-only Ed25519 keys (gateway envelope and a dev identity key) into `.wrangler/dev-api/keys.json` and writes gitignored `.dev.vars` files for each Worker. No production secret is needed;
+- applies the D1 migrations locally and seeds `scripts/dev-seed/*.sql`: two orgs, two conferences with hosts `cndn.konf.localhost` and `kk.konf.localhost`, one conference row, a member (`user-dev-member`) and a platform operator (`user-dev-operator`);
+- composes the supergraph, then prints three example `curl` queries.
+
+It runs the `preview` environment of each config, because the top-level configs share one placeholder `database_id` and local D1 would merge their databases. Everything stays local (`--local`, `--persist-to .wrangler/dev-api`).
+
+`mise run dev:token -- [userId] [origin]` mints a 5-minute identity JWT, signed with the dev key, which is seeded into identity's `jwks` table. It defaults to the operator and the operator-lane origin `http://localhost:3000`. `mise run dev:api:reset` wipes the local D1 state; the keys stay.
+
+Limits: content and program read Sanity's private dataset, so without `SANITY_API_TOKEN_READ` in your shell, Sanity-backed fields come back empty. Cron triggers do not fire on their own (use `/cdn-cgi/local/scheduled`). OAuth login does not work; use `dev:token`.
+
 Identity tests run against a real local D1 through Miniflare. A cross-tenant test that walks the whole public schema with two tenants runs with them (#1837).
 
 ## Rollout flags
@@ -85,6 +99,10 @@ D1 flags for all 4 conferences are set in tenant-directory D1 (`d1_override = 1`
 1. Approve the production Workers deploy, which applies migrations 0002 and 0003. Check the CNDN 2026 row: `SELECT id, api_read, identity_login, d1_write, d1_override FROM conferences WHERE api_read OR identity_login OR d1_write OR d1_override`.
 2. Delete `KONF_API_TENANTS`, `KONF_IDENTITY_TENANTS` and `KONF_D1_WRITE_TENANTS` from every Vercel environment and redeploy. Check that sign-in through identity and the settings save still work on 2026.cloudnativedays.no.
 3. Delete `listed()` and its three calls in `src/lib/conference/konf-api.ts`, and the `OVERRIDE_TENANTS` var with its check in `progressiveOverride` (`api/src/gateway.ts`), in one PR.
+
+## Production deploys
+
+`deploy-workers.yml` deploys on every push to main that touches `api/`, `services/` or `packages/`. The job runs in the GitHub environment `workers-production`. With no required reviewers configured there, production deploys run automatically; with reviewers, each run waits for approval. The repository owner controls that setting. A first job cancels older runs that are still `waiting` or `queued`, so the newest run always deploys all of main and an unapproved run cannot block the queue. A run that is in progress (for example applying migrations) is never cancelled.
 
 ## Gateway URL
 

@@ -1,3 +1,4 @@
+import { PUBLIC_TALK_FIELDS } from '@/lib/proposal/public-groq'
 import { ProposalExisting, ProposalInput, Status } from '@/lib/proposal/types'
 import {
   clientReadCached,
@@ -26,7 +27,6 @@ import {
   EXCLUDE_PRIVATE_SPEAKER_FIELDS,
 } from '@/lib/sanity/helpers'
 import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
-import { OFFICIAL_SCHEDULE_FILTER } from '@/lib/speaker/schedule-groq'
 import {
   mergeConferences,
   type ConferenceCandidate,
@@ -1160,30 +1160,7 @@ export async function listPublicTalks(
   try {
     const talks = await clientReadCached.fetch<unknown[] | null>(
       groq`*[_type == "talk" && status == "confirmed" && conference._ref == $conferenceId && references($speakerId)]{
-          _id, title, description, language, level, format,
-          attachments[]{
-            ...,
-            _type == "fileAttachment" => {
-              "url": file.asset->url
-            }
-          },
-          speakers[]-> {
-            _id, name, title, "slug": slug.current, "image": ${SPEAKER_IMAGE_URL}
-          },
-          topics[]-> {
-            _id, title, "slug": slug.current
-          },
-          "scheduleInfo": {
-            "talkId": _id,
-            "schedule": *[_type == "schedule" && conference._ref == $conferenceId && ${/* groq-global-scoped: conference._ref == $conferenceId on this root; the interpolation is a status constant */ OFFICIAL_SCHEDULE_FILTER} && ^._id in tracks[].talks[].talk._ref] | order(date asc) [0]
-          } {
-            "date": schedule.date,
-            "trackTitle": schedule.tracks[^.talkId in talks[].talk._ref][0].trackTitle,
-            "timeSlot": schedule.tracks[^.talkId in talks[].talk._ref][0].talks[talk._ref == ^.talkId][0]{
-              startTime,
-              endTime
-            }
-          }
+          ${PUBLIC_TALK_FIELDS}
         }`,
       { conferenceId, speakerId },
     )
