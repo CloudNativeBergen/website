@@ -3,11 +3,12 @@
 -- a CHECK, so the table is rebuilt (create, copy, drop, rename). Dropping a
 -- parent that still has domains rows counts as an FK violation even when the
 -- rows are back by commit, so domains is parked in a scratch table and
--- restored after. Rerunnable: the scratch tables are dropped first. Down path: docs in the PR (#1997), the same rebuild with the
+-- restored after. domains_park is NOT dropped first: if a half-applied run
+-- ever left it behind, it may be the only copy of every hostname, so a
+-- rerun fails on CREATE instead of destroying it. Down path: docs in the PR (#1997), the same rebuild with the
 -- old CHECK after UPDATE ... SET lifecycle = 'archived' WHERE lifecycle = 'cancelled'.
 PRAGMA defer_foreign_keys = true;
 DROP TABLE IF EXISTS conferences_new;
-DROP TABLE IF EXISTS domains_park;
 CREATE TABLE domains_park AS SELECT * FROM domains;
 DELETE FROM domains;
 CREATE TABLE conferences_new (
