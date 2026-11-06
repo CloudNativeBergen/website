@@ -18,9 +18,9 @@ The target is kontroll on the API.
    `api.konf.app`. Clients use no `@sanity/client` and no direct D1 access.
    Subgraph resolvers call a data-source adapter, either a Sanity adapter or a
    D1 adapter, and clients cannot tell which. New dual-write windows live in the
-   subgraph adapter. The existing site-side dual write in
-   `src/lib/konf-api/conference-write.ts` (D1 first, then Sanity) is temporary:
-   it stays until #1879 closes its window and is then deleted, not moved.
+   subgraph adapter. Conference settings moved fields are written only to D1 for
+   d1_write tenants, with Sanity copies frozen (#1997); non-moved fields still go
+   to Sanity.
 3. **Cutover is per entity and per tenant, behind the adapter.**
    1. The subgraph proxies Sanity and clients move to the API. The data does not
       move.
@@ -63,15 +63,15 @@ The target is kontroll on the API.
 
 ## Entity table
 
-| Entity                                            | Owner                                       | Adapter                                                                                      | Write mode                                                            | Window end    |
-| ------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------- |
-| Conference settings                               | D1                                          | D1 (reads from D1 for all 4 conferences since 2026-11-05; d1_override=1, parity in_sync 4/4) | Dual write until #1879 closes and the site-side dual write is removed | #1879         |
-| Tenants, domains and conference lifecycle (#1971) | D1 (tenant-directory)                       | D1                                                                                           | D1 only                                                               | Done          |
-| Identity                                          | D1 (identity)                               | D1                                                                                           | D1 only                                                               | Done          |
-| Editorial content                                 | Sanity (content subgraph)                   | Sanity                                                                                       | Sanity only                                                           | Permanent     |
-| Proposals, speakers                               | Sanity, behind the site seam (#1876, #1887) | Sanity                                                                                       | Sanity only                                                           | Undecided     |
-| Logos                                             | Sanity                                      | Sanity                                                                                       | Sanity only; R2 later (#1866)                                         | Not scheduled |
-| Tickets                                           | Undecided                                   | -                                                                                            | -                                                                     | Undecided     |
+| Entity                                            | Owner                                       | Adapter                                                                                      | Write mode                                             | Window end    |
+| ------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------- |
+| Conference settings                               | D1                                          | D1 (reads from D1 for all 4 conferences since 2026-11-05; d1_override=1, parity in_sync 4/4) | D1 only for d1_write tenants, and Sanity copies frozen | Done          |
+| Tenants, domains and conference lifecycle (#1971) | D1 (tenant-directory)                       | D1                                                                                           | D1 only                                                | Done          |
+| Identity                                          | D1 (identity)                               | D1                                                                                           | D1 only                                                | Done          |
+| Editorial content                                 | Sanity (content subgraph)                   | Sanity                                                                                       | Sanity only                                            | Permanent     |
+| Proposals, speakers                               | Sanity, behind the site seam (#1876, #1887) | Sanity                                                                                       | Sanity only                                            | Undecided     |
+| Logos                                             | Sanity                                      | Sanity                                                                                       | Sanity only; R2 later (#1866)                          | Not scheduled |
+| Tickets                                           | Undecided                                   | -                                                                                            | -                                                      | Undecided     |
 
 Update the row in the same PR that changes an owner, an adapter or a write
 mode.

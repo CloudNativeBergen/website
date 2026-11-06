@@ -48,12 +48,12 @@ Identity tests run against a real local D1 through Miniflare. A cross-tenant tes
 
 Each conference has four rollout flags in tenant-directory D1 (`conferences` table, #1925). They default to off. No GraphQL mutation writes them; an operator sets them with SQL:
 
-| Column           | Effect                                                            |
-| ---------------- | ----------------------------------------------------------------- |
-| `api_read`       | The site reads core conference fields from `api.konf.app`.        |
-| `identity_login` | The site signs in through identity (`id.konf.app`).               |
-| `d1_write`       | The admin writes the moved conference fields to D1 before Sanity. |
-| `d1_override`    | The gateway routes the `conference` `@override` label to D1.      |
+| Column           | Effect                                                       |
+| ---------------- | ------------------------------------------------------------ |
+| `api_read`       | The site reads core conference fields from `api.konf.app`.   |
+| `identity_login` | The site signs in through identity (`id.konf.app`).          |
+| `d1_write`       | The admin writes moved conference fields to D1 only (#1997). |
+| `d1_override`    | The gateway routes the `conference` `@override` label to D1. |
 
 ```sh
 pnpm --filter @runkonf/tenant-directory exec wrangler d1 execute DB --remote --env production \
@@ -76,7 +76,7 @@ Kill switch: `KONF_API_DISABLED=1` on Vercel turns all three site flags off for 
 
 ### Write path (`d1_write`)
 
-`src/lib/konf-api/conference-write.ts` sends each settings save's moved fields to `updateConference` first, with the organizer's identity JWT (#1881). If that fails, the save fails and Sanity is not touched. If Sanity fails after D1 succeeded, the error is logged and the save returns a warning. An organizer without an identity session cannot save moved fields, so turn `d1_write` on only together with `identity_login`. Run `pnpm tsx scripts/parity-conference.ts --all` again after turning `d1_write` on, with the same caveat for tenants with `d1_override` off.
+`src/lib/konf-api/conference-write.ts` sends each settings save's moved fields to `updateConference` in D1 (#1881). For `d1_write` tenants, moved fields go ONLY to D1 and Sanity copies are frozen (#1997); non-moved fields still go to Sanity. If the D1 write fails, the save fails and Sanity is not touched. If Sanity fails after D1 succeeded, the error is logged and the save returns a warning. An organizer without an identity session cannot save moved fields, so turn `d1_write` on only together with `identity_login`. Run `pnpm tsx scripts/parity-conference.ts --all` again after turning `d1_write` on, with the same caveat for tenants with `d1_override` off.
 
 ### Transition: the old env lists
 
