@@ -47,6 +47,14 @@ ruleTester.run('no-sanity-d1-conference-fields', asRule, {
     },
     {
       filename: SRC,
+      code: "import { mergeConference } from '@/lib/conference/merge'\nconst q = `*[_type == \"conference\"][0]{ title, city }`",
+    },
+    {
+      filename: SRC,
+      code: "import { mergeKonfApiConference } from '@/lib/conference/konf-api'\nconst q = `conference->{ title }`",
+    },
+    {
+      filename: SRC,
       code: 'const q = `*[_type == "conference"][0]{_id, "org": organization->title, "t": $title}`',
     },
     // Self-exempt files: src/lib/conference/merge.ts
@@ -119,6 +127,14 @@ ruleTester.run('no-sanity-d1-conference-fields', asRule, {
 
   invalid: [
     // (a) Deref conference->title flagged
+    {
+      filename: SRC,
+      code: "import { rolloutFlags } from '@/lib/conference/konf-api'\nconst q = `*[_type == \"conference\"][0]{ title, city }`",
+      errors: [
+        { messageId: 'd1Field', data: { field: 'title' } },
+        { messageId: 'd1Field', data: { field: 'city' } },
+      ],
+    },
     {
       filename: SRC,
       code: 'const q = `conference->title`',

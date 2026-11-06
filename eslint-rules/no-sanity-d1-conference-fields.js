@@ -43,6 +43,18 @@
  * Each field is reported at most once per query string node.
  *
  * ---------------------------------------------------------------------------
+ * OPT-IN: IMPORT THE MERGE LAYER
+ * ---------------------------------------------------------------------------
+ *
+ * The correct #1997 pattern still READS these fields from Sanity, then passes
+ * the row through `mergeConference` / `mergeConferences` / `purgeEndDate`
+ * (src/lib/conference/merge.ts) or `mergeKonfApiConference` (konf-api.ts),
+ * which overlay D1. A file that imports from `@/lib/conference/merge`, or
+ * imports `mergeKonfApiConference`, is therefore not reported at all. This is
+ * deliberately FILE-LEVEL: it does not prove each query's row reaches the
+ * merge, so a file that merges one read and leaks another passes.
+ *
+ * ---------------------------------------------------------------------------
  * SELF-EXEMPT FILES
  * ---------------------------------------------------------------------------
  *
@@ -242,6 +254,24 @@ function findD1FieldsInProjection(projectionContent) {
   return found
 }
 
+/**
+ * `import ... from '@/lib/conference/merge'` (or a relative `./merge`), or
+ * `import { mergeKonfApiConference } from '.../konf-api'`.
+ */
+function isMergeImport(node) {
+  if (node.type !== 'ImportDeclaration') return false
+  const src = String(node.source.value)
+  if (/(^|\/)lib\/conference\/merge$|^\.\/merge$/.test(src)) return true
+  return (
+    /(^|\/)konf-api$/.test(src) &&
+    node.specifiers.some(
+      (sp) =>
+        sp.type === 'ImportSpecifier' &&
+        sp.imported.name === 'mergeKonfApiConference',
+    )
+  )
+}
+
 module.exports = {
   meta: {
     type: 'problem',
@@ -261,6 +291,10 @@ module.exports = {
     const filename =
       (context.filename || (context.getFilename && context.getFilename())) ?? ''
     if (isAllowlisted(filename)) return {}
+    // Opt-in: a file that imports the merge layer is assumed to pass its Sanity
+    // rows through it (the #1997 pattern), so its reads are not reported.
+    const ast = (context.sourceCode ?? context.getSourceCode()).ast
+    if (ast.body.some(isMergeImport)) return {}
 
     function checkQueryString(node, text) {
       if (!text || typeof text !== 'string') return
