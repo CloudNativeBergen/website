@@ -731,7 +731,7 @@ describe('members list above the D1 parameter cap (#2018)', () => {
       get: (t, k) =>
         k === 'prepare'
           ? (q: string) => (queries++, t.prepare(q))
-          : Reflect.get(t, k).bind?.(t) ?? Reflect.get(t, k),
+          : (Reflect.get(t, k).bind?.(t) ?? Reflect.get(t, k)),
     })
     const rows = await createMembers({ ...env, DB }).list(orgId, true)
     expect(rows).toHaveLength(150)
