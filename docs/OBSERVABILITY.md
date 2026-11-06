@@ -11,7 +11,7 @@ Workers Observability is configured per `wrangler.jsonc`:
   - Logs destination: `grafana-cloud-logs`
   - Traces destination: `grafana-cloud-traces`
 - **Gateway (`konf-api`):**
-  `api/wrangler.jsonc` currently lacks an `observability` block (#1895). Gateway requests, 429s, masked errors, and latency are not yet piped to Grafana Cloud until #1895 adds the destinations. (inferred)
+  Configured in `api/wrangler.jsonc` with the same destinations (#1895). It logs the two events under [Gateway Events](#gateway-events-konf-api).
 
 ## Crons and Schedules
 
@@ -185,9 +185,25 @@ Workers check for optional incoming webhook secrets in code. If unset, events ar
 
 ---
 
-### Gateway & Platform Errors, Authz, and Rate Limits (inferred)
+### Gateway Events (`konf-api`)
 
-The gateway (`konf-api`) emits status responses and GraphQL errors rather than named structured console events:
+Both are JSON lines on `console.error`, emitted from `api/src/gateway.ts`. String fields are capped at 64 characters; no message, stack or request body is logged.
+
+#### `gateway.response.5xx`
+
+- **When it fires:** The gateway answers with a status of 500 or more, e.g. the 503 `UNAVAILABLE` when tenant-directory fails.
+- **Fields:** `event`, `status`
+- **Suggested alert:** Critical (condition: `count > 0` over 5 min).
+
+#### `gateway.error.masked`
+
+- **When it fires:** For each error masked to `Unexpected error.` / `INTERNAL_SERVER_ERROR`: a subgraph error outside the safe codes, a subgraph that answered non-2xx (including a 403 `TENANT_MISMATCH` from a stale `GATEWAY_PUBLIC_KEY`), or an unexpected gateway error. These responses are HTTP 200, so `gateway.response.5xx` does not see them. Safe codes (`BAD_USER_INPUT`, `NOT_FOUND`, `FORBIDDEN`, `UNAUTHENTICATED`) do not log it.
+- **Fields:** `event`, `subgraph` (Hive `serviceName`, when the error came from a subgraph), `path` (dot-joined), `code` (the original code, when it had one)
+- **Suggested alert:** Critical (condition: `count > 0` over 5 min). This is the signal the 2026-11-04 missing-key incident produced.
+
+### Gateway Responses Without an Event (inferred)
+
+These are status responses or GraphQL errors with no structured log line:
 
 #### Gateway Rate Limits (`rate limits`) (inferred)
 
@@ -211,16 +227,6 @@ The gateway (`konf-api`) emits status responses and GraphQL errors rather than n
 - **Emitted format:** (inferred) Returns HTTP 401 / 403 JSON responses or GraphQL errors with extension codes `UNAUTHENTICATED` or `FORBIDDEN`.
 - **Fields:** (inferred) HTTP status 401/403, error `message`, `extensions.code`
 - **Suggested alert:** Warning (condition: 401/403 rate spike above baseline).
-
-#### Gateway Masked & Unhandled Errors (`gateway errors`) (inferred)
-
-- **Emitting Worker:** `konf-api` ([api/src/gateway.ts:194-214](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L194-L214), [L503](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L503))
-- **When it fires:**
-  - Runtime or subgraph errors masked by `maskError` to `Unexpected error.` with code `INTERNAL_SERVER_ERROR`. Yoga logs the original unmasked error via `console.error` (inferred from `api/src/gateway.test.ts:425`).
-  - Tenant directory lookup failures return HTTP 503 `UNAVAILABLE` (`tenant lookup unavailable`).
-- **Emitted format:** (inferred) Yoga `console.error` server log with original error stack; client receives masked GraphQL error or HTTP 503.
-- **Fields:** (inferred) `message`, `extensions.code`, `extensions.unexpected`, stack trace in stdout.
-- **Suggested alert:** Critical (condition: 5xx response count > 0 or `INTERNAL_SERVER_ERROR` > 0).
 
 #### Domain & Hostname Reconciliation Errors (inferred)
 

@@ -668,6 +668,32 @@ describe('gateway', () => {
       }
     })
 
+    // The 2026-11-04 incident: a subgraph without GATEWAY_PUBLIC_KEY refuses
+    // every envelope (packages/tenancy reject), and the caller sees a 200.
+    it('logs gateway.error.masked for a subgraph envelope refusal', async () => {
+      const { env } = makeEnv()
+      ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+        Response.json(
+          {
+            errors: [
+              {
+                message: 'invalid tenant envelope',
+                extensions: { code: 'TENANT_MISMATCH' },
+              },
+            ],
+          },
+          { status: 403 },
+        )
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        const res = await gateway.fetch(post(SUBGRAPH_QUERY), env)
+        expect(res.status).toBe(200)
+        expect(events(error)).toMatchObject([{ event: 'gateway.error.masked' }])
+      } finally {
+        error.mockRestore()
+      }
+    })
+
     it('caps a subgraph code in the masked event', () => {
       const error = vi.spyOn(console, 'error').mockImplementation(() => {})
       try {
