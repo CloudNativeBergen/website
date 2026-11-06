@@ -135,19 +135,16 @@ type DomainRow = typeof domains.$inferSelect
 /**
  * THE canonical host of one edition (#1977): its verified custom domain,
  * else its verified platform-edition host (`<org>-<year>`), else null. Never
- * a pending or failed row, never the moving `<org>` alias, never a row of
- * another org. Ties break by hostname so the answer is stable.
+ * a pending or failed row, never the moving `<org>` alias. `rows` must be
+ * the edition's own org's (domainsByOrg scopes the read). Ties break by
+ * hostname so the answer is stable.
  */
 function primaryHost(
   rows: readonly DomainRow[],
-  orgId: string,
   conferenceId: string,
 ): string | null {
   const ok = rows.filter(
-    (d) =>
-      d.orgId === orgId &&
-      d.conferenceId === conferenceId &&
-      d.verification === 'verified',
+    (d) => d.conferenceId === conferenceId && d.verification === 'verified',
   )
   for (const kind of ['custom', 'platform-edition'] as const) {
     const hit = ok
@@ -170,16 +167,16 @@ export function createData(
   const conference = (id: string) =>
     db.query.conferences.findFirst({ where: eq(conferences.id, id) })
 
-  // Verified domains by org, one D1 query per batch of orgs (#1977): every
+  // Domains by org, one D1 query per batch of orgs (#1977): every
   // primaryHost asked in the same tick shares it, and an org already loaded
   // in this request is not read again.
-  const verifiedByOrg = new Map<string, Promise<DomainRow[]>>()
+  const byOrg = new Map<string, Promise<DomainRow[]>>()
   let batch: Map<
     string,
     { resolve: (r: DomainRow[]) => void; reject: (e: unknown) => void }
   > | null = null
-  const verifiedDomainsOf = (orgId: string) => {
-    let p = verifiedByOrg.get(orgId)
+  const domainsByOrg = (orgId: string) => {
+    let p = byOrg.get(orgId)
     if (!p) {
       if (!batch) {
         const b = (batch = new Map())
@@ -187,10 +184,7 @@ export function createData(
           batch = null
           db.query.domains
             .findMany({
-              where: and(
-                inArray(domains.orgId, [...b.keys()]),
-                eq(domains.verification, 'verified'),
-              ),
+              where: inArray(domains.orgId, [...b.keys()]),
             })
             .then(
               (rows) =>
@@ -203,7 +197,7 @@ export function createData(
       }
       const b = batch
       p = new Promise((resolve, reject) => b.set(orgId, { resolve, reject }))
-      verifiedByOrg.set(orgId, p)
+      byOrg.set(orgId, p)
     }
     return p
   }
@@ -213,7 +207,7 @@ export function createData(
 
     /** {@link primaryHost} of one edition; the caller decided it may see it. */
     primaryHostOf: async (orgId: string, conferenceId: string) =>
-      primaryHost(await verifiedDomainsOf(orgId), orgId, conferenceId),
+      primaryHost(await domainsByOrg(orgId), conferenceId),
     organization,
 
     /** Every org, by slug, `first` after the `after` slug. Operator-only. */
