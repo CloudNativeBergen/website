@@ -209,7 +209,10 @@ export function maskError(error: unknown, message: string): Error {
         ...(detail?.field ? { field: detail.field } : {}),
         // As yoga's default: unexpected answers 500, an http status is kept.
         ...(safe ? {} : { unexpected: true }),
-        ...(gql?.extensions?.http ? { http: gql.extensions.http } : {}),
+        // Not a subgraph's: yoga would apply its status and headers (#1877).
+        ...(gql?.extensions?.http && !fromSubgraph
+          ? { http: gql.extensions.http }
+          : {}),
       },
     },
   )
