@@ -122,7 +122,7 @@ describe('scheduled', () => {
     fetchMock.mockResolvedValue([doc])
     await scheduled(envWith([d1()]))
     expect(emit).not.toHaveBeenCalled()
-    await scheduled(envWith([d1({ city: SECRET })]))
+    await scheduled(envWith([d1({ contact_email: SECRET })]))
     expect(emit.mock.calls).toEqual([
       [{ type: 'parity.drift', conferenceIds: ['c1'] }],
     ])
@@ -170,13 +170,51 @@ describe('scheduled', () => {
     expect(logs.join()).not.toContain(SECRET)
   })
 
-  it('logs drift by column name, never by value', async () => {
-    fetchMock.mockResolvedValue([{ ...doc, title: SECRET }])
-    await scheduled(envWith([d1({ city: SECRET })]))
+  // #1917: moved fields are D1-only with frozen Sanity copies (#2013).
+  it('does not report an edit to a frozen moved field as drift', async () => {
+    emit.mockReset()
+    fetchMock.mockResolvedValue([doc])
+    await scheduled(
+      envWith([
+        d1({ city: 'Oslo', title: 'Konf 2027', cfp_end_date: '2027-01-01' }),
+      ]),
+    )
+    expect(summary()).toMatchObject({ status: 'in_sync', drifted: 0 })
+    expect(emit).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['org_id', { org_id: 'o2' }],
+    ['published', { published: 0 as const }],
+    ['travel_support_budget', { travel_support_budget: 500 }],
+    ['volunteer_slack_invite_url', { volunteer_slack_invite_url: 'https://x' }],
+  ])('reports a dual-written column out of step: %s', async (col, over) => {
+    fetchMock.mockResolvedValue([doc])
+    await scheduled(envWith([d1(over)]))
     expect(events()[0]).toEqual({
       event: 'conference.parity.drift',
       conferenceId: 'c1',
-      fields: ['title', 'city'],
+      fields: [col],
+    })
+  })
+
+  it('still reports a D1 row Sanity no longer has', async () => {
+    fetchMock.mockResolvedValue([{ ...doc, _id: 'other' }])
+    await scheduled(envWith([d1()]))
+    expect(events()[0]).toEqual({
+      event: 'conference.parity.drift',
+      conferenceId: 'c1',
+      fields: ['(missing in sanity)'],
+    })
+  })
+
+  it('logs drift by column name, never by value', async () => {
+    fetchMock.mockResolvedValue([{ ...doc, organizerAddress: SECRET }])
+    await scheduled(envWith([d1({ contact_email: SECRET })]))
+    expect(events()[0]).toEqual({
+      event: 'conference.parity.drift',
+      conferenceId: 'c1',
+      fields: ['organizer_address', 'contact_email'],
     })
     expect(summary()).toMatchObject({ status: 'drift', drifted: 1 })
     expect(logs.join()).not.toContain(SECRET)
@@ -194,9 +232,9 @@ describe('scheduled', () => {
     it('posts drift without values', async () => {
       post.mockResolvedValue(new Response('ok'))
       fetchMock.mockResolvedValue([doc])
-      await scheduled(envWith([d1({ city: SECRET })], url))
+      await scheduled(envWith([d1({ contact_email: SECRET })], url))
       const text = JSON.parse(post.mock.calls[0][1].body).text
-      expect(text).toContain('c1: city')
+      expect(text).toContain('c1: contact_email')
       expect(text).not.toContain(SECRET)
     })
 
@@ -218,7 +256,7 @@ describe('scheduled', () => {
       post.mockRejectedValue(new Error('down'))
       fetchMock.mockResolvedValue([doc])
       await expect(
-        scheduled(envWith([d1({ city: 'x' })], url)),
+        scheduled(envWith([d1({ contact_email: 'x' })], url)),
       ).resolves.toBeUndefined()
       expect(summary()).toMatchObject({ status: 'drift' })
       expect(events().at(-1)).toMatchObject({
