@@ -27,7 +27,6 @@ import {
   EXCLUDE_PRIVATE_SPEAKER_FIELDS,
 } from '@/lib/sanity/helpers'
 import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
-import { OFFICIAL_SCHEDULE_FILTER } from '@/lib/speaker/schedule-groq'
 import {
   mergeConferences,
   type ConferenceCandidate,

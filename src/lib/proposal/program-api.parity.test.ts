@@ -7,11 +7,11 @@
  */
 import { describe, expect, it } from 'vitest'
 import { evaluate, parse } from 'groq-js'
-import { SanityProgramSource } from './data'
-import { CONFERENCE_QUERY_FULL } from '../../../src/lib/conference/query'
-import { EXPANDED_SECTIONS_KEY } from '../../../src/lib/conference/sections'
-import { PUBLIC_TALK_FIELDS } from '../../../src/lib/proposal/public-groq'
-import { toPublicTalk } from '../../../src/lib/proposal/public'
+import { SanityProgramSource } from '../../../services/program/src/data'
+import { CONFERENCE_QUERY_FULL } from '@/lib/conference/query'
+import { EXPANDED_SECTIONS_KEY } from '@/lib/conference/sections'
+import { PUBLIC_TALK_FIELDS } from './public-groq'
+import { toPublicTalk } from './public'
 
 const ref = (_ref: string) => ({ _type: 'reference', _ref })
 const DATASET = [
@@ -23,7 +23,13 @@ const DATASET = [
     domains: ['a.example'],
     schedules: [ref('sched')],
   },
-  { _id: 'tp', _type: 'topic', title: 'K8s', color: '#00f', slug: { current: 'k8s' } },
+  {
+    _id: 'tp',
+    _type: 'topic',
+    title: 'K8s',
+    color: '#00f',
+    slug: { current: 'k8s' },
+  },
   {
     _id: 'sp',
     _type: 'speaker',

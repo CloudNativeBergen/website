@@ -428,7 +428,13 @@ const OPERATOR_QUERIES = new Set([
   'myOrganizations',
 ])
 /** Public roots too costly to batch: each gets its own document. */
-const ALONE = new Set(['program', 'talk', 'speakers', 'speaker', 'speakerBySlug'])
+const ALONE = new Set([
+  'program',
+  'talk',
+  'speakers',
+  'speaker',
+  'speakerBySlug',
+])
 
 function queries(tenants: T[]) {
   const roots = Object.values(schema.getQueryType()!.getFields()).flatMap(
