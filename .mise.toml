@@ -94,6 +94,9 @@ description = "Install dependencies"
 run = "pnpm install"
 
 [env]
+# The RunKonf Cloudflare account (production). Not a secret. Keeps local
+# wrangler off any personal account a login can also reach.
+CLOUDFLARE_ACCOUNT_ID = "eefa2cb5c8528a07d7bf8b00a6606dcd"
 NEXT_TELEMETRY_DISABLED = "1"
 NEXT_PUBLIC_SANITY_PROJECT_ID = "mvzwvw14"
 NEXT_PUBLIC_SANITY_DATASET = "production"

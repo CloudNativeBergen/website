@@ -48,7 +48,7 @@ cd <api|services/NAME>
 fnox get FNOX_KEY | npx wrangler secret put WORKER_NAME --env <preview|production>
 ```
 
-New fnox references use `if_missing = "warn"`, so a key not yet in your keychain does not break `fnox exec` for the site. The wrangler configs use account `eefa2cb5c8528a07d7bf8b00a6606dcd`, which CI deploys to. Depending on which account your login can reach, local wrangler commands may need `CLOUDFLARE_ACCOUNT_ID=bf423d08017f82ace4019bc367338981`; which account is canonical is pending an owner decision.
+New fnox references use `if_missing = "warn"`, so a key not yet in your keychain does not break `fnox exec` for the site. Production is the RunKonf Cloudflare account `eefa2cb5c8528a07d7bf8b00a6606dcd`. `.mise.toml` sets `CLOUDFLARE_ACCOUNT_ID` to it, so local wrangler never falls back to another account. **Wrangler must be logged in as a user with access to the RunKonf account:** `npx wrangler whoami` must list `eefa2cb5c8528a07d7bf8b00a6606dcd`. `secrets:sync` runs `wrangler whoami` before any write and refuses unless that account is listed.
 
 ## Gateway key
 

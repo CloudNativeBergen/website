@@ -79,6 +79,19 @@ export function missingSecrets(
   }
 }
 
+// The RunKonf Cloudflare account (production). Any other account a login can
+// reach (a personal one with PoC Workers) must never receive these secrets.
+export const RUNKONF_ACCOUNT_ID = 'eefa2cb5c8528a07d7bf8b00a6606dcd'
+
+/** Refuses unless `wrangler whoami` lists the RunKonf account. */
+export function assertRunKonfAccount(cwd: string, exec: Run = run) {
+  const who = exec('pnpm', ['exec', 'wrangler', 'whoami'], { cwd }).toString()
+  if (!who.includes(RUNKONF_ACCOUNT_ID))
+    throw new Error(
+      `wrangler is not logged in with access to the RunKonf account ${RUNKONF_ACCOUNT_ID}; refusing to write`,
+    )
+}
+
 export function sync(
   service: string,
   env: Env,
@@ -86,6 +99,7 @@ export function sync(
   log = console.log,
 ) {
   const cwd = serviceDir(service)
+  assertRunKonfAccount(cwd, exec)
   const { required, optional } = declaredSecrets(service, env)
   for (const name of [...required, ...optional]) {
     let value: Buffer

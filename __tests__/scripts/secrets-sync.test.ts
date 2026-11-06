@@ -5,6 +5,7 @@ import {
   declaredSecrets,
   fnoxName,
   missingSecrets,
+  RUNKONF_ACCOUNT_ID,
   sync,
   type Env,
 } from '../../scripts/secrets-sync'
@@ -129,7 +130,7 @@ describe('secrets', () => {
     const exec = vi.fn((cmd: string, args: string[], _opts: Opts) => {
       if (cmd === 'fnox' && args[1] !== 'KONF_PREVIEW_GATEWAY_PUBLIC_KEY')
         throw new Error('missing')
-      return Buffer.from('')
+      return Buffer.from(args[2] === 'whoami' ? RUNKONF_ACCOUNT_ID : '')
     })
     sync('tenant-directory', 'preview', exec, log)
     expect(log.mock.calls.flat()).toEqual([
@@ -146,11 +147,19 @@ describe('secrets', () => {
 
   it('sync pipes each fnox value to wrangler and logs only names', () => {
     const exec = vi.fn((cmd: string, args: string[], _opts: Opts) =>
-      Buffer.from(cmd === 'fnox' ? `value-of-${args[1]}` : ''),
+      Buffer.from(
+        cmd === 'fnox'
+          ? `value-of-${args[1]}`
+          : args[2] === 'whoami'
+            ? `Account ${RUNKONF_ACCOUNT_ID}`
+            : '',
+      ),
     )
     const log = vi.fn()
     sync('content', 'preview', exec, log)
-    const puts = exec.mock.calls.filter(([c]) => c === 'pnpm')
+    const puts = exec.mock.calls.filter(
+      ([c, a]) => c === 'pnpm' && a[2] !== 'whoami',
+    )
     expect(puts.map(([, a]) => a[4])).toEqual([
       'GATEWAY_PUBLIC_KEY',
       'SANITY_API_TOKEN_READ',
@@ -163,5 +172,15 @@ describe('secrets', () => {
       'ok GATEWAY_PUBLIC_KEY',
       'ok SANITY_API_TOKEN_READ',
     ])
+  })
+
+  it('sync refuses before any fnox read or put when whoami lacks the RunKonf account', () => {
+    const exec = vi.fn((_cmd: string, args: string[], _opts: Opts) =>
+      Buffer.from(args[2] === 'whoami' ? 'Account bf000000personal' : 'x'),
+    )
+    expect(() => sync('content', 'production', exec, vi.fn())).toThrow(
+      /RunKonf account/,
+    )
+    expect(exec).toHaveBeenCalledTimes(1)
   })
 })
