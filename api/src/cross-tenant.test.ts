@@ -450,13 +450,45 @@ function selection(
  * the Query field it calls.
  */
 /**
+ * Root fields tagged @tag(name: "operator") in the composed supergraph
+ * (#1962): derived, so a new operator field is walked as one and fails the
+ * walk if it forgets requirePlatform, instead of passing as a public field.
+ */
+function operatorFields(root: 'Query' | 'Mutation') {
+  const out = new Set<string>()
+  for (const d of parse(compose()).definitions) {
+    if (
+      (d.kind !== Kind.OBJECT_TYPE_DEFINITION &&
+        d.kind !== Kind.OBJECT_TYPE_EXTENSION) ||
+      d.name.value !== root
+    )
+      continue
+    for (const f of d.fields ?? [])
+      if (
+        f.directives?.some(
+          (x) =>
+            x.name.value === 'tag' &&
+            x.arguments?.some(
+              (a) =>
+                a.name.value === 'name' &&
+                a.value.kind === Kind.STRING &&
+                a.value.value === 'operator',
+            ),
+        )
+      )
+        out.add(f.name.value)
+  }
+  return out
+}
+/** Operator-only mutations: refused to every tenant envelope (#1924, #1923). */
+const OPERATOR_MUTATIONS = operatorFields('Mutation')
+/**
  * Query fields every walker (site lane, tenant envelope or none) is refused:
  * the @tag(operator) ones by requirePlatform, myOrganizations (#2036) because
  * it needs a session with no tenant.
  */
 const OPERATOR_QUERIES = new Set([
-  'organizations',
-  'conferences',
+  ...operatorFields('Query'),
   'myOrganizations',
 ])
 /** Public roots too costly to batch: each gets its own document. */
@@ -517,7 +549,10 @@ function mutations() {
       f.name === 'updateConference'
         ? '(input: {tagline: "x"})'
         : args(f.args, '')
-    return `mutation { ${f.name}${a}${selection(getNamedType(f.type), 2, '')} }`
+    return {
+      field: f.name,
+      doc: `mutation { ${f.name}${a}${selection(getNamedType(f.type), 2, '')} }`,
+    }
   })
 }
 
@@ -857,13 +892,30 @@ describe('cross-tenant mutation walk', () => {
   const mutate = async (headers: Record<string, string>, skip?: RegExp) => {
     const bodies: { data?: unknown; errors?: unknown[] }[] = []
     for (const m of mutations())
-      if (!skip?.test(m)) bodies.push(JSON.parse(await run(m, headers)))
+      if (!skip?.test(m.doc)) bodies.push(JSON.parse(await run(m.doc, headers)))
     return bodies
   }
   const organizer = () => ({ authorization: `Bearer ${memberJwt}` })
 
   it('has a mutation to walk', () => {
     expect(mutations().length).toBeGreaterThan(0)
+  })
+
+  it('takes the operator fields from @tag(operator) in the supergraph (#1962)', () => {
+    // Anchors only: the derived sets grow with every new operator field.
+    expect([...OPERATOR_MUTATIONS]).toEqual(
+      expect.arrayContaining([
+        'provisionOrganization',
+        'operatorInviteMember',
+        'prunePushSubscriptions',
+      ]),
+    )
+    expect([...OPERATOR_QUERIES]).toEqual(
+      expect.arrayContaining(['organizations', 'conferences']),
+    )
+    // Public fields stay public.
+    expect(OPERATOR_MUTATIONS.has('updateConference')).toBe(false)
+    expect(OPERATOR_QUERIES.has('conference')).toBe(false)
   })
 
   it.each([
@@ -915,14 +967,12 @@ describe('cross-tenant mutation walk', () => {
 
   it("A's organizer on A's host changes A's rows and never a B row", async () => {
     const before = await snapshot()
-    for (const body of await mutate({ ...organizer(), origin: ORIGIN })) {
+    for (const { field, doc } of mutations()) {
+      const body = JSON.parse(
+        await run(doc, { ...organizer(), origin: ORIGIN }),
+      ) as { data?: unknown; errors?: unknown[] }
       const json = JSON.stringify(body)
-      // Operator-only (#1924, #1923): refused to every tenant envelope.
-      if (
-        /"(provisionOrganization|operator\w+|prunePushSubscriptions)"/.test(
-          json,
-        )
-      )
+      if (OPERATOR_MUTATIONS.has(field))
         expect(body.errors).toMatchObject([
           { extensions: { code: 'FORBIDDEN' } },
         ])
