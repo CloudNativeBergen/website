@@ -2642,7 +2642,7 @@ describe('myOrganizations: member lane, no tenant (#2036)', () => {
   })
 
   it('a plain member can subscribePush and unsubscribePush via the user lane', async () => {
-    const endpoint = 'https://push.example/user-lane-push-test'
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/user-lane-push-test'
     try {
       const subRaw = await run(
         `mutation {
