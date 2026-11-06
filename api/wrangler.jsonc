@@ -9,7 +9,7 @@
   // supergraph.graphql (pnpm compose) is bundled as a string.
   "rules": [{ "type": "Text", "globs": ["**/*.graphql"], "fallthrough": true }],
   // Bindings do not inherit into envs, so each env lists its own.
-  // Secrets per env: ENVELOPE_PRIVATE_KEY, CLIENT_IP_SECRET.
+  // Secrets per env: declared in secrets.json (mise run secrets:sync).
   // OVERRIDE_TENANTS: @override label -> orgIds routed to the native subgraph.
   // Transition only (#1925): prefer the d1_override flag in tenant-directory D1.
   // API_LIMITER: per caller, 300 requests a minute (#1790);

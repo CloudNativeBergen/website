@@ -93,6 +93,10 @@ run = "fnox exec -- pnpm run storybook:test-ci"
 description = "Manage orphaned uploaded files"
 run = "fnox exec -- pnpm run manage-orphaned-files"
 
+[tasks."secrets:sync"]
+description = "Put a Worker's declared secrets from fnox (usage: mise run secrets:sync -- <service> <preview|production> [--check])"
+run = "pnpm exec tsx scripts/secrets-sync.ts {{args}}"
+
 [tasks.install]
 description = "Install dependencies"
 run = "pnpm install"
@@ -151,6 +155,9 @@ description = "Local API: wipe the local D1 state (dev keys stay)"
 run = "rm -rf .wrangler/dev-api/v3"
 
 [env]
+# The RunKonf Cloudflare account (production). Not a secret. Keeps local
+# wrangler off any personal account a login can also reach.
+CLOUDFLARE_ACCOUNT_ID = "eefa2cb5c8528a07d7bf8b00a6606dcd"
 NEXT_TELEMETRY_DISABLED = "1"
 NEXT_PUBLIC_SANITY_PROJECT_ID = "mvzwvw14"
 NEXT_PUBLIC_SANITY_DATASET = "production"
