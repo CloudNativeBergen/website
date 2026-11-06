@@ -301,11 +301,19 @@ async function main() {
   console.error(
     [
       '',
-      'Each of these is a read of `*` that is not constrained to one tenant.',
-      'Fix it — scope the query (scopedFetch / CONFERENCE_FILTER / ORG_FILTER, see',
-      'docs/TENANT_SCOPING.md), or annotate the single read with `// groq-global: <reason>`',
-      'if it is genuinely cross-tenant, or `// groq-global-scoped: <how>` if it is scoped',
-      'by something the rule cannot see.',
+      ...(RULE_ID === RULES.tenancy[0]
+        ? [
+            'Each of these is a read of `*` that is not constrained to one tenant.',
+            'Fix it — scope the query (scopedFetch / CONFERENCE_FILTER / ORG_FILTER, see',
+            'docs/TENANT_SCOPING.md), or annotate the single read with `// groq-global: <reason>`',
+            'if it is genuinely cross-tenant, or `// groq-global-scoped: <how>` if it is scoped',
+            'by something the rule cannot see.',
+          ]
+        : [
+            'Each of these reads a D1-owned conference field straight from Sanity GROQ.',
+            'Read it through src/lib/conference (merge.ts / konf-api.ts) instead; see the',
+            `header of eslint-rules/${BASELINE_NAME}.js.`,
+          ]),
       '',
       `Raising the ceiling is a deliberate, reviewed act: \`${UPDATE_COMMAND}\` and commit`,
       `${BASELINE_REL}. A pure file rename lands here too — regenerate, and the diff should`,
