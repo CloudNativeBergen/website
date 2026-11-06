@@ -369,8 +369,9 @@ async function applyConferencePatch(
   // through api.konf.app; Sanity copies are frozen and not updated. Non-moved fields
   // still go to Sanity as before. Tenants without d1_write write all fields to
   // Sanity unchanged. A failure writing D1 aborts before Sanity is touched.
-  // Settings phase 1 fields (#2019) go to D1 and still to Sanity until their
-  // read flips. Prefixed (nested) fieldsets hold no moved fields.
+  // Settings phase 1 (#2019): the public fields are moved; the members-only
+  // ones still go to Sanity too (conference-write.ts). Prefixed (nested)
+  // fieldsets hold no moved fields.
   const d1 = !pathPrefix && (await writeMovedToD1(conferenceId, input))
 
   // For d1_write tenants, omit moved fields from the Sanity patch (#1997).

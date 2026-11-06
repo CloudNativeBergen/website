@@ -45,6 +45,13 @@ describe('findDrift', () => {
     ['social_links', { social_links: '[]' }],
     ['org_id', { org_id: 'o2' }],
     ['primary_color', { primary_color: '#fff' }],
+    // Settings phase 1 (#2019): the members-only columns have no anonymous
+    // gateway parity, so this sweep is their only check.
+    ['organizer_address', { organizer_address: 'Gate 1' }],
+    ['organizer_org_number', { organizer_org_number: '999' }],
+    ['analytics_pirsch_code', { analytics_pirsch_code: 'abc' }],
+    ['travel_support_budget', { travel_support_budget: 5 }],
+    ['registration_enabled', { registration_enabled: 1 as const }],
   ])('reports a mismatch in %s', (field, over) => {
     expect(findDrift([d1(over)], [doc])).toEqual([
       { conferenceId: 'c1', fields: [field] },

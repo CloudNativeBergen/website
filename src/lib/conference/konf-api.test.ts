@@ -20,6 +20,7 @@ vi.mock('@/lib/sponsor-crm/sanity', () => ({
 import { cacheLife, cacheTag } from 'next/cache'
 import { getConferenceForDomain } from './sanity'
 import { fetchKonfApiConference } from './konf-api'
+import { isCfpOpen } from './state'
 
 /**
  * `'use cache'` is a compiler directive that vitest does not transform, so the
@@ -369,5 +370,83 @@ describe('lifecycleStatus from tenant-directory (#1997)', () => {
     reply(d1)
     const { conference } = await getConferenceForDomain('2026.example.com')
     expect(conference.lifecycleStatus).toBe('archived')
+  })
+})
+
+describe('settings phase 1 read flip (#2019)', () => {
+  // Sanity has the CFP closed and registration off.
+  const closed = {
+    ...sanityDoc,
+    cfpStartDate: '2000-01-01',
+    cfpEndDate: '2000-02-01',
+    registrationEnabled: false,
+    ticketCustomization: { heroHeadline: 'H', showVanityMetrics: false },
+  }
+  beforeEach(() => {
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    sanityFetch.mockResolvedValue(structuredClone(closed))
+  })
+
+  it.each([
+    ['null', null],
+    ['an impossible date', '2099-02-30'],
+    ['an out-of-range date', '9999-99-99'],
+    ['a datetime', '2099-12-31T00:00:00Z'],
+    ['free text', 'soon'],
+    ['a number', 4102444800000],
+  ])('a D1 cfpEndDate of %s keeps the Sanity CFP closed', async (_, bad) => {
+    apiReply({ cfpEndDate: bad, cfpStartDate: 'later' })
+    const { conference } = await getConferenceForDomain('2026.example.com')
+    expect(conference.cfpEndDate).toBe('2000-02-01')
+    expect(conference.cfpStartDate).toBe('2000-01-01')
+    expect(isCfpOpen(conference)).toBe(false)
+  })
+
+  it.each([
+    ['null', null],
+    ['a string', 'true'],
+    ['a number', 1],
+  ])(
+    'a D1 registrationEnabled of %s keeps Sanity registration off',
+    async (_, bad) => {
+      apiReply({ registrationEnabled: bad })
+      const { conference } = await getConferenceForDomain('2026.example.com')
+      expect(conference.registrationEnabled).toBe(false)
+    },
+  )
+
+  it('valid D1 values win: D1 is the source once Sanity stops being written', async () => {
+    apiReply({
+      cfpEndDate: '2099-12-31',
+      registrationCloseDate: '2099-01-01',
+      registrationEnabled: true,
+      organizer: 'D1 Org',
+      socialHashtag: '#d1',
+      showVanityMetrics: true,
+    })
+    const { conference } = await getConferenceForDomain('2026.example.com')
+    expect(isCfpOpen(conference)).toBe(true)
+    expect(conference.registrationCloseDate).toBe('2099-01-01')
+    expect(conference.registrationEnabled).toBe(true)
+    expect(conference.organizer).toBe('D1 Org')
+    expect(conference.socialHashtag).toBe('#d1')
+    expect(conference.ticketCustomization).toEqual({
+      heroHeadline: 'H',
+      showVanityMetrics: true,
+    })
+  })
+
+  it('never asks the cached anonymous read for members-only settings', async () => {
+    apiReply({})
+    await getConferenceForDomain('2026.example.com')
+    const { query } = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(query).toContain('cfpEndDate')
+    for (const f of [
+      'organizerAddress',
+      'organizerOrgNumber',
+      'analyticsPirschCode',
+      'travelSupportBudget',
+    ])
+      expect(query).not.toContain(f)
   })
 })

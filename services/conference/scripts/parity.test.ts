@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mapBackfill } from './backfill'
-import { diffConference, expected, pickHosts } from './parity'
+import { FIELDS, diffConference, expected, pickHosts } from './parity'
 
 describe('pickHosts', () => {
   const d = (
@@ -89,5 +89,44 @@ describe('diffConference', () => {
     expect(diffConference(null, api())).toEqual([
       { field: '(conference)', sanity: 'null', api: 'present' },
     ])
+  })
+})
+
+describe('settings phase 1 (#2019)', () => {
+  const set = mapBackfill(
+    [
+      {
+        _id: 'c1',
+        orgId: 'o1',
+        title: 'Konf',
+        cfpEndDate: '2026-05-01',
+        registrationEnabled: false,
+        ticketCustomization: { showVanityMetrics: true },
+      },
+    ],
+    new Set(['c1']),
+  ).rows[0]
+
+  it('reports drift in public settings, booleans as booleans', () => {
+    const want = expected(set)!
+    expect(want.registrationEnabled).toBe(false)
+    expect(want.showVanityMetrics).toBe(true)
+    expect(
+      diffConference(want, {
+        ...want,
+        cfpEndDate: '2026-06-01',
+        registrationEnabled: true,
+      }).map((d) => d.field),
+    ).toEqual(['cfpEndDate', 'registrationEnabled'])
+  })
+
+  it('leaves members-only fields to the D1 sweep (always null anonymously)', () => {
+    for (const f of [
+      'organizerAddress',
+      'organizerOrgNumber',
+      'analyticsPirschCode',
+      'travelSupportBudget',
+    ])
+      expect(FIELDS).not.toContain(f)
   })
 })

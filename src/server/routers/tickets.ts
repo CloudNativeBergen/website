@@ -1499,10 +1499,18 @@ export const ticketsRouter = router({
           })
         }
 
-        // Settings phase 1 (#2019): showVanityMetrics goes to D1 first for
-        // d1_write tenants, then the whole object to Sanity.
-        if (ticketCustomization !== undefined)
-          await writeMovedToD1(conferenceId, { ticketCustomization })
+        // Settings phase 1 (#2019): showVanityMetrics goes to D1 only for
+        // d1_write tenants (read back through the merge); the rest of the
+        // object still goes to Sanity, which replaces it whole, so the
+        // Sanity copy of the flag is dropped rather than updated.
+        const d1 =
+          ticketCustomization !== undefined &&
+          (await writeMovedToD1(conferenceId, { ticketCustomization }))
+        if (d1 && ticketCustomization) {
+          const rest = { ...ticketCustomization }
+          delete rest.showVanityMetrics
+          updates.ticketCustomization = rest
+        }
 
         try {
           const result = await clientWrite
