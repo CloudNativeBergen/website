@@ -37,7 +37,6 @@ beforeEach(() => {
 export async function fakeRolloutFlags(
   _host: string | null,
   conference: { _id: string; organization?: { _ref?: string } | null },
-  _opts?: { verify?: boolean },
 ): Promise<RolloutFlags> {
   // The kill switch, as the real rolloutFlags honours it.
   if (process.env.KONF_API_DISABLED === '1')
