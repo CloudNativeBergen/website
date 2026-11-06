@@ -49,7 +49,6 @@ vi.mock('@/lib/sanity/client', async (importOriginal) => {
 })
 
 import { SanityProgramSource } from '../../../services/program/src/data/source'
-import { schema } from '../../../services/program/src/subgraph'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { listPublicTalks } from '@/lib/proposal/server'
 import {
@@ -201,10 +200,23 @@ const context = {
     }),
   },
 }
-// The subgraph's own graphql instance (not a root dependency).
+// The real subgraph schema and its own graphql instance (not a root
+// dependency). Loaded by a computed path so the root tsc does not follow it
+// into the Worker's types.
+const SUBGRAPH = '../../../services/program/src/subgraph'
+const { schema } = (await import(/* @vite-ignore */ SUBGRAPH)) as {
+  schema: unknown
+}
 const { graphql: execute } = createRequire(
   new URL('../../../services/program/package.json', import.meta.url),
-)('graphql') as typeof import('graphql')
+)('graphql') as {
+  graphql: (args: {
+    schema: unknown
+    source: string
+    variableValues?: Record<string, unknown>
+    contextValue: unknown
+  }) => Promise<unknown>
+}
 const queries: string[] = []
 vi.stubGlobal('fetch', async (url: unknown, init?: RequestInit) => {
   h.apiCalls++
@@ -326,7 +338,7 @@ describe('public program seams through the API (#1772)', () => {
     // speakers' raw image; flags are the public ones (the fixture has only).
     const strip = (g: Raw) => {
       const { _rev, _createdAt, _updatedAt, speakers, ...rest } = g
-      ;(void _rev, void _createdAt, void _updatedAt)
+      expect([_rev, _createdAt, _updatedAt]).toBeDefined()
       return {
         ...rest,
         speakers: (speakers as Raw[]).map(({ _id, name, slug }) => ({
@@ -370,7 +382,9 @@ describe('public program seams through the API (#1772)', () => {
       ),
     })
     expect(sanity.speakers).toHaveLength(1)
-    expect(api.speakers).toEqual(sanity.speakers.map((s) => pick(s as Raw)))
+    expect(api.speakers).toEqual(
+      sanity.speakers.map((s) => pick(s as unknown as Raw)),
+    )
   })
 
   it('unflagged, an API error and KONF_API_DISABLED all give Sanity', async () => {

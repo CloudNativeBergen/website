@@ -119,13 +119,16 @@ describe('parity with the site', () => {
         level: s.level,
         language: s.language,
         audiences: ['developer'], // the API's addition
+        hasFeedbackCode: null, // program slots only
         topics: s.topics!.map((x) => ({
           id: x._id,
           title: x.title,
           slug: x.slug,
           color: '#00f', // the API's addition
+          description: null, // the API's addition
         })),
         attachments: s.attachments!.map((a) => ({
+          key: a._key,
           kind: 'url',
           attachmentType: a.attachmentType,
           title: a.title ?? null,
@@ -167,13 +170,17 @@ describe('parity with the site', () => {
     expect(api).toHaveLength(1)
     expect(api[0].date).toBe(day.date)
     expect(api[0].slots).toEqual(
-      (track.talks as Raw[]).map((sl) => {
+      (track.talks as Raw[]).map((sl, position) => {
         const talk = sl.talk as Raw | null
         const sp = talk && (talk.speakers as Raw[])[0]
         return {
           start: sl.startTime,
           end: sl.endTime,
           placeholder: sl.placeholder ?? null,
+          hasTalkRef: sl.hasTalkRef,
+          talkStatus: talk ? 'CONFIRMED' : null,
+          trackIndex: 0,
+          position,
           room: track.trackTitle,
           track: {
             name: track.trackTitle,
@@ -193,8 +200,10 @@ describe('parity with the site', () => {
               title: x.title,
               slug: (x.slug as Raw).current,
               color: x.color,
+              description: x.description ?? null,
             })),
-            attachments: [],
+            attachments: null, // the schedule projection has none
+            hasFeedbackCode: talk.hasFeedbackCode,
             speakers: [
               {
                 id: sp!._id,
