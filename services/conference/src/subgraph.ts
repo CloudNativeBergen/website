@@ -48,7 +48,10 @@ const SETTINGS_SHARED = [
   'organizer',
 ] as const
 /** Public, not served by content. */
-const SETTINGS_NEW = ['sponsorDeadlineDate', 'travelSupportPaymentDate'] as const
+const SETTINGS_NEW = [
+  'sponsorDeadlineDate',
+  'travelSupportPaymentDate',
+] as const
 /**
  * Org members only: null for anyone else. Content serves organizerAddress
  * publicly today; the gate applies once a tenant's label flips.

@@ -1573,7 +1573,12 @@ describe('conference router — D1 write path (#1881)', () => {
     cfpNotifyDate: '2026-03-01',
     programDate: '2026-04-01',
   }
-  const { startDate: _s, endDate: _e, ...SETTINGS_DATES } = DATES
+  const SETTINGS_DATES = {
+    cfpStartDate: DATES.cfpStartDate,
+    cfpEndDate: DATES.cfpEndDate,
+    cfpNotifyDate: DATES.cfpNotifyDate,
+    programDate: DATES.programDate,
+  }
 
   it('for a d1_write tenant, writes settings phase 1 fields to D1 and still to Sanity (#2019)', async () => {
     await makeCaller({ isOrganizer: true }).updateDates({
