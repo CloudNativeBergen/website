@@ -428,7 +428,13 @@ const OPERATOR_QUERIES = new Set([
   'myOrganizations',
 ])
 /** Public roots too costly to batch: each gets its own document. */
-const ALONE = new Set(['program'])
+const ALONE = new Set([
+  'program',
+  'talk',
+  'speakers',
+  'speaker',
+  'speakerBySlug',
+])
 
 function queries(tenants: T[]) {
   const roots = Object.values(schema.getQueryType()!.getFields()).flatMap(
@@ -448,7 +454,8 @@ function queries(tenants: T[]) {
   for (const r of roots.filter((r) => OPERATOR_QUERIES.has(r.field)))
     out.push({ query: `{ ${r.sel} }`, roots: { [r.field]: r.field } })
   // The demand-control cost is summed over one operation: the full program
-  // (~480) batched with every other root passes the 1000 ceiling.
+  // (~900) or a profile's nested talks batched with every other root pass
+  // the 1000 ceiling.
   for (const r of roots.filter((r) => ALONE.has(r.field)))
     out.push({ query: `{ ${r.sel} }`, roots: { [r.field]: r.field } })
   const pub = roots.filter(
