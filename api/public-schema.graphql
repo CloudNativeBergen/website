@@ -181,6 +181,12 @@ type Query {
   speakers: [Speaker!]
   talk(id: ID!): Talk
 
+  """Highest first."""
+  sponsorTiers: [SponsorTier!]
+
+  """In the site order: highest tier first."""
+  sponsors: [Sponsorship!]
+
   """
   The request's Conference lifecycle: `live`, `cancelled` or `archived` for anyone, `draft` only for org members. Public because a cancelled or archived homepage says so to every visitor (#1997).
   """
@@ -487,6 +493,44 @@ type Topic {
   id: ID
   slug: String
   title: String
+}
+
+type Sponsor {
+  id: ID
+
+  """The same, for dark backgrounds."""
+  logoBrightUrl: String
+
+  """data:image/svg+xml;base64 URL. Render with <img>."""
+  logoUrl: String
+  name: String
+  website: String
+}
+
+type SponsorPerk {
+  description: String
+  label: String
+}
+
+type SponsorTier {
+  id: ID
+
+  """1 is the highest tier."""
+  level: Int
+  mostPopular: Boolean
+  name: String
+  perks: [SponsorPerk!]
+  soldOut: Boolean
+  tagline: String
+
+  """standard, special or addon."""
+  tierType: String
+}
+
+"""A sponsor shown publicly for the conference."""
+type Sponsorship {
+  sponsor: Sponsor
+  tier: SponsorTier
 }
 
 type Domain {

@@ -76,11 +76,13 @@ vi.mock('@sanity/client', () => ({
       const groq = rewriteGroq(query)
       const dataset = /_type == "(talk|speaker|schedule)"/.test(groq)
         ? (['b', 'a'] as T[]).flatMap(programDocs)
-        : (['b', 'a'] as T[]).map((t) => ({
-            ...sanityDoc(groq, t),
-            _type: 'conference',
-            organization: { _type: 'reference', _ref: ORG[t] },
-          }))
+        : /_type == "(sponsorTier|sponsorForConference)"/.test(groq)
+          ? (['b', 'a'] as T[]).flatMap(sponsorDocs)
+          : (['b', 'a'] as T[]).map((t) => ({
+              ...sanityDoc(groq, t),
+              _type: 'conference',
+              organization: { _type: 'reference', _ref: ORG[t] },
+            }))
       const { evaluate, parse } = await import('groq-js')
       return (await evaluate(parse(groq), { dataset, params })).get()
     },
@@ -276,6 +278,36 @@ function fill(type: GraphQLOutputType, t: T, path: string, depth = 0): unknown {
   return isObjectType(type) ? docs[0] : docs
 }
 
+/** sponsors' documents for tenant t: a tier and a published sponsorship. */
+function sponsorDocs(t: T) {
+  const ref = (_ref: string) => ({ _type: 'reference', _ref })
+  const conference = ref(CONF[t])
+  return [
+    { _id: CONF[t], _type: 'conference', organization: ref(ORG[t]) },
+    {
+      _id: `tier-${t}`,
+      _type: 'sponsorTier',
+      conference,
+      title: `${tag(t)} tier`,
+      tierType: 'standard',
+    },
+    {
+      _id: `sponsor-${t}`,
+      _type: 'sponsor',
+      name: `${tag(t)} sponsor`,
+      website: `https://${tag(t)}.example`,
+    },
+    {
+      _id: `sfc-${t}`,
+      _type: 'sponsorForConference',
+      conference,
+      status: 'closed-won',
+      sponsor: ref(`sponsor-${t}`),
+      tier: ref(`tier-${t}`),
+    },
+  ]
+}
+
 /** program's documents for tenant t: a published schedule, a confirmed talk, its speaker. */
 function programDocs(t: T) {
   const ref = (_ref: string) => ({ _type: 'reference', _ref })
@@ -434,6 +466,8 @@ const ALONE = new Set([
   'speakers',
   'speaker',
   'speakerBySlug',
+  'sponsors',
+  'sponsorTiers',
 ])
 
 function queries(tenants: T[]) {
