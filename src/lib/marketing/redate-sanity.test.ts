@@ -1,5 +1,11 @@
 /** @vitest-environment node */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 import { evaluate, parse } from 'groq-js'
 
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
@@ -282,7 +288,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('uses merged D1 dates for getRedatablePlan when flagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'a')
+    flagTenants('apiRead', 'a')
 
     const confA = h.dataset.find((d) => d._id === 'a')!
     confA.domains = ['a.example.com']
@@ -312,7 +318,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity for getRedatablePlan when unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other')
+    flagTenants('apiRead', 'other')
 
     const confA = h.dataset.find((d) => d._id === 'a')!
     confA.domains = ['a.example.com']
@@ -331,7 +337,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
   it('falls back to Sanity for getRedatablePlan on gateway error', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'a')
+    flagTenants('apiRead', 'a')
 
     const confA = h.dataset.find((d) => d._id === 'a')!
     confA.domains = ['a.example.com']

@@ -6,6 +6,12 @@
  * gateway failure keeps Sanity.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../../__tests__/helpers/rolloutFlags'
 
 vi.mock('server-only', () => ({}))
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
@@ -52,7 +58,7 @@ afterEach(() => {
 
 describe('proposal reads merge D1 conference fields', () => {
   it('flagged: title and dates come from D1, one gateway call per conference', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-test')
+    flagTenants('apiRead', 'conf-test')
     const gw = vi.fn().mockImplementation(async () => d1())
     vi.stubGlobal('fetch', gw)
     fetchMock.mockResolvedValue([talk('a'), talk('b')])
@@ -71,7 +77,7 @@ describe('proposal reads merge D1 conference fields', () => {
   })
 
   it('unflagged: Sanity values, gateway never called', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
     const gw = vi.fn()
     vi.stubGlobal('fetch', gw)
     fetchMock.mockResolvedValue([talk('a')])
@@ -84,7 +90,7 @@ describe('proposal reads merge D1 conference fields', () => {
   })
 
   it('gateway failure: Sanity values', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-test')
+    flagTenants('apiRead', 'conf-test')
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('D1 down')))
     fetchMock.mockResolvedValue([talk('a')])
     const { proposals } = await getProposals({ conferenceId: 'conf-test' })
@@ -92,7 +98,7 @@ describe('proposal reads merge D1 conference fields', () => {
   })
 
   it('sorts on the merged startDate, not the Sanity one', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-b')
+    flagTenants('apiRead', 'conf-b')
     const confA = {
       ...conference,
       _id: 'conf-a',

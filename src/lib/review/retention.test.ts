@@ -2,6 +2,12 @@
  * @vitest-environment node
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 
 const h = vi.hoisted(() => ({
   fetch: vi.fn(),
@@ -157,7 +163,7 @@ describe('foldExpiredReviews', () => {
   describe('D1 gateway values and fallbacks (#1997)', () => {
     it('uses D1 endDate when tenant has apiRead enabled (postponed edition is spared)', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'c1')
+      flagTenants('apiRead', 'c1')
 
       // Sanity endDate is 2020-01-01, but D1 postponed to 2099-01-01
       h.fetch.mockResolvedValueOnce([
@@ -190,7 +196,7 @@ describe('foldExpiredReviews', () => {
 
     it('uses D1 endDate when tenant has apiRead enabled (an EARLIER D1 date never widens the fold)', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'c1')
+      flagTenants('apiRead', 'c1')
 
       // Sanity endDate is 2099-01-01, but D1 ended 2020-01-01
       h.fetch
@@ -229,7 +235,7 @@ describe('foldExpiredReviews', () => {
 
     it('falls back to Sanity endDate when tenant is unflagged', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+      flagTenants('apiRead', 'other-conf')
 
       // Sanity endDate is 2099-01-01 (not expired)
       h.fetch.mockResolvedValueOnce([

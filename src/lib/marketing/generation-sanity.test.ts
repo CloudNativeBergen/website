@@ -1,5 +1,11 @@
 /** @vitest-environment node */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 import { evaluate, parse } from 'groq-js'
 import {
   commitGeneratedTasks,
@@ -131,7 +137,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('uses merged D1 conference fields for getGenerationContext when flagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-A')
+    flagTenants('apiRead', 'conf-A')
 
     h.dataset = [structuredClone(confA), structuredClone(planA)]
 
@@ -162,7 +168,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity for getGenerationContext when unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
 
     h.dataset = [structuredClone(confA), structuredClone(planA)]
 
@@ -179,7 +185,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
   it('falls back to Sanity for getGenerationContext on gateway error', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-A')
+    flagTenants('apiRead', 'conf-A')
 
     h.dataset = [structuredClone(confA), structuredClone(planA)]
 
@@ -198,7 +204,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('uses merged D1 dates for getPlannedConferences when flagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-A')
+    flagTenants('apiRead', 'conf-A')
 
     h.dataset = [structuredClone(confA), structuredClone(planA)]
 
@@ -225,7 +231,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity dates for getPlannedConferences when unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
 
     h.dataset = [structuredClone(confA), structuredClone(planA)]
 
@@ -241,7 +247,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
   it('falls back to Sanity dates for getPlannedConferences on gateway error', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-A')
+    flagTenants('apiRead', 'conf-A')
 
     h.dataset = [structuredClone(confA), structuredClone(planA)]
 

@@ -3,7 +3,7 @@
 // Conference is one entity keyed by id, shared with services/content (#1835).
 // This service owns the structured fields and takes them, and
 // Query.conference, over from content per tenant through the `conference`
-// override label (OVERRIDE_TENANTS). The editorial fields (description,
+// override label (d1_override in tenant-directory D1). The editorial fields (description,
 // homepage blocks and the rest) stay in content and reach the caller through
 // the entity key.
 import { builder } from './builder'
@@ -30,8 +30,7 @@ const STRINGS = [
 ] as const
 
 // Settings phase 1 (#2019). Fields content also serves move under their own
-// label, so the D1 read flips per tenant separately from the core fields:
-// only OVERRIDE_TENANTS turns `conference-settings` on, never d1_override.
+// label; d1_override turns it on together with `conference` (gateway.ts).
 const settings = {
   override: { from: 'content', label: 'conference-settings' },
 } as const

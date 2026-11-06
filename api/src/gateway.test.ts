@@ -1085,7 +1085,6 @@ describe('gateway', () => {
           ['https://other.example', 0],
         ] as const) {
           const { env, conference } = withFlags()
-          env.OVERRIDE_TENANTS = {}
           await gateway.fetch(post(SUBGRAPH_QUERY, { origin }), env)
           expect(conference).toHaveLength(routed)
         }
@@ -1103,8 +1102,13 @@ describe('conference subgraph', () => {
 
   it('reaches konf-conference over its binding with the minted envelope', async () => {
     const { env, conference } = makeEnv()
-    // org_a has the `conference` override label on (#1835).
-    env.OVERRIDE_TENANTS = { conference: [TENANT.orgId] }
+    // org_a's conference has d1_override, so the `conference` label is on.
+    ;(env as unknown as { DIRECTORY: unknown }).DIRECTORY = {
+      fetch: async () =>
+        Response.json({
+          data: { tenantByHost: { ...TENANT, flags: { d1Override: true } } },
+        }),
+    }
     const res = await gateway.fetch(
       post({ query: '{ conference { id } }' }, { origin: VERIFIED }),
       env,

@@ -17,7 +17,7 @@ Tenants, domains, identity, and memberships live in D1. Gateway has an operator 
 | Platform 3 | Self-service onboarding                                                      | #1924, #1981, #1985, #1977                      |                |
 | Platform 4 | Operations and observability                                                 | #1895, #1917, #1814, #1929, #1769, #1870, #1771 | randax         |
 | Platform 5 | Gateway hardening                                                            | #1877, #1789, #1962, #1954, #1967, #1949, #1957 |                |
-| Platform 6 | Cleanup (env lists, fallbacks, next-auth retirement, docs)                   |                                                 |                |
+| Platform 6 | Cleanup (env lists, fallbacks, next-auth retirement, docs)                   | #1939 (site env lists removed)                  |                |
 
 ## Later phases
 

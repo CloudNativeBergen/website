@@ -142,9 +142,9 @@ export async function writeMovedToD1(
 ): Promise<boolean> {
   const moved = movedConferencePatch(input)
   if (Object.keys(moved).length === 0) return false
-  // Outside a request scope (jobs, tests) there is no host: env lists only.
+  // Outside a request scope (jobs, tests) there is no host.
   const host = await requestHost().catch(() => null)
-  // A null host still honours the env list, so the refusal below holds.
+  // A null host reads as unverified, so a moved-field save is refused.
   if (!(await isD1WriteTenant(host, conferenceId))) return false
   const jwt = host && (await identityJwt())
   // Refuse rather than write Sanity alone: that would leave D1 stale with

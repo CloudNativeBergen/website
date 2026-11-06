@@ -1,4 +1,9 @@
 /** @vitest-environment node */
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../helpers/rolloutFlags')).fakeRolloutFlags,
+}))
+import { flagTenants } from '../../helpers/rolloutFlags'
 import { evaluate, parse } from 'groq-js'
 import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/cron/marketing-reminders/route'
@@ -546,7 +551,7 @@ describe('resolveReminderConferences D1 gateway values and fallbacks (#1997)', (
 
   it('uses merged D1 startDate for sorting when flagged and values differ', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     data = setupData()
 
     const gatewayFetch = vi.fn().mockResolvedValue(
@@ -573,7 +578,7 @@ describe('resolveReminderConferences D1 gateway values and fallbacks (#1997)', (
 
   it('falls back to Sanity startDate for sorting when unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
     data = setupData()
 
     const gatewayFetch = vi.fn()
@@ -589,7 +594,7 @@ describe('resolveReminderConferences D1 gateway values and fallbacks (#1997)', (
   it('falls back to Sanity startDate for sorting on gateway error', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     data = setupData()
 
     const gatewayFetch = vi.fn().mockResolvedValue(

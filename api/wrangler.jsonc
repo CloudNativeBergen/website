@@ -10,8 +10,7 @@
   "rules": [{ "type": "Text", "globs": ["**/*.graphql"], "fallthrough": true }],
   // Bindings do not inherit into envs, so each env lists its own.
   // Secrets per env: ENVELOPE_PRIVATE_KEY, CLIENT_IP_SECRET.
-  // OVERRIDE_TENANTS: @override label -> orgIds routed to the native subgraph.
-  // Transition only (#1925): prefer the d1_override flag in tenant-directory D1.
+  // @override labels follow d1_override in tenant-directory D1 (gateway.ts).
   // API_LIMITER: per caller, 300 requests a minute (#1790);
   // API_MUTATION_LIMITER: per caller, 60 mutations a minute (#1888);
   // API_IP_LIMITER: per IP, 1200 a minute, before the tenant lookup. namespace_id is
@@ -35,9 +34,6 @@
   ],
   "vars": {
     "IDENTITY_ISSUER": "https://id-preview.konf.app",
-    "OVERRIDE_TENANTS": {
-      "conference-settings": ["organization-cloud-native-days", "kkdemo.org"],
-    },
   },
   "services": [
     { "binding": "DIRECTORY", "service": "konf-tenant-directory" },
@@ -62,12 +58,6 @@
       // Placeholder until identity's preview host exists.
       "vars": {
         "IDENTITY_ISSUER": "https://id-preview.konf.app",
-        "OVERRIDE_TENANTS": {
-          "conference-settings": [
-            "organization-cloud-native-days",
-            "kkdemo.org",
-          ],
-        },
       },
       "ratelimits": [
         {
@@ -112,12 +102,6 @@
         "IDENTITY_ISSUER": "https://id.konf.app",
         // Operator lane (#1892 phase 4): kontroll. Preview leaves it unset.
         "OPERATOR_ORIGIN": "https://my.konf.app",
-        "OVERRIDE_TENANTS": {
-          "conference-settings": [
-            "organization-cloud-native-days",
-            "kkdemo.org",
-          ],
-        },
       },
       "ratelimits": [
         {
