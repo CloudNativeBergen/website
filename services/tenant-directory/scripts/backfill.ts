@@ -33,6 +33,16 @@ export interface SanityVerification {
 
 type Ed = { id: string; date: string }
 type Verification = 'pending' | 'verified' | 'failed'
+/**
+ * Sanity `lifecycleStatus` to D1 `lifecycle`, losslessly (#1997). Sanity has
+ * no draft: an absent or unknown value is no override, so `live`.
+ */
+export function lifecycleOf(
+  status: string | null | undefined,
+): 'live' | 'cancelled' | 'archived' {
+  return status === 'cancelled' || status === 'archived' ? status : 'live'
+}
+
 export interface Backfill {
   orgs: { id: string; slug: string; name: string; plan: string }[]
   conferences: {
@@ -40,7 +50,7 @@ export interface Backfill {
     orgId: string
     slug: string
     name: string
-    lifecycle: 'live' | 'archived'
+    lifecycle: 'live' | 'cancelled' | 'archived'
   }[]
   domains: {
     hostname: string
@@ -127,7 +137,7 @@ export function mapBackfill(
       orgId: org.id,
       slug,
       name: c.title || `${org.name} ${slug}`,
-      lifecycle: archived ? 'archived' : 'live',
+      lifecycle: lifecycleOf(c.lifecycleStatus),
     })
     if (platformOk.has(org.id)) {
       platform.push({

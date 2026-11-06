@@ -240,11 +240,81 @@ async function readKonfApiConference(
   return api
 }
 
+const LIFECYCLE_QUERY = '{ conferenceLifecycle }'
+
+/**
+ * The tenant's lifecycle from tenant-directory (#1997): `live`, `cancelled`,
+ * `archived`, or null (a draft, to anyone not a member). A separate read
+ * because `conference` is null to the public for a cancelled or archived
+ * edition. Cached like the conference read; throws on any failure.
+ */
+export async function fetchKonfApiLifecycle(
+  host: string,
+  conferenceId: string,
+): Promise<string | null> {
+  'use cache: remote'
+  cacheLife(CONFERENCE_CACHE_LIFE)
+  cacheTag('content:conferences')
+  cacheTag(domainTag(host))
+  cacheTag(conferenceTag(conferenceId))
+  const url = konfApiUrl()
+  if (!url) throw new Error('KONF_API_URL is not set on this environment')
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: await konfApiHeaders(host),
+    body: JSON.stringify({ query: LIFECYCLE_QUERY }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const json = (await res.json()) as {
+    data?: { conferenceLifecycle?: string | null }
+    errors?: unknown[]
+  }
+  if (json.errors?.length) throw new Error(JSON.stringify(json.errors))
+  return json.data?.conferenceLifecycle ?? null
+}
+
+/**
+ * The D1 lifecycle as the Sanity `lifecycleStatus` override: `cancelled` and
+ * `archived` set it, `live` clears it. Null, a draft or a failed read keep
+ * Sanity's value.
+ */
+async function mergeLifecycle(
+  host: string,
+  conference: Conference,
+): Promise<Conference> {
+  try {
+    const lc = await fetchKonfApiLifecycle(host, conference._id)
+    if (lc === 'cancelled' || lc === 'archived')
+      return { ...conference, lifecycleStatus: lc }
+    if (lc === 'live') {
+      const { lifecycleStatus: _, ...rest } = conference
+      return rest as Conference
+    }
+    return conference
+  } catch (err) {
+    console.warn(
+      `[konf-api] lifecycle falling back to Sanity for ${host}:`,
+      (err as Error).message,
+    )
+    return conference
+  }
+}
+
 /**
  * Merge the API's fields over the Sanity conference. Returns the Sanity
- * conference untouched on any error, timeout or null.
+ * conference untouched on any error, timeout or null, except for the
+ * lifecycle, which is read and merged on its own.
  */
 export async function mergeKonfApiConference(
+  host: string,
+  conference: Conference,
+): Promise<Conference> {
+  return mergeLifecycle(host, await mergeCoreFields(host, conference))
+}
+
+async function mergeCoreFields(
   host: string,
   conference: Conference,
 ): Promise<Conference> {

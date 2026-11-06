@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapBackfill, toSql } from './backfill'
+import { lifecycleOf, mapBackfill, toSql } from './backfill'
 
 const orgs = [
   { _id: 'org-acme', name: "Acme's Conf", slug: 'acme', plan: 'pro' },
@@ -164,5 +164,32 @@ describe('mapBackfill', () => {
     )
     const sets = sql.split('\n').map((l) => l.split(' WHERE ')[0])
     expect(sets.join('\n')).not.toMatch(/\b(slug|org_id) = excluded/)
+  })
+})
+
+describe('lifecycleOf (#1997)', () => {
+  it('maps every Sanity lifecycleStatus losslessly; absent is live', async () => {
+    // The site's list is the Sanity schema's option list; a new value fails here.
+    const { LIFECYCLE_STATUS_VALUES } =
+      await import('../../../src/lib/homepage/lifecycle')
+    for (const v of LIFECYCLE_STATUS_VALUES) expect(lifecycleOf(v)).toBe(v)
+    for (const v of [undefined, null, '', 'bogus'])
+      expect(lifecycleOf(v)).toBe('live')
+  })
+
+  it('writes cancelled through to the directory row', () => {
+    const r = mapBackfill(
+      [{ _id: 'o', name: 'O', slug: 'o' }],
+      [
+        {
+          _id: 'c',
+          orgId: 'o',
+          startDate: '2026-01-01',
+          lifecycleStatus: 'cancelled',
+        },
+      ],
+      [],
+    )
+    expect(r.conferences[0].lifecycle).toBe('cancelled')
   })
 })

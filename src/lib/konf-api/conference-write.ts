@@ -109,13 +109,13 @@ export async function identityJwt(): Promise<string | null> {
 
 const MUTATION = `mutation($input: ConferencePatch!) { updateConference(input: $input) { id } }`
 
-/** Throws on any HTTP, GraphQL or tenant mismatch error. */
-export async function updateConferenceViaApi(
+/** One gateway mutation as the signed-in user. Throws on HTTP or GraphQL errors. */
+async function mutate<T>(
   host: string,
-  conferenceId: string,
-  patch: Record<string, unknown>,
+  query: string,
+  variables: Record<string, unknown>,
   userJwt: string,
-): Promise<void> {
+): Promise<T | undefined> {
   const url = konfApiUrl()
   if (!url) throw new Error('KONF_API_URL is not set on this environment')
   const res = await fetch(url, {
@@ -124,18 +124,53 @@ export async function updateConferenceViaApi(
       ...(await konfApiHeaders(host, await headers())),
       authorization: `Bearer ${userJwt}`,
     },
-    body: JSON.stringify({ query: MUTATION, variables: { input: patch } }),
+    body: JSON.stringify({ query, variables }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
     cache: 'no-store',
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = (await res.json()) as {
-    data?: { updateConference?: { id?: string } | null }
+    data?: T
     errors?: { message?: string }[]
   }
   if (json.errors?.length) {
     throw new Error(json.errors.map((e) => e.message).join('; '))
   }
-  const id = json.data?.updateConference?.id
+  return json.data
+}
+
+/** Throws on any HTTP, GraphQL or tenant mismatch error. */
+export async function updateConferenceViaApi(
+  host: string,
+  conferenceId: string,
+  patch: Record<string, unknown>,
+  userJwt: string,
+): Promise<void> {
+  const data = await mutate<{ updateConference?: { id?: string } | null }>(
+    host,
+    MUTATION,
+    { input: patch },
+    userJwt,
+  )
+  const id = data?.updateConference?.id
+  if (id !== conferenceId) throw new Error(`conference id mismatch: ${id}`)
+}
+
+const LIFECYCLE_MUTATION = `mutation($s: ConferenceLifecycleOverride) { setConferenceLifecycle(status: $s) { id } }`
+
+/**
+ * Writes the homepage override to tenant-directory, its D1 home (#1997).
+ * null clears it. Throws on any HTTP, GraphQL or tenant mismatch error.
+ */
+export async function setLifecycleViaApi(
+  host: string,
+  conferenceId: string,
+  status: LifecycleStatus | null,
+  userJwt: string,
+): Promise<void> {
+  const data = await mutate<{
+    setConferenceLifecycle?: { id?: string } | null
+  }>(host, LIFECYCLE_MUTATION, { s: status }, userJwt)
+  const id = data?.setConferenceLifecycle?.id
   if (id !== conferenceId) throw new Error(`conference id mismatch: ${id}`)
 }

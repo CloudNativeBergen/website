@@ -56,7 +56,7 @@ const ConferenceEdition = builder
       lifecycleStatus: t.exposeString('lifecycle', {
         nullable: true,
         description:
-          '`draft`, `live` or `archived`. Org members see every value; anyone else only `live`, and null otherwise.',
+          '`draft`, `live`, `cancelled` or `archived`. Org members see every value; anyone else only `live`, and null otherwise.',
       }),
     }),
   })
@@ -137,7 +137,7 @@ const Organization = builder.objectRef<OrgRow>('Organization').implement({
 })
 
 const Lifecycle = builder.enumType('ConferenceLifecycle', {
-  values: ['draft', 'live', 'archived'] as const,
+  values: ['draft', 'live', 'cancelled', 'archived'] as const,
 })
 const FLAGS = ['apiRead', 'identityLogin', 'd1Write', 'd1Override'] as const
 const RolloutFlag = builder.enumType('RolloutFlag', { values: FLAGS })
@@ -165,8 +165,26 @@ const OperatorConference = builder
     }),
   })
 
+const LifecycleOverride = builder.enumType('ConferenceLifecycleOverride', {
+  values: ['cancelled', 'archived'] as const,
+})
+
+const WRITERS = new Set(['owner', 'admin'])
+
 builder.queryType({
   fields: (t) => ({
+    conferenceLifecycle: t.string({
+      nullable: true,
+      description:
+        "The request's Conference lifecycle: `live`, `cancelled` or `archived` for anyone, `draft` only for org members. Public because a cancelled or archived homepage says so to every visitor (#1997).",
+      resolve: async (_, __, ctx) => {
+        const e = ctx.envelope
+        if (e?.typ !== 'tenant' || !e.conferenceId) return null
+        const conf = await ctx.data.conferenceOf(e.orgId, e.conferenceId)
+        if (!conf) return null
+        return conf.lifecycle === 'draft' && !e.orgRole ? null : conf.lifecycle
+      },
+    }),
     organization: t.field({
       type: Organization,
       nullable: true,
@@ -242,6 +260,36 @@ builder.queryType({
 
 builder.mutationType({
   fields: (t) => ({
+    setConferenceLifecycle: t.field({
+      type: Conference,
+      nullable: true,
+      description:
+        "Sets the request's Conference homepage override, or clears it with null (back to `live`; a draft stays draft). Org owner or admin, or an operator acting for the org (#1997).",
+      args: { status: t.arg({ type: LifecycleOverride }) },
+      resolve: (_, { status }, ctx) => {
+        const e = ctx.envelope
+        const roles =
+          e?.typ === 'tenant'
+            ? (e.orgRole?.split(',').map((r) => r.trim()) ?? [])
+            : []
+        // Guard before fetch: a refusal says nothing about the row.
+        if (
+          e?.typ !== 'tenant' ||
+          !e.userId ||
+          !(
+            e.scopes.includes('platform:operator') ||
+            roles.some((r) => WRITERS.has(r))
+          )
+        ) {
+          throw createGraphQLError(
+            'setting the lifecycle requires an org owner or admin',
+            { extensions: { code: 'FORBIDDEN' } },
+          )
+        }
+        if (!e.conferenceId) return null
+        return ctx.data.setLifecycle(e.orgId, e.conferenceId, status ?? null)
+      },
+    }),
     provisionOrganization: t.field({
       type: Organization,
       // In the public schema; requirePlatform refuses everyone but an operator.
