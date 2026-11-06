@@ -43,7 +43,7 @@ Decisions taken (2026-11-06):
 | Delete frozen Sanity fields                               | After lifecycle is in D1 and the lint guard is merged, plus one clean parity week |     |
 | Workers Paid                                              | When Platform 4 is ready to move crons, or crons are needed                       |     |
 | Settings phases 2–5 order                                 | After phase 1 lands                                                               |     |
-| Where proposals, speakers and tickets live                | Before Platform 2 ends                                                            |     |
+| Speaker model (identity, global profile, sharing, directory) and where proposals and tickets live; design in #2022 | Before CFP, proposals and speakers move (after #2019) | Owner |
 | Retire next-auth                                          | After #1981 and identity login covers all users                                   |     |
 | Owner of D1 lifecycle (tenant-directory vs conference D1) | Decided in the lifecycle PR                                                       |     |
 
