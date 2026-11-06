@@ -2564,4 +2564,139 @@ describe('myOrganizations: member lane, no tenant (#2036)', () => {
     expect((await mine()).map((o) => o.id)).toEqual([ORG.a, ORG_C])
     expect(await typ()).toBe('platform')
   })
+
+  it('refuses changeMemberRole on the user lane and leaves the role unchanged', async () => {
+    const roleBefore = (
+      await identityDb()
+        .prepare('SELECT role FROM member WHERE id = ?')
+        .bind('member-2036')
+        .first<{ role: string }>()
+    )?.role
+    expect(roleBefore).toBe('member')
+
+    const raw = await run(
+      `mutation { changeMemberRole(userId: "${USER.a}", role: owner) }`,
+      ops(),
+    )
+    const body = JSON.parse(raw)
+    expect(body.data?.changeMemberRole ?? null).toBeNull()
+    expect(body.errors?.[0]?.extensions?.code).toBe('FORBIDDEN')
+
+    const roleAfter = (
+      await identityDb()
+        .prepare('SELECT role FROM member WHERE id = ?')
+        .bind('member-2036')
+        .first<{ role: string }>()
+    )?.role
+    expect(roleAfter).toBe('member')
+  })
+
+  it('refuses removeMember on the user lane and leaves the member in place', async () => {
+    const before = await identityDb()
+      .prepare('SELECT id, role FROM member WHERE id = ?')
+      .bind('member-2036')
+      .first<{ id: string; role: string }>()
+    expect(before).toEqual({ id: 'member-2036', role: 'member' })
+
+    const raw = await run(
+      `mutation { removeMember(userId: "${USER.a}") }`,
+      ops(),
+    )
+    const body = JSON.parse(raw)
+    expect(body.data?.removeMember ?? null).toBeNull()
+    expect(body.errors?.[0]?.extensions?.code).toBe('FORBIDDEN')
+
+    const after = await identityDb()
+      .prepare('SELECT id, role FROM member WHERE id = ?')
+      .bind('member-2036')
+      .first<{ id: string; role: string }>()
+    expect(after).toEqual({ id: 'member-2036', role: 'member' })
+  })
+
+  it('refuses updateConference on the user lane and leaves the conference unchanged', async () => {
+    const db = await conferenceDb()
+    const before = await db
+      .prepare(
+        'SELECT conference_id, title, tagline FROM conferences WHERE conference_id = ?',
+      )
+      .bind(CONF.a)
+      .first<{ conference_id: string; title: string; tagline: string | null }>()
+    expect(before?.conference_id).toBe(CONF.a)
+    expect(before?.title).toMatch(/^TENANT_A/)
+
+    const raw = await run(
+      'mutation { updateConference(input: { tagline: "user-lane-exploit" }) { id tagline } }',
+      ops(),
+    )
+    const body = JSON.parse(raw)
+    expect(body.data?.updateConference ?? null).toBeNull()
+    expect(
+      body.errors?.[0]?.extensions?.code === 'FORBIDDEN' ||
+        body.errors?.length > 0,
+    ).toBe(true)
+
+    const after = await db
+      .prepare(
+        'SELECT conference_id, title, tagline FROM conferences WHERE conference_id = ?',
+      )
+      .bind(CONF.a)
+      .first<{ conference_id: string; title: string; tagline: string | null }>()
+    expect(after).toEqual(before)
+    expect(after?.tagline).not.toBe('user-lane-exploit')
+  })
+
+  it('a plain member can subscribePush and unsubscribePush via the user lane', async () => {
+    const endpoint = 'https://push.example/user-lane-push-test'
+    try {
+      const subRaw = await run(
+        `mutation {
+          subscribePush(input: {
+            endpoint: "${endpoint}",
+            keys: { p256dh: "key-p256dh-1", auth: "auth-key-1" }
+          })
+        }`,
+        ops(),
+      )
+      const subBody = JSON.parse(subRaw)
+      expect(subBody.errors).toBeUndefined()
+      expect(subBody.data?.subscribePush).toBe(true)
+
+      const row = await identityDb()
+        .prepare(
+          'SELECT user_id, endpoint, p256dh, auth FROM push_subscription WHERE endpoint = ?',
+        )
+        .bind(endpoint)
+        .first<{
+          user_id: string
+          endpoint: string
+          p256dh: string
+          auth: string
+        }>()
+      expect(row).toEqual({
+        user_id: USER.a,
+        endpoint,
+        p256dh: 'key-p256dh-1',
+        auth: 'auth-key-1',
+      })
+
+      const unsubRaw = await run(
+        `mutation { unsubscribePush(endpoint: "${endpoint}") }`,
+        ops(),
+      )
+      const unsubBody = JSON.parse(unsubRaw)
+      expect(unsubBody.errors).toBeUndefined()
+      expect(unsubBody.data?.unsubscribePush).toBe(true)
+
+      const after = await identityDb()
+        .prepare('SELECT 1 FROM push_subscription WHERE endpoint = ?')
+        .bind(endpoint)
+        .all()
+      expect(after.results).toEqual([])
+    } finally {
+      await identityDb()
+        .prepare('DELETE FROM push_subscription WHERE endpoint = ?')
+        .bind(endpoint)
+        .run()
+    }
+  })
 })
