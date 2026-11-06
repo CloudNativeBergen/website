@@ -950,6 +950,7 @@ describe('Dashboard Server Actions', () => {
       expect(mockGetConferenceForCurrentDomain).toHaveBeenCalledWith({
         schedule: true,
         confirmedTalksOnly: false,
+        scheduleFromSanity: true,
       })
       expect(data.totalSlots).toBe(4)
       expect(data.filledSlots).toBe(2)

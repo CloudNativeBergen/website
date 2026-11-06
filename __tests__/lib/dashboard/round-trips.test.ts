@@ -219,7 +219,7 @@ describe('dashboard Sanity round-trips', () => {
     // The schedule-expanded document is a superset read, so it replaces the
     // plain one rather than being fetched alongside it.
     expect(conferenceResolutionOptions).toEqual([
-      { schedule: true, confirmedTalksOnly: false },
+      { schedule: true, confirmedTalksOnly: false, scheduleFromSanity: true },
     ])
     expect(composedQueries()).toHaveLength(1)
   })
