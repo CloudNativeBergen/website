@@ -5,6 +5,10 @@ fnox = "latest"
 cue = "0.17"
 "npm:wrangler" = "4"
 
+[tasks.setup]
+description = "Enable the tracked git hooks (.githooks)"
+run = "git config core.hooksPath .githooks"
+
 [tasks.all]
 description = "Run all checks, tests, and build sequentially"
 run = [
