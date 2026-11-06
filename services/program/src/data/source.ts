@@ -63,10 +63,11 @@ export interface Talk {
   format: string | null
   level: string | null
   language: string | null
-  audiences: string[]
-  topics: Topic[]
-  attachments: Attachment[]
-  speakers: SpeakerRef[]
+  /** The four lists are null when the talk has no such field, as in Sanity. */
+  audiences: string[] | null
+  topics: Topic[] | null
+  attachments: Attachment[] | null
+  speakers: SpeakerRef[] | null
   scheduleInfo: ScheduleInfo | null
   /** Whether, never which (#1472). Only the program read projects it. */
   hasFeedbackCode: boolean | null
@@ -200,6 +201,10 @@ const strings = (v: unknown) =>
 const slug = (v: unknown) =>
   s(v) ?? s((v as { current?: unknown } | null)?.current)
 
+/** null for a missing field, so the site can tell it from an empty list. */
+const orNull = <T>(v: unknown, f: (v: unknown) => T): T | null =>
+  v == null ? null : f(v)
+
 const toSpeakerRef = (r: Row): SpeakerRef => ({
   id: r._id as string,
   name: s(r.name),
@@ -234,20 +239,22 @@ const toTalk = (r: Row): Talk => ({
   format: s(r.format),
   level: s(r.level),
   language: s(r.language),
-  audiences: strings(r.audiences),
-  topics: list(r.topics)
-    .filter((t) => t._id)
-    .map((t) => ({
-      id: t._id as string,
-      title: s(t.title),
-      slug: slug(t.slug),
-      color: s(t.color),
-      description: s(t.description),
-    })),
-  attachments: list(r.attachments).map(toAttachment),
-  speakers: list(r.speakers)
-    .filter((sp) => sp._id)
-    .map(toSpeakerRef),
+  audiences: orNull(r.audiences, strings),
+  topics:
+    orNull(r.topics, list)
+      ?.filter((t) => t._id)
+      .map((t) => ({
+        id: t._id as string,
+        title: s(t.title),
+        slug: slug(t.slug),
+        color: s(t.color),
+        description: s(t.description),
+      })) ?? null,
+  attachments: orNull(r.attachments, list)?.map(toAttachment) ?? null,
+  speakers:
+    orNull(r.speakers, list)
+      ?.filter((sp) => sp._id)
+      .map(toSpeakerRef) ?? null,
   scheduleInfo: toScheduleInfo(r.scheduleInfo),
   hasFeedbackCode:
     typeof r.hasFeedbackCode === 'boolean' ? r.hasFeedbackCode : null,
@@ -311,9 +318,7 @@ export class SanityProgramSource implements ProgramSource {
             sponsorId: s((tr.sponsor as Row | null)?._ref),
           }
           return list(tr.talks).map((sl, position): Slot => {
-            const talk = (sl.talk as Row | null)?._id
-              ? (sl.talk as Row)
-              : null
+            const talk = (sl.talk as Row | null)?._id ? (sl.talk as Row) : null
             return {
               start: s(sl.startTime),
               end: s(sl.endTime),

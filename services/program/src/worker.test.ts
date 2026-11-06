@@ -332,7 +332,7 @@ describe('program subgraph', () => {
               description: null,
               format: null,
               level: null,
-              speakers: [],
+              speakers: null,
             },
           },
         ],
@@ -552,7 +552,7 @@ describe('program subgraph', () => {
         talkStatus: 'PENDING',
         trackIndex: 0,
         position: 2,
-        talk: { id: null, title: null, speakers: [] },
+        talk: { id: null, title: null, speakers: null },
       },
     ])
     expect(JSON.stringify(data)).not.toContain('Secret')

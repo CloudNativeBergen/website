@@ -8,8 +8,16 @@
 import 'server-only'
 import type { Transaction } from '@sanity/client'
 import { clientWrite } from '@/lib/sanity/client'
+import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
+import {
+  apiHostForConference,
+  fetchApiSpeakerProfile,
+  fetchApiSpeakers,
+} from '@/lib/konf-api/program'
 import { listPublicTalks } from '@/lib/proposal/server'
-import type { PublicTalk } from '@/lib/proposal/public'
+import { toPublicTalk, type PublicTalk } from '@/lib/proposal/public'
+import type { SpeakerWithProposals } from './index'
 import * as store from './sanity'
 import { canonicalEmail, normalizeEmail } from './email'
 import type { Speaker, TicketEmailGrant } from './types'
@@ -39,11 +47,63 @@ export async function getPublicSpeakerProfile(
   conferenceId: string,
   slug: string,
 ): Promise<PublicSpeakerProfile> {
+  // apiRead tenants read through the gateway (#1772), speaker and talks in one
+  // root; any failure is Sanity. The API strips scheduleInfo before
+  // programDate, the same rule the page applies (withoutUnpublishedSchedule).
+  const host = await apiHostForConference(conferenceId)
+  if (host) {
+    try {
+      const p = await fetchApiSpeakerProfile(host, conferenceId, slug)
+      if (!p) return { speaker: null, talks: [], err: null }
+      return {
+        speaker: p.speaker as unknown as PublicSpeaker,
+        talks: p.talks.map(toPublicTalk),
+        err: null,
+      }
+    } catch (err) {
+      console.warn(
+        `[konf-api] profile falling back to Sanity for ${conferenceId}:`,
+        (err as Error).message,
+      )
+    }
+  }
   const { speaker, err } = await store.getPublicSpeaker(conferenceId, slug)
   if (!speaker) return { speaker: null, talks: [], err: err as Error | null }
   const { _id: speakerId, ...publicSpeaker } = speaker
   const talks = await listPublicTalks(conferenceId, { speakerId })
   return { speaker: publicSpeaker, talks: talks.talks, err: talks.err }
+}
+
+/**
+ * The public /speaker list and the sitemap: speakers with a confirmed talk in
+ * `conferenceId`. getSpeakers(conferenceId) on Sanity, or the gateway for an
+ * apiRead tenant (#1772), with the fields those two pages use. Every other
+ * getSpeakers caller (admin, tickets, status, dashboard) stays on Sanity.
+ */
+export async function getPublicSpeakers(conferenceId: string): Promise<{
+  speakers: SpeakerWithProposals[]
+  err: Error | null
+}> {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:speakers')
+  cacheTag(conferenceTag(conferenceId))
+  const host = await apiHostForConference(conferenceId)
+  if (host) {
+    try {
+      const speakers = await fetchApiSpeakers(host, conferenceId)
+      return {
+        speakers: speakers as unknown as SpeakerWithProposals[],
+        err: null,
+      }
+    } catch (err) {
+      console.warn(
+        `[konf-api] speakers falling back to Sanity for ${conferenceId}:`,
+        (err as Error).message,
+      )
+    }
+  }
+  return store.getSpeakers(conferenceId)
 }
 
 /** What an organizer supplies to create a speaker placeholder in `orgId`. */

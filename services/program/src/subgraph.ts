@@ -80,19 +80,25 @@ const TalkType = builder.objectRef<Talk>('Talk').implement({
     format: t.exposeString('format', str),
     level: t.exposeString('level', str),
     language: t.exposeString('language', str),
-    audiences: t.exposeStringList('audiences', { directives: size(3) }),
+    audiences: t.exposeStringList('audiences', {
+      nullable: true,
+      directives: size(3),
+    }),
     topics: t.field({
       type: [TopicType],
+      nullable: true,
       directives: size(2),
       resolve: (x) => x.topics,
     }),
     attachments: t.field({
       type: [AttachmentType],
+      nullable: true,
       directives: size(2),
       resolve: (x) => x.attachments,
     }),
     speakers: t.field({
       type: [TalkSpeaker],
+      nullable: true,
       directives: size(2),
       resolve: (x) => x.speakers,
     }),
@@ -200,7 +206,8 @@ const GalleryImageType = builder
       featured: t.exposeBoolean('featured'),
       image: t.exposeString('image', {
         ...str,
-        description: 'The Sanity image object (asset, hotspot, crop, alt) as JSON.',
+        description:
+          'The Sanity image object (asset, hotspot, crop, alt) as JSON.',
       }),
       speakers: t.field({
         type: [GallerySpeaker],

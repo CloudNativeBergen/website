@@ -25,6 +25,8 @@ import { selectConferenceSections, type RawConferenceRead } from './sections'
 import { CONFERENCE_QUERY_CORE, CONFERENCE_QUERY_FULL } from './query'
 import { CONFERENCE_CACHE_LIFE } from './cache-life'
 import { mergeConference, mergeConferences } from './merge'
+import { EXPANDED_SECTIONS_KEY } from './sections'
+import { apiHost, fetchApiSchedules } from '@/lib/konf-api/program'
 
 /**
  * THE cached conference read.
@@ -85,6 +87,39 @@ async function fetchConferenceData(
     cacheTag(conferenceTag(result._id))
   }
   return result
+}
+
+/**
+ * The core read with `schedules` added: from the gateway for an apiRead
+ * tenant, else (flag off, an API error, no days before programDate,
+ * KONF_API_DISABLED) from the full Sanity read, as before.
+ */
+async function withSchedules(
+  host: string,
+  wildcardSubdomain: string,
+  core: RawConferenceRead,
+): Promise<RawConferenceRead | null> {
+  const apiHostName = await apiHost(core as Parameters<typeof apiHost>[0])
+  if (apiHostName) {
+    try {
+      const schedules = await fetchApiSchedules(apiHostName, core._id)
+      if (schedules) {
+        return {
+          ...core,
+          [EXPANDED_SECTIONS_KEY]: {
+            ...core[EXPANDED_SECTIONS_KEY],
+            schedules: schedules as unknown as Conference['schedules'],
+          },
+        }
+      }
+    } catch (err) {
+      console.warn(
+        `[konf-api] schedule falling back to Sanity for ${host}:`,
+        (err as Error).message,
+      )
+    }
+  }
+  return fetchConferenceData(host, wildcardSubdomain, CONFERENCE_QUERY_FULL)
 }
 
 export async function getConferenceForCurrentDomain({
@@ -287,7 +322,15 @@ export async function getConferenceForDomain(
     // ONE cached read per tier, not one per flag combination. `schedule` is
     // the only flag that still changes which query runs; everything else is a
     // pure selection over the same cached document (see ./sections.ts).
-    const query = schedule ? CONFERENCE_QUERY_FULL : CONFERENCE_QUERY_CORE
+    //
+    // The public cached read of an apiRead tenant takes its schedule from the
+    // gateway (#1772): the core read here, the program from the API below,
+    // and the full read only as the fallback.
+    const scheduleFromApi = schedule && !uncached
+    const query =
+      schedule && !scheduleFromApi
+        ? CONFERENCE_QUERY_FULL
+        : CONFERENCE_QUERY_CORE
 
     // Fetch conference data with caching (or straight from the origin dataset
     // when the caller opted out — see the `uncached` option).
@@ -309,11 +352,19 @@ export async function getConferenceForDomain(
     // production claims must be backfilled before enforcement can turn on, or
     // the live sites would go dark. With the flag unset this is a no-op and
     // routing is byte-for-byte what it was.
-    const conferenceData =
+    let conferenceData =
       matchedConference &&
       !(await isHostRoutable(host, matchedConference.domains ?? []))
         ? null
         : matchedConference
+
+    if (conferenceData && scheduleFromApi) {
+      conferenceData = await withSchedules(
+        host,
+        wildcardSubdomain,
+        conferenceData,
+      )
+    }
 
     if (conferenceData) {
       // Narrow the one cached superset down to the shape this caller's flags
