@@ -129,16 +129,17 @@ export default async function AdminSettings() {
   // READ LIVE (#1345, as on the workshops page): this page reloads straight
   // after a save, and the cached read serves the old values once
   // (`revalidateTag(tag, 'default')` is stale-while-revalidate).
-  const { conference, domain, error } = await getEditableScheduleForCurrentDomain({
-    uncached: true,
-    organizers: true,
-    topics: true,
-    featuredSpeakers: true,
-    // This page EDITS the links, so it has to read the stored values back.
-    includeSponsorRegistrationLink: true,
-    includeSpeakerRegistrationLink: true,
-    includeVolunteerRegistrationLink: true,
-  })
+  const { conference, domain, error } =
+    await getEditableScheduleForCurrentDomain({
+      uncached: true,
+      organizers: true,
+      topics: true,
+      featuredSpeakers: true,
+      // This page EDITS the links, so it has to read the stored values back.
+      includeSponsorRegistrationLink: true,
+      includeSpeakerRegistrationLink: true,
+      includeVolunteerRegistrationLink: true,
+    })
 
   if (error) {
     return (
