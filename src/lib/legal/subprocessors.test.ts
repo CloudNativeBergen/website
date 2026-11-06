@@ -273,6 +273,7 @@ describe('a failed read must NOT shorten the list', () => {
     for (const id of [
       'sanity',
       'vercel',
+      'cloudflare',
       'resend',
       'grafana',
       'checkin',
@@ -301,11 +302,26 @@ describe('shared platform infrastructure is disclosed for everyone', () => {
       expect.arrayContaining([
         'sanity',
         'vercel',
+        'cloudflare',
         'resend',
         'grafana',
         'oauth-providers',
       ]),
     )
+  })
+
+  it('discloses Cloudflare as the API host: EU storage, US transfer under SCCs', () => {
+    const disclosure = buildSubprocessorDisclosure(facts())
+    const cloudflare = disclosure.processors.find((p) => p.id === 'cloudflare')
+    expect(cloudflare).toMatchObject({
+      certainty: 'confirmed',
+      chosenBy: 'platform',
+      location: 'United States',
+    })
+    expect(cloudflare?.purpose).toMatch(/stored in Western Europe/)
+    expect(
+      internationalTransferProcessors(disclosure).map((p) => p.id),
+    ).toContain('cloudflare')
   })
 
   it('discloses the API diagnostics in Grafana as confirmed EU processing (#1895)', () => {
