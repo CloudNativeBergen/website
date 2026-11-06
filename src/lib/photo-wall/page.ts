@@ -11,10 +11,17 @@ import { getPhotoWall } from './cache'
  * not "no wall": it throws to Next's error page, never a 404 that would
  * claim the conference has no wall.
  */
-export async function requirePhotoWall(
-  select?: Parameters<typeof getConferenceForCurrentDomain>[0],
+export async function requirePhotoWall<
+  O = Parameters<typeof getConferenceForCurrentDomain>[0],
+>(
+  select?: O,
+  read: (
+    select?: O,
+  ) => ReturnType<
+    typeof getConferenceForCurrentDomain
+  > = getConferenceForCurrentDomain as never,
 ) {
-  const resolution = await getConferenceForCurrentDomain(select)
+  const resolution = await read(select)
   if (isConferenceUnavailable(resolution)) {
     throw new Error('Could not read the conference for this Photo Wall')
   }

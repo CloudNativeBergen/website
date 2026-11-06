@@ -90,38 +90,111 @@ async function fetchConferenceData(
 }
 
 /**
- * The full read with its `schedules` replaced by the gateway's for an apiRead
- * tenant (#1772). Flag off, an API error, no days (before programDate) or
- * KONF_API_DISABLED keep Sanity's. The Sanity read still runs, so a tenant
- * without the flag reads exactly as before; dropping it waits for the
- * schedule to leave Sanity.
+ * The core read with `schedules` added for {@link getPublicSchedule}: from the
+ * gateway for an apiRead tenant (#1772), so the full Sanity read is skipped.
+ * Flag off, an API error, no days (before programDate) or KONF_API_DISABLED
+ * read the full Sanity document instead, as before.
  */
-async function withApiSchedules(
+async function withPublicSchedules(
   host: string,
-  full: RawConferenceRead,
-): Promise<RawConferenceRead> {
-  const apiHostName = await apiHost(full as Parameters<typeof apiHost>[0])
-  if (!apiHostName) return full
-  try {
-    const schedules = await fetchApiSchedules(apiHostName, full._id)
-    if (!schedules) return full
-    return {
-      ...full,
-      [EXPANDED_SECTIONS_KEY]: {
-        ...full[EXPANDED_SECTIONS_KEY],
-        schedules: schedules as unknown as Conference['schedules'],
-      },
+  wildcardSubdomain: string,
+  core: RawConferenceRead,
+): Promise<RawConferenceRead | null> {
+  const apiHostName = await apiHost(core as Parameters<typeof apiHost>[0])
+  if (apiHostName) {
+    try {
+      const schedules = await fetchApiSchedules(apiHostName, core._id)
+      if (schedules) {
+        return {
+          ...core,
+          [EXPANDED_SECTIONS_KEY]: {
+            ...core[EXPANDED_SECTIONS_KEY],
+            schedules: schedules as unknown as Conference['schedules'],
+          },
+        }
+      }
+    } catch (err) {
+      console.warn(
+        `[konf-api] schedule falling back to Sanity for ${host}:`,
+        (err as Error).message,
+      )
     }
-  } catch (err) {
-    console.warn(
-      `[konf-api] schedule falling back to Sanity for ${host}:`,
-      (err as Error).message,
-    )
-    return full
   }
+  return fetchConferenceData(host, wildcardSubdomain, CONFERENCE_QUERY_FULL)
 }
 
-export async function getConferenceForCurrentDomain({
+type DomainOptions = NonNullable<Parameters<typeof readConference>[1]>
+/** Options of the conference reads; `schedule` picks the Sanity schedule. */
+export type ConferenceReadOptions = Omit<DomainOptions, 'publicSchedule'>
+type ScheduleOptions = Omit<ConferenceReadOptions, 'schedule'>
+
+/**
+ * The conference with its PUBLIC schedule (#1772): from the gateway for an
+ * apiRead tenant, else Sanity. An unconfirmed talk has no `_id`, and the
+ * schedule days carry no `_rev`, `status` or `version`. Public pages only;
+ * anything that counts, edits or hashes the schedule uses
+ * {@link getEditableSchedule}.
+ */
+export function getPublicSchedule(
+  domain: string,
+  options: ScheduleOptions = {},
+) {
+  return readConference(domain, {
+    ...options,
+    schedule: true,
+    publicSchedule: true,
+  })
+}
+
+/** {@link getPublicSchedule} for the request's host. */
+export function getPublicScheduleForCurrentDomain(
+  options: ScheduleOptions = {},
+) {
+  return forCurrentDomain({ ...options, schedule: true, publicSchedule: true })
+}
+
+/**
+ * The conference with its schedule straight from Sanity: every day document
+ * with `_id`, `_rev` and `status`, every talk with its `_id`. For admin
+ * surfaces and the schedule editor.
+ */
+export function getEditableSchedule(
+  domain: string,
+  options: ScheduleOptions = {},
+) {
+  return readConference(domain, { ...options, schedule: true })
+}
+
+/** {@link getEditableSchedule} for the request's host. */
+export function getEditableScheduleForCurrentDomain(
+  options: ScheduleOptions = {},
+) {
+  return forCurrentDomain({ ...options, schedule: true })
+}
+
+/**
+ * The conference for the request's host. `schedule: true` is the Sanity
+ * schedule; prefer {@link getEditableScheduleForCurrentDomain} or
+ * {@link getPublicScheduleForCurrentDomain}, which say which one.
+ */
+export function getConferenceForCurrentDomain(
+  options: ConferenceReadOptions = {},
+) {
+  return forCurrentDomain(options)
+}
+
+/**
+ * The conference for `domain`. `schedule: true` is the Sanity schedule;
+ * prefer {@link getEditableSchedule} or {@link getPublicSchedule}.
+ */
+export function getConferenceForDomain(
+  domain: string,
+  options: ConferenceReadOptions = {},
+) {
+  return readConference(domain, options)
+}
+
+async function forCurrentDomain({
   organizers = false,
   schedule = false,
   sponsors = false,
@@ -135,7 +208,7 @@ export async function getConferenceForCurrentDomain({
   includeSpeakerRegistrationLink = false,
   includeVolunteerRegistrationLink = false,
   uncached = false,
-  scheduleFromSanity = false,
+  publicSchedule = false,
 }: {
   organizers?: boolean
   schedule?: boolean
@@ -160,8 +233,7 @@ export async function getConferenceForCurrentDomain({
   includeVolunteerRegistrationLink?: boolean
   /** Fetch directly from the origin API instead of the CDN. Admin surfaces only. */
   uncached?: boolean
-  /** See {@link getConferenceForDomain}. Admin surfaces only. */
-  scheduleFromSanity?: boolean
+  publicSchedule?: boolean
 } = {}): Promise<{
   conference: Conference
   domain: string
@@ -170,7 +242,7 @@ export async function getConferenceForCurrentDomain({
 }> {
   const domain = await requestDomain()
   try {
-    return await getConferenceForDomain(domain, {
+    return await readConference(domain, {
       organizers,
       schedule,
       sponsors,
@@ -184,7 +256,7 @@ export async function getConferenceForCurrentDomain({
       includeSpeakerRegistrationLink,
       includeVolunteerRegistrationLink,
       uncached,
-      scheduleFromSanity,
+      publicSchedule,
     })
   } catch (err) {
     const error = err as Error
@@ -204,7 +276,7 @@ export async function getConferenceForCurrentDomain({
  */
 export async function getConferenceById(
   conferenceId: string,
-  options: Parameters<typeof getConferenceForDomain>[1] = {},
+  options: ConferenceReadOptions = {},
 ): Promise<{ conference: Conference; domain: string } | null> {
   const domain = await clientReadUncached.fetch<string | null>(
     // groq-global-scoped: callers pass the id of a document they have already
@@ -213,7 +285,7 @@ export async function getConferenceById(
     { conferenceId },
   )
   if (!domain) return null
-  const { conference, error } = await getConferenceForDomain(domain, {
+  const { conference, error } = await readConference(domain, {
     ...options,
     uncached: true,
   })
@@ -221,7 +293,7 @@ export async function getConferenceById(
   return { conference, domain }
 }
 
-export async function getConferenceForDomain(
+async function readConference(
   domain: string,
   {
     organizers = false,
@@ -237,7 +309,7 @@ export async function getConferenceForDomain(
     includeSponsorRegistrationLink = false,
     includeSpeakerRegistrationLink = false,
     includeVolunteerRegistrationLink = false,
-    scheduleFromSanity = false,
+    publicSchedule = false,
   }: {
     organizers?: boolean
     schedule?: boolean
@@ -298,13 +370,8 @@ export async function getConferenceForDomain(
      * OFF by default. Private volunteer onboarding links; admin/email surfaces only.
      */
     includeVolunteerRegistrationLink?: boolean
-    /**
-     * Keep the schedule on Sanity for an apiRead tenant (#1772). The API's
-     * schedule is the PUBLIC one: an unconfirmed talk has no `_id` and the
-     * schedule documents carry no `_rev` or `status`. Admin surfaces that
-     * count, edit or hash the schedule pass this; `uncached` implies it.
-     */
-    scheduleFromSanity?: boolean
+    /** Internal: only {@link getPublicSchedule} sets it. Ignored if uncached. */
+    publicSchedule?: boolean
   } = {},
 ): Promise<{
   conference: Conference
@@ -333,7 +400,11 @@ export async function getConferenceForDomain(
     // ONE cached read per tier, not one per flag combination. `schedule` is
     // the only flag that still changes which query runs; everything else is a
     // pure selection over the same cached document (see ./sections.ts).
-    const query = schedule ? CONFERENCE_QUERY_FULL : CONFERENCE_QUERY_CORE
+    // The public schedule of an apiRead tenant comes from the gateway, so
+    // its read starts from the core document (#1772).
+    const fromApi = schedule && publicSchedule && !uncached
+    const query =
+      schedule && !fromApi ? CONFERENCE_QUERY_FULL : CONFERENCE_QUERY_CORE
 
     // Fetch conference data with caching (or straight from the origin dataset
     // when the caller opted out — see the `uncached` option).
@@ -361,10 +432,12 @@ export async function getConferenceForDomain(
         ? null
         : matchedConference
 
-    // The public cached read of an apiRead tenant takes its schedule from
-    // the gateway (#1772).
-    if (conferenceData && schedule && !uncached && !scheduleFromSanity) {
-      conferenceData = await withApiSchedules(host, conferenceData)
+    if (conferenceData && fromApi) {
+      conferenceData = await withPublicSchedules(
+        host,
+        wildcardSubdomain,
+        conferenceData,
+      )
     }
 
     if (conferenceData) {

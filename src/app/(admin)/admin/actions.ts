@@ -1,7 +1,10 @@
 'use server'
 
 import { Conference } from '@/lib/conference/types'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import {
+  getConferenceForCurrentDomain,
+  getEditableScheduleForCurrentDomain,
+} from '@/lib/conference/sanity'
 import { getAuthSession } from '@/lib/auth'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { clientWrite } from '@/lib/sanity/client'
@@ -44,8 +47,9 @@ async function requireOrganizer(): Promise<void> {
  */
 async function resolveConference(
   options: Parameters<typeof getConferenceForCurrentDomain>[0] = {},
+  read: typeof getConferenceForCurrentDomain = getConferenceForCurrentDomain,
 ): Promise<Conference> {
-  const { conference, error } = await getConferenceForCurrentDomain(options)
+  const { conference, error } = await read(options)
   if (error || !conference?._id) {
     throw new Error('Could not resolve conference from request domain')
   }
@@ -129,11 +133,10 @@ export async function fetchDashboardData(
   // `confirmedTalksOnly: false` every assigned slot counts toward fill,
   // regardless of the talk's status — this is an admin progress view.
   const conference = needsScheduleExpansion(keys)
-    ? await resolveConference({
-        schedule: true,
-        confirmedTalksOnly: false,
-        scheduleFromSanity: true,
-      })
+    ? await resolveConference(
+        { confirmedTalksOnly: false },
+        getEditableScheduleForCurrentDomain,
+      )
     : await resolveConference()
 
   const session = await getAuthSession()

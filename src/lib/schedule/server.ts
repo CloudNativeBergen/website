@@ -1,4 +1,4 @@
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getEditableScheduleForCurrentDomain } from '@/lib/conference/sanity'
 import { getProposals } from '@/lib/proposal/server'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { ConferenceSchedule } from '@/lib/conference/types'
@@ -75,10 +75,8 @@ async function getTrackSponsorOptions(
 export async function getScheduleData(): Promise<ScheduleData> {
   try {
     const { conference, error: conferenceError } =
-      await getConferenceForCurrentDomain({
-        schedule: true,
+      await getEditableScheduleForCurrentDomain({
         confirmedTalksOnly: false,
-        scheduleFromSanity: true,
       })
 
     if (conferenceError || !conference) {

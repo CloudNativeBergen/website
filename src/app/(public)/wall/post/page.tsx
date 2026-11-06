@@ -1,3 +1,4 @@
+import { getPublicScheduleForCurrentDomain } from '@/lib/conference/sanity'
 import { connection } from 'next/server'
 import {
   ComposerClosed,
@@ -58,11 +59,11 @@ export default async function ComposerPage({
 }: {
   searchParams?: Promise<{ room?: string | string[] }>
 } = {}) {
-  // The program's read (`schedule: true`), cached per tier, not a new one.
-  const { conference, wall } = await requirePhotoWall({
-    schedule: true,
-    confirmedTalksOnly: false,
-  })
+  // The program's public schedule read, cached per tier, not a new one.
+  const { conference, wall } = await requirePhotoWall(
+    { confirmedTalksOnly: false },
+    getPublicScheduleForCurrentDomain,
+  )
   await connection()
   const { room } = (await searchParams) ?? {}
   const logo = pickConferenceLogoProps(conference)
