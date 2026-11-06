@@ -258,7 +258,8 @@ async function resolveTenant(
 
 /**
  * Progressive override per tenant: an @override label is on for the orgIds
- * OVERRIDE_TENANTS lists (transition, #1925), or for `conference` when the
+ * OVERRIDE_TENANTS lists (the only switch for labels other than
+ * `conference`), or for `conference` when the
  * resolved conference has d1_override. Both come from the host the envelope
  * is minted for, never from the caller.
  */

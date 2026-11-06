@@ -11,7 +11,8 @@
   // Bindings do not inherit into envs, so each env lists its own.
   // Secrets per env: ENVELOPE_PRIVATE_KEY, CLIENT_IP_SECRET.
   // OVERRIDE_TENANTS: @override label -> orgIds routed to the native subgraph.
-  // Transition only (#1925): prefer the d1_override flag in tenant-directory D1.
+  // For `conference` prefer the d1_override flag in D1; other labels (e.g.
+  // `conference-settings`, #2019) have only this switch.
   // API_LIMITER: per caller, 300 requests a minute (#1790);
   // API_MUTATION_LIMITER: per caller, 60 mutations a minute (#1888);
   // API_IP_LIMITER: per IP, 1200 a minute, before the tenant lookup. namespace_id is

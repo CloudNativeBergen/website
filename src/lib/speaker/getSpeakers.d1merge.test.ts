@@ -6,6 +6,12 @@
  * keeps Sanity.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 
 const h = vi.hoisted(() => ({ fetch: vi.fn() }))
 vi.mock('server-only', () => ({}))
@@ -57,7 +63,7 @@ afterEach(() => {
 
 describe('getSpeakers merges D1 conference fields into proposals', () => {
   it('flagged: D1 title, kept per speaker, one gateway call', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-test')
+    flagTenants('apiRead', 'conf-test')
     const gw = vi.fn().mockImplementation(async () => d1())
     vi.stubGlobal('fetch', gw)
     const res = await getSpeakersUncached('conf-test')
@@ -72,7 +78,7 @@ describe('getSpeakers merges D1 conference fields into proposals', () => {
   })
 
   it('unflagged: Sanity values, gateway never called', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
     const gw = vi.fn()
     vi.stubGlobal('fetch', gw)
     const res = await getSpeakersUncached('conf-test')
@@ -81,7 +87,7 @@ describe('getSpeakers merges D1 conference fields into proposals', () => {
   })
 
   it('gateway failure: Sanity values', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-test')
+    flagTenants('apiRead', 'conf-test')
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('D1 down')))
     const res = await getSpeakersUncached('conf-test')
     expect(res.speakers).toEqual(rows())

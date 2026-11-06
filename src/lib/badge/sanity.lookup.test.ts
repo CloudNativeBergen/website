@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 
@@ -96,7 +102,7 @@ describe('getBadgeById D1 gateway values and fallbacks (#1997)', () => {
 
   it('uses D1-owned fields when apiRead is on and values differ', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-a')
+    flagTenants('apiRead', 'conf-a')
     badgeFetch.mockResolvedValue({
       _id: 'b-1',
       badgeId: 'badge-123',
@@ -134,7 +140,7 @@ describe('getBadgeById D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity when apiRead is off', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
     badgeFetch.mockResolvedValue({
       _id: 'b-1',
       badgeId: 'badge-123',
@@ -154,7 +160,7 @@ describe('getBadgeById D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity when KONF_API_DISABLED=1', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-a')
+    flagTenants('apiRead', 'conf-a')
     vi.stubEnv('KONF_API_DISABLED', '1')
     badgeFetch.mockResolvedValue({
       _id: 'b-1',
@@ -174,7 +180,7 @@ describe('getBadgeById D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity when the gateway errors', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-a')
+    flagTenants('apiRead', 'conf-a')
     badgeFetch.mockResolvedValue({
       _id: 'b-1',
       badgeId: 'badge-123',

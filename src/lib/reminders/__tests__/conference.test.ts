@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../../__tests__/helpers/rolloutFlags'
 
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 
@@ -85,7 +91,7 @@ describe('resolveActiveReminderConferences', () => {
 
     it('uses D1-owned fields when the gateway returns values that differ from Sanity', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'conf-a')
+      flagTenants('apiRead', 'conf-a')
       fetchMock.mockResolvedValue([structuredClone(sanityConf)])
 
       const gatewayFetch = vi.fn().mockResolvedValue(
@@ -122,7 +128,7 @@ describe('resolveActiveReminderConferences', () => {
 
     it('falls back to Sanity when KONF_API_DISABLED=1', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'conf-a')
+      flagTenants('apiRead', 'conf-a')
       vi.stubEnv('KONF_API_DISABLED', '1')
       fetchMock.mockResolvedValue([structuredClone(sanityConf)])
 
@@ -141,7 +147,7 @@ describe('resolveActiveReminderConferences', () => {
 
     it('filters and sorts on merged D1 dates when flagged and values differ', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'conf-past,conf-late')
+      flagTenants('apiRead', 'conf-past,conf-late')
 
       // conf-past has Sanity endDate < today (2026-07-20), but D1 moves it to >= today.
       // conf-late has Sanity startDate after conf-a, but D1 moves it before conf-a.
@@ -221,7 +227,7 @@ describe('resolveActiveReminderConferences', () => {
 
     it('falls back to Sanity when the gateway errors', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'conf-a')
+      flagTenants('apiRead', 'conf-a')
       fetchMock.mockResolvedValue([structuredClone(sanityConf)])
 
       const gatewayFetch = vi.fn().mockResolvedValue(

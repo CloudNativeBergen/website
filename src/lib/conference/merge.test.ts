@@ -10,11 +10,13 @@ vi.mock('@/lib/conference/konf-api', async (importOriginal) => {
   return {
     ...actual,
     rolloutFlags: (...args: Parameters<typeof actual.rolloutFlags>) =>
-      h.flagsThrow
-        ? Promise.reject(new Error('flags down'))
-        : actual.rolloutFlags(...args),
+      h.flagsThrow ? Promise.reject(new Error('flags down')) : fake(...args),
   }
 })
+import {
+  flagTenants,
+  fakeRolloutFlags as fake,
+} from '../../../__tests__/helpers/rolloutFlags'
 
 import {
   gateEndDate,
@@ -96,7 +98,7 @@ describe('mergeConference & mergeConferences', () => {
 
   it('uses D1-owned fields when the gateway returns values that differ from Sanity', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-test')
+    flagTenants('apiRead', 'conf-test')
 
     const gatewayFetch = vi.fn().mockResolvedValue(
       new Response(
@@ -122,7 +124,7 @@ describe('mergeConference & mergeConferences', () => {
 
   it('falls back to Sanity date when D1 returns nullish endDate (never to now)', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-test')
+    flagTenants('apiRead', 'conf-test')
 
     const gatewayFetch = vi.fn().mockResolvedValue(
       new Response(
@@ -148,7 +150,7 @@ describe('mergeConference & mergeConferences', () => {
 
   it('falls back to Sanity when unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'different-conf')
+    flagTenants('apiRead', 'different-conf')
 
     const gatewayFetch = vi.fn()
     vi.stubGlobal('fetch', gatewayFetch)
@@ -160,7 +162,7 @@ describe('mergeConference & mergeConferences', () => {
 
   it('falls back to Sanity when KONF_API_DISABLED=1', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-test')
+    flagTenants('apiRead', 'conf-test')
     vi.stubEnv('KONF_API_DISABLED', '1')
 
     const gatewayFetch = vi.fn()
@@ -173,7 +175,7 @@ describe('mergeConference & mergeConferences', () => {
 
   it('falls back to Sanity when gateway errors', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-test')
+    flagTenants('apiRead', 'conf-test')
 
     const gatewayFetch = vi
       .fn()
@@ -193,7 +195,7 @@ describe('mergeConference & mergeConferences', () => {
 
   it('falls back to Sanity when the gateway fetch rejects (timeout)', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-test')
+    flagTenants('apiRead', 'conf-test')
     vi.stubGlobal(
       'fetch',
       vi.fn().mockRejectedValue(new DOMException('timed out', 'TimeoutError')),
@@ -203,7 +205,7 @@ describe('mergeConference & mergeConferences', () => {
 
   it('falls back to Sanity when the flag lookup itself throws', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-test')
+    flagTenants('apiRead', 'conf-test')
     h.flagsThrow = true
     const gatewayFetch = vi.fn()
     vi.stubGlobal('fetch', gatewayFetch)

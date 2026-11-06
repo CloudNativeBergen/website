@@ -7,6 +7,11 @@
  * is the only way the idempotency claim means anything — asserting on fixtures
  * the test itself froze would prove nothing.
  */
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../helpers/rolloutFlags')).fakeRolloutFlags,
+}))
+import { flagTenants } from '../../helpers/rolloutFlags'
 import { NextRequest } from 'next/server'
 import { renderToStaticMarkup } from 'react-dom/server'
 
@@ -495,7 +500,7 @@ describe('api/cron/cospeaker-invitations', () => {
 
     it('uses D1 endDate when tenant has apiRead enabled (extended conference is nudged)', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'conf-a')
+      flagTenants('apiRead', 'conf-a')
 
       // Sanity endDate is 2020-01-01 (ended), but D1 endDate is 2126-10-27 (future)
       rows = [
@@ -530,7 +535,7 @@ describe('api/cron/cospeaker-invitations', () => {
 
     it('uses D1 endDate when tenant has apiRead enabled (past conference is skipped)', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'conf-a')
+      flagTenants('apiRead', 'conf-a')
 
       // Sanity endDate is future, but D1 says it ended in 2020
       rows = [
@@ -565,7 +570,7 @@ describe('api/cron/cospeaker-invitations', () => {
 
     it('falls back to Sanity endDate when tenant is unflagged', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+      flagTenants('apiRead', 'other-conf')
 
       // Sanity endDate is 2020-01-01 (ended); should be skipped without calling gateway
       rows = [

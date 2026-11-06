@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 
@@ -147,7 +153,7 @@ describe('volunteer D1 gateway values and fallbacks (#1997)', () => {
 
   it('uses D1-owned fields when apiRead is on and values differ', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-v')
+    flagTenants('apiRead', 'conf-v')
     volunteerFetch.mockResolvedValue(structuredClone(sanityVolunteer))
 
     const gatewayFetch = vi.fn().mockResolvedValue(
@@ -181,7 +187,7 @@ describe('volunteer D1 gateway values and fallbacks (#1997)', () => {
 
   it('uses D1-owned fields for getVolunteersByConference when apiRead is on', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-v')
+    flagTenants('apiRead', 'conf-v')
     volunteerFetch.mockResolvedValue([structuredClone(sanityVolunteer)])
 
     const gatewayFetch = vi.fn().mockResolvedValue(
@@ -207,7 +213,7 @@ describe('volunteer D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity when apiRead is off', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
     volunteerFetch.mockResolvedValue(structuredClone(sanityVolunteer))
 
     const gatewayFetch = vi.fn()
@@ -223,7 +229,7 @@ describe('volunteer D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity when KONF_API_DISABLED=1', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-v')
+    flagTenants('apiRead', 'conf-v')
     vi.stubEnv('KONF_API_DISABLED', '1')
     volunteerFetch.mockResolvedValue(structuredClone(sanityVolunteer))
 
@@ -239,7 +245,7 @@ describe('volunteer D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity when the gateway errors', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-v')
+    flagTenants('apiRead', 'conf-v')
     volunteerFetch.mockResolvedValue(structuredClone(sanityVolunteer))
 
     const gatewayFetch = vi
