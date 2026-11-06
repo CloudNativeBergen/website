@@ -236,6 +236,7 @@ export async function identityJwt(): Promise<string | null> {
 
 const MUTATION =
   `mutation($input: ConferencePatch!) { updateConference(input: $input) { id } }` as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
 const MUTATION_DOC = graphql(MUTATION)
 
 /** One gateway mutation as the signed-in user. Throws on HTTP or GraphQL errors. */
@@ -287,6 +288,7 @@ export async function updateConferenceViaApi(
 
 const LIFECYCLE_MUTATION =
   `mutation($s: ConferenceLifecycleOverride) { setConferenceLifecycle(status: $s) { id } }` as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
 const LIFECYCLE_DOC = graphql(LIFECYCLE_MUTATION)
 
 /**

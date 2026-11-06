@@ -50,6 +50,7 @@ const QUERY = `{ conference {
   earlyBirdEndDate registrationCloseDate speakersAnnouncedDate sponsorDeadlineDate
   recordingsLiveDate registrationEnabled organizer socialHashtag showVanityMetrics
 } conferenceLifecycle }` as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
 const QUERY_DOC = graphql(QUERY)
 type QueryData = ResultOf<typeof QUERY_DOC>
 
@@ -75,6 +76,7 @@ const OFF: RolloutFlags = {
 }
 const FLAGS_QUERY =
   '{ rolloutFlags { apiRead identityLogin d1Write } }' as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
 const FLAGS_DOC = graphql(FLAGS_QUERY)
 // Every uncached render waits on this read, so keep it short (#1939).
 const FLAGS_TIMEOUT_MS = 500
