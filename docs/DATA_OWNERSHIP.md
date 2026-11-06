@@ -113,8 +113,9 @@ per-field table is in [CONFERENCE_FIELDS.md](./CONFERENCE_FIELDS.md).
   the conference subgraph and written by `updateConference` (title, tagline,
   city, country, venue, dates, visibility, background pattern, two colours,
   registration link, social links). Two in tenant-directory D1:
-  `organization` (`org_id`) and `domains`. Sanity still holds all 16, and
-  reads come from Sanity until `d1_override` is on (#1879).
+  `organization` (`org_id`) and `domains`. Since 2026-11-05 all 4 conferences
+  have `d1_override` on, and since #2013 writes go to D1 only with Sanity
+  copies frozen.
 - **B, settings to move (64).** Dates, links, contacts and channels,
   ticketing, CFP taxonomy and goals, organizer teams, feature flags and
   workshop job state.
