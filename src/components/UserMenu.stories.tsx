@@ -92,6 +92,8 @@ export const SignedInSpeaker: Story = {
     await expect(screen.getByText('View public profile')).toBeVisible()
     await expect(screen.getByText('Signed in with GitHub')).toBeVisible()
     await expect(screen.getByText('Sign Out')).toBeVisible()
+    // Not an identity session, so no linked-accounts link.
+    await expect(screen.queryByText('Koblede kontoer')).not.toBeInTheDocument()
     // Admin section is hidden for non-organizers.
     await expect(screen.queryByText('Admin')).not.toBeInTheDocument()
     // No Photo Wall here, so its group is hidden.
@@ -204,5 +206,23 @@ export const PhotoWallClosed: Story = {
       '/wall/post#my-posts',
     )
     await expect(screen.queryByText('Post a photo')).not.toBeInTheDocument()
+  },
+}
+
+export const IdentityLogin: Story = {
+  args: { ...SignedInSpeaker.args, identity: true },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A session from an id.konf.app login gets a "Koblede kontoer" link to the account page there, where the user links more providers (#2021).',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await openMenu(canvasElement)
+    await expect(
+      screen.getByText('Koblede kontoer').closest('a'),
+    ).toHaveAttribute('href', 'https://id.konf.app/account')
   },
 }

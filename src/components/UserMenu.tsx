@@ -11,6 +11,7 @@ import {
   ArrowTopRightOnSquareIcon,
   BanknotesIcon,
   BuildingOfficeIcon,
+  LinkIcon,
   CalendarDaysIcon,
   CameraIcon,
   ChatBubbleLeftRightIcon,
@@ -153,6 +154,8 @@ export interface UserMenuProps {
   speaker?: Speaker
   /** The account the user authenticated with (`session.account`). */
   account?: Account
+  /** True when the session came from an id.konf.app login (#2021). */
+  identity?: boolean
   /**
    * Photo Wall state (computed server-side): `open` while posting is open,
    * `closed` when a wall exists but posting is not; undefined hides the group.
@@ -179,6 +182,7 @@ export function UserMenu({
   picture,
   speaker,
   account,
+  identity,
   photoWall,
   enabledFeatures = NO_FEATURES,
 }: UserMenuProps) {
@@ -276,6 +280,15 @@ export function UserMenu({
             />
             <span>Signed in with {providerMeta.name}</span>
           </div>
+        )}
+
+        {identity && (
+          <LinkItem
+            href="https://id.konf.app/account"
+            label="Koblede kontoer"
+            icon={LinkIcon}
+            external
+          />
         )}
 
         <MenuItem>
