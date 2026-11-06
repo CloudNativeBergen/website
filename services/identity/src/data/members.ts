@@ -9,7 +9,7 @@
 // rows and errors, never emails (#1310).
 import { runWithRequestState } from '@better-auth/core/context'
 import { isAPIError } from 'better-auth/api'
-import { and, eq, lte, sql } from 'drizzle-orm'
+import { and, eq, inArray, lte, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   INVITATION_EXPIRES_IN,
@@ -19,7 +19,14 @@ import {
   type AuthEnv,
 } from './auth'
 import { rawDb } from './db'
-import { auditEvent, invitation, member, organization, user } from './schema'
+import {
+  account,
+  auditEvent,
+  invitation,
+  member,
+  organization,
+  user,
+} from './schema'
 
 export type MemberRole = 'owner' | 'admin' | 'member'
 
@@ -302,8 +309,8 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
    * envelope; `orgId` is the envelope's, never an argument. Emails are read
    * only when `withEmail` is set (owners, admins, operators).
    */
-  const list = (orgId: string, withEmail: boolean) =>
-    db
+  const list = async (orgId: string, withEmail: boolean) => {
+    const rows = await db
       .select({
         userId: member.userId,
         name: user.name,
@@ -315,6 +322,27 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
       .innerJoin(user, eq(user.id, member.userId))
       .where(eq(member.organizationId, orgId))
       .orderBy(member.createdAt)
+    // Provider names only, for managers only, in one query per page (#1990).
+    const byUser = new Map<string, string[]>()
+    if (withEmail && rows.length) {
+      const linked = await db
+        .selectDistinct({
+          userId: account.userId,
+          providerId: account.providerId,
+        })
+        .from(account)
+        .where(
+          inArray(
+            account.userId,
+            rows.map((r) => r.userId),
+          ),
+        )
+        .orderBy(account.providerId)
+      for (const a of linked)
+        byUser.set(a.userId, [...(byUser.get(a.userId) ?? []), a.providerId])
+    }
+    return rows.map((r) => ({ ...r, providers: byUser.get(r.userId) ?? [] }))
+  }
   const pendingInvitations = (orgId: string) =>
     db
       .select({

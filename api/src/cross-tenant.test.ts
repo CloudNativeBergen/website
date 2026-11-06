@@ -419,6 +419,8 @@ let sign: (p: Record<string, unknown>) => Promise<string>
 let envelopePublicKey: string
 /** D1 calls since the last reset, by `subgraph:root fields` of the request. */
 const d1Calls: Record<string, number> = {}
+/** SQL each worker prepared, by worker name, for query-shape guards. */
+const d1Sql: Record<string, string[]> = {}
 /** Root fields of the request each subgraph is serving. */
 const currentRoots: Record<string, string> = {}
 /** The envelope each subgraph binding last received. */
@@ -491,6 +493,7 @@ beforeAll(async () => {
           return (...a: unknown[]) => {
             const k = `${name}:${currentRoots[name]}`
             d1Calls[k] = (d1Calls[k] ?? 0) + 1
+            if (key === 'prepare') (d1Sql[name] ??= []).push(String(a[0]))
             return v.apply(target, a)
           }
         },
@@ -2050,5 +2053,107 @@ describe('session org members (#1972)', () => {
     } finally {
       await sql('UPDATE user SET platformOperator = 0 WHERE id = ?', USER.a)
     }
+  })
+  describe('providers (#1990)', () => {
+    const PQ = '{ members { userId email providers } }'
+    const P_USER = 'user-1990'
+    type PBody = {
+      data?: {
+        members:
+          { userId: string; email: string | null; providers: string[] }[] | null
+      }
+      errors?: unknown[]
+    }
+    const linked = async (headers: Record<string, string>) => {
+      d1Sql.identity = []
+      const raw = await run(PQ, headers)
+      const accountReads = d1Sql.identity.filter((q) => /"account"/.test(q))
+      return { raw, body: JSON.parse(raw) as PBody, accountReads }
+    }
+    beforeAll(async () => {
+      await sql(
+        "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, 'P', 'p-1990@example.com', 1, 0, 0)",
+        P_USER,
+      )
+      await sql(
+        "INSERT INTO member (id, organizationId, userId, role, createdAt) VALUES ('member-1990', ?, ?, 'member', 1)",
+        ORG.a,
+        P_USER,
+      )
+      // Two linkedin rows prove DISTINCT; the secrets must never surface.
+      for (const [id, provider] of [
+        ['acc-1990-l1', 'linkedin'],
+        ['acc-1990-g', 'github'],
+        ['acc-1990-l2', 'linkedin'],
+      ])
+        await sql(
+          "INSERT INTO account (id, accountId, providerId, userId, accessToken, refreshToken, idToken, scope, password, createdAt, updatedAt) VALUES (?, 'SECRET-accountId', ?, ?, 'SECRET-access', 'SECRET-refresh', 'SECRET-id', 'SECRET-scope', 'SECRET-pw', 0, 0)",
+          id,
+          provider,
+          P_USER,
+        )
+    })
+    afterAll(async () => {
+      await sql("DELETE FROM account WHERE id LIKE 'acc-1990-%'")
+      await sql("DELETE FROM member WHERE id = 'member-1990'")
+      await sql('DELETE FROM user WHERE id = ?', P_USER)
+    })
+
+    it('an owner sees sorted distinct provider names in one account query', async () => {
+      await setRole('owner')
+      const { raw, body, accountReads } = await linked(site())
+      expect(raw).not.toMatch(/SECRET|p-1990@example\.com.*SECRET/)
+      expect(body.data!.members).toHaveLength(2)
+      expect(body.data!.members!.find((m) => m.userId === P_USER)).toEqual({
+        userId: P_USER,
+        email: 'p-1990@example.com',
+        providers: ['github', 'linkedin'],
+      })
+      // One batched read for both members, not one per member.
+      expect(accountReads).toHaveLength(1)
+      expect(accountReads[0]).toMatch(/\bin\s*\(/i)
+      // Only providerId (and the join key) leave the account table.
+      const cols = accountReads[0].match(/"account"\."(\w+)"/g) ?? []
+      expect(new Set(cols)).toEqual(
+        new Set(['"account"."userId"', '"account"."providerId"']),
+      )
+    })
+
+    it('a plain member gets an empty list, as email is null, and no account read', async () => {
+      await setRole('member')
+      const { body, accountReads } = await linked(site())
+      expect(body.data!.members).toHaveLength(2)
+      for (const m of body.data!.members!) {
+        expect(m.email).toBeNull()
+        expect(m.providers).toEqual([])
+      }
+      expect(accountReads).toEqual([])
+    })
+
+    it('a foreign org is refused as today', async () => {
+      const { raw, body } = await linked({
+        ...site(),
+        origin: `https://${HOST.b}`,
+      })
+      expect(raw).not.toMatch(/github|linkedin/)
+      expect(body.data?.members ?? null).toBeNull()
+    })
+
+    it('an operator acting for A sees the providers', async () => {
+      await sql('UPDATE user SET platformOperator = 1 WHERE id = ?', USER.a)
+      try {
+        const { body, accountReads } = await linked({
+          origin: OPS,
+          authorization: `Bearer ${opsJwt}`,
+          [OPERATOR_TENANT_HEADER]: HOST.a,
+        })
+        expect(
+          body.data!.members!.find((m) => m.userId === P_USER)!.providers,
+        ).toEqual(['github', 'linkedin'])
+        expect(accountReads).toHaveLength(1)
+      } finally {
+        await sql('UPDATE user SET platformOperator = 0 WHERE id = ?', USER.a)
+      }
+    })
   })
 })
