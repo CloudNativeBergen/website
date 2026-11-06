@@ -331,12 +331,9 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
           providerId: account.providerId,
         })
         .from(account)
-        .where(
-          inArray(
-            account.userId,
-            rows.map((r) => r.userId),
-          ),
-        )
+        // A join, not inArray: D1 caps bound parameters at 100 (#2018).
+        .innerJoin(member, eq(member.userId, account.userId))
+        .where(eq(member.organizationId, orgId))
         .orderBy(account.providerId)
       for (const a of linked)
         byUser.set(a.userId, [...(byUser.get(a.userId) ?? []), a.providerId])
