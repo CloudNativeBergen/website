@@ -39,7 +39,9 @@ const MOVED = new Set([
  * derived from `lifecycleStatus`.
  */
 export function isMovedConferenceField(key: string): boolean {
-  return MOVED.has(key) || key === 'theme' || key === 'lifecycleStatus'
+  // lifecycleStatus is NOT moved: D1 stores only the derived `published`
+  // boolean, so cancelled vs archived lives in Sanity alone.
+  return MOVED.has(key) || key === 'theme'
 }
 
 /**

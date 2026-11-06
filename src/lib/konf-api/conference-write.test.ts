@@ -46,7 +46,6 @@ describe('isMovedConferenceField (#1997)', () => {
     'visibility',
     'socialLinks',
     'theme',
-    'lifecycleStatus',
   ])('recognises %s as a moved field', (key) => {
     expect(isMovedConferenceField(key)).toBe(true)
   })
@@ -64,6 +63,7 @@ describe('isMovedConferenceField (#1997)', () => {
     'logoBright',
     'domains',
     'topics',
+    'lifecycleStatus',
   ])('recognises %s as a non-moved field', (key) => {
     expect(isMovedConferenceField(key)).toBe(false)
   })

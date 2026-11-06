@@ -412,7 +412,10 @@ async function applyConferencePatch(
 
   for (const [key, value] of Object.entries(input)) {
     if (value === undefined) continue
-    if (d1 && !pathPrefix && isMovedConferenceField(key)) continue
+    // Unsets still reach Sanity: the read merge keeps a non-null Sanity value
+    // when D1 is null, so a frozen copy would otherwise resurrect a cleared field.
+    if (d1 && !pathPrefix && value !== null && isMovedConferenceField(key))
+      continue
     const path = pathPrefix ? `${pathPrefix}.${key}` : key
     if (value === null) {
       sanityUnset.push(path)

@@ -1554,7 +1554,8 @@ describe('conference router — D1 write path (#1881)', () => {
     expect(init.headers.authorization).toBe('Bearer user-jwt')
     expect(init.headers.origin).toBe('https://cloudnativebergen.no')
     expect(lastSet).toEqual({ organizer: 'Org', description: 'D' })
-    expect(lastUnset).toBeUndefined()
+    // city: null also unsets in Sanity so the frozen copy can't resurrect it.
+    expect(lastUnset).toEqual(['city'])
     expect(commitMock).toHaveBeenCalledTimes(1)
   })
 
@@ -1583,6 +1584,8 @@ describe('conference router — D1 write path (#1881)', () => {
     })
     const [[, init]] = apiCalls()
     expect(JSON.parse(init.body).variables.input).toEqual({ published: false })
+    // cancelled vs archived exists only in Sanity, so it is still written there.
+    expect(lastSet).toEqual({ lifecycleStatus: 'cancelled' })
   })
 
   it('preview without KONF_API_URL: no gateway call, Sanity only (#1926)', async () => {
@@ -1605,6 +1608,8 @@ describe('conference router — D1 write path (#1881)', () => {
       primaryColor: null,
       accentColor: null,
     })
+    // The unset also reaches Sanity, so the frozen copy can't resurrect it.
+    expect(lastUnset).toEqual(['theme'])
   })
 
   it('never calls Sanity when the D1 write fails', async () => {
