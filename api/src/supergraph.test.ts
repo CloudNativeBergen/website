@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
-import { publicContract } from './supergraph'
+import { compose, publicContract, publicSdl } from './supergraph'
 
 // Node's graphql (CJS), the copy @graphql-tools/utils loads; Vite's ESM copy
 // would trip graphql's cross-realm check.
@@ -27,5 +27,26 @@ describe('publicContract', () => {
     for (const gone of ['secret', 'SECRET', 'Node', 'Hidden']) {
       expect(sdl).not.toContain(gone)
     }
+  })
+})
+
+describe('compose', () => {
+  it('composes the program subgraph into the public supergraph', () => {
+    expect(compose()).toMatch(/PROGRAM @join__graph\(name: "program"/)
+    const query = buildSchema(publicSdl()).getQueryType()!.getFields()
+    for (const f of ['program', 'talk', 'speakers', 'speaker'])
+      expect(query[f]).toBeDefined()
+    const speaker = buildSchema(publicSdl()).getType('Speaker') as unknown as {
+      getFields(): Record<string, unknown>
+    }
+    expect(Object.keys(speaker.getFields()).sort()).toEqual([
+      'bio',
+      'id',
+      'image',
+      'links',
+      'name',
+      'slug',
+      'title',
+    ])
   })
 })

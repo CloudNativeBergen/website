@@ -32,6 +32,8 @@ export interface Env {
   DIRECTORY: Fetcher
   /** konf-content: Sanity-backed editorial data (#1835) */
   CONTENT: Fetcher
+  /** konf-program: talks, schedule, public speakers (Sanity-backed, #1772) */
+  PROGRAM: Fetcher
   /** konf-conference: its subgraph */
   CONFERENCE: Fetcher
   /** konf-identity default entrypoint: only /api/auth/* (JWKS) answers */
@@ -66,6 +68,7 @@ export interface Env {
 export const BINDINGS = {
   'tenant-directory': 'DIRECTORY',
   content: 'CONTENT',
+  program: 'PROGRAM',
   conference: 'CONFERENCE',
   identity: 'IDENTITY_GRAPH',
 } as const

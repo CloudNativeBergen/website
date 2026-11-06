@@ -15,5 +15,9 @@ service: #PlatformService & {
 		preview: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development"}
 		production: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", PUSH_WEBHOOK_URL: "https://my.konf.app/api/push/events"}
 	}
-	files: "package.json": dependencies: "@sanity/client": "^7.28.0"
+	files: {
+		"package.json": dependencies: "@sanity/client": "^7.28.0"
+		// src/index.ts adds the ProgramDate entrypoint for services/program.
+		"wrangler.jsonc": main: "src/index.ts"
+	}
 }

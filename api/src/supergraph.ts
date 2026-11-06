@@ -16,6 +16,7 @@ import { composeServices } from '@theguild/federation-composition'
 import { parse, type GraphQLSchema } from 'graphql'
 import { schema as content } from '../../services/content/src/subgraph'
 import { schema as conference } from '../../services/conference/src/subgraph'
+import { schema as program } from '../../services/program/src/subgraph'
 import { schema as identity } from '../../services/identity/src/subgraph'
 import { schema as tenantDirectory } from '../../services/tenant-directory/src/subgraph'
 
@@ -27,6 +28,7 @@ import { schema as tenantDirectory } from '../../services/tenant-directory/src/s
 export const SUBGRAPHS = {
   'tenant-directory': tenantDirectory,
   content,
+  program,
   conference,
   identity,
 }

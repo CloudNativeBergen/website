@@ -74,11 +74,13 @@ vi.mock('@sanity/client', () => ({
   createClient: () => ({
     fetch: async (query: string, params: Record<string, unknown>) => {
       const groq = rewriteGroq(query)
-      const dataset = (['b', 'a'] as T[]).map((t) => ({
-        ...sanityDoc(groq, t),
-        _type: 'conference',
-        organization: { _type: 'reference', _ref: ORG[t] },
-      }))
+      const dataset = /_type == "(talk|speaker|schedule)"/.test(groq)
+        ? (['b', 'a'] as T[]).flatMap(programDocs)
+        : (['b', 'a'] as T[]).map((t) => ({
+            ...sanityDoc(groq, t),
+            _type: 'conference',
+            organization: { _type: 'reference', _ref: ORG[t] },
+          }))
       const { evaluate, parse } = await import('groq-js')
       return (await evaluate(parse(groq), { dataset, params })).get()
     },
@@ -274,6 +276,52 @@ function fill(type: GraphQLOutputType, t: T, path: string, depth = 0): unknown {
   return isObjectType(type) ? docs[0] : docs
 }
 
+/** program's documents for tenant t: a published schedule, a confirmed talk, its speaker. */
+function programDocs(t: T) {
+  const ref = (_ref: string) => ({ _type: 'reference', _ref })
+  const conference = ref(CONF[t])
+  return [
+    {
+      _id: CONF[t],
+      _type: 'conference',
+      organization: ref(ORG[t]),
+      programDate: '2000-01-01',
+    },
+    {
+      _id: `speaker-${t}`,
+      _type: 'speaker',
+      name: `${tag(t)} speaker`,
+      title: `${tag(t)} title`,
+      bio: `${tag(t)} bio`,
+      links: [`https://${tag(t)}.example`],
+      email: `${tag(t)} email`,
+    },
+    {
+      _id: `talk-${t}`,
+      _type: 'talk',
+      status: 'confirmed',
+      conference,
+      title: `${tag(t)} talk`,
+      format: 'presentation_25',
+      level: 'beginner',
+      speakers: [ref(`speaker-${t}`)],
+    },
+    {
+      _id: `schedule-${t}`,
+      _type: 'schedule',
+      conference,
+      date: '2026-01-01',
+      tracks: [
+        {
+          talks: [
+            { startTime: '09:00', endTime: '09:45', talk: ref(`talk-${t}`) },
+          ],
+        },
+      ],
+    },
+  ]
+}
+
 /** The Sanity document a GROQ projection asks for, for tenant t. */
 function sanityDoc(query: string, t: T) {
   const conference = schema.getType('Conference')
@@ -354,9 +402,13 @@ function selection(
       const sub = selection(named, depth + 1, probe)
       return [`${f.name}${args(f.args, probe)}${sub}`]
     })
-    return `... on ${obj.name} { __typename ${fields.join(' ')} }`
+    return `__typename ${fields.join(' ')}`
   })
-  return ` { ${parts.join(' ')} }`
+  // An inline fragment counts toward the gateway's depth limit: only an
+  // abstract type needs one per possible type.
+  return isObjectType(type)
+    ? ` { ${parts[0]} }`
+    : ` { ${parts.map((p, i) => `... on ${types[i].name} { ${p} }`).join(' ')} }`
 }
 
 /**
@@ -375,6 +427,8 @@ const OPERATOR_QUERIES = new Set([
   'conferences',
   'myOrganizations',
 ])
+/** Public roots too costly to batch: each gets its own document. */
+const ALONE = new Set(['program'])
 
 function queries(tenants: T[]) {
   const roots = Object.values(schema.getQueryType()!.getFields()).flatMap(
@@ -393,7 +447,13 @@ function queries(tenants: T[]) {
   // Operator-only roots go alone: every walker must get FORBIDDEN for them.
   for (const r of roots.filter((r) => OPERATOR_QUERIES.has(r.field)))
     out.push({ query: `{ ${r.sel} }`, roots: { [r.field]: r.field } })
-  const pub = roots.filter((r) => !OPERATOR_QUERIES.has(r.field))
+  // The demand-control cost is summed over one operation: the full program
+  // (~480) batched with every other root passes the 1000 ceiling.
+  for (const r of roots.filter((r) => ALONE.has(r.field)))
+    out.push({ query: `{ ${r.sel} }`, roots: { [r.field]: r.field } })
+  const pub = roots.filter(
+    (r) => !OPERATOR_QUERIES.has(r.field) && !ALONE.has(r.field),
+  )
   for (let i = 0; i < pub.length; i += MAX_ALIASES) {
     const chunk = pub.slice(i, i + MAX_ALIASES).map((r, j) => ({
       ...r,
