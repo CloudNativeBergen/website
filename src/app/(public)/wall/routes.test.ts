@@ -28,9 +28,19 @@ vi.mock('next/server', async (importOriginal) => ({
   ...(await importOriginal<typeof import('next/server')>()),
   connection: async () => {},
 }))
-vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForCurrentDomain: async () => h.resolution,
-}))
+vi.mock('@/lib/conference/sanity', () => {
+  const m = {
+    getConferenceForCurrentDomain: async () => h.resolution,
+  }
+  // The explicit schedule seams (#1772) read through the same mock.
+  const withSchedule = (o: object = {}) =>
+    m.getConferenceForCurrentDomain({ ...o, schedule: true } as never)
+  return {
+    ...m,
+    getEditableScheduleForCurrentDomain: withSchedule,
+    getPublicScheduleForCurrentDomain: withSchedule,
+  }
+})
 
 import { ComposerClosed, ScreenMode, WallPoster } from '@/components/photo-wall'
 import { ensureDevice } from './post/actions'

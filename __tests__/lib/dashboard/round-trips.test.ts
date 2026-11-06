@@ -84,17 +84,27 @@ vi.mock('@/lib/organization/sanity', async (importOriginal) => ({
 // `getConferenceForCurrentDomain` is `'use cache'` + `cacheLife('hours')`, which
 // throws outside a Next build — so it is mocked, and its calls are counted
 // separately (see the header).
-vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForCurrentDomain: async (options: unknown = {}) => {
-    conferenceResolutionOptions.push(options)
-    return {
-      conference: { ...CONFERENCE_DOC },
-      domain: 'test.example.com',
-      error: null,
-      status: 'resolved',
-    }
-  },
-}))
+vi.mock('@/lib/conference/sanity', () => {
+  const m = {
+    getConferenceForCurrentDomain: async (options: unknown = {}) => {
+      conferenceResolutionOptions.push(options)
+      return {
+        conference: { ...CONFERENCE_DOC },
+        domain: 'test.example.com',
+        error: null,
+        status: 'resolved',
+      }
+    },
+  }
+  // The explicit schedule seams (#1772) read through the same mock.
+  const withSchedule = (o: object = {}) =>
+    m.getConferenceForCurrentDomain({ ...o, schedule: true } as never)
+  return {
+    ...m,
+    getEditableScheduleForCurrentDomain: withSchedule,
+    getPublicScheduleForCurrentDomain: withSchedule,
+  }
+})
 
 // Same reason: `getSpeakers` carries `'use cache'`. It IS one round-trip on a
 // cache miss, so it records one.
@@ -219,7 +229,7 @@ describe('dashboard Sanity round-trips', () => {
     // The schedule-expanded document is a superset read, so it replaces the
     // plain one rather than being fetched alongside it.
     expect(conferenceResolutionOptions).toEqual([
-      { schedule: true, confirmedTalksOnly: false, scheduleFromSanity: true },
+      { schedule: true, confirmedTalksOnly: false },
     ])
     expect(composedQueries()).toHaveLength(1)
   })

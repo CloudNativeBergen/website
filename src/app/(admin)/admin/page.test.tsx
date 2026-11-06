@@ -3,9 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const getConference = vi.fn()
 const resolve = vi.fn()
 
-vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForCurrentDomain: (...a: unknown[]) => getConference(...a),
-}))
+vi.mock('@/lib/conference/sanity', () => {
+  const m = {
+    getConferenceForCurrentDomain: (...a: unknown[]) => getConference(...a),
+  }
+  // The explicit schedule seams (#1772) read through the same mock.
+  const withSchedule = (o: object = {}) =>
+    m.getConferenceForCurrentDomain({ ...o, schedule: true } as never)
+  return {
+    ...m,
+    getEditableScheduleForCurrentDomain: withSchedule,
+    getPublicScheduleForCurrentDomain: withSchedule,
+  }
+})
 vi.mock('@/lib/settings/activation-server', () => ({
   resolveActivationChecklist: (...a: unknown[]) => resolve(...a),
 }))
@@ -55,7 +65,6 @@ describe('/admin event facts opt-in', () => {
     expect(getConference).toHaveBeenLastCalledWith({
       topics: true,
       schedule: true,
-      scheduleFromSanity: true,
       includeSpeakerRegistrationLink: true,
     })
   })

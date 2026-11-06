@@ -11,10 +11,20 @@ import { getScheduleData } from '@/lib/schedule/server'
 type AnyFn = (...args: any[]) => any
 
 const mockGetConference = vi.fn<AnyFn>()
-vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForCurrentDomain: (...args: unknown[]) =>
-    mockGetConference(...args),
-}))
+vi.mock('@/lib/conference/sanity', () => {
+  const m = {
+    getConferenceForCurrentDomain: (...args: unknown[]) =>
+      mockGetConference(...args),
+  }
+  // The explicit schedule seams (#1772) read through the same mock.
+  const withSchedule = (o: object = {}) =>
+    m.getConferenceForCurrentDomain({ ...o, schedule: true } as never)
+  return {
+    ...m,
+    getEditableScheduleForCurrentDomain: withSchedule,
+    getPublicScheduleForCurrentDomain: withSchedule,
+  }
+})
 
 const mockFetch = vi.fn<AnyFn>()
 vi.mock('@/lib/sanity/client', () => ({
