@@ -451,6 +451,50 @@ describe('gateway', () => {
     })
   })
 
+  // #1877: extensions.http from a subgraph would set the gateway's status and headers.
+  it('ignores a subgraph error extensions.http status and headers', async () => {
+    const { env } = makeEnv()
+    ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+      Response.json({
+        data: { conference: null },
+        errors: [
+          {
+            message: 'boom',
+            path: ['conference'],
+            extensions: {
+              code: 'SANITY_DOWN',
+              http: {
+                status: 418,
+                headers: { 'set-cookie': 'session=planted', 'x-planted': '1' },
+              },
+            },
+          },
+        ],
+      })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await gateway.fetch(post(SUBGRAPH_QUERY), env)
+    const text = await res.text()
+    expect(res.status).toBe(200)
+    expect(res.headers.get('set-cookie')).toBeNull()
+    expect(res.headers.get('x-planted')).toBeNull()
+    expect(text).not.toContain('418')
+    expect(JSON.parse(text).errors[0]).toEqual({
+      message: 'Unexpected error.',
+      path: ['conference'],
+      extensions: { code: 'INTERNAL_SERVER_ERROR', unexpected: true },
+    })
+  })
+
+  it('keeps extensions.http on a masked gateway error', () => {
+    const outer = new GraphQLError('secret detail', {
+      originalError: new Error('secret detail'),
+      extensions: { http: { status: 503 } },
+    })
+    const masked = maskError(outer, 'Unexpected error.') as GraphQLError
+    expect(masked.message).toBe('Unexpected error.')
+    expect(masked.extensions.http).toEqual({ status: 503 })
+  })
+
   it('masks a GraphQLError chain that ends in a plain Error', () => {
     const inner = new GraphQLError('inner', {
       originalError: new Error('secret detail'),
