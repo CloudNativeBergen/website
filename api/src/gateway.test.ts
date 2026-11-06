@@ -164,7 +164,6 @@ describe('gateway', () => {
       'operatorInviteMember',
       'operatorRemoveMember',
       'provisionOrganization',
-      'prunePushSubscriptions',
       'removeMember',
       'setConferenceLifecycle',
       'subscribePush',

@@ -277,12 +277,13 @@ builder.mutationType({
       resolve: async (_, { input }, ctx) => {
         const row = await ctx.data.conferences().update(validate(input))
         const e = ctx.envelope
-        // The actor rides along so kontroll can leave them out (kontroll#61).
+        // The actor rides along so identity can leave them out (kontroll#61).
         if (e.typ === 'tenant' && e.userId)
           emit({
             type: 'conference.settings_changed',
             organizationId: e.orgId,
             conferenceId: row.conferenceId,
+            conferenceName: row.title,
             actorId: e.userId,
           })
         return row

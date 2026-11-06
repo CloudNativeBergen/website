@@ -8,12 +8,13 @@ service: #PlatformService & {
 	// Daily D1 vs Sanity parity sweep, alert-only (#1892). src/data/parity.ts.
 	// Secrets per env: SANITY_API_TOKEN_READ (the content Worker's name);
 	// SLACK_CONFERENCE_PARITY_WEBHOOK_URL (optional; unset, log only).
-	// Push webhook (kontroll#61): settings_changed and parity.drift, signed
-	// with the PUSH_WEBHOOK_SECRET secret; unset, nothing is sent.
+	// Web push (kontroll#61): settings_changed and parity.drift go to
+	// identity's `Push` entrypoint, which resolves recipients and sends.
 	crons: ["17 4 * * *"]
 	vars: {
 		preview: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development"}
-		production: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", PUSH_WEBHOOK_URL: "https://my.konf.app/api/push/events"}
+		production: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production"}
 	}
+	serviceBindings: [{binding: "PUSH", service: "konf-identity", entrypoint: "Push"}]
 	files: "package.json": dependencies: "@sanity/client": "^7.28.0"
 }
