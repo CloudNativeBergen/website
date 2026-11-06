@@ -40,11 +40,13 @@ const TopicType = builder.objectRef<Topic>('Topic').implement({
     title: t.exposeString('title', str),
     slug: t.exposeString('slug', str),
     color: t.exposeString('color', str),
+    description: t.exposeString('description', str),
   }),
 })
 
 const AttachmentType = builder.objectRef<Attachment>('Attachment').implement({
   fields: (t) => ({
+    key: t.exposeString('key', { ...str, description: 'The Sanity `_key`.' }),
     kind: t.exposeString('kind', { description: 'file or url.' }),
     attachmentType: t.exposeString('attachmentType', str),
     title: t.exposeString('title', str),
@@ -66,7 +68,8 @@ const ScheduleInfoType = builder
   })
 
 const TalkType = builder.objectRef<Talk>('Talk').implement({
-  description: 'A confirmed talk.',
+  description:
+    'A talk. Every root returns confirmed talks only; a program slot also carries an unconfirmed one, with title, description, language and speakers null.',
   fields: (t) => ({
     id: t.exposeID('id'),
     title: t.exposeString('title', str),
@@ -99,7 +102,17 @@ const TalkType = builder.objectRef<Talk>('Talk').implement({
       description: 'Null until the program is published (programDate).',
       resolve: (x) => x.scheduleInfo,
     }),
+    hasFeedbackCode: t.exposeBoolean('hasFeedbackCode', {
+      nullable: true,
+      description:
+        'Whether the talk takes feedback, never the code. Program slots only; null elsewhere.',
+    }),
   }),
+})
+
+const TalkStatusType = builder.enumType('TalkStatus', {
+  description: 'Public status class of a scheduled talk.',
+  values: ['CONFIRMED', 'WITHDRAWN', 'PENDING'] as const,
 })
 
 const TrackType = builder.objectRef<Track>('ProgramTrack').implement({
@@ -120,14 +133,30 @@ const SlotType = builder.objectRef<Slot>('ProgramSlot').implement({
     talk: t.field({
       type: TalkType,
       nullable: true,
-      description: 'Null for a break or a talk not yet confirmed.',
+      description:
+        'Null for a break. An unconfirmed talk has title, description, language and speakers null (TBA).',
       resolve: (x) => x.talk,
+    }),
+    hasTalkRef: t.exposeBoolean('hasTalkRef', {
+      description: 'The slot references a talk, resolved or not.',
+    }),
+    talkStatus: t.field({
+      type: TalkStatusType,
+      nullable: true,
+      resolve: (x) => x.talkStatus,
+    }),
+    trackIndex: t.exposeInt('trackIndex', {
+      description: 'Index of the track within the day.',
+    }),
+    position: t.exposeInt('position', {
+      description: 'Index of the slot within its track.',
     }),
   }),
 })
 
 const DayType = builder.objectRef<Day>('ProgramDay').implement({
   fields: (t) => ({
+    id: t.exposeID('id', { nullable: true }),
     date: t.exposeString('date'),
     slots: t.field({
       type: [SlotType],
@@ -148,6 +177,16 @@ const ProgramType = builder.objectRef<{ days: Day[] }>('Program').implement({
   }),
 })
 
+const GallerySpeaker = builder
+  .objectRef<GalleryImage['speakers'][number]>('GallerySpeaker')
+  .implement({
+    fields: (t) => ({
+      id: t.exposeID('id'),
+      name: t.exposeString('name', str),
+      slug: t.exposeString('slug', str),
+    }),
+  })
+
 const GalleryImageType = builder
   .objectRef<GalleryImage>('GalleryImage')
   .implement({
@@ -159,6 +198,15 @@ const GalleryImageType = builder
       date: t.exposeString('date', str),
       location: t.exposeString('location', str),
       featured: t.exposeBoolean('featured'),
+      image: t.exposeString('image', {
+        ...str,
+        description: 'The Sanity image object (asset, hotspot, crop, alt) as JSON.',
+      }),
+      speakers: t.field({
+        type: [GallerySpeaker],
+        directives: size(2),
+        resolve: (x) => x.speakers,
+      }),
     }),
   })
 
@@ -171,6 +219,7 @@ const SpeakerType = builder.objectRef<Speaker>('Speaker').implement({
     title: t.exposeString('title', str),
     bio: t.exposeString('bio', str),
     image: t.exposeString('image', { ...str, description: 'URL.' }),
+    updatedAt: t.exposeString('updatedAt', str),
     links: t.exposeStringList('links', { directives: size(4) }),
     flags: t.exposeStringList('flags', {
       directives: size(1),

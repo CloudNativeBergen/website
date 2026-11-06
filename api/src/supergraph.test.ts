@@ -50,6 +50,7 @@ describe('compose', () => {
       'slug',
       'talks',
       'title',
+      'updatedAt',
     ])
   })
 })

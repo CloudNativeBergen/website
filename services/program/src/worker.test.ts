@@ -204,11 +204,13 @@ const fetch = vi.fn(async (q: string, p: P) => {
           const t = TALKS.find((t) => t._id === sl.talk)
           return {
             ...sl,
+            hasTalkRef: !!sl.talk,
             placeholder: sl.talk ? undefined : 'Coffee',
             talk: t
               ? t.status === 'confirmed'
                 ? deref(t)
-                : { status: t.status }
+                : // SCHEDULE_TRACKS: no title, description, language or speakers.
+                  { _id: t._id, status: t.status }
               : null,
           }
         }),
@@ -321,7 +323,18 @@ describe('program subgraph', () => {
             },
           },
           // Accepted, not confirmed: the slot stays, the talk is not named.
-          { start: '10:00', end: '10:45', talk: null },
+          {
+            start: '10:00',
+            end: '10:45',
+            talk: {
+              id: null,
+              title: null,
+              description: null,
+              format: null,
+              level: null,
+              speakers: [],
+            },
+          },
         ],
       },
     ])
@@ -386,12 +399,14 @@ describe('program subgraph', () => {
         'slug',
         'talks',
         'title',
+        'updatedAt',
       ],
       Talk: [
         'attachments',
         'audiences',
         'description',
         'format',
+        'hasFeedbackCode',
         'id',
         'language',
         'level',
@@ -401,11 +416,12 @@ describe('program subgraph', () => {
         'topics',
       ],
       TalkSpeaker: ['id', 'image', 'name', 'slug', 'title'],
-      Topic: ['color', 'id', 'slug', 'title'],
+      Topic: ['color', 'description', 'id', 'slug', 'title'],
       Attachment: [
         'attachmentType',
         'description',
         'filename',
+        'key',
         'kind',
         'title',
         'url',
@@ -416,11 +432,26 @@ describe('program subgraph', () => {
         'date',
         'featured',
         'id',
+        'image',
         'location',
         'photographer',
+        'speakers',
         'url',
       ],
-      ProgramSlot: ['end', 'placeholder', 'room', 'start', 'talk', 'track'],
+      GallerySpeaker: ['id', 'name', 'slug'],
+      ProgramDay: ['date', 'id', 'slots'],
+      ProgramSlot: [
+        'end',
+        'hasTalkRef',
+        'placeholder',
+        'position',
+        'room',
+        'start',
+        'talk',
+        'talkStatus',
+        'track',
+        'trackIndex',
+      ],
       ProgramTrack: ['description', 'name', 'sponsorId'],
     }
     for (const [type, fields] of Object.entries(PUBLIC)) {
@@ -505,6 +536,26 @@ describe('program subgraph', () => {
     expect((await post(PROFILE, tenant('org_b', 'conf_b'))).data.b.id).toBe(
       'sp_b',
     )
+  })
+
+  it('marks a TBA slot without naming its talk', async () => {
+    const { data } = await post(
+      '{ program { days { slots { start hasTalkRef talkStatus trackIndex position talk { id title speakers { id } } } } } }',
+      tenant('org_a', 'conf_a'),
+    )
+    expect(data.program.days[0].slots).toEqual([
+      expect.objectContaining({ hasTalkRef: false, talkStatus: null }),
+      expect.objectContaining({ hasTalkRef: true, talkStatus: 'CONFIRMED' }),
+      {
+        start: '10:00',
+        hasTalkRef: true,
+        talkStatus: 'PENDING',
+        trackIndex: 0,
+        position: 2,
+        talk: { id: null, title: null, speakers: [] },
+      },
+    ])
+    expect(JSON.stringify(data)).not.toContain('Secret')
   })
 
   it('serves track, room and placeholder on program slots', async () => {
