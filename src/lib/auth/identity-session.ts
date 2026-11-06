@@ -13,7 +13,11 @@ import type { JWT } from 'next-auth/jwt'
 import { applySpeakerToToken, sessionCallback } from '@/lib/auth'
 import { sessionCookieRequestHost } from '@/lib/auth-cookie-domain'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
-import { getOrCreateSpeaker } from '@/lib/speaker/sanity'
+import {
+  findSpeakerByProvider,
+  getOrCreateSpeaker,
+  providerAccount,
+} from '@/lib/speaker/sanity'
 import { IDENTITY_SESSION_COOKIE } from './identity-cookie'
 import { isIdentityTenant } from './identity-handoff'
 
@@ -108,10 +112,25 @@ async function resolve(token: string, origin: string): Promise<Session | null> {
       '/api/auth/list-accounts',
       token,
     )) ?? []
-  const linked = PROVIDERS.map((p) =>
+  const candidates = PROVIDERS.map((p) =>
     accounts.find((a) => a.providerId === p),
-  ).find(Boolean)
-  if (!linked) return null
+  ).filter((a) => a !== undefined)
+  if (!candidates.length) return null
+  // One identity user, several accounts (#1981): the speaker may be keyed on
+  // any of them, so use the first linked account a speaker already holds.
+  // Picking only the first provider made a GitHub sign-in miss a speaker
+  // keyed on LinkedIn and fall through to the email match or a new speaker.
+  let linked = candidates[0]
+  for (const a of candidates) {
+    const hit = await findSpeakerByProvider(
+      providerAccount(a.providerId, a.accountId),
+    )
+    if (hit.err) throw hit.err
+    if (hit.speaker?._id) {
+      linked = a
+      break
+    }
+  }
 
   const account: Account = {
     provider: linked.providerId,
