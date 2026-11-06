@@ -43,6 +43,13 @@ export default defineConfig({
         ),
       },
       {
+        find: /^cloudflare:workers$/,
+        replacement: path.resolve(
+          __dirname,
+          '__tests__/mocks/cloudflare-workers.ts',
+        ),
+      },
+      {
         find: /^uuid$/,
         replacement: path.resolve(__dirname, '__tests__/mocks/uuid.ts'),
       },

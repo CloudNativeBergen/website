@@ -118,6 +118,7 @@
       ],
       "vars": {
         "OPERATOR_ORIGINS": "https://my.konf.app",
+        "PUSH_WEBHOOK_URL": "https://my.konf.app/api/push/events",
         "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z",
         "SANITY_PROJECT_ID": "mvzwvw14",
         "SANITY_DATASET": "production",

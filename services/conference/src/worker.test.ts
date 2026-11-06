@@ -22,6 +22,16 @@ vi.mock('jose', async () => {
   return import(pathToFileURL(require.resolve('jose')).href)
 })
 
+// Push emits (kontroll#61): capture what reaches waitUntil.
+const cf = vi.hoisted(() => ({
+  env: {} as Record<string, string>,
+  pending: [] as Promise<unknown>[],
+}))
+vi.mock('cloudflare:workers', () => ({
+  env: cf.env,
+  waitUntil: (p: Promise<unknown>) => cf.pending.push(p),
+}))
+
 const { default: worker } = await import('./worker')
 
 /** The slice of D1 that drizzle-orm/d1 uses, over node:sqlite. */
@@ -584,5 +594,71 @@ describe('settings phase 1 (#2019)', () => {
       travel_support_budget: null,
       social_hashtag: null,
     })
+  })
+})
+
+describe('conference.settings_changed push event', () => {
+  const MUTATION =
+    'mutation($input: ConferencePatch!) { updateConference(input: $input) { id title } }'
+  const sent: { body: string }[] = []
+  beforeEach(() => {
+    sent.length = 0
+    cf.pending.length = 0
+    cf.env.PUSH_WEBHOOK_URL = 'https://kontroll.test/api/push/events'
+    cf.env.PUSH_WEBHOOK_SECRET = 's'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_: string, init: RequestInit) => {
+        sent.push({ body: String(init.body) })
+        return new Response(null, { status: 204 })
+      }),
+    )
+    return () => {
+      delete cf.env.PUSH_WEBHOOK_URL
+      delete cf.env.PUSH_WEBHOOK_SECRET
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('carries ids and the actor, nothing else', async () => {
+    const { body } = await gql(tenant('org-a', 'conf-a', 'admin'), MUTATION, {
+      input: { title: 'New' },
+    })
+    expect(body.errors).toBeUndefined()
+    await Promise.all(cf.pending)
+    expect(sent.map((s) => JSON.parse(s.body))).toEqual([
+      {
+        type: 'conference.settings_changed',
+        organizationId: 'org-a',
+        conferenceId: 'conf-a',
+        actorId: 'u',
+      },
+    ])
+  })
+
+  it('a failed send leaves the update applied', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('down')
+      }),
+    )
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { body } = await gql(tenant('org-a', 'conf-a', 'admin'), MUTATION, {
+      input: { title: 'Still saved' },
+    })
+    await Promise.all(cf.pending)
+    expect(body.data.updateConference.title).toBe('Still saved')
+    expect(err).toHaveBeenCalledWith(
+      expect.stringContaining('push.webhook_failed'),
+    )
+  })
+
+  it('a refused update sends nothing', async () => {
+    await gql(tenant('org-a', 'conf-a', 'member'), MUTATION, {
+      input: { title: 'x' },
+    })
+    await Promise.all(cf.pending)
+    expect(sent).toEqual([])
   })
 })

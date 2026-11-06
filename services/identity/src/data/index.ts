@@ -15,6 +15,7 @@ import type { AuthEnv } from './auth'
 import { createMembers } from './members'
 export { MemberError, type MemberRole } from './members'
 import { syncMembers, type SyncEnv } from './member-sync'
+import { createPushSubscriptions } from './push-subscriptions'
 
 /** What the gateway needs per request to mint an envelope. */
 export interface Principal {
@@ -40,6 +41,8 @@ export function createData(env: DataEnv) {
     syncMembers: () => syncMembers(env),
     /** Membership writes for the subgraph (#1923): member and operator paths. */
     members: () => createMembers(env),
+    /** Web push subscriptions (kontroll#61). */
+    pushSubscriptions: () => createPushSubscriptions(env.DB),
     /**
      * True only for an exact `https://<host>` origin (no path, port or
      * userinfo) whose host the directory holds as verified for an active

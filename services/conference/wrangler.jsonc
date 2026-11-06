@@ -50,6 +50,7 @@
       "vars": {
         "SANITY_PROJECT_ID": "mvzwvw14",
         "SANITY_DATASET": "production",
+        "PUSH_WEBHOOK_URL": "https://my.konf.app/api/push/events",
       },
     },
   },

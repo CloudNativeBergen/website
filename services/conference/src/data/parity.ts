@@ -6,6 +6,7 @@
 // Logs carry conference ids and column names, never values.
 // The one conference file that reads Sanity (eslint.config.js, #1892).
 import { createClient } from '@sanity/client'
+import { emit } from '../push'
 import type { Row, SanityConference } from '../../scripts/backfill'
 
 export interface ScheduledEnv {
@@ -118,6 +119,11 @@ export async function scheduled(env: ScheduledEnv, now = Date.now()) {
       drifted: drift.length,
     }),
   )
+  if (drift.length)
+    emit({
+      type: 'parity.drift',
+      conferenceIds: drift.map((d) => d.conferenceId),
+    })
   if (drift.length)
     await alert(
       env,

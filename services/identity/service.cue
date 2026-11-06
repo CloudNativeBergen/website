@@ -16,7 +16,7 @@ service: #PlatformService & {
 		// OPERATOR_ORIGINS: non-tenant origins whose token only platform
 		// operators and organization members get (#1922, #1956). None in preview: kontroll has no stable
 		// preview origin.
-		production: {OPERATOR_ORIGINS: "https://my.konf.app", IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", MEMBER_SOURCE_ORGS: ""}
+		production: {OPERATOR_ORIGINS: "https://my.konf.app", PUSH_WEBHOOK_URL: "https://my.konf.app/api/push/events", IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", MEMBER_SOURCE_ORGS: ""}
 	}
 	// Organizer membership sync (#1907, src/data/member-sync.ts) has no cron
 	// here: the account allows 5. tenant-directory's cron calls
@@ -27,6 +27,9 @@ service: #PlatformService & {
 	// every org grants, as before. Optional secret per env:
 	// SLACK_MEMBER_DRIFT_WEBHOOK_URL (Slack incoming webhook for drift
 	// alerts); unset, drift is logged only.
+	// Push webhook (kontroll#61, packages/tenancy/src/push.ts): signed
+	// events to PUSH_WEBHOOK_URL, production only (kontroll has no stable
+	// preview origin). Secret per env: PUSH_WEBHOOK_SECRET; unset, nothing is sent.
 	// Verified origins for the login handoff (#688).
 	serviceBindings: [{binding: "DIRECTORY", service: "konf-tenant-directory"}]
 	// Handoff limits (src/handoff.ts): POSTs per tenant origin, GET per IP.
