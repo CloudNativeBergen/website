@@ -74,7 +74,7 @@ export async function message(db: D1Database, e: PushEvent) {
       return {
         title: 'Conference updated',
         body: `${await nameOf(db, 'user', e.actorId)} changed the settings of ${e.conferenceName ?? 'a conference'}`,
-        url: `${orgUrl(e.organizationId)}/conferences/${encodeURIComponent(e.conferenceId)}`,
+        url: `${orgUrl(e.organizationId)}#conference-${encodeURIComponent(e.conferenceId)}`,
       }
     case 'parity.drift':
       return {
