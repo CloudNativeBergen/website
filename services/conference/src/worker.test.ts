@@ -739,3 +739,67 @@ describe('settings phase 2 (#2038)', () => {
     expect(Object.values(row as object).every((v) => v === null)).toBe(true)
   })
 })
+
+describe('tenant span attributes (#1814)', () => {
+  /** An ExecutionContext whose active span records what is set on it. */
+  function traced() {
+    const setAttributes = vi.fn()
+    const ctx = {
+      tracing: { getActiveSpan: () => ({ setAttributes }) },
+    } as unknown as ExecutionContext
+    return { ctx, setAttributes }
+  }
+
+  async function fetchWith(ctx: ExecutionContext, as?: Envelope | string) {
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+    }
+    if (as)
+      headers[ENVELOPE_HEADER] =
+        typeof as === 'string' ? as : await signer.sign(as)
+    return worker.fetch(
+      new Request('http://conference/graphql', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ query: QUERY }),
+      }),
+      env,
+      ctx,
+    )
+  }
+
+  it("sets the envelope's org and conference on the request's span", async () => {
+    const { ctx, setAttributes } = traced()
+    const res = await fetchWith(ctx, tenant('org-a', 'conf-a'))
+    expect(res.status).toBe(200)
+    expect(setAttributes.mock.calls).toEqual([
+      [{ 'konf.org_id': 'org-a', 'konf.conference_id': 'conf-a' }],
+    ])
+  })
+
+  it('sets the operator, not a tenant, for a PlatformContext', async () => {
+    const { ctx, setAttributes } = traced()
+    await fetchWith(ctx, {
+      typ: 'platform',
+      userId: 'op',
+      platformRole: 'operator',
+    })
+    expect(setAttributes.mock.calls).toEqual([[{ 'konf.platform_user': 'op' }]])
+  })
+
+  it('sets nothing for a refused envelope', async () => {
+    const { ctx, setAttributes } = traced()
+    expect((await fetchWith(ctx, 'not-a-jwt')).status).toBe(403)
+    expect((await fetchWith(ctx)).status).toBe(401)
+    expect(setAttributes).not.toHaveBeenCalled()
+  })
+
+  it('serves the request when the runtime has no active span', async () => {
+    const ctx = {
+      tracing: { getActiveSpan: () => undefined },
+    } as unknown as ExecutionContext
+    const res = await fetchWith(ctx, tenant('org-a', 'conf-a'))
+    expect(res.status).toBe(200)
+    expect((await res.json()).data.conference.id).toBe('conf-a')
+  })
+})

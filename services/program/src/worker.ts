@@ -18,21 +18,25 @@ const yoga = createYoga<ResolverContext>({
 })
 
 export default {
-  async fetch(request: Request, env: WorkerEnv): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: WorkerEnv,
+    ctx?: ExecutionContext,
+  ): Promise<Response> {
     // No request reaches a resolver without a valid envelope.
     const result = await envelopeFromRequest(request, env.GATEWAY_PUBLIC_KEY)
     if ('response' in result) return result.response
     const envelope = result.envelope
-    console.log(
-      JSON.stringify(
-        envelope.typ === 'tenant'
-          ? {
-              'konf.org_id': envelope.orgId,
-              'konf.conference_id': envelope.conferenceId,
-            }
-          : { 'konf.platform_user': envelope.userId },
-      ),
-    )
+    const tenant =
+      envelope.typ === 'tenant'
+        ? {
+            'konf.org_id': envelope.orgId,
+            'konf.conference_id': envelope.conferenceId,
+          }
+        : { 'konf.platform_user': envelope.userId }
+    // On the log line and on the request's span, so traces filter by tenant (#1814).
+    console.log(JSON.stringify(tenant))
+    ctx?.tracing.getActiveSpan()?.setAttributes(tenant)
     return yoga.fetch(request, { envelope, data: createData(env, envelope) })
   },
 } satisfies ExportedHandler<WorkerEnv>
