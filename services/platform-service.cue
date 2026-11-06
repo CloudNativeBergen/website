@@ -128,7 +128,7 @@ package codegen
 		"wrangler.jsonc": {
 			"name": _workerName
 			// Every service deploys to the RunKonf account.
-			"account_id": "bf423d08017f82ace4019bc367338981"
+			"account_id": "eefa2cb5c8528a07d7bf8b00a6606dcd"
 			// A service with its own HTTP surface (identity) points main at
 			// its own entry; src/worker.ts stays generated.
 			"main":               *"src/worker.ts" | string

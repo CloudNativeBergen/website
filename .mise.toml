@@ -94,8 +94,6 @@ description = "Install dependencies"
 run = "pnpm install"
 
 [env]
-# Not a secret. The Cloudflare account wrangler uses for secrets:sync.
-CLOUDFLARE_ACCOUNT_ID = "bf423d08017f82ace4019bc367338981"
 NEXT_TELEMETRY_DISABLED = "1"
 NEXT_PUBLIC_SANITY_PROJECT_ID = "mvzwvw14"
 NEXT_PUBLIC_SANITY_DATASET = "production"
