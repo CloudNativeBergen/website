@@ -71,13 +71,11 @@ const CONTACT_EMAILS = ['contactEmail', 'cfpEmail', 'sponsorEmail'] as const
  * Org members only: the registration and Slack invite links each let the
  * holder claim a ticket or join a private workspace, and the channel names
  * are internal. The registration links are content's fields too, so they
- * move under the settings label; content serves volunteerRegistrationLink
- * publicly today and the gate applies once a tenant's label flips.
+ * move under the settings label. volunteerRegistrationLink is public (below).
  */
 const SETTINGS_PHASE2_PRIVATE = [
   'sponsorRegistrationLink',
   'speakerRegistrationLink',
-  'volunteerRegistrationLink',
   'salesNotificationChannel',
   'cfpNotificationChannel',
   'speakerSlackChannel',
@@ -146,6 +144,13 @@ const Conference = builder.objectRef<ConferenceRow>('Conference').implement({
     ...Object.fromEntries(
       CONTACT_EMAILS.map((k) => [k, t.exposeString(k, { nullable: true })]),
     ),
+    // Public: the volunteer confirmation page shows it to anonymous
+    // visitors (src/app/(main)/volunteer/confirm/page.tsx).
+    volunteerRegistrationLink: t.string({
+      nullable: true,
+      ...settings,
+      resolve: (c) => c.volunteerRegistrationLink,
+    }),
     ...Object.fromEntries(
       SETTINGS_PHASE2_PRIVATE.map((k) => [
         k,
@@ -215,6 +220,7 @@ const ConferencePatchInput = builder.inputType('ConferencePatch', {
         ...SETTINGS_NEW,
         ...SETTINGS_PRIVATE,
         ...CONTACT_EMAILS,
+        'volunteerRegistrationLink',
         ...SETTINGS_PHASE2_PRIVATE,
       ].map((k) => [k, t.string()]),
     ),

@@ -673,11 +673,11 @@ describe('settings phase 2 (#2038)', () => {
     contactEmail: 'hi@acme.example',
     cfpEmail: 'cfp@acme.example',
     sponsorEmail: 'sponsor@acme.example',
+    volunteerRegistrationLink: 'https://t.example/v',
   }
   const PRIVATE = {
     sponsorRegistrationLink: 'https://t.example/s',
     speakerRegistrationLink: 'https://t.example/sp',
-    volunteerRegistrationLink: 'https://t.example/v',
     salesNotificationChannel: '#sales',
     cfpNotificationChannel: '#cfp',
     speakerSlackChannel: 'speakers',
@@ -696,7 +696,7 @@ describe('settings phase 2 (#2038)', () => {
     expect(body.data.updateConference).toEqual(ALL)
   })
 
-  it('shows the emails to anyone and the rest to org members only', async () => {
+  it('shows the emails and volunteer link to anyone, the rest to org members only', async () => {
     await gql(admin, MUTATION, { input: ALL })
     const read = async (as: Envelope) =>
       (await gql(as, `{ conference { ${FIELDS} } }`)).body.data.conference
