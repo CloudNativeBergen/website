@@ -4,8 +4,10 @@ import {
   isMovedConferenceField,
   movedConferencePatch,
   requestHost,
+  setLifecycleViaApi,
   updateConferenceViaApi,
 } from '@/lib/konf-api/conference-write'
+import type { LifecycleStatus } from '@/lib/homepage/lifecycle'
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
@@ -392,6 +394,15 @@ async function applyConferencePatch(
       })
     }
     try {
+      // The override's D1 home is tenant-directory (#1997); written first, as
+      // the source of truth. `published` below is the conference gate.
+      if (input.lifecycleStatus !== undefined)
+        await setLifecycleViaApi(
+          host,
+          conferenceId,
+          input.lifecycleStatus as LifecycleStatus | null,
+          jwt,
+        )
       await updateConferenceViaApi(host, conferenceId, moved, jwt)
     } catch (error) {
       console.error(

@@ -1,4 +1,5 @@
-// Drizzle mirror of migrations/0001_init.sql and 0002_rollout_flags.sql.
+// Drizzle mirror of migrations/0001_init.sql, 0002_rollout_flags.sql and
+// 0005_lifecycle_cancelled.sql.
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const organizations = sqliteTable('organizations', {
@@ -16,7 +17,7 @@ export const conferences = sqliteTable('conferences', {
   slug: text('slug').notNull(),
   name: text('name').notNull(),
   lifecycle: text('lifecycle', {
-    enum: ['draft', 'live', 'archived'],
+    enum: ['draft', 'live', 'cancelled', 'archived'],
   }).notNull(),
   apiRead: integer('api_read', { mode: 'boolean' }).notNull().default(false),
   identityLogin: integer('identity_login', { mode: 'boolean' })

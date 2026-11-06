@@ -2,7 +2,7 @@
 // tenancy: false: the directory is the registry every tenant is resolved
 // from, so its reads span Organizations. Who may call what is decided in
 // the resolvers (src/subgraph.ts).
-import { and, eq, gt, isNotNull, isNull, lt, or } from 'drizzle-orm'
+import { and, eq, gt, isNotNull, isNull, lt, or, sql } from 'drizzle-orm'
 import { createGraphQLError } from 'graphql-yoga'
 import { rawDb } from './db'
 import {
@@ -151,7 +151,7 @@ export function createData(
     allConferences: (
       first: number,
       after?: string | null,
-      lifecycle?: 'draft' | 'live' | 'archived' | null,
+      lifecycle?: 'draft' | 'live' | 'cancelled' | 'archived' | null,
       flag?: 'apiRead' | 'identityLogin' | 'd1Write' | 'd1Override' | null,
     ) =>
       db
@@ -176,6 +176,29 @@ export function createData(
       db.query.conferences.findFirst({
         where: and(eq(conferences.id, id), eq(conferences.orgId, orgId)),
       }),
+
+    /**
+     * Sets or clears the homepage override (#1997) on one of `orgId`'s
+     * conferences. Clearing returns a cancelled or archived edition to
+     * `live`; a draft stays draft. Null when the org has no such conference.
+     */
+    async setLifecycle(
+      orgId: string,
+      id: string,
+      status: 'cancelled' | 'archived' | null,
+    ) {
+      const where = and(eq(conferences.id, id), eq(conferences.orgId, orgId))
+      const [row] = await db
+        .update(conferences)
+        .set({
+          lifecycle: status
+            ? status
+            : sql`CASE WHEN ${conferences.lifecycle} = 'draft' THEN 'draft' ELSE 'live' END`,
+        })
+        .where(where)
+        .returning()
+      return row ?? null
+    },
 
     /** One org's hostnames; the caller already decided it may see them. */
     domainsOf: (orgId: string) =>

@@ -138,6 +138,10 @@ beforeEach(() => {
       readFileSync(
         new URL('../migrations/0004_org_created_at.sql', import.meta.url),
         'utf8',
+      ) +
+      readFileSync(
+        new URL('../migrations/0005_lifecycle_cancelled.sql', import.meta.url),
+        'utf8',
       ),
   )
   env = {
@@ -310,17 +314,19 @@ describe('organizations (#1973)', () => {
 })
 
 describe('provisioning', () => {
-  it('tags provisionOrganization operator and every other mutation internal', async () => {
+  it('tags provisionOrganization operator, leaves setConferenceLifecycle public and every other mutation internal', async () => {
     const { body } = await gql('{ _service { sdl } }')
     const mutation = /type Mutation[^}]*}/.exec(body.data._service.sdl)![0]
-    const fields = mutation.split('\n').filter((l) => l.includes('('))
-    expect(fields).toHaveLength(5)
+    const fields = mutation.split('\n').filter((l) => /^\s+\w+\(/.test(l))
+    expect(fields).toHaveLength(6)
     for (const f of fields)
-      expect(f).toContain(
-        f.includes('provisionOrganization(')
-          ? '@tag(name: "operator")'
-          : '@tag(name: "internal")',
-      )
+      if (f.includes('setConferenceLifecycle(')) expect(f).not.toContain('@tag')
+      else
+        expect(f).toContain(
+          f.includes('provisionOrganization(')
+            ? '@tag(name: "operator")'
+            : '@tag(name: "internal")',
+        )
   })
 
   it('creates the Organization with edition and alias hosts', async () => {
@@ -862,5 +868,156 @@ describe('rollout flags (#1925)', () => {
         },
       ].sort((x, y) => x.id.localeCompare(y.id)),
     )
+  })
+})
+
+describe('lifecycle override (#1997)', () => {
+  const SET = `mutation($s: ConferenceLifecycleOverride) { setConferenceLifecycle(status: $s) { id lifecycleStatus } }`
+  const READ = `{ conferenceLifecycle }`
+  const lifecycle = (id: string) =>
+    (
+      sqlite
+        .prepare('SELECT lifecycle FROM conferences WHERE id = ?')
+        .get(id) as {
+        lifecycle: string
+      }
+    ).lifecycle
+  async function setup() {
+    const org = await provision()
+    const confId = conferenceOf(org.id)
+    const as: Envelope = {
+      typ: 'tenant',
+      orgId: org.id,
+      conferenceId: confId,
+      userId: 'u',
+      orgRole: 'admin',
+      scopes: [],
+    }
+    return { org, confId, as }
+  }
+
+  it('lets an org admin cancel, archive and clear back to live', async () => {
+    const { confId, as } = await setup()
+    for (const s of ['cancelled', 'archived', null]) {
+      const { body } = await gql(SET, { s }, as)
+      expect(body.data.setConferenceLifecycle).toEqual({
+        id: confId,
+        lifecycleStatus: s ?? 'live',
+      })
+      expect(lifecycle(confId)).toBe(s ?? 'live')
+    }
+  })
+
+  it('keeps a draft a draft when the override is cleared', async () => {
+    const { confId, as } = await setup()
+    sqlite
+      .prepare("UPDATE conferences SET lifecycle = 'draft' WHERE id = ?")
+      .run(confId)
+    await gql(SET, { s: null }, as)
+    expect(lifecycle(confId)).toBe('draft')
+  })
+
+  it.each([
+    ['anonymous', undefined],
+    ['a member without a writer role', { orgRole: 'member' }],
+    ['no user', { userId: null }],
+  ])('refuses %s before touching D1', async (_, over) => {
+    const { confId, as } = await setup()
+    const { body } = await gql(
+      SET,
+      { s: 'cancelled' },
+      over && ({ ...as, ...over } as Envelope),
+    )
+    expect(body.errors?.[0]?.extensions.code).toBe('FORBIDDEN')
+    expect(lifecycle(confId)).toBe('live')
+  })
+
+  it("never writes another org's conference", async () => {
+    const { confId, as } = await setup()
+    const { body } = await gql(
+      SET,
+      { s: 'cancelled' },
+      { ...as, orgId: 'organization.beta' },
+    )
+    expect(body.data.setConferenceLifecycle).toBeNull()
+    expect(lifecycle(confId)).toBe('live')
+  })
+
+  it('reads the override publicly, but a draft only for members', async () => {
+    const { confId, as } = await setup()
+    const anon = { ...as, userId: null, orgRole: null }
+    await gql(SET, { s: 'cancelled' }, as)
+    expect((await gql(READ, {}, anon)).body.data.conferenceLifecycle).toBe(
+      'cancelled',
+    )
+    sqlite
+      .prepare("UPDATE conferences SET lifecycle = 'draft' WHERE id = ?")
+      .run(confId)
+    expect((await gql(READ, {}, anon)).body.data.conferenceLifecycle).toBeNull()
+    expect((await gql(READ, {}, as)).body.data.conferenceLifecycle).toBe(
+      'draft',
+    )
+  })
+})
+
+describe('migration 0005', () => {
+  it('rebuilds conferences keeping rows, flags and domain references', () => {
+    const db = new DatabaseSync(':memory:')
+    const m = (f: string) =>
+      readFileSync(new URL(`../migrations/${f}`, import.meta.url), 'utf8')
+    db.exec(
+      m('0001_init.sql') +
+        m('0002_rollout_flags.sql') +
+        m('0004_org_created_at.sql'),
+    )
+    db.exec(`INSERT INTO organizations (id, slug, name) VALUES ('o', 'o', 'O');
+      INSERT INTO conferences (id, org_id, slug, name, lifecycle, d1_write) VALUES ('c', 'o', '2026', 'C', 'archived', 1);
+      INSERT INTO domains (hostname, org_id, conference_id, kind, verification) VALUES ('h', 'o', 'c', 'custom', 'verified');`)
+    db.exec('BEGIN')
+    db.exec(m('0005_lifecycle_cancelled.sql'))
+    db.exec('COMMIT')
+    expect(
+      db.prepare('SELECT id, lifecycle, d1_write FROM conferences').all(),
+    ).toEqual([{ id: 'c', lifecycle: 'archived', d1_write: 1 }])
+    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+    // foreign_key_check is also empty for an empty domains table: pin the row.
+    expect(
+      db
+        .prepare(
+          'SELECT hostname, org_id, conference_id, kind, verification FROM domains',
+        )
+        .all(),
+    ).toEqual([
+      {
+        hostname: 'h',
+        org_id: 'o',
+        conference_id: 'c',
+        kind: 'custom',
+        verification: 'verified',
+      },
+    ])
+    db.exec("UPDATE conferences SET lifecycle = 'cancelled'")
+    expect(() => db.exec("UPDATE conferences SET lifecycle = 'gone'")).toThrow(
+      /CHECK/,
+    )
+  })
+
+  it('never destroys a domains_park left by a half-applied run', () => {
+    const db = new DatabaseSync(':memory:')
+    const m = (f: string) =>
+      readFileSync(new URL(`../migrations/${f}`, import.meta.url), 'utf8')
+    db.exec(
+      m('0001_init.sql') +
+        m('0002_rollout_flags.sql') +
+        m('0004_org_created_at.sql'),
+    )
+    db.exec(`CREATE TABLE domains_park AS SELECT * FROM domains;
+      INSERT INTO domains_park (hostname, org_id, conference_id, kind, verification) VALUES ('only-copy', 'o', 'c', 'custom', 'verified');`)
+    expect(() => db.exec(m('0005_lifecycle_cancelled.sql'))).toThrow(
+      /domains_park/,
+    )
+    expect(db.prepare('SELECT hostname FROM domains_park').all()).toEqual([
+      { hostname: 'only-copy' },
+    ])
   })
 })

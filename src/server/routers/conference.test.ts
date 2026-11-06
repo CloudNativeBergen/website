@@ -1530,7 +1530,12 @@ describe('conference router — D1 write path (#1881)', () => {
                 },
               },
             })
-          : ok({ data: { updateConference: { id: CONFERENCE_ID } } }),
+          : ok({
+              data: {
+                updateConference: { id: CONFERENCE_ID },
+                setConferenceLifecycle: { id: CONFERENCE_ID },
+              },
+            }),
     )
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -1582,10 +1587,52 @@ describe('conference router — D1 write path (#1881)', () => {
     await makeCaller({ isOrganizer: true }).updateLifecycleStatus({
       lifecycleStatus: 'cancelled',
     })
-    const [[, init]] = apiCalls()
+    const [, [, init]] = apiCalls()
     expect(JSON.parse(init.body).variables.input).toEqual({ published: false })
     // cancelled vs archived exists only in Sanity, so it is still written there.
     expect(lastSet).toEqual({ lifecycleStatus: 'cancelled' })
+  })
+
+  it.each(['cancelled', null] as const)(
+    'writes lifecycle %s to tenant-directory first, then Sanity (#1997)',
+    async (status) => {
+      await makeCaller({ isOrganizer: true }).updateLifecycleStatus({
+        lifecycleStatus: status,
+      })
+      const [[, first]] = apiCalls()
+      const body = JSON.parse(first.body)
+      expect(body.query).toContain('setConferenceLifecycle')
+      expect(body.variables).toEqual({ s: status })
+      expect(first.headers.authorization).toBe('Bearer user-jwt')
+      // Transition: Sanity keeps the override until the #1997 freeze.
+      expect(commitMock).toHaveBeenCalled()
+    },
+  )
+
+  it('never calls Sanity or the conference write when the lifecycle write fails', async () => {
+    fetchMock.mockImplementation(async (url: URL | string, init) =>
+      String(url).includes('/api/auth/token')
+        ? ok({ token: 'user-jwt' })
+        : String(init?.body).includes('setConferenceLifecycle')
+          ? ok({ errors: [{ message: 'denied' }] })
+          : ok({ data: { updateConference: { id: CONFERENCE_ID } } }),
+    )
+    await expect(
+      makeCaller({ isOrganizer: true }).updateLifecycleStatus({
+        lifecycleStatus: 'archived',
+      }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+    expect(apiCalls()).toHaveLength(1)
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('does not write the lifecycle for other moved fields', async () => {
+    await makeCaller({ isOrganizer: true }).updateVenue({ venueName: 'X' })
+    expect(
+      apiCalls().some(([, i]) =>
+        String(i.body).includes('setConferenceLifecycle'),
+      ),
+    ).toBe(false)
   })
 
   it('preview without KONF_API_URL: no gateway call, Sanity only (#1926)', async () => {

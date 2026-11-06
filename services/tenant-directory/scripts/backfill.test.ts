@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { mapBackfill, toSql } from './backfill'
+import { lifecycleOf, mapBackfill, toSql } from './backfill'
 
 const orgs = [
   { _id: 'org-acme', name: "Acme's Conf", slug: 'acme', plan: 'pro' },
@@ -164,5 +165,40 @@ describe('mapBackfill', () => {
     )
     const sets = sql.split('\n').map((l) => l.split(' WHERE ')[0])
     expect(sets.join('\n')).not.toMatch(/\b(slug|org_id) = excluded/)
+  })
+})
+
+describe('lifecycleOf (#1997)', () => {
+  it('maps every Sanity lifecycleStatus losslessly; absent is live', () => {
+    // Read from the Sanity schema's option list, so a new value fails here.
+    const schema = readFileSync(
+      new URL('../../../sanity/schemaTypes/conference.ts', import.meta.url),
+      'utf8',
+    )
+    const field = schema.slice(
+      schema.indexOf("name: 'lifecycleStatus'"),
+      schema.indexOf("name: 'lifecycleHeadline'"),
+    )
+    const values = [...field.matchAll(/value: '([^']+)'/g)].map((m) => m[1])
+    expect(values).toEqual(['cancelled', 'archived'])
+    for (const v of values) expect(lifecycleOf(v)).toBe(v)
+    for (const v of [undefined, null, '', 'bogus'])
+      expect(lifecycleOf(v)).toBe('live')
+  })
+
+  it('writes cancelled through to the directory row', () => {
+    const r = mapBackfill(
+      [{ _id: 'o', name: 'O', slug: 'o' }],
+      [
+        {
+          _id: 'c',
+          orgId: 'o',
+          startDate: '2026-01-01',
+          lifecycleStatus: 'cancelled',
+        },
+      ],
+      [],
+    )
+    expect(r.conferences[0].lifecycle).toBe('cancelled')
   })
 })

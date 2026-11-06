@@ -296,3 +296,78 @@ describe('fetchKonfApiConference caching', () => {
     ).rejects.toThrow('conference is null')
   })
 })
+
+describe('lifecycleStatus from tenant-directory (#1997)', () => {
+  /** One gateway answer carrying both root fields, as the gateway sends it. */
+  function reply(lifecycle: unknown, conference: unknown = { id: 'conf-1' }) {
+    fetchMock.mockImplementation(async () =>
+      lifecycle instanceof Response
+        ? lifecycle
+        : new Response(
+            JSON.stringify({
+              data: { conference, conferenceLifecycle: lifecycle },
+            }),
+          ),
+    )
+  }
+  const withSanity = (lifecycleStatus?: string) =>
+    sanityFetch.mockResolvedValue({
+      ...structuredClone(sanityDoc),
+      lifecycleStatus,
+    })
+
+  it('unflagged: keeps Sanity and reads nothing', async () => {
+    withSanity('cancelled')
+    reply('live')
+    const { conference } = await getConferenceForDomain('2026.example.com')
+    expect(conference.lifecycleStatus).toBe('cancelled')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['cancelled', undefined, 'cancelled'],
+    ['archived', 'cancelled', 'archived'],
+    ['live', 'archived', undefined],
+  ])('flagged: D1 %s over Sanity %s gives %s', async (d1, sanity, want) => {
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    withSanity(sanity)
+    reply(d1)
+    const { conference } = await getConferenceForDomain('2026.example.com')
+    expect(conference.lifecycleStatus).toBe(want)
+  })
+
+  it('flagged: merges even when the public conference read is null', async () => {
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    withSanity(undefined)
+    reply('cancelled', null)
+    const { conference } = await getConferenceForDomain('2026.example.com')
+    expect(conference.lifecycleStatus).toBe('cancelled')
+    expect(conference.title).toBe('Sanity title')
+    // One gateway call: the lifecycle rides the conference query.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('flagged: a null conference and a live lifecycle still falls back', async () => {
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    withSanity('cancelled')
+    reply('live', null)
+    const { conference } = await getConferenceForDomain('2026.example.com')
+    expect(conference.lifecycleStatus).toBe('cancelled')
+  })
+
+  it.each([
+    ['an HTTP error', new Response('boom', { status: 502 })],
+    [
+      'a GraphQL error',
+      new Response(JSON.stringify({ errors: [{ message: 'x' }] })),
+    ],
+    ['a null (draft) answer', null],
+    ['an unknown value', 'bogus'],
+  ])('flagged: %s keeps Sanity', async (_, d1) => {
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    withSanity('archived')
+    reply(d1)
+    const { conference } = await getConferenceForDomain('2026.example.com')
+    expect(conference.lifecycleStatus).toBe('archived')
+  })
+})

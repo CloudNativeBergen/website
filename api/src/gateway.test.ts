@@ -165,6 +165,7 @@ describe('gateway', () => {
       'operatorRemoveMember',
       'provisionOrganization',
       'removeMember',
+      'setConferenceLifecycle',
       'updateConference',
     ])
     // Operator-only list (#1973): in the served schema, refused by
