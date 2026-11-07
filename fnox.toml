@@ -29,10 +29,8 @@ BADGE_ISSUER_ED25519_PUBLIC_KEY= { provider = "keychain", value = "BADGE_ISSUER_
 OPENROUTER_API_KEY= { provider = "keychain", value = "OPENROUTER_API_KEY" }
 KONTROLL_PREVIEW_VAPID_PUBLIC_KEY= { provider = "keychain", value = "KONTROLL_PREVIEW_VAPID_PUBLIC_KEY" }
 KONTROLL_PREVIEW_VAPID_PRIVATE_KEY= { provider = "keychain", value = "KONTROLL_PREVIEW_VAPID_PRIVATE_KEY" }
-KONTROLL_PREVIEW_PUSH_WEBHOOK_SECRET= { provider = "keychain", value = "KONTROLL_PREVIEW_PUSH_WEBHOOK_SECRET" }
 KONTROLL_PRODUCTION_VAPID_PUBLIC_KEY= { provider = "keychain", value = "KONTROLL_PRODUCTION_VAPID_PUBLIC_KEY" }
 KONTROLL_PRODUCTION_VAPID_PRIVATE_KEY= { provider = "keychain", value = "KONTROLL_PRODUCTION_VAPID_PRIVATE_KEY" }
-KONTROLL_PRODUCTION_PUSH_WEBHOOK_SECRET= { provider = "keychain", value = "KONTROLL_PRODUCTION_PUSH_WEBHOOK_SECRET" }
 # Worker secrets (scripts/secrets-sync.ts, docs/SECRETS.md). if_missing = "warn":
 # a key not yet in the keychain must not break `fnox exec` for the site.
 KONF_PREVIEW_GATEWAY_PRIVATE_KEY= { provider = "keychain", value = "KONF_PREVIEW_GATEWAY_PRIVATE_KEY", if_missing = "warn" }

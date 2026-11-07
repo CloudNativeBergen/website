@@ -46,4 +46,4 @@ for svc in conference content identity program sponsors tenant-directory; do
   put "services/$svc" GATEWAY_PUBLIC_KEY "$tmp/pub.pem"
 done
 
-echo "Rotated $env_name: $priv_name and $pub_name stored in fnox; set on api and 4 subgraphs."
+echo "Rotated $env_name: $priv_name and $pub_name stored in fnox; set on api and 6 subgraphs."
