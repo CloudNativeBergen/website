@@ -201,6 +201,13 @@ All three are JSON lines on `console.error`, emitted from `api/src/gateway.ts`. 
 - **Fields:** `event`, `subgraph` (Hive `serviceName`, when the error came from a subgraph), `path` (dot-joined), `code` (the original code, when it had one)
 - **Suggested alert:** Critical (condition: `count > 0` over 5 min). This is the signal the 2026-11-04 missing-key incident produced.
 
+#### `gateway.cache.purge_failed`
+
+- **Emitting Worker:** `konf-api` (`api/src/gateway.ts`, #1789)
+- **When it fires:** Purging a tenant's cached reads failed after a POST returned HTTP 200 that was a mutation, or whose body the gateway did not read (another content type, or over 64 KB), so it may have been one. It does not establish that a mutation succeeded. The response is unaffected; the tenant's entries may remain until they expire (`API_CACHE_TTL_SECONDS`).
+- **Fields:** `event`
+- **Suggested alert:** Warning (condition: `count > 0`).
+
 #### `gateway.rejected`
 
 - **When it fires:** The gateway refuses a request itself, before any subgraph: 429 `RATE_LIMITED` (per IP, 1200/min; per caller, 300/min; mutation budget, 60/min, with `limit: "mutation"`), 401 `UNAUTHENTICATED` (operator lane without a session, invalid identity token, unknown user), 403 `FORBIDDEN` (not authorized for the tenant) and 400 `BAD_USER_INPUT` (unknown operator tenant). The introspection refusal (403) does not log it.
