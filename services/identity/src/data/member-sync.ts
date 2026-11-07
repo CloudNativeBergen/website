@@ -311,17 +311,15 @@ async function checkDrift(
     }
   }
   // An expired invitation stays `pending` until retired, so expiry is checked.
-  const invited = missingEmails.length
-    ? new Set(
-        (
-          await env.DB.prepare(
-            "SELECT lower(trim(email)) AS email FROM invitation WHERE organizationId = ?1 AND status = 'pending' AND expiresAt > ?2",
-          )
-            .bind(orgId, Date.now())
-            .all<{ email: string }>()
-        ).results.map((r) => r.email),
+  const { results: pending } = missingEmails.length
+    ? await env.DB.prepare(
+        "SELECT email FROM invitation WHERE organizationId = ?1 AND status = 'pending' AND expiresAt > ?2",
       )
-    : new Set<string>()
+        .bind(orgId, Date.now())
+        .all<{ email: string }>()
+    : { results: [] }
+  // Normalised as organizerEmails does: SQLite's trim keeps tabs and newlines.
+  const invited = new Set(pending.map((r) => r.email.trim().toLowerCase()))
   const invitePending = [
     ...new Set(
       missingEmails

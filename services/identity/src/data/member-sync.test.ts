@@ -385,8 +385,8 @@ describe('syncMembers drift mode (MEMBER_SOURCE_ORGS)', () => {
 
   it('counts the missing organizers with a pending invite, by speaker id (#1949)', async () => {
     const { env, seed } = await driftDb()
-    // Case and space differ from the Sanity address; still the same person.
-    await invite(seed, 'inv-1', ' Unverified@Example.COM ')
+    // Case and whitespace differ from the Sanity address; still the same person.
+    await invite(seed, 'inv-1', '\t Unverified@Example.COM\n')
     await syncMembers(env)
     expect(driftLog()).toEqual({
       event: 'identity.membership.drift',
