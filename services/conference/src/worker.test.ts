@@ -920,3 +920,216 @@ describe('conferenceParityStatus', () => {
     },
   )
 })
+
+describe('settings phase 3 (#2080)', () => {
+  const PUBLIC = {
+    ticketingProvider: 'tito',
+    publicFreeTicketIds: [7, 9],
+    workshopRegistrationSponsorStart: '2026-05-01T08:00:00.000Z',
+    workshopRegistrationStart: '2026-05-02T08:00:00.000Z',
+    workshopRegistrationEnd: '2026-06-01T08:00:00.000Z',
+    workshopEarlyAccessTicketTypes: ['Two-day pass'],
+  }
+  const PRIVATE_SCALARS = {
+    checkinCustomerId: 12,
+    ticketCapacity: 400,
+    ticketTargetsEnabled: true,
+    ticketSalesStartDate: '2026-01-15',
+    ticketTargetCurve: 's_curve',
+  }
+  // The binding is platform-set only; written below as an operator.
+  const BINDING = {
+    checkinEventId: 34,
+    titoAccountSlug: 'acme',
+    titoEventSlug: '2026',
+  }
+  const LISTS_IN = {
+    ticketTargetMilestones: [
+      { date: '2026-03-01', targetPercentage: 50, label: '' },
+      { date: '2026-04-01', targetPercentage: 90, label: 'Early bird' },
+    ],
+    ticketTypeRoles: [
+      { typeName: 'Workshop add-on', admits: false },
+      { typeName: 'Two-day pass', grantsWorkshop: true },
+    ],
+  }
+  // As stored: an empty label dropped, unanswered questions null, not false.
+  const LISTS_OUT = {
+    ticketTargetMilestones: [
+      { date: '2026-03-01', targetPercentage: 50, label: null },
+      { date: '2026-04-01', targetPercentage: 90, label: 'Early bird' },
+    ],
+    ticketTypeRoles: [
+      { typeName: 'Workshop add-on', admits: false, grantsWorkshop: null },
+      { typeName: 'Two-day pass', admits: null, grantsWorkshop: true },
+    ],
+  }
+  const REMINDER = {
+    workshopReminderLastSentAt: '2026-05-03T10:00:00.000Z',
+    workshopReminderLastSentCount: 5,
+    workshopReminderReservedAt: '2026-05-03T09:59:00.000Z',
+  }
+  const PRIVATE_KEYS = [
+    ...Object.keys(PRIVATE_SCALARS),
+    ...Object.keys(BINDING),
+    ...Object.keys(REMINDER),
+  ]
+  const SEL = [
+    ...Object.keys(PUBLIC),
+    ...PRIVATE_KEYS,
+    'ticketTargetMilestones { date targetPercentage label }',
+    'ticketTypeRoles { typeName admits grantsWorkshop }',
+  ].join(' ')
+  const MUTATION = `mutation($input: ConferencePatch!) { updateConference(input: $input) { id } }`
+  const admin = tenant('org-a', 'conf-a', 'admin')
+  const operator: Envelope = {
+    ...(admin as Extract<Envelope, { typ: 'tenant' }>),
+    scopes: ['platform:operator'],
+  }
+  const privateNulls = Object.fromEntries(
+    [...PRIVATE_KEYS, 'ticketTargetMilestones', 'ticketTypeRoles'].map((k) => [
+      k,
+      null,
+    ]),
+  )
+  const read = async (as: Envelope) =>
+    (await gql(as, `{ conference { ${SEL} } }`)).body.data.conference
+  const seedReminder = () =>
+    sqlite
+      .prepare(
+        'UPDATE conferences SET workshop_reminder_last_sent_at = ?, workshop_reminder_last_sent_count = ?, workshop_reminder_reserved_at = ? WHERE conference_id = ?',
+      )
+      .run(...(Object.values(REMINDER) as [string, number, string]), 'conf-a')
+
+  it('an admin writes every patch field and a member reads them back as stored', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    expect(
+      (await gql(operator, MUTATION, { input: BINDING })).body.errors,
+    ).toBeUndefined()
+    const { body } = await gql(admin, MUTATION, {
+      input: { ...PUBLIC, ...PRIVATE_SCALARS, ...LISTS_IN },
+    })
+    expect(body.errors).toBeUndefined()
+    seedReminder()
+    expect(await read(tenant('org-a', 'conf-a', 'member'))).toEqual({
+      ...PUBLIC,
+      ...PRIVATE_SCALARS,
+      ...BINDING,
+      ...LISTS_OUT,
+      ...REMINDER,
+    })
+  })
+
+  it('shows the public six to anyone and the rest to org members only, on the entity path too', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await gql(operator, MUTATION, {
+      input: { ...BINDING, ...PUBLIC, ...PRIVATE_SCALARS, ...LISTS_IN },
+    })
+    seedReminder()
+    expect(await read(tenant('org-a', 'conf-a'))).toEqual({
+      ...PUBLIC,
+      ...privateNulls,
+    })
+    // Another org's member is anonymous here.
+    expect(await read(tenant('org-b', 'conf-a', 'admin'))).toBeNull()
+    const entity = await gql(
+      tenant('org-a', 'conf-a'),
+      `{ _entities(representations: [{ __typename: "Conference", id: "conf-a" }]) { ... on Conference { ${SEL} } } }`,
+    )
+    expect(entity.body.data._entities[0]).toEqual({
+      ...PUBLIC,
+      ...privateNulls,
+    })
+  })
+
+  it('keeps the reminder state out of the patch', async () => {
+    for (const k of Object.keys(REMINDER)) {
+      const { body } = await gql(admin, MUTATION, {
+        input: { [k]: (REMINDER as Record<string, unknown>)[k] },
+      })
+      expect(body.errors?.[0].message, k).toMatch(/not defined/)
+    }
+  })
+
+  it('lets only a platform operator change the vendor binding; re-sending it is not a change', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    for (const [k, v] of Object.entries(BINDING)) {
+      const { body } = await gql(admin, MUTATION, { input: { [k]: v } })
+      expect(body.errors?.[0].extensions.code, k).toBe('FORBIDDEN')
+    }
+    const row = () =>
+      sqlite
+        .prepare(
+          'SELECT checkin_event_id, tito_account_slug, tito_event_slug FROM conferences WHERE conference_id = ?',
+        )
+        .get('conf-a')
+    expect(Object.values(row() as object).every((v) => v === null)).toBe(true)
+    expect(
+      (await gql(operator, MUTATION, { input: BINDING })).body.errors,
+    ).toBeUndefined()
+    // The stored values, re-sent by an admin with another field, pass.
+    const { body } = await gql(admin, MUTATION, {
+      input: { ...BINDING, ticketCapacity: 10 },
+    })
+    expect(body.errors).toBeUndefined()
+    expect(row()).toEqual({
+      checkin_event_id: 34,
+      tito_account_slug: 'acme',
+      tito_event_slug: '2026',
+    })
+  })
+
+  it('stores an empty list as unset', async () => {
+    await gql(admin, MUTATION, {
+      input: { publicFreeTicketIds: [], ticketTypeRoles: [] },
+    })
+    expect(
+      sqlite
+        .prepare(
+          'SELECT public_free_ticket_ids, ticket_type_roles FROM conferences WHERE conference_id = ?',
+        )
+        .get('conf-a'),
+    ).toEqual({ public_free_ticket_ids: null, ticket_type_roles: null })
+  })
+
+  it('rejects each invalid value without writing', async () => {
+    for (const input of [
+      { ticketingProvider: 'eventbrite' },
+      { checkinCustomerId: 0 },
+      { ticketCapacity: -1 },
+      { titoAccountSlug: 'has space' },
+      { ticketSalesStartDate: '2026-02-30' },
+      { ticketTargetCurve: 'zigzag' },
+      { workshopRegistrationStart: 'tomorrow' },
+      { workshopRegistrationEnd: '2026-06-01' },
+      {
+        workshopRegistrationStart: '2026-06-01T08:00:00Z',
+        workshopRegistrationEnd: '2026-05-01T08:00:00Z',
+      },
+      {
+        workshopRegistrationSponsorStart: '2026-05-02T08:00:00Z',
+        workshopRegistrationStart: '2026-05-02T08:00:00Z',
+      },
+      { publicFreeTicketIds: [1, 0] },
+      { publicFreeTicketIds: Array.from({ length: 201 }, (_, i) => i + 1) },
+      { workshopEarlyAccessTicketTypes: ['  '] },
+      { workshopEarlyAccessTicketTypes: ['tab\there'] },
+      { ticketTypeRoles: [{ typeName: 'x'.repeat(201) }] },
+      {
+        ticketTargetMilestones: [{ date: '2026-03-01', targetPercentage: 101 }],
+      },
+      { ticketTargetMilestones: [{ date: 'March', targetPercentage: 50 }] },
+    ]) {
+      const { body } = await gql(admin, MUTATION, { input })
+      expect(body.errors?.[0].extensions.code, JSON.stringify(input)).toBe(
+        'BAD_USER_INPUT',
+      )
+    }
+    const row = sqlite
+      .prepare(
+        'SELECT ticketing_provider, checkin_customer_id, ticket_capacity, tito_account_slug, ticket_sales_start_date, ticket_target_curve, workshop_registration_sponsor_start, workshop_registration_start, workshop_registration_end, public_free_ticket_ids, workshop_early_access_ticket_types, ticket_type_roles, ticket_target_milestones FROM conferences WHERE conference_id = ?',
+      )
+      .get('conf-a')
+    expect(Object.values(row as object).every((v) => v === null)).toBe(true)
+  })
+})

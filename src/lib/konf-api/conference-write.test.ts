@@ -176,3 +176,40 @@ describe('parity columns agree with the write split (#1917)', () => {
     expect(columns.length).toBeGreaterThan(40)
   })
 })
+
+describe('movedConferencePatch settings phase 3 (#2080)', () => {
+  it('sends every phase 3 key to D1, flattens ticketTargets, strips role keys, and leaves Sanity owning them', () => {
+    const input = {
+      ticketingProvider: 'checkin',
+      checkinCustomerId: 1,
+      checkinEventId: 2,
+      titoAccountSlug: null,
+      titoEventSlug: null,
+      ticketCapacity: 300,
+      publicFreeTicketIds: [7],
+      workshopRegistrationSponsorStart: null,
+      workshopRegistrationStart: '2026-05-02T08:00:00.000Z',
+      workshopRegistrationEnd: '2026-06-01T08:00:00.000Z',
+      workshopEarlyAccessTicketTypes: ['Two-day pass'],
+    }
+    const milestones = [{ date: '2026-03-01', targetPercentage: 50, label: '' }]
+    expect(
+      movedConferencePatch({
+        ...input,
+        ticketTargets: { enabled: true, targetCurve: 'linear', milestones },
+        ticketTypeRoles: [{ _key: 'k', typeName: 'X', admits: false }],
+        workshopReminderReservedAt: 'x',
+        description: 'x',
+      }),
+    ).toEqual({
+      ...input,
+      ticketTargetsEnabled: true,
+      ticketSalesStartDate: null,
+      ticketTargetCurve: 'linear',
+      ticketTargetMilestones: milestones,
+      ticketTypeRoles: [{ typeName: 'X', admits: false }],
+    })
+    for (const k of [...Object.keys(input), 'ticketTargets', 'ticketTypeRoles'])
+      expect(isMovedConferenceField(k)).toBe(false)
+  })
+})

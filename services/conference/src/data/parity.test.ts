@@ -4,7 +4,7 @@ import {
   type Row,
   type SanityConference,
 } from '../../scripts/backfill'
-import { findDrift, scheduled, window } from './parity'
+import { findDrift, PARITY_COLUMNS, scheduled, window } from './parity'
 
 const SECRET = 'S3CRET-VALUE'
 const doc: SanityConference = {
@@ -79,6 +79,97 @@ describe('findDrift', () => {
         { conferenceId: 'c1', fields: [col] },
       ])
     }
+  })
+
+  describe('settings phase 3 lists (#2080)', () => {
+    const lists: SanityConference = {
+      ...doc,
+      publicFreeTicketIds: [7, 9],
+      workshopEarlyAccessTicketTypes: ['A', 'B'],
+      ticketTargets: {
+        milestones: [
+          { date: '2026-03-01', targetPercentage: 50 },
+          { date: '2026-04-01', targetPercentage: 90 },
+        ],
+      },
+      ticketTypeRoles: [
+        { typeName: 'A', admits: false },
+        { typeName: 'a', grantsWorkshop: true },
+      ],
+    }
+    const row = (over: Partial<Row> = {}) => ({
+      ...mapBackfill([lists], new Set(['c1'])).rows[0],
+      tagline: null,
+      ...over,
+    })
+    it('compares ids, types and milestones as sets', () => {
+      expect(
+        findDrift(
+          [
+            row({
+              public_free_ticket_ids: '[9,7,9]',
+              workshop_early_access_ticket_types: '["B","A"]',
+              ticket_target_milestones: JSON.stringify([
+                { date: '2026-04-01', targetPercentage: 90 },
+                { date: '2026-03-01', targetPercentage: 50 },
+              ]),
+            }),
+          ],
+          [lists],
+          PARITY_COLUMNS,
+        ),
+      ).toEqual([])
+      expect(
+        findDrift(
+          [row({ public_free_ticket_ids: '[7]' })],
+          [lists],
+          PARITY_COLUMNS,
+        ),
+      ).toEqual([{ conferenceId: 'c1', fields: ['public_free_ticket_ids'] }])
+      // null and [] are one value.
+      expect(
+        findDrift(
+          [row({ workshop_early_access_ticket_types: null })],
+          [{ ...lists, workshopEarlyAccessTicketTypes: [] }],
+          PARITY_COLUMNS,
+        ),
+      ).toEqual([])
+    })
+    it('keeps role order: the first entry for a name is the one read', () => {
+      expect(
+        findDrift(
+          [
+            row({
+              ticket_type_roles: JSON.stringify([
+                { typeName: 'a', grantsWorkshop: true },
+                { typeName: 'A', admits: false },
+              ]),
+            }),
+          ],
+          [lists],
+          PARITY_COLUMNS,
+        ),
+      ).toEqual([{ conferenceId: 'c1', fields: ['ticket_type_roles'] }])
+    })
+    it('sweeps the dual-written columns, not the reminder state', () => {
+      const swept = new Set<string>(PARITY_COLUMNS)
+      for (const c of [
+        'ticketing_provider',
+        'checkin_event_id',
+        'ticket_capacity',
+        'ticket_target_curve',
+        'ticket_type_roles',
+        'workshop_registration_start',
+      ])
+        expect(swept.has(c), c).toBe(true)
+      expect(
+        findDrift(
+          [row({ workshop_reminder_reserved_at: 'x' })],
+          [lists],
+          PARITY_COLUMNS,
+        ),
+      ).toEqual([])
+    })
   })
 
   it('reports a row Sanity no longer has', () => {

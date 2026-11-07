@@ -1234,3 +1234,61 @@ describe('a save that leaves no granting type', () => {
     ])
   })
 })
+
+// Settings phase 3 (#2080): the list each patch produces goes to D1 first;
+// a D1 failure leaves Sanity untouched.
+describe('the D1 write of ticket type roles (#2080)', () => {
+  const d1 = async () =>
+    vi.mocked((await import('@/lib/konf-api/conference-write')).writeMovedToD1)
+  const ROLES: Role[] = [
+    { _key: 'a', typeName: 'Two-day pass', grantsWorkshop: true },
+    { _key: 'b', typeName: 'Workshop add-on', admits: true },
+  ]
+  // As D1 stores them (the subgraph drops null answers and keys).
+  const without = (r: Role[]) =>
+    r.map(({ _key: _, ...x }) =>
+      Object.fromEntries(Object.entries(x).filter(([, v]) => v != null)),
+    )
+
+  it('sends the seating write’s resulting list before Sanity', async () => {
+    seed(ROLES)
+    const write = await d1()
+    write.mockImplementationOnce(async () => {
+      expect(h.commits).toBe(0)
+      return true
+    })
+    await tickets().admin.setTicketTypeRole({
+      typeName: 'Workshop add-on',
+      admits: false,
+    })
+    const [, sent] = write.mock.lastCall!
+    expect(without(sent.ticketTypeRoles as Role[])).toEqual(stored())
+    expect(stored()).toEqual([
+      { typeName: 'Two-day pass', grantsWorkshop: true },
+      { typeName: 'Workshop add-on', admits: false },
+    ])
+  })
+
+  it('sends the workshop write’s resulting list before Sanity', async () => {
+    seed(ROLES)
+    const write = await d1()
+    await tickets().admin.setWorkshopAccess({
+      updates: [{ typeName: 'Workshop add-on', grantsWorkshop: true }],
+    })
+    const [, sent] = write.mock.lastCall!
+    expect(without(sent.ticketTypeRoles as Role[])).toEqual(stored())
+  })
+
+  it('a failed D1 write leaves Sanity untouched', async () => {
+    seed(ROLES)
+    ;(await d1()).mockRejectedValueOnce(new Error('d1 down'))
+    await expect(
+      tickets().admin.setTicketTypeRole({
+        typeName: 'Workshop add-on',
+        admits: false,
+      }),
+    ).rejects.toThrow()
+    expect(h.commits).toBe(0)
+    expect(stored()).toEqual(without(ROLES))
+  })
+})

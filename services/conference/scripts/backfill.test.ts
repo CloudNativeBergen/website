@@ -305,3 +305,156 @@ const PHASE2_NULLS = Object.fromEntries(
 const PHASE3_NULLS = Object.fromEntries(
   SETTINGS_PHASE3_COLUMNS.map((k) => [k, null]),
 )
+
+describe('settings phase 3 (#2080)', () => {
+  const b = mapBackfill(docs, routable)
+  const PHASE3 = {
+    ticketingProvider: 'tito',
+    checkinCustomerId: 12,
+    checkinEventId: 34,
+    titoAccountSlug: ' acme ',
+    titoEventSlug: '2026',
+    ticketCapacity: 400,
+    ticketTargets: {
+      enabled: false,
+      salesStartDate: '2026-01-15',
+      targetCurve: 'linear',
+      milestones: [
+        { date: '2026-03-01', targetPercentage: 50, label: null },
+        { date: '2026-04-01', targetPercentage: 90, label: ' Early bird ' },
+      ],
+    },
+    // As the projection returns them: unanswered questions are null.
+    ticketTypeRoles: [
+      { typeName: 'Workshop add-on', admits: false, grantsWorkshop: null },
+      { typeName: 'Two-day pass', admits: null, grantsWorkshop: true },
+    ],
+    publicFreeTicketIds: [7, 9],
+    workshopRegistrationSponsorStart: '2026-05-01T08:00:00Z',
+    workshopRegistrationStart: '2026-05-02T08:00:00Z',
+    workshopRegistrationEnd: '2026-06-01T08:00:00Z',
+    workshopEarlyAccessTicketTypes: ['Two-day pass'],
+    workshopReminderLastSentAt: '2026-05-03T10:00:00Z',
+    workshopReminderLastSentCount: 0,
+    workshopReminderReservedAt: '2026-05-03T09:59:00Z',
+  }
+  const PHASE3_ROW = {
+    ticketing_provider: 'tito',
+    checkin_customer_id: 12,
+    checkin_event_id: 34,
+    tito_account_slug: 'acme',
+    tito_event_slug: '2026',
+    ticket_capacity: 400,
+    ticket_targets_enabled: 0,
+    ticket_sales_start_date: '2026-01-15',
+    ticket_target_curve: 'linear',
+    ticket_target_milestones: JSON.stringify([
+      { date: '2026-03-01', targetPercentage: 50 },
+      { date: '2026-04-01', targetPercentage: 90, label: 'Early bird' },
+    ]),
+    ticket_type_roles: JSON.stringify([
+      { typeName: 'Workshop add-on', admits: false },
+      { typeName: 'Two-day pass', grantsWorkshop: true },
+    ]),
+    public_free_ticket_ids: '[7,9]',
+    workshop_registration_sponsor_start: '2026-05-01T08:00:00Z',
+    workshop_registration_start: '2026-05-02T08:00:00Z',
+    workshop_registration_end: '2026-06-01T08:00:00Z',
+    workshop_early_access_ticket_types: '["Two-day pass"]',
+    workshop_reminder_last_sent_at: '2026-05-03T10:00:00Z',
+    workshop_reminder_last_sent_count: 0,
+    workshop_reminder_reserved_at: '2026-05-03T09:59:00Z',
+  }
+
+  it('maps every field, the lists as JSON, and absent or empty lists as null', () => {
+    const [full, empty] = mapBackfill(
+      [
+        { _id: 'x', orgId: 'o', ...PHASE3 },
+        {
+          _id: 'y',
+          orgId: 'o',
+          ticketTargets: { milestones: [] },
+          ticketTypeRoles: [],
+          publicFreeTicketIds: [],
+        },
+      ],
+      new Set(['x', 'y']),
+    ).rows
+    expect(full).toMatchObject(PHASE3_ROW)
+    expect(empty).toMatchObject(PHASE3_NULLS)
+    expect([...SETTINGS_PHASE3_COLUMNS].sort()).toEqual(
+      Object.keys(PHASE3_ROW).sort(),
+    )
+    for (const k of Object.keys(PHASE3))
+      expect(SETTINGS_PROJECTION).toContain(k)
+    const db = migrated()
+    db.exec(toSql([full]))
+    expect(
+      db.prepare("SELECT * FROM conferences WHERE conference_id = 'x'").get(),
+    ).toMatchObject(PHASE3_ROW)
+  })
+
+  it('migrates a populated phase 2 database without touching its rows, and checks the JSON', () => {
+    const dir = new URL('../migrations/', import.meta.url)
+    const files = readdirSync(dir).sort()
+    expect(files.pop()).toBe('0007_settings_phase3.sql')
+    const db = new DatabaseSync(':memory:')
+    for (const f of files) db.exec(readFileSync(new URL(f, dir), 'utf8'))
+    const phase2 = b.rows.map(
+      (r) =>
+        Object.fromEntries(
+          Object.entries(r).filter(([k]) => !(k in PHASE3_NULLS)),
+        ) as unknown as typeof r,
+    )
+    db.exec(toSql(phase2))
+    const before = db.prepare('SELECT * FROM conferences').all()
+    db.exec(readFileSync(new URL('0007_settings_phase3.sql', dir), 'utf8'))
+    expect(db.prepare('SELECT * FROM conferences').all()).toEqual(
+      before.map((r) => ({ ...(r as object), ...PHASE3_NULLS })),
+    )
+    expect(() =>
+      db.exec(
+        "UPDATE conferences SET ticket_type_roles = 'not json' WHERE conference_id = 'conf-b'",
+      ),
+    ).toThrow(/CHECK constraint/)
+  })
+
+  it('with only settings-phase3, keeps a D1-edited title and phase 1 and 2 fields, and reruns idempotently', () => {
+    const db = migrated()
+    db.exec(toSql(b.rows))
+    db.exec(
+      "UPDATE conferences SET title = 'D1 edit', social_hashtag = '#d1', contact_email = 'd1@acme.example' WHERE conference_id = 'conf-b'",
+    )
+    const [row] = mapBackfill(
+      [
+        {
+          ...docs[0],
+          socialHashtag: '#sanity',
+          contactEmail: 'sanity@acme.example',
+          ...PHASE3,
+        },
+      ],
+      routable,
+    ).rows
+    const sql = toSql([row], { only: SETTINGS_PHASE3_COLUMNS })
+    db.exec(sql)
+    const read = () =>
+      db
+        .prepare(
+          `SELECT title, social_hashtag, contact_email, ${SETTINGS_PHASE3_COLUMNS.join(', ')} FROM conferences WHERE conference_id = 'conf-b'`,
+        )
+        .get()
+    const once = read()
+    expect(once).toEqual({
+      title: 'D1 edit',
+      social_hashtag: '#d1',
+      contact_email: 'd1@acme.example',
+      ...PHASE3_ROW,
+    })
+    db.exec(sql)
+    expect(read()).toEqual(once)
+    expect(db.prepare('SELECT count(*) AS n FROM conferences').get()).toEqual({
+      n: b.rows.length,
+    })
+  })
+})
