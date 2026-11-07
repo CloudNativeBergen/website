@@ -2,7 +2,7 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { ClickableSpeakerNames } from '@/components/ClickableSpeakerNames'
-import { formats, languages, levels } from '@/lib/proposal/types'
+import { getPublicCfp } from '@/lib/proposal/cfp'
 import { flags, Flags, type Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import * as social from '@/components/SocialIcons'
@@ -135,11 +135,10 @@ async function CachedSpeakerContent({
     return null
   }
 
-  const {
-    speaker,
-    talks: allTalks,
-    err,
-  } = await getPublicSpeakerProfile(conference._id, slug)
+  const [{ speaker, talks: allTalks, err }, cfp] = await Promise.all([
+    getPublicSpeakerProfile(conference._id, slug),
+    getPublicCfp(conference),
+  ])
   const talks = withoutUnpublishedSchedule(conference, allTalks ?? [])
 
   if (err) {
@@ -381,17 +380,17 @@ async function CachedSpeakerContent({
                             <div className="flex flex-wrap gap-3">
                               {talk.format && (
                                 <span className="inline-flex items-center rounded-full bg-brand-cloud-blue/10 px-3 py-1 text-sm font-medium text-brand-cloud-blue dark:bg-blue-900/30 dark:text-blue-400">
-                                  {formats.get(talk.format)}
+                                  {cfp.formats.get(talk.format)}
                                 </span>
                               )}
                               {talk.level && (
                                 <span className="inline-flex items-center rounded-full bg-brand-fresh-green/10 px-3 py-1 text-sm font-medium text-brand-fresh-green dark:bg-green-900/30 dark:text-green-400">
-                                  {levels.get(talk.level)}
+                                  {cfp.levels.get(talk.level)}
                                 </span>
                               )}
                               {talk.language && (
                                 <span className="inline-flex items-center rounded-full bg-accent-purple/10 px-3 py-1 text-sm font-medium text-accent-purple dark:bg-purple-900/30 dark:text-purple-400">
-                                  {languages.get(talk.language)}
+                                  {cfp.languages.get(talk.language)}
                                 </span>
                               )}
                             </div>

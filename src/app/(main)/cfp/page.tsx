@@ -12,7 +12,7 @@ import { isUnknownHost } from '@/lib/conference/guard'
 import { canAcceptProposals, isCfpOpen } from '@/lib/conference/state'
 import { formatDate } from '@/lib/time'
 import { Topic } from '@/lib/topic/types'
-import { formats } from '@/lib/proposal/types'
+import { getPublicCfp } from '@/lib/proposal/cfp'
 import clsx from 'clsx'
 import Link from 'next/link'
 import { cacheLife, cacheTag } from 'next/cache'
@@ -43,9 +43,7 @@ async function CachedCFPContent({ domain }: { domain: string }) {
   // Hours, not days: the CTA below flips when the CFP window opens or closes.
   cacheLife('hours')
   cacheTag('content:cfp')
-  const { conference, error } = await getConferenceForDomain(domain, {
-    topics: true,
-  })
+  const { conference, error } = await getConferenceForDomain(domain)
 
   if (conference?._id) {
     cacheTag(conferenceTag(conference._id))
@@ -58,12 +56,15 @@ async function CachedCFPContent({ domain }: { domain: string }) {
     return null
   }
 
+  const cfp = await getPublicCfp(conference)
+  conference.topics = cfp.topics
+
   const talkFormats = conference.formats
     .filter((formatId) => !formatId.startsWith('workshop_'))
-    .map((formatId) => formats.get(formatId))
+    .map((formatId) => cfp.formats.get(formatId))
   const workshopFormats = conference.formats
     .filter((formatId) => formatId.startsWith('workshop_'))
-    .map((formatId) => formats.get(formatId))
+    .map((formatId) => cfp.formats.get(formatId))
   const hasWorkshops =
     Array.isArray(workshopFormats) && workshopFormats.length > 0
 
@@ -74,7 +75,7 @@ async function CachedCFPContent({ domain }: { domain: string }) {
   // (@/lib/onboarding/create.ts), so a brand-new tenant still lands here — and
   // this page must not hand a speaker a "Submit your proposal" button that
   // leads to a form with a required field it cannot satisfy. Safe to ask here:
-  // this page projects topics (`{ topics: true }` above).
+  // this page populates `conference.topics` via `getPublicCfp` above.
   const acceptingSubmissions = canAcceptProposals(conference)
   const cfpContactEmail = conference.cfpEmail || conference.contactEmail
 
@@ -82,7 +83,7 @@ async function CachedCFPContent({ domain }: { domain: string }) {
   // "Presentation formats" heading over nothing reads as a broken page, and a
   // talks-only conference should not advertise a blank workshop track.
   const factRows: [string, string[]][] = [
-    ['Languages', ['Norwegian', 'English']],
+    ['Languages', [...cfp.languages.values()]],
   ]
   const namedTalkFormats = talkFormats.filter((f): f is string => !!f)
   if (namedTalkFormats.length > 0) {
