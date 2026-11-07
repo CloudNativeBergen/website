@@ -438,6 +438,41 @@ describe('syncMembers drift mode (MEMBER_SOURCE_ORGS)', () => {
     })
   })
 
+  it('never counts an invite to a ticket-linked address (#1949)', async () => {
+    // Membership matching ignores that address, so accepting this invite
+    // would not clear the drift: calling it "invited" would mislead.
+    const { env, seed } = await driftDb()
+    speakers[2] = {
+      _id: 'sp-unverified',
+      knownEmails: ['unverified@example.com', 'ticket@example.com'],
+      ticketEmailGrants: [{ email: 'Ticket@Example.com' }],
+    }
+    await invite(seed, 'inv-t', 'ticket@example.com')
+    await syncMembers(env)
+    expect(driftLog().missingInIdentity).toEqual(['sp-unverified'])
+    expect(driftLog()).not.toHaveProperty('invitePending')
+  })
+
+  it('dedupes drift with pending invites, whatever order organizers come in (#1949)', async () => {
+    const { env, seed } = await driftDb()
+    speakers.push({ _id: 'sp-new', knownEmails: ['new@example.com'] })
+    const ids = ['sp-owner', 'sp-ok', 'sp-new', 'sp-unverified']
+    conferences[0] = { orgId: 'org-a', ids }
+    await invite(seed, 'inv-1', 'unverified@example.com')
+    await invite(seed, 'inv-2', 'new@example.com')
+    await syncMembers(env)
+    expect(driftLog()).toMatchObject({
+      ownersBelowTwo: 1,
+      invitePending: ['sp-new', 'sp-unverified'],
+    })
+    expect(slackPosts).toHaveLength(1)
+    // The same organizers, listed in the other order.
+    conferences[0] = { orgId: 'org-a', ids: [...ids].reverse() }
+    await syncMembers(env)
+    expect(slackPosts).toHaveLength(1)
+    expect(events()).toContain('identity.membership.drift_deduped')
+  })
+
   it('stores the pending-invite count in the job status (#1949)', async () => {
     const { env, d1, seed } = await driftDb()
     await invite(seed, 'inv-1', 'unverified@example.com')
