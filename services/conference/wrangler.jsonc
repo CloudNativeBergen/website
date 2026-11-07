@@ -12,6 +12,13 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
+  "services": [
+    {
+      "binding": "PUSH",
+      "service": "konf-identity",
+      "entrypoint": "Push",
+    },
+  ],
   "triggers": {
     "crons": ["17 4 * * *"],
   },
@@ -32,6 +39,13 @@
         },
       ],
       "name": "konf-conference-preview",
+      "services": [
+        {
+          "binding": "PUSH",
+          "entrypoint": "Push",
+          "service": "konf-identity-preview",
+        },
+      ],
       "vars": {
         "SANITY_PROJECT_ID": "mvzwvw14",
         "SANITY_DATASET": "development",
@@ -47,10 +61,16 @@
         },
       ],
       "name": "konf-conference",
+      "services": [
+        {
+          "binding": "PUSH",
+          "service": "konf-identity",
+          "entrypoint": "Push",
+        },
+      ],
       "vars": {
         "SANITY_PROJECT_ID": "mvzwvw14",
         "SANITY_DATASET": "production",
-        "PUSH_WEBHOOK_URL": "https://my.konf.app/api/push/events",
       },
     },
   },

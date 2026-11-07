@@ -133,11 +133,6 @@ type Mutation {
   operatorChangeMemberRole(orgId: ID!, role: MemberRole!, userId: ID!): Boolean
   operatorInviteMember(email: String!, orgId: ID!, role: MemberRole!): MemberInvitation
   operatorRemoveMember(orgId: ID!, userId: ID!): Boolean
-
-  """
-  Deletes endpoints the push service answered 404 or 410 for. Platform context only.
-  """
-  prunePushSubscriptions(endpoints: [String!]!): Int
   removeMember(userId: ID!): Boolean
 
   """

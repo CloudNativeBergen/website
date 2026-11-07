@@ -292,12 +292,6 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
               invitationId: i.id,
               to: i.role ?? undefined,
             })
-            emit({
-              type: 'member.invited',
-              organizationId: i.organizationId,
-              invitationId: i.id,
-              actorId: inviter.id,
-            })
           },
           beforeCancelInvitation: async ({ invitation: i, cancelledBy }) => {
             if (i.status !== 'pending')
@@ -370,6 +364,7 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
               type: 'member.role_changed',
               organizationId: m.organizationId,
               userId: m.userId,
+              role: m.role,
               // The hook's `user` is the member changed; the actor is the session.
               actorId: actorId() ?? null,
             })

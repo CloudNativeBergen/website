@@ -904,11 +904,7 @@ describe('cross-tenant mutation walk', () => {
   it('takes the operator fields from @tag(operator) in the supergraph (#1962)', () => {
     // Anchors only: the derived sets grow with every new operator field.
     expect([...OPERATOR_MUTATIONS]).toEqual(
-      expect.arrayContaining([
-        'provisionOrganization',
-        'operatorInviteMember',
-        'prunePushSubscriptions',
-      ]),
+      expect.arrayContaining(['provisionOrganization', 'operatorInviteMember']),
     )
     expect([...OPERATOR_QUERIES]).toEqual(
       expect.arrayContaining(['organizations', 'conferences']),
@@ -2730,7 +2726,7 @@ describe('myOrganizations: member lane, no tenant (#2036)', () => {
   })
 
   it('a plain member can subscribePush and unsubscribePush via the user lane', async () => {
-    const endpoint = 'https://push.example/user-lane-push-test'
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/user-lane-push-test'
     try {
       const subRaw = await run(
         `mutation {
