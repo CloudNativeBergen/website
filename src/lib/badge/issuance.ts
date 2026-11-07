@@ -202,7 +202,9 @@ export async function issueBadgeForSpeaker(
     }
   }
 
-  const { conference, domain, error } = await getConferenceForCurrentDomain()
+  const { conference, domain, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || !conference) {
     return { success: false, error: 'Conference not found' }
   }

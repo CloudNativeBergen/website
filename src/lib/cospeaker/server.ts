@@ -382,7 +382,9 @@ export async function sendInvitationEmail(
     let domain = context?.domain ?? ''
 
     if (!context) {
-      const resolved = await getConferenceForCurrentDomain()
+      const resolved = await getConferenceForCurrentDomain({
+        includeTicketSetup: true,
+      })
       if (resolved.error || !resolved.conference || !resolved.domain) {
         console.error(
           'Cannot send invitation email: failed to resolve conference or domain for current request',
@@ -523,7 +525,7 @@ export async function sendCoSpeakerAddedEmail(params: {
       conference,
       domain,
       error: conferenceError,
-    } = await getConferenceForCurrentDomain()
+    } = await getConferenceForCurrentDomain({ includeTicketSetup: true })
     if (conferenceError || !conference || !domain) {
       console.error(
         `Cannot send ${role} added email: failed to resolve conference or domain for current request`,
@@ -671,7 +673,7 @@ export async function sendResponseNotificationEmail(params: {
       conference,
       domain,
       error: conferenceError,
-    } = await getConferenceForCurrentDomain()
+    } = await getConferenceForCurrentDomain({ includeTicketSetup: true })
     if (conferenceError || !conference || !domain) {
       console.error(
         'Cannot send co-speaker response notification: failed to resolve conference or domain for current request',

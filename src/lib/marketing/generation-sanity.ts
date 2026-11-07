@@ -157,7 +157,9 @@ export async function getGenerationContext(
     { cache: 'no-store' },
   )
   if (!row?.conference?._id) return null
-  const mergedConference = await mergeConference(row.conference)
+  const mergedConference = await mergeConference(row.conference, {
+    ticketSetup: true,
+  })
   return {
     plan: { _id: row._id, ownerId: row.ownerId ?? null },
     conference: mergedConference,

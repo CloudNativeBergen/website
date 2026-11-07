@@ -62,10 +62,7 @@ const h = vi.hoisted(() => ({
   set: vi.fn(),
 }))
 
-vi.mock('@/lib/konf-api/conference-write', async (orig) => ({
-  isMovedConferenceField: (
-    await orig<typeof import('@/lib/konf-api/conference-write')>()
-  ).isMovedConferenceField,
+vi.mock('@/lib/konf-api/conference-write', () => ({
   writeMovedToD1: h.writeD1,
 }))
 
@@ -447,22 +444,16 @@ describe('updateSettings settings phase 3 (#2080)', () => {
     targetCurve: 'linear' as const,
     milestones: [],
   }
-  it('writes capacity and targets to D1 only for a d1_write tenant: Sanity is not written', async () => {
-    h.writeD1.mockResolvedValue(true)
+  it('writes capacity and targets to D1 before Sanity', async () => {
+    const order: string[] = []
+    h.writeD1.mockImplementation(async () => (order.push('d1'), true))
+    h.commit.mockImplementation(async () => (order.push('sanity'), {}))
     await tickets().admin.updateSettings({ ticketCapacity: 500, ticketTargets })
     expect(h.writeD1).toHaveBeenCalledWith(CONF, {
       ticketCapacity: 500,
       ticketTargets,
     })
-    expect(h.set).not.toHaveBeenCalled()
-    expect(h.commit).not.toHaveBeenCalled()
-  })
-
-  it('writes both to Sanity, as before, for a tenant without d1_write', async () => {
-    h.writeD1.mockResolvedValue(false)
-    h.commit.mockResolvedValue({})
-    await tickets().admin.updateSettings({ ticketCapacity: 500, ticketTargets })
-    expect(h.set).toHaveBeenCalledWith({ ticketCapacity: 500, ticketTargets })
+    expect(order).toEqual(['d1', 'sanity'])
   })
 
   it('never touches Sanity when the D1 write refuses', async () => {

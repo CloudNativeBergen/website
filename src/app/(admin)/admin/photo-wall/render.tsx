@@ -12,7 +12,9 @@ import { PhotoWallAdminPage } from '@/components/photo-wall/admin'
 export async function renderPhotoWallAdmin(setup = false) {
   const denied = await denyNonOrganizer()
   if (denied) return denied
-  const { conference, error } = await getEditableScheduleForCurrentDomain({})
+  const { conference, error } = await getEditableScheduleForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || !conference) {
     return (
       <ErrorDisplay

@@ -241,7 +241,9 @@ export async function requireGalleryImageReadable(
  */
 export async function requireCurrentConference() {
   const conferenceId = await resolveConferenceId()
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || conference?._id !== conferenceId) {
     throw new TRPCError({
       code: 'NOT_FOUND',

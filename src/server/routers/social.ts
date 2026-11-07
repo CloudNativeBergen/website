@@ -202,7 +202,9 @@ async function currentShortLinkOrigin(
 ): Promise<string | null> {
   // Skips the read only; the gate itself is `variantShortLinkOrigin`'s.
   if (!normalizeShortCode(shortCode)) return null
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || !conference?._id) {
     throw new TRPCError({
       code: 'NOT_FOUND',
@@ -238,7 +240,9 @@ async function taskLinkFor(
       message: 'This variant does not belong to that marketing Task.',
     })
   }
-  const { conference } = await getConferenceForCurrentDomain()
+  const { conference } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (!conference) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Conference not found' })
   }

@@ -37,6 +37,7 @@ export default async function ProposalDetailPage({
   try {
     const { conference, domain } = await getConferenceForCurrentDomain({
       topics: true,
+      includeTicketSetup: true,
     })
     // ORG-SCOPE the organizer read to this tenant (B1, #642): a proposal from
     // another organization's conference must not be reachable by URL id even for a

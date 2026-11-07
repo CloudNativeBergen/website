@@ -4,7 +4,7 @@ import { TicketPageContentEditor } from '@/components/admin/TicketPageContentEdi
 
 export default async function TicketContentAdminPage() {
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain()
+    await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
   if (conferenceError) {
     return (

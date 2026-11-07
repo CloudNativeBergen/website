@@ -282,7 +282,7 @@ export async function readProposalOutcomes(
  * The edition's ticket orders, for `ticketsSoldInWindow`.
  *
  * BY CONFERENCE ID, never by request domain. The cron sweeps every edition in
- * one request, so `getConferenceForCurrentDomain()` here would resolve the
+ * one request, so `getConferenceForCurrentDomain({ includeTicketSetup: true })` here would resolve the
  * DEPLOYMENT's conference and hand one tenant's ticket sales to all of them.
  * The binding is read by id and passed to the ticketing ACCESS resolver, which
  * is what keeps an unbound, uncredentialed or switched-off edition to "no
@@ -312,7 +312,7 @@ export async function readTicketOutcomes(
     throw new Error(`Conference ${conferenceId} could not be read`)
   }
   // The binding from D1 when flagged (#2080).
-  const binding = await mergeConference(row)
+  const binding = await mergeConference(row, { ticketSetup: true })
   const access = await resolveTicketingAdminAccess(binding)
   if (access.state !== 'ready') {
     throw new Error(`Ticketing is ${access.state} for this edition`)

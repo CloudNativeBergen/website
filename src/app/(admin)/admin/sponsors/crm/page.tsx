@@ -32,6 +32,7 @@ export default async function AdminSponsorsCRM() {
       // `SPONSOR_REGISTRATION_URL` (#1261), so the composer and the server
       // must see the same value.
       includeSponsorRegistrationLink: true,
+      includeTicketSetup: true,
     })
 
   if (conferenceError || !conference) {

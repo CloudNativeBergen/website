@@ -232,7 +232,7 @@ function generateCompanyBreakdown(orders: GroupedOrder[]): CompanyBreakdown[] {
 
 export default async function CompaniesAdminPage() {
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({})
+    await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
   if (conferenceError) {
     return (

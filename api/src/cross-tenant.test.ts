@@ -2798,3 +2798,68 @@ describe('myOrganizations: member lane, no tenant (#2036)', () => {
     }
   })
 })
+
+/**
+ * Settings phase 3 (#2080): the site's members-only read, end to end through
+ * the real gateway and the real conference Worker. The site lane (a verified
+ * site assertion, so `site:server`) reads the ticket setup; the same query
+ * with only the Origin reads null.
+ */
+describe('members-only ticket setup over the site lane (#2080)', () => {
+  let assertion: () => Promise<string>
+  beforeAll(async () => {
+    const jose = await import('jose')
+    const site = await jose.generateKeyPair('EdDSA', { extractable: true })
+    env.SITE_PUBLIC_KEYS = JSON.stringify({
+      s1: await jose.exportSPKI(site.publicKey),
+    })
+    assertion = () =>
+      new jose.SignJWT({ host: HOST.a })
+        .setProtectedHeader({ alg: 'EdDSA', kid: 's1' })
+        .setIssuer('konf-site')
+        .setAudience('konf-gateway')
+        .setJti(crypto.randomUUID())
+        .setIssuedAt()
+        .setExpirationTime('60s')
+        .sign(site.privateKey)
+    for (const db of dbs)
+      await db
+        .prepare(
+          'UPDATE conferences SET ticket_capacity = 777, checkin_customer_id = 55 WHERE conference_id = ?1',
+        )
+        .bind(CONF.a)
+        .run()
+        .catch(() => undefined)
+  })
+  afterAll(() => {
+    delete (env as { SITE_PUBLIC_KEYS?: string }).SITE_PUBLIC_KEYS
+  })
+  beforeEach(() => {
+    env.OVERRIDE_TENANTS = {}
+  })
+
+  const Q = '{ conference { id ticketCapacity checkinCustomerId } }'
+
+  it('the site lane reads them', async () => {
+    const body = JSON.parse(
+      await run(Q, { 'x-konf-service': await assertion() }),
+    ) as { data?: { conference?: Record<string, unknown> }; errors?: unknown }
+    expect(body.errors).toBeUndefined()
+    expect(body.data?.conference).toEqual({
+      id: CONF.a,
+      ticketCapacity: 777,
+      checkinCustomerId: 55,
+    })
+  })
+
+  it('an anonymous caller on the same host reads null', async () => {
+    const body = JSON.parse(await run(Q, { origin: ORIGIN })) as {
+      data?: { conference?: Record<string, unknown> }
+    }
+    expect(body.data?.conference).toEqual({
+      id: CONF.a,
+      ticketCapacity: null,
+      checkinCustomerId: null,
+    })
+  })
+})

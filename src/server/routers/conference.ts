@@ -124,6 +124,7 @@ async function briefingConference() {
     uncached: true,
     // The speaker Slack invite (#164) is part of the briefing and its hash.
     includeSpeakerRegistrationLink: true,
+    includeTicketSetup: true,
   })
   if (error || !conference?._id) {
     throw new TRPCError({
@@ -1756,6 +1757,7 @@ export const conferenceRouter = router({
       schedule: true,
       gallery: { featuredOnly: true },
       uncached: true,
+      includeTicketSetup: true,
     })
 
     if (error || !conference?._id) {

@@ -18,16 +18,6 @@ import {
  * these (#1917, owner decision 2026-11-07); conference-write.test.ts checks
  * the list against the site's write split. Shrinks as windows close.
  */
-const PHASE3_D1_ONLY = new Set<string>([
-  'ticketing_provider',
-  'checkin_customer_id',
-  'ticket_capacity',
-  'ticket_targets_enabled',
-  'ticket_sales_start_date',
-  'ticket_target_curve',
-  'ticket_target_milestones',
-])
-
 export const PARITY_COLUMNS = [
   'org_id',
   'published',
@@ -36,13 +26,10 @@ export const PARITY_COLUMNS = [
   'organizer_org_number',
   'analytics_pirsch_code',
   ...SETTINGS_PHASE2_COLUMNS,
-  // Phase 3 (#2080) still dual-written. Left out: the reminder state (a
-  // d1_write tenant's reminder writes D1 only, everyone else's Sanity only)
-  // and the four whose Sanity write stopped (PHASE3_WRITE_STOPPED in
-  // conference-write.ts). The CLI (scripts/parity-d1.ts) still compares all.
-  ...SETTINGS_PHASE3_COLUMNS.filter(
-    (c) => !c.startsWith('workshop_reminder_') && !PHASE3_D1_ONLY.has(c),
-  ),
+  // Phase 3 (#2080) minus the reminder state, which only the reminder writes,
+  // to Sanity, until its own D1 write lands with the read flip; the CLI
+  // (scripts/parity-d1.ts) still compares it.
+  ...SETTINGS_PHASE3_COLUMNS.filter((c) => !c.startsWith('workshop_reminder_')),
 ] as const satisfies readonly (keyof Row)[]
 
 // groq-global: a platform-wide sweep reads every published conference.

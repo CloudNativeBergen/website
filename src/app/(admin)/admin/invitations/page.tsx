@@ -11,7 +11,7 @@ export default async function AdminInvitationLetters({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain()
+    await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
   if (conferenceError || !conference) {
     return (

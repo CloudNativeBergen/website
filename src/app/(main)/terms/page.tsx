@@ -47,7 +47,7 @@ async function CachedTermsContent({ domain }: { domain: string }) {
     conference,
     error: conferenceError,
     status,
-  } = await getConferenceForDomain(domain)
+  } = await getConferenceForDomain(domain, { includeTicketSetup: true })
 
   if (conference?._id) {
     cacheTag(conferenceTag(conference._id))

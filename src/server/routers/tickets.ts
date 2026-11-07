@@ -1,7 +1,4 @@
-import {
-  isMovedConferenceField,
-  writeMovedToD1,
-} from '@/lib/konf-api/conference-write'
+import { writeMovedToD1 } from '@/lib/konf-api/conference-write'
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
@@ -121,7 +118,9 @@ interface RequestTicketing {
  * organization, or an org the seam has no credentials for throws BAD_REQUEST.
  */
 async function checkin(): Promise<RequestTicketing> {
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || !conference?._id) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
@@ -160,7 +159,9 @@ async function checkin(): Promise<RequestTicketing> {
  * `checkinEventId` refuses.
  */
 async function requireCheckinEventId(clientEventId?: number): Promise<number> {
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || !conference?.checkinEventId) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
@@ -254,7 +255,9 @@ async function requireOrderInCurrentEvent(
   ticketing: RequestTicketing,
   orderId: number,
 ): Promise<void> {
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || !conference?.checkinEventId || !conference?.checkinCustomerId) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
@@ -755,6 +758,7 @@ export const ticketsRouter = router({
       .query(async ({ input }) => {
         const { conference, error } = await getConferenceForCurrentDomain({
           sponsors: true,
+          includeTicketSetup: true,
         })
         if (error || !conference?._id) {
           throw new TRPCError({
@@ -768,6 +772,7 @@ export const ticketsRouter = router({
     summary: ticketingAdminProcedure.query(async () => {
       const { conference, error } = await getConferenceForCurrentDomain({
         sponsors: true,
+        includeTicketSetup: true,
       })
       if (error || !conference?._id) {
         throw new TRPCError({
@@ -795,7 +800,9 @@ export const ticketsRouter = router({
      * a client component.
      */
     speakerTicketStatus: ticketingAdminProcedure.query(async () => {
-      const { conference, error } = await getConferenceForCurrentDomain()
+      const { conference, error } = await getConferenceForCurrentDomain({
+        includeTicketSetup: true,
+      })
       if (error || !conference?._id) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -835,7 +842,9 @@ export const ticketsRouter = router({
      * this conference's volunteers.
      */
     volunteerTicketStatus: ticketingAdminProcedure.query(async () => {
-      const { conference, error } = await getConferenceForCurrentDomain()
+      const { conference, error } = await getConferenceForCurrentDomain({
+        includeTicketSetup: true,
+      })
       if (error || !conference?._id) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -880,7 +889,9 @@ export const ticketsRouter = router({
     searchEventTickets: ticketingAdminProcedure
       .input(z.object({ query: z.string().trim().min(2).max(100) }))
       .query(async ({ input }) => {
-        const { conference, error } = await getConferenceForCurrentDomain()
+        const { conference, error } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         if (error || !conference?._id) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
@@ -925,20 +936,15 @@ export const ticketsRouter = router({
         }
 
         // D1 first for a d1_write tenant (#2080); a failure there throws
-        // before Sanity is touched. Then D1 alone holds these (read through
-        // the merge), so Sanity is not written. The schema takes no null, so
-        // there is no unset to carry to Sanity here.
-        const d1 = await writeMovedToD1(conferenceId, updates)
-        const sanitySet = Object.fromEntries(
-          Object.entries(updates).filter(
-            ([k]) => !(d1 && isMovedConferenceField(k)),
-          ),
-        )
+        // before Sanity is touched. Sanity is still written: it is the
+        // fallback when the D1 read fails.
+        await writeMovedToD1(conferenceId, updates)
 
         try {
-          const result = Object.keys(sanitySet).length
-            ? await clientWrite.patch(conferenceId).set(sanitySet).commit()
-            : null
+          const result = await clientWrite
+            .patch(conferenceId)
+            .set(updates)
+            .commit()
 
           revalidateTag('admin:tickets', 'default')
           // `ticketCapacity`/`ticketTargets` live on the CONFERENCE document, which
@@ -1049,7 +1055,7 @@ export const ticketsRouter = router({
     getDiscountCodesWithUsage: ticketingAdminProcedure.query(async () => {
       try {
         const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain()
+          await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
         if (
           conferenceError ||
@@ -1184,7 +1190,10 @@ export const ticketsRouter = router({
               'sponsorForConference',
             )
             const { conference: linkConference } =
-              await getConferenceForCurrentDomain({ sponsors: true })
+              await getConferenceForCurrentDomain({
+                sponsors: true,
+                includeTicketSetup: true,
+              })
             if (!linkConference) {
               throw new TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
@@ -1254,7 +1263,10 @@ export const ticketsRouter = router({
           // containing the sponsor's name is exactly what they are for.
           if (!sponsorName) {
             const { conference, error: sponsorsError } =
-              await getConferenceForCurrentDomain({ sponsors: true })
+              await getConferenceForCurrentDomain({
+                sponsors: true,
+                includeTicketSetup: true,
+              })
             // FAILS CLOSED. That read swallows a failure into `error` and
             // returns a conference with NO `sponsors`, so treating the absent
             // list as "no sponsors" would turn a transient Sanity problem into

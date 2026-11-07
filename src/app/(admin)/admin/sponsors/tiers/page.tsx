@@ -26,6 +26,7 @@ export default async function AdminSponsorTiers() {
       sponsorTiers: true,
       organizers: true,
       includeSponsorRegistrationLink: true,
+      includeTicketSetup: true,
     })
 
   if (conferenceError) {

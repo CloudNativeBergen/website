@@ -49,6 +49,7 @@ export default async function AppearancePage() {
     uncached: true,
     organizers: true,
     featuredSpeakers: true,
+    includeTicketSetup: true,
   })
 
   if (error) {

@@ -319,7 +319,10 @@ describe('/admin/workshops — the registration times are read live', () => {
     expect(page.props).toMatchObject(STORED)
     // The cached read names the conference the guard authorized; the card's
     // times come from the one read that skips the caches.
-    expect(mockGetConference.mock.calls).toEqual([[], [{ uncached: true }]])
+    expect(mockGetConference.mock.calls).toEqual([
+      [{ includeTicketSetup: true }],
+      [{ uncached: true, includeTicketSetup: true }],
+    ])
   })
 })
 
@@ -404,7 +407,10 @@ describe('/admin/workshops — refuses a non-organizer before any read', () => {
   it('CONTROL: an organizer of this org gets the page, and every probe above sees its reads', async () => {
     expect(await view()).toEqual({
       shown: 'the workshops',
-      conferenceReads: [[], [{ uncached: true }]],
+      conferenceReads: [
+        [{ includeTicketSetup: true }],
+        [{ uncached: true, includeTicketSetup: true }],
+      ],
       workshopReads: [['conf-1']],
       // Twice: the page's feature gate, and the resend action's own.
       organizationReads: [['org-A'], ['org-A']],

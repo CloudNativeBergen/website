@@ -238,6 +238,7 @@ async function ticketSweepContext(): Promise<{
     await getConferenceForCurrentDomain({
       includeSpeakerRegistrationLink: true,
       uncached: true,
+      includeTicketSetup: true,
     })
 
   if (conferenceError || !conference) {
@@ -785,7 +786,9 @@ export const speakerRouter = router({
       .input(SpeakerSearchSchema)
       .query(async ({ input }) => {
         try {
-          const { conference, error } = await getConferenceForCurrentDomain()
+          const { conference, error } = await getConferenceForCurrentDomain({
+            includeTicketSetup: true,
+          })
           if (error || !conference) {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
@@ -1392,7 +1395,9 @@ export const speakerRouter = router({
           })
         }
 
-        const { conference, error } = await getConferenceForCurrentDomain()
+        const { conference, error } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         if (error || !conference?._id) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
@@ -1571,7 +1576,7 @@ export const speakerRouter = router({
       )
       .mutation(async ({ input }) => {
         const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain()
+          await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
         if (conferenceError || !conference) {
           throw new TRPCError({
@@ -1631,7 +1636,7 @@ export const speakerRouter = router({
 
     syncAudience: adminProcedure.mutation(async () => {
       const { conference, error: conferenceError } =
-        await getConferenceForCurrentDomain()
+        await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
       if (conferenceError || !conference) {
         throw new TRPCError({
@@ -1717,6 +1722,7 @@ export const speakerRouter = router({
       const { conference, error } = await getConferenceForCurrentDomain({
         includeSpeakerRegistrationLink: true,
         uncached: true,
+        includeTicketSetup: true,
       })
       // A FAILED READ IS NOT "NO LINK". The read returns a normalized empty
       // conference alongside its error, which would answer `false` and tell

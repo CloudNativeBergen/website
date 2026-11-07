@@ -130,7 +130,7 @@ function capitalize(value: string): string {
  *
  * KNOWN GAP: the page ALSO requires `conference.schedules?.length > 0`, which
  * cannot be checked here — the letter resolver calls
- * `getConferenceForCurrentDomain()` without `schedule: true`, so `schedules` is
+ * `getConferenceForCurrentDomain({ includeTicketSetup: true })` without `schedule: true`, so `schedules` is
  * undefined in this path and testing it would suppress the link every time. A
  * conference past its `programDate` with no schedule document therefore still
  * gets a link to an "available soon" page. Closing that needs the resolver to

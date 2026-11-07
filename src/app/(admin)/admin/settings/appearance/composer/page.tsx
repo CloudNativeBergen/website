@@ -30,6 +30,7 @@ export default async function HomepageComposerPage({
   const { conference, error } = await getEditableScheduleForCurrentDomain({
     organizers: true,
     featuredSpeakers: true,
+    includeTicketSetup: true,
   })
 
   if (error) {

@@ -44,20 +44,12 @@ beforeEach(() => {
 })
 
 describe('the D1 ticket setup (#2080)', () => {
-  it('serves the merged roles and vendor once the binding agrees', async () => {
+  it('serves the merged conference', async () => {
     h.fetch.mockResolvedValue([{ _id: 'conf-A', checkinEventId: 4242 }])
     h.d1 = { checkinEventId: 4242, ticketTypeRoles: [{ typeName: 'D1' }] }
     const { conference, error } = await getConferenceByCheckinEventId(4242)
     expect(error).toBeNull()
     expect(conference?.ticketTypeRoles).toEqual([{ typeName: 'D1' }])
-  })
-
-  it('REFUSES when D1 binds the conference to another event than the Sanity index', async () => {
-    h.fetch.mockResolvedValue([{ _id: 'conf-A', checkinEventId: 4242 }])
-    h.d1 = { checkinEventId: 9999 }
-    const { conference, error } = await getConferenceByCheckinEventId(4242)
-    expect(conference).toBeNull()
-    expect(error?.message).toContain('conf-A')
   })
 
   it("takes the tenant's vendor from the merge", async () => {

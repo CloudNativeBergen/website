@@ -30,7 +30,10 @@ export default async function AdminRootLayout({
   // `topics: true`: the unlisted banner's CTA depends on the activation
   // checklist, and topics are an opt-in join that the boundary normaliser
   // otherwise reports as `[]` — see the same note on /admin/page.tsx.
-  const { conference } = await getConferenceForCurrentDomain({ topics: true })
+  const { conference } = await getConferenceForCurrentDomain({
+    topics: true,
+    includeTicketSetup: true,
+  })
   const conferenceLogos = conference
     ? {
         logoBright: conference.logoBright,

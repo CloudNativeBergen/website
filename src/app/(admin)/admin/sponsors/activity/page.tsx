@@ -9,7 +9,7 @@ export const metadata = { title: SPONSOR_PAGE_TITLES.activity }
 
 export default async function AdminSponsorActivity() {
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({})
+    await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
   if (conferenceError) {
     return (

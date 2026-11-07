@@ -638,7 +638,7 @@ export function canAccessConversation(
  * conference when the caller already holds the resolved org.
  *
  * `getOrganizerSpeakerIds()` resolves the org itself, through
- * `getConferenceForCurrentDomain()` — a read the tRPC authorization waist
+ * `getConferenceForCurrentDomain({ includeTicketSetup: true })` — a read the tRPC authorization waist
  * (`withOrgOrganizer` / `requireAdmin`) has ALREADY performed for this request
  * and stashed as `ctx.orgId`. Threading that value through removes the repeat
  * resolution without changing WHICH org is used: `ctx.orgId` and

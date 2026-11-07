@@ -11,7 +11,10 @@ export default async function AdminProposals() {
   const session = await getAuthSession()
 
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({ topics: true })
+    await getConferenceForCurrentDomain({
+      topics: true,
+      includeTicketSetup: true,
+    })
 
   if (conferenceError) {
     return (

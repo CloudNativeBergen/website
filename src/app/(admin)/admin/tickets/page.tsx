@@ -38,6 +38,7 @@ export default async function AdminTickets() {
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({
       sponsors: true,
+      includeTicketSetup: true,
     })
 
   // A failed conference read is the ONLY error case the summary cannot speak

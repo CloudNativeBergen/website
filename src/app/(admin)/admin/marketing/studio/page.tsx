@@ -191,7 +191,10 @@ export default async function MarketingPage({
   }
 
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({ sponsors: true })
+    await getConferenceForCurrentDomain({
+      sponsors: true,
+      includeTicketSetup: true,
+    })
 
   if (conferenceError || !conference) {
     console.error('Error loading conference:', conferenceError)

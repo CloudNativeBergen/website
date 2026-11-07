@@ -41,7 +41,7 @@ async function getTicketData(
 
 export default async function OrdersAdminPage() {
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({})
+    await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
   if (conferenceError) {
     return (

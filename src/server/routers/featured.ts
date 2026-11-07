@@ -27,7 +27,9 @@ export const featuredRouter = router({
   admin: router({
     listSpeakers: adminProcedure.query(async () => {
       try {
-        const { conference, error } = await getConferenceForCurrentDomain()
+        const { conference, error } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         if (error || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -61,7 +63,9 @@ export const featuredRouter = router({
 
     listTalks: adminProcedure.query(async () => {
       try {
-        const { conference, error } = await getConferenceForCurrentDomain()
+        const { conference, error } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         if (error || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -97,7 +101,9 @@ export const featuredRouter = router({
       .input(FeaturedSpeakerInputSchema)
       .mutation(async ({ input }) => {
         try {
-          const { conference, error } = await getConferenceForCurrentDomain()
+          const { conference, error } = await getConferenceForCurrentDomain({
+            includeTicketSetup: true,
+          })
           if (error || !conference) {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
@@ -145,7 +151,9 @@ export const featuredRouter = router({
       .input(FeaturedSpeakerRemoveSchema)
       .mutation(async ({ input }) => {
         try {
-          const { conference, error } = await getConferenceForCurrentDomain()
+          const { conference, error } = await getConferenceForCurrentDomain({
+            includeTicketSetup: true,
+          })
           if (error || !conference) {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
@@ -187,7 +195,9 @@ export const featuredRouter = router({
       .input(FeaturedTalkInputSchema)
       .mutation(async ({ input }) => {
         try {
-          const { conference, error } = await getConferenceForCurrentDomain()
+          const { conference, error } = await getConferenceForCurrentDomain({
+            includeTicketSetup: true,
+          })
           if (error || !conference) {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
@@ -234,7 +244,9 @@ export const featuredRouter = router({
       .input(FeaturedTalkRemoveSchema)
       .mutation(async ({ input }) => {
         try {
-          const { conference, error } = await getConferenceForCurrentDomain()
+          const { conference, error } = await getConferenceForCurrentDomain({
+            includeTicketSetup: true,
+          })
           if (error || !conference) {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
@@ -274,7 +286,9 @@ export const featuredRouter = router({
 
     summary: adminProcedure.query(async () => {
       try {
-        const { conference, error } = await getConferenceForCurrentDomain()
+        const { conference, error } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         if (error || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',

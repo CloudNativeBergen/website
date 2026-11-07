@@ -46,7 +46,9 @@ export default async function WorkshopPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
 
   // FEATURE GATE (#689), BEFORE THE SESSION IS READ: the segment layout gates
   // too, but ordering it first means this page spends no record read on a

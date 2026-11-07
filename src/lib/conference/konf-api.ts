@@ -49,8 +49,7 @@ const QUERY = `{ conference {
   cfpStartDate cfpEndDate cfpNotifyDate programDate travelSupportPaymentDate
   earlyBirdEndDate registrationCloseDate speakersAnnouncedDate sponsorDeadlineDate
   recordingsLiveDate registrationEnabled organizer socialHashtag showVanityMetrics
-  ticketingProvider publicFreeTicketIds workshopRegistrationSponsorStart
-  workshopRegistrationStart workshopRegistrationEnd workshopEarlyAccessTicketTypes
+  ticketingProvider
 } conferenceLifecycle }` as const
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
 const QUERY_DOC = graphql(QUERY)
@@ -64,10 +63,9 @@ type QueryData = ResultOf<typeof QUERY_DOC>
  * assertion, as its own request and its own cache entry.
  */
 const PRIVATE_QUERY = `{ conference {
-  id checkinCustomerId checkinEventId titoAccountSlug titoEventSlug ticketCapacity
+  id checkinCustomerId ticketCapacity
   ticketTargetsEnabled ticketSalesStartDate ticketTargetCurve
   ticketTargetMilestones { date targetPercentage label }
-  ticketTypeRoles { typeName admits grantsWorkshop }
   workshopReminderLastSentAt workshopReminderLastSentCount workshopReminderReservedAt
 } }` as const
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
@@ -76,7 +74,6 @@ export type PrivateConference = NonNullable<
   ResultOf<typeof PRIVATE_DOC>['conference']
 >
 
-/** Phase 3 public fields with their validity check (#2080). */
 // A real day (Date.parse rolls 02-30 over to March) with a time.
 const isInstant = (v: unknown) =>
   typeof v === 'string' &&
@@ -85,17 +82,14 @@ const isInstant = (v: unknown) =>
   !Number.isNaN(Date.parse(v))
 const isPosInt = (v: unknown) =>
   typeof v === 'number' && Number.isInteger(v) && v > 0
-const isList = (v: unknown, item: (x: unknown) => boolean) =>
-  Array.isArray(v) && v.length > 0 && v.every(item)
+/**
+ * Phase 3 public fields read from D1 (#2080). Only the vendor: the other
+ * public ones (free tickets, workshop windows, early-access types) are
+ * written D1 first and then by a `_rev`-conditioned Sanity patch that can
+ * fail, so D1 could run ahead of what was saved; they stay on Sanity.
+ */
 const PHASE3_CHECKS: Record<string, (v: unknown) => boolean> = {
   ticketingProvider: (v) => v === 'checkin' || v === 'tito',
-  publicFreeTicketIds: (v) => isList(v, isPosInt),
-  // Gates: a valid D1 time wins; null or anything else keeps Sanity's.
-  workshopRegistrationSponsorStart: isInstant,
-  workshopRegistrationStart: isInstant,
-  workshopRegistrationEnd: isInstant,
-  workshopEarlyAccessTicketTypes: (v) =>
-    isList(v, (x) => typeof x === 'string' && x.trim() !== ''),
 }
 
 type ApiConference = Partial<
@@ -389,7 +383,6 @@ export async function mergeKonfApiConference(
     // `[]` means no value: keep Sanity's composition, hidden flags and all.
     if (Array.isArray(homepageSections) && homepageSections.length > 0)
       merged.homepageSections = homepageSections
-    await mergePrivate(host, conference, merged)
     return merged as unknown as Conference
   } catch (err) {
     console.warn(
@@ -441,15 +434,36 @@ const isDayOrNull = (v: unknown) => v == null || isDay(v)
 const CURVES = new Set(['linear', 'early_push', 'late_push', 's_curve'])
 
 /**
- * The members-only ticket setup over `merged`. Each field is taken only when
- * D1 holds a valid value; null or a bad value keeps Sanity's. Any failure
- * keeps every Sanity value.
+ * The members-only fields of the conference document (Sanity names). Never in
+ * a conference object handed to a public page: `getConferenceForDomain`
+ * strips them unless `includeTicketSetup`, and `mergeTicketSetup` adds the D1
+ * ones only on that server-side path (#2080).
  */
-async function mergePrivate(
+export const TICKET_SETUP_FIELDS = [
+  'checkinCustomerId',
+  'checkinEventId',
+  'titoAccountSlug',
+  'titoEventSlug',
+  'ticketCapacity',
+  'ticketTargets',
+  'ticketTypeRoles',
+  'workshopReminderLastSentAt',
+  'workshopReminderLastSentCount',
+  'workshopReminderReservedAt',
+] as const
+
+/**
+ * The members-only ticket setup from D1 over `conference`, for server-side
+ * readers only. D1 is read for checkinCustomerId, ticketCapacity,
+ * ticketTargets and the reminder state; the binding and ticketTypeRoles stay
+ * on Sanity (their writers serialise on Sanity's `_rev`). Each field is taken
+ * only when D1 holds a valid value; null, a bad value or any failure keeps
+ * Sanity's, which is still written for every one of them.
+ */
+export async function mergeTicketSetup<T extends { _id: string }>(
   host: string,
-  conference: Conference,
-  merged: Record<string, unknown>,
-): Promise<void> {
+  conference: T,
+): Promise<T> {
   let p: PrivateConference
   try {
     p = await fetchKonfApiPrivate(host, conference._id)
@@ -458,16 +472,11 @@ async function mergePrivate(
       `[konf-api] members-only fields fall back to Sanity for ${host}:`,
       (err as Error).message,
     )
-    return
+    return conference
   }
-  for (const k of [
-    'checkinCustomerId',
-    'checkinEventId',
-    'ticketCapacity',
-  ] as const)
+  const merged = { ...conference } as Record<string, unknown>
+  for (const k of ['checkinCustomerId', 'ticketCapacity'] as const)
     if (isPosInt(p[k])) merged[k] = p[k]
-  for (const k of ['titoAccountSlug', 'titoEventSlug'] as const)
-    if (typeof p[k] === 'string' && p[k].trim()) merged[k] = p[k]
   for (const k of [
     'workshopReminderLastSentAt',
     'workshopReminderReservedAt',
@@ -505,25 +514,5 @@ async function mergePrivate(
         label: m.label ?? '',
       })),
     }
-
-  // Absent stays absent: GraphQL's null for an unanswered question is
-  // dropped, never turned into `false`. D1 keeps no `_key`; one is made up
-  // per position for React lists (writers address entries by name).
-  const roles = p.ticketTypeRoles
-  if (
-    isList(
-      roles,
-      (r) =>
-        typeof (r as { typeName?: unknown }).typeName === 'string' &&
-        (r as { typeName: string }).typeName.trim() !== '',
-    )
-  )
-    merged.ticketTypeRoles = roles!.map((r, i) => ({
-      _key: `d1-${i}`,
-      typeName: r.typeName,
-      ...(typeof r.admits === 'boolean' && { admits: r.admits }),
-      ...(typeof r.grantsWorkshop === 'boolean' && {
-        grantsWorkshop: r.grantsWorkshop,
-      }),
-    }))
+  return merged as T
 }

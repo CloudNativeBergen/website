@@ -8,7 +8,7 @@ import { BuildingOffice2Icon } from '@heroicons/react/24/outline'
 
 export default async function AdminSponsors() {
   const [{ conference, error: conferenceError }, session] = await Promise.all([
-    getConferenceForCurrentDomain({}),
+    getConferenceForCurrentDomain({ includeTicketSetup: true }),
     getAuthSession(),
   ])
 

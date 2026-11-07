@@ -66,6 +66,7 @@ describe('/admin event facts opt-in', () => {
       topics: true,
       schedule: true,
       includeSpeakerRegistrationLink: true,
+      includeTicketSetup: true,
     })
   })
 })

@@ -248,7 +248,9 @@ function requireWorkshopUser(ctx: Context): WorkshopUserIdentity {
 async function requireWorkshopAttendee(ctx: Context, signUp = false) {
   const actor = requireWorkshopUser(ctx)
 
-  const { conference, error } = await getConferenceForCurrentDomain({})
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   // The helper NEVER returns null — on failure it returns `{} as Conference`
   // plus `error`, so a bare `!conference` check can never fire. Check the error
   // AND a usable _id instead.
@@ -512,7 +514,9 @@ export const workshopRouter = router({
         const recipients = await getConfirmedAnnouncementRecipients(
           input.workshopId,
         )
-        const { conference } = await getConferenceForCurrentDomain({})
+        const { conference } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         const { sent, failed } = await sendAnnouncementToConfirmedParticipants({
           conference: conference || undefined,
           workshopTitle: workshop.title,
@@ -1029,7 +1033,9 @@ export const workshopRouter = router({
 
           let emailSent = false
           if (input.sendEmail && wasWaitlisted) {
-            const { conference } = await getConferenceForCurrentDomain({})
+            const { conference } = await getConferenceForCurrentDomain({
+              includeTicketSetup: true,
+            })
             if (conference) {
               const [result] = await Promise.allSettled([
                 sendBasicWorkshopConfirmation({
@@ -1172,7 +1178,9 @@ export const workshopRouter = router({
             })
           }
 
-          const { conference } = await getConferenceForCurrentDomain({})
+          const { conference } = await getConferenceForCurrentDomain({
+            includeTicketSetup: true,
+          })
 
           // ONE guarded write per workshop (#1344). Past capacity is the
           // organizer's call, made on the true count (#1358): a workshop the
@@ -1477,7 +1485,9 @@ export const workshopRouter = router({
               .set({ workshopCancelNoticeSentAt: at })
               .commit()
           await setSentAt(new Date().toISOString())
-          const { conference } = await getConferenceForCurrentDomain({})
+          const { conference } = await getConferenceForCurrentDomain({
+            includeTicketSetup: true,
+          })
           const { sent, failed } = await fanOutEmails(recipients, (s) =>
             sendWorkshopCanceledEmail({
               userEmail: s.userEmail,
@@ -1545,7 +1555,9 @@ export const workshopRouter = router({
         const move = await readMoveOrRefuse(input)
         const wanted = input.signupIds && new Set(input.signupIds)
         try {
-          const { conference } = await getConferenceForCurrentDomain({})
+          const { conference } = await getConferenceForCurrentDomain({
+            includeTicketSetup: true,
+          })
           const result = await moveSignups({
             conferenceId,
             conference: conference || undefined,
@@ -1580,7 +1592,9 @@ export const workshopRouter = router({
       // resolves, which fails closed. The document is read for the ticketing
       // binding and the roles, and must be that conference.
       const conferenceId = await resolveConferenceId()
-      const { conference } = await getConferenceForCurrentDomain()
+      const { conference } = await getConferenceForCurrentDomain({
+        includeTicketSetup: true,
+      })
       if (conference?._id !== conferenceId) {
         throw new TRPCError({
           code: 'NOT_FOUND',
@@ -1613,7 +1627,9 @@ export const workshopRouter = router({
         // TENANCY (AGENTS.md): the tenant is the one `resolveConferenceId()`
         // resolves, which fails closed; the document must be that conference.
         const conferenceId = await resolveConferenceId()
-        const { conference } = await getConferenceForCurrentDomain()
+        const { conference } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         if (conference?._id !== conferenceId) {
           throw new TRPCError({
             code: 'NOT_FOUND',
@@ -1739,7 +1755,9 @@ export const workshopRouter = router({
       .input(z.object({ onlyUnsent: z.boolean().default(true) }))
       .query(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
-        const { domain } = await getConferenceForCurrentDomain()
+        const { domain } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         const targets = await earlyAccessBulkTargets(conferenceId, input)
         return {
           count: targets.length,
@@ -1755,7 +1773,7 @@ export const workshopRouter = router({
       .input(z.object({ onlyUnsent: z.boolean().default(true) }))
       .query(async ({ input }) => {
         const { conference, domain, error } =
-          await getConferenceForCurrentDomain()
+          await getConferenceForCurrentDomain({ includeTicketSetup: true })
         if (error || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -1784,7 +1802,7 @@ export const workshopRouter = router({
       )
       .mutation(async ({ input, ctx }) => {
         const { conference, domain, error } =
-          await getConferenceForCurrentDomain()
+          await getConferenceForCurrentDomain({ includeTicketSetup: true })
         if (error || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',

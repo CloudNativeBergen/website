@@ -81,7 +81,7 @@ const NO_FORMATS_MESSAGE =
  *
  * WHAT IT MAY READ. The parameter type lists every conference field it looks
  * at, and `topics` is deliberately NOT among them: the routers call
- * `getConferenceForCurrentDomain()` WITHOUT projecting topics, and the boundary
+ * `getConferenceForCurrentDomain({ includeTicketSetup: true })` WITHOUT projecting topics, and the boundary
  * normaliser coerces the absent field to `[]`, so a topic-aware conference gate
  * here would fail CLOSED on every well-configured conference (see
  * `canAcceptProposals`). What refuses a topic-less proposal is step 4 — the

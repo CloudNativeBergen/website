@@ -89,9 +89,12 @@ const SETTINGS_PHASE2 = new Set([
 ])
 
 /**
- * Settings phase 3 (#2080), ticket setup, read from D1 through the merge.
- * `ticketTargets` is flattened in movedConferencePatch. The reminder state is
- * not here: only the reminder writes it (D1 lock for a d1_write tenant).
+ * Settings phase 3 (#2080), ticket setup: written to D1 AND Sanity. Some are
+ * read from D1 now (konf-api.ts), but Sanity stays the fallback when that read
+ * fails, so its copy must not go stale until the D1 read is proven in
+ * production. `ticketTargets` is flattened in movedConferencePatch. The
+ * reminder state is not here: only the reminder writes it (D1 lock for a
+ * d1_write tenant).
  */
 const SETTINGS_PHASE3 = new Set([
   'ticketingProvider',
@@ -109,23 +112,6 @@ const SETTINGS_PHASE3 = new Set([
 ])
 
 /**
- * Settings phase 3 fields whose Sanity write stops for a d1_write tenant.
- * The others in SETTINGS_PHASE3 are still written to both, on purpose:
- * - the binding (checkinEventId, tito slugs): Sanity stays the cross-tenant
- *   index for the "already claimed" check and the ticket-sold webhook lookup;
- * - ticketTypeRoles, publicFreeTicketIds, the registration windows and the
- *   early-access types: their writers serialise on Sanity's `_rev` (or patch
- *   per element) and validate against that same read. A D1-side conditional
- *   write is the follow-up that lets their Sanity write stop.
- */
-const PHASE3_WRITE_STOPPED = new Set([
-  'ticketingProvider',
-  'checkinCustomerId',
-  'ticketCapacity',
-  'ticketTargets',
-])
-
-/**
  * Whether a conference settings input key represents a field moved to D1 (#1997).
  * Sanity groups primaryColor/accentColor under `theme`, and published is
  * derived from `lifecycleStatus`.
@@ -133,12 +119,7 @@ const PHASE3_WRITE_STOPPED = new Set([
 export function isMovedConferenceField(key: string): boolean {
   // lifecycleStatus is NOT moved: D1 stores only the derived `published`
   // boolean, so cancelled vs archived lives in Sanity alone.
-  return (
-    MOVED.has(key) ||
-    SETTINGS.has(key) ||
-    PHASE3_WRITE_STOPPED.has(key) ||
-    key === 'theme'
-  )
+  return MOVED.has(key) || SETTINGS.has(key) || key === 'theme'
 }
 
 /**

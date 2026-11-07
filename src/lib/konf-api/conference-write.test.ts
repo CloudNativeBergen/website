@@ -143,19 +143,10 @@ describe('movedConferencePatch settings phase 2 (#2038)', () => {
 // the same change, or every edit to it reads as drift; a dual-written column
 // missing from it goes unchecked.
 describe('parity columns agree with the write split (#1917)', () => {
-  // The four ticketTargets columns are one Sanity input key.
-  const TARGETS = new Set([
-    'ticket_targets_enabled',
-    'ticket_sales_start_date',
-    'ticket_target_curve',
-    'ticket_target_milestones',
-  ])
   const camel = (col: string) =>
     col === 'organizer_name'
       ? 'organizer'
-      : TARGETS.has(col)
-        ? 'ticketTargets'
-        : col.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())
+      : col.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())
   // Not a settings input key: the row's identity, lifecycleStatus's derived
   // gate, and showVanityMetrics (nested; the tickets router writes it to D1
   // only for d1_write tenants).
@@ -164,7 +155,7 @@ describe('parity columns agree with the write split (#1917)', () => {
     'org_id',
     'published',
     'show_vanity_metrics',
-    // Written by the reminder only: D1 for a d1_write tenant, else Sanity (#2080).
+    // Written by the reminder to Sanity only, until its D1 write (#2080).
     'workshop_reminder_last_sent_at',
     'workshop_reminder_last_sent_count',
     'workshop_reminder_reserved_at',
@@ -187,7 +178,7 @@ describe('parity columns agree with the write split (#1917)', () => {
 })
 
 describe('movedConferencePatch settings phase 3 (#2080)', () => {
-  it('sends every phase 3 key to D1, flattens ticketTargets, strips role keys; stops the Sanity write for four of them only', () => {
+  it('sends every phase 3 key to D1, flattens ticketTargets, strips role keys, and leaves Sanity owning them', () => {
     const input = {
       ticketingProvider: 'checkin',
       checkinCustomerId: 1,
@@ -218,13 +209,7 @@ describe('movedConferencePatch settings phase 3 (#2080)', () => {
       ticketTargetMilestones: milestones,
       ticketTypeRoles: [{ typeName: 'X', admits: false }],
     })
-    const stopped = [
-      'ticketingProvider',
-      'checkinCustomerId',
-      'ticketCapacity',
-      'ticketTargets',
-    ]
     for (const k of [...Object.keys(input), 'ticketTargets', 'ticketTypeRoles'])
-      expect(isMovedConferenceField(k), k).toBe(stopped.includes(k))
+      expect(isMovedConferenceField(k)).toBe(false)
   })
 })

@@ -41,7 +41,7 @@ export async function GET(request: Request) {
 
     // Get conference from domain
     const { conference, domain: domainName } =
-      await getConferenceForCurrentDomain()
+      await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
     // Ensure domain includes protocol (domainName is just hostname from headers)
     const baseUrl = `https://${domainName}`

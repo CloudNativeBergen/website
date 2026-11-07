@@ -978,7 +978,7 @@ export const proposalRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const { conference, error: confError } =
-          await getConferenceForCurrentDomain()
+          await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
         if (confError || !conference) {
           throw new TRPCError({
@@ -1150,7 +1150,9 @@ export const proposalRouter = router({
                 : null
 
           if (conferenceId) {
-            const { conference } = await getConferenceForCurrentDomain({})
+            const { conference } = await getConferenceForCurrentDomain({
+              includeTicketSetup: true,
+            })
             if (conference && conference._id === conferenceId) {
               const { isConferenceOver, isCfpOpen } =
                 await import('@/lib/conference/state')
@@ -1665,7 +1667,9 @@ export const proposalRouter = router({
 
         // Only for a talk of the host conference: the notice carries its
         // branding, and the owner arm admits a talk of another tenant.
-        const { conference, domain } = await getConferenceForCurrentDomain()
+        const { conference, domain } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         const talkConference = proposal.conference
         const talkConferenceId =
           talkConference && '_ref' in talkConference
@@ -1725,6 +1729,7 @@ export const proposalRouter = router({
           error: confError,
         } = await getConferenceForCurrentDomain({
           includeSpeakerRegistrationLink: true,
+          includeTicketSetup: true,
         })
 
         if (confError || !conference) {
@@ -2098,6 +2103,7 @@ export const proposalRouter = router({
         if (talkConferenceId && talkConferenceId !== conference._id) {
           const own = await getConferenceById(talkConferenceId, {
             includeSpeakerRegistrationLink: true,
+            includeTicketSetup: true,
           }).catch(() => null)
           if (own) {
             statusChangeEvent.conference = own.conference
@@ -2141,7 +2147,9 @@ export const proposalRouter = router({
         }),
       )
       .mutation(async ({ input }) => {
-        const { conference, domain } = await getConferenceForCurrentDomain()
+        const { conference, domain } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         if (!conference?._id || !domain) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -2203,7 +2211,9 @@ export const proposalRouter = router({
       .mutation(async ({ input, ctx }) => {
         const { proposalId, speakerId, revokeTicket } = input
         const comment = input.comment?.trim() || undefined
-        const { conference, domain } = await getConferenceForCurrentDomain()
+        const { conference, domain } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         if (!conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -2568,7 +2578,9 @@ export const proposalRouter = router({
                 removedSpeakerIds,
               })
               const { conference, domain } =
-                await getConferenceForCurrentDomain()
+                await getConferenceForCurrentDomain({
+                  includeTicketSetup: true,
+                })
               const talkConference = proposal.conference
               const talkConferenceId =
                 talkConference && '_ref' in talkConference
@@ -2903,7 +2915,9 @@ export const proposalRouter = router({
       )
       .query(async ({ input }) => {
         try {
-          const { conference, error } = await getConferenceForCurrentDomain()
+          const { conference, error } = await getConferenceForCurrentDomain({
+            includeTicketSetup: true,
+          })
           if (error || !conference) {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
@@ -3572,7 +3586,7 @@ export const proposalRouter = router({
           // frozen out when the serverless instance is reclaimed.
           //
           // REQUEST-SCOPE DEPENDENCY: `sendResponseNotificationEmail` calls
-          // `getConferenceForCurrentDomain()` -> `await headers()` INSIDE this
+          // `getConferenceForCurrentDomain({ includeTicketSetup: true })` -> `await headers()` INSIDE this
           // task. That is safe here — `after()` binds the AsyncLocalStorage
           // snapshot and this is an App Router route handler in the action
           // phase — but it is NOT the house pattern (`message.ts:568` resolves

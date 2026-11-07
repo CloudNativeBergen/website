@@ -373,7 +373,9 @@ export function isClientError(code: string): boolean {
 }
 
 export async function resolveConferenceId(): Promise<string> {
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || !conference?._id) {
     throw new TRPCError({
       code: 'NOT_FOUND',
@@ -396,7 +398,9 @@ export async function resolveConferenceId(): Promise<string> {
  */
 export async function resolveOrganizationId(): Promise<string | null> {
   try {
-    const { conference, error } = await getConferenceForCurrentDomain()
+    const { conference, error } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     if (error || !conference?._id) return null
     return conference.organization?._ref ?? null
   } catch {
@@ -419,7 +423,9 @@ export async function resolveLogTenant(): Promise<{
   conferenceId?: string
 }> {
   try {
-    const { conference } = await getConferenceForCurrentDomain()
+    const { conference } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     if (!conference?._id) return {}
     return {
       orgId: conference.organization?._ref,

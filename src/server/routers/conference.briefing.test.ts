@@ -194,6 +194,7 @@ describe('speaker briefing procedures', () => {
     expect(getConferenceMock).toHaveBeenCalledWith({
       uncached: true,
       includeSpeakerRegistrationLink: true,
+      includeTicketSetup: true,
     })
   })
 

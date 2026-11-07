@@ -38,6 +38,7 @@ export default async function SponsorDashboardPage({
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({
       includeSponsorRegistrationLink: true,
+      includeTicketSetup: true,
     })
   if (conferenceError || !conference) {
     return (

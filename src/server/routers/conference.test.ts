@@ -1645,23 +1645,18 @@ describe('conference router — D1 write path (#1881)', () => {
     ticketingProvider: 'checkin' as const,
     checkinCustomerId: 42,
   }
-  it('for a d1_write tenant, writes the provider and customer id to D1 only; Sanity is not written (#2080)', async () => {
+  it('for a d1_write tenant, writes settings phase 3 ticketing fields to D1 first, then Sanity (#2080)', async () => {
     await makeCaller({ isOrganizer: true }).updateTicketingIds(TICKETING)
     const [[, init]] = apiCalls()
     expect(JSON.parse(init.body).variables.input).toEqual(TICKETING)
-    expect(lastSet).toBeUndefined()
-    expect(commitMock).not.toHaveBeenCalled()
-  })
-
-  it('for a d1_write tenant, an unset of a write-stopped field still reaches Sanity (#2080)', async () => {
-    await makeCaller({ isOrganizer: true }).updateTicketingIds({
-      checkinCustomerId: null,
-    })
-    expect(JSON.parse(apiCalls()[0][1].body).variables.input).toEqual({
-      checkinCustomerId: null,
-    })
-    expect(commitMock).toHaveBeenCalled()
-    expect(lastSet).toBeUndefined()
+    expect(lastSet).toEqual(TICKETING)
+    const d1At =
+      fetchMock.mock.invocationCallOrder[
+        fetchMock.mock.calls.findIndex(([, i]) =>
+          String(i?.body).includes('updateConference'),
+        )
+      ]
+    expect(d1At).toBeLessThan(commitMock.mock.invocationCallOrder[0])
   })
 
   it('for a d1_write tenant, a failed D1 write of phase 3 fields leaves Sanity untouched (#2080)', async () => {

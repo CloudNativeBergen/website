@@ -111,10 +111,15 @@ async function CachedHomeContent({ domain }: { domain: string }) {
   // Gate on the FULL binding (customer + event id — what the resolver
   // requires) and pass only the minimal binding so the 'use cache' key stays
   // stable across unrelated conference-field changes.
-  if (hasTicketingBinding(conference)) {
+  // The binding is members-only (#2080): read on its own, server-side, and
+  // never part of the `conference` handed to the components below.
+  const { conference: ticketSetup } = await getConferenceForDomain(domain, {
+    includeTicketSetup: true,
+  })
+  if (hasTicketingBinding(ticketSetup)) {
     try {
       const ticketData = await getPublicTicketTypes(
-        ticketingBinding(conference),
+        ticketingBinding(ticketSetup),
         conference._id,
       )
       if (ticketData.status === 'ok') {
