@@ -23,6 +23,12 @@ import {
 import { ViewModeSelector } from './ViewModeSelector'
 import { formatConferenceDateShort } from '@/lib/time'
 
+export interface ProgramCfpOptions {
+  formats?: Record<string, string>
+  levels?: Record<string, string>
+  audiences?: Record<string, string>
+}
+
 interface ProgramFiltersProps {
   filters: ProgramFilterOptions
   availableFilters: {
@@ -33,6 +39,7 @@ interface ProgramFiltersProps {
     audiences: Audience[]
     topics: Topic[]
   }
+  cfpOptions?: ProgramCfpOptions
   onFilterChange: <K extends keyof ProgramFilterOptions>(
     key: K,
     value: ProgramFilterOptions[K],
@@ -56,6 +63,7 @@ const CHEVRON_DOWN_CLASSES =
 export const ProgramFilters = React.memo(function ProgramFilters({
   filters,
   availableFilters,
+  cfpOptions,
   onFilterChange,
   onClearFilters,
   hasActiveFilters,
@@ -118,27 +126,38 @@ export const ProgramFilters = React.memo(function ProgramFilters({
     () =>
       availableFilters.formats.map((format) => {
         const config = getFormatConfig(format)
-        return { value: format, label: `${config.label} (${config.duration})` }
+        return {
+          value: format,
+          label:
+            cfpOptions?.formats?.[format] ??
+            `${config.label} (${config.duration})`,
+        }
       }),
-    [availableFilters.formats],
+    [availableFilters.formats, cfpOptions?.formats],
   )
 
   const levelOptions = useMemo(
     () =>
       availableFilters.levels.map((level) => {
         const config = getLevelConfig(level)
-        return { value: level, label: config?.label || level }
+        return {
+          value: level,
+          label: cfpOptions?.levels?.[level] ?? config?.label ?? level,
+        }
       }),
-    [availableFilters.levels],
+    [availableFilters.levels, cfpOptions?.levels],
   )
 
   const audienceOptions = useMemo(
     () =>
       availableFilters.audiences.map((audience) => {
         const config = getAudienceBadgeConfig(audience)
-        return { value: audience, label: config.text }
+        return {
+          value: audience,
+          label: cfpOptions?.audiences?.[audience] ?? config.text,
+        }
       }),
-    [availableFilters.audiences],
+    [availableFilters.audiences, cfpOptions?.audiences],
   )
 
   const formattedDays = useMemo(

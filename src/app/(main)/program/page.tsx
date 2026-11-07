@@ -2,6 +2,7 @@ import { resolvePageMetadata } from '@/lib/seo/brand'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { getPublicSchedule } from '@/lib/conference/sanity'
+import { getPublicCfp } from '@/lib/proposal/cfp'
 import { isUnknownHost } from '@/lib/conference/guard'
 import { isProgramPublished } from '@/lib/conference/state'
 import { ProgramClient } from './ProgramClient'
@@ -58,7 +59,6 @@ async function CachedProgramContent({ domain }: { domain: string }) {
 
   const { conference, error } = await getPublicSchedule(domain, {
     organizers: false,
-    topics: true,
     publicSponsors: true,
     sponsorTiers: true,
     confirmedTalksOnly: false,
@@ -107,6 +107,7 @@ async function CachedProgramContent({ domain }: { domain: string }) {
     )
   }
 
+  const cfp = await getPublicCfp(conference)
   const performers = performersFromSchedules(conference.schedules)
 
   return (
@@ -149,7 +150,11 @@ async function CachedProgramContent({ domain }: { domain: string }) {
             conference.schedules,
             conference.sponsors || [],
           )}
-          conferenceTopics={conference.topics || []}
+          cfpOptions={{
+            formats: Object.fromEntries(cfp.formats),
+            levels: Object.fromEntries(cfp.levels),
+            audiences: Object.fromEntries(cfp.audiences),
+          }}
           conferenceStartDate={conference.startDate}
           conferenceEndDate={conference.endDate}
         />

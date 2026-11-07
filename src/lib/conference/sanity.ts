@@ -22,6 +22,7 @@ import {
 } from '@/lib/gallery/sanity'
 import { getPublicSponsorsForConference } from '@/lib/sponsor-crm/sanity'
 import { getPublicSponsors } from '@/lib/sponsor/public'
+import { getPublicCfp } from '@/lib/proposal/cfp'
 import { selectConferenceSections, type RawConferenceRead } from './sections'
 import { CONFERENCE_QUERY_CORE, CONFERENCE_QUERY_FULL } from './query'
 import { CONFERENCE_CACHE_LIFE } from './cache-life'
@@ -211,6 +212,7 @@ async function forCurrentDomain({
   uncached = false,
   publicSchedule = false,
   publicSponsors = false,
+  publicCfp = false,
 }: {
   organizers?: boolean
   schedule?: boolean
@@ -237,6 +239,7 @@ async function forCurrentDomain({
   uncached?: boolean
   publicSchedule?: boolean
   publicSponsors?: boolean
+  publicCfp?: boolean
 } = {}): Promise<{
   conference: Conference
   domain: string
@@ -261,6 +264,7 @@ async function forCurrentDomain({
       uncached,
       publicSchedule,
       publicSponsors,
+      publicCfp,
     })
   } catch (err) {
     const error = err as Error
@@ -315,6 +319,7 @@ async function readConference(
     includeVolunteerRegistrationLink = false,
     publicSchedule = false,
     publicSponsors = false,
+    publicCfp = false,
   }: {
     organizers?: boolean
     schedule?: boolean
@@ -383,6 +388,11 @@ async function readConference(
      * entitlement. Implies `sponsors`. Public pages only.
      */
     publicSponsors?: boolean
+    /**
+     * The CFP topics from {@link getPublicCfp} (the API for an apiRead
+     * tenant). Implies `topics`. Public pages only.
+     */
+    publicCfp?: boolean
   } = {},
 ): Promise<{
   conference: Conference
@@ -461,12 +471,18 @@ async function readConference(
         featuredSpeakers,
         featuredTalks,
         sponsorTiers,
-        topics,
+        topics: topics || publicCfp,
         schedule,
         confirmedTalksOnly,
       })
       conference = await mergeConference(conference)
       status = 'resolved'
+
+      if (publicCfp && !uncached && conference._id) {
+        conference.topics = (
+          await getPublicCfp(conference as Parameters<typeof getPublicCfp>[0])
+        ).topics
+      }
 
       if (publicSponsors && !uncached && conference._id) {
         conference.sponsors = await getPublicSponsors(

@@ -2,11 +2,13 @@
 
 import React from 'react'
 import { ConferenceSchedule } from '@/lib/conference/types'
-import { Topic } from '@/lib/topic/types'
 import { useProgramFilter } from '@/hooks/useProgramFilter'
 import { useProgramViewMode } from '@/hooks/useProgramViewMode'
 import { useLiveProgram } from '@/hooks/useLiveProgram'
-import { ProgramFilters } from '@/components/program/ProgramFilters'
+import {
+  ProgramFilters,
+  type ProgramCfpOptions,
+} from '@/components/program/ProgramFilters'
 import { ProgramScheduleView } from '@/components/program/ProgramScheduleView'
 import { ProgramGridView } from '@/components/program/ProgramGridView'
 import { ProgramListView } from '@/components/program/ProgramListView'
@@ -14,13 +16,14 @@ import { ProgramAgendaView } from '@/components/program/ProgramAgendaView'
 
 interface ProgramClientProps {
   schedules: ConferenceSchedule[]
-  conferenceTopics: Topic[]
+  cfpOptions?: ProgramCfpOptions
   conferenceStartDate: string
   conferenceEndDate: string
 }
 
 export function ProgramClient({
   schedules,
+  cfpOptions,
   conferenceStartDate,
   conferenceEndDate,
 }: ProgramClientProps) {
@@ -77,6 +80,7 @@ export function ProgramClient({
         <ProgramFilters
           filters={filters}
           availableFilters={filteredData.availableFilters}
+          cfpOptions={cfpOptions}
           onFilterChange={updateFilter}
           onClearFilters={clearFilters}
           hasActiveFilters={hasActiveFilters}
