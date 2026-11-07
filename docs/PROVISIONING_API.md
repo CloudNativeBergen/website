@@ -4,16 +4,17 @@
 
 The same caller also **writes** `organization` documents directly, with its own Sanity token, and must be able to bust this app's caches afterwards. That is `POST /api/provisioning/cache/invalidate` — same bearer secret, documented at the end of this file.
 
-## One transaction, two front doors
+## One transaction, three front doors
 
 There is exactly **one** tenant-creation implementation: `provisionOrganization()` in `src/lib/onboarding/provision.ts`.
 
-| Surface                                | Caller                     | Authentication              | Idempotency  |
-| -------------------------------------- | -------------------------- | --------------------------- | ------------ |
-| `onboarding.createOrganization` (tRPC) | Platform operator, in-app  | Session + platform-org role | none         |
-| `POST /api/provisioning/organizations` | RunKonf/kontroll (machine) | Shared bearer secret        | required key |
+| Surface                                        | Caller                                                                                        | Authentication                                                            | Idempotency                                    |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------- |
+| `onboarding.createOrganization` (tRPC)         | Platform operator, in-app                                                                     | Session + platform-org role                                               | none                                           |
+| `POST /api/provisioning/organizations`         | RunKonf/kontroll (machine)                                                                    | Shared bearer secret                                                      | required key                                   |
+| `POST /api/provisioning/service/organizations` | tenant-directory, for the gateway's operator-only `createOrganization` mutation (kontroll#79) | tenant-directory assertion over the body (`TENANT_DIRECTORY_PUBLIC_KEYS`) | required key, then the same key on the D1 step |
 
-Both land on the same reads, the same validation authority, and the same all-or-nothing Sanity transaction. **Do not add provisioning logic to the route handler.** A second copy would fork the per-field document enumeration in `buildOnboardingDocuments` and start silently dropping new conference fields on whichever path was forgotten (#752).
+All land on the same reads, the same validation authority, and the same all-or-nothing Sanity transaction. **Do not add provisioning logic to the route handler.** A second copy would fork the per-field document enumeration in `buildOnboardingDocuments` and start silently dropping new conference fields on whichever path was forgotten (#752).
 
 ## Environment
 

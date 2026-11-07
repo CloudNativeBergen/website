@@ -14,7 +14,9 @@ import {
   generateEnvelopeKeyPair,
   type Envelope,
 } from '@runkonf/tenancy'
+import { exportJWK, exportSPKI, generateKeyPair } from 'jose'
 import type { CustomHostnames } from './data/cloudflare'
+import { verifyServiceAssertion } from '../../../src/lib/provisioning/service'
 
 // vitest.config.ts stubs `jose`; load the real one so signatures are checked.
 vi.mock('jose', async () => {
@@ -120,6 +122,64 @@ const tenantDocs = (): Docs => {
   return docs
 }
 let sanity: Docs
+
+// The site's provisioning route (src/lib/provisioning/service.ts verifies the
+// real assertion): writes Sanity docs into `sanity`, once per key.
+const SITE = 'https://site.test'
+const signing = await generateKeyPair('EdDSA', { extractable: true })
+const signingJwk = JSON.stringify({
+  ...(await exportJWK(signing.privateKey)),
+  kid: 'td1',
+})
+const sitePublicKeys = JSON.stringify({
+  td1: await exportSPKI(signing.publicKey),
+})
+const site = {
+  receipts: new Map<string, { organizationId: string; conferenceId: string }>(),
+  writes: 0,
+  /** Fail AFTER the Sanity write, as a lost response would. */
+  fail: false,
+  operators: [] as string[],
+}
+async function fakeSite(req: Request): Promise<Response> {
+  const raw = await req.text()
+  const op = await verifyServiceAssertion(
+    req.headers.get('x-konf-service'),
+    sitePublicKeys,
+    raw,
+  )
+  if (!op) return Response.json({ error: 'unauthorized' }, { status: 401 })
+  site.operators.push(op)
+  const { idempotencyKey, input } = JSON.parse(raw)
+  let out = site.receipts.get(idempotencyKey)
+  if (!out) {
+    const claimed = Object.values(sanity.confs).flatMap((c) => c.domains ?? [])
+    if (sanity.orgs[`organization.${input.slug}`])
+      return Response.json({ code: 'slug_taken' }, { status: 409 })
+    if (input.domain && claimed.includes(input.domain))
+      return Response.json({ code: 'domain_claimed' }, { status: 409 })
+    out = {
+      organizationId: `organization.${input.slug}`,
+      conferenceId: `conference-${site.receipts.size}-${input.slug}`,
+    }
+    sanity.orgs[out.organizationId] = { slug: input.slug, name: input.name }
+    const year = input.startDate.slice(0, 4)
+    sanity.confs[out.conferenceId] = {
+      orgRef: out.organizationId,
+      title: input.conferenceTitle,
+      startDate: input.startDate,
+      domains: [
+        `${input.slug}-${year}.konf.run`,
+        `${input.slug}.konf.run`,
+        ...(input.domain ? [input.domain] : []),
+      ],
+    }
+    site.receipts.set(idempotencyKey, out)
+    site.writes++
+  }
+  if (site.fail) return new Response('gateway timeout', { status: 504 })
+  return Response.json(out)
+}
 const sanityFetch = vi.fn<typeof fetch>()
 let sanityRequests: Pick<Request, 'url' | 'headers' | 'json'>[] = []
 vi.stubGlobal('fetch', sanityFetch)
@@ -152,6 +212,13 @@ beforeEach(() => {
           import.meta.url,
         ),
         'utf8',
+      ) +
+      readFileSync(
+        new URL(
+          '../migrations/0007_provisioning_created_by.sql',
+          import.meta.url,
+        ),
+        'utf8',
       ),
   )
   env = {
@@ -163,13 +230,20 @@ beforeEach(() => {
     SANITY_PROJECT_ID: 'p',
     SANITY_DATASET: 'd',
     SANITY_API_TOKEN_READ: 'token',
+    SITE_URL: SITE,
+    PROVISIONING_SIGNING_KEY: signingJwk,
   }
   sanity = tenantDocs()
+  site.receipts.clear()
+  site.writes = 0
+  site.fail = false
+  site.operators = []
   sanityFetch.mockReset()
   sanityRequests = []
   sanityFetch.mockImplementation(async (url, init) => {
     // A Request at runtime; workers-types and Node disagree on its type.
     const req = new Request(url as unknown as string, init)
+    if (req.url.startsWith(SITE)) return fakeSite(req)
     sanityRequests.push(req.clone())
     const { params } = (await req.json()) as {
       params: { orgId: string; conferenceId: string }
@@ -328,12 +402,13 @@ describe('provisioning', () => {
     const { body } = await gql('{ _service { sdl } }')
     const mutation = /type Mutation[^}]*}/.exec(body.data._service.sdl)![0]
     const fields = mutation.split('\n').filter((l) => /^\s+\w+\(/.test(l))
-    expect(fields).toHaveLength(6)
+    expect(fields).toHaveLength(7)
     for (const f of fields)
       if (f.includes('setConferenceLifecycle(')) expect(f).not.toContain('@tag')
       else
         expect(f).toContain(
-          f.includes('provisionOrganization(')
+          f.includes('provisionOrganization(') ||
+            f.includes('createOrganization(')
             ? '@tag(name: "operator")'
             : '@tag(name: "internal")',
         )
@@ -893,7 +968,14 @@ describe('rollout flags (#1925)', () => {
     expect(mutation).not.toMatch(
       /apiRead|identityLogin|d1Write|d1Override|flags/i,
     )
-    expect(sdl).not.toMatch(/^input /m)
+    // The only input type is createOrganization's, and it carries no flag.
+    const inputs = sdl.match(/^input [^}]*}/gm) ?? []
+    expect(inputs.map((i) => i.split(' ')[1])).toEqual([
+      'CreateOrganizationInput',
+    ])
+    expect(inputs[0]).not.toMatch(
+      /apiRead|identityLogin|d1Write|d1Override|flags/i,
+    )
     expect(sdl).toMatch(/flags: RolloutFlags @tag\(name: "internal"\)/)
   })
 
@@ -1184,5 +1266,166 @@ describe('myOrganizations (#2036, #2043)', () => {
       const count = (String(sql).match(/\?/g) || []).length
       expect(count).toBeLessThanOrEqual(90)
     }
+  })
+})
+
+describe('createOrganization (kontroll#79)', () => {
+  const CREATE = `mutation($input: CreateOrganizationInput!, $key: String!) {
+    createOrganization(input: $input, idempotencyKey: $key) { organizationId conferenceId }
+  }`
+  const input = (over: Record<string, unknown> = {}) => ({
+    name: 'Nova',
+    slug: 'nova',
+    conferenceTitle: 'Nova Conf 2027',
+    startDate: '2027-05-01',
+    endDate: '2027-05-02',
+    domain: 'conf.nova.org',
+    ownerEmail: 'owner@nova.org',
+    ...over,
+  })
+  const create = (
+    over = {},
+    key = 'create-key-000001',
+    as: Envelope = operator,
+  ) => gql(CREATE, { input: input(over), key }, as)
+  const nothingWritten = () => {
+    expect(site.writes).toBe(0)
+    for (const t of [
+      'organizations',
+      'conferences',
+      'domains',
+      'provisioning_requests',
+    ])
+      expect(count(t)).toBe(0)
+  }
+
+  it('creates the Sanity docs, the D1 rows and the owner org, recording the operator', async () => {
+    const { body } = await create()
+    expect(body.errors).toBeUndefined()
+    expect(body.data.createOrganization).toEqual({
+      organizationId: 'organization.nova',
+      conferenceId: 'conference-0-nova',
+    })
+    expect(site.writes).toBe(1)
+    expect(site.operators).toEqual(['op'])
+    expect(identity.ensure).toHaveBeenCalledWith('organization.nova', 'nova')
+    expect(
+      sqlite.prepare('SELECT created_by FROM provisioning_requests').all(),
+    ).toEqual([{ created_by: 'op' }])
+    expect(
+      sqlite
+        .prepare('SELECT hostname, kind FROM domains ORDER BY hostname')
+        .all(),
+    ).toEqual([
+      { hostname: 'nova-2027.konf.run', kind: 'platform-edition' },
+      { hostname: 'nova.konf.run', kind: 'platform-alias' },
+    ])
+  })
+
+  it('a retry with the same key returns the same ids and writes nothing twice', async () => {
+    const a = (await create()).body.data.createOrganization
+    const b = (await create()).body.data.createOrganization
+    expect(b).toEqual(a)
+    expect(site.writes).toBe(1)
+    expect(count('organizations')).toBe(1)
+    expect(count('conferences')).toBe(1)
+    expect(count('provisioning_requests')).toBe(1)
+  })
+
+  it('a retry after a failure between the Sanity and D1 steps completes', async () => {
+    site.fail = true
+    const first = await create()
+    expect(first.body.errors[0].extensions.code).toBe('INTERNAL_SERVER_ERROR')
+    expect(site.writes).toBe(1)
+    expect(count('organizations')).toBe(0)
+    site.fail = false
+    const { body } = await create()
+    expect(body.data.createOrganization).toEqual({
+      organizationId: 'organization.nova',
+      conferenceId: 'conference-0-nova',
+    })
+    expect(site.writes).toBe(1)
+    expect(count('organizations')).toBe(1)
+    expect(count('conferences')).toBe(1)
+  })
+
+  it.each<[string, Envelope | null]>([
+    ['anonymous', null],
+    ['a tenant envelope', organizer],
+    [
+      'an operator acting for a tenant',
+      {
+        ...(organizer as object),
+        orgRole: null,
+        scopes: ['platform:operator'],
+      } as Envelope,
+    ],
+    ['a user envelope', { typ: 'user', userId: 'u' }],
+  ])('refuses %s before any read or write', async (_, as) => {
+    const prepare = vi.spyOn(env.DB, 'prepare')
+    const { body } = as
+      ? await create({}, 'create-key-000001', as)
+      : await gql(CREATE, { input: input(), key: 'create-key-000001' })
+    expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
+    expect(sanityFetch).not.toHaveBeenCalled()
+    expect(prepare).not.toHaveBeenCalled()
+    expect(identity.ensure).not.toHaveBeenCalled()
+    nothingWritten()
+  })
+
+  it('a duplicate slug is BAD_USER_INPUT with nothing created', async () => {
+    const { body } = await create({ slug: 'acme', domain: null })
+    expect(body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    nothingWritten()
+  })
+
+  it('a duplicate domain is BAD_USER_INPUT with nothing created', async () => {
+    const { body } = await create({ domain: 'conf.acme.org' })
+    expect(body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    nothingWritten()
+  })
+
+  it('a slug or custom domain held only in D1 is refused before the site is called', async () => {
+    await provision('acme')
+    sanityFetch.mockClear()
+    delete sanity.orgs['organization.acme']
+    const slug = await create({ slug: 'acme', domain: null })
+    expect(slug.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    sqlite
+      .prepare(
+        "INSERT INTO domains (hostname, kind, org_id, conference_id, verification) VALUES ('custom.example.com', 'custom', 'organization.acme', 'conference-acme', 'pending')",
+      )
+      .run()
+    const domain = await create(
+      { domain: 'custom.example.com' },
+      'create-key-000002',
+    )
+    expect(domain.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    expect(sanityFetch).not.toHaveBeenCalled()
+    expect(site.writes).toBe(0)
+  })
+
+  it('rejects a short idempotency key', async () => {
+    const { body } = await create({}, 'short')
+    expect(body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    nothingWritten()
+  })
+
+  it.each([
+    ['slug', { slug: 'Not A Slug' }],
+    ['reserved slug', { slug: 'admin' }],
+    ['empty name', { name: '  ' }],
+    ['empty title', { conferenceTitle: '' }],
+    ['bad date', { startDate: '2027-02-30' }],
+    ['end before start', { endDate: '2027-04-30' }],
+    ['domain with a path', { domain: 'nova.org/x' }],
+    ['platform domain', { domain: 'x.konf.run' }],
+    ['email', { ownerEmail: 'not-an-email' }],
+  ])('rejects invalid input: %s', async (_, over) => {
+    const prepare = vi.spyOn(env.DB, 'prepare')
+    const { body } = await create(over)
+    expect(body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    expect(prepare).not.toHaveBeenCalled()
+    nothingWritten()
   })
 })

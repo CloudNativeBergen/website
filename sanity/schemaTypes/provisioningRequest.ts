@@ -68,6 +68,14 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'createdBy',
+      type: 'string',
+      title: 'Created by',
+      description:
+        'The platform operator user id, when created through the API gateway (createOrganization).',
+      readOnly: true,
+    }),
+    defineField({
       name: 'createdAt',
       type: 'datetime',
       title: 'Created at',

@@ -122,7 +122,12 @@ describe('secrets', () => {
     )
     expect(missingSecrets('tenant-directory', 'production', exec)).toEqual({
       required: [],
-      optional: ['SANITY_API_TOKEN_READ', 'CF_API_TOKEN', 'CF_ZONE_ID'],
+      optional: [
+        'SANITY_API_TOKEN_READ',
+        'CF_API_TOKEN',
+        'CF_ZONE_ID',
+        'PROVISIONING_SIGNING_KEY',
+      ],
     })
   })
 
@@ -139,6 +144,7 @@ describe('secrets', () => {
       'skip SANITY_API_TOKEN_READ (optional, not in fnox)',
       'skip CF_API_TOKEN (optional, not in fnox)',
       'skip CF_ZONE_ID (optional, not in fnox)',
+      'skip PROVISIONING_SIGNING_KEY (optional, not in fnox)',
     ])
     exec.mockImplementation(() => {
       throw new Error('missing')

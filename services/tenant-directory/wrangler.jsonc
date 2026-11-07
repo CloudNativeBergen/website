@@ -71,6 +71,7 @@
       "vars": {
         "SANITY_PROJECT_ID": "mvzwvw14",
         "SANITY_DATASET": "production",
+        "SITE_URL": "https://konf.app",
       },
     },
   },

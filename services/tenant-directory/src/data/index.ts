@@ -14,6 +14,7 @@ import {
   sql,
 } from 'drizzle-orm'
 import { createGraphQLError } from 'graphql-yoga'
+import { importJWK, SignJWT, type JWK } from 'jose'
 import { rawDb } from './db'
 import {
   cloudflareHostnames,
@@ -53,6 +54,10 @@ export interface DataEnv extends CloudflareEnv {
   SANITY_DATASET?: string
   /** wrangler secret put SANITY_API_TOKEN_READ (per environment) */
   SANITY_API_TOKEN_READ?: string
+  /** The site createOrganization asks to write the Sanity docs (kontroll#79). */
+  SITE_URL?: string
+  /** wrangler secret put PROVISIONING_SIGNING_KEY: private Ed25519 JWK with kid. */
+  PROVISIONING_SIGNING_KEY?: string
 }
 
 /** How often a verified custom domain is re-checked with Cloudflare. */
@@ -70,6 +75,79 @@ export interface ProvisionInput {
   orgId: string
   orgSlug: string
   conferenceId: string
+  /** The operator's user id, recorded on the receipt row (audit). */
+  createdBy?: string
+}
+
+/** createOrganization's input (RunKonf/kontroll#79). */
+export interface CreateOrganizationInput {
+  name: string
+  slug: string
+  conferenceTitle: string
+  startDate: string
+  endDate: string
+  domain?: string | null
+  ownerEmail: string
+}
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/
+const isDate = (s: string) =>
+  DATE.test(s) && new Date(`${s}T00:00:00Z`).toISOString().startsWith(s)
+const HOSTNAME =
+  /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Every input rule, checked before anything is read or written. */
+function validateCreate(input: CreateOrganizationInput, key: string) {
+  const bad = (m: string) => fail('BAD_USER_INPUT', m)
+  // The site's Idempotency-Key rule (src/lib/provisioning/constants.ts).
+  if (!/^[\x20-\x7e]{16,200}$/.test(key))
+    throw bad('idempotencyKey is 16-200 printable ASCII characters')
+  if (!input.name.trim() || input.name.length > 200)
+    throw bad('name is required')
+  if (!input.conferenceTitle.trim() || input.conferenceTitle.length > 200)
+    throw bad('conferenceTitle is required')
+  if (input.slug.length > 63 || !SLUG.test(input.slug))
+    throw bad('slugs are lowercase a-z, 0-9 and -')
+  if (RESERVED_SLUGS.has(input.slug))
+    throw bad(`"${input.slug}" is reserved for a platform host`)
+  if (!isDate(input.startDate) || !isDate(input.endDate))
+    throw bad('dates are YYYY-MM-DD')
+  if (input.endDate < input.startDate) throw bad('endDate is before startDate')
+  if (
+    input.domain != null &&
+    (!HOSTNAME.test(input.domain) ||
+      input.domain === PLATFORM_DOMAIN ||
+      input.domain.endsWith(`.${PLATFORM_DOMAIN}`))
+  )
+    throw bad('domain must be a lowercase hostname outside the platform zone')
+  if (input.ownerEmail.length > 254 || !EMAIL.test(input.ownerEmail))
+    throw bad('ownerEmail is not an email address')
+}
+
+/** A tenant-directory assertion over `body` (src/lib/provisioning/service.ts). */
+async function siteAssertion(jwkJson: string, sub: string, body: string) {
+  const jwk = JSON.parse(jwkJson) as JWK
+  if (!jwk.kid) throw new Error('PROVISIONING_SIGNING_KEY has no kid')
+  const bh = btoa(
+    String.fromCharCode(
+      ...new Uint8Array(
+        await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body)),
+      ),
+    ),
+  )
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+  const now = Math.floor(Date.now() / 1000)
+  return new SignJWT({ bh })
+    .setProtectedHeader({ alg: 'EdDSA', kid: jwk.kid })
+    .setIssuer('konf-tenant-directory')
+    .setAudience('konf-site-provisioning')
+    .setSubject(sub)
+    .setIssuedAt(now)
+    .setExpirationTime(now + 60)
+    .sign(await importJWK(jwk, 'EdDSA'))
 }
 
 interface SanityTenant {
@@ -209,7 +287,7 @@ export function createData(
     return p
   }
 
-  return {
+  const api = {
     syncMembers: () => env.IDENTITY.syncMembers(),
 
     /** {@link primaryHost} of one edition; the caller decided it may see it. */
@@ -526,6 +604,7 @@ export function createData(
             idempotencyKey: keyHash,
             orgId,
             conferenceId,
+            createdBy: input.createdBy ?? null,
           }),
         ])
       } catch (error) {
@@ -539,6 +618,99 @@ export function createData(
         )
       }
       return replay(orgId, conferenceId)
+    },
+
+    /**
+     * kontroll#79: creates the tenant end to end. The site writes the Sanity
+     * organization and conference (it owns that write and its idempotency
+     * receipt), then provision() registers them in D1 and runs identity's
+     * ensure. Both steps are idempotent on the same key, so a retry after a
+     * failure between them completes without duplicates.
+     */
+    async createOrganization(
+      input: CreateOrganizationInput,
+      idempotencyKey: string,
+      createdBy: string,
+    ) {
+      validateCreate(input, idempotencyKey)
+      if (!env.SITE_URL || !env.PROVISIONING_SIGNING_KEY) {
+        throw fail(
+          'INTERNAL_SERVER_ERROR',
+          'createOrganization is not configured',
+        )
+      }
+      const done = await db.query.provisioningRequests.findFirst({
+        where: eq(
+          provisioningRequests.idempotencyKey,
+          await sha256(idempotencyKey),
+        ),
+      })
+      if (!done) {
+        // D1 holds claims Sanity does not (custom domains): refuse those
+        // before the site writes anything.
+        const [slugRow, domainRow] = await Promise.all([
+          db.query.organizations.findFirst({
+            where: eq(organizations.slug, input.slug),
+          }),
+          input.domain
+            ? db.query.domains.findFirst({
+                where: eq(domains.hostname, input.domain),
+              })
+            : undefined,
+        ])
+        if (slugRow) throw fail('BAD_USER_INPUT', 'that slug is taken')
+        if (domainRow) throw fail('BAD_USER_INPUT', 'that domain is claimed')
+      }
+      const body = JSON.stringify({ idempotencyKey, input })
+      let res: Response
+      try {
+        res = await fetch(
+          new URL('/api/provisioning/service/organizations', env.SITE_URL),
+          {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-konf-service': await siteAssertion(
+                env.PROVISIONING_SIGNING_KEY,
+                createdBy,
+                body,
+              ),
+            },
+            body,
+            signal: AbortSignal.timeout(30_000),
+          },
+        )
+      } catch {
+        throw fail('INTERNAL_SERVER_ERROR', 'the site did not answer')
+      }
+      const out = (await res.json().catch(() => null)) as {
+        organizationId?: string
+        conferenceId?: string
+        code?: string
+      } | null
+      if (res.status === 400 || res.status === 409) {
+        throw fail(
+          'BAD_USER_INPUT',
+          `refused by the site (${out?.code ?? res.status})`,
+        )
+      }
+      if (!res.ok || !out?.organizationId || !out.conferenceId) {
+        throw fail(
+          'INTERNAL_SERVER_ERROR',
+          `site provisioning failed (${res.status})`,
+        )
+      }
+      await api.provision({
+        idempotencyKey,
+        orgId: out.organizationId,
+        orgSlug: input.slug,
+        conferenceId: out.conferenceId,
+        createdBy,
+      })
+      return {
+        organizationId: out.organizationId,
+        conferenceId: out.conferenceId,
+      }
     },
 
     /** Points the Organization's latest-edition alias at this Conference. */
@@ -671,6 +843,7 @@ export function createData(
       return rows.map((r) => r.hostname)
     },
   }
+  return api
 }
 
 /** Cron Trigger: mirror Cloudflare status onto custom domains due a check. */

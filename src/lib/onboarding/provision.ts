@@ -428,7 +428,8 @@ async function mintChallenges(
  */
 export async function provisionOrganization(
   input: OnboardingInput,
-  options: { idempotencyKey?: string } = {},
+  /** `createdBy`: the operator user id, kept on the receipt (audit). */
+  options: { idempotencyKey?: string; createdBy?: string } = {},
 ): Promise<ProvisionOutcome> {
   const receiptId = options.idempotencyKey
     ? receiptDocId(options.idempotencyKey)
@@ -565,6 +566,7 @@ export async function provisionOrganization(
         // The EFFECTIVE list, so a replay re-mints (and re-allocates) exactly
         // the hosts this tenant was actually given.
         domains,
+        ...(options.createdBy ? { createdBy: options.createdBy } : {}),
         createdAt: new Date(now).toISOString(),
         expiresAt: new Date(
           now + PROVISIONING_RECEIPT_RETENTION_DAYS * 24 * 60 * 60 * 1000,
