@@ -190,6 +190,22 @@ describe('validation', () => {
       { name: 'A', topics: Array(21).fill('t') },
       /Too many topics/,
     ],
+    [
+      'javascript photo',
+      { name: 'A', photoKey: 'javascript:alert(1)' },
+      /R2 object key/,
+    ],
+    [
+      'data photo',
+      { name: 'A', photoKey: 'data:image/png;base64,AAAA' },
+      /R2 object key/,
+    ],
+    [
+      'https photo',
+      { name: 'A', photoKey: 'https://evil.example/p.png' },
+      /R2 object key/,
+    ],
+    ['dotdot photo', { name: 'A', photoKey: 'a/../b' }, /R2 object key/],
     ['long topic', { name: 'A', topics: ['x'.repeat(61)] }, /Topic too long/],
   ]
   it.each(cases)('refuses %s and stores nothing', async (_, input, msg) => {
@@ -217,6 +233,13 @@ describe('validation', () => {
         .run(),
     ).rejects.toThrow(/CHECK/)
   })
+  it('accepts an R2 object key', async () => {
+    const r = await update(tenant(await newUser()), {
+      name: 'A',
+      photoKey: 'profiles/u1/photo-2.webp',
+    })
+    expect(r.data.updateMyProfile.photoKey).toBe('profiles/u1/photo-2.webp')
+  })
   it('accepts valid https links', async () => {
     const r = await update(tenant(await newUser()), {
       name: 'A',
@@ -231,7 +254,7 @@ describe('speakerDirectory', () => {
     const u = await newUser()
     // A network profile exists, so a missing guard would return a page.
     await update(tenant(u), { name: 'Visible' })
-    for (const who of [null, tenant(null), tenant(u)]) {
+    for (const who of [null, tenant(null), tenant(u), tenant(u, 'member')]) {
       const r = await gql(who, DIR)
       expect(r.errors).toBeUndefined()
       expect(r.data.speakerDirectory).toBeNull()
@@ -247,7 +270,7 @@ describe('speakerDirectory', () => {
       })
     const org = await newUser()
     for (const who of [
-      tenant(org, 'member'),
+      tenant(org, 'admin'),
       tenant(org, 'owner'),
       platform(org),
     ]) {
@@ -281,7 +304,7 @@ describe('speakerDirectory', () => {
     const a = await newUser()
     const tag = `t${crypto.randomUUID().slice(0, 8)}`
     await update(tenant(a), { name: tag })
-    const r = await gql(tenant(a, 'member'), DIR, { q: tag })
+    const r = await gql(tenant(a, 'owner'), DIR, { q: tag })
     expect(r.data.speakerDirectory.nodes).toHaveLength(1)
     expect(r.data.speakerDirectory.nodes[0].id).not.toBe(a)
   })

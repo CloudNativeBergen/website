@@ -12,7 +12,8 @@ const MAX_LINKS = 10
 const MAX_LINK = 500
 const MAX_TOPICS = 20
 const MAX_TOPIC = 60
-const MAX_PHOTO_KEY = 300
+// An R2 object key only, never a URL: nothing renders external photos yet.
+const PHOTO_KEY = /^[A-Za-z0-9/_.-]{1,200}$/
 const MAX_QUERY = 100
 export const MAX_PAGE = 100
 
@@ -97,8 +98,11 @@ export function validate(input: ProfileInput, current?: Profile) {
     throw bad('Unknown visibility')
   const photoKey =
     input.photoKey === undefined ? (current?.photoKey ?? null) : input.photoKey
-  if (photoKey && photoKey.length > MAX_PHOTO_KEY)
-    throw bad('Photo key too long')
+  if (
+    photoKey &&
+    (!PHOTO_KEY.test(photoKey) || photoKey.split('/').includes('..'))
+  )
+    throw bad('Photo key must be an R2 object key')
   return {
     name,
     bio: text(input.bio ?? current?.bio ?? '', MAX_BIO, 'Bio'),

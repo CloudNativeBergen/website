@@ -295,7 +295,8 @@ const SpeakerProfile = builder.objectRef<Profile>('SpeakerProfile').implement({
     bio: t.exposeString('bio'),
     photoKey: t.exposeString('photoKey', {
       nullable: true,
-      description: 'R2 object key or URL of the photo. Upload is a follow-up.',
+      description:
+        'R2 object key of the photo (letters, digits, / _ . -; no URL). Upload is a follow-up.',
     }),
     links: t.exposeStringList('links'),
     topics: t.exposeStringList('topics'),
@@ -334,12 +335,12 @@ const SpeakerProfileInput = builder.inputType('SpeakerProfileInput', {
 })
 
 /**
- * Organizers (#2093), decided from the envelope before any lookup: a member
- * of the tenant org with any role (owner, admin, member), an operator acting
- * for the tenant, or a PlatformContext operator.
+ * Organizers (#2093, owner decision), decided from the envelope before any
+ * lookup: an owner or admin of the tenant org, an operator acting for the
+ * tenant, or a PlatformContext operator. Plain members are not organizers.
  */
 const isOrganizer = (ctx: ResolverContext) =>
-  ctx.envelope?.typ === 'platform' || reader(ctx) !== null
+  ctx.envelope?.typ === 'platform' || !!reader(ctx)?.manager
 
 builder.queryFields((t) => ({
   myProfile: t.field({
