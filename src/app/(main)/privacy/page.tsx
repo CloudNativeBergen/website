@@ -130,7 +130,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'November 6, 2026'
+  const lastUpdated = 'November 7, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -349,6 +349,69 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             proposal, and never changed afterwards.
                           </li>
                         </ul>
+                      </div>
+                    </div>
+
+                    {/* Global Speaker Profile */}
+                    <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-6 dark:border-indigo-800 dark:bg-indigo-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-indigo-800 dark:text-indigo-200">
+                        <GlobeAltIcon className="mr-3 h-5 w-5" />
+                        Global Speaker Profile
+                      </h3>
+                      <p className="mb-3 text-sm text-indigo-700 dark:text-indigo-300">
+                        The profile belongs to the speaker, not to a conference,
+                        and is reused across conferences on the konf platform.
+                        It is stored in Cloudflare D1, which also hosts our API.
+                      </p>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <h4 className="mb-2 font-medium text-indigo-800 dark:text-indigo-200">
+                            What We Store
+                          </h4>
+                          <ul className="space-y-1 text-sm text-indigo-700 dark:text-indigo-300">
+                            <li>• Display name, bio, and a photo reference</li>
+                            <li>• Up to 10 https links and up to 20 topics</li>
+                            <li>
+                              • A visibility choice, and created/updated
+                              timestamps
+                            </li>
+                          </ul>
+                        </div>
+                        <div>
+                          <h4 className="mb-2 font-medium text-indigo-800 dark:text-indigo-200">
+                            Visibility &amp; Snapshots
+                          </h4>
+                          <ul className="space-y-1 text-sm text-indigo-700 dark:text-indigo-300">
+                            <li>
+                              • Visibility can be &apos;network&apos; (the
+                              default for new profiles), meaning organizers
+                              (owners and admins) of any organization on the
+                              konf platform can see the profile in a speaker
+                              directory, or &apos;private&apos; (which opts out,
+                              so only conferences you submit to see it). You can
+                              change it at any time
+                            </li>
+                            <li>
+                              • Profiles imported from earlier speaker records
+                              start private
+                            </li>
+                            <li>
+                              • The directory never shares email or
+                              account/identity data
+                            </li>
+                            <li>
+                              • When you submit a proposal, that conference
+                              keeps a snapshot of your profile as it was then;
+                              conferences never edit your global profile
+                            </li>
+                            <li>
+                              • Deleting your account deletes the global
+                              profile. What a conference has already published
+                              (for example a past program) is kept as an archive
+                              record
+                            </li>
+                          </ul>
+                        </div>
                       </div>
                     </div>
 
@@ -1465,6 +1528,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         <li>• Improving future events</li>
                         <li>• Preserving conference history and archives</li>
                         <li>
+                          • Global speaker profile visibility in the organizer
+                          directory across the platform (network visibility by
+                          default, with an easy opt-out to private at any time)
+                        </li>
+                        <li>
                           {usesPostHog
                             ? '• Privacy-friendly analytics by PostHog (EU): anonymous by default, one optional cookie if you accept it.'
                             : '• Cookie-less Vercel Analytics and Speed Insights (no advertising)'}
@@ -1693,6 +1761,23 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             <p className="text-sm text-yellow-800 dark:text-yellow-200">
                               •{' '}
                               <strong>
+                                Platform organizers via the speaker directory
+                              </strong>
+                              : When your global speaker profile visibility is
+                              set to &apos;network&apos; (the default for new
+                              profiles), organizers (owners and admins) of any
+                              organization on the konf platform can see your
+                              profile in a speaker directory. The directory
+                              never shares email or account/identity data. You
+                              can opt out by changing visibility to
+                              &apos;private&apos; at any time, so only
+                              conferences you submit to see it.
+                            </p>
+                          </div>
+                          <div className="rounded-lg bg-yellow-50 p-3 dark:bg-yellow-900/20">
+                            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                              •{' '}
+                              <strong>
                                 Sponsors for networking opportunities
                               </strong>{' '}
                               (only if you opt in during registration)
@@ -1895,6 +1980,33 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </span>{' '}
                               Maintaining public archives of past conferences
                               for community and historical value.
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
+                              Global Speaker Profiles
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                (Display name, bio, photo, links, topics,
+                                visibility)
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              Until account deletion
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Deleting your account deletes the global
+                                profile. When you submit a proposal, that
+                                conference keeps a snapshot of your profile as
+                                it was then. What a conference has already
+                                published (for example a past program) is kept
+                                as an archive record
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              <span className="font-medium text-blue-600 dark:text-blue-400">
+                                Legitimate Interest:
+                              </span>{' '}
+                              Maintaining your reusable speaker profile across
+                              conferences on the konf platform
                             </td>
                           </tr>
                           <tr>
