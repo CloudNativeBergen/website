@@ -74,6 +74,13 @@ describe('SanityProgramSource.program (code layer)', () => {
     const leaky = (status: string) => ({
       ...talk(status),
       speakers: [{ _id: 'sp_a', name: 'Ada Secret' }],
+      attachments: [
+        {
+          _type: 'urlAttachment',
+          _key: 'a1',
+          url: 'https://slides.example/secret',
+        },
+      ],
     })
     const source = new SanityProgramSource({
       fetch: (async () => [
@@ -106,6 +113,7 @@ describe('SanityProgramSource.program (code layer)', () => {
         description: null,
         language: null,
         speakers: null,
+        attachments: null,
         format: 'presentation_40',
       })
     expect(slots[2].talk).toMatchObject({

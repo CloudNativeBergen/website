@@ -340,6 +340,7 @@ export class SanityProgramSource implements ProgramSource {
                       description: null,
                       language: null,
                       speakers: null,
+                      attachments: null,
                     }
                 : null,
               hasTalkRef: sl.hasTalkRef === true,
