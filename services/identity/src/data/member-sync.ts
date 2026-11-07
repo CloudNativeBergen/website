@@ -4,6 +4,7 @@
 // get a drift check instead and are never granted (#1923). Matching and ids follow scripts/backfill-identity-members.ts (#1909).
 
 import { emit } from './push'
+import { recordJobStatus, type MemberSyncDrift } from './job-status'
 
 /** Role every synced organizer gets. The owner decided this; see #1907. */
 export const ORGANIZER_ROLE = 'admin'
@@ -110,11 +111,50 @@ async function organizerEmails(env: SyncEnv) {
 }
 
 export async function syncMembers(env: SyncEnv) {
+  const progress = {
+    checked: 0,
+    granted: 0,
+    failed: false,
+    drifted: [] as MemberSyncDrift[],
+  }
+  const ranAt = Date.now()
+  try {
+    return await runSync(env, progress)
+  } catch (error) {
+    progress.failed = true
+    throw error
+  } finally {
+    // Failure takes precedence over drift, then a clean run: failed > drift > ok.
+    await recordJobStatus(env.DB, {
+      job: 'identity.member_sync',
+      ran_at: ranAt,
+      status: progress.failed
+        ? 'failed'
+        : progress.drifted.length
+          ? 'drift'
+          : 'ok',
+      checked: progress.checked,
+      affected: progress.drifted.length,
+      granted: progress.granted,
+      detail: JSON.stringify(progress.drifted),
+    })
+  }
+}
+
+interface Progress {
+  checked: number
+  granted: number
+  failed: boolean
+  drifted: MemberSyncDrift[]
+}
+
+async function runSync(env: SyncEnv, progress: Progress) {
   if (
     !env.SANITY_API_TOKEN_READ ||
     !env.SANITY_PROJECT_ID ||
     !env.SANITY_DATASET
   ) {
+    progress.failed = true
     return log('error', 'identity.membership.sync_failed', {
       reason: 'missing_config',
     })
@@ -124,6 +164,7 @@ export async function syncMembers(env: SyncEnv) {
   try {
     ;({ byOrg, confOrgs } = await organizerEmails(env))
   } catch (e) {
+    progress.failed = true
     return log('error', 'identity.membership.sync_failed', {
       reason: 'sanity_read',
       error: String(e),
@@ -133,6 +174,7 @@ export async function syncMembers(env: SyncEnv) {
   // No organizers anywhere never grants. Drift orgs with a published
   // conference still run: their roster is validly empty (#1947 review).
   const noOrganizers = byOrg.size === 0
+  if (noOrganizers) progress.failed = true
   if (noOrganizers)
     log('error', 'identity.membership.sync_failed', { reason: 'no_organizers' })
 
@@ -163,17 +205,21 @@ export async function syncMembers(env: SyncEnv) {
   )
   let granted = 0
   for (const { id: orgId } of orgs) {
+    progress.checked++
     const organizers = byOrg.get(orgId)
     if (noOrganizers && !(sourceOrgs.has(orgId) && confOrgs.has(orgId)))
       continue
     if (sourceOrgs.has(orgId)) {
       // Never grants. A drift or Slack failure must not stop the sync.
-      await checkDrift(env, orgId, organizers ?? [], verified).catch((e) =>
-        log('error', 'identity.membership.drift_failed', {
-          orgId,
-          // Name only: a message is not ours to vet for emails.
-          error: e instanceof Error ? e.name : 'unknown',
-        }),
+      await checkDrift(env, orgId, organizers ?? [], verified, progress).catch(
+        (e) => {
+          progress.failed = true
+          log('error', 'identity.membership.drift_failed', {
+            orgId,
+            // Name only: a message is not ours to vet for emails.
+            error: e instanceof Error ? e.name : 'unknown',
+          })
+        },
       )
       continue
     }
@@ -196,6 +242,7 @@ export async function syncMembers(env: SyncEnv) {
         .run()
       if (meta.changes > 0) {
         granted++
+        progress.granted = granted
         log('log', 'identity.membership.granted', {
           orgId,
           userId,
@@ -236,6 +283,7 @@ async function checkDrift(
   orgId: string,
   organizers: Organizer[],
   verified: Map<string, string | null>,
+  progress: Progress,
 ) {
   const { results: rows } = await env.DB.prepare(
     'SELECT userId, role FROM member WHERE organizationId = ?1',
@@ -265,9 +313,12 @@ async function checkDrift(
   // Pending invites do not count (#1923 follow-up).
   const owners = rows.filter((r) => isOwner(r.role)).length
   if (owners < 2) drift.ownersBelowTwo = owners
-  const counts: Record<string, number> = Object.fromEntries(
-    Object.entries(drift).map(([k, v]) => [k, Array.isArray(v) ? v.length : 1]),
-  )
+  const counts: MemberSyncDrift['counts'] = {
+    missingInIdentity: drift.missingInIdentity.length,
+    missingInSanity: drift.missingInSanity.length,
+    roleMismatch: drift.roleMismatch.length,
+    ...(drift.ownersBelowTwo === undefined ? {} : { ownersBelowTwo: 1 }),
+  }
   if (Object.values(counts).every((n) => n === 0)) {
     // Clean: forget the last alert, so a recurrence posts at once.
     await env.DB.prepare(
@@ -277,6 +328,7 @@ async function checkDrift(
       .run()
     return log('log', 'identity.membership.drift_clean', { orgId })
   }
+  progress.drifted.push({ orgId, counts })
   log('warn', 'identity.membership.drift', { orgId, counts, ...drift })
 
   const url = env.SLACK_MEMBER_DRIFT_WEBHOOK_URL
@@ -299,11 +351,13 @@ async function checkDrift(
     body: JSON.stringify({ text: slackText(orgId, drift) }),
     signal: AbortSignal.timeout(5000),
   })
-  if (!res.ok)
+  if (!res.ok) {
+    progress.failed = true
     return log('error', 'identity.membership.drift_alert_failed', {
       orgId,
       status: res.status,
     })
+  }
   await env.DB.prepare(
     'INSERT INTO member_drift_alert (organizationId, hash, postedAt) VALUES (?1, ?2, ?3) ON CONFLICT (organizationId) DO UPDATE SET hash = excluded.hash, postedAt = excluded.postedAt',
   )

@@ -106,7 +106,10 @@ describe('scheduled', () => {
 
   const envWith = (rows: Row[], over = {}) => ({
     DB: {
-      prepare: vi.fn(() => ({ all: async () => ({ results: rows }) })),
+      prepare: vi.fn(() => ({
+        all: async () => ({ results: rows }),
+        bind: () => ({ run: async () => ({ success: true }) }),
+      })),
     } as unknown as D1Database,
     SANITY_PROJECT_ID: 'p',
     SANITY_DATASET: 'd',

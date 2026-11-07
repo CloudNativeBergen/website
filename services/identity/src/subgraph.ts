@@ -3,6 +3,7 @@
 // org argument and need a PlatformContext.
 import { createGraphQLError } from 'graphql-yoga'
 import { builder } from './builder'
+import './job-status'
 import { MemberError, type MemberRole } from './data'
 import type { ResolverContext } from './worker'
 

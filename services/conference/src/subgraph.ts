@@ -7,6 +7,7 @@
 // homepage blocks and the rest) stay in content and reach the caller through
 // the entity key.
 import { builder } from './builder'
+import { registerJobStatus } from './job-status'
 import { emit } from './push'
 import { createGraphQLError } from 'graphql-yoga'
 import type { ConferencePatch, ConferenceRow } from './data'
@@ -392,6 +393,8 @@ builder.queryType({
     }),
   }),
 })
+
+registerJobStatus()
 
 export const schema = builder.toSubGraphSchema({
   linkUrl: 'https://specs.apollo.dev/federation/v2.7',

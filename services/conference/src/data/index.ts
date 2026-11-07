@@ -10,6 +10,7 @@ import {
 } from '@runkonf/tenancy'
 import { rawDb } from './db'
 import { conferences } from './schema'
+import { conferenceParityStatus } from './job-status'
 
 export type ConferenceRow = typeof conferences.$inferSelect
 
@@ -162,6 +163,7 @@ export function createData(d1: D1Database, envelope: Envelope) {
   // should fail the resolver, not the whole request.
   return {
     conferences: () => new Conferences(db, envelope),
+    conferenceParityStatus: () => conferenceParityStatus(d1),
     /**
      * Any org's edition, by id, for the operator `conferences` list (#1985).
      * unscopedForPlatformOps throws for anything but a PlatformContext.

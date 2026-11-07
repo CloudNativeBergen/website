@@ -252,7 +252,9 @@ describe('mapBackfill', () => {
 
   it('migrates a populated phase 1 database without touching its rows (#2038)', () => {
     const dir = new URL('../migrations/', import.meta.url)
-    const files = readdirSync(dir).sort()
+    const files = readdirSync(dir)
+      .filter((f) => f <= '0005_settings_phase2.sql')
+      .sort()
     const last = files.pop()
     expect(last).toBe('0005_settings_phase2.sql')
     const db = new DatabaseSync(':memory:')

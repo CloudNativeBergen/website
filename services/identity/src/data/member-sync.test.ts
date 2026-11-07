@@ -6,6 +6,7 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
 import { evaluate, parse } from 'groq-js'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { memberId, syncMembers, type SyncEnv } from './member-sync'
+import { memberSyncStatus } from './job-status'
 
 const emit = vi.fn()
 vi.mock('./push', () => ({ emit: (e: unknown) => emit(e) }))
@@ -183,9 +184,9 @@ describe('syncMembers', () => {
       },
     ])
     expect(seen.length).toBeGreaterThan(0)
-    for (const q of seen)
+    for (const q of seen.filter((q) => !q.includes('job_status')))
       expect(q).not.toMatch(/\b(UPDATE|DELETE|REPLACE|UPSERT)\b/i)
-    expect(seen.filter((q) => q.startsWith('INSERT'))).toEqual(
+    expect(seen.filter((q) => q.startsWith('INSERT INTO member '))).toEqual(
       Array(6).fill(
         'INSERT INTO member (id, organizationId, userId, role) VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING',
       ),
@@ -582,5 +583,145 @@ describe('syncMembers drift mode (MEMBER_SOURCE_ORGS)', () => {
     expect(logs).toEqual(logsA)
     expect(slackPosts).toEqual([])
     for (const q of b.seen) expect(q).not.toMatch(/member_drift_alert/)
+  })
+})
+
+describe('member sync status', () => {
+  const failingDb = (db: D1Database, query: string, error: Error) =>
+    new Proxy(db, {
+      get(target, property) {
+        if (property === 'prepare')
+          return (sql: string) => {
+            if (sql.includes(query)) throw error
+            return target.prepare(sql)
+          }
+        return Reflect.get(target, property)
+      },
+    })
+
+  it('records and replaces a clean run with concrete counts', async () => {
+    const { env, d1 } = await freshDb()
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1794000000000)
+    try {
+      await expect(syncMembers(env)).resolves.toBeUndefined()
+      expect(await memberSyncStatus(d1)).toEqual({
+        job: 'identity.member_sync',
+        ran_at: 1794000000000,
+        status: 'ok',
+        checked: 2,
+        affected: 0,
+        granted: 2,
+        detail: '[]',
+      })
+      await syncMembers(env)
+      expect(await memberSyncStatus(d1)).toMatchObject({
+        status: 'ok',
+        granted: 0,
+        detail: '[]',
+      })
+      expect(
+        (await d1.prepare('SELECT * FROM job_status').all()).results,
+      ).toHaveLength(1)
+    } finally {
+      now.mockRestore()
+    }
+  })
+
+  it('persists drift org ids and counts without identities or emails', async () => {
+    const { env, d1 } = await freshDb()
+    await syncMembers({ ...env, MEMBER_SOURCE_ORGS: 'org-a' })
+    const row = await memberSyncStatus(d1)
+    expect(row).toMatchObject({
+      status: 'drift',
+      checked: 2,
+      affected: 1,
+      granted: 1,
+    })
+    expect(JSON.parse(row!.detail!)).toEqual([
+      {
+        orgId: 'org-a',
+        counts: {
+          missingInIdentity: 2,
+          missingInSanity: 0,
+          roleMismatch: 0,
+          ownersBelowTwo: 1,
+        },
+      },
+    ])
+  })
+
+  it('records a failed drift read while preserving the existing completion log', async () => {
+    const { env, d1 } = await freshDb()
+    await syncMembers({
+      ...env,
+      MEMBER_SOURCE_ORGS: 'org-a',
+      DB: failingDb(d1, 'SELECT userId, role', new Error('read')),
+    })
+    expect(await memberSyncStatus(d1)).toMatchObject({
+      status: 'failed',
+      checked: 2,
+      affected: 0,
+      granted: 1,
+      detail: '[]',
+    })
+    expect(events()).toContain('identity.membership.drift_failed')
+    expect(events().at(-1)).toBe('identity.membership.synced')
+  })
+
+  it('gives failed alerts precedence over computed drift', async () => {
+    const { env, d1 } = await freshDb()
+    slackStatus = 500
+    await syncMembers({
+      ...env,
+      MEMBER_SOURCE_ORGS: 'org-a',
+      SLACK_MEMBER_DRIFT_WEBHOOK_URL: SLACK,
+    })
+    expect(await memberSyncStatus(d1)).toMatchObject({
+      status: 'failed',
+      affected: 1,
+      granted: 1,
+    })
+    expect(events()).toContain('identity.membership.drift_alert_failed')
+  })
+
+  it('records early failures and propagates the original uncaught error', async () => {
+    const { env, d1 } = await freshDb()
+    await syncMembers({ ...env, SANITY_API_TOKEN_READ: undefined })
+    expect(await memberSyncStatus(d1)).toMatchObject({
+      status: 'failed',
+      checked: 0,
+      granted: 0,
+      detail: '[]',
+    })
+    const error = new Error('original')
+    await expect(
+      syncMembers({ ...env, DB: failingDb(d1, 'SELECT id, email', error) }),
+    ).rejects.toBe(error)
+    expect(await memberSyncStatus(d1)).toMatchObject({
+      status: 'failed',
+      checked: 0,
+      granted: 0,
+    })
+  })
+
+  it('status write failure preserves the full existing log sequence and outcome', async () => {
+    const { env, d1 } = await freshDb()
+    await syncMembers({
+      ...env,
+      DB: failingDb(d1, 'job_status', new Error('write')),
+    })
+    expect(events()).toEqual([
+      'identity.membership.granted',
+      'identity.membership.granted',
+      'identity.membership.synced',
+      'job_status.write_failed',
+    ])
+    expect(JSON.parse(logs.at(-1)!)).toEqual({
+      event: 'job_status.write_failed',
+      job: 'identity.member_sync',
+    })
+    expect((await members(d1)).filter((r) => r.role === 'admin')).toHaveLength(
+      2,
+    )
   })
 })

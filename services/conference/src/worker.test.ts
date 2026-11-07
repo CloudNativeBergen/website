@@ -7,6 +7,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { GraphQLObjectType } from 'graphql'
 import {
   ENVELOPE_HEADER,
   createSigner,
@@ -33,6 +34,7 @@ vi.mock('cloudflare:workers', () => ({
 }))
 
 const { default: worker } = await import('./worker')
+const { schema } = await import('./subgraph')
 
 /** The slice of D1 that drizzle-orm/d1 uses, over node:sqlite. */
 function d1(db: DatabaseSync): D1Database {
@@ -811,4 +813,86 @@ describe('tenant span attributes (#1814)', () => {
     const body = (await res.json()) as { data: { conference: { id: string } } }
     expect(body.data.conference.id).toBe('conf-a')
   })
+})
+
+describe('conferenceParityStatus', () => {
+  const query =
+    '{ conferenceParityStatus { ranAt status checked affected drifted { conferenceId fields } } }'
+  const platform: Envelope = {
+    typ: 'platform',
+    userId: 'op',
+    platformRole: 'operator',
+  }
+  const seedStatus = () =>
+    sqlite
+      .prepare(
+        'INSERT INTO job_status (job, ran_at, status, checked, affected, detail) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        'conference.parity',
+        1_800_000_000_000,
+        'drift',
+        2,
+        1,
+        JSON.stringify([{ conferenceId: 'conf-b', fields: ['city', 'title'] }]),
+      )
+
+  it('keeps operator status required fields non-null in the schema', () => {
+    const drift = schema.getType('ConferenceParityDrift') as GraphQLObjectType
+    const status = schema.getType('ConferenceParityStatus') as GraphQLObjectType
+    expect(
+      schema.getQueryType()?.getFields().conferenceParityStatus.type.toString(),
+    ).toBe('ConferenceParityStatus')
+    expect(drift.getFields().conferenceId.type.toString()).toBe('ID!')
+    expect(drift.getFields().fields.type.toString()).toBe('[String!]!')
+    expect(status.getFields().ranAt.type.toString()).toBe('String!')
+    expect(status.getFields().status.type.toString()).toBe('String!')
+    expect(status.getFields().drifted.type.toString()).toBe(
+      '[ConferenceParityDrift!]!',
+    )
+  })
+
+  it('returns null before the job has run', async () => {
+    const { body } = await gql(platform, query)
+    expect(body).toEqual({ data: { conferenceParityStatus: null } })
+  })
+
+  it('returns concrete stored values to a signed platform envelope', async () => {
+    seedStatus()
+    const { body } = await gql(platform, query)
+    expect(body).toEqual({
+      data: {
+        conferenceParityStatus: {
+          ranAt: '2027-01-15T08:00:00.000Z',
+          status: 'drift',
+          checked: 2,
+          affected: 1,
+          drifted: [{ conferenceId: 'conf-b', fields: ['city', 'title'] }],
+        },
+      },
+    })
+  })
+
+  it.each([{ scopes: [] }, { scopes: ['platform:operator'] }])(
+    'refuses a tenant with scopes %j before reading status',
+    async ({ scopes }) => {
+      seedStatus()
+      const prepare = vi.spyOn(env.DB, 'prepare')
+      const as: Envelope = {
+        typ: 'tenant',
+        orgId: 'org-a',
+        conferenceId: 'conf-a',
+        userId: 'op',
+        orgRole: 'admin',
+        scopes,
+      }
+      const { body } = await gql(as, query)
+      expect(body.data.conferenceParityStatus).toBeNull()
+      expect(body.errors?.[0]?.extensions.code).toBe('FORBIDDEN')
+      expect(body.errors).toHaveLength(1)
+      expect(
+        prepare.mock.calls.filter(([sql]) => sql.includes('job_status')),
+      ).toEqual([])
+    },
+  )
 })
