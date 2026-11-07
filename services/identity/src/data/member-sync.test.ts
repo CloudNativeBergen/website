@@ -556,13 +556,119 @@ describe('syncMembers drift mode (MEMBER_SOURCE_ORGS)', () => {
     const { env } = await driftDb()
     // Sanity keeps working; only Slack throws.
     vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
-      if (url === SLACK) throw new TypeError('network ann@example.org')
+      if (url === SLACK)
+        throw new TypeError(`network ann@example.org posting to ${SLACK}`)
       return defaultFetch(url, init)
     })
     await syncMembers(env)
-    expect(events()).toContain('identity.membership.drift_failed')
+    // The alert failed, not the drift check (#1949); its name only.
+    expect(logs.map((l) => JSON.parse(l))).toContainEqual({
+      event: 'identity.membership.drift_alert_failed',
+      orgId: 'org-a',
+      error: 'TypeError',
+    })
     expect(events().at(-1)).toBe('identity.membership.synced')
     for (const l of logs) expect(l).not.toMatch(/@/)
+    for (const l of logs) expect(l).not.toContain(SLACK)
+  })
+
+  it('never logs the webhook URL when Slack answers an error', async () => {
+    const { env } = await driftDb()
+    slackStatus = 500
+    await syncMembers(env)
+    expect(logs.map((l) => JSON.parse(l))).toContainEqual({
+      event: 'identity.membership.drift_alert_failed',
+      orgId: 'org-a',
+      status: 500,
+    })
+    for (const l of logs) expect(l).not.toContain(SLACK)
+  })
+
+  it('posts to Slack without following redirects, and reports one (#1949)', async () => {
+    const { env } = await driftDb()
+    slackStatus = 307
+    await syncMembers(env)
+    const slack = fetchMock.mock.calls.filter(([u]) => u === SLACK)
+    // 'manual': workerd rejects 'error' ("does not make sense at the edge").
+    expect(slack.map(([, init]) => (init as RequestInit).redirect)).toEqual([
+      'manual',
+    ])
+    expect(logs.map((l) => JSON.parse(l))).toContainEqual({
+      event: 'identity.membership.drift_alert_failed',
+      orgId: 'org-a',
+      status: 307,
+    })
+  })
+
+  it('warns about a MEMBER_SOURCE_ORGS id that is no organization (#1949)', async () => {
+    const { env } = await driftDb()
+    await syncMembers({ ...env, MEMBER_SOURCE_ORGS: 'org-a, org-typo' })
+    const unknown = logs
+      .map((l) => JSON.parse(l))
+      .filter((e) => e.event === 'identity.membership.source_org_unknown')
+    expect(unknown).toEqual([
+      { event: 'identity.membership.source_org_unknown', orgId: 'org-typo' },
+    ])
+  })
+
+  it('reads a role as authorization does: "ow ner" is a mismatch (#1949)', async () => {
+    const { env, d1 } = await driftDb()
+    await d1
+      .prepare("UPDATE member SET role = 'ow ner' WHERE id = 'm-ok'")
+      .run()
+    await syncMembers(env)
+    // asMember trims each item, so it refuses this organizer; drift says so.
+    expect(driftLog().roleMismatch).toEqual(['u-ok'])
+  })
+
+  it('drops a drift alert with its org, and refuses one for no org (#1949)', async () => {
+    const { d1 } = await freshDb()
+    await d1
+      .prepare(
+        "INSERT INTO organization (id, name, slug) VALUES ('org-z', 'Z', 'org-z')",
+      )
+      .run()
+    await d1
+      .prepare(
+        "INSERT INTO member_drift_alert (organizationId, hash, postedAt) VALUES ('org-z', 'h', 1)",
+      )
+      .run()
+    await d1.prepare("DELETE FROM organization WHERE id = 'org-z'").run()
+    const left = await d1
+      .prepare('SELECT count(*) AS n FROM member_drift_alert')
+      .first<{ n: number }>()
+    expect(left?.n).toBe(0)
+    await expect(
+      d1
+        .prepare(
+          "INSERT INTO member_drift_alert (organizationId, hash, postedAt) VALUES ('org-none', 'h', 1)",
+        )
+        .run(),
+    ).rejects.toThrow(/FOREIGN KEY/)
+  })
+
+  it('hashes the drift set, not the order rows come back in (#1949)', async () => {
+    const { env, d1, user } = await driftDb()
+    await user('u-stray2', 'stray2@example.com', 1)
+    const insert = (id: string, userId: string) =>
+      d1
+        .prepare(
+          "INSERT INTO member (id, organizationId, userId, role) VALUES (?1, 'org-a', ?2, 'admin')",
+        )
+        .bind(id, userId)
+        .run()
+    await insert('m-stray2', 'u-stray2')
+    await syncMembers(env)
+    expect(slackPosts).toHaveLength(1)
+    // The same two strays, inserted in the other order.
+    await d1
+      .prepare("DELETE FROM member WHERE id IN ('m-stray', 'm-stray2')")
+      .run()
+    await insert('m-stray2', 'u-stray2')
+    await insert('m-stray', 'u-stray')
+    await syncMembers(env)
+    expect(slackPosts).toHaveLength(1)
+    expect(events()).toContain('identity.membership.drift_deduped')
   })
 
   it('an empty MEMBER_SOURCE_ORGS runs exactly the grant path', async () => {

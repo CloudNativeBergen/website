@@ -291,16 +291,30 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
       },
       async changeRole(userId: string, role: MemberRole) {
         const m = await target(userId)
-        await db
-          .batch([
-            db.update(member).set({ role }).where(eq(member.id, m.id)),
-            audit('member.role', userId, {
-              memberId: m.id,
-              from: m.role,
-              to: role,
-            }),
-          ])
-          .catch(clean)
+        // #1967: both statements depend on the role read above, in one D1
+        // batch (one transaction), so a concurrent change makes neither happen
+        // and the audit row never names a role other than the one it replaced.
+        const detail = JSON.stringify({
+          actorId,
+          operator: true,
+          orgId,
+          memberId: m.id,
+          from: m.role,
+          to: role,
+        })
+        const [, updated] = await env.DB.batch([
+          env.DB.prepare(
+            "INSERT INTO audit_event (action, userId, detail) SELECT 'member.role', ?1, ?2 FROM member WHERE id = ?3 AND role = ?4",
+          ).bind(userId, detail, m.id, m.role),
+          env.DB.prepare(
+            'UPDATE member SET role = ?1 WHERE id = ?2 AND role = ?3',
+          ).bind(role, m.id, m.role),
+        ]).catch(clean)
+        if (!updated.meta.changes)
+          throw new MemberError(
+            'BAD_USER_INPUT',
+            "The member's role changed meanwhile; reload and try again",
+          )
         emit({
           type: 'member.role_changed',
           organizationId: orgId,
