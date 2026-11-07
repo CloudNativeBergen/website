@@ -21,8 +21,20 @@ import {
 import { getOperationAST, GraphQLError, parse, visit } from 'graphql'
 import { clientIp } from './client-ip'
 import { SITE_ASSERTION_HEADER, verifySiteAssertion } from './site-identity'
+import {
+  cacheableRead,
+  cacheTtl,
+  isMutation,
+  loopback,
+  storable,
+  tagsFor,
+  toClient,
+  type CacheProps,
+} from './response-cache'
 
 export interface Env {
+  /** Anonymous response cache TTL in seconds (#1789); unset or 0 is off. */
+  API_CACHE_TTL_SECONDS?: string
   /** wrangler secret put ENVELOPE_PRIVATE_KEY (PKCS8 PEM, EdDSA, per env) */
   ENVELOPE_PRIVATE_KEY: string
   /** identity's Better Auth base URL, the JWT `iss` (wrangler var, per env) */
@@ -395,6 +407,18 @@ const mutationBudget: GatewayPlugin<GatewayContext> = {
   },
 }
 
+/** The CachedRead loopback (index.ts), if this runtime provides ctx.exports. */
+type CachedReadStub = (opts: { props: CacheProps }) => {
+  fetch(request: Request, init: { cf: { cacheKey: string } }): Promise<Response>
+  purge(tags: string[]): Promise<unknown>
+}
+function cachedReadStub(ctx: ExecutionContext | undefined) {
+  const exports = (
+    ctx as { exports?: { CachedRead?: CachedReadStub } } | undefined
+  )?.exports
+  return exports?.CachedRead ?? null
+}
+
 export function createGateway(supergraph: string) {
   let signer: Awaited<ReturnType<typeof createSigner>> | undefined
   let jwks: ReturnType<typeof createRemoteJWKSet> | undefined
@@ -643,7 +667,7 @@ export function createGateway(supergraph: string) {
         )
       }
 
-      return runtime(forwarded, {
+      const context = {
         env,
         ctx,
         orgId: tenant?.orgId ?? null,
@@ -653,11 +677,89 @@ export function createGateway(supergraph: string) {
         // selected (an unauthorized selection was refused above).
         siteFlags: ((siteHost || operatorLane) && tenant?.flags) || null,
         platform,
-      })
+      }
+
+      // Response cache (#1789), after every guard above. Only the site's
+      // server lane with no session reads through it: no user data, and no
+      // browser CORS headers to replay to another origin.
+      const ttl = cacheTtl(env.API_CACHE_TTL_SECONDS)
+      const cached = ttl ? cachedReadStub(ctx) : null
+      const t = tenant as Tenant | null
+      if (!cached || !t) return runtime(forwarded, context)
+      const props: CacheProps = {
+        orgId: t.orgId,
+        conferenceId: t.conferenceId,
+        flags: t.flags ?? null,
+      }
+      const body =
+        request.method === 'POST' ? await forwarded.clone().text() : ''
+      if (siteHost && auth === null && request.method === 'POST') {
+        const read = cacheableRead(body)
+        const loop =
+          read &&
+          (await loopback(
+            read,
+            forwarded.headers.get(ENVELOPE_HEADER),
+            await composition(),
+          ))
+        if (loop)
+          return toClient(
+            await cached({ props }).fetch(loop.request, {
+              cf: { cacheKey: loop.cacheKey },
+            }),
+          )
+      }
+      const res = await runtime(forwarded, context)
+      // A write through the gateway drops the tenant's cached reads. A purge
+      // failure never fails the write; entries then expire within the TTL.
+      if (res.status === 200 && isMutation(body)) {
+        const tags = tagsFor(t)
+        try {
+          if (!tags) throw new Error('untaggable tenant')
+          await cached({ props }).purge(tags)
+        } catch {
+          logEvent('gateway.cache.purge_failed', {})
+        }
+      }
+      return res
     },
   }
 
+  /** sha256 of the supergraph, so a new composition never reads old entries. */
+  let compositionHash: Promise<string> | undefined
+  const composition = () =>
+    (compositionHash ??= crypto.subtle
+      .digest('SHA-256', new TextEncoder().encode(supergraph))
+      .then((d) =>
+        [...new Uint8Array(d)]
+          .slice(0, 8)
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join(''),
+      ))
+
   return {
+    /**
+     * CachedRead's execution (index.ts): the request the gateway built after
+     * its guards, run for the tenant in `props`. Never reachable from outside.
+     */
+    async cachedRead(
+      request: Request,
+      env: Env,
+      ctx: ExecutionContext,
+      props: CacheProps,
+    ) {
+      const flags = props.flags as RolloutFlags | null
+      const res = await runtime(request, {
+        env,
+        ctx,
+        orgId: props.orgId,
+        limitKey: 'cache',
+        flags,
+        siteFlags: flags,
+        platform: false,
+      })
+      return storable(res, cacheTtl(env.API_CACHE_TTL_SECONDS), tagsFor(props))
+    },
     async fetch(request: Request, env: Env, ctx?: ExecutionContext) {
       let res: Response
       try {

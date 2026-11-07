@@ -15,6 +15,12 @@
     "traces": { "enabled": true, "destinations": ["grafana-cloud-traces"] },
     "logs": { "enabled": true, "destinations": ["grafana-cloud-logs"] },
   },
+  // Anonymous response cache (#1789): Workers Caching fronts only the
+  // CachedRead entrypoint, which the gateway calls after its guards. Off until
+  // API_CACHE_TTL_SECONDS is set. Listed per env too (inheritance unconfirmed).
+  "exports": {
+    "CachedRead": { "type": "worker", "cache": { "enabled": true } },
+  },
   // Bindings do not inherit into envs, so each env lists its own.
   // Secrets per env: declared in secrets.json (mise run secrets:sync).
   // OVERRIDE_TENANTS: @override label -> orgIds routed to the native subgraph.
@@ -67,6 +73,9 @@
   "env": {
     "preview": {
       "name": "konf-api-preview",
+      "exports": {
+        "CachedRead": { "type": "worker", "cache": { "enabled": true } },
+      },
       "workers_dev": true,
       // Placeholder until identity's preview host exists.
       "vars": {
@@ -117,6 +126,9 @@
     },
     "production": {
       "name": "konf-api",
+      "exports": {
+        "CachedRead": { "type": "worker", "cache": { "enabled": true } },
+      },
       "routes": [{ "pattern": "api.konf.app", "custom_domain": true }],
       // Identity has its own host: auth.konf.app is the NextAuth site today.
       "vars": {
