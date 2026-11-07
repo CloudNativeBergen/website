@@ -504,6 +504,7 @@ const ALONE = new Set([
   'speakerBySlug',
   'sponsors',
   'sponsorTiers',
+  'cfp',
 ])
 
 function queries(tenants: T[]) {
