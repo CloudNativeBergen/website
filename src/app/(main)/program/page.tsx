@@ -59,7 +59,7 @@ async function CachedProgramContent({ domain }: { domain: string }) {
   const { conference, error } = await getPublicSchedule(domain, {
     organizers: false,
     topics: true,
-    sponsors: true,
+    publicSponsors: true,
     sponsorTiers: true,
     confirmedTalksOnly: false,
   })

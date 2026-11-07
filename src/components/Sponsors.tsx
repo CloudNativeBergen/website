@@ -48,6 +48,8 @@ function SponsorCell({
         <SponsorLogo
           logo={sponsor.sponsor.logo}
           logoBright={sponsor.sponsor.logoBright}
+          logoUrl={sponsor.sponsor.logoUrl}
+          logoBrightUrl={sponsor.sponsor.logoBrightUrl}
           name={sponsor.sponsor.name}
           className={logoClassName}
         />

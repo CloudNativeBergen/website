@@ -67,6 +67,9 @@ export interface ConferenceSponsor {
     website: string
     logo?: string | null
     logoBright?: string | null
+    /** From the API (#1772): a base64 data URL for <img>; `logo` is then empty. */
+    logoUrl?: string | null
+    logoBrightUrl?: string | null
   }
   tier: {
     _id?: string

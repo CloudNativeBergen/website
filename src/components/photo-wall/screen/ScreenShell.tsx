@@ -300,14 +300,16 @@ function TrackSponsorStrip({
       <div
         className={clsx(
           'shrink-0',
-          sponsor.logo &&
-            !sponsor.logoBright &&
+          (sponsor.logo || sponsor.logoUrl) &&
+            !(sponsor.logoBright || sponsor.logoBrightUrl) &&
             'rounded-md bg-white px-3 py-2',
         )}
       >
         <SponsorLogo
           logo={sponsor.logo}
           logoBright={sponsor.logoBright}
+          logoUrl={sponsor.logoUrl}
+          logoBrightUrl={sponsor.logoBrightUrl}
           name={sponsor.name}
           className="h-14 w-auto max-w-[420px] object-contain"
         />

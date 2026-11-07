@@ -96,8 +96,10 @@ export function SponsorBanner({
               // The strip is dark: a sponsor with no bright logo gets its
               // dark one on a white tile, so it still reads (spec §9.4).
               variant === 'strip' &&
-                sponsor.sponsor.logo &&
-                !sponsor.sponsor.logoBright &&
+                (sponsor.sponsor.logo || sponsor.sponsor.logoUrl) &&
+                !(
+                  sponsor.sponsor.logoBright || sponsor.sponsor.logoBrightUrl
+                ) &&
                 '[&>a]:rounded-md [&>a]:bg-white [&>a]:px-3 [&>a]:py-2',
             )}
           >
@@ -111,6 +113,8 @@ export function SponsorBanner({
               <SponsorLogo
                 logo={sponsor.sponsor.logo}
                 logoBright={sponsor.sponsor.logoBright}
+                logoUrl={sponsor.sponsor.logoUrl}
+                logoBrightUrl={sponsor.sponsor.logoBrightUrl}
                 name={sponsor.sponsor.name}
                 className={
                   variant === 'strip'

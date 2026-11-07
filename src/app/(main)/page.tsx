@@ -79,7 +79,7 @@ async function CachedHomeContent({ domain }: { domain: string }) {
 
   const { conference, error, status } = await getPublicSchedule(domain, {
     organizers: true,
-    sponsors: true,
+    publicSponsors: true,
     sponsorTiers: true,
     featuredSpeakers: true,
     featuredTalks: true,
