@@ -82,11 +82,13 @@ type Query {
   """
   members: [OrganizationMember!]
 
-  """The session user's speaker profile; null until first update."""
+  """
+  The session user's speaker profile; null until first update, and null without a session user.
+  """
   myProfile: SpeakerProfile
 
   """
-  Network and public speaker profiles, for organizers only. Never private profiles, user ids or emails.
+  Network and public speaker profiles, for organizers only; null for anyone else. Never private profiles, user ids or emails.
   """
   speakerDirectory(after: String, first: Int = 50, query: String): SpeakerDirectoryPage
   program: Program
