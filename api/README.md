@@ -15,6 +15,14 @@ are reached over service bindings, never HTTP.
   from the verified JWT, else `anon:<orgId>:<ip>`, checked before identity and
   `Membership` work, after a coarse `ip:<ip>` pre-check (`API_IP_LIMITER`,
   1200 a minute) before the tenant lookup. 429 `RATE_LIMITED` when spent.
+- `src/response-cache.ts` (#1789): anonymous response cache, off until the var
+  `API_CACHE_TTL_SECONDS` is set. Only the site's signed server lane without a
+  session reads through it, after every guard above: the gateway calls the
+  `CachedRead` entrypoint (`src/index.ts`) over `ctx.exports`, and Workers
+  Caching (`exports.CachedRead.cache` in wrangler) stores clean `200`s. The
+  tenant and its flags travel as `ctx.props`, so entries are per tenant;
+  responses with `errors` are never stored; a mutation purges the tenant's
+  `org:<id>` / `conf:<id>` tags. Responses carry `x-konf-cache: hit|miss`.
 - `src/client-ip.ts`: the client IP, from the site's HMAC-signed
   `x-konf-client-ip` header (`CLIENT_IP_SECRET`) or `CF-Connecting-IP`
 - `src/supergraph.ts`: composes the public contract of the subgraph schemas
