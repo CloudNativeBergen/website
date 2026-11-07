@@ -354,7 +354,7 @@ builder.mutationType({
       type: Conference,
       nullable: false,
       description:
-        "Patches the request's Conference. Requires an org owner or admin.",
+        "Patches the request's Conference. Requires an org owner or admin, or a platform operator acting for the org (audited).",
       args: { input: t.arg({ type: ConferencePatchInput, required: true }) },
       resolve: async (_, { input }, ctx) => {
         const row = await ctx.data.conferences().update(validate(input))

@@ -83,8 +83,9 @@ class Conferences extends ScopedRepository {
 
   /**
    * Patches the envelope's Conference, never one the caller names. Only an
-   * owner or admin of the org may write; the check runs before any query, so
-   * a refusal says nothing about whether the row exists.
+   * owner or admin of the org, or a platform operator acting for it (scope
+   * platform:operator, audited), may write; the check runs before any query,
+   * so a refusal says nothing about whether the row exists.
    */
   async update(patch: ConferencePatch): Promise<ConferenceRow> {
     const { userId, orgRole, scopes } = this.tenant

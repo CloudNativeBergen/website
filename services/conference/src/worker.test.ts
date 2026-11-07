@@ -174,14 +174,20 @@ describe('conference', () => {
     expect((await gql('not-a-jwt')).status).toBe(403)
   })
 
-  it('refuses a PlatformContext', async () => {
+  it('refuses a PlatformContext with FORBIDDEN, before any D1 read', async () => {
+    const prepare = vi.spyOn(env.DB, 'prepare')
     const { body } = await gql({
       typ: 'platform',
       userId: 'op',
       platformRole: 'operator',
     })
     expect(body.data.conference).toBeNull()
-    expect(body.errors).toHaveLength(1)
+    expect(
+      body.errors.map(
+        (e: { extensions: { code: string } }) => e.extensions.code,
+      ),
+    ).toEqual(['FORBIDDEN'])
+    expect(prepare).not.toHaveBeenCalled()
   })
 })
 
@@ -299,14 +305,32 @@ describe('updateConference', () => {
       expect(row('conf-a').title).toBe('A 2026')
     })
 
-    it('refuses an operator without a named tenant (PlatformContext)', async () => {
+    it('refuses an operator without a named tenant (PlatformContext), before any D1 read', async () => {
       // What the gateway mints on the lane when x-konf-operator-tenant is absent.
+      const prepare = vi.spyOn(env.DB, 'prepare')
       const { body } = await update(
         { typ: 'platform', userId: 'op', platformRole: 'operator' },
         { title: 'x' },
       )
       expect(body.data).toBeNull()
-      expect(body.errors).toHaveLength(1)
+      expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
+      expect(prepare).not.toHaveBeenCalled()
+      prepare.mockRestore()
+      expect(row('conf-a').title).toBe('A 2026')
+    })
+
+    it('refuses the operator scope without a user', async () => {
+      const { body } = await update(
+        {
+          ...(as(['platform:operator']) as Extract<
+            Envelope,
+            { typ: 'tenant' }
+          >),
+          userId: null,
+        },
+        { title: 'x' },
+      )
+      expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
       expect(row('conf-a').title).toBe('A 2026')
     })
 
