@@ -38,6 +38,8 @@ export function registerJobStatus() {
       type: Status,
       nullable: true,
       tag: 'operator',
+      description:
+        'Platform operators only. The latest daily D1 vs Sanity parity sweep: status ok, drift or unknown (a failed read). Null if the sweep has never run in this environment.',
       resolve: (_, __, ctx) => {
         if (ctx.envelope?.typ !== 'platform')
           throw createGraphQLError('parity status requires a PlatformContext', {

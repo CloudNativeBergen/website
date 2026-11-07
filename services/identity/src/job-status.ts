@@ -45,6 +45,8 @@ builder.queryField('memberSyncStatus', (t) =>
     type: Status,
     nullable: true,
     tag: 'operator',
+    description:
+      'Platform operators only. The latest hourly member sync: status ok, drift or failed (failed wins over drift). Null if it has never run in this environment.',
     resolve: (_, __, ctx) => {
       if (ctx.envelope?.typ !== 'platform')
         throw createGraphQLError(

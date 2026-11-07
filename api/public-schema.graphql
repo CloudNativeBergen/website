@@ -173,12 +173,20 @@ type Query {
   The request's organization's editions, newest first. Unpublished and unlisted editions only for org members.
   """
   conferenceEditions: [ConferenceEdition!]!
+
+  """
+  Platform operators only. The latest daily D1 vs Sanity parity sweep: status ok, drift or unknown (a failed read). Null if the sweep has never run in this environment.
+  """
   conferenceParityStatus: ConferenceParityStatus
 
   """
   The session org's pending invitations. Owners, admins and operators only; null otherwise.
   """
   invitations: [PendingInvitation!]
+
+  """
+  Platform operators only. The latest hourly member sync: status ok, drift or failed (failed wins over drift). Null if it has never run in this environment.
+  """
   memberSyncStatus: MemberSyncStatus
 
   """
