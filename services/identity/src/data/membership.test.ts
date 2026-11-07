@@ -713,6 +713,69 @@ describe('membership audit', () => {
   })
 })
 
+describe('operator role change (#1967)', () => {
+  const opAudits = async (orgId: string) =>
+    (
+      await all<{ action: string; detail: string }>(
+        "SELECT action, detail FROM audit_event WHERE action = 'member.role' AND detail LIKE ? ORDER BY id",
+        `%"${orgId}"%`,
+      )
+    ).map((r) => JSON.parse(r.detail))
+
+  it('audits the role it actually replaced', async () => {
+    const { orgId, members } = await org('owner', 'owner', 'admin')
+    const ops = await createMembers({ ...env, DB: d1 }).asOperator(
+      'op-1',
+      orgId,
+    )
+    await ops.changeRole(members[2].userId, 'member')
+    expect(await roleOf(members[2].memberId)).toBe('member')
+    expect(await opAudits(orgId)).toEqual([
+      {
+        actorId: 'op-1',
+        operator: true,
+        orgId,
+        memberId: members[2].memberId,
+        from: 'admin',
+        to: 'member',
+      },
+    ])
+  })
+
+  it('refuses, writing nothing, when the role changed after it was read', async () => {
+    const { orgId, members } = await org('owner', 'owner', 'admin')
+    const target = members[2]
+    // A concurrent operator change lands between the read and the batch.
+    const raced = new Proxy(d1, {
+      get(t, p) {
+        if (p === 'batch')
+          return async (stmts: D1PreparedStatement[]) => {
+            await run(
+              "UPDATE member SET role = 'owner' WHERE id = ?",
+              target.memberId,
+            )
+            return t.batch(stmts)
+          }
+        const v = Reflect.get(t, p) as unknown
+        return typeof v === 'function' ? v.bind(t) : v
+      },
+    }) as D1Database
+    const ops = await createMembers({ ...env, DB: raced }).asOperator(
+      'op-1',
+      orgId,
+    )
+    await expect(ops.changeRole(target.userId, 'member')).rejects.toMatchObject(
+      {
+        code: 'BAD_USER_INPUT',
+        message: "The member's role changed meanwhile; reload and try again",
+      },
+    )
+    // The concurrent change stands, and no row claims "from: admin".
+    expect(await roleOf(target.memberId)).toBe('owner')
+    expect(await opAudits(orgId)).toEqual([])
+  })
+})
+
 describe('members list above the D1 parameter cap (#2018)', () => {
   it('returns every provider for 150 members in at most 2 queries', async () => {
     const { orgId, members } = await org(

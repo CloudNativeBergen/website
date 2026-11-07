@@ -203,6 +203,11 @@ async function runSync(env: SyncEnv, progress: Progress) {
       .map((s) => s.trim())
       .filter(Boolean),
   )
+  // A mistyped id would leave that org granting with no sign (#1949).
+  const known = new Set(orgs.map((o) => o.id))
+  for (const orgId of sourceOrgs)
+    if (!known.has(orgId))
+      log('warn', 'identity.membership.source_org_unknown', { orgId })
   let granted = 0
   for (const { id: orgId } of orgs) {
     progress.checked++
@@ -298,6 +303,10 @@ async function checkDrift(
     if (userId) inSanity.add(userId)
     if (!userId || !roles.has(userId)) missingInIdentity.push(speakerId)
   }
+  // As authorization reads a role (members.ts asMember: trim each item), so
+  // a role it refuses, such as "ow ner", is a mismatch. ownersBelowTwo uses
+  // isOwner instead, the LAST_OWNER trigger's rule: the two differ on purpose
+  // (#1949).
   const roleOk = (r: string) =>
     r
       .toLowerCase()
@@ -345,19 +354,30 @@ async function checkDrift(
     return log('log', 'identity.membership.drift_deduped', { orgId })
   // Same gate and dedupe as the Slack post: ids only (kontroll#61).
   emit({ type: 'membership.drift', organizationId: orgId })
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text: slackText(orgId, drift) }),
-    signal: AbortSignal.timeout(5000),
-  })
-  if (!res.ok) {
+  // Never the URL in a log: it is the webhook's secret.
+  const failed = (detail: { status: number } | { error: string }) => {
     progress.failed = true
     return log('error', 'identity.membership.drift_alert_failed', {
       orgId,
-      status: res.status,
+      ...detail,
     })
   }
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: slackText(orgId, drift) }),
+      signal: AbortSignal.timeout(5000),
+      // Never follow a 307/308 (it would re-POST the drift elsewhere, #1949):
+      // the 3xx fails the status check below. Workers has no 'error' mode.
+      redirect: 'manual',
+    })
+  } catch (e) {
+    // Name only: a message may carry the URL.
+    return failed({ error: e instanceof Error ? e.name : 'unknown' })
+  }
+  if (!res.ok) return failed({ status: res.status })
   await env.DB.prepare(
     'INSERT INTO member_drift_alert (organizationId, hash, postedAt) VALUES (?1, ?2, ?3) ON CONFLICT (organizationId) DO UPDATE SET hash = excluded.hash, postedAt = excluded.postedAt',
   )
