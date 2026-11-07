@@ -1051,7 +1051,16 @@ describe('settings phase 3 (#2080)', () => {
     }
   })
 
-  it('lets only a platform operator change the vendor binding; re-sending it is not a change', async () => {
+  it('trusts a binding change on the site lane, whose router admits only operators', async () => {
+    const site: Envelope = {
+      ...(admin as Extract<Envelope, { typ: 'tenant' }>),
+      scopes: ['site:server'],
+    }
+    const { body } = await gql(site, MUTATION, { input: BINDING })
+    expect(body.errors).toBeUndefined()
+  })
+
+  it('lets only a platform operator change the vendor binding off the site lane (member lanes, e.g. kontroll); re-sending it is not a change', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     for (const [k, v] of Object.entries(BINDING)) {
       const { body } = await gql(admin, MUTATION, { input: { [k]: v } })

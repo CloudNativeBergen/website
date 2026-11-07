@@ -344,9 +344,11 @@ async function applyConferencePatch(
      * touches the subfields it knows about and never clobbers siblings.
      */
     pathPrefix?: string
+    /** Keys left out of the D1 write only (unchanged ticketing binding). */
+    d1Omit?: readonly string[]
   } = {},
 ) {
-  const { pathPrefix } = opts
+  const { pathPrefix, d1Omit = [] } = opts
   const set: Record<string, unknown> = {}
   const unset: string[] = []
 
@@ -374,7 +376,14 @@ async function applyConferencePatch(
   // Settings phase 1 (#2019): the public fields are moved; the members-only
   // ones still go to Sanity too (conference-write.ts). Prefixed (nested)
   // fieldsets hold no moved fields.
-  const d1 = !pathPrefix && (await writeMovedToD1(conferenceId, input))
+  const d1 =
+    !pathPrefix &&
+    (await writeMovedToD1(
+      conferenceId,
+      Object.fromEntries(
+        Object.entries(input).filter(([k]) => !d1Omit.includes(k)),
+      ),
+    ))
 
   // For d1_write tenants, omit moved fields from the Sanity patch (#1997).
   const sanitySet: Record<string, unknown> = {}
@@ -636,7 +645,14 @@ export const conferenceRouter = router({
           message: TICKETING_BINDING_ALREADY_CLAIMED,
         })
       }
-      return applyConferencePatch(conferenceId, input)
+      // An ordinary save re-sends the binding: keep the unchanged keys out of
+      // the D1 write, so it never counts as a rebind there (#2080).
+      const unchanged = (
+        ['checkinEventId', 'titoAccountSlug', 'titoEventSlug'] as const
+      ).filter(
+        (k) => k in input && (effective[k] || null) === (current?.[k] || null),
+      )
+      return applyConferencePatch(conferenceId, input, { d1Omit: unchanged })
     }),
 
   /**
