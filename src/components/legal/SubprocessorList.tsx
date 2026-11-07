@@ -1,6 +1,7 @@
 import {
   ChartBarIcon,
   ChatBubbleLeftRightIcon,
+  CloudIcon,
   DocumentTextIcon,
   EnvelopeIcon,
   ExclamationTriangleIcon,
@@ -34,6 +35,7 @@ import type {
 const ICONS: Record<SubprocessorId, typeof LockClosedIcon> = {
   sanity: LockClosedIcon,
   vercel: GlobeAltIcon,
+  cloudflare: CloudIcon,
   resend: EnvelopeIcon,
   grafana: ServerStackIcon,
   checkin: DocumentTextIcon,
