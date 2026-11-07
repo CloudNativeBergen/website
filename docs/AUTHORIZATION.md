@@ -9,7 +9,7 @@ Related: #1928 (role vocabularies), #1907 (organizer backfill), #2022 (speaker m
 (identity D1 `member`, Sanity `conference.organizers[]`, identity `user.platformOperator`
 vs Sanity `PLATFORM_ORG_ID`), with at least six separate parsers for the role string.
 The target keeps Better Auth `member` rows as the only source for org roles, adds one
-`relation_tuple` table in identity D1 for per-conference roles, lets each subgraph keep
+`conference_role` table in identity D1 for per-conference roles, lets each subgraph keep
 the facts it owns (a talk's speakers, a sponsor's contacts), and puts one pure, typed
 `can()` in `packages/tenancy` that every subgraph and the site call. Org and conference
 roles travel as claims in the gateway envelope; resource facts are read locally.
@@ -56,6 +56,8 @@ roles travel as claims in the gateway envelope; resource facts are read locally.
    admin within 60 s but leaves their API `admin`: conference settings (C1), lifecycle (D3),
    member management and invitations (I2), and through kontroll a full admin UI. Only orgs
    listed in `MEMBER_SOURCE_ORGS` are drift-checked instead (`member-sync.ts:3, 19`).
+   **The mirror gap:** removing a member in kontroll (I2) leaves them site admin, because
+   S1 reads Sanity `organizers[]` (`live-organizer.ts:16-20`), not identity. Fixed in phase 2.
 2. **Two operator sets.** Site: organizers of the `PLATFORM_ORG_ID` org in Sanity (S3).
    API and kontroll: `user.platformOperator` (G1, K1). C3 trusts `site:server` for the
    vendor binding because "the site router enforces the platform-operator rule"
@@ -73,7 +75,7 @@ roles travel as claims in the gateway envelope; resource facts are read locally.
    `"member,admin"` is admin everywhere except notification fan-out.
 5. **One site waist for everything.** S1 gives every organizer the same power: proposal
    scores and reviews, attendee PII, sponsor CRM, GDPR erasure (S4), schedule. There is no
-   reviewer, volunteer lead or per-conference organizer. Sponsor contacts and volunteers
+   reviewer, volunteer coordinator or per-conference organizer. Sponsor contacts and volunteers
    have no identity at all (S5).
 6. **"Member" has no defined meaning.** C2, C5, D2 let a plain `member` read drafts and the
    ticket setup; I1 shows them the member list without emails; I6 (owner decision) keeps
@@ -96,92 +98,108 @@ for member management (I2).
 
 ### 2.1 Functional: roles
 
-| Role                                        | Scope                                   | Granted by                                               | Now / next 2 steps                                     |
-| ------------------------------------------- | --------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------ |
-| `owner`, `admin`, `member`                  | org                                     | Better Auth invitation (kontroll)                        | now                                                    |
-| `operator`                                  | platform                                | identity `user.platformOperator` (set by hand/migration) | now                                                    |
-| `organizer`                                 | conference (one edition)                | org owner/admin                                          | CFP c (#2079): help with one edition without org admin |
-| `reviewer`                                  | conference                              | organizer                                                | CFP c (#2079)                                          |
-| `speaker` (submitter, accepted, co-speaker) | talk                                    | the cfp data itself (who is on the proposal)             | CFP b (#2078)                                          |
-| `volunteer`, `volunteer_lead`               | conference (edition = time bound)       | organizer                                                | later (tickets/volunteers move)                        |
-| `sponsor_contact`                           | sponsor (one company in one conference) | organizer                                                | later (sponsors move)                                  |
-| `profile_owner`                             | speaker profile                         | the person (#2022)                                       | now (#2097)                                            |
-| `site:server`                               | machine, per tenant                     | site key pair                                            | now; narrowed                                          |
-| job/cron actors                             | machine                                 | Worker binding                                           | now (unchanged)                                        |
+| Role                                        | Scope                                  | Granted by                                               | When                                                   |
+| ------------------------------------------- | -------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------ |
+| `owner`, `admin`, `member`                  | org                                    | Better Auth invitation (kontroll)                        | now                                                    |
+| `operator`                                  | platform                               | identity `user.platformOperator` (set by hand/migration) | now                                                    |
+| `organizer`                                 | conference (one edition)               | org owner/admin                                          | CFP c (#2079): help with one edition without org admin |
+| `reviewer`                                  | conference                             | organizer                                                | CFP c (#2079)                                          |
+| `volunteer`                                 | conference (edition = time bound)      | organizer                                                | later (volunteers move)                                |
+| `speaker` (submitter, accepted, co-speaker) | talk, resource-local in cfp D1         | the proposal itself                                      | CFP b (#2078)                                          |
+| `sponsor_contact`                           | sponsor, resource-local in sponsors D1 | organizer, in the sponsors subgraph                      | later (sponsors move)                                  |
+| `profile_owner`                             | speaker profile                        | the person (#2022)                                       | now (#2097)                                            |
+| `site:server`                               | machine lane marker, per tenant        | site key pair                                            | now; narrowed to two capabilities                      |
+| job/cron actors                             | machine                                | Worker binding                                           | now (unchanged)                                        |
 
 Per-org vs per-conference: org roles apply to every conference of the org by inheritance;
 conference roles never widen to the org. Time-bound roles: an edition is its own conference
-id, so "volunteer for 2026" is a tuple on that conference; an optional `expires_at` covers
-the rest (a reviewer until the review deadline).
+id, so "volunteer for 2026" is a row on that conference; an optional `expires_at` covers the
+rest (a reviewer until the review deadline).
 
 ### 2.2 Non-functional
 
-- **Workers/D1.** Free plan now (ROADMAP "Workers Paid later"). No new Worker or cron is
-  needed. One D1 query per request already happens in `principal()`; the design must stay
-  at one. D1 read replicas lag; authorization reads go to the primary.
-- **Latency.** Target: no extra network hop per check. Claims-based checks are in-memory
-  (µs); resource checks reuse the query the resolver runs anyway.
-- **Consistency.** A revoked role takes effect on the caller's next request (envelope is
-  minted per request, TTL 60 s, `gateway.ts:98`). The site's 60 s memo
-  (`live-organizer.ts:8`) stays the upper bound until the site reads identity.
-- **Isolation.** Every decision is made inside the envelope's tenant; no role claim can
-  name another org; `conferenceId` never comes from the client (AGENTS.md).
+- **Workers/D1.** Free plan now (ROADMAP "Workers Paid later"). No new Worker and no new
+  cron. One D1 query per request already happens in `principal()`; the design stays at one.
+  D1 read replicas lag; authorization reads go to the primary.
+- **Latency.** No extra network hop per check. Claims are checked in memory; resource
+  checks reuse the query the resolver runs anyway.
+- **Consistency: the hard bounds.**
+  - Role grant or revoke in identity D1: next request (the gateway calls `principal()` per
+    request and mints a 60 s envelope, `gateway.ts:98`).
+  - User deletion: next request (`principal()` returns null → 401, `gateway.ts:670-673`).
+  - Session revocation (sign-out, ban): **up to 300 s**. The identity JWT is verified
+    statelessly with `JWT_MAX_SECONDS = 300` (`gateway.ts:97`); the gateway does not check
+    the session row.
+  - Site: up to 60 s more from the per-instance memos (`identity-session.ts:25`,
+    `live-organizer.ts:8`), until phase 2 removes the second one.
+- **Isolation.** Every decision is inside the envelope's tenant; no role claim can name
+  another org; `conferenceId` never comes from the client.
 - **No existence oracle.** Org/conference checks run before any fetch; resource checks are
   folded into the query (`WHERE ... AND speaker = ?`) so "not yours" is `NOT_FOUND`.
-- **Audit.** Every grant, revoke and operator action lands in `audit_event` in the same
-  D1 batch as the change.
-- **Erasure.** Deleting an identity user deletes their tuples (FK cascade) and profile
-  (#2097 already cascades); audit rows keep the opaque user id only.
-- **Fail closed.** Unknown action, unknown role string, missing resource fact: deny.
+- **Audit.** One sink: identity `audit_event`. Identity's own writes insert it in the same
+  batch; other services emit on the existing event bus and identity records it. Add an
+  indexed `subject_user_id` column so "everything done to or by this person" is one query.
+- **Erasure.** Deleting an identity user cascades their `conference_role` rows and profile
+  (#2097 cascades). Audit rows keep the opaque user id (decision 8). cfp `talk.speakers`
+  user ids: the talk is org-owned (#2022 layer 3), so erasure replaces the user id with a
+  tombstone id and clears the profile snapshot; published program entries keep the
+  snapshot only if decision 8 says the archive survives erasure.
+- **Fail closed.** Unknown action, unknown role string, expired row, missing resource fact:
+  deny.
 
 ## 3. Model
 
 ### 3.1 Sources: one per relation
 
-Zanzibar-shaped (object#relation@subject), but each relation has exactly one source.
-No relation is stored twice.
+Each relation has exactly one source; nothing is stored twice.
 
-| Relation                                                 | Source                                                                   | Why                                                                                     |
-| -------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| `org#owner/admin/member`                                 | Better Auth `member` (identity D1)                                       | Owns invitations, last-owner trigger, audit. Copying into tuples would be a dual write. |
-| `platform#operator`                                      | `user.platformOperator` (identity D1, `auth.ts:117-121`, `input: false`) | Already the API's and kontroll's source.                                                |
-| `conference#organizer/reviewer/volunteer/volunteer_lead` | new `relation_tuple` (identity D1)                                       | No existing owner; needs grant/revoke/audit next to members.                            |
-| `sponsor#contact`                                        | `relation_tuple`                                                         | Same; object id is the sponsor-in-conference id.                                        |
-| `talk#speaker`                                           | cfp D1 (talk speakers, CFP b)                                            | The proposal owns who is on it; co-speaker acceptance is a cfp workflow.                |
-| `profile#owner`                                          | identity `speaker_profile.user_id` (#2097)                               |                                                                                         |
+| Relation                                | Source                                                                   | Why                                                                        |
+| --------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| org owner/admin/member                  | Better Auth `member` (identity D1)                                       | Owns invitations, last-owner trigger, audit. A copy would be a dual write. |
+| platform operator                       | `user.platformOperator` (identity D1, `auth.ts:117-121`, `input: false`) | Already the API's and kontroll's source.                                   |
+| conference organizer/reviewer/volunteer | new `conference_role` (identity D1)                                      | No existing owner; grant/revoke/audit next to members.                     |
+| talk speaker                            | cfp D1 (talk speakers, CFP b)                                            | The proposal owns who is on it; co-speaker acceptance is a cfp workflow.   |
+| sponsor contact                         | sponsors D1                                                              | The sponsors subgraph owns the sponsor and its contacts.                   |
+| profile owner                           | identity `speaker_profile.user_id` (#2097)                               |                                                                            |
 
-Decision: **org roles are derived from `member` rows, not tuples.** The Sanity
-`organizers[]` list stops being an authorization source: existing synced people stay
-`admin` (#1907 decision, nothing breaks), new per-edition helpers get a `conference#organizer`
-tuple, and `organizers[]` becomes display data (or is removed with settings phase 5).
+Decision: **org roles come from `member` rows.** Sanity `organizers[]` stops being an
+authorization source: people already synced stay `admin` (#1907, nothing breaks), new
+per-edition helpers get a `conference_role` row, and `organizers[]` becomes display data
+(or goes with settings phase 5).
+
+With sponsor contacts resource-local, only one object type is left, so the table is a
+plain role table, not a generic tuple store:
 
 ```sql
--- services/identity/migrations/00xx_relation_tuple.sql
-CREATE TABLE relation_tuple (
-  object_type TEXT NOT NULL,            -- 'conference' | 'sponsor'
-  object_id   TEXT NOT NULL,
-  relation    TEXT NOT NULL,            -- checked against the policy's list
-  user_id     TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
-  org_id      TEXT NOT NULL,            -- tenant column: every read filters on it
-  expires_at  INTEGER,                  -- null = no expiry
-  granted_by  TEXT NOT NULL,
-  created_at  INTEGER NOT NULL,
-  PRIMARY KEY (object_type, object_id, relation, user_id)
+-- services/identity/migrations/00xx_conference_role.sql
+CREATE TABLE conference_role (
+  org_id        TEXT NOT NULL,
+  conference_id TEXT NOT NULL,
+  user_id       TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  role          TEXT NOT NULL CHECK (role IN ('organizer', 'reviewer', 'volunteer')),
+  expires_at    INTEGER,          -- null = no expiry
+  granted_by    TEXT NOT NULL,
+  created_at    INTEGER NOT NULL,
+  PRIMARY KEY (org_id, conference_id, user_id, role)
 );
-CREATE INDEX relation_tuple_user ON relation_tuple (user_id, org_id);
+CREATE INDEX conference_role_user ON conference_role (user_id, org_id, conference_id);
 ```
 
-Subjects are users only. Usersets (`group#member`) and wildcards are not built (§6).
+Mint-time read: `WHERE user_id = ? AND org_id = <envelope orgId> AND conference_id =
+<envelope conferenceId> AND (expires_at IS NULL OR expires_at > now)`. Both tenant ids
+come from the resolved host, never from the caller. Expired rows are filtered at read and
+purged by the existing hourly identity job (`services/identity/src/index.ts:56`, run by
+tenant-directory's cron); no new cron.
 
 ### 3.2 Inheritance (the policy)
 
 ```
-platform#operator            -> acts for any org, only on the operator lane, audited
-org#owner                    ⊇ org#admin ⊇ org#member
-org#admin                    ⊇ conference#organizer for every conference of the org
-conference#organizer         ⊇ conference#reviewer, conference#volunteer_lead
-conference#volunteer_lead    ⊇ conference#volunteer
-talk#speaker                 (no inheritance; co-speaker = speaker with accepted=false until accepted)
+operator              -> acts for any org, only on the operator lane, audited
+org owner             ⊇ admin ⊇ member
+org admin             ⊇ conference organizer for every conference of the org
+conference organizer  ⊇ reviewer, volunteer (for management actions)
+talk speaker          resource-local; co-speaker = speaker with accepted=false
+sponsor contact       resource-local
 ```
 
 ### 3.3 Typed policy and one `can()`
@@ -199,49 +217,73 @@ export function can(e: Envelope, action: Action, r: Resource = { type: 'conferen
 export function parseOrgRoles(raw: string | null): Set<'owner' | 'admin' | 'member'>
 ```
 
-- `can()` is pure and synchronous: the envelope supplies org/conference roles, the caller
-  supplies resource facts it already loaded (the Cedar "entity" shape). No I/O inside.
-- The policy is a `Record<Action, Rule>` so a missing action is a compile error.
+- Pure and synchronous: the envelope supplies org/conference roles, the caller supplies
+  resource facts it already loaded. No I/O.
+- The policy is a `Record<Action, Rule>`, so a missing action is a compile error.
 - `parseOrgRoles` is the one parser (lower-case, trim, split on `,`, drop unknown); I3's
   stricter owner rule stays inside the last-owner trigger only.
 - Every subgraph check in §1.1 (C1–C5, D2–D3, I1, I4, I6) becomes a `can()` call. The site
   calls the same function once it reads identity (phase 2).
+- **`site:server` is a lane marker, not a role.** `can()` grants it exactly two machine
+  capabilities: the reminder lock (C4) and the ticket-setup read (C5). It does **not** get
+  `conference.read_draft`; drafts follow the user token the site forwards. Its C3 arm goes
+  in phase 2b.
+- **Tests.** The `can()` test table is generated from the §4 matrix as a fixture (one file
+  both the doc table and the test read), plus negative tests: unknown role strings,
+  `"Admin"`, `"member,admin"`, an expired row, a role row for another conference, an
+  envelope with an oversized or unknown `conferenceRoles`.
 
 ### 3.4 How subgraphs evaluate: claims vs lookup
 
-|                | A. Claims in the envelope                 | B. Service-binding lookup to identity per check | C. Hybrid (recommended)                               |
-| -------------- | ----------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
-| Latency        | 0 extra hops                              | one RPC per check (~1–5 ms, D1 query each)      | 0 extra hops                                          |
-| Consistency    | per request (envelope minted per request) | per check                                       | per request                                           |
-| Envelope size  | grows with roles                          | small                                           | bounded: roles for **one** org and **one** conference |
-| Resource roles | do not fit (unbounded talks)              | fit                                             | read locally by the owning subgraph                   |
-| Coupling       | none at check time                        | every subgraph binds identity                   | none                                                  |
+|                | A. Claims in the envelope | B. Lookup to identity per check | C. Hybrid (recommended)             |
+| -------------- | ------------------------- | ------------------------------- | ----------------------------------- |
+| Latency        | 0 extra hops              | one RPC + D1 query per check    | 0 extra hops                        |
+| Consistency    | per request               | per check                       | per request                         |
+| Envelope size  | grows with roles          | small                           | bounded: one org + one conference   |
+| Resource roles | do not fit                | fit                             | read locally by the owning subgraph |
+| Coupling       | none at check time        | every subgraph binds identity   | none                                |
 
 **Recommendation: C.** Extend `principal(userId, orgId, conferenceId)` to return
-`conferenceRoles` from `relation_tuple` (same query, `UNION` on the indexed `user_id`,
-`expires_at` filter) and add `conferenceRoles: string[]` to `TenantEnvelope`
-(`tenancy/src/index.ts:25-33`; `verifyEnvelope` rebuilds known fields, so old subgraphs
-ignore it). Resource relations (`talk#speaker`, `sponsor#contact` if moved to the sponsors
-subgraph) are facts the owning subgraph loads in its own query. Identity is never called
-at check time.
+`conferenceRoles` (same query, one extra indexed lookup) and add `conferenceRoles: string[]`
+to `TenantEnvelope` (`tenancy/src/index.ts:25-33`). `verifyEnvelope` (`:102-119`) defaults
+it to `[]` when absent, refuses more than 8 entries, and drops values outside the role
+vocabulary, so gateway and subgraphs can deploy in either order. Resource facts (talk
+speakers, sponsor contacts) are loaded by the owning subgraph in its own query. Identity is
+never called at check time.
+
+**The gateway must admit role holders without a member row (phase 3 blocker).** Today the
+operator lane refuses anyone without `orgRole` (`gateway.ts:636`), and kontroll admission
+counts only member rows (`services/identity/src/data/index.ts:144-152`,
+`mayUseOperatorOrigin`). Phase 3 changes both: `principal()` and `mayUseOperatorOrigin`
+count `conference_role` rows, and `:636` becomes `orgRole || conferenceRoles.length`. A
+gateway test proves a role holder with no member row gets a tenant envelope and a stranger
+still gets the single 403. The insider checks C2, C5, D2 (`!!e.orgRole`) become
+`can(e, 'conference.read_draft')` in the same PR, or a reviewer could not read the edition
+they review.
 
 ### 3.5 Caching and invalidation
 
-No authorization cache is added. The gateway reads `principal()` live per request and the
-envelope dies in 60 s; a grant or revoke is visible on the next request. The site's 60 s
-per-instance memo (`live-organizer.ts:24-26`, `identity-session.ts:25-30`) is the only
-staleness and disappears with phase 2. The gateway response cache must not cache responses
-that depend on roles; phase 1 adds a test that proves it (`api/src/response-cache.ts` not yet checked for this).
+No authorization cache. Bounds are in §2.2: role changes next request, session revocation
+up to 300 s, site memos up to 60 s on top. The gateway response cache must not serve
+role-dependent responses across callers; phase 1 adds a test (`api/src/response-cache.ts`
+not yet checked for this).
 
-### 3.6 Grants and audit
+### 3.6 Grants, emergency revocation, audit
 
-- Grants and revokes go through identity mutations (`grantConferenceRole`,
-  `revokeConferenceRole`), guarded by `can(e, 'conference.manage_roles')`, written in one
-  `db.batch` with an `audit_event` row (`action`, `userId` = actor, `detail` JSON with
-  object, relation, subject). Same pattern as `members.ts:307`.
-- Operator writes (`conference/src/data/index.ts:159-164`) move from log lines to an
-  `audit_event`-shaped table in the writing service, or to identity via the existing event
-  bus. Trigger: phase 1.
+- Grants and revokes: identity mutations `grantConferenceRole` / `revokeConferenceRole`,
+  guarded by `can(e, 'conference.manage_roles')`, written in one `db.batch` with an
+  `audit_event` row. Same pattern as `members.ts:307`.
+- **`revokeAll(userId)`**: operator-only (PlatformContext), audited, one batch: deletes
+  member rows (respecting the last-owner trigger: an orphaned org is reported, not left
+  ownerless), `conference_role` rows, sessions, and clears `platformOperator`. Takes
+  effect next request for the API; up to 300 s for an already-issued JWT.
+- **Break-glass** (documented in `docs/AUTH.md` in phase 1): if no operator can sign in,
+  an engineer with Cloudflare access sets `platformOperator = 1` with
+  `wrangler d1 execute` against identity, records an `audit_event` row by hand with the
+  reason, and reverts within 24 h. Rotating `ENVELOPE_PRIVATE_KEY` invalidates every
+  envelope at once.
+- Operator writes (`conference/src/data/index.ts:159-164`) move from log lines to the bus →
+  identity `audit_event`.
 - `audit.read`: owners for their org; operators for all.
 
 ## 4. Role × action matrix
@@ -249,7 +291,7 @@ that depend on roles; phase 1 adds a test that proves it (`api/src/response-cach
 Y = allowed, N = denied, own = only their own resource, asg = only where assigned,
 ★ = needs an owner decision (§8). Org roles inherit downward (owner ⊇ admin ⊇ member);
 admin ⊇ conference organizer. "Spk" = speaker on the talk; "CoS" = invited co-speaker
-before acceptance; "Site" = `site:server` without a user.
+before acceptance; "Site" = `site:server` with no user token.
 
 | Action                                | Op  | Own | Adm | Mem | Org | Rev        | Vol  | Spk  | CoS | Spn | Site |
 | ------------------------------------- | --- | --- | --- | --- | --- | ---------- | ---- | ---- | --- | --- | ---- |
@@ -259,7 +301,8 @@ before acceptance; "Site" = `site:server` without a user.
 | org.manage_owners                     | Y   | Y   | N   | N   | N   | N          | N    | N    | N   | N   | N    |
 | org.create (provision)                | Y   | N   | N   | N   | N   | N          | N    | N    | N   | N   | N    |
 | org.write_secrets (#2098, write-only) | Y   | Y   | Y★  | N   | N   | N          | N    | N    | N   | N   | N    |
-| conference.read_draft                 | Y   | Y   | Y   | Y★  | Y   | Y          | N    | N    | N   | N   | Y    |
+| conference.read_draft                 | Y   | Y   | Y   | Y★  | Y   | Y          | N    | N    | N   | N   | N    |
+| conference.read_ticket_setup (C5)     | Y   | Y   | Y   | Y   | Y   | N          | N    | N    | N   | N   | Y    |
 | conference.update_settings            | Y   | Y   | Y   | N   | Y★  | N          | N    | N    | N   | N   | N    |
 | conference.set_lifecycle              | Y   | Y   | Y   | N   | N★  | N          | N    | N    | N   | N   | N    |
 | conference.bind_ticketing             | Y   | N★  | N★  | N   | N   | N          | N    | N    | N   | N   | N    |
@@ -280,7 +323,8 @@ before acceptance; "Site" = `site:server` without a user.
 | attendee.read_pii                     | Y   | Y   | Y   | N   | Y★  | N          | N★   | N    | N   | N   | N    |
 | person.erase (GDPR)                   | Y   | Y   | Y★  | N   | N★  | N          | N    | N    | N   | N   | N    |
 | audit.read                            | Y   | Y   | N   | N   | N   | N          | N    | N    | N   | N   | N    |
-| reminder_lock / jobs                  | Y   | N   | N   | N   | N   | N          | N    | N    | N   | N   | Y    |
+| user.revoke_all                       | Y   | N   | N   | N   | N   | N          | N    | N    | N   | N   | N    |
+| reminder_lock (C4)                    | Y   | N   | N   | N   | N   | N          | N    | N    | N   | N   | Y    |
 
 Operator is N on reviewing and editing proposals by default: operators act for a tenant
 for support, not as a juror. Operator access is only on the operator lane and is audited.
@@ -288,98 +332,97 @@ for support, not as a juror. Operator access is only on the operator lane and is
 ## 5. Migration plan
 
 Each phase ships alone, keeps every current user's access, and carries a **cross-reader
-test**: a table-driven test that runs the old predicate and `can()` over the same inputs
-(every role string seen in production, plus `"Admin"`, `"member,admin"`, `" owner "`,
-empty) and fails on any disagreement the phase did not intend. Intended changes are listed
-in the test as explicit exceptions, so a reviewer sees them.
+test**: the old predicate and `can()` run over the same inputs (every role string seen in
+production, plus `"Admin"`, `"member,admin"`, `" owner "`, empty) and the test fails on any
+disagreement the phase did not intend. Intended changes are listed as explicit exceptions.
 
-| Phase | What                                                                                                                                                                                                                                                 | Issues / milestone                            | Non-breaking because                                                                    |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------- |
-| 0     | This doc; fix `CONTROL_MODEL.md:3`; name canonical source per role                                                                                                                                                                                   | #1928                                         | docs only                                                                               |
-| 1     | `parseOrgRoles` + `can()` for the actions that exist (C1–C5, D2–D3, I1, I4, I6); replace each check; operator audit to D1                                                                                                                            | #1928, Platform 5                             | Cross-reader test: identical except the parser fixes (case, `push.ts`), listed          |
-| 1b    | Close the revocation gap: put all four orgs in `MEMBER_SOURCE_ORGS` after one week with zero drift, so Y1 only alerts                                                                                                                                | #1907, #1947                                  | Drift = 0 means no one loses access                                                     |
-| 2     | Site reads roles from identity: operator from `platformOperator` (retire `PLATFORM_ORG_ID`, S3); admin waist from the member row through the API (S1); organizer invites through identity invitations (S7); `isOrganizer` in UI → per-org check (S6) | new issues, Platform 6 (next-auth retirement) | Shadow mode first: compute both, log `authz.shadow.mismatch`, switch after a clean week |
-| 2b    | Vendor binding: C3 requires the operator scope from the user's own envelope; drop the `site:server` arm. Site forwards the user's identity token on that call                                                                                        | #2085 follow-up; ends with #2098              | Phase 2 made both lanes use the same operator list                                      |
-| 3     | `relation_tuple`, `principal()` returns `conferenceRoles`, envelope field; grant/revoke mutations; kontroll UI for per-edition organizer and reviewer                                                                                                | CFP c (#2079)                                 | Additive table and claim; nobody has a tuple until granted                              |
-| 3b    | `talk#speaker` from cfp D1; proposal reads/writes through `can()` with resource facts                                                                                                                                                                | CFP b (#2078)                                 | Same rules as S2 today; cross-reader test against `proposal.ts:921-960`                 |
-| 4     | Volunteer and sponsor contact as identity users with tuples; bearer links stay as a fallback for existing invitations                                                                                                                                | tickets / sponsors phases                     | Token links keep working until expiry                                                   |
-| 5     | Retire: `organizers[]` as authz source, member-sync cron, `withLiveOrganizerRights`, `PLATFORM_ORG_ID`, global `isOrganizer`, `adminProcedure` as a single waist                                                                                     | settings phase 5, Platform 6                  | Each removed after its replacement ran one clean week                                   |
+| Phase | What                                                                                                                                                                                                                                                                                                                             | Issues / milestone               | Non-breaking because                                                              |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------- |
+| 0     | This doc; fix `CONTROL_MODEL.md:3`; canonical source per role                                                                                                                                                                                                                                                                    | #1928                            | docs only                                                                         |
+| 1     | `parseOrgRoles` + `can()` for existing actions (C1–C5, D2–D3, I1, I4, I6); `site:server` limited to C4/C5 (+C3 until 2b); operator audit via bus; `audit_event.subject_user_id`; `revokeAll`; break-glass doc                                                                                                                    | #1928, Platform 7                | Cross-reader test: identical except parser fixes (case, `push.ts`), listed        |
+| 1b    | **Together:** organizer invites (S7) go through identity invitations, **and** all four orgs move to `MEMBER_SOURCE_ORGS` after one week of zero drift, so Y1 only alerts. Shipping only the flag would leave a site-invited organizer without API admin                                                                          | #1907, #1947                     | Drift = 0 means no one loses access; new invites land in identity directly        |
+| 2     | Site reads roles from identity: operator from `platformOperator` (retire `PLATFORM_ORG_ID`, S3); admin waist from the member row via the API (S1), which closes the mirror gap; UI `isOrganizer` → per-org check (S6)                                                                                                            | new issues, Platform 7           | Shadow mode: compute both, log `authz.shadow.mismatch`, switch after a clean week |
+| 2b    | Vendor binding: C3 requires the operator scope from the user's own envelope; drop the `site:server` arm. The site forwards the user's identity token. **Depends on identity login for the tenant** (`isIdentityTenant`): a NextAuth-only tenant has no identity token, so its binding changes go through kontroll until it moves | #2085 follow-up; ends with #2098 | Phase 2 put both lanes on one operator list                                       |
+| 3b    | Talk speaker from cfp D1; proposal reads/writes through `can()` with resource facts                                                                                                                                                                                                                                              | CFP b (#2078)                    | Same rules as S2 today; cross-reader test against `proposal.ts:921-960`           |
+| 3     | `conference_role`, `principal()`/`mayUseOperatorOrigin` count it, gateway `:636` relaxed, `conferenceRoles` claim (capped, defaulted), C2/C5/D2 → `can()`; grant/revoke mutations; kontroll UI. **Gated on** phase 2, or on proposal mutations living in the cfp subgraph, so a reviewer role is enforced where reviews happen   | CFP c (#2079)                    | Additive table and claim; no rows until granted                                   |
+| 4     | Volunteers as identity users with `conference_role`; sponsor contacts as identity users in sponsors D1; bearer links stay for existing invitations                                                                                                                                                                               | volunteers / sponsors phases     | Token links keep working until expiry                                             |
+| 5     | Retire `organizers[]` as authz source, member-sync cron, `withLiveOrganizerRights`, `PLATFORM_ORG_ID`, global `isOrganizer`, `adminProcedure` as one waist                                                                                                                                                                       | settings phase 5, Platform 6     | Each removed after its replacement ran one clean week                             |
 
 ## 6. Future-proofing
 
-- **Custom roles per org.** Policy maps action → set of relations. A custom role is a row
-  `(org_id, name, actions[])` plus a tuple `conference#role:<name>`; `can()` adds one
-  lookup in the claims. Trigger: the first paying org asks for a role the matrix lacks.
-- **More tenants.** Nothing scales with tenant count: checks are per request, one indexed
-  query. `relation_tuple` grows with people × editions (thousands of rows).
-- **SpiceDB / OpenFGA swap.** The store sits behind one function used by the gateway:
-  `principal(userId, orgId, conferenceId) → { orgRole, platformOperator, conferenceRoles }`
-  plus `grant/revoke`. Tuples already have the `object#relation@user` shape, and §3.2 is a
-  direct schema (`definition conference { relation organizer: user; permission review =
-reviewer + organizer + org->admin }`). The swap replaces `principal()` and `grant/revoke`;
-  `can()` keeps reading claims. Resource facts move only if we choose to mirror them.
-  Trigger: relations deeper than three levels, usersets/groups, or reverse queries
-  ("everything this user can see") that SQL handles badly. Cost: a hosted service and a
-  hop on every request, which Workers Free cannot hide.
-- **Cedar as policy-as-data.** `can()`'s signature (principal, action, resource with
-  attributes) is Cedar's. If org admins need to edit policy, or policies must be reviewed
-  outside code, the `Record<Action, Rule>` can be compiled from Cedar (WASM in Workers).
-  Trigger: custom roles with conditions, or an auditor asking for policies as data.
-- **Not built now (YAGNI).** Usersets/groups (trigger: teams that grant as a unit; Sanity
-  `teams[]` moving, settings phase 5); reverse-lookup API (trigger: "my conferences" across
-  orgs for non-members); authz cache (trigger: `principal()` p95 > 10 ms); field-level ACLs
-  (trigger: a column readable by a role that may not read its row); delegated operator
-  roles (support vs superuser; trigger: a second operator who should not provision);
-  per-org secrets store (#2098, its own design).
+- **The envelope fixes the shape:** roles for one org plus one conference, never a list
+  of everything a user may do. That keeps it small and is the line every extension below
+  respects.
+- **Custom roles per org.** A row `(org_id, name, actions[])` assigned through
+  `conference_role.role`. `principal()` expands role → actions at mint time and the
+  envelope carries the action list for that one conference; `can()` stays pure and just
+  checks membership. Trigger: the first paying org asks for a role the matrix lacks.
+- **More tenants.** Nothing grows with tenant count: one indexed query per request.
+  `conference_role` grows with people × editions (thousands of rows).
+- **SpiceDB / OpenFGA.** The store sits behind `principal()` and `grant/revoke`. A swap
+  replaces those two; `can()` keeps reading claims and resource facts stay local. The
+  table would become `conference#<role>@user` tuples one-to-one. Trigger: groups or
+  reverse queries ("everything this user can see") across orgs. Cost: a hosted service
+  and a hop per request.
+- **Not built now (YAGNI).** Generic tuple store and other object types (trigger: a second
+  object type that identity, not its subgraph, must own); groups/teams (trigger: Sanity
+  `teams[]` moving in settings phase 5); reverse-lookup API; authz cache (trigger:
+  `principal()` p95 > 10 ms); field-level ACLs; delegated operator roles (trigger: a second
+  operator who should not provision); session-row check in the gateway (trigger: 300 s
+  revocation is not enough); policy-as-data (trigger: admins editing policy); per-org
+  secrets (#2098, own design).
 
 ## 7. Fit with the trajectory
 
-This **follows** the accepted plan: `api.konf.app` stays the only door and the only
-enforcer; identity D1 stays the source for memberships (DATA_OWNERSHIP.md:72, 90); Sanity
-`organizers[]` retires in phase 5 as already planned; #1907's "organizers are admin" stands
-for existing people; #2022's three layers map to `profile#owner`, `talk#speaker` and
-conference roles.
+This **follows** the accepted plan: `api.konf.app` stays the only door and enforcer;
+identity D1 stays the source for memberships (`DATA_OWNERSHIP.md:72, 90`); Sanity
+`organizers[]` retires in phase 5 as planned; #1907's "organizers are admin" stands for
+existing people; #2022's three layers map to profile owner, talk speaker and conference
+roles.
 
-It **departs** in three places, each needing a decision or an issue:
+It **departs** in four places:
 
-1. A new table and new roles (per-conference organizer, reviewer) that no accepted
-   document names. Needed by CFP c (#2079); without it reviewers must be org admins.
-2. The site stops being an authorization source of its own (phase 2) earlier than
-   next-auth retirement would force; this is what closes gaps 1–3.
-3. `site:server` loses its trust for operator-only writes (phase 2b).
+1. A new table and per-conference roles (organizer, reviewer, volunteer) that no accepted
+   document names. Needed by CFP c (#2079).
+2. The gateway admits users with a conference role but no member row (phase 3).
+3. The site stops being its own authorization source (phase 2) before next-auth retirement
+   would force it; this closes gaps 1–3 and the mirror gap.
+4. `site:server` shrinks to a lane marker with two machine capabilities.
 
-New milestone recommended: **Platform 7: Authorization** (phases 1–2b), with CFP b/c
-carrying phases 3–3b. Issues to file: phase 1 (`can()` + parser), 1b (flip
-`MEMBER_SOURCE_ORGS`), 2 (site reads identity roles; split per surface), 2b, 3
-(`relation_tuple`), operator audit table, and a doc fix for `CONTROL_MODEL.md:3`.
+New milestone: **Platform 7: Authorization** (phases 1–2b); CFP b/c carry 3b and 3. Issues
+to file: phase 1, 1b (S7 + flag together), 2 (split per surface), 2b, 3 (gateway admission +
+`conference_role`), break-glass doc, `CONTROL_MODEL.md:3` fix.
 
 ## 8. Open decisions for the owner
 
-1. **What is an org `member`?** (a) read-only insider: drafts and settings, no PII, no
-   directory (today's C2/D2 behaviour, plus #2097); (b) nothing beyond "belongs to the org".
-   _Recommend (a)_: it matches current code and needs no change.
-2. **Close the revocation gap now?** (a) flip all orgs to identity-source after zero drift
-   (phase 1b); (b) make the sync delete; (c) wait for phase 5. _Recommend (a)_: one env
-   change, no new code path that deletes members.
-3. **Per-conference organizer.** (a) add `conference#organizer` for new helpers, keep
-   existing admins; (b) everyone stays org admin. _Recommend (a)_, needed for CFP c.
-   Sub-decisions ★: may an organizer edit settings, set lifecycle, grant roles?
-   _Recommend_: settings yes, lifecycle no, grant reviewer/volunteer only.
-4. **Site operator source.** (a) identity `platformOperator` everywhere, retire
-   `PLATFORM_ORG_ID`; (b) keep both. _Recommend (a)_.
-5. **Vendor binding.** (a) operator-only until #2098 ships per-org credentials, then admins
-   bind in their own account; (b) admins now. _Recommend (a)_; this is #745's rule.
-6. **Review process.** Blind until the reviewer has scored (★ `proposal.read_reviews`),
-   reviewers see only assigned proposals or all of the conference, operators never score.
-   _Recommend_: blind until scored; all proposals of the conference unless the organizer
-   assigns; operators read-only.
-7. **Who may erase a person (GDPR) and read attendee PII.** Today any organizer. _Recommend_:
-   erase = owner/admin/operator; attendee PII = admin and conference organizer; volunteers
-   get check-in lookups only, never the export.
-8. **Speaker edits after acceptance** (★ `proposal.edit`). _Recommend_: bio and links
-   always (profile, #2022); title and abstract until the program is published, then via
-   the organizer.
-9. **Speaker directory for per-conference organizers** (★). #2097 limits it to owner/admin.
-   _Recommend_: keep owner/admin until someone asks.
-10. **Evaluation model** (§3.4). _Recommend_ C: org and conference roles as envelope
-    claims, resource facts local, no per-check RPC.
+Settled by the Fable review (2026-11-07), no longer open: evaluation model C (claims +
+local resource facts); one object type (`conference_role`), sponsor contacts resource-local,
+no Cedar, no `volunteer_lead`; `site:server` limited to C4/C5; one audit sink in identity;
+phase order 3b before 3; 1b ships with S7.
+
+1. **What is an org `member`?** (a) read-only insider: drafts, settings and ticket setup,
+   no PII, no directory (today's behaviour plus #2097); (b) only "belongs to the org".
+   _Recommend (a)_: matches current code.
+2. **Close the revocation gap (1b).** (a) flag all orgs identity-source after zero drift,
+   with S7 through identity in the same change; (b) make the sync delete; (c) wait for
+   phase 5. _Recommend (a)_.
+3. **Per-conference organizer powers.** Settings, lifecycle, granting roles?
+   _Recommend_: settings yes, lifecycle no, may grant reviewer and volunteer only.
+4. **Site operator source.** (a) identity `platformOperator`, retire `PLATFORM_ORG_ID`;
+   (b) keep both. _Recommend (a)_.
+5. **Vendor binding.** (a) operator-only until #2098, then admins bind their own account;
+   (b) admins now. _Recommend (a)_ (#745).
+6. **Review process.** _Recommend_: blind until the reviewer has scored; reviewers see all
+   proposals of their conference unless the organizer assigns; operators never score.
+7. **GDPR erasure and attendee PII.** _Recommend_: erase = owner/admin/operator; attendee
+   PII = admin and conference organizer; volunteers get check-in lookups only.
+8. **Erasure versus the archive.** Do published program entries keep the speaker snapshot
+   after erasure, and do audit rows keep the opaque user id? _Recommend_: audit keeps the
+   id (legitimate interest, no PII in it); published entries drop name and photo unless
+   the speaker consented to archival.
+9. **Speaker edits after acceptance.** _Recommend_: bio and links always (profile); title
+   and abstract until the program is published, then via the organizer.
+10. **Speaker directory for per-conference organizers.** _Recommend_: keep owner/admin only
+    (#2097) until someone asks.
+11. **Is 300 s session revocation acceptable?** (a) yes, `revokeAll` + key rotation for
+    emergencies; (b) gateway checks the session row (one more D1 read). _Recommend (a)_.
