@@ -186,7 +186,10 @@ describe('provisionOrganization (#1924)', () => {
     expect(await res.json()).toEqual({
       data: { provisionOrganization: { id: 'org_new', slug: 'new' } },
     })
-    expect(data.provision).toHaveBeenCalledWith(ARGS)
+    expect(data.provision).toHaveBeenCalledWith({
+      ...ARGS,
+      createdBy: 'user_1',
+    })
   })
 })
 

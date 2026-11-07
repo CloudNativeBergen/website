@@ -158,6 +158,7 @@ describe('gateway', () => {
     expect(names.sort()).toEqual([
       'cancelInvitation',
       'changeMemberRole',
+      'createOrganization',
       'inviteMember',
       'operatorCancelInvitation',
       'operatorChangeMemberRole',

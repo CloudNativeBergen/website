@@ -575,23 +575,42 @@ describe('provisioning API — a replayed request never creates a second tenant'
     })
   })
 
-  it('honours the KEY, not the payload — a changed body under a used key still creates nothing', async () => {
-    await POST(request())
-    const res = await POST(
-      request({
-        payload: body({
-          organization: {
-            name: 'Totally Different',
-            slug: 'totally-different',
-            contactEmail: 'x@y.no',
-          },
-        }),
-      }),
-    )
-    expect(res.status).toBe(200)
-    expect(ofType('organization')).toHaveLength(1)
-    expect(ofType('organization')[0].name).toBe('Cloud Native Oslo')
-  })
+  it.each([
+    [
+      'slug',
+      {
+        organization: {
+          name: 'Totally Different',
+          slug: 'totally-different',
+          contactEmail: 'x@y.no',
+        },
+      },
+    ],
+    [
+      'conference title only',
+      {
+        conference: {
+          title: 'Another Title',
+          city: 'Oslo',
+          country: 'Norway',
+        },
+      },
+    ],
+  ])(
+    'refuses a used key with a different body (%s): 409, nothing created',
+    async (_, over) => {
+      await POST(request())
+      const res = await POST(request({ payload: body(over) }))
+      expect(res.status).toBe(409)
+      await expect(res.json()).resolves.toEqual({
+        error: 'conflict',
+        code: 'idempotency_conflict',
+      })
+      expect(ofType('organization')).toHaveLength(1)
+      expect(ofType('conference')).toHaveLength(1)
+      expect(ofType('organization')[0].name).toBe('Cloud Native Oslo')
+    },
+  )
 
   it('creates exactly one tenant when two identical requests race', async () => {
     const [a, b] = await Promise.all([POST(request()), POST(request())])

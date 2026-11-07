@@ -1,6 +1,7 @@
 // tenant-directory: tenant resolution for the gateway, plus the provisioning
 // surface. Provisioning fields are @tag(internal), except
-// provisionOrganization (@tag(operator)); all need a PlatformContext.
+// provisionOrganization and createOrganization (@tag(operator)); all need
+// a PlatformContext.
 // `organizations` (#1973) and `conferences` (#1985) are @tag(operator) too:
 // requirePlatform.
 // `organization` is public and returns only the envelope's own org.
@@ -29,6 +30,41 @@ function sessionOrgId(ctx: ResolverContext) {
   if (e?.typ !== 'tenant') return null
   return e.orgRole || e.scopes.includes('platform:operator') ? e.orgId : null
 }
+
+const CreateOrganizationInput = builder.inputType('CreateOrganizationInput', {
+  fields: (t) => ({
+    name: t.string({ required: true }),
+    slug: t.string({
+      required: true,
+      description: 'Lowercase a-z, 0-9 and -; becomes <slug>.konf.run.',
+    }),
+    conferenceTitle: t.string({ required: true }),
+    startDate: t.string({ required: true, description: 'YYYY-MM-DD' }),
+    endDate: t.string({
+      required: true,
+      description: 'YYYY-MM-DD, on or after startDate',
+    }),
+    domain: t.string({
+      description: 'Optional custom hostname; proves itself by DNS later.',
+    }),
+    ownerEmail: t.string({
+      required: true,
+      description:
+        'Becomes the first organizer (existing account or a new one).',
+    }),
+  }),
+})
+
+const CreatedOrganization = builder
+  .objectRef<{ organizationId: string; conferenceId: string }>(
+    'CreatedOrganization',
+  )
+  .implement({
+    fields: (t) => ({
+      organizationId: t.exposeID('organizationId'),
+      conferenceId: t.exposeID('conferenceId'),
+    }),
+  })
 
 const ORGS_MAX = 100
 
@@ -335,6 +371,23 @@ builder.mutationType({
         return ctx.data.setLifecycle(e.orgId, e.conferenceId, status ?? null)
       },
     }),
+    createOrganization: t.field({
+      type: CreatedOrganization,
+      // kontroll#79. requirePlatform first: nothing is read or written for
+      // anyone but an operator on the platform lane.
+      tag: 'operator',
+      description:
+        'Creates an Organization and its first Conference: the Sanity documents (through the site), the directory rows and the owner membership. Retrying with the same idempotencyKey returns the same ids. Platform operators only (operator lane, no tenant).',
+      args: {
+        input: t.arg({ type: CreateOrganizationInput, required: true }),
+        idempotencyKey: t.arg.string({ required: true }),
+      },
+      resolve: (_, { input, idempotencyKey }, ctx) => {
+        requirePlatform(ctx)
+        const userId = (ctx.envelope as { userId: string }).userId
+        return ctx.data.createOrganization(input, idempotencyKey, userId)
+      },
+    }),
     provisionOrganization: t.field({
       type: Organization,
       // In the public schema; requirePlatform refuses everyone but an operator.
@@ -350,6 +403,7 @@ builder.mutationType({
         requirePlatform(ctx)
         return ctx.data.provision({
           ...args,
+          createdBy: (ctx.envelope as { userId: string }).userId,
           orgId: String(args.orgId),
           conferenceId: String(args.conferenceId),
         })

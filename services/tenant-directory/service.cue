@@ -7,7 +7,7 @@ service: #PlatformService & {
 	secrets: {
 		required: ["GATEWAY_PUBLIC_KEY"]
 		// Degrades without these: provisioning and custom-hostname registration refuse.
-		optional: ["SANITY_API_TOKEN_READ", "CF_API_TOKEN", "CF_ZONE_ID"]
+		optional: ["SANITY_API_TOKEN_READ", "CF_API_TOKEN", "CF_ZONE_ID", "PROVISIONING_SIGNING_KEY"]
 	}
 	// Mirror Cloudflare custom-hostname status for custom domains.
 	crons: ["*/5 * * * *"]
@@ -19,7 +19,14 @@ service: #PlatformService & {
 	// Without it provisioning refuses. Preview reads development only.
 	vars: {
 		preview: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development"}
-		production: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production"}
+		production: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", SITE_URL: "https://auth.konf.app"}
 	}
+	// createOrganization (RunKonf/kontroll#79) asks the site to write the
+	// Sanity docs: POST SITE_URL/api/provisioning/service/organizations,
+	// signed with PROVISIONING_SIGNING_KEY (private Ed25519 JWK with kid; the
+	// site holds the public half in TENANT_DIRECTORY_PUBLIC_KEYS). Without
+	// SITE_URL or the key, createOrganization refuses. Preview sets no
+	// SITE_URL: no preview site writes to a dataset the worker can trust yet.
+	files: "package.json": dependencies: jose: "^6.2.14"
 	serviceBindings: [{binding: "IDENTITY", service: "konf-identity", entrypoint: "Organizations"}]
 }

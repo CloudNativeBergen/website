@@ -15,7 +15,8 @@
     "@pothos/plugin-federation": "^4",
     "drizzle-orm": "^0.45.2",
     "graphql": "16.14.2",
-    "graphql-yoga": "^5"
+    "graphql-yoga": "^5",
+    "jose": "^6.2.14"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261101.1",

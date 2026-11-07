@@ -24,3 +24,4 @@ export {
   deleteExpiredProvisioningRateLimits,
 } from './rateLimit'
 export { authenticateProvisioningRequest } from './token'
+export { SERVICE_ASSERTION_HEADER, verifyServiceAssertion } from './service'

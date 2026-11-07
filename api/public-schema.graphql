@@ -204,6 +204,11 @@ type Mutation {
 
   """Removes the session user's subscription for the endpoint."""
   unsubscribePush(endpoint: String!): Boolean
+
+  """
+  Creates an Organization and its first Conference: the Sanity documents (through the site), the directory rows and the owner membership. Retrying with the same idempotencyKey returns the same ids. Platform operators only (operator lane, no tenant).
+  """
+  createOrganization(idempotencyKey: String!, input: CreateOrganizationInput!): CreatedOrganization
   provisionOrganization(conferenceId: ID!, idempotencyKey: String!, orgId: ID!, orgSlug: String!): Organization
 
   """
@@ -669,6 +674,11 @@ type Sponsorship {
   tier: SponsorTier
 }
 
+type CreatedOrganization {
+  conferenceId: ID
+  organizationId: ID
+}
+
 type Domain {
   conferenceId: ID
   hostname: String
@@ -849,6 +859,26 @@ input PushSubscriptionInput {
 input PushSubscriptionKeys {
   auth: String!
   p256dh: String!
+}
+
+input CreateOrganizationInput {
+  conferenceTitle: String!
+
+  """Optional custom hostname; proves itself by DNS later."""
+  domain: String
+
+  """YYYY-MM-DD, on or after startDate"""
+  endDate: String!
+  name: String!
+
+  """Becomes the first organizer (existing account or a new one)."""
+  ownerEmail: String!
+
+  """Lowercase a-z, 0-9 and -; becomes <slug>.konf.run."""
+  slug: String!
+
+  """YYYY-MM-DD"""
+  startDate: String!
 }
 
 type SiteRolloutFlags {
