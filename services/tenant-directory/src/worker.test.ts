@@ -145,6 +145,13 @@ beforeEach(() => {
       readFileSync(
         new URL('../migrations/0005_lifecycle_cancelled.sql', import.meta.url),
         'utf8',
+      ) +
+      readFileSync(
+        new URL(
+          '../migrations/0006_provisioning_conference.sql',
+          import.meta.url,
+        ),
+        'utf8',
       ),
   )
   env = {
@@ -488,6 +495,64 @@ describe('provisioning', () => {
     }
     expect(count('organizations')).toBe(1)
     expect(count('domains')).toBe(2)
+  })
+
+  // #1957: a later edition of the same org, already in D1, must not turn a
+  // replay with another conference into a silent no-op.
+  it('refuses a replayed key naming another conference of the same org', async () => {
+    await provision('acme', 'same')
+    sqlite.exec(
+      "INSERT INTO conferences (id, org_id, slug, name, lifecycle) VALUES ('conference-acme-2027', 'organization.acme', '2027', 'Acme 2027', 'draft')",
+    )
+    const { body } = await gql(
+      PROVISION,
+      vars('acme', 'same', { conf: 'conference-acme-2027' }),
+      operator,
+    )
+    expect(body.errors[0].extensions.code).toBe('CONFLICT')
+    expect(sanityFetch).toHaveBeenCalledTimes(1)
+  })
+
+  it("refuses a replay whose conference has moved to the caller's org (the org check alone)", async () => {
+    await provision('beta', 'beta-key')
+    await provision('acme', 'same')
+    // Only reachable by a later D1 change: the key's conference now belongs
+    // to beta, so the conference checks pass and the org check must refuse.
+    sqlite.exec(
+      "UPDATE conferences SET org_id = 'organization.beta', slug = 'moved' WHERE id = 'conference-acme'",
+    )
+    const { body } = await gql(
+      PROVISION,
+      vars('beta', 'same', { conf: 'conference-acme' }),
+      operator,
+    )
+    expect(body.errors[0].extensions.code).toBe('CONFLICT')
+  })
+
+  it('refuses conference.domains with two dated platform hosts', async () => {
+    sanity.confs['conference-acme'].domains = [
+      'acme-2025.konf.run',
+      'acme-2026.konf.run',
+      'acme.konf.run',
+    ]
+    expect(await refused(vars())).toContain(
+      'conference.domains needs exactly one acme-<year>.konf.run host',
+    )
+  })
+
+  it('bounds the Sanity read with a timeout', async () => {
+    const timeout = vi
+      .spyOn(AbortSignal, 'timeout')
+      .mockReturnValue(AbortSignal.abort(new DOMException('t', 'TimeoutError')))
+    sanityFetch.mockImplementationOnce(async (_url, init) => {
+      if (init?.signal?.aborted) throw init.signal.reason
+      return Response.json({ result: { org: null, conf: null } })
+    })
+    expect(await refused(vars(), 'INTERNAL_SERVER_ERROR')).toBe(
+      'Sanity read failed',
+    )
+    expect(timeout).toHaveBeenCalledWith(5000)
+    timeout.mockRestore()
   })
 
   it('refuses callers without a PlatformContext', async () => {

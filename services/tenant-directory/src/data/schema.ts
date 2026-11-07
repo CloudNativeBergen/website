@@ -1,5 +1,5 @@
-// Drizzle mirror of migrations/0001_init.sql, 0002_rollout_flags.sql and
-// 0005_lifecycle_cancelled.sql.
+// Drizzle mirror of migrations/0001_init.sql, 0002_rollout_flags.sql,
+// 0005_lifecycle_cancelled.sql and 0006_provisioning_conference.sql.
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const organizations = sqliteTable('organizations', {
@@ -47,4 +47,6 @@ export const domains = sqliteTable('domains', {
 export const provisioningRequests = sqliteTable('provisioning_requests', {
   idempotencyKey: text('idempotency_key').primaryKey(),
   orgId: text('org_id').notNull(),
+  // 0006 (#1957); null on rows written before it.
+  conferenceId: text('conference_id'),
 })
