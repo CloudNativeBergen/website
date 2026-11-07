@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mapBackfill } from '../../../services/conference/scripts/backfill'
+import { PARITY_COLUMNS } from '../../../services/conference/src/data/parity-core'
 import {
   isMovedConferenceField,
   movedConferencePatch,
@@ -134,5 +135,40 @@ describe('movedConferencePatch settings phase 2 (#2038)', () => {
     // Not read from D1 yet, so Sanity still gets them.
     for (const k of Object.keys(input))
       expect(isMovedConferenceField(k)).toBe(false)
+  })
+})
+
+// #1917: the daily parity sweep compares only columns the site still writes to
+// D1 and Sanity. A column that moves to D1-only must leave PARITY_COLUMNS in
+// the same change, or every edit to it reads as drift; a dual-written column
+// missing from it goes unchecked.
+describe('parity columns agree with the write split (#1917)', () => {
+  const camel = (col: string) =>
+    col === 'organizer_name'
+      ? 'organizer'
+      : col.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())
+  // Not a settings input key: the row's identity, lifecycleStatus's derived
+  // gate, and showVanityMetrics (nested; the tickets router writes it to D1
+  // only for d1_write tenants).
+  const SPECIAL = [
+    'conference_id',
+    'org_id',
+    'published',
+    'show_vanity_metrics',
+  ]
+  const columns = Object.keys(
+    mapBackfill([{ _id: 'c', orgId: 'o' }], new Set(['c'])).rows[0],
+  ).filter((c) => !SPECIAL.includes(c))
+  const compared = new Set<string>(PARITY_COLUMNS)
+
+  it.each(columns)('%s is moved or compared, not both', (col) => {
+    expect(isMovedConferenceField(camel(col))).toBe(!compared.has(col))
+  })
+
+  it('compares org_id and published, and not the frozen showVanityMetrics', () => {
+    expect(compared.has('org_id')).toBe(true)
+    expect(compared.has('published')).toBe(true)
+    expect(compared.has('show_vanity_metrics')).toBe(false)
+    expect(columns.length).toBeGreaterThan(40)
   })
 })
