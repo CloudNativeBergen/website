@@ -8,7 +8,7 @@ check() { # name, expected, json
 }
 check identical '' '{"status":"identical","files":[],"commits":[]}'
 check behind '' '{"status":"behind","files":[{"filename":"api/x.ts"}],"commits":[]}'
-check docs-only '' '{"status":"ahead","files":[{"filename":"docs/ROADMAP.md"},{"filename":"src/app/page.tsx"},{"filename":"apix/a"},{"filename":"pnpm-lock.yamlx"}],"commits":[{"sha":"b"}]}'
+check docs-only '' '{"status":"ahead","files":[{"filename":"docs/ROADMAP.md"},{"filename":"src/app/page.tsx"},{"filename":"apix/a"},{"filename":"docs/api/x.md"},{"filename":"src/lib/services/x.ts"},{"filename":"pnpm-lock.yamlx"}],"commits":[{"sha":"b"}]}'
 check service 'c' '{"status":"ahead","files":[{"filename":"docs/a.md"},{"filename":"services/identity/src/x.ts"}],"commits":[{"sha":"b"},{"sha":"c"}]}'
 check lockfile 'c' '{"status":"ahead","files":[{"filename":"pnpm-lock.yaml"}],"commits":[{"sha":"c"}]}'
 check workflow 'c' '{"status":"diverged","files":[{"filename":".github/workflows/deploy-workers.yml"}],"commits":[{"sha":"c"}]}'
