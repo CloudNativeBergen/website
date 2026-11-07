@@ -98,6 +98,12 @@ function toTRPCError(rejection: ProvisionRejection): TRPCError {
         code: 'BAD_REQUEST',
         message: AMBIGUOUS_ORGANIZER_EMAIL,
       })
+    case 'idempotency_conflict':
+      // Unreachable here (the wizard sends no key); kept for exhaustiveness.
+      return new TRPCError({
+        code: 'CONFLICT',
+        message: 'This request was already used with different details',
+      })
     case 'commit_failed':
       return new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
