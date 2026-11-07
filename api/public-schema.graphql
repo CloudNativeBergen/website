@@ -1,3 +1,126 @@
+"""Dates, email and enabled formats are on Conference. Public data only."""
+type CallForPapers {
+  audiences: [CfpOption!]
+
+  """
+  Every format with its label; Conference.formats says which are enabled.
+  """
+  formats: [CfpOption!]
+  languages: [CfpOption!]
+  levels: [CfpOption!]
+
+  """Confirmed talks, by title."""
+  talks: [CfpTalk!]
+  topics: [CfpTopic!]
+}
+
+type CfpOption {
+  label: String
+  value: String
+}
+
+"""
+Who presents a talk: id and display name only. The speaker model may change (#2022).
+"""
+type CfpSpeakerRef {
+  id: ID
+  name: String
+}
+
+"""
+A confirmed talk. The id is the one program `talk(id:)` takes for details.
+"""
+type CfpTalk {
+  audiences: [String!]
+  format: String
+  id: ID
+  language: String
+  level: String
+  speakers: [CfpSpeakerRef!]
+  title: String
+  topicIds: [ID!]
+}
+
+type CfpTopic {
+  color: String
+  description: String
+  id: ID
+  title: String
+}
+
+type Query {
+  """The request's conference CFP. Null when the request has no conference."""
+  cfp: CallForPapers
+
+  """
+  The request's Conference. Null when the request has none, or it is unpublished and the caller is not an org member.
+  """
+  conference: Conference
+
+  """
+  The request's organization's editions, newest first. Unpublished and unlisted editions only for org members.
+  """
+  conferenceEditions: [ConferenceEdition!]!
+
+  """
+  Platform operators only. The latest daily D1 vs Sanity parity sweep: status ok, drift or unknown (a failed read). Null if the sweep has never run in this environment.
+  """
+  conferenceParityStatus: ConferenceParityStatus
+
+  """
+  The session org's pending invitations. Owners, admins and operators only; null otherwise.
+  """
+  invitations: [PendingInvitation!]
+
+  """
+  Platform operators only. The latest hourly member sync: status ok, drift or failed (failed wins over drift). Null if it has never run in this environment.
+  """
+  memberSyncStatus: MemberSyncStatus
+
+  """
+  The session org's members. Null unless the caller is a member or an operator acting for the tenant.
+  """
+  members: [OrganizationMember!]
+  program: Program
+  speaker(id: ID!): Speaker
+  speakerBySlug(slug: String!): Speaker
+  speakers: [Speaker!]
+  talk(id: ID!): Talk
+
+  """Highest first."""
+  sponsorTiers: [SponsorTier!]
+
+  """In the site order: highest tier first."""
+  sponsors: [Sponsorship!]
+
+  """
+  The request's Conference lifecycle: `live`, `cancelled` or `archived` for anyone, `draft` only for org members. Public because a cancelled or archived homepage says so to every visitor (#1997).
+  """
+  conferenceLifecycle: String
+
+  """
+  Every org's conferences, ordered by id. Platform operators only (operator lane, no tenant). At most 100 per page: pass the last id as `after` for the next. `lifecycle` and `flag` (that flag on) filter.
+  """
+  conferences(after: ID, first: Int = 100, flag: RolloutFlag, lifecycle: ConferenceLifecycle): [OperatorConference!]
+
+  """
+  The signed-in user's own organizations, with their role and every conference edition (#2036). Kontroll's member lane: a session with no tenant. Refused with a tenant envelope or none.
+  """
+  myOrganizations: [MyOrganization!]
+
+  """
+  The session's Organization: members (any role) and operators acting for it. Null for everyone else.
+  """
+  organization: Organization
+
+  """
+  Every Organization, ordered by slug. Platform operators only (operator lane, no tenant). At most 100 per page: pass the last slug as `after` for the next.
+  """
+  organizations(after: String, first: Int = 100): [Organization!]
+  health: String!
+  rolloutFlags: SiteRolloutFlags
+}
+
 type Conference {
   id: ID
   accentColor: String
@@ -215,76 +338,6 @@ type Mutation {
   Sets the request's Conference homepage override, or clears it with null (back to `live`; a draft stays draft). Org owner or admin, or an operator acting for the org (#1997).
   """
   setConferenceLifecycle(status: ConferenceLifecycleOverride): ConferenceEdition
-}
-
-type Query {
-  """
-  The request's Conference. Null when the request has none, or it is unpublished and the caller is not an org member.
-  """
-  conference: Conference
-
-  """
-  The request's organization's editions, newest first. Unpublished and unlisted editions only for org members.
-  """
-  conferenceEditions: [ConferenceEdition!]!
-
-  """
-  Platform operators only. The latest daily D1 vs Sanity parity sweep: status ok, drift or unknown (a failed read). Null if the sweep has never run in this environment.
-  """
-  conferenceParityStatus: ConferenceParityStatus
-
-  """
-  The session org's pending invitations. Owners, admins and operators only; null otherwise.
-  """
-  invitations: [PendingInvitation!]
-
-  """
-  Platform operators only. The latest hourly member sync: status ok, drift or failed (failed wins over drift). Null if it has never run in this environment.
-  """
-  memberSyncStatus: MemberSyncStatus
-
-  """
-  The session org's members. Null unless the caller is a member or an operator acting for the tenant.
-  """
-  members: [OrganizationMember!]
-  program: Program
-  speaker(id: ID!): Speaker
-  speakerBySlug(slug: String!): Speaker
-  speakers: [Speaker!]
-  talk(id: ID!): Talk
-
-  """Highest first."""
-  sponsorTiers: [SponsorTier!]
-
-  """In the site order: highest tier first."""
-  sponsors: [Sponsorship!]
-
-  """
-  The request's Conference lifecycle: `live`, `cancelled` or `archived` for anyone, `draft` only for org members. Public because a cancelled or archived homepage says so to every visitor (#1997).
-  """
-  conferenceLifecycle: String
-
-  """
-  Every org's conferences, ordered by id. Platform operators only (operator lane, no tenant). At most 100 per page: pass the last id as `after` for the next. `lifecycle` and `flag` (that flag on) filter.
-  """
-  conferences(after: ID, first: Int = 100, flag: RolloutFlag, lifecycle: ConferenceLifecycle): [OperatorConference!]
-
-  """
-  The signed-in user's own organizations, with their role and every conference edition (#2036). Kontroll's member lane: a session with no tenant. Refused with a tenant envelope or none.
-  """
-  myOrganizations: [MyOrganization!]
-
-  """
-  The session's Organization: members (any role) and operators acting for it. Null for everyone else.
-  """
-  organization: Organization
-
-  """
-  Every Organization, ordered by slug. Platform operators only (operator lane, no tenant). At most 100 per page: pass the last slug as `after` for the next.
-  """
-  organizations(after: String, first: Int = 100): [Organization!]
-  health: String!
-  rolloutFlags: SiteRolloutFlags
 }
 
 type TicketTargetMilestone {

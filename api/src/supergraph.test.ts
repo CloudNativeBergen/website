@@ -31,6 +31,25 @@ describe('publicContract', () => {
 })
 
 describe('compose', () => {
+  it('composes the cfp subgraph into the public supergraph', () => {
+    expect(compose()).toMatch(/CFP @join__graph\(name: "cfp"/)
+    const pub = buildSchema(publicSdl())
+    expect(pub.getQueryType()!.getFields().cfp).toBeDefined()
+    const talk = pub.getType('CfpTalk') as unknown as {
+      getFields(): Record<string, unknown>
+    }
+    expect(Object.keys(talk.getFields()).sort()).toEqual([
+      'audiences',
+      'format',
+      'id',
+      'language',
+      'level',
+      'speakers',
+      'title',
+      'topicIds',
+    ])
+  })
+
   it('composes the sponsors subgraph into the public supergraph', () => {
     expect(compose()).toMatch(/SPONSORS @join__graph\(name: "sponsors"/)
     const pub = buildSchema(publicSdl())

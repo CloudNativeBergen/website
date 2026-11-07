@@ -50,6 +50,8 @@ export interface Env {
   PROGRAM: Fetcher
   /** konf-sponsors: public sponsors and tiers (Sanity-backed, #1772) */
   SPONSORS: Fetcher
+  /** konf-cfp: public CFP options and confirmed talks (Sanity-backed, #2077) */
+  CFP: Fetcher
   /** konf-conference: its subgraph */
   CONFERENCE: Fetcher
   /** konf-identity default entrypoint: only /api/auth/* (JWKS) answers */
@@ -86,6 +88,7 @@ export const BINDINGS = {
   content: 'CONTENT',
   program: 'PROGRAM',
   sponsors: 'SPONSORS',
+  cfp: 'CFP',
   conference: 'CONFERENCE',
   identity: 'IDENTITY_GRAPH',
 } as const

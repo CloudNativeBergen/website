@@ -174,9 +174,9 @@ jobs:
               pnpm exec tsx scripts/secrets-sync.ts "$1" production --check
             fi
           }
-          for pkg in identity tenant-directory content conference program sponsors; do
+          for pkg in identity tenant-directory content conference program sponsors cfp; do
             echo "::group::$pkg ($DEPLOY_ENV)"
-            # `db: false` services (content, program, sponsors) have no D1 and no migrations.
+            # `db: false` services (content, program, sponsors, cfp) have no D1 and no migrations.
             if [ -d "services/$pkg/migrations" ]; then
               pnpm --filter "@runkonf/$pkg" exec wrangler d1 migrations apply DB --remote --env "$DEPLOY_ENV"
             fi
