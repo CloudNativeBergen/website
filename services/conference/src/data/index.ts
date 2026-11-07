@@ -109,11 +109,13 @@ class Conferences extends ScopedRepository {
     )
     const row = await this.db.query.conferences.findFirst({ where })
     if (!row) throw fail('conference not found', 'NOT_FOUND')
-    // PLATFORM-SET ONLY (#745, #2080): every tenant shares the platform's
-    // ticketing credentials, so an org admin rebinding the vendor event could
-    // squat another org's. Re-sending the stored value is not a change. The
-    // site's server lane is trusted: its router admits only a platform
-    // operator (updateTicketingIds) before it writes here.
+    // PLATFORM-SET ONLY (#745, #2080, #2085): every tenant shares the
+    // platform's ticketing credentials, so an org admin rebinding the vendor
+    // event could squat another org's. Re-sending the stored value is not a
+    // change. The site's server lane (SITE_SCOPE) is trusted because the site
+    // router enforces the platform-operator rule before writing here, and
+    // only updateTicketingIds admits these keys (locked by
+    // __tests__/server/ticketing-binding-guard.test.ts).
     const rebinds = BINDING.some(
       (k) => k in patch && (patch[k] ?? null) !== (row[k] ?? null),
     )
