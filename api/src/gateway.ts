@@ -583,10 +583,18 @@ export function createGateway(supergraph: string) {
           if (!token) throw new Error('malformed authorization header')
           const payload = await verifyIdentity(token, env)
           userId = payload.sub!
-          // In both lanes the resolved host must be the origin the session
-          // was handed off to; a token without that claim is refused.
-          const claimed = hostOf(payload[SESSION_ORIGIN_CLAIM])
-          if (!claimed || claimed !== host)
+          // The session must have been handed off to this caller; a token
+          // without the claim is refused. The operator lane compares exactly,
+          // as the lane itself was chosen (identity mints that claim from an
+          // OPERATOR_ORIGINS entry). Site lanes compare hosts: the server lane
+          // asserts a host and has no Origin.
+          const claim = payload[SESSION_ORIGIN_CLAIM]
+          const claimed = hostOf(claim)
+          if (
+            operatorLane
+              ? claim !== request.headers.get('origin')
+              : !claimed || claimed !== host
+          )
             throw new Error('host is not the session origin')
         } catch {
           return reject(401, 'UNAUTHENTICATED', 'invalid identity token')

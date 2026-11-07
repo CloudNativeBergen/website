@@ -1695,6 +1695,40 @@ describe('operator lane (#1892 phase 4)', () => {
     expect(envelopes.every((e) => e === null)).toBe(true)
   })
 
+  it.each(['', ',,', ' , '])(
+    'never treats an empty Origin as an operator origin (OPERATOR_ORIGIN %j)',
+    async (list) => {
+      const { env, envelopes } = opsEnv()
+      env.OPERATOR_ORIGIN = list
+      // No session: the operator lane would refuse with 401; any other lane
+      // answers this anonymous query.
+      const res = await call(env, { origin: '' })
+      expect(res.status).toBe(200)
+      expect(envelopes).toEqual([null])
+      expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each([
+    'http://my.konf.app',
+    'https://MY.konf.app',
+    'https://my.konf.app:443',
+    'https://my.konf.app/',
+  ])(
+    'refuses a session handed off to %s: the claim must equal the operator Origin exactly',
+    async (claim) => {
+      const { env, envelopes } = opsEnv()
+      const token = await jwt({ claims: { [SESSION_ORIGIN_CLAIM]: claim } })
+      const res = await call(env, {
+        origin: OPS,
+        authorization: `Bearer ${token}`,
+      })
+      expect(res.status).toBe(401)
+      expect(envelopes).toEqual([])
+      expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+    },
+  )
+
   it('accepts any exact entry of a comma-separated OPERATOR_ORIGIN', async () => {
     const { env, envelopes } = opsEnv()
     env.OPERATOR_ORIGIN = `https://other.example, ${OPS}`
