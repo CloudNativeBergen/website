@@ -48,6 +48,13 @@ const h = vi.hoisted(() => ({
   reads: [] as unknown[],
 }))
 
+// Not a d1_write tenant: ticket setup goes to Sanity only (#2080).
+vi.mock('@/lib/konf-api/conference-write', async (original) => ({
+  ...(await original<typeof import('@/lib/konf-api/conference-write')>()),
+  writeMovedToD1: vi.fn(async () => false),
+  isD1WriteTenant: vi.fn(async () => false),
+}))
+
 vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
 
 vi.mock('@/lib/conference/sanity', () => ({
