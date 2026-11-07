@@ -89,6 +89,9 @@ const TENANT = `{
   "conf": *[_type == "conference" && _id == $conferenceId && !(_id in path("drafts.**"))][0]{ "orgRef": organization._ref, title, startDate, domains }
 }`
 
+/** As identity's member sync. */
+export const SANITY_TIMEOUT_MS = 5000
+
 /** Raw GROQ, the same pattern as identity's member sync. Fails closed. */
 async function sanityTenant(env: DataEnv, params: Record<string, string>) {
   if (
@@ -109,6 +112,8 @@ async function sanityTenant(env: DataEnv, params: Record<string, string>) {
           'content-type': 'application/json',
         },
         body: JSON.stringify({ query: TENANT, params }),
+        // A hung read must not hold the provisioning call open (#1957).
+        signal: AbortSignal.timeout(SANITY_TIMEOUT_MS),
       },
     )
   } catch {
@@ -417,12 +422,18 @@ export function createData(
         db.query.provisioningRequests.findFirst({
           where: eq(provisioningRequests.idempotencyKey, keyHash),
         })
-      const replay = async (orgOfKey: string) => {
+      // The key's own arguments: its org, and its conference since 0006
+      // (#1957; null on older rows, which keep the org-only check).
+      const replay = async (
+        orgOfKey: string,
+        conferenceOfKey: string | null,
+      ) => {
         const [org, conf] = await Promise.all([
           organization(orgOfKey),
           conference(conferenceId),
         ])
         if (
+          (conferenceOfKey !== null && conferenceOfKey !== conferenceId) ||
           !org ||
           org.id !== orgId ||
           org.slug !== orgSlug ||
@@ -437,7 +448,7 @@ export function createData(
         return org
       }
       const done = await earlier()
-      if (done) return replay(done.orgId)
+      if (done) return replay(done.orgId, done.conferenceId)
 
       const { org, conf } = await sanityTenant(env, { orgId, conferenceId })
       if (!org || org.slug !== orgSlug) {
@@ -514,19 +525,20 @@ export function createData(
           db.insert(provisioningRequests).values({
             idempotencyKey: keyHash,
             orgId,
+            conferenceId,
           }),
         ])
       } catch (error) {
         // A concurrent request with the same key won the race.
         const raced = await earlier()
-        if (raced) return replay(raced.orgId)
+        if (raced) return replay(raced.orgId, raced.conferenceId)
         console.error(error)
         throw fail(
           'CONFLICT',
           'organization, conference or platform host is taken',
         )
       }
-      return replay(orgId)
+      return replay(orgId, conferenceId)
     },
 
     /** Points the Organization's latest-edition alias at this Conference. */
