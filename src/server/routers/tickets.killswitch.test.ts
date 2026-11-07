@@ -436,3 +436,31 @@ describe('updatePageContent settings phase 1 (#2019)', () => {
     expect(h.commit).not.toHaveBeenCalled()
   })
 })
+
+describe('updateSettings settings phase 3 (#2080)', () => {
+  const ticketTargets = {
+    enabled: true,
+    salesStartDate: '2026-01-15',
+    targetCurve: 'linear' as const,
+    milestones: [],
+  }
+  it('writes capacity and targets to D1 before Sanity', async () => {
+    const order: string[] = []
+    h.writeD1.mockImplementation(async () => (order.push('d1'), true))
+    h.commit.mockImplementation(async () => (order.push('sanity'), {}))
+    await tickets().admin.updateSettings({ ticketCapacity: 500, ticketTargets })
+    expect(h.writeD1).toHaveBeenCalledWith(CONF, {
+      ticketCapacity: 500,
+      ticketTargets,
+    })
+    expect(order).toEqual(['d1', 'sanity'])
+  })
+
+  it('never touches Sanity when the D1 write refuses', async () => {
+    h.writeD1.mockRejectedValue(new Error('d1 down'))
+    await expect(
+      tickets().admin.updateSettings({ ticketCapacity: 500 }),
+    ).rejects.toThrow('d1 down')
+    expect(h.commit).not.toHaveBeenCalled()
+  })
+})

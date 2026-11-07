@@ -159,7 +159,7 @@ Each phase needs the same six things:
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1     | Dates (10), `travelSupportBudget`, `registrationEnabled`, `organizer*` (3), `socialHashtag`, `ticketCustomization.showVanityMetrics`, `analyticsPirschCode`             | 18    | Scalar columns on `conferences` (D1 write path in #2023). Most are already served by content subgraph. `lifecycleStatus` moved to tenant-directory D1 in #2015. |
 | 2     | Sponsor, speaker and volunteer registration links; contact, CFP and sponsor emails; notification and Slack channels; Slack invite URLs                                  | 11    | Scalar columns on `conferences` (D1 write path in #2038).                                                                                                       |
-| 3     | Ticketing provider and ids, capacity, `ticketTargets.*`, `ticketTypeRoles`, `publicFreeTicketIds`, workshop registration windows and early-access types, reminder state | 19    | Scalars plus child tables (ticket types, target milestones, reminder state).                                                                                    |
+| 3     | Ticketing provider and ids, capacity, `ticketTargets.*`, `ticketTypeRoles`, `publicFreeTicketIds`, workshop registration windows and early-access types, reminder state | 19    | Columns on `conferences`; the four lists are JSON text (D1 write path in #2080).                                                                                |
 | 4     | `formats`, `topics`, six CFP and sponsor goals, `crmInactivityThresholds`, `agentConfig.*`                                                                              | 12    | Child tables and long text columns.                                                                                                                             |
 | 5     | `organizers`, `teams`, `features`                                                                                                                                       | 3     | Identity memberships and roles, team tables, a features table.                                                                                                  |
 
@@ -172,7 +172,7 @@ comes last because it touches access control.
 Run `pnpm run doctor` first: it checks node, pnpm, fnox, the Sanity read
 token, wrangler and gh.
 
-1. Generate: `fnox exec -- pnpm backfill:conference -- --only settings-phase2 --out tmp/backfill`.
+1. Generate: `fnox exec -- pnpm backfill:conference -- --only settings-phase3 --out tmp/backfill`.
    The script stops early with a fix hint if `SANITY_API_TOKEN_READ` is not
    set, and creates `--out` if needed. Writing needs `--only <phase>` or
    `--all-columns`. `--all-columns` overwrites every column of existing rows

@@ -1640,6 +1640,92 @@ describe('conference router — D1 write path (#1881)', () => {
     expect(commitMock).not.toHaveBeenCalled()
   })
 
+  // No binding change: the provider and customer id stay org-admin writable.
+  const TICKETING = {
+    ticketingProvider: 'checkin' as const,
+    checkinCustomerId: 42,
+  }
+  it('for a d1_write tenant, writes settings phase 3 ticketing fields to D1 first, then Sanity (#2080)', async () => {
+    await makeCaller({ isOrganizer: true }).updateTicketingIds(TICKETING)
+    const [[, init]] = apiCalls()
+    expect(JSON.parse(init.body).variables.input).toEqual(TICKETING)
+    expect(lastSet).toEqual(TICKETING)
+    const d1At =
+      fetchMock.mock.invocationCallOrder[
+        fetchMock.mock.calls.findIndex(([, i]) =>
+          String(i?.body).includes('updateConference'),
+        )
+      ]
+    expect(d1At).toBeLessThan(commitMock.mock.invocationCallOrder[0])
+  })
+
+  it('for a d1_write tenant, a failed D1 write of phase 3 fields leaves Sanity untouched (#2080)', async () => {
+    const base = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation(async (url: URL | string, init) =>
+      String(init?.body).includes('updateConference')
+        ? new Response('boom', { status: 500 })
+        : base(url, init),
+    )
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTicketingIds(TICKETING),
+    ).rejects.toThrow()
+    expect(apiCalls()).toHaveLength(1)
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('for a d1_write tenant, a platform operator sets the vendor binding through the site, D1 then Sanity (#2080)', async () => {
+    vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG_ID)
+    const binding = {
+      ticketingProvider: 'tito' as const,
+      titoAccountSlug: 'acme',
+      titoEventSlug: '2026',
+    }
+    await makeCaller({
+      isOrganizer: true,
+      platformOperator: true,
+    }).updateTicketingIds(binding)
+    await makeCaller({
+      isOrganizer: true,
+      platformOperator: true,
+    }).updateTicketingIds({
+      ticketingProvider: null,
+      titoAccountSlug: null,
+      titoEventSlug: null,
+      checkinEventId: 77,
+    })
+    const inputs = apiCalls().map(([, i]) => JSON.parse(i.body).variables.input)
+    expect(inputs[0]).toEqual(binding)
+    expect(inputs[1]).toMatchObject({ checkinEventId: 77 })
+    const d1At =
+      fetchMock.mock.invocationCallOrder[
+        fetchMock.mock.calls.findIndex(([, i]) =>
+          String(i?.body).includes('updateConference'),
+        )
+      ]
+    expect(d1At).toBeLessThan(commitMock.mock.invocationCallOrder[0])
+  })
+
+  it('for a d1_write tenant, an admin save re-sending the stored binding keeps it out of the D1 write (#2080)', async () => {
+    // D1 may still hold NULL here (before the backfill): sending the slug
+    // would count as a rebind there.
+    ticketingByConference[CONFERENCE_ID] = {
+      titoAccountSlug: 'acme',
+      titoEventSlug: '2026',
+    }
+    await makeCaller({ isOrganizer: true }).updateTicketingIds({
+      ticketingProvider: 'tito',
+      titoAccountSlug: 'acme',
+      titoEventSlug: '2026',
+      checkinCustomerId: 5,
+    })
+    const [[, init]] = apiCalls()
+    expect(JSON.parse(init.body).variables.input).toEqual({
+      ticketingProvider: 'tito',
+      checkinCustomerId: 5,
+    })
+    expect(lastSet).toMatchObject({ titoAccountSlug: 'acme' })
+  })
+
   it('for a d1_write tenant with only moved fields, writes only to D1 and leaves Sanity untouched (#1997)', async () => {
     await makeCaller({ isOrganizer: true }).updateVenue({
       venueName: 'Grieghallen',

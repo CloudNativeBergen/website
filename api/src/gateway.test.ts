@@ -1187,13 +1187,15 @@ describe('gateway', () => {
           }),
           env,
         )
-        // Anonymous: the assertion grants no role.
+        // Anonymous: the assertion grants no role, only the site lane's
+        // scope (#2080), which the conference subgraph trusts for the
+        // ticketing binding.
         expect(await minted(envelopes)).toEqual({
           typ: 'tenant',
           ...TENANT,
           userId: null,
           orgRole: null,
-          scopes: [],
+          scopes: ['site:server'],
         })
         expect(forwarded[0].get(SITE_ASSERTION_HEADER)).toBeNull()
       },

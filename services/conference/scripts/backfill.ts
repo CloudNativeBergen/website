@@ -51,16 +51,59 @@ export interface SanityConference {
   speakerSlackChannel?: string | null
   speakerSlackInviteUrl?: string | null
   volunteerSlackInviteUrl?: string | null
+  // Settings phase 3 (#2080).
+  ticketingProvider?: string | null
+  checkinCustomerId?: number | null
+  checkinEventId?: number | null
+  titoAccountSlug?: string | null
+  titoEventSlug?: string | null
+  ticketCapacity?: number | null
+  ticketTargets?: {
+    enabled?: boolean | null
+    salesStartDate?: string | null
+    targetCurve?: string | null
+    milestones?: Milestone[] | null
+  } | null
+  ticketTypeRoles?: TicketTypeRole[] | null
+  publicFreeTicketIds?: number[] | null
+  workshopRegistrationSponsorStart?: string | null
+  workshopRegistrationStart?: string | null
+  workshopRegistrationEnd?: string | null
+  workshopEarlyAccessTicketTypes?: string[] | null
+  workshopReminderLastSentAt?: string | null
+  workshopReminderLastSentCount?: number | null
+  workshopReminderReservedAt?: string | null
 }
 
-/** The GROQ projection of the settings fields, phase 1 (#2019) and 2 (#2038). */
+export interface Milestone {
+  date?: string | null
+  targetPercentage?: number | null
+  label?: string | null
+}
+/** Three states per answer: absent is not false (src/lib/tickets/classification). */
+export interface TicketTypeRole {
+  typeName?: string | null
+  admits?: boolean | null
+  grantsWorkshop?: boolean | null
+}
+
+/** The GROQ projection of the settings fields, phase 1 (#2019), 2 (#2038) and 3 (#2080). */
 export const SETTINGS_PROJECTION = `cfpStartDate, cfpEndDate, cfpNotifyDate,
   programDate, travelSupportPaymentDate, earlyBirdEndDate,
   registrationCloseDate, speakersAnnouncedDate, sponsorDeadlineDate,
   recordingsLiveDate, travelSupportBudget, registrationEnabled, organizer,
   organizerAddress, organizerOrgNumber, socialHashtag,
   "ticketCustomization": ticketCustomization{ showVanityMetrics },
-  analyticsPirschCode, sponsorRegistrationLink, speakerRegistrationLink, volunteerRegistrationLink, contactEmail, cfpEmail, sponsorEmail, salesNotificationChannel, cfpNotificationChannel, speakerSlackChannel, speakerSlackInviteUrl, volunteerSlackInviteUrl`
+  analyticsPirschCode, sponsorRegistrationLink, speakerRegistrationLink, volunteerRegistrationLink, contactEmail, cfpEmail, sponsorEmail, salesNotificationChannel, cfpNotificationChannel, speakerSlackChannel, speakerSlackInviteUrl, volunteerSlackInviteUrl,
+  ticketingProvider, checkinCustomerId, checkinEventId, titoAccountSlug,
+  titoEventSlug, ticketCapacity,
+  "ticketTargets": ticketTargets{ enabled, salesStartDate, targetCurve,
+    "milestones": milestones[]{ date, targetPercentage, label } },
+  "ticketTypeRoles": ticketTypeRoles[]{ typeName, admits, grantsWorkshop },
+  publicFreeTicketIds, workshopRegistrationSponsorStart,
+  workshopRegistrationStart, workshopRegistrationEnd,
+  workshopEarlyAccessTicketTypes, workshopReminderLastSentAt,
+  workshopReminderLastSentCount, workshopReminderReservedAt`
 
 export interface Row {
   conference_id: string
@@ -109,6 +152,26 @@ export interface Row {
   speaker_slack_channel: string | null
   speaker_slack_invite_url: string | null
   volunteer_slack_invite_url: string | null
+  ticketing_provider: string | null
+  checkin_customer_id: number | null
+  checkin_event_id: number | null
+  tito_account_slug: string | null
+  tito_event_slug: string | null
+  ticket_capacity: number | null
+  ticket_targets_enabled: 0 | 1 | null
+  ticket_sales_start_date: string | null
+  ticket_target_curve: string | null
+  /** JSON; the four list columns are null when the list is absent or empty. */
+  ticket_target_milestones: string | null
+  ticket_type_roles: string | null
+  public_free_ticket_ids: string | null
+  workshop_registration_sponsor_start: string | null
+  workshop_registration_start: string | null
+  workshop_registration_end: string | null
+  workshop_early_access_ticket_types: string | null
+  workshop_reminder_last_sent_at: string | null
+  workshop_reminder_last_sent_count: number | null
+  workshop_reminder_reserved_at: string | null
 }
 
 const s = (v: string | null | undefined) => v?.trim() || null
@@ -116,6 +179,24 @@ const b = (v: boolean | null | undefined) =>
   typeof v === 'boolean' ? (v ? 1 : 0) : null
 const n = (v: number | null | undefined) =>
   typeof v === 'number' && Number.isFinite(v) ? v : null
+/** A list as JSON, or null when absent or empty (one value for parity). */
+const j = (v: unknown[] | null | undefined) =>
+  v?.length ? JSON.stringify(v) : null
+
+/** The stored shape of a milestone: no `_key`, label only when set. */
+export const milestone = (m: Milestone) => ({
+  date: m.date ?? null,
+  targetPercentage: m.targetPercentage ?? null,
+  ...(m.label?.trim() && { label: m.label.trim() }),
+})
+/** The stored shape of a role: no `_key`, and an unanswered question stays absent. */
+export const ticketTypeRole = (r: TicketTypeRole) => ({
+  typeName: r.typeName ?? null,
+  ...(typeof r.admits === 'boolean' && { admits: r.admits }),
+  ...(typeof r.grantsWorkshop === 'boolean' && {
+    grantsWorkshop: r.grantsWorkshop,
+  }),
+})
 
 /**
  * Drafts are never passed in. `routable` is the set of conference ids the
@@ -184,6 +265,27 @@ export function mapBackfill(
       speaker_slack_channel: s(c.speakerSlackChannel),
       speaker_slack_invite_url: s(c.speakerSlackInviteUrl),
       volunteer_slack_invite_url: s(c.volunteerSlackInviteUrl),
+      ticketing_provider: s(c.ticketingProvider),
+      checkin_customer_id: n(c.checkinCustomerId),
+      checkin_event_id: n(c.checkinEventId),
+      tito_account_slug: s(c.titoAccountSlug),
+      tito_event_slug: s(c.titoEventSlug),
+      ticket_capacity: n(c.ticketCapacity),
+      ticket_targets_enabled: b(c.ticketTargets?.enabled),
+      ticket_sales_start_date: s(c.ticketTargets?.salesStartDate),
+      ticket_target_curve: s(c.ticketTargets?.targetCurve),
+      ticket_target_milestones: j(c.ticketTargets?.milestones?.map(milestone)),
+      ticket_type_roles: j(c.ticketTypeRoles?.map(ticketTypeRole)),
+      public_free_ticket_ids: j(c.publicFreeTicketIds),
+      workshop_registration_sponsor_start: s(
+        c.workshopRegistrationSponsorStart,
+      ),
+      workshop_registration_start: s(c.workshopRegistrationStart),
+      workshop_registration_end: s(c.workshopRegistrationEnd),
+      workshop_early_access_ticket_types: j(c.workshopEarlyAccessTicketTypes),
+      workshop_reminder_last_sent_at: s(c.workshopReminderLastSentAt),
+      workshop_reminder_last_sent_count: n(c.workshopReminderLastSentCount),
+      workshop_reminder_reserved_at: s(c.workshopReminderReservedAt),
     })
     if (!c.title?.trim()) anomalies.push(`conference ${c._id}: no title`)
   }
@@ -232,6 +334,29 @@ export const SETTINGS_PHASE2_COLUMNS = [
   'speaker_slack_channel',
   'speaker_slack_invite_url',
   'volunteer_slack_invite_url',
+] as const satisfies readonly (keyof Row)[]
+
+/** The settings phase 3 columns (#2080), for `toSql(rows, { only })`. */
+export const SETTINGS_PHASE3_COLUMNS = [
+  'ticketing_provider',
+  'checkin_customer_id',
+  'checkin_event_id',
+  'tito_account_slug',
+  'tito_event_slug',
+  'ticket_capacity',
+  'ticket_targets_enabled',
+  'ticket_sales_start_date',
+  'ticket_target_curve',
+  'ticket_target_milestones',
+  'ticket_type_roles',
+  'public_free_ticket_ids',
+  'workshop_registration_sponsor_start',
+  'workshop_registration_start',
+  'workshop_registration_end',
+  'workshop_early_access_ticket_types',
+  'workshop_reminder_last_sent_at',
+  'workshop_reminder_last_sent_count',
+  'workshop_reminder_reserved_at',
 ] as const satisfies readonly (keyof Row)[]
 
 /** The columns `toSql` puts in ON CONFLICT DO UPDATE SET for a row. */

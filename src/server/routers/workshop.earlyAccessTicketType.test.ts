@@ -13,6 +13,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { initTRPC } from '@trpc/server'
 import type { VersionedSanityStore } from '../../../__tests__/helpers/versionedSanityStore'
 
+// Not a d1_write tenant: ticket setup goes to Sanity only (#2080).
+vi.mock('@/lib/konf-api/conference-write', async (original) => ({
+  ...(await original<typeof import('@/lib/konf-api/conference-write')>()),
+  writeMovedToD1: vi.fn(async () => false),
+  isD1WriteTenant: vi.fn(async () => false),
+}))
+
 vi.mock('@/lib/auth', () => ({
   getAuthSession: vi.fn().mockResolvedValue(null),
 }))
@@ -169,5 +176,58 @@ describe('workshop.admin.setEarlyAccessTicketType', () => {
     await expect(set('x'.repeat(201), false)).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     })
+  })
+})
+
+// Settings phase 3 (#2080): D1 first, the whole list; a D1 failure leaves
+// Sanity untouched.
+describe('the D1 write of workshop ticket setup (#2080)', () => {
+  const d1 = async () =>
+    vi.mocked((await import('@/lib/konf-api/conference-write')).writeMovedToD1)
+
+  it('sends the whole early-access list to D1 before Sanity', async () => {
+    store().reset([conference(['Old pass'])])
+    const write = await d1()
+    write.mockImplementationOnce(async () => {
+      expect(stored()).toEqual(['Old pass'])
+      return true
+    })
+    await set('Two-day pass', true)
+    expect(write).toHaveBeenCalledWith(CONF, {
+      workshopEarlyAccessTicketTypes: ['Old pass', 'Two-day pass'],
+    })
+    expect(stored()).toEqual(['Old pass', 'Two-day pass'])
+  })
+
+  it('a failed D1 write of the early-access list leaves Sanity untouched', async () => {
+    ;(await d1()).mockRejectedValueOnce(new Error('d1 down'))
+    await expect(set('Two-day pass', true)).rejects.toThrow()
+    expect(store().commits).toEqual([])
+  })
+
+  const times = {
+    startDate: '2026-05-02T08:00:00.000Z',
+    endDate: '2026-06-01T08:00:00.000Z',
+  }
+  it('sends the registration times to D1 before Sanity', async () => {
+    const write = await d1()
+    write.mockImplementationOnce(async () => {
+      expect(store().commits).toEqual([])
+      return true
+    })
+    await caller().admin.updateRegistrationTimes(times)
+    expect(write).toHaveBeenCalledWith(CONF, {
+      workshopRegistrationStart: times.startDate,
+      workshopRegistrationEnd: times.endDate,
+    })
+    expect(store().doc(CONF)?.workshopRegistrationStart).toBe(times.startDate)
+  })
+
+  it('a failed D1 write of the registration times leaves Sanity untouched', async () => {
+    ;(await d1()).mockRejectedValueOnce(new Error('d1 down'))
+    await expect(
+      caller().admin.updateRegistrationTimes(times),
+    ).rejects.toThrow()
+    expect(store().commits).toEqual([])
   })
 })

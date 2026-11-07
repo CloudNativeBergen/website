@@ -11,6 +11,12 @@ import { registerJobStatus } from './job-status'
 import { emit } from './push'
 import { createGraphQLError } from 'graphql-yoga'
 import type { ConferencePatch, ConferenceRow } from './data'
+import {
+  milestone,
+  ticketTypeRole,
+  type Milestone,
+  type TicketTypeRole,
+} from '../scripts/backfill'
 import type { ResolverContext } from './worker'
 
 const moved = { override: { from: 'content', label: 'conference' } } as const
@@ -89,6 +95,89 @@ const IN_CONTENT = new Set<string>([
   'volunteerRegistrationLink',
 ])
 
+// Settings phase 3 (#2080): ticket setup. None is a secret: the Tito API
+// token is a tenant secret and never reaches D1. Not served by content.
+/** Public: /privacy names the vendor; /tickets and /workshop show the rest. */
+const PHASE3_PUBLIC_STRINGS = [
+  'ticketingProvider',
+  'workshopRegistrationSponsorStart',
+  'workshopRegistrationStart',
+  'workshopRegistrationEnd',
+] as const
+/**
+ * Org members only: the vendor binding, sales targets and the ticket-type
+ * roles are admin configuration (Layout.tsx keeps checkinCustomerId out of
+ * the public payload today), and the reminder state is job state.
+ */
+const PHASE3_PRIVATE_STRINGS = [
+  'titoAccountSlug',
+  'titoEventSlug',
+  'ticketSalesStartDate',
+  'ticketTargetCurve',
+  'workshopReminderLastSentAt',
+  'workshopReminderReservedAt',
+] as const
+const PHASE3_PRIVATE_INTS = [
+  'checkinCustomerId',
+  'checkinEventId',
+  'ticketCapacity',
+  'workshopReminderLastSentCount',
+] as const
+/** The reminder state is written by the reminder only, never by the patch. */
+const REMINDER_STATE = new Set<string>([
+  'workshopReminderLastSentAt',
+  'workshopReminderReservedAt',
+  'workshopReminderLastSentCount',
+])
+const TARGET_CURVES = ['linear', 'early_push', 'late_push', 's_curve']
+
+const TicketTargetMilestone = builder
+  .objectRef<Milestone>('TicketTargetMilestone')
+  .implement({
+    fields: (t) => ({
+      date: t.string({ nullable: true, resolve: (m) => m.date ?? null }),
+      targetPercentage: t.float({
+        nullable: true,
+        resolve: (m) => m.targetPercentage ?? null,
+      }),
+      label: t.string({ nullable: true, resolve: (m) => m.label ?? null }),
+    }),
+  })
+const TicketTypeRoleRef = builder
+  .objectRef<TicketTypeRole>('TicketTypeRole')
+  .implement({
+    description:
+      'Absent answers are null, not false: an unanswered question is not a no.',
+    fields: (t) => ({
+      typeName: t.string({
+        nullable: true,
+        resolve: (r) => r.typeName ?? null,
+      }),
+      admits: t.boolean({ nullable: true, resolve: (r) => r.admits ?? null }),
+      grantsWorkshop: t.boolean({
+        nullable: true,
+        resolve: (r) => r.grantsWorkshop ?? null,
+      }),
+    }),
+  })
+const TicketTargetMilestoneInput = builder.inputType(
+  'TicketTargetMilestoneInput',
+  {
+    fields: (t) => ({
+      date: t.string({ required: true }),
+      targetPercentage: t.float({ required: true }),
+      label: t.string(),
+    }),
+  },
+)
+const TicketTypeRoleInput = builder.inputType('TicketTypeRoleInput', {
+  fields: (t) => ({
+    typeName: t.string({ required: true }),
+    admits: t.boolean(),
+    grantsWorkshop: t.boolean(),
+  }),
+})
+
 /** A member of the envelope's org, or an operator acting for it. */
 const isMember = ({ envelope: e }: ResolverContext) =>
   e.typ === 'tenant' &&
@@ -163,6 +252,58 @@ const Conference = builder.objectRef<ConferenceRow>('Conference').implement({
         }),
       ]),
     ),
+    ...Object.fromEntries(
+      PHASE3_PUBLIC_STRINGS.map((k) => [
+        k,
+        t.exposeString(k, { nullable: true }),
+      ]),
+    ),
+    publicFreeTicketIds: t.intList({
+      nullable: true,
+      description: 'Free ticket types shown on the public /tickets page.',
+      resolve: (c) => c.publicFreeTicketIds,
+    }),
+    workshopEarlyAccessTicketTypes: t.stringList({
+      nullable: true,
+      resolve: (c) => c.workshopEarlyAccessTicketTypes,
+    }),
+    ...Object.fromEntries(
+      PHASE3_PRIVATE_STRINGS.map((k) => [
+        k,
+        t.string({
+          nullable: true,
+          description: 'Org members only.',
+          resolve: (c, _, ctx) => (isMember(ctx) ? c[k] : null),
+        }),
+      ]),
+    ),
+    ...Object.fromEntries(
+      PHASE3_PRIVATE_INTS.map((k) => [
+        k,
+        t.int({
+          nullable: true,
+          description: 'Org members only.',
+          resolve: (c, _, ctx) => (isMember(ctx) ? c[k] : null),
+        }),
+      ]),
+    ),
+    ticketTargetsEnabled: t.boolean({
+      nullable: true,
+      description: 'Org members only.',
+      resolve: (c, _, ctx) => (isMember(ctx) ? c.ticketTargetsEnabled : null),
+    }),
+    ticketTargetMilestones: t.field({
+      type: [TicketTargetMilestone],
+      nullable: true,
+      description: 'Org members only.',
+      resolve: (c, _, ctx) => (isMember(ctx) ? c.ticketTargetMilestones : null),
+    }),
+    ticketTypeRoles: t.field({
+      type: [TicketTypeRoleRef],
+      nullable: true,
+      description: 'Org members only.',
+      resolve: (c, _, ctx) => (isMember(ctx) ? c.ticketTypeRoles : null),
+    }),
   }),
 })
 
@@ -225,6 +366,25 @@ const ConferencePatchInput = builder.inputType('ConferencePatch', {
         ...SETTINGS_PHASE2_PRIVATE,
       ].map((k) => [k, t.string()]),
     ),
+    ...Object.fromEntries(
+      [...PHASE3_PUBLIC_STRINGS, ...PHASE3_PRIVATE_STRINGS]
+        .filter((k) => !REMINDER_STATE.has(k))
+        .map((k) => [k, t.string()]),
+    ),
+    ...Object.fromEntries(
+      PHASE3_PRIVATE_INTS.filter((k) => !REMINDER_STATE.has(k)).map((k) => [
+        k,
+        t.int({ description: 'One or more.' }),
+      ]),
+    ),
+    ticketTargetsEnabled: t.boolean(),
+    ticketTargetMilestones: t.field({ type: [TicketTargetMilestoneInput] }),
+    ticketTypeRoles: t.field({
+      type: [TicketTypeRoleInput],
+      description: 'The whole list, in order: the first entry for a name wins.',
+    }),
+    publicFreeTicketIds: t.intList(),
+    workshopEarlyAccessTicketTypes: t.stringList(),
     registrationEnabled: t.boolean(),
     showVanityMetrics: t.boolean(),
     travelSupportBudget: t.float({ description: 'Zero or more.' }),
@@ -257,6 +417,20 @@ const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
 // A Slack channel name, `#` optional: lowercase in Slack, but the site stores
 // what the organizer typed, so case is tolerated. No spaces.
 const isChannel = (v: string) => /^#?[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v)
+const isSlug = (v: string) => /^[A-Za-z0-9_-]+$/.test(v)
+// An ISO 8601 timestamp with a zone, as Sanity's datetime stores it.
+const isDateTime = (v: string) =>
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(
+    v,
+  ) && !isNaN(Date.parse(v))
+const isPositiveInt = (v: unknown) => Number.isInteger(v) && (v as number) > 0
+// Ticket type names reach Sanity patch paths on the site: no control chars.
+const isTypeName = (v: unknown) =>
+  typeof v === 'string' &&
+  !!v.trim() &&
+  v.length <= 200 &&
+  !/[\u0000-\u001f\u007f]/.test(v)
+export const MAX_LIST = 200
 const isHex = (v: string) => /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(v)
 
 /** Max characters per string field; anything not listed gets 2,000. */
@@ -311,6 +485,14 @@ function validate(input: Record<string, unknown>): ConferencePatch {
     volunteerRegistrationLink: isHttps,
     speakerSlackInviteUrl: isHttps,
     volunteerSlackInviteUrl: isHttps,
+    ticketingProvider: (v) => v === 'checkin' || v === 'tito',
+    titoAccountSlug: isSlug,
+    titoEventSlug: isSlug,
+    ticketSalesStartDate: isDate,
+    ticketTargetCurve: (v) => TARGET_CURVES.includes(v),
+    workshopRegistrationSponsorStart: isDateTime,
+    workshopRegistrationStart: isDateTime,
+    workshopRegistrationEnd: isDateTime,
     ...Object.fromEntries(
       [...SETTINGS_SHARED, ...SETTINGS_NEW]
         .filter((k) => k.endsWith('Date'))
@@ -344,8 +526,73 @@ function validate(input: Record<string, unknown>): ConferencePatch {
     )
       bad(k, 'must be zero or more')
     if (checks[k] && !checks[k](v as string)) bad(k, 'invalid format')
+    if (
+      ['checkinCustomerId', 'checkinEventId', 'ticketCapacity'].includes(k) &&
+      !isPositiveInt(v)
+    )
+      bad(k, 'must be a positive whole number')
+    if (Array.isArray(v) && k !== 'socialLinks' && v.length > MAX_LIST)
+      bad(k, `at most ${MAX_LIST} entries`)
+    if (k === 'publicFreeTicketIds' && !(v as unknown[]).every(isPositiveInt))
+      bad(k, 'must be positive whole numbers')
+    if (
+      k === 'workshopEarlyAccessTicketTypes' &&
+      !(v as unknown[]).every(isTypeName)
+    )
+      bad(k, 'invalid ticket type name')
+    if (
+      k === 'ticketTypeRoles' &&
+      !(v as TicketTypeRole[]).every((r) => isTypeName(r.typeName))
+    )
+      bad(k, 'invalid ticket type name')
+    if (
+      k === 'ticketTargetMilestones' &&
+      !(v as Milestone[]).every(
+        (m) =>
+          isDate(m.date ?? '') &&
+          Number.isFinite(m.targetPercentage) &&
+          m.targetPercentage! >= 0 &&
+          m.targetPercentage! <= 100 &&
+          (m.label ?? '').length <= MAX_DEFAULT,
+      )
+    )
+      bad(k, 'each needs a date and a percentage from 0 to 100')
   }
-  return input as ConferencePatch
+  const windows = [
+    input.workshopRegistrationSponsorStart,
+    input.workshopRegistrationStart,
+    input.workshopRegistrationEnd,
+  ]
+  // Only within one patch; the site checks the merged times (workshop router).
+  for (let i = 0; i < 2; i++)
+    if (
+      typeof windows[i] === 'string' &&
+      typeof windows[i + 1] === 'string' &&
+      Date.parse(windows[i] as string) >= Date.parse(windows[i + 1] as string)
+    )
+      bad(
+        'workshopRegistrationStart',
+        'sponsor start, start and end must be in order',
+      )
+  // Stored as the backfill stores them: no `_key`, absent answers absent,
+  // and an empty list unset (one value for parity).
+  const out: Record<string, unknown> = { ...input }
+  if (Array.isArray(input.ticketTargetMilestones))
+    out.ticketTargetMilestones = (
+      input.ticketTargetMilestones as Milestone[]
+    ).map(milestone)
+  if (Array.isArray(input.ticketTypeRoles))
+    out.ticketTypeRoles = (input.ticketTypeRoles as TicketTypeRole[]).map(
+      ticketTypeRole,
+    )
+  for (const k of [
+    'ticketTargetMilestones',
+    'ticketTypeRoles',
+    'publicFreeTicketIds',
+    'workshopEarlyAccessTicketTypes',
+  ])
+    if (Array.isArray(out[k]) && !(out[k] as unknown[]).length) out[k] = null
+  return out as ConferencePatch
 }
 
 builder.mutationType({

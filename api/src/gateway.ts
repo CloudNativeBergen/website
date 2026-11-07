@@ -103,6 +103,13 @@ export const OPERATOR_TENANT_HEADER = 'x-konf-operator-tenant'
 /** Scope on a tenant envelope minted in the operator lane. */
 export const OPERATOR_SCOPE = 'platform:operator'
 
+/**
+ * Scope on a tenant envelope minted for a verified site assertion: the
+ * request came from the site's server, whose routers enforce rules the
+ * subgraphs then trust (the ticketing binding, #745). Never from a header.
+ */
+export const SITE_SCOPE = 'site:server'
+
 /** CORS for the operator lane; the default for everyone else. */
 export function operatorCors(request: Request, env: Env) {
   const origin = request.headers.get('origin')
@@ -662,7 +669,7 @@ export function createGateway(supergraph: string) {
           conferenceId: tenant.conferenceId,
           userId,
           orgRole,
-          scopes: [],
+          scopes: siteHost ? [SITE_SCOPE] : [],
         }
         forwarded.headers.set(
           ENVELOPE_HEADER,

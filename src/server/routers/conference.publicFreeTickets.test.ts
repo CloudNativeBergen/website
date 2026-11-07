@@ -30,6 +30,13 @@ const h = vi.hoisted(() => {
   }
 })
 
+// Not a d1_write tenant: ticket setup goes to Sanity only (#2080).
+vi.mock('@/lib/konf-api/conference-write', async (original) => ({
+  ...(await original<typeof import('@/lib/konf-api/conference-write')>()),
+  writeMovedToD1: vi.fn(async () => false),
+  isD1WriteTenant: vi.fn(async () => false),
+}))
+
 vi.mock('@/lib/auth', () => ({
   getAuthSession: vi.fn().mockResolvedValue(null),
 }))
@@ -151,7 +158,7 @@ describe('showing a type (visible: true)', () => {
     expect(h.txCommit).toHaveBeenCalledTimes(1)
   })
 
-  it('never reads the stored array — there is nothing stale to write back', async () => {
+  it('never reads the stored array for a tenant not on D1 — there is nothing stale to write back', async () => {
     await conference().updatePublicFreeTickets({ ticketId: 7, visible: true })
     expect(h.uncachedFetch).not.toHaveBeenCalled()
   })
@@ -182,6 +189,45 @@ describe('input validation', () => {
         input as { ticketId: number; visible: boolean },
       ),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.txCommit).not.toHaveBeenCalled()
+  })
+})
+
+// Settings phase 3 (#2080): a d1_write tenant reads the list once, writes
+// the whole result to D1 first, and a D1 failure leaves Sanity untouched.
+describe('a d1_write tenant (#2080)', () => {
+  const mod = () => import('@/lib/konf-api/conference-write')
+  beforeEach(async () => {
+    vi.mocked((await mod()).isD1WriteTenant).mockResolvedValueOnce(true)
+  })
+
+  it('writes the whole list to D1 before the Sanity transaction', async () => {
+    h.uncachedFetch.mockResolvedValueOnce([7, 3])
+    const write = vi.mocked((await mod()).writeMovedToD1)
+    write.mockImplementationOnce(async () => {
+      expect(h.txCommit).not.toHaveBeenCalled()
+      return true
+    })
+    await conference().updatePublicFreeTickets({ ticketId: 7, visible: true })
+    expect(write).toHaveBeenCalledWith(CONF, { publicFreeTicketIds: [3, 7] })
+    expect(h.txCommit).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes the id from the D1 list when hiding', async () => {
+    h.uncachedFetch.mockResolvedValueOnce([7, 3])
+    const write = vi.mocked((await mod()).writeMovedToD1)
+    await conference().updatePublicFreeTickets({ ticketId: 7, visible: false })
+    expect(write).toHaveBeenCalledWith(CONF, { publicFreeTicketIds: [3] })
+  })
+
+  it('a failed D1 write leaves Sanity untouched', async () => {
+    h.uncachedFetch.mockResolvedValueOnce(null)
+    vi.mocked((await mod()).writeMovedToD1).mockRejectedValueOnce(
+      new Error('d1 down'),
+    )
+    await expect(
+      conference().updatePublicFreeTickets({ ticketId: 7, visible: true }),
+    ).rejects.toThrow()
     expect(h.txCommit).not.toHaveBeenCalled()
   })
 })

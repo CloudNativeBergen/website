@@ -1,4 +1,5 @@
-// Drizzle mirror of migrations/ (0001-0005).
+// Drizzle mirror of migrations/ (0001-0005, 0007; 0006 is job_status.ts).
+import type { Milestone, TicketTypeRole } from '../../scripts/backfill'
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const conferences = sqliteTable('conferences', {
@@ -53,4 +54,32 @@ export const conferences = sqliteTable('conferences', {
   speakerSlackChannel: text('speaker_slack_channel'),
   speakerSlackInviteUrl: text('speaker_slack_invite_url'),
   volunteerSlackInviteUrl: text('volunteer_slack_invite_url'),
+  // 0007, settings phase 3 (#2080). Lists are JSON text, null when unset.
+  ticketingProvider: text('ticketing_provider'),
+  checkinCustomerId: integer('checkin_customer_id'),
+  checkinEventId: integer('checkin_event_id'),
+  titoAccountSlug: text('tito_account_slug'),
+  titoEventSlug: text('tito_event_slug'),
+  ticketCapacity: integer('ticket_capacity'),
+  ticketTargetsEnabled: integer('ticket_targets_enabled', { mode: 'boolean' }),
+  ticketSalesStartDate: text('ticket_sales_start_date'),
+  ticketTargetCurve: text('ticket_target_curve'),
+  ticketTargetMilestones: text('ticket_target_milestones', {
+    mode: 'json',
+  }).$type<Milestone[]>(),
+  ticketTypeRoles: text('ticket_type_roles', { mode: 'json' }).$type<
+    TicketTypeRole[]
+  >(),
+  publicFreeTicketIds: text('public_free_ticket_ids', {
+    mode: 'json',
+  }).$type<number[]>(),
+  workshopRegistrationSponsorStart: text('workshop_registration_sponsor_start'),
+  workshopRegistrationStart: text('workshop_registration_start'),
+  workshopRegistrationEnd: text('workshop_registration_end'),
+  workshopEarlyAccessTicketTypes: text('workshop_early_access_ticket_types', {
+    mode: 'json',
+  }).$type<string[]>(),
+  workshopReminderLastSentAt: text('workshop_reminder_last_sent_at'),
+  workshopReminderLastSentCount: integer('workshop_reminder_last_sent_count'),
+  workshopReminderReservedAt: text('workshop_reminder_reserved_at'),
 })

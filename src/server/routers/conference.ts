@@ -1,5 +1,7 @@
 import {
+  isD1WriteTenant,
   isMovedConferenceField,
+  requestHost,
   writeMovedToD1,
 } from '@/lib/konf-api/conference-write'
 import { TRPCError } from '@trpc/server'
@@ -342,9 +344,11 @@ async function applyConferencePatch(
      * touches the subfields it knows about and never clobbers siblings.
      */
     pathPrefix?: string
+    /** Keys left out of the D1 write only (unchanged ticketing binding). */
+    d1Omit?: readonly string[]
   } = {},
 ) {
-  const { pathPrefix } = opts
+  const { pathPrefix, d1Omit = [] } = opts
   const set: Record<string, unknown> = {}
   const unset: string[] = []
 
@@ -372,7 +376,14 @@ async function applyConferencePatch(
   // Settings phase 1 (#2019): the public fields are moved; the members-only
   // ones still go to Sanity too (conference-write.ts). Prefixed (nested)
   // fieldsets hold no moved fields.
-  const d1 = !pathPrefix && (await writeMovedToD1(conferenceId, input))
+  const d1 =
+    !pathPrefix &&
+    (await writeMovedToD1(
+      conferenceId,
+      Object.fromEntries(
+        Object.entries(input).filter(([k]) => !d1Omit.includes(k)),
+      ),
+    ))
 
   // For d1_write tenants, omit moved fields from the Sanity patch (#1997).
   const sanitySet: Record<string, unknown> = {}
@@ -634,7 +645,14 @@ export const conferenceRouter = router({
           message: TICKETING_BINDING_ALREADY_CLAIMED,
         })
       }
-      return applyConferencePatch(conferenceId, input)
+      // An ordinary save re-sends the binding: keep the unchanged keys out of
+      // the D1 write, so it never counts as a rebind there (#2080).
+      const unchanged = (
+        ['checkinEventId', 'titoAccountSlug', 'titoEventSlug'] as const
+      ).filter(
+        (k) => k in input && (effective[k] || null) === (current?.[k] || null),
+      )
+      return applyConferencePatch(conferenceId, input, { d1Omit: unchanged })
     }),
 
   /**
@@ -665,6 +683,24 @@ export const conferenceRouter = router({
       // `ticketId` is a zod-validated positive integer, so interpolating it
       // into the attribute filter cannot inject anything.
       const occurrence = `publicFreeTicketIds[@ == ${input.ticketId}]`
+      // D1 first for a d1_write tenant (#2080). D1 takes the whole list, so
+      // this one read: a concurrent toggle can be lost in D1 (never in
+      // Sanity, whose ops below carry no read) and parity reports it.
+      // ponytail: whole-list D1 write; a per-id D1 mutation before the read flip.
+      // Only a d1_write tenant reads: everyone else keeps the no-read path.
+      if (await isD1WriteTenant(await requestHost(), conferenceId)) {
+        const stored =
+          (await clientReadUncached.fetch<number[] | null>(
+            // groq-global: keyed by the SERVER-resolved conference id.
+            `*[_type == "conference" && _id == $id][0].publicFreeTicketIds`,
+            { id: conferenceId },
+            { cache: 'no-store' },
+          )) ?? []
+        const rest = stored.filter((id) => id !== input.ticketId)
+        await writeMovedToD1(conferenceId, {
+          publicFreeTicketIds: input.visible ? [...rest, input.ticketId] : rest,
+        })
+      }
       try {
         const tx = clientWrite.transaction()
         if (input.visible) {
