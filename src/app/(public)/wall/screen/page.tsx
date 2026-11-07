@@ -5,7 +5,7 @@ import { photoWallLinks } from '@/lib/photo-wall/links'
 import { requirePhotoWall } from '@/lib/photo-wall/page'
 import { SCREEN_LOOK_PARAM, screenLookOverride } from '@/lib/photo-wall/screen'
 import { readScreenPage } from '@/lib/photo-wall/screen-page'
-import { getPublicSponsorsForConference } from '@/lib/sponsor-crm/sanity'
+import { getPublicSponsors } from '@/lib/sponsor/public'
 
 /**
  * `/wall/screen`, Screen Mode for the venue display (Photo Wall spec §9.2):
@@ -25,7 +25,7 @@ export default async function ScreenPage({
   const [initial, sponsors] = await Promise.all([
     readScreenPage(conference._id),
     // A sponsor read that fails must not take the venue screen down with it.
-    getPublicSponsorsForConference(conference._id).catch((error: unknown) => {
+    getPublicSponsors(conference).catch((error: unknown) => {
       console.error('Could not read the sponsors for Screen Mode', error)
       return []
     }),

@@ -48,7 +48,10 @@ const createSponsorLogo = (
   }
 
   try {
-    const dataUrl = createSvgDataUrl(selectedLogo)
+    // The API already sends a data URL (#1772).
+    const dataUrl = selectedLogo.startsWith('data:')
+      ? selectedLogo
+      : createSvgDataUrl(selectedLogo)
     if (dataUrl) {
       return (
         <img
@@ -245,7 +248,7 @@ export default async function Image({
     conference,
     domain,
     error: confError,
-  } = await getConferenceForCurrentDomain({ sponsors: true })
+  } = await getConferenceForCurrentDomain({ publicSponsors: true })
   if (confError || !conference) {
     return new Response(`Conference not found for domain: ${domain}`, {
       status: 404,
@@ -443,8 +446,10 @@ export default async function Image({
                   }}
                 >
                   {renderSponsorLogo(
-                    sponsor?.sponsor?.logo || null,
-                    sponsor?.sponsor?.logoBright || null,
+                    sponsor?.sponsor?.logo || sponsor?.sponsor?.logoUrl || null,
+                    sponsor?.sponsor?.logoBright ||
+                      sponsor?.sponsor?.logoBrightUrl ||
+                      null,
                     sponsor?.sponsor?.name || `Sponsor ${index + 1}`,
                     'small',
                     brand.textOnLight,
@@ -643,8 +648,10 @@ export default async function Image({
                   }}
                 >
                   {renderSponsorLogo(
-                    sponsor?.sponsor?.logo || null,
-                    sponsor?.sponsor?.logoBright || null,
+                    sponsor?.sponsor?.logo || sponsor?.sponsor?.logoUrl || null,
+                    sponsor?.sponsor?.logoBright ||
+                      sponsor?.sponsor?.logoBrightUrl ||
+                      null,
                     sponsor?.sponsor?.name || `Sponsor ${index + 1}`,
                     'small',
                     brand.textOnLight,

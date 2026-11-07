@@ -60,7 +60,7 @@ type ApiTalk = NonNullable<Profile['talks']>[number]
 type ApiSpeaker = NonNullable<ResultOf<typeof SPEAKERS_DOC>['speakers']>[number]
 
 /** One uncached gateway read. Throws on HTTP or GraphQL errors. */
-async function read<T>(
+export async function read<T>(
   host: string,
   query: string,
   variables?: Record<string, unknown>,

@@ -394,3 +394,28 @@ export const LogoWallWithoutCTA: Story = {
     showCTA: false,
   },
 }
+
+/** The API shape (#1772): no raw SVG, logos as data URLs rendered with <img>. */
+const dataUrl = (svg: string) => `data:image/svg+xml;base64,${btoa(svg)}`
+const fromApi = <T extends { sponsor: Record<string, unknown> }>(rows: T[]) =>
+  rows.map((r) => ({
+    ...r,
+    sponsor: {
+      ...r.sponsor,
+      logo: null,
+      logoBright: null,
+      logoUrl: r.sponsor.logo ? dataUrl(r.sponsor.logo as string) : null,
+      logoBrightUrl: r.sponsor.logoBright
+        ? dataUrl(r.sponsor.logoBright as string)
+        : null,
+    },
+  }))
+
+export const WithSponsorsFromApi: Story = {
+  args: { ...WithSponsors.args, sponsors: fromApi(mockSponsors) },
+}
+
+export const WithSponsorsFromApiDark: Story = {
+  ...dark,
+  args: WithSponsorsFromApi.args,
+}

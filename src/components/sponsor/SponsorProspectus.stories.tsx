@@ -326,3 +326,24 @@ export const WithSoldOutTiers: Story = {
     pastSponsors,
   },
 }
+
+const apiLogo = (name: string, color: string) =>
+  `data:image/svg+xml;base64,${btoa(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48"><rect width="44" height="44" y="2" rx="8" fill="${color}"/><text x="56" y="34" font-family="Arial" font-size="28" font-weight="700" fill="#1f2937">${name}</text></svg>`,
+  )}`
+
+/** The past-sponsor wall as the API serves it (#1772): logos as data URLs. */
+export const PastSponsorsFromApi: Story = {
+  args: {
+    ...Default.args,
+    pastSponsors: pastSponsors.map((s, i) => ({
+      ...s,
+      sponsor: {
+        ...s.sponsor,
+        logo: null,
+        logoBright: null,
+        logoUrl: apiLogo(s.sponsor.name, i ? '#0ea5e9' : '#7c3aed'),
+      },
+    })),
+  },
+}

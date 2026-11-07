@@ -35,7 +35,7 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
 
   const { conference, error } = await getConferenceForDomain(domain, {
     sponsorTiers: true,
-    sponsors: true,
+    publicSponsors: true,
     gallery: { featuredLimit: 8, featuredOnly: true },
   })
 

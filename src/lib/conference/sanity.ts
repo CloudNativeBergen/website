@@ -21,6 +21,7 @@ import {
   getGalleryImages,
 } from '@/lib/gallery/sanity'
 import { getPublicSponsorsForConference } from '@/lib/sponsor-crm/sanity'
+import { getPublicSponsors } from '@/lib/sponsor/public'
 import { selectConferenceSections, type RawConferenceRead } from './sections'
 import { CONFERENCE_QUERY_CORE, CONFERENCE_QUERY_FULL } from './query'
 import { CONFERENCE_CACHE_LIFE } from './cache-life'
@@ -209,6 +210,7 @@ async function forCurrentDomain({
   includeVolunteerRegistrationLink = false,
   uncached = false,
   publicSchedule = false,
+  publicSponsors = false,
 }: {
   organizers?: boolean
   schedule?: boolean
@@ -234,6 +236,7 @@ async function forCurrentDomain({
   /** Fetch directly from the origin API instead of the CDN. Admin surfaces only. */
   uncached?: boolean
   publicSchedule?: boolean
+  publicSponsors?: boolean
 } = {}): Promise<{
   conference: Conference
   domain: string
@@ -257,6 +260,7 @@ async function forCurrentDomain({
       includeVolunteerRegistrationLink,
       uncached,
       publicSchedule,
+      publicSponsors,
     })
   } catch (err) {
     const error = err as Error
@@ -310,6 +314,7 @@ async function readConference(
     includeSpeakerRegistrationLink = false,
     includeVolunteerRegistrationLink = false,
     publicSchedule = false,
+    publicSponsors = false,
   }: {
     organizers?: boolean
     schedule?: boolean
@@ -372,6 +377,12 @@ async function readConference(
     includeVolunteerRegistrationLink?: boolean
     /** Internal: only {@link getPublicSchedule} sets it. Ignored if uncached. */
     publicSchedule?: boolean
+    /**
+     * The sponsors from {@link getPublicSponsors} (the API for an apiRead
+     * tenant): logos as data URLs, no `_sfcId`, tier price or ticket
+     * entitlement. Implies `sponsors`. Public pages only.
+     */
+    publicSponsors?: boolean
   } = {},
 ): Promise<{
   conference: Conference
@@ -457,7 +468,11 @@ async function readConference(
       conference = await mergeConference(conference)
       status = 'resolved'
 
-      if (sponsors && conference._id) {
+      if (publicSponsors && !uncached && conference._id) {
+        conference.sponsors = await getPublicSponsors(
+          conference as Parameters<typeof getPublicSponsors>[0],
+        )
+      } else if ((sponsors || publicSponsors) && conference._id) {
         // `{ useCache: !uncached }` exactly as the gallery reads below do: the
         // public path takes the CDN, and the homepage composer preview — the
         // only `uncached: true` caller that asks for sponsors — keeps its

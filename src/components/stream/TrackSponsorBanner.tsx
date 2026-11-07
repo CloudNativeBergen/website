@@ -34,6 +34,8 @@ export function TrackSponsorBanner({
         <SponsorLogo
           logo={sponsor.logo}
           logoBright={sponsor.logoBright}
+          logoUrl={sponsor.logoUrl}
+          logoBrightUrl={sponsor.logoBrightUrl}
           name={sponsor.name}
           className="h-16 w-auto max-w-full object-contain sm:h-24 sm:max-w-[480px] lg:h-32"
         />

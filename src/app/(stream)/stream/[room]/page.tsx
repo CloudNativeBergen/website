@@ -38,7 +38,7 @@ export default async function StreamRoomPage({ params, searchParams }: Props) {
   const room = decodeURIComponent(roomParam).trim()
 
   const { conference, error } = await getPublicScheduleForCurrentDomain({
-    sponsors: true,
+    publicSponsors: true,
     confirmedTalksOnly: false,
   })
 
