@@ -580,6 +580,7 @@ enum MemberRole {
 enum TalkStatus {
   CONFIRMED
   PENDING
+  WITHDRAWN
 }
 
 enum ConferenceLifecycle {

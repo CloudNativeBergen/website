@@ -100,11 +100,8 @@ export interface Slot {
   trackIndex: number
   position: number
 }
-/**
- * confirmed; anything else, withdrawn included: the public API never reveals
- * that a speaker dropped out before the replacement is announced.
- */
-export type TalkStatus = 'CONFIRMED' | 'PENDING'
+/** confirmed; withdrawn, canceled or rejected; anything else. */
+export type TalkStatus = 'CONFIRMED' | 'WITHDRAWN' | 'PENDING'
 export interface Day {
   /** The schedule document id. */
   id: string | null
@@ -263,7 +260,11 @@ const toTalk = (r: Row): Talk => ({
     typeof r.hasFeedbackCode === 'boolean' ? r.hasFeedbackCode : null,
 })
 const talkStatus = (v: unknown): TalkStatus =>
-  v === 'confirmed' ? 'CONFIRMED' : 'PENDING'
+  v === 'confirmed'
+    ? 'CONFIRMED'
+    : v === 'withdrawn' || v === 'canceled' || v === 'rejected'
+      ? 'WITHDRAWN'
+      : 'PENDING'
 const toSpeaker = (r: Row): Speaker => ({
   ...toSpeakerRef(r),
   bio: s(r.bio),
