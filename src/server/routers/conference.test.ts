@@ -1641,7 +1641,10 @@ describe('conference router — D1 write path (#1881)', () => {
   })
 
   // No binding change: the provider and customer id stay org-admin writable.
-  const TICKETING = { ticketingProvider: 'checkin', checkinCustomerId: 42 }
+  const TICKETING = {
+    ticketingProvider: 'checkin' as const,
+    checkinCustomerId: 42,
+  }
   it('for a d1_write tenant, writes settings phase 3 ticketing fields to D1 first, then Sanity (#2080)', async () => {
     await makeCaller({ isOrganizer: true }).updateTicketingIds(TICKETING)
     const [[, init]] = apiCalls()

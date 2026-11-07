@@ -425,7 +425,6 @@ const isDateTime = (v: string) =>
   ) && !isNaN(Date.parse(v))
 const isPositiveInt = (v: unknown) => Number.isInteger(v) && (v as number) > 0
 // Ticket type names reach Sanity patch paths on the site: no control chars.
-// eslint-disable-next-line no-control-regex
 const isTypeName = (v: unknown) =>
   typeof v === 'string' &&
   !!v.trim() &&

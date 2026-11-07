@@ -177,9 +177,11 @@ export function movedConferencePatch(
     } else if (k === 'ticketTypeRoles') {
       // D1 keeps no `_key`.
       out[k] =
-        (v as Record<string, unknown>[] | null)?.map(
-          ({ _key: _, ...role }) => role,
-        ) ?? null
+        (v as Record<string, unknown>[] | null)?.map((role) => {
+          const { _key, ...rest } = role
+          void _key
+          return rest
+        }) ?? null
     } else if (
       MOVED.has(k) ||
       SETTINGS.has(k) ||

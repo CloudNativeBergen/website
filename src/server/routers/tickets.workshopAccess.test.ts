@@ -1246,8 +1246,10 @@ describe('the D1 write of ticket type roles (#2080)', () => {
   ]
   // As D1 stores them (the subgraph drops null answers and keys).
   const without = (r: Role[]) =>
-    r.map(({ _key: _, ...x }) =>
-      Object.fromEntries(Object.entries(x).filter(([, v]) => v != null)),
+    r.map((x) =>
+      Object.fromEntries(
+        Object.entries(x).filter(([k, v]) => k !== '_key' && v != null),
+      ),
     )
 
   it('sends the seating write’s resulting list before Sanity', async () => {
