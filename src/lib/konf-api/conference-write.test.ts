@@ -155,6 +155,10 @@ describe('parity columns agree with the write split (#1917)', () => {
     'org_id',
     'published',
     'show_vanity_metrics',
+    // Written by the reminder to Sanity only, until its D1 write (#2080).
+    'workshop_reminder_last_sent_at',
+    'workshop_reminder_last_sent_count',
+    'workshop_reminder_reserved_at',
   ]
   const columns = Object.keys(
     mapBackfill([{ _id: 'c', orgId: 'o' }], new Set(['c'])).rows[0],

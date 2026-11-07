@@ -64,8 +64,17 @@ describe('findDrift', () => {
     const row = d1()
     for (const col of Object.keys(row) as (keyof Row)[]) {
       if (col === 'conference_id') continue
-      const v =
-        col === 'social_links' ? '["y"]' : col === 'published' ? 0 : 'zz'
+      const v = [
+        'social_links',
+        'ticket_target_milestones',
+        'ticket_type_roles',
+        'public_free_ticket_ids',
+        'workshop_early_access_ticket_types',
+      ].includes(col)
+        ? '["y"]'
+        : col === 'published'
+          ? 0
+          : 'zz'
       expect(findDrift([{ ...row, [col]: v }], [doc])).toEqual([
         { conferenceId: 'c1', fields: [col] },
       ])

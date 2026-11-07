@@ -158,7 +158,11 @@ function value(
   if (n === 'role') return 'admin'
   if (/INT|REAL|FLOA|DOUB/i.test(col.type)) return 0
   const text = `${tag(t)} ${table}.${n}`
-  if (col.dflt_value === "'[]'") return JSON.stringify([text])
+  // A JSON id list holds numbers (conference 0007 public_free_ticket_ids).
+  if (sql.includes(`json_valid(${n})`) && n.endsWith('_ids'))
+    return JSON.stringify([0])
+  if (col.dflt_value === "'[]'" || sql.includes(`json_valid(${n})`))
+    return JSON.stringify([text])
   if (col.dflt_value === "'{}'") return JSON.stringify({ v: text })
   return text
 }

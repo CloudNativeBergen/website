@@ -33,6 +33,13 @@ const h = vi.hoisted(() => ({
   tickets: [] as { category: string; crm: { email: string } }[],
 }))
 
+// Not a d1_write tenant: ticket setup goes to Sanity only (#2080).
+vi.mock('@/lib/konf-api/conference-write', async (original) => ({
+  ...(await original<typeof import('@/lib/konf-api/conference-write')>()),
+  writeMovedToD1: vi.fn(async () => false),
+  isD1WriteTenant: vi.fn(async () => false),
+}))
+
 vi.mock('@/lib/sanity/client', async () => {
   const { createClient } = await import('@sanity/client')
   const { parse, evaluate } = await import('groq-js')

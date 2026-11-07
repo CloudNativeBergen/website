@@ -27,6 +27,13 @@
  * expiry are exercised rather than stubbed.
  */
 
+// Not a d1_write tenant: ticket setup goes to Sanity only (#2080).
+vi.mock('@/lib/konf-api/conference-write', async (original) => ({
+  ...(await original<typeof import('@/lib/konf-api/conference-write')>()),
+  writeMovedToD1: vi.fn(async () => false),
+  isD1WriteTenant: vi.fn(async () => false),
+}))
+
 vi.mock('@/lib/auth', () => ({
   getAuthSession: vi.fn().mockResolvedValue(null),
 }))

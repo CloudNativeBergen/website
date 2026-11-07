@@ -1,5 +1,7 @@
 import {
+  isD1WriteTenant,
   isMovedConferenceField,
+  requestHost,
   writeMovedToD1,
 } from '@/lib/konf-api/conference-write'
 import { TRPCError } from '@trpc/server'
@@ -669,17 +671,20 @@ export const conferenceRouter = router({
       // this one read: a concurrent toggle can be lost in D1 (never in
       // Sanity, whose ops below carry no read) and parity reports it.
       // ponytail: whole-list D1 write; a per-id D1 mutation before the read flip.
-      const stored =
-        (await clientReadUncached.fetch<number[] | null>(
-          // groq-global: keyed by the SERVER-resolved conference id.
-          `*[_type == "conference" && _id == $id][0].publicFreeTicketIds`,
-          { id: conferenceId },
-          { cache: 'no-store' },
-        )) ?? []
-      const rest = stored.filter((id) => id !== input.ticketId)
-      await writeMovedToD1(conferenceId, {
-        publicFreeTicketIds: input.visible ? [...rest, input.ticketId] : rest,
-      })
+      // Only a d1_write tenant reads: everyone else keeps the no-read path.
+      if (await isD1WriteTenant(await requestHost(), conferenceId)) {
+        const stored =
+          (await clientReadUncached.fetch<number[] | null>(
+            // groq-global: keyed by the SERVER-resolved conference id.
+            `*[_type == "conference" && _id == $id][0].publicFreeTicketIds`,
+            { id: conferenceId },
+            { cache: 'no-store' },
+          )) ?? []
+        const rest = stored.filter((id) => id !== input.ticketId)
+        await writeMovedToD1(conferenceId, {
+          publicFreeTicketIds: input.visible ? [...rest, input.ticketId] : rest,
+        })
+      }
       try {
         const tx = clientWrite.transaction()
         if (input.visible) {

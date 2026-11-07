@@ -5,6 +5,7 @@ import {
   mapBackfill,
   SETTINGS_PHASE1_COLUMNS,
   SETTINGS_PHASE2_COLUMNS,
+  SETTINGS_PHASE3_COLUMNS,
   SETTINGS_PROJECTION,
   toSql,
 } from './backfill'
@@ -263,7 +264,9 @@ describe('mapBackfill', () => {
     const phase1 = b.rows.map(
       (r) =>
         Object.fromEntries(
-          Object.entries(r).filter(([k]) => !(k in PHASE2_NULLS)),
+          Object.entries(r).filter(
+            ([k]) => !(k in PHASE2_NULLS) && !(k in PHASE3_NULLS),
+          ),
         ) as unknown as typeof r,
     )
     db.exec(toSql(phase1))
@@ -298,4 +301,7 @@ describe('mapBackfill', () => {
 
 const PHASE2_NULLS = Object.fromEntries(
   SETTINGS_PHASE2_COLUMNS.map((k) => [k, null]),
+)
+const PHASE3_NULLS = Object.fromEntries(
+  SETTINGS_PHASE3_COLUMNS.map((k) => [k, null]),
 )
