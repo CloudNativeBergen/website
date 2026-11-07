@@ -584,13 +584,20 @@ describe('syncMembers drift mode (MEMBER_SOURCE_ORGS)', () => {
     for (const l of logs) expect(l).not.toContain(SLACK)
   })
 
-  it('posts to Slack with redirects refused (#1949)', async () => {
+  it('posts to Slack without following redirects, and reports one (#1949)', async () => {
     const { env } = await driftDb()
+    slackStatus = 307
     await syncMembers(env)
     const slack = fetchMock.mock.calls.filter(([u]) => u === SLACK)
+    // 'manual': workerd rejects 'error' ("does not make sense at the edge").
     expect(slack.map(([, init]) => (init as RequestInit).redirect)).toEqual([
-      'error',
+      'manual',
     ])
+    expect(logs.map((l) => JSON.parse(l))).toContainEqual({
+      event: 'identity.membership.drift_alert_failed',
+      orgId: 'org-a',
+      status: 307,
+    })
   })
 
   it('warns about a MEMBER_SOURCE_ORGS id that is no organization (#1949)', async () => {
@@ -604,14 +611,14 @@ describe('syncMembers drift mode (MEMBER_SOURCE_ORGS)', () => {
     ])
   })
 
-  it('reads a role with inner whitespace as the trigger does (#1949)', async () => {
+  it('reads a role as authorization does: "ow ner" is a mismatch (#1949)', async () => {
     const { env, d1 } = await driftDb()
     await d1
       .prepare("UPDATE member SET role = 'ow ner' WHERE id = 'm-ok'")
       .run()
     await syncMembers(env)
-    expect(driftLog().roleMismatch).not.toContain('u-ok')
-    expect(driftLog().roleMismatch).toEqual([])
+    // asMember trims each item, so it refuses this organizer; drift says so.
+    expect(driftLog().roleMismatch).toEqual(['u-ok'])
   })
 
   it('drops a drift alert with its org, and refuses one for no org (#1949)', async () => {

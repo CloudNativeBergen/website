@@ -303,13 +303,15 @@ async function checkDrift(
     if (userId) inSanity.add(userId)
     if (!userId || !roles.has(userId)) missingInIdentity.push(speakerId)
   }
-  // Whitespace stripped anywhere, as isOwner and the LAST_OWNER trigger do.
+  // As authorization reads a role (members.ts asMember: trim each item), so
+  // a role it refuses, such as "ow ner", is a mismatch. ownersBelowTwo uses
+  // isOwner instead, the LAST_OWNER trigger's rule: the two differ on purpose
+  // (#1949).
   const roleOk = (r: string) =>
     r
       .toLowerCase()
-      .replace(/[ \t\n\r]/g, '')
       .split(',')
-      .some((x) => ['owner', 'admin'].includes(x))
+      .some((x) => ['owner', 'admin'].includes(x.trim()))
   const drift: Drift = {
     missingInIdentity: [...new Set(missingInIdentity)].sort(),
     missingInSanity: [...roles.keys()].filter((u) => !inSanity.has(u)).sort(),
@@ -367,8 +369,9 @@ async function checkDrift(
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text: slackText(orgId, drift) }),
       signal: AbortSignal.timeout(5000),
-      // A 307/308 would re-POST the drift to wherever it points (#1949).
-      redirect: 'error',
+      // Never follow a 307/308 (it would re-POST the drift elsewhere, #1949):
+      // the 3xx fails the status check below. Workers has no 'error' mode.
+      redirect: 'manual',
     })
   } catch (e) {
     // Name only: a message may carry the URL.
