@@ -19,7 +19,7 @@ service: #PlatformService & {
 	// Without it provisioning refuses. Preview reads development only.
 	vars: {
 		preview: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development"}
-		production: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", SITE_URL: "https://konf.app"}
+		production: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", SITE_URL: "https://auth.konf.app"}
 	}
 	// createOrganization (RunKonf/kontroll#79) asks the site to write the
 	// Sanity docs: POST SITE_URL/api/provisioning/service/organizations,

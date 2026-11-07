@@ -79,6 +79,13 @@ export interface ProvisionInput {
   createdBy?: string
 }
 
+/**
+ * The only hosts createOrganization sends a signed assertion and an owner
+ * email to: this website's own deployment. A SITE_URL elsewhere (konf.app is
+ * a different, third-party site) is refused, never called.
+ */
+export const SITE_HOSTS = new Set(['auth.konf.app'])
+
 /** createOrganization's input (RunKonf/kontroll#79). */
 export interface CreateOrganizationInput {
   name: string
@@ -633,7 +640,13 @@ export function createData(
       createdBy: string,
     ) {
       validateCreate(input, idempotencyKey)
-      if (!env.SITE_URL || !env.PROVISIONING_SIGNING_KEY) {
+      const site = env.SITE_URL ? URL.parse(env.SITE_URL) : null
+      if (
+        !site ||
+        site.protocol !== 'https:' ||
+        !SITE_HOSTS.has(site.hostname) ||
+        !env.PROVISIONING_SIGNING_KEY
+      ) {
         throw fail(
           'INTERNAL_SERVER_ERROR',
           'createOrganization is not configured',
@@ -665,7 +678,7 @@ export function createData(
       let res: Response
       try {
         res = await fetch(
-          new URL('/api/provisioning/service/organizations', env.SITE_URL),
+          new URL('/api/provisioning/service/organizations', site),
           {
             method: 'POST',
             headers: {

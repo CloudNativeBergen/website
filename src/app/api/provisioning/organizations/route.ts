@@ -220,6 +220,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             { error: 'internal_error', code: 'platform_domain_unconfigured' },
             { status: 500 },
           )
+        case 'idempotency_conflict':
+          return NextResponse.json(
+            { error: 'conflict', code: 'idempotency_conflict' },
+            { status: 409 },
+          )
         case 'ambiguous_organizer':
           return NextResponse.json(
             { error: 'conflict', code: 'ambiguous_organizer' },

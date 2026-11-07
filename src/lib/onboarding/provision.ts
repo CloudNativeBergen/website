@@ -315,18 +315,33 @@ interface Receipt {
   speakerId: string
   speakerCreated: boolean
   domains?: string[]
+  /** sha256 of the parsed input and operator; absent on older receipts. */
+  inputHash?: string
 }
+
+/** What a reused key must match (kontroll#79). The input is the parsed,
+ * normalized schema output, so key order and casing are stable. */
+const inputHashOf = (input: OnboardingInput, createdBy?: string) =>
+  createHash('sha256')
+    .update(JSON.stringify([input, createdBy ?? null]))
+    .digest('hex')
+
+/** A receipt from an older provision has no hash and is trusted as before. */
+const sameInput = (r: Receipt, hash: string) =>
+  r.inputHash === undefined || r.inputHash === null || r.inputHash === hash
 
 async function readReceipt(id: string): Promise<Receipt | null> {
   return clientReadUncached.fetch<Receipt | null>(
     // groq-global: platform-internal provisioning receipt, deliberately not tenant-scoped (it predates any tenant).
-    `*[_type == $type && _id == $id][0]{ organizationId, conferenceId, speakerId, speakerCreated, domains }`,
+    `*[_type == $type && _id == $id][0]{ organizationId, conferenceId, speakerId, speakerCreated, domains, inputHash }`,
     { type: PROVISIONING_REQUEST_TYPE, id },
     { cache: 'no-store' },
   )
 }
 
 export type ProvisionRejection =
+  /** The idempotency key was used before with a different input. */
+  | { code: 'idempotency_conflict' }
   | { code: 'slug_taken'; slug: string }
   | { code: 'domain_claimed'; domains: string[] }
   /** The minted `<slug>-<year>.<suffix>` host is already claimed — the org slug
@@ -434,10 +449,13 @@ export async function provisionOrganization(
   const receiptId = options.idempotencyKey
     ? receiptDocId(options.idempotencyKey)
     : null
+  const inputHash = inputHashOf(input, options.createdBy)
 
   if (receiptId) {
     const existing = await readReceipt(receiptId)
     if (existing?.organizationId) {
+      if (!sameInput(existing, inputHash))
+        return { ok: false, rejection: { code: 'idempotency_conflict' } }
       return {
         ok: true,
         ...existing,
@@ -567,6 +585,7 @@ export async function provisionOrganization(
         // the hosts this tenant was actually given.
         domains,
         ...(options.createdBy ? { createdBy: options.createdBy } : {}),
+        inputHash,
         createdAt: new Date(now).toISOString(),
         expiresAt: new Date(
           now + PROVISIONING_RECEIPT_RETENTION_DAYS * 24 * 60 * 60 * 1000,
@@ -582,6 +601,8 @@ export async function provisionOrganization(
     if (receiptId) {
       const winner = await readReceipt(receiptId).catch(() => null)
       if (winner?.organizationId) {
+        if (!sameInput(winner, inputHash))
+          return { ok: false, rejection: { code: 'idempotency_conflict' } }
         return {
           ok: true,
           ...winner,

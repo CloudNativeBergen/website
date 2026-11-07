@@ -125,7 +125,7 @@ let sanity: Docs
 
 // The site's provisioning route (src/lib/provisioning/service.ts verifies the
 // real assertion): writes Sanity docs into `sanity`, once per key.
-const SITE = 'https://site.test'
+const SITE = 'https://auth.konf.app'
 const signing = await generateKeyPair('EdDSA', { extractable: true })
 const signingJwk = JSON.stringify({
   ...(await exportJWK(signing.privateKey)),
@@ -1370,6 +1370,18 @@ describe('createOrganization (kontroll#79)', () => {
     expect(sanityFetch).not.toHaveBeenCalled()
     expect(prepare).not.toHaveBeenCalled()
     expect(identity.ensure).not.toHaveBeenCalled()
+    nothingWritten()
+  })
+
+  it.each([
+    'https://konf.app',
+    'http://auth.konf.app',
+    'https://auth.konf.app.evil.test',
+  ])('refuses to call a SITE_URL off the allowlist: %s', async (url) => {
+    env.SITE_URL = url
+    const { body } = await create()
+    expect(body.errors[0].extensions.code).toBe('INTERNAL_SERVER_ERROR')
+    expect(sanityFetch).not.toHaveBeenCalled()
     nothingWritten()
   })
 
