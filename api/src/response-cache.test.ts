@@ -23,6 +23,7 @@ import { compose } from './supergraph'
 import {
   cacheableRead,
   cacheTtl,
+  purgeTags,
   storable,
   tagsFor,
   type CacheProps,
@@ -256,11 +257,16 @@ describe('response cache through the gateway (#1789)', () => {
     expect(seen.map((s) => s.props.orgId)).toEqual(['org_a', 'org_b'])
   })
 
+  const SERVED = {
+    status: 200,
+    json: { data: { conference: { id: 'conf_a' } } },
+  }
   it.each([
     [
       'a browser Origin (no site assertion)',
       async () => ({ origin: 'https://conf.example' }),
       QUERY,
+      SERVED,
     ],
     [
       'a signed-in site-lane caller',
@@ -269,20 +275,68 @@ describe('response cache through the gateway (#1789)', () => {
         authorization: `Bearer ${await session()}`,
       }),
       QUERY,
+      SERVED,
     ],
-    ['introspection', site, { query: '{ __schema { queryType { name } } }' }],
+    [
+      'introspection',
+      site,
+      { query: '{ __schema { queryType { name } } }' },
+      {
+        status: 403,
+        json: {
+          errors: [
+            {
+              message: 'GraphQL introspection is not allowed',
+              extensions: { code: 'FORBIDDEN', http: { status: 403 } },
+            },
+          ],
+        },
+      },
+    ],
     [
       'a persisted-query extension',
       site,
       { ...QUERY, extensions: { persistedQuery: {} } },
+      SERVED,
     ],
-  ])('bypasses the cache for %s', async (_, headers, body) => {
+  ])('bypasses the cache for %s', async (_, headers, body, expected) => {
     const env = makeEnv()
     const { ctx, seen, store } = workersCache(env)
     const res = await gateway.fetch(post(body, await headers()), env, ctx)
+    // The request still runs, uncached: its real outcome, then no cache use.
+    expect({ status: res.status, json: await res.json() }).toEqual(expected)
     expect(res.headers.get('x-konf-cache')).toBeNull()
     expect(seen).toEqual([])
     expect(store.size).toBe(0)
+  })
+
+  it('reads through the cache only on /graphql', async () => {
+    const env = makeEnv()
+    const { ctx, seen } = workersCache(env)
+    const req = post(QUERY, await site())
+    const res = await gateway.fetch(
+      new Request('http://api.test/other', {
+        method: 'POST',
+        headers: req.headers,
+        body: await req.text(),
+      }),
+      env,
+      ctx,
+    )
+    expect(res.status).toBe(404)
+    expect(seen).toEqual([])
+  })
+
+  it('reads only application/json bodies, not other +json types', async () => {
+    const env = makeEnv()
+    const { ctx, seen } = workersCache(env)
+    const req = post(QUERY, {
+      ...(await site()),
+      'content-type': 'application/json-patch+json',
+    })
+    const res = await gateway.fetch(req, env, ctx)
+    expect(res.status).toBe(415)
+    expect(seen).toEqual([])
   })
 
   it('stays off without API_CACHE_TTL_SECONDS', async () => {
@@ -419,6 +473,19 @@ describe('response cache through the gateway (#1789)', () => {
 })
 
 describe('response cache rules', () => {
+  it('purgeTags forwards the tags and throws unless the purge succeeded', async () => {
+    const purge = vi.fn(async () => ({ success: true, errors: [] }))
+    await purgeTags({ purge, invalidate: purge }, ['org:x', 'conf:y'])
+    expect(purge.mock.calls).toEqual([[{ tags: ['org:x', 'conf:y'] }]])
+    const failed = vi.fn(async () => ({ success: false, errors: [] }))
+    await expect(
+      purgeTags({ purge: failed, invalidate: failed }, ['org:x']),
+    ).rejects.toThrow('cache purge failed')
+    await expect(purgeTags(undefined, ['org:x'])).rejects.toThrow(
+      'cache purge failed',
+    )
+  })
+
   it.each([
     ['60', 60],
     ['0', 0],

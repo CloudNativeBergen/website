@@ -1,6 +1,6 @@
 import { WorkerEntrypoint } from 'cloudflare:workers'
 import { createGateway, type Env } from './gateway'
-import type { CacheProps } from './response-cache'
+import { purgeTags, type CacheProps } from './response-cache'
 // Composed at build time (`pnpm compose`), imported as text (wrangler rules).
 import supergraph from '../supergraph.graphql'
 
@@ -21,8 +21,7 @@ export class CachedRead extends WorkerEntrypoint<Env, CacheProps> {
   }
 
   /** Tag purges are scoped to the entrypoint that calls them: this one. */
-  async purge(tags: string[]) {
-    const result = await this.ctx.cache?.purge({ tags })
-    if (!result?.success) throw new Error('cache purge failed')
+  purge(tags: string[]) {
+    return purgeTags(this.ctx.cache, tags)
   }
 }

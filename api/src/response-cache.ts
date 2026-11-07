@@ -76,7 +76,9 @@ export function readableBody(request: Request) {
   const length = Number(request.headers.get('content-length'))
   return (
     request.method === 'POST' &&
-    /^application\/json\b/i.test(request.headers.get('content-type') ?? '') &&
+    /^application\/json\s*(?:;|$)/i.test(
+      request.headers.get('content-type') ?? '',
+    ) &&
     Number.isInteger(length) &&
     length > 0 &&
     length <= MAX_READ_BODY
@@ -184,4 +186,16 @@ export function toClient(res: Response) {
         : 'miss',
   })
   return new Response(res.body, { status: res.status, headers })
+}
+
+/**
+ * CachedRead's purge (index.ts): tags are scoped to the entrypoint that calls
+ * it. Throws unless Cloudflare accepted it, so the gateway logs the failure.
+ */
+export async function purgeTags(
+  cache: CacheContext | undefined,
+  tags: string[],
+) {
+  const result = await cache?.purge({ tags })
+  if (!result?.success) throw new Error('cache purge failed')
 }

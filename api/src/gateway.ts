@@ -695,7 +695,13 @@ export function createGateway(supergraph: string) {
       // Only a small JSON body with a declared length is read here, so a
       // large or streamed one still meets Yoga's body limit first.
       const body = readableBody(request) ? await forwarded.clone().text() : null
-      if (siteHost && auth === null && body !== null) {
+      const path = new URL(request.url).pathname
+      if (
+        siteHost &&
+        auth === null &&
+        body !== null &&
+        (path === '/graphql' || path === '/graphql/')
+      ) {
         const read = cacheableRead(body)
         const loop =
           read &&

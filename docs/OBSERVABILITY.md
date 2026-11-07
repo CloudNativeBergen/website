@@ -204,7 +204,7 @@ All three are JSON lines on `console.error`, emitted from `api/src/gateway.ts`. 
 #### `gateway.cache.purge_failed`
 
 - **Emitting Worker:** `konf-api` (`api/src/gateway.ts`, #1789)
-- **When it fires:** A mutation succeeded but purging its tenant's cached reads failed. The write is unaffected; the tenant's entries expire within `API_CACHE_TTL_SECONDS`.
+- **When it fires:** Purging a tenant's cached reads failed after a POST returned HTTP 200 that was a mutation, or whose body the gateway did not read (another content type, or over 64 KB), so it may have been one. It does not establish that a mutation succeeded. The response is unaffected; the tenant's entries may remain until they expire (`API_CACHE_TTL_SECONDS`).
 - **Fields:** `event`
 - **Suggested alert:** Warning (condition: `count > 0`).
 
