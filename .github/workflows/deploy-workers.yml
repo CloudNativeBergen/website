@@ -69,7 +69,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v4
         with:
           sparse-checkout: scripts/older-deploys.sh
+      # A GitHub API blip must not block this run's own deploy (#2053): the
+      # only cost of skipping is that an older run may still wait for approval.
       - name: Cancel
+        id: cancel
+        continue-on-error: true
         run: |
           set -euo pipefail
           gh api "repos/${{ github.repository }}/actions/workflows/deploy-workers.yml/runs?branch=main&event=push&per_page=100" \
@@ -78,14 +82,52 @@ jobs:
                 echo "Cancelling older run $id"
                 gh api -X POST "repos/${{ github.repository }}/actions/runs/$id/cancel" || true
               done
+      - if: steps.cancel.outcome == 'failure'
+        run: echo "::warning::Could not list older deploy runs; an older run may still be waiting for approval."
+
+  # An older run that reaches `deploy` after a newer one would replace the
+  # newer pending deploy in the concurrency group, and older code would deploy
+  # last (#2053). So a run whose commit is no longer main's newest Worker change
+  # never enters the group: the newer run deploys all of main. Runs after
+  # compose, right before deploy, so the window is the queue time of one job.
+  # On an API failure it deploys, as before this check existed.
+  newest:
+    name: Skip when main has newer Worker changes
+    if: github.event_name == 'push'
+    needs: [compose]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    outputs:
+      newer: ${{ steps.check.outputs.newer }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v4
+        with:
+          sparse-checkout: scripts/newer-deploy.sh
+      - name: Compare with main
+        id: check
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          newer=$(gh api "repos/${{ github.repository }}/compare/${{ github.sha }}...main" | bash scripts/newer-deploy.sh)
+          echo "newer=$newer" >> "$GITHUB_OUTPUT"
+          if [ -n "$newer" ]; then
+            echo "::notice::main has newer Worker changes (up to $newer); that commit's run deploys them, so this one skips."
+          fi
+      - if: steps.check.outcome == 'failure'
+        run: echo "::warning::Could not compare with main; deploying this commit."
 
   deploy:
     name: Deploy (${{ github.event_name == 'push' && 'production' || 'preview' }})
-    needs: [compose, cancel-older]
+    needs: [compose, cancel-older, newest]
     # Fork PRs get no secrets; skip them rather than fail.
     # Dependabot PRs get no environment secrets either.
-    # cancel-older is skipped on PRs, so accept skipped as well as success.
-    if: ${{ !cancelled() && needs.compose.result == 'success' && needs.cancel-older.result != 'failure' && (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) }}
+    # cancel-older and newest are skipped on PRs, so accept skipped as well as
+    # success. newest never blocks on its own failure: its output is then empty.
+    if: ${{ !cancelled() && needs.compose.result == 'success' && needs.cancel-older.result != 'failure' && needs.newest.outputs.newer == '' && (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: ${{ github.event_name == 'push' && 'workers-production' || 'workers-preview' }}
