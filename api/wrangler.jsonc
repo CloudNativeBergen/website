@@ -80,6 +80,8 @@
       // Placeholder until identity's preview host exists.
       "vars": {
         "IDENTITY_ISSUER": "https://id-preview.konf.app",
+        // Response cache (#1789) on in preview only, to prove it on Workers Free.
+        "API_CACHE_TTL_SECONDS": "60",
         "OVERRIDE_TENANTS": {
           "conference-settings": [
             "organization-cloud-native-days",
