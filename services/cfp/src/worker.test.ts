@@ -54,11 +54,18 @@ const talk = (conf: string, status: string) => ({
   feedbackCode: 'PRIVATE-CODE',
   private: true,
 })
-const DATASET = ['conf_a', 'conf_b'].flatMap((conf) => [
+// conf_a2 is org_a's other edition: only the conference predicate keeps it
+// out of conf_a.
+const ORG: Record<string, string> = {
+  conf_a: 'org_a',
+  conf_a2: 'org_a',
+  conf_b: 'org_b',
+}
+const DATASET = Object.keys(ORG).flatMap((conf) => [
   {
     _id: conf,
     _type: 'conference',
-    organization: ref(conf.replace('conf', 'org')),
+    organization: ref(ORG[conf]),
     topics: [ref(`topic_${conf}`)],
     cfpEmail: 'PRIVATE-cfp@example.org',
   },
@@ -175,6 +182,9 @@ describe('cfp subgraph', () => {
       'conf_b_confirmed',
     ])
     expect(JSON.stringify(b.data)).not.toContain('conf_a')
+    // The same org's other edition stays out of conf_a.
+    const a = await post(ALL, tenant('org_a', 'conf_a'))
+    expect(JSON.stringify(a.data)).not.toContain('conf_a2')
     // org_b's envelope naming org_a's conference matches nothing.
     const forged = await post(ALL, tenant('org_b', 'conf_a'))
     expect(forged.errors).toBeUndefined()
