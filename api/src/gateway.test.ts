@@ -1719,12 +1719,16 @@ describe('operator lane (#1892 phase 4)', () => {
     async (claim) => {
       const { env, envelopes } = opsEnv()
       const token = await jwt({ claims: { [SESSION_ORIGIN_CLAIM]: claim } })
+      // A named tenant, so a lookup ahead of the claim check would fetch.
       const res = await call(env, {
         origin: OPS,
         authorization: `Bearer ${token}`,
+        [OPERATOR_TENANT_HEADER]: 'conf.example',
       })
       expect(res.status).toBe(401)
       expect(envelopes).toEqual([])
+      // Guard before fetch: no directory read, no Membership call.
+      expect(env.DIRECTORY.fetch).not.toHaveBeenCalled()
       expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
     },
   )
