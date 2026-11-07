@@ -384,12 +384,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           <ul className="space-y-1 text-sm text-indigo-700 dark:text-indigo-300">
                             <li>
                               • Visibility can be &apos;network&apos; (the
-                              default for new profiles), meaning organizers of
-                              any organization on the konf platform can see the
-                              profile in a speaker directory, or
-                              &apos;private&apos; (which opts out, so only
-                              conferences you submit to see it). You can change
-                              it at any time
+                              default for new profiles), meaning organizers
+                              (owners and admins) of any organization on the
+                              konf platform can see the profile in a speaker
+                              directory, or &apos;private&apos; (which opts out,
+                              so only conferences you submit to see it). You can
+                              change it at any time
                             </li>
                             <li>
                               • Profiles imported from earlier speaker records
@@ -1765,12 +1765,13 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </strong>
                               : When your global speaker profile visibility is
                               set to &apos;network&apos; (the default for new
-                              profiles), organizers of any organization on the
-                              konf platform can see your profile in a speaker
-                              directory. The directory never shares email or
-                              account/identity data. You can opt out by changing
-                              visibility to &apos;private&apos; at any time, so
-                              only conferences you submit to see it.
+                              profiles), organizers (owners and admins) of any
+                              organization on the konf platform can see your
+                              profile in a speaker directory. The directory
+                              never shares email or account/identity data. You
+                              can opt out by changing visibility to
+                              &apos;private&apos; at any time, so only
+                              conferences you submit to see it.
                             </p>
                           </div>
                           <div className="rounded-lg bg-yellow-50 p-3 dark:bg-yellow-900/20">
