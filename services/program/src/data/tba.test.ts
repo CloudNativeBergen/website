@@ -96,7 +96,7 @@ describe('SanityProgramSource.program (code layer)', () => {
     const slots = (await source.program(tenant))[0].slots
     expect(slots.map((s) => s.talkStatus)).toEqual([
       'PENDING',
-      'PENDING',
+      'WITHDRAWN',
       'CONFIRMED',
     ])
     for (const s of slots.slice(0, 2))
