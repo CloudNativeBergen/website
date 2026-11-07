@@ -1,7 +1,7 @@
 // Identity entry: Better Auth under /api/auth, the login handoff under
 // /handoff, its error page at /error, the linked-accounts page at /account, the RPC entrypoints, and 404 for everything else.
 import { WorkerEntrypoint } from 'cloudflare:workers'
-import type { ConferencePushEvent } from '@runkonf/tenancy'
+import type { ConferencePushEvent } from './data/push'
 import { createAuth, createData } from './data'
 import { notify, type PushEnv } from './data/push'
 import { accountPage } from './account-page'

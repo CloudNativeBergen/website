@@ -3,7 +3,15 @@
 // the response via waitUntil and can never fail the write that raised it.
 // `cloudflare:workers` is imported lazily: api/scripts/compose.ts loads the
 // subgraph schema under Node, where the module does not exist.
-import type { ConferencePushEvent } from '@runkonf/tenancy'
+export type ConferencePushEvent =
+  | {
+      type: 'conference.settings_changed'
+      organizationId: string
+      conferenceId: string
+      conferenceName: string | null
+      actorId: string
+    }
+  | { type: 'parity.drift'; conferenceIds: string[] }
 
 export interface PushBinding {
   send(event: ConferencePushEvent): Promise<void>
