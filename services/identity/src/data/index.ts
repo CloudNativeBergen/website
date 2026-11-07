@@ -15,6 +15,7 @@ import type { AuthEnv } from './auth'
 import { createMembers } from './members'
 export { MemberError, type MemberRole } from './members'
 import { syncMembers, type SyncEnv } from './member-sync'
+import { memberSyncStatus } from './job-status'
 import { createPushSubscriptions } from './push-subscriptions'
 
 /** What the gateway needs per request to mint an envelope. */
@@ -37,6 +38,7 @@ const TENANT_QUERY =
 export function createData(env: DataEnv) {
   const db = rawDb(env.DB)
   return {
+    memberSyncStatus: () => memberSyncStatus(env.DB),
     /** Grants missing organizer memberships from Sanity (cron, #1907). */
     syncMembers: () => syncMembers(env),
     /** Membership writes for the subgraph (#1923): member and operator paths. */

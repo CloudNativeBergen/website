@@ -9,6 +9,7 @@
 // The one conference file that reads Sanity (eslint.config.js, #1892).
 import { createClient } from '@sanity/client'
 import { emit } from '../push'
+import { recordJobStatus } from './job-status'
 import type { Row, SanityConference } from '../../scripts/backfill'
 
 export interface ScheduledEnv {
@@ -107,6 +108,15 @@ export async function scheduled(env: ScheduledEnv, now = Date.now()) {
       }),
     )
     await alert(env, 'Conference D1 parity: UNKNOWN (read failed, see logs)')
+    await recordJobStatus(env.DB, {
+      job: 'conference.parity',
+      ran_at: now,
+      status: 'unknown',
+      checked: null,
+      affected: null,
+      granted: null,
+      detail: null,
+    })
     return
   }
   const { rows, total, drift } = result
@@ -134,4 +144,15 @@ export async function scheduled(env: ScheduledEnv, now = Date.now()) {
           .map((d) => `${d.conferenceId}: ${d.fields.join(', ')}`)
           .join('\n'),
     )
+  await recordJobStatus(env.DB, {
+    job: 'conference.parity',
+    ran_at: now,
+    status: drift.length ? 'drift' : 'ok',
+    checked: rows,
+    affected: drift.length,
+    granted: null,
+    // Ids and column names only, as logged; '(missing in sanity)' kept so a
+    // vanished document is not an empty field list.
+    detail: JSON.stringify(drift),
+  })
 }

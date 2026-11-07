@@ -676,8 +676,9 @@ beforeAll(async () => {
       fetch: (url: string, init?: RequestInit) => {
         const body = String(init?.body)
         // Label each call by the root fields it sends; `name` alone means a
-        // root other than the entity path or the conference subgraph's own
-        // conferenceEditions, which is served whatever the label says.
+        // root other than the entity path, the conference subgraph's own
+        // conferenceEditions, or an operator root (#1917): those are served
+        // whatever the label says.
         const op = parse(JSON.parse(body).query).definitions.find(
           (d) => d.kind === Kind.OPERATION_DEFINITION,
         ) as OperationDefinitionNode
@@ -685,7 +686,14 @@ beforeAll(async () => {
           x.kind === Kind.FIELD ? [x.name.value] : [],
         )
         for (const f of roots) calls.add(`${name}:${f}`)
-        if (roots.some((f) => f !== '_entities' && f !== 'conferenceEditions'))
+        if (
+          roots.some(
+            (f) =>
+              f !== '_entities' &&
+              f !== 'conferenceEditions' &&
+              !OPERATOR_QUERIES.has(f),
+          )
+        )
           calls.add(name)
         lastEnvelope[name] = new Headers(init?.headers).get(ENVELOPE_HEADER)
         currentRoots[name] = roots.join(',')

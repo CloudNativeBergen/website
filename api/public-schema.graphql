@@ -123,6 +123,19 @@ type ConferenceEdition {
   primaryHost: String
 }
 
+type ConferenceParityDrift {
+  conferenceId: ID!
+  fields: [String!]!
+}
+
+type ConferenceParityStatus {
+  affected: Int
+  checked: Int
+  drifted: [ConferenceParityDrift!]!
+  ranAt: String!
+  status: String!
+}
+
 type Mutation {
   """Patches the request's Conference. Requires an org owner or admin."""
   updateConference(input: ConferencePatch!): Conference!
@@ -160,11 +173,13 @@ type Query {
   The request's organization's editions, newest first. Unpublished and unlisted editions only for org members.
   """
   conferenceEditions: [ConferenceEdition!]!
+  conferenceParityStatus: ConferenceParityStatus
 
   """
   The session org's pending invitations. Owners, admins and operators only; null otherwise.
   """
   invitations: [PendingInvitation!]
+  memberSyncStatus: MemberSyncStatus
 
   """
   The session org's members. Null unless the caller is a member or an operator acting for the tenant.
@@ -354,6 +369,23 @@ type MemberInvitation {
   id: ID
   role: String
   status: String
+}
+
+type MemberSyncDrift {
+  missingInIdentity: Int!
+  missingInSanity: Int!
+  orgId: ID!
+  ownersBelowTwo: Int
+  roleMismatch: Int!
+}
+
+type MemberSyncStatus {
+  affected: Int
+  checked: Int
+  drifted: [MemberSyncDrift!]!
+  granted: Int
+  ranAt: String!
+  status: String!
 }
 
 type OrganizationMember {
