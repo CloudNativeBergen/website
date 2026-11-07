@@ -12,6 +12,12 @@ type Conference {
   cfpNotificationChannel: String
   cfpNotifyDate: String
   cfpStartDate: String
+
+  """Org members only."""
+  checkinCustomerId: Int
+
+  """Org members only."""
+  checkinEventId: Int
   city: String
   contactEmail: String
   country: String
@@ -26,6 +32,9 @@ type Conference {
   organizerOrgNumber: String
   primaryColor: String
   programDate: String
+
+  """Free ticket types shown on the public /tickets page."""
+  publicFreeTicketIds: [Int!]
   recordingsLiveDate: String
   registrationCloseDate: String
   registrationEnabled: Boolean
@@ -55,7 +64,32 @@ type Conference {
   sponsorRegistrationLink: String
   startDate: String
   tagline: String
+
+  """Org members only."""
+  ticketCapacity: Int
+
+  """Org members only."""
+  ticketSalesStartDate: String
+
+  """Org members only."""
+  ticketTargetCurve: String
+
+  """Org members only."""
+  ticketTargetMilestones: [TicketTargetMilestone!]
+
+  """Org members only."""
+  ticketTargetsEnabled: Boolean
+
+  """Org members only."""
+  ticketTypeRoles: [TicketTypeRole!]
+  ticketingProvider: String
   title: String
+
+  """Org members only."""
+  titoAccountSlug: String
+
+  """Org members only."""
+  titoEventSlug: String
 
   """Org members only."""
   travelSupportBudget: Float
@@ -69,6 +103,19 @@ type Conference {
 
   """Org members only."""
   volunteerSlackInviteUrl: String
+  workshopEarlyAccessTicketTypes: [String!]
+  workshopRegistrationEnd: String
+  workshopRegistrationSponsorStart: String
+  workshopRegistrationStart: String
+
+  """Org members only."""
+  workshopReminderLastSentAt: String
+
+  """Org members only."""
+  workshopReminderLastSentCount: Int
+
+  """Org members only."""
+  workshopReminderReservedAt: String
 
   """Portable Text as JSON (Sanity shape)."""
   announcement: String
@@ -233,6 +280,21 @@ type Query {
   organizations(after: String, first: Int = 100): [Organization!]
   health: String!
   rolloutFlags: SiteRolloutFlags
+}
+
+type TicketTargetMilestone {
+  date: String
+  label: String
+  targetPercentage: Float
+}
+
+"""
+Absent answers are null, not false: an unanswered question is not a no.
+"""
+type TicketTypeRole {
+  admits: Boolean
+  grantsWorkshop: Boolean
+  typeName: String
 }
 
 type Faq {
@@ -695,6 +757,12 @@ input ConferencePatch {
   cfpNotificationChannel: String
   cfpNotifyDate: String
   cfpStartDate: String
+
+  """One or more."""
+  checkinCustomerId: Int
+
+  """One or more."""
+  checkinEventId: Int
   city: String
   contactEmail: String
   country: String
@@ -705,6 +773,7 @@ input ConferencePatch {
   organizerOrgNumber: String
   primaryColor: String
   programDate: String
+  publicFreeTicketIds: [Int!]
 
   """False when Sanity marks the edition cancelled or archived. Not null."""
   published: Boolean
@@ -727,7 +796,20 @@ input ConferencePatch {
   sponsorRegistrationLink: String
   startDate: String
   tagline: String
+
+  """One or more."""
+  ticketCapacity: Int
+  ticketSalesStartDate: String
+  ticketTargetCurve: String
+  ticketTargetMilestones: [TicketTargetMilestoneInput!]
+  ticketTargetsEnabled: Boolean
+
+  """The whole list, in order: the first entry for a name wins."""
+  ticketTypeRoles: [TicketTypeRoleInput!]
+  ticketingProvider: String
   title: String
+  titoAccountSlug: String
+  titoEventSlug: String
 
   """Zero or more."""
   travelSupportBudget: Float
@@ -739,6 +821,22 @@ input ConferencePatch {
   visibility: String
   volunteerRegistrationLink: String
   volunteerSlackInviteUrl: String
+  workshopEarlyAccessTicketTypes: [String!]
+  workshopRegistrationEnd: String
+  workshopRegistrationSponsorStart: String
+  workshopRegistrationStart: String
+}
+
+input TicketTargetMilestoneInput {
+  date: String!
+  label: String
+  targetPercentage: Float!
+}
+
+input TicketTypeRoleInput {
+  admits: Boolean
+  grantsWorkshop: Boolean
+  typeName: String!
 }
 
 input PushSubscriptionInput {

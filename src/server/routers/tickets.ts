@@ -446,6 +446,17 @@ async function setTicketTypeRoles(
         // position exact: it is the position in the array this read saw.
         patch.set({ [`ticketTypeRoles[${index}].admits`]: admits })
       }
+      // D1 first for a d1_write tenant (#2080): the whole list this patch
+      // produces. A Sanity conflict retries and writes D1 again from the
+      // re-read; a D1 failure throws before Sanity is touched.
+      await writeMovedToD1(conferenceId, {
+        ticketTypeRoles:
+          index === -1
+            ? [...roles, { typeName, admits }]
+            : roles.map((role, i) =>
+                i === index ? { ...role, admits } : role,
+              ),
+      })
       try {
         return await patch.commit()
       } catch (error) {
@@ -543,6 +554,14 @@ async function setTicketTypeRoles(
     const kept = entries.filter(
       (entry) => 'admits' in entry || 'grantsWorkshop' in entry,
     )
+
+    // D1 first, as above: the list the unset-then-insert below produces.
+    await writeMovedToD1(conferenceId, {
+      ticketTypeRoles: [
+        ...roles.filter((role) => !unsetNames.has(role.typeName)),
+        ...kept,
+      ],
+    })
 
     try {
       const patch = clientWrite
@@ -903,6 +922,10 @@ export const ticketsRouter = router({
             message: 'No updates provided',
           })
         }
+
+        // D1 first for a d1_write tenant (#2080); a failure there throws
+        // before Sanity is touched.
+        await writeMovedToD1(conferenceId, updates)
 
         try {
           const result = await clientWrite

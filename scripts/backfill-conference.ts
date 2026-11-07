@@ -9,7 +9,7 @@
  *
  * Usage (see also docs/DATA_OWNERSHIP.md, "Running the conference backfill"):
  *   pnpm backfill:conference -- --dry-run
- *   pnpm backfill:conference -- --only settings-phase2 [--out <dir>]
+ *   pnpm backfill:conference -- --only settings-phase3 [--out <dir>]
  *   pnpm backfill:conference -- --all-columns [--out <dir>]
  *
  * Needs SANITY_API_TOKEN_READ (`fnox exec -- pnpm backfill:conference ...`).
@@ -110,10 +110,12 @@ async function main() {
     updateColumns,
     SETTINGS_PHASE1_COLUMNS,
     SETTINGS_PHASE2_COLUMNS,
+    SETTINGS_PHASE3_COLUMNS,
   } = await import('../services/conference/scripts/backfill')
   const opts = parseArgs(process.argv.slice(2), {
     'settings-phase1': SETTINGS_PHASE1_COLUMNS,
     'settings-phase2': SETTINGS_PHASE2_COLUMNS,
+    'settings-phase3': SETTINGS_PHASE3_COLUMNS,
   })
   requireReadToken()
   if (opts.warning) console.warn(`\n${opts.warning}\n`)

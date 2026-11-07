@@ -1,3 +1,4 @@
+import { writeMovedToD1 } from '@/lib/konf-api/conference-write'
 import { z } from 'zod'
 import { formatDateTimeSafe, formatRegistrationInstant } from '@/lib/time'
 import {
@@ -1939,6 +1940,10 @@ export const workshopRouter = router({
           // only if the document is still the one that was read. No retry: a
           // second pass would judge the organizer's change against times they
           // have not seen.
+          // D1 first for a d1_write tenant (#2080); a failure throws before
+          // Sanity is touched. A Sanity conflict below leaves D1 ahead, as
+          // any post-D1 Sanity failure does (#1881 decision 4); parity flags it.
+          await writeMovedToD1(conferenceId, { ...changes })
           try {
             await clientWrite
               .patch(conferenceId)
@@ -2019,6 +2024,10 @@ export const workshopRouter = router({
           (type) => typeKey(type) !== key,
         )
         if (input.earlyAccess) types.push(input.typeName)
+        // D1 first for a d1_write tenant (#2080), as above.
+        await writeMovedToD1(conferenceId, {
+          workshopEarlyAccessTicketTypes: types,
+        })
         try {
           await clientWrite
             .patch(conferenceId)

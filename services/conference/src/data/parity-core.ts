@@ -3,6 +3,7 @@
 import {
   mapBackfill,
   SETTINGS_PHASE2_COLUMNS,
+  SETTINGS_PHASE3_COLUMNS,
   SETTINGS_PROJECTION,
   type Row,
   type SanityConference,
@@ -25,6 +26,10 @@ export const PARITY_COLUMNS = [
   'organizer_org_number',
   'analytics_pirsch_code',
   ...SETTINGS_PHASE2_COLUMNS,
+  // Phase 3 (#2080) minus the reminder state, which only the reminder writes,
+  // to Sanity, until its own D1 write lands with the read flip; the CLI
+  // (scripts/parity-d1.ts) still compares it.
+  ...SETTINGS_PHASE3_COLUMNS.filter((c) => !c.startsWith('workshop_reminder_')),
 ] as const satisfies readonly (keyof Row)[]
 
 // groq-global: a platform-wide sweep reads every published conference.
@@ -37,9 +42,34 @@ export const QUERY = `*[_type == "conference" && _id in $ids]{
 
 // The backfill's normalisation: trimmed, '' / null / absent are one value,
 // arrays compared as JSON (D1 stores social_links as JSON text).
+// The phase 3 lists are compared as sets: order carries no meaning for ids,
+// type names or dated milestones. ticket_type_roles keeps its order, because
+// the first entry for a type name is the one classifyTicket reads.
+const SETS: Partial<Record<keyof Row, (a: never, b: never) => number>> = {
+  public_free_ticket_ids: (a: number, b: number) => a - b,
+  workshop_early_access_ticket_types: (a: string, b: string) =>
+    a.localeCompare(b),
+  ticket_target_milestones: (a: object, b: object) =>
+    JSON.stringify(a).localeCompare(JSON.stringify(b)),
+}
+const LISTS = new Set<keyof Row>([
+  'ticket_type_roles',
+  ...(Object.keys(SETS) as (keyof Row)[]),
+])
 function norm(col: keyof Row, v: unknown): string {
   if (col === 'social_links')
     return JSON.stringify(typeof v === 'string' ? JSON.parse(v) : (v ?? []))
+  if (LISTS.has(col)) {
+    const list = (typeof v === 'string' ? JSON.parse(v) : (v ?? [])) as never[]
+    const by = SETS[col]
+    return JSON.stringify(
+      by
+        ? [...new Set(list.map((x) => JSON.stringify(x)))]
+            .map((x) => JSON.parse(x) as never)
+            .sort(by)
+        : list,
+    )
+  }
   if (typeof v === 'string') return JSON.stringify(v.trim() || null)
   return JSON.stringify(v ?? null)
 }

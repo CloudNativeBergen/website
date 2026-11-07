@@ -27,6 +27,7 @@ const WRITERS = new Set(['owner', 'admin'])
  * envelope always carries `scopes: []`, and the subgraph verifies the signature.
  */
 const OPERATOR_SCOPE = 'platform:operator'
+const BINDING = ['checkinEventId', 'titoAccountSlug', 'titoEventSlug'] as const
 
 const fail = (message: string, code: string) =>
   createGraphQLError(message, { extensions: { code } })
@@ -106,6 +107,17 @@ class Conferences extends ScopedRepository {
     )
     const row = await this.db.query.conferences.findFirst({ where })
     if (!row) throw fail('conference not found', 'NOT_FOUND')
+    // PLATFORM-SET ONLY (#745, #2080): every tenant shares the platform's
+    // ticketing credentials, so an org admin rebinding the vendor event could
+    // squat another org's. Re-sending the stored value is not a change.
+    const rebinds = BINDING.some(
+      (k) => k in patch && (patch[k] ?? null) !== (row[k] ?? null),
+    )
+    if (rebinds && !operator)
+      throw fail(
+        'only a platform operator can change the ticketing event binding',
+        'FORBIDDEN',
+      )
     // A patch that changes nothing is a no-op: updated_at stays put.
     const changes = Object.entries(patch).some(
       ([k, v]) =>

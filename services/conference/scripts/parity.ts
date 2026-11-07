@@ -49,6 +49,13 @@ export const FIELDS = [
   'contactEmail',
   'cfpEmail',
   'sponsorEmail',
+  // Settings phase 3 (#2080), the public ones; members-only ones as above.
+  'ticketingProvider',
+  'publicFreeTicketIds',
+  'workshopRegistrationSponsorStart',
+  'workshopRegistrationStart',
+  'workshopRegistrationEnd',
+  'workshopEarlyAccessTicketTypes',
 ] as const
 
 const bool = (v: 0 | 1 | null) => (v === null ? null : v === 1)
@@ -89,6 +96,16 @@ export function expected(row: Row | undefined): ApiConference {
     contactEmail: row.contact_email,
     cfpEmail: row.cfp_email,
     sponsorEmail: row.sponsor_email,
+    ticketingProvider: row.ticketing_provider,
+    publicFreeTicketIds: row.public_free_ticket_ids
+      ? JSON.parse(row.public_free_ticket_ids)
+      : null,
+    workshopRegistrationSponsorStart: row.workshop_registration_sponsor_start,
+    workshopRegistrationStart: row.workshop_registration_start,
+    workshopRegistrationEnd: row.workshop_registration_end,
+    workshopEarlyAccessTicketTypes: row.workshop_early_access_ticket_types
+      ? JSON.parse(row.workshop_early_access_ticket_types)
+      : null,
   }
 }
 

@@ -665,6 +665,21 @@ export const conferenceRouter = router({
       // `ticketId` is a zod-validated positive integer, so interpolating it
       // into the attribute filter cannot inject anything.
       const occurrence = `publicFreeTicketIds[@ == ${input.ticketId}]`
+      // D1 first for a d1_write tenant (#2080). D1 takes the whole list, so
+      // this one read: a concurrent toggle can be lost in D1 (never in
+      // Sanity, whose ops below carry no read) and parity reports it.
+      // ponytail: whole-list D1 write; a per-id D1 mutation before the read flip.
+      const stored =
+        (await clientReadUncached.fetch<number[] | null>(
+          // groq-global: keyed by the SERVER-resolved conference id.
+          `*[_type == "conference" && _id == $id][0].publicFreeTicketIds`,
+          { id: conferenceId },
+          { cache: 'no-store' },
+        )) ?? []
+      const rest = stored.filter((id) => id !== input.ticketId)
+      await writeMovedToD1(conferenceId, {
+        publicFreeTicketIds: input.visible ? [...rest, input.ticketId] : rest,
+      })
       try {
         const tx = clientWrite.transaction()
         if (input.visible) {

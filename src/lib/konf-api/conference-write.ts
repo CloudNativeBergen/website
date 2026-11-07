@@ -89,6 +89,26 @@ const SETTINGS_PHASE2 = new Set([
 ])
 
 /**
+ * Settings phase 3 (#2080), ticket setup: dual-written like phase 2 until the
+ * read flip. `ticketTargets` is flattened in movedConferencePatch. The
+ * reminder state is not here: only the reminder writes it, to Sanity.
+ */
+const SETTINGS_PHASE3 = new Set([
+  'ticketingProvider',
+  'checkinCustomerId',
+  'checkinEventId',
+  'titoAccountSlug',
+  'titoEventSlug',
+  'ticketCapacity',
+  'ticketTypeRoles',
+  'publicFreeTicketIds',
+  'workshopRegistrationSponsorStart',
+  'workshopRegistrationStart',
+  'workshopRegistrationEnd',
+  'workshopEarlyAccessTicketTypes',
+])
+
+/**
  * Whether a conference settings input key represents a field moved to D1 (#1997).
  * Sanity groups primaryColor/accentColor under `theme`, and published is
  * derived from `lifecycleStatus`.
@@ -142,11 +162,30 @@ export function movedConferencePatch(
       // Sanity replaces the whole object, so an absent flag is an unset.
       const t = v as { showVanityMetrics?: boolean } | null
       out.showVanityMetrics = t?.showVanityMetrics ?? null
+    } else if (k === 'ticketTargets') {
+      // Sanity replaces the whole object, so an absent part is an unset.
+      const t = v as {
+        enabled?: boolean
+        salesStartDate?: string
+        targetCurve?: string
+        milestones?: unknown[]
+      } | null
+      out.ticketTargetsEnabled = t?.enabled ?? null
+      out.ticketSalesStartDate = t?.salesStartDate ?? null
+      out.ticketTargetCurve = t?.targetCurve ?? null
+      out.ticketTargetMilestones = t?.milestones ?? null
+    } else if (k === 'ticketTypeRoles') {
+      // D1 keeps no `_key`.
+      out[k] =
+        (v as Record<string, unknown>[] | null)?.map(
+          ({ _key: _, ...role }) => role,
+        ) ?? null
     } else if (
       MOVED.has(k) ||
       SETTINGS.has(k) ||
       SETTINGS_PRIVATE.has(k) ||
-      SETTINGS_PHASE2.has(k)
+      SETTINGS_PHASE2.has(k) ||
+      SETTINGS_PHASE3.has(k)
     ) {
       out[k] = v
     }
