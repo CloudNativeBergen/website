@@ -10,6 +10,7 @@
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
 import { normalizeDomain } from '@/lib/conference/domains'
+import { mergeConference } from '@/lib/conference/merge'
 import { domainVerificationId, generateVerificationToken } from './challenge'
 import { isPlatformZoneHost } from './platform'
 import { GRANDFATHER_GRACE_DAYS } from './policy'
@@ -364,5 +365,9 @@ export async function getDomainClaim(id: string): Promise<DomainClaim | null> {
   )
   if (!raw) return null
   const { conference, ...record } = raw
-  return { record: hydrate(record), conference: conference ?? null }
+  return {
+    record: hydrate(record),
+    // The vendor from D1 when flagged (#2080).
+    conference: conference ? await mergeConference(conference) : null,
+  }
 }

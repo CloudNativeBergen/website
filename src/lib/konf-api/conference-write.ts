@@ -89,9 +89,12 @@ const SETTINGS_PHASE2 = new Set([
 ])
 
 /**
- * Settings phase 3 (#2080), ticket setup: dual-written like phase 2 until the
- * read flip. `ticketTargets` is flattened in movedConferencePatch. The
- * reminder state is not here: only the reminder writes it, to Sanity.
+ * Settings phase 3 (#2080), ticket setup: written to D1 AND Sanity. Some are
+ * read from D1 now (konf-api.ts), but Sanity stays the fallback when that read
+ * fails, so its copy must not go stale until the D1 read is proven in
+ * production. `ticketTargets` is flattened in movedConferencePatch. The
+ * reminder state is not here: only the reminder writes it (D1 lock for a
+ * d1_write tenant).
  */
 const SETTINGS_PHASE3 = new Set([
   'ticketingProvider',
@@ -280,20 +283,24 @@ const MUTATION =
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
 const MUTATION_DOC = graphql(MUTATION)
 
-/** One gateway mutation as the signed-in user. Throws on HTTP or GraphQL errors. */
+/**
+ * One gateway mutation as the signed-in user, or with no user on the site's
+ * server lane alone (`userJwt` null). Throws on HTTP or GraphQL errors.
+ */
 async function mutate<T>(
   host: string,
   query: string,
   variables: Record<string, unknown>,
-  userJwt: string,
+  userJwt: string | null,
 ): Promise<T | undefined> {
   const url = konfApiUrl()
   if (!url) throw new Error('KONF_API_URL is not set on this environment')
+  const incoming = await headers().catch(() => undefined)
   const res = await fetch(url, {
     method: 'POST',
     headers: {
-      ...(await konfApiHeaders(host, await headers())),
-      authorization: `Bearer ${userJwt}`,
+      ...(await konfApiHeaders(host, incoming)),
+      ...(userJwt && { authorization: `Bearer ${userJwt}` }),
     },
     body: JSON.stringify({ query, variables }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -350,4 +357,64 @@ export async function setLifecycleViaApi(
   )
   const id = data?.setConferenceLifecycle?.id
   if (id !== conferenceId) throw new Error(`conference id mismatch: ${id}`)
+}
+
+const RESERVE_REMINDER =
+  `mutation { reserveWorkshopReminder { token retryAfterMs } }` as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
+const RESERVE_REMINDER_DOC = graphql(RESERVE_REMINDER)
+const RELEASE_REMINDER =
+  `mutation($t: String!) { releaseWorkshopReminder(token: $t) }` as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
+const RELEASE_REMINDER_DOC = graphql(RELEASE_REMINDER)
+const RECORD_REMINDER =
+  `mutation($at: String!, $n: Int!) { recordWorkshopReminder(sentAt: $at, count: $n) }` as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
+const RECORD_REMINDER_DOC = graphql(RECORD_REMINDER)
+
+/**
+ * The workshop reminder's hourly lock in D1 (#2080): one conditional UPDATE
+ * in the subgraph, so of concurrent presses exactly one gets a token. Site
+ * lane only (the router has admitted the workshop admin). Throws on failure.
+ */
+export async function reserveReminderViaApi(
+  host: string,
+): Promise<{ token: string | null; retryAfterMs: number | null }> {
+  const data = await mutate<ResultOf<typeof RESERVE_REMINDER_DOC>>(
+    host,
+    RESERVE_REMINDER,
+    {},
+    null,
+  )
+  const r = data?.reserveWorkshopReminder
+  if (!r || (!r.token && r.retryAfterMs == null))
+    throw new Error('no reminder reservation in the answer')
+  return { token: r.token ?? null, retryAfterMs: r.retryAfterMs ?? null }
+}
+
+/** Gives the hour back if `token` still holds it. Throws on failure. */
+export async function releaseReminderViaApi(
+  host: string,
+  token: string,
+): Promise<void> {
+  await mutate<ResultOf<typeof RELEASE_REMINDER_DOC>>(
+    host,
+    RELEASE_REMINDER,
+    { t: token },
+    null,
+  )
+}
+
+/** Stores the last send. Throws on failure. */
+export async function recordReminderViaApi(
+  host: string,
+  sentAt: string,
+  count: number,
+): Promise<void> {
+  await mutate<ResultOf<typeof RECORD_REMINDER_DOC>>(
+    host,
+    RECORD_REMINDER,
+    { at: sentAt, n: count },
+    null,
+  )
 }

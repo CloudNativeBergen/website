@@ -54,7 +54,9 @@ function probeError(err: unknown): string {
 }
 
 async function requireConference() {
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || !conference?._id) {
     throw new TRPCError({
       code: 'NOT_FOUND',
@@ -70,6 +72,7 @@ export const statusRouter = router({
       const { conference, error } = await getConferenceForCurrentDomain({
         organizers: true,
         sponsors: true,
+        includeTicketSetup: true,
       })
 
       if (error || !conference?._id) {

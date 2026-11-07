@@ -83,7 +83,9 @@ async function emailDecision(
   notes: string | undefined,
 ): Promise<void> {
   if (!speaker?.email) return
-  const { conference } = await getConferenceForCurrentDomain()
+  const { conference } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (!conference || conference._id !== conferenceId) return
   runAfterResponse(async () => {
     await sendTravelSupportDecisionEmail({
@@ -104,7 +106,9 @@ async function requireTravelSupportConferenceId(
   speakerId: string,
   requestedId: string | undefined,
 ): Promise<string> {
-  const { conference, error: confError } = await getConferenceForCurrentDomain()
+  const { conference, error: confError } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (confError || !conference?._id) {
     throw new TRPCError({
       code: 'INTERNAL_SERVER_ERROR',
@@ -704,7 +708,7 @@ export const travelSupportRouter = router({
     list: adminProcedure.query(async () => {
       try {
         const { conference, error: confError } =
-          await getConferenceForCurrentDomain()
+          await getConferenceForCurrentDomain({ includeTicketSetup: true })
         if (confError || !conference?._id) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -977,7 +981,7 @@ export const travelSupportRouter = router({
     getSpeakersRequiringSupport: adminProcedure.query(async () => {
       try {
         const { conference, error: confError } =
-          await getConferenceForCurrentDomain()
+          await getConferenceForCurrentDomain({ includeTicketSetup: true })
         if (confError || !conference?._id) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',

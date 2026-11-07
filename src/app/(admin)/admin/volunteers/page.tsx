@@ -10,7 +10,9 @@ import { VolunteerAdminPage } from '@/components/volunteer'
 export default async function AdminVolunteersPage() {
   const denied = await denyNonOrganizer()
   if (denied) return denied
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || !conference) {
     return (
       <ErrorDisplay

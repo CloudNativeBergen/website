@@ -1896,6 +1896,7 @@ describe('proposal router', () => {
 
       expect(getConferenceById).toHaveBeenCalledWith('conf-of-the-talk', {
         includeSpeakerRegistrationLink: true,
+        includeTicketSetup: true,
       })
       expect(eventBus.publish).toHaveBeenCalledTimes(1)
       const event = vi.mocked(eventBus.publish).mock.calls[0][0] as any

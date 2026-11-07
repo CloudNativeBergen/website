@@ -11,7 +11,9 @@ import { Status, type ProposalExisting } from '@/lib/proposal/types'
 import type { Speaker } from '@/lib/speaker/types'
 
 export default async function AdminBadgePage() {
-  const { conference, error } = await getConferenceForCurrentDomain({})
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
 
   // FAILURE FIRST, THEN THE GATE. `getConferenceForCurrentDomain` returns a
   // TRUTHY `{} as Conference` alongside its error, so an entitlement check

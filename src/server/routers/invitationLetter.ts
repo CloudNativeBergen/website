@@ -32,7 +32,7 @@ export const invitationLetterRouter = router({
     .input(IssueInvitationLetterSchema)
     .mutation(async ({ input, ctx }) => {
       const { conference, error: conferenceError } =
-        await getConferenceForCurrentDomain()
+        await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
       if (conferenceError || !conference) {
         throw new TRPCError({
@@ -176,7 +176,7 @@ export const invitationLetterRouter = router({
 
   list: adminProcedure.query(async () => {
     const { conference, error: conferenceError } =
-      await getConferenceForCurrentDomain()
+      await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
     if (conferenceError || !conference) {
       throw new TRPCError({

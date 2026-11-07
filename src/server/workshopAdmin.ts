@@ -31,7 +31,9 @@ export const workshopAdminProcedure = adminProcedure.use(async ({ next }) => {
  * and must refuse where creating the link on the sponsor's record is refused.
  */
 export async function requireWorkshopsEnabled(): Promise<void> {
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (!(await isWorkshopsEnabledForConference(error ? null : conference))) {
     throw new TRPCError({
       code: 'FORBIDDEN',

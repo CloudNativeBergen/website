@@ -140,7 +140,7 @@ export const marketingAssetRouter = router({
   filters: adminProcedure.query(async () => {
     const orgId = await requireCurrentOrgId()
     const [{ conference }, facets] = await Promise.all([
-      getConferenceForCurrentDomain(),
+      getConferenceForCurrentDomain({ includeTicketSetup: true }),
       listMarketingAssetFacets(orgId),
     ])
     return {

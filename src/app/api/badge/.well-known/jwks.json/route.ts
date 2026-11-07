@@ -39,7 +39,9 @@ export async function GET(): Promise<NextResponse> {
     }
 
     // Get conference data for domain context
-    const { domain } = await getConferenceForCurrentDomain()
+    const { domain } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     const baseUrl = domain.startsWith('http') ? domain : `https://${domain}`
 
     // Convert PEM public key to JWK format

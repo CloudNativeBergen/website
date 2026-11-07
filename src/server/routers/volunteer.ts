@@ -154,7 +154,9 @@ export const volunteerRouter = router({
         }
 
         try {
-          const { conference, error } = await getConferenceForCurrentDomain()
+          const { conference, error } = await getConferenceForCurrentDomain({
+            includeTicketSetup: true,
+          })
           if (!error && conference) {
             // Slack webhook round-trip, deferred past the response — but via
             // `after()`, never a bare floating promise. `notifyNewVolunteer`
@@ -751,6 +753,7 @@ export const volunteerRouter = router({
             const { conference: currentConf, error: confError } =
               await getConferenceForCurrentDomain({
                 includeVolunteerRegistrationLink: true,
+                includeTicketSetup: true,
               })
             if (confError || !currentConf) {
               throw new TRPCError({
@@ -908,6 +911,7 @@ export const volunteerRouter = router({
         const conferenceId = await resolveConferenceId()
         const { conference } = await getConferenceForCurrentDomain({
           includeVolunteerRegistrationLink: true,
+          includeTicketSetup: true,
         })
         if (conference?._id !== conferenceId) {
           throw new TRPCError({

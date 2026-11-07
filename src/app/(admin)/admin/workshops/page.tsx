@@ -22,7 +22,9 @@ export default async function WorkshopAdminPage() {
   // THE CONFERENCE THE GUARD AUTHORIZED: the request's conference as the
   // CACHED host mapping resolves it, which is what the guard above went by and
   // what every procedure this page's saves go through will patch.
-  const { conference: authorized } = await getConferenceForCurrentDomain()
+  const { conference: authorized } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
 
   // READ LIVE, past both cache layers (#1345): the registration card below is
   // the baseline of every save, which sends only what differs from it. The
@@ -31,7 +33,10 @@ export default async function WorkshopAdminPage() {
   // so an organizer who set a time back to what a stale card showed would
   // send nothing. One live read per view of this admin page.
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({ uncached: true })
+    await getConferenceForCurrentDomain({
+      uncached: true,
+      includeTicketSetup: true,
+    })
 
   const loadError = conferenceError ? (
     <ErrorDisplay

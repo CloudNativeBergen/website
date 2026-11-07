@@ -133,7 +133,9 @@ export const sessionFeedbackRouter = router({
       if (ctx.session?.isImpersonating) throw notFound()
       // Not `resolveConferenceId()`: the code's URL and window need the
       // conference's `domains` and `endDate` too. Fails closed the same way.
-      const { conference } = await getConferenceForCurrentDomain()
+      const { conference } = await getConferenceForCurrentDomain({
+        includeTicketSetup: true,
+      })
       if (!conference?._id) throw notFound()
       const result = await ensureFeedbackCode({
         talkId: input.talkId,
@@ -151,7 +153,9 @@ export const sessionFeedbackRouter = router({
    * comes back; hidden comments never do.
    */
   results: protectedProcedure.input(talkInput).query(async ({ ctx, input }) => {
-    const { conference } = await getConferenceForCurrentDomain()
+    const { conference } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     if (!conference?._id) throw notFound()
     const result = await readSpeakerResults({
       talkId: input.talkId,
@@ -176,7 +180,9 @@ export const sessionFeedbackRouter = router({
    * same NOT_FOUND as a missing one.
    */
   mintCode: adminProcedure.input(talkInput).mutation(async ({ input }) => {
-    const { conference } = await getConferenceForCurrentDomain()
+    const { conference } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     if (!conference?._id) throw notFound()
     const result = await ensureFeedbackCode({
       talkId: input.talkId,
@@ -192,7 +198,9 @@ export const sessionFeedbackRouter = router({
    * `mayMint` offers the Mint button. NOT_FOUND as {@link mintCode}.
    */
   adminCode: adminProcedure.input(talkInput).query(async ({ input }) => {
-    const { conference } = await getConferenceForCurrentDomain()
+    const { conference } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     if (!conference?._id) throw notFound()
     const result = await readFeedbackCode({
       talkId: input.talkId,
@@ -209,7 +217,9 @@ export const sessionFeedbackRouter = router({
 
   /** How many confirmed talks the bulk mint would give a code (#1459). */
   mintPreview: adminProcedure.query(async () => {
-    const { conference } = await getConferenceForCurrentDomain()
+    const { conference } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     if (!conference?._id) throw notFound()
     return countTalksWithoutCode({ conference, now: new Date() })
   }),
@@ -219,7 +229,9 @@ export const sessionFeedbackRouter = router({
    * (#1459). One talk failing does not stop the rest; the report names it.
    */
   mintAll: adminProcedure.mutation(async () => {
-    const { conference } = await getConferenceForCurrentDomain()
+    const { conference } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     if (!conference?._id) throw notFound()
     return mintConferenceFeedbackCodes({ conference })
   }),
@@ -303,7 +315,9 @@ export const sessionFeedbackRouter = router({
    * than the one the organizer confirmed (rotated by someone else since).
    */
   rotateCode: adminProcedure.input(rotateInput).mutation(async ({ input }) => {
-    const { conference } = await getConferenceForCurrentDomain()
+    const { conference } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     if (!conference?._id) throw notFound()
     const result = await rotateFeedbackCode({
       talkId: input.talkId,
@@ -334,7 +348,9 @@ export const sessionFeedbackRouter = router({
    * talk gets the same NOT_FOUND as a missing one.
    */
   adminTalk: adminProcedure.input(talkInput).query(async ({ input }) => {
-    const { conference } = await getConferenceForCurrentDomain()
+    const { conference } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     if (!conference?._id) throw notFound()
     const result = await readTalkFeedback({
       conference,
@@ -359,7 +375,9 @@ export const sessionFeedbackRouter = router({
     // An organizer impersonating a speaker (development only) must not
     // flag as them, like {@link ensureCode}.
     if (ctx.session?.isImpersonating) throw responseNotFound()
-    const { conference } = await getConferenceForCurrentDomain()
+    const { conference } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     if (!conference?._id) throw responseNotFound()
     const result = await flagResponse({
       talkId: input.talkId,

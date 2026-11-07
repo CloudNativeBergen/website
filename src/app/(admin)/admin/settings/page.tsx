@@ -139,6 +139,7 @@ export default async function AdminSettings() {
       includeSponsorRegistrationLink: true,
       includeSpeakerRegistrationLink: true,
       includeVolunteerRegistrationLink: true,
+      includeTicketSetup: true,
     })
 
   if (error) {

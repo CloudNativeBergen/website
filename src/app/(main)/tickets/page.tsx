@@ -120,7 +120,9 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
   cacheLife('hours')
   cacheTag('content:tickets')
 
-  const { conference, error, status } = await getConferenceForDomain(domain)
+  const { conference, error, status } = await getConferenceForDomain(domain, {
+    includeTicketSetup: true,
+  })
 
   if (conference?._id) {
     cacheTag(conferenceTag(conference._id))

@@ -201,7 +201,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
  * `getGalleryImages` — the two sibling reads on this exact code path — so the
  * CDN/live decision is threaded the same way for all three rather than each
  * growing its own convention. The homepage composer preview passes `false`
- * (`getConferenceForDomain({ uncached: true })`) so an organizer who just moved
+ * (`getConferenceForDomain({ uncached: true }, { includeTicketSetup: true })`) so an organizer who just moved
  * a sponsor to `closed-won` sees it immediately.
  *
  * Staleness is acceptable on the public path: this projects only `closed-won`

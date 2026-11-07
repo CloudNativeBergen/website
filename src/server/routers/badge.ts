@@ -208,7 +208,9 @@ export const badgeRouter = router({
 
         if (input.sendEmail !== false && !isDevelopment) {
           const { sendBadgeEmailWithRetry } = await import('@/lib/email/badge')
-          const { conference } = await getConferenceForCurrentDomain()
+          const { conference } = await getConferenceForCurrentDomain({
+            includeTicketSetup: true,
+          })
           if (conference) {
             const conferenceYear = conference.startDate
               ? new Date(conference.startDate).getFullYear().toString()
@@ -426,7 +428,7 @@ export const badgeRouter = router({
             conferenceData = badge.conference
           } else {
             const { conference: fetchedConference, error } =
-              await getConferenceForCurrentDomain()
+              await getConferenceForCurrentDomain({ includeTicketSetup: true })
             if (error || !fetchedConference) {
               throw new TRPCError({
                 code: 'NOT_FOUND',

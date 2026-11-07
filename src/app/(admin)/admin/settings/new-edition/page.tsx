@@ -20,6 +20,7 @@ export default async function NewEditionPage() {
     organizers: true,
     sponsorTiers: true,
     topics: true,
+    includeTicketSetup: true,
   })
 
   if (error) {

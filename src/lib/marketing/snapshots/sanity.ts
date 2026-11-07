@@ -13,6 +13,7 @@ import 'server-only'
 import { CONFERENCE_TIME_ZONE } from '@/lib/time'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { mergeConference } from '@/lib/conference/merge'
 import { resolveTicketingAdminAccess } from '@/lib/tickets/admin-access'
 import { parseTicketAmount } from '@/lib/tickets/amount'
 import type { ConferenceTicketingBinding } from '@/lib/tickets/provider'
@@ -281,7 +282,7 @@ export async function readProposalOutcomes(
  * The edition's ticket orders, for `ticketsSoldInWindow`.
  *
  * BY CONFERENCE ID, never by request domain. The cron sweeps every edition in
- * one request, so `getConferenceForCurrentDomain()` here would resolve the
+ * one request, so `getConferenceForCurrentDomain({ includeTicketSetup: true })` here would resolve the
  * DEPLOYMENT's conference and hand one tenant's ticket sales to all of them.
  * The binding is read by id and passed to the ticketing ACCESS resolver, which
  * is what keeps an unbound, uncredentialed or switched-off edition to "no
@@ -290,20 +291,28 @@ export async function readProposalOutcomes(
 export async function readTicketOutcomes(
   conferenceId: string,
 ): Promise<OutcomeTicket[]> {
-  const binding =
-    await clientReadUncached.fetch<ConferenceTicketingBinding | null>(
-      // groq-global-scoped: the tenant predicate IS `_id == $conferenceId` — this
-      // reads the conference document itself, which carries no `conference` ref.
-      `*[_type == "conference" && _id == $conferenceId][0]{
-      ticketingProvider, checkinCustomerId, checkinEventId,
+  const row = await clientReadUncached.fetch<
+    | (ConferenceTicketingBinding & {
+        _id: string
+        domains?: string[] | null
+        organization?: { _ref: string } | null
+      })
+    | null
+  >(
+    // groq-global-scoped: the tenant predicate IS `_id == $conferenceId` — this
+    // reads the conference document itself, which carries no `conference` ref.
+    `*[_type == "conference" && _id == $conferenceId][0]{
+      _id, domains, ticketingProvider, checkinCustomerId, checkinEventId,
       titoAccountSlug, titoEventSlug, organization
     }`,
-      { conferenceId },
-      { cache: 'no-store' },
-    )
-  if (!binding) {
+    { conferenceId },
+    { cache: 'no-store' },
+  )
+  if (!row) {
     throw new Error(`Conference ${conferenceId} could not be read`)
   }
+  // The binding from D1 when flagged (#2080).
+  const binding = await mergeConference(row, { ticketSetup: true })
   const access = await resolveTicketingAdminAccess(binding)
   if (access.state !== 'ready') {
     throw new Error(`Ticketing is ${access.state} for this edition`)

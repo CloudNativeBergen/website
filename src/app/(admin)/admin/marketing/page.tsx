@@ -22,7 +22,9 @@ export default async function MarketingPage() {
     )
   }
 
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || !conference?._id) {
     console.error('Error loading conference:', error)
     return (

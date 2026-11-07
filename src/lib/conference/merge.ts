@@ -1,6 +1,10 @@
 import 'server-only'
 import { findOutboundOrigin } from '@/lib/conference/baseUrl'
-import { mergeKonfApiConference, rolloutFlags } from '@/lib/conference/konf-api'
+import {
+  mergeKonfApiConference,
+  mergeTicketSetup,
+  rolloutFlags,
+} from '@/lib/conference/konf-api'
 import type { Conference } from '@/lib/conference/types'
 
 /** The fields a server-side Sanity conference row needs to be merged. */
@@ -14,9 +18,14 @@ export type ConferenceCandidate = {
  * Merge the D1-owned fields over a Sanity conference row when its tenant has
  * `apiRead`. The host comes from the row's own `domains[]`, never from a
  * request. Any error leaves the Sanity row untouched.
+ *
+ * `ticketSetup` also merges the members-only ticket setup from D1
+ * (`mergeTicketSetup`, #2080). Server-side readers only: never for a row that
+ * reaches a public page.
  */
 export async function mergeConference<T extends ConferenceCandidate>(
   conf: T,
+  { ticketSetup = false }: { ticketSetup?: boolean } = {},
 ): Promise<T> {
   try {
     const origin = findOutboundOrigin(conf)
@@ -31,7 +40,8 @@ export async function mergeConference<T extends ConferenceCandidate>(
       host,
       conf as unknown as Conference,
     )
-    return merged as unknown as T
+    if (!ticketSetup) return merged as unknown as T
+    return (await mergeTicketSetup(host, merged)) as unknown as T
   } catch (err) {
     console.warn(
       `[conference/merge] falling back to Sanity for ${conf._id}:`,
@@ -43,8 +53,9 @@ export async function mergeConference<T extends ConferenceCandidate>(
 
 export function mergeConferences<T extends ConferenceCandidate>(
   conferences: readonly T[],
+  options: { ticketSetup?: boolean } = {},
 ): Promise<T[]> {
-  return Promise.all(conferences.map((c) => mergeConference(c)))
+  return Promise.all(conferences.map((c) => mergeConference(c, options)))
 }
 
 const isDate = (d: unknown): d is string =>

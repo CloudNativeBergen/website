@@ -10,7 +10,7 @@ import { builder } from './builder'
 import { registerJobStatus } from './job-status'
 import { emit } from './push'
 import { createGraphQLError } from 'graphql-yoga'
-import type { ConferencePatch, ConferenceRow } from './data'
+import { SITE_SCOPE, type ConferencePatch, type ConferenceRow } from './data'
 import {
   milestone,
   ticketTypeRole,
@@ -183,6 +183,17 @@ const isMember = ({ envelope: e }: ResolverContext) =>
   e.typ === 'tenant' &&
   (!!e.orgRole?.trim() || e.scopes.includes('platform:operator'))
 
+/**
+ * The site's server lane (`site:server`, minted by the gateway only for a
+ * verified site assertion). The site already holds the Sanity copy of the
+ * phase 3 ticket setup with a full read token, and its readers include jobs
+ * and webhooks with no signed-in user (#2080), so the lane may read it.
+ */
+const isSiteLane = ({ envelope: e }: ResolverContext) =>
+  e.typ === 'tenant' && e.scopes.includes(SITE_SCOPE)
+const isMemberOrSite = (ctx: ResolverContext) =>
+  isMember(ctx) || isSiteLane(ctx)
+
 const Conference = builder.objectRef<ConferenceRow>('Conference').implement({
   fields: (t) => ({
     id: t.exposeID('conferenceId'),
@@ -273,7 +284,7 @@ const Conference = builder.objectRef<ConferenceRow>('Conference').implement({
         t.string({
           nullable: true,
           description: 'Org members only.',
-          resolve: (c, _, ctx) => (isMember(ctx) ? c[k] : null),
+          resolve: (c, _, ctx) => (isMemberOrSite(ctx) ? c[k] : null),
         }),
       ]),
     ),
@@ -283,26 +294,28 @@ const Conference = builder.objectRef<ConferenceRow>('Conference').implement({
         t.int({
           nullable: true,
           description: 'Org members only.',
-          resolve: (c, _, ctx) => (isMember(ctx) ? c[k] : null),
+          resolve: (c, _, ctx) => (isMemberOrSite(ctx) ? c[k] : null),
         }),
       ]),
     ),
     ticketTargetsEnabled: t.boolean({
       nullable: true,
       description: 'Org members only.',
-      resolve: (c, _, ctx) => (isMember(ctx) ? c.ticketTargetsEnabled : null),
+      resolve: (c, _, ctx) =>
+        isMemberOrSite(ctx) ? c.ticketTargetsEnabled : null,
     }),
     ticketTargetMilestones: t.field({
       type: [TicketTargetMilestone],
       nullable: true,
       description: 'Org members only.',
-      resolve: (c, _, ctx) => (isMember(ctx) ? c.ticketTargetMilestones : null),
+      resolve: (c, _, ctx) =>
+        isMemberOrSite(ctx) ? c.ticketTargetMilestones : null,
     }),
     ticketTypeRoles: t.field({
       type: [TicketTypeRoleRef],
       nullable: true,
       description: 'Org members only.',
-      resolve: (c, _, ctx) => (isMember(ctx) ? c.ticketTypeRoles : null),
+      resolve: (c, _, ctx) => (isMemberOrSite(ctx) ? c.ticketTypeRoles : null),
     }),
   }),
 })
@@ -595,8 +608,52 @@ function validate(input: Record<string, unknown>): ConferencePatch {
   return out as ConferencePatch
 }
 
+const ReminderReservation = builder
+  .objectRef<{ token: string | null; retryAfterMs: number | null }>(
+    'WorkshopReminderReservation',
+  )
+  .implement({
+    fields: (t) => ({
+      token: t.string({
+        nullable: true,
+        description: 'Set when the hour was claimed: pass it to release.',
+        resolve: (r) => r.token,
+      }),
+      retryAfterMs: t.int({
+        nullable: true,
+        description: 'Set when the hour is held: when it frees up.',
+        resolve: (r) => r.retryAfterMs,
+      }),
+    }),
+  })
+
 builder.mutationType({
   fields: (t) => ({
+    reserveWorkshopReminder: t.field({
+      type: ReminderReservation,
+      nullable: false,
+      description:
+        "Claims the request's Conference's hourly workshop-reminder lock, atomically. Site server lane or operator only.",
+      resolve: (_, __, ctx) => ctx.data.conferences().reserveReminder(),
+    }),
+    releaseWorkshopReminder: t.boolean({
+      nullable: false,
+      description: 'Releases the lock if it is still held by `token`.',
+      args: { token: t.arg.string({ required: true }) },
+      resolve: (_, { token }, ctx) =>
+        ctx.data.conferences().releaseReminder(token),
+    }),
+    recordWorkshopReminder: t.boolean({
+      nullable: false,
+      description:
+        'Stores the last reminder send. Site server lane or operator only.',
+      args: {
+        sentAt: t.arg.string({ required: true }),
+        count: t.arg.int({ required: true }),
+      },
+      resolve: (_, { sentAt, count }, ctx) =>
+        ctx.data.conferences().recordReminder(sentAt, count),
+    }),
     updateConference: t.field({
       type: Conference,
       nullable: false,

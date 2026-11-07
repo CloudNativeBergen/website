@@ -25,7 +25,9 @@ export const photoWallPublicRouter = router({
   get: publicProcedure.query(async () => {
     // The whole conference, not `resolveConferenceId()`: whether posting is
     // open depends on its dates (§7).
-    const { conference, error } = await getConferenceForCurrentDomain()
+    const { conference, error } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     const view =
       !error && conference?._id
         ? await readWallPage(conference, new Date())
@@ -35,7 +37,9 @@ export const photoWallPublicRouter = router({
   }),
   /** Screen Mode's poll (§9.2): the posts with their approval time and the Sponsor strip switch. */
   screen: publicProcedure.query(async () => {
-    const { conference, error } = await getConferenceForCurrentDomain()
+    const { conference, error } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     const view =
       !error && conference?._id ? await readScreenPage(conference._id) : null
     if (!view) throw noWall()
@@ -50,7 +54,9 @@ export const photoWallPublicRouter = router({
   talkPhotos: publicProcedure
     .input(z.object({ talkId: z.string().min(1).max(128) }))
     .query(async ({ input }): Promise<TalkPhotosView> => {
-      const { conference, error } = await getConferenceForCurrentDomain()
+      const { conference, error } = await getConferenceForCurrentDomain({
+        includeTicketSetup: true,
+      })
       if (error || !conference?._id) return { posts: [], count: 0 }
       const posts = await getTalkPhotos(conference._id, input.talkId)
       return {

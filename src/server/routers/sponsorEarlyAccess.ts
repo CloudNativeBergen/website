@@ -100,7 +100,9 @@ export function refuseUnpublishedCopy(sponsorForConferenceId: string): void {
  * is no longer this conference's.
  */
 async function requirePortalUrl(): Promise<string> {
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   const portalUrl =
     error || !conference ? null : await earlyAccessPortalUrl(conference)
   if (!portalUrl) {
@@ -181,6 +183,7 @@ async function readConferenceLive(
 ): Promise<EarlyAccessSendConference> {
   const { conference, error } = await getConferenceForCurrentDomain({
     uncached: true,
+    includeTicketSetup: true,
   })
   if (error) {
     throw new TRPCError({
@@ -690,7 +693,9 @@ export const sponsorEarlyAccessRouter = router({
     .query(async ({ input }) => {
       const conferenceId = await requireSponsor(input.sponsorForConferenceId)
       // The host only: the times are read live by the decision.
-      const { domain } = await getConferenceForCurrentDomain()
+      const { domain } = await getConferenceForCurrentDomain({
+        includeTicketSetup: true,
+      })
       const { refusal, plan } = await decideSendForRequest(
         conferenceId,
         domain,

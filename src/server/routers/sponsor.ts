@@ -557,7 +557,9 @@ async function loadRenewal(
   }
   if (intoCurrent) {
     // From the board of the next edition: `id` is last year's record.
-    const { conference } = await getConferenceForCurrentDomain()
+    const { conference } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     if (orgId && conference?._id) {
       context = await getRenewalContextIntoCurrent(orgId, conference, id)
     }
@@ -1385,7 +1387,7 @@ export const sponsorRouter = router({
       .input(SponsorTierInputSchema)
       .mutation(async ({ input }) => {
         const { conference, error: confError } =
-          await getConferenceForCurrentDomain()
+          await getConferenceForCurrentDomain({ includeTicketSetup: true })
         if (confError || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -2354,7 +2356,7 @@ export const sponsorRouter = router({
           }>
           try {
             const { conference: bulkConf } =
-              await getConferenceForCurrentDomain()
+              await getConferenceForCurrentDomain({ includeTicketSetup: true })
             pendingAgreements = await clientReadUncached.fetch(
               `*[_type == "sponsorForConference" && conference._ref == $conferenceId && _id in $ids && signatureStatus == "pending" && defined(signatureId)]{ _id, signatureId, "signingProvider": conference->signingProvider }`,
               { ids: input.ids, conferenceId: bulkConf._id },
@@ -2441,8 +2443,9 @@ export const sponsorRouter = router({
         // deleted: the agreement would stay live with no record pointing at it.
         if (input.cancelAgreement) {
           try {
-            const { conference: delConf } =
-              await getConferenceForCurrentDomain()
+            const { conference: delConf } = await getConferenceForCurrentDomain(
+              { includeTicketSetup: true },
+            )
             const sfc = await clientReadUncached.fetch<{
               signatureId?: string
               signatureStatus?: string
@@ -2536,7 +2539,9 @@ export const sponsorRouter = router({
 
     // R2 (#1687): one org-scoped query; null outside the lead window.
     renewalReminders: adminProcedure.query(async ({ ctx }) => {
-      const { conference } = await getConferenceForCurrentDomain()
+      const { conference } = await getConferenceForCurrentDomain({
+        includeTicketSetup: true,
+      })
       if (!ctx.orgId || !conference?._id) return null
       return getPreviousEditionRenewals(ctx.orgId, conference)
     }),
@@ -2941,6 +2946,7 @@ export const sponsorRouter = router({
           // `SPONSOR_REGISTRATION_URL` is merged on the server to compute
           // `templateEdited`; the composer sees the same link (#1261).
           includeSponsorRegistrationLink: true,
+          includeTicketSetup: true,
         })
         if (conferenceError || !conference) {
           throw new TRPCError({
@@ -3351,6 +3357,7 @@ export const sponsorRouter = router({
           await getConferenceForCurrentDomain({
             sponsors: true,
             includeSponsorRegistrationLink: true,
+            includeTicketSetup: true,
           })
         if (conferenceError || !conference) {
           throw new TRPCError({
@@ -3423,7 +3430,10 @@ export const sponsorRouter = router({
           'sponsorForConference',
         )
         const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain({ sponsors: true })
+          await getConferenceForCurrentDomain({
+            sponsors: true,
+            includeTicketSetup: true,
+          })
         if (conferenceError || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -3471,7 +3481,7 @@ export const sponsorRouter = router({
           'sponsorForConference',
         )
         const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain()
+          await getConferenceForCurrentDomain({ includeTicketSetup: true })
         if (conferenceError || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -3526,7 +3536,10 @@ export const sponsorRouter = router({
           'sponsorForConference',
         )
         const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain({ sponsors: true })
+          await getConferenceForCurrentDomain({
+            sponsors: true,
+            includeTicketSetup: true,
+          })
         if (conferenceError || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -3610,7 +3623,7 @@ export const sponsorRouter = router({
       .input(BroadcastFiltersSchema)
       .query(async ({ input }) => {
         const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain()
+          await getConferenceForCurrentDomain({ includeTicketSetup: true })
         if (conferenceError || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -3639,7 +3652,7 @@ export const sponsorRouter = router({
       )
       .mutation(async ({ input, ctx }) => {
         const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain()
+          await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
         if (conferenceError || !conference) {
           throw new TRPCError({
@@ -3735,7 +3748,7 @@ export const sponsorRouter = router({
 
     syncAudience: adminProcedure.mutation(async () => {
       const { conference, error: conferenceError } =
-        await getConferenceForCurrentDomain()
+        await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
       if (conferenceError || !conference) {
         throw new TRPCError({
@@ -3797,6 +3810,7 @@ export const sponsorRouter = router({
             // Server-side only (adminProcedure): the link is merged into the
             // Markdown templates served to the CLI, never into a page payload.
             includeSponsorRegistrationLink: true,
+            includeTicketSetup: true,
           })
         if (conferenceError || !conference) {
           throw new TRPCError({

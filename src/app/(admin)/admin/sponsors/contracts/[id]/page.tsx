@@ -10,7 +10,7 @@ export default async function EditContractTemplatePage({
   const { id } = await params
 
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({})
+    await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
   if (conferenceError) {
     return (

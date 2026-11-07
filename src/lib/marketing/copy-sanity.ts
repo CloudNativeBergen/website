@@ -230,7 +230,9 @@ export async function readPlanSource(
     { cache: 'no-store' },
   )
   if (!row?.conference) return null
-  const mergedConference = await mergeConference(row.conference)
+  const mergedConference = await mergeConference(row.conference, {
+    ticketSetup: true,
+  })
   return {
     ticketCapacity: mergedConference.ticketCapacity ?? null,
     deletingAt: row.deletingAt ?? null,

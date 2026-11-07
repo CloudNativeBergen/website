@@ -52,7 +52,9 @@ export async function openEarlyAccessLink(
   token: string,
 ): Promise<NextResponse> {
   if (isAuthHost(request.headers)) return notFound()
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || !conference?._id) return notFound()
   if (!(await isWorkshopsEnabledForConference(conference))) return notFound()
 

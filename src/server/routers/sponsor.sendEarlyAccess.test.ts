@@ -572,7 +572,10 @@ describe('the times are the stored ones, not the cached ones', () => {
   it('makes one live read per send and one per question from the modal', async () => {
     await send()
     expect(liveReads()).toHaveLength(1)
-    expect(liveReads()[0][0]).toEqual({ uncached: true })
+    expect(liveReads()[0][0]).toEqual({
+      uncached: true,
+      includeTicketSetup: true,
+    })
 
     h.getConference.mockClear()
     await readiness()

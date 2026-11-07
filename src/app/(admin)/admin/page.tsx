@@ -14,7 +14,10 @@ async function DashboardContent() {
   // and the boundary normaliser hands back `[]` when they were not projected
   // (see @/lib/conference/sanity). Without it the activation checklist would
   // tell every conference on earth to add its first topic.
-  const loaded = await getConferenceForCurrentDomain({ topics: true })
+  const loaded = await getConferenceForCurrentDomain({
+    topics: true,
+    includeTicketSetup: true,
+  })
   // From six weeks out until the last day, the hero also covers the event
   // stage. Only then does the dashboard read the schedule (the programme, track
   // sponsor and room rows need it) and opt in to the event facts.
@@ -25,6 +28,7 @@ async function DashboardContent() {
         topics: true,
         // Same fields as the briefing send, so the briefing version matches.
         includeSpeakerRegistrationLink: true,
+        includeTicketSetup: true,
       })
     : loaded
 

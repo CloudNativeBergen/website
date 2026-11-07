@@ -77,6 +77,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
     const { conference, error: conferenceError } =
       await getEditableScheduleForCurrentDomain({
         confirmedTalksOnly: false,
+        includeTicketSetup: true,
       })
 
     if (conferenceError || !conference) {

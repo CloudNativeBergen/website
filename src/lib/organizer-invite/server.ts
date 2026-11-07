@@ -134,7 +134,7 @@ export async function sendOrganizerInvitationEmail(params: {
       conference,
       domain,
       error: conferenceError,
-    } = await getConferenceForCurrentDomain()
+    } = await getConferenceForCurrentDomain({ includeTicketSetup: true })
     if (conferenceError || !conference || !domain) {
       console.error(
         'Cannot send organizer invitation: failed to resolve conference or domain',

@@ -11,7 +11,9 @@ import { SessionFeedbackAdminPage } from '@/components/feedback/admin'
 export default async function AdminFeedbackPage() {
   const denied = await denyNonOrganizer()
   if (denied) return denied
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || !conference) {
     return (
       <ErrorDisplay

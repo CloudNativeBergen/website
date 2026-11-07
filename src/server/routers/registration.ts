@@ -147,7 +147,9 @@ export const registrationRouter = router({
         })
       }
 
-      const { domain } = await getConferenceForCurrentDomain()
+      const { domain } = await getConferenceForCurrentDomain({
+        includeTicketSetup: true,
+      })
       if (!domain) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',

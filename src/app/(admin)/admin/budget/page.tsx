@@ -25,7 +25,7 @@ import { BudgetPageClient, ErrorDisplay } from '@/components/admin'
  */
 export default async function AdminBudgetPage() {
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({})
+    await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
   if (conferenceError || !conference) {
     return (

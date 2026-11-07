@@ -18,9 +18,10 @@
  * - NOT AFTER REGISTRATION HAS CLOSED: the email would only say so. Checked
  *   before the link, so a closed conference is never told to fix its host.
  * - AT MOST ONCE AN HOUR PER CONFERENCE, across instances: the hour is
- *   reserved on the conference (`workshopReminderReservedAt`) with a
- *   revision-conditioned patch before the first ticket read, so two
- *   concurrent presses send once. A misfire guard against a double click, not
+ *   reserved on the conference (`workshopReminderReservedAt`) before the
+ *   first ticket read, so two concurrent presses send once: in D1 with one
+ *   conditional UPDATE for a d1_write tenant (#2080), else with a
+ *   revision-conditioned Sanity patch. A misfire guard against a double click, not
  *   a security control. A refusal, nobody to send to, or a send confirmed to
  *   have reached nobody releases the hour.
  * - THE LAST SEND IS STORED on the conference (`workshopReminderLastSentAt`,
@@ -49,6 +50,11 @@ import { readTicketHolders } from './holders'
 import { workshopRegistrationWindow } from './registration-window'
 import { workshopMainHost, workshopPortalUrl } from './sign-in'
 import { mergeKonfApiConference, rolloutFlags } from '@/lib/conference/konf-api'
+import {
+  recordReminderViaApi,
+  releaseReminderViaApi,
+  reserveReminderViaApi,
+} from '@/lib/konf-api/conference-write'
 
 export const REMINDER_WINDOW_MS = 60 * 60 * 1000
 /** Resend's batch API limit. */
@@ -184,6 +190,59 @@ export async function reminderPortal(
     : { blocker: 'portal-unavailable' }
 }
 
+/**
+ * Where the hour is reserved and the last send stored: D1 for a d1_write
+ * tenant (#2080), with ONE conditional UPDATE in the conference subgraph, so
+ * two concurrent presses cannot both claim it; Sanity's revision lock for
+ * everyone else, unchanged.
+ * ponytail: an instance whose flag read fails with no recent good value sees
+ * d1Write off and takes the Sanity lock; a press on another instance in that
+ * window could send twice. Both locks at once if that ever matters.
+ */
+async function reminderLock(
+  host: string | null,
+  conference: Conference & { _id: string },
+  now: number,
+): Promise<{
+  reserve: () => Promise<number | null>
+  release: () => Promise<void>
+  record: (sent: number) => Promise<void>
+}> {
+  if (host && (await rolloutFlags(host, conference)).d1Write) {
+    let token: string | null = null
+    return {
+      reserve: async () => {
+        const r = await reserveReminderViaApi(host)
+        token = r.token
+        return token ? null : (r.retryAfterMs ?? REMINDER_WINDOW_MS)
+      },
+      release: async () => {
+        if (!token) return
+        try {
+          await releaseReminderViaApi(host, token)
+        } catch (error) {
+          console.error('Workshop reminder: the hour was not released:', error)
+        }
+      },
+      record: async (sent) => {
+        try {
+          await recordReminderViaApi(host, new Date(now).toISOString(), sent)
+        } catch (error) {
+          console.error(
+            'Workshop reminder: the last send was not stored:',
+            error,
+          )
+        }
+      },
+    }
+  }
+  return {
+    reserve: () => reserveHour(conference._id, now),
+    release: () => releaseHour(conference._id, now),
+    record: (sent) => storeLastReminder(conference._id, now, sent),
+  }
+}
+
 export async function sendWorkshopReminder(
   conference: Conference & { _id: string },
   { note }: { note?: string },
@@ -203,16 +262,18 @@ export async function sendWorkshopReminder(
   // Reserve the hour before anything is read or sent; released below when
   // nothing went out.
   let retryAfterMs: number | null
+  let lock: Awaited<ReturnType<typeof reminderLock>>
   try {
-    retryAfterMs = await reserveHour(conference._id, now)
+    lock = await reminderLock(host, conference, now)
+    retryAfterMs = await lock.reserve()
   } catch (error) {
-    // Sanity unreachable or contended: refuse rather than risk a double send.
+    // Lock store unreachable or contended: refuse rather than risk a double send.
     console.error('Workshop reminder: the hour could not be reserved:', error)
     return { kind: 'rate-limited', retryAfterMs: 60_000 }
   }
   if (retryAfterMs !== null) return { kind: 'rate-limited', retryAfterMs }
 
-  const release = () => releaseHour(conference._id, now)
+  const release = lock.release
 
   // The sender before the ticket read: a press that cannot send reads nothing.
   let client: Awaited<ReturnType<typeof resolveEmailSender>>['client']
@@ -315,7 +376,7 @@ export async function sendWorkshopReminder(
   // waiting the hour. Anything unconfirmed keeps the hour, so a second press
   // cannot double-send what may have gone.
   if (sent === 0 && unconfirmed === 0) await release()
-  if (sent > 0) await storeLastReminder(conference._id, now, sent)
+  if (sent > 0) await lock.record(sent)
   return { kind: 'sent', sent, failed, unconfirmed }
 }
 

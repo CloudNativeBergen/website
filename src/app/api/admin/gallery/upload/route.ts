@@ -42,7 +42,9 @@ export async function POST(request: NextRequest) {
     // `isUnknownHost`, not `!conference`: an unknown host resolves to a TRUTHY
     // `{} as Conference`, so the old check never fired and the upload would have
     // been created with an undefined conference reference.
-    const { conference } = await getConferenceForCurrentDomain({})
+    const { conference } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     if (isUnknownHost({ conference })) {
       return NextResponse.json(
         { error: 'Conference not found for current domain' },

@@ -68,7 +68,9 @@ async function readCeilings(
     { cache: 'no-store' },
   )
   if (!read?.conference) return null
-  const mergedConference = await mergeConference(read.conference)
+  const mergedConference = await mergeConference(read.conference, {
+    ticketSetup: true,
+  })
   const keyByVariant = new Map(
     (read.tasks ?? []).flatMap((t) =>
       t.key && t.variantId ? [[t.variantId, t.key] as const] : [],

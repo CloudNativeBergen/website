@@ -54,6 +54,7 @@ export default async function DiscountCodesAdminPage() {
     // The sponsor discount email defaults its ticket URL to this link, so this
     // page is one of the two surfaces allowed to read it. See the option's doc.
     includeSponsorRegistrationLink: true,
+    includeTicketSetup: true,
   })
 
   if (conferenceError) {

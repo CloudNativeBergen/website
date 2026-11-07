@@ -61,7 +61,9 @@ async function requestConference(orgId: string | null) {
  * on every other `adminProcedure` read; M1's writes keep the live check.
  */
 async function polledConferenceId(orgId: string | null) {
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (
     error ||
     !conference?._id ||

@@ -49,7 +49,10 @@ export default async function AdminSpeakers() {
   noStore()
   try {
     const { conference, error: conferenceError } =
-      await getConferenceForCurrentDomain({ featuredSpeakers: true })
+      await getConferenceForCurrentDomain({
+        featuredSpeakers: true,
+        includeTicketSetup: true,
+      })
 
     if (conferenceError || !conference) {
       return (

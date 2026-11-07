@@ -6,7 +6,9 @@ import { PostsPage } from './PostsPage'
 export default async function AdminMarketingPostsPage() {
   const denied = await denyNonOrganizer()
   if (denied) return denied
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || !conference) {
     return (
       <ErrorDisplay

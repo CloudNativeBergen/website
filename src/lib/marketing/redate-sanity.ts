@@ -77,7 +77,9 @@ export async function getRedatablePlan(
   )
   if (!snapshot) return null
   if (snapshot.conference) {
-    snapshot.conference = await mergeConference(snapshot.conference)
+    snapshot.conference = await mergeConference(snapshot.conference, {
+      ticketSetup: true,
+    })
   }
   return snapshot
 }

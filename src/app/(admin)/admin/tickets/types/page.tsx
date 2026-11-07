@@ -22,7 +22,7 @@ import type { EventTicket } from '@/lib/tickets/types'
 
 export default async function TicketTypesAdminPage() {
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({})
+    await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
   if (conferenceError) {
     return (

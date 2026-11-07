@@ -7,7 +7,7 @@ export const metadata = { title: SPONSOR_PAGE_TITLES.contacts }
 
 export default async function AdminSponsorContacts() {
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain()
+    await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
   if (conferenceError || !conference) {
     return (

@@ -275,7 +275,9 @@ async function loadDeletion(conferenceId: string, campaignId?: string) {
 
 /** The domain conference, or NOT_FOUND — the same rule as `resolveConferenceId`. */
 async function requireConference(): Promise<Conference> {
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
   if (error || !conference?._id) {
     throw new TRPCError({
       code: 'NOT_FOUND',

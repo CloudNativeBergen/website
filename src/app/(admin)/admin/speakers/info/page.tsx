@@ -10,7 +10,9 @@ import { getDinnerChoiceSummaryInputs } from '@/lib/speaker/dinnerChoice-sanity'
 import { summarizeDinnerChoices } from '@/lib/speaker/dinnerChoice'
 
 export default async function AdminSpeakerInfoPage() {
-  const { conference, error } = await getConferenceForCurrentDomain({})
+  const { conference, error } = await getConferenceForCurrentDomain({
+    includeTicketSetup: true,
+  })
 
   if (error) {
     return (

@@ -69,7 +69,7 @@ export const scheduleRouter = router({
     .input(SaveScheduleSchema)
     .mutation(async ({ input, ctx }) => {
       const { conference, error: conferenceError } =
-        await getConferenceForCurrentDomain()
+        await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
       if (conferenceError || !conference) {
         throw new TRPCError({
@@ -176,7 +176,9 @@ export const scheduleRouter = router({
         }),
       )
       .query(async ({ input }) => {
-        const { conference, error } = await getConferenceForCurrentDomain()
+        const { conference, error } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         if (error || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -208,7 +210,9 @@ export const scheduleRouter = router({
     getById: adminProcedure
       .input(z.object({ id: z.string() }))
       .query(async ({ input }) => {
-        const { conference, error } = await getConferenceForCurrentDomain()
+        const { conference, error } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         if (error || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -258,7 +262,9 @@ export const scheduleRouter = router({
      * property the write client was being used for.
      */
     pollExternalChanges: adminProcedure.query(async () => {
-      const { conference, error } = await getConferenceForCurrentDomain()
+      const { conference, error } = await getConferenceForCurrentDomain({
+        includeTicketSetup: true,
+      })
       if (error || !conference) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
@@ -306,7 +312,9 @@ export const scheduleRouter = router({
     proposalsStatus: adminProcedure
       .input(z.object({ fingerprint: z.string() }))
       .query(async () => {
-        const { conference, error } = await getConferenceForCurrentDomain()
+        const { conference, error } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         if (error || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -323,7 +331,9 @@ export const scheduleRouter = router({
     delete: adminProcedure
       .input(z.object({ id: z.string() }))
       .mutation(async ({ input }) => {
-        const { conference, error } = await getConferenceForCurrentDomain()
+        const { conference, error } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         if (error || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -374,7 +384,9 @@ export const scheduleRouter = router({
           ),
       )
       .mutation(async ({ input, ctx }) => {
-        const { conference, error } = await getConferenceForCurrentDomain()
+        const { conference, error } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         if (error || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -508,7 +520,9 @@ export const scheduleRouter = router({
           ),
       )
       .mutation(async ({ input, ctx }) => {
-        const { conference, error } = await getConferenceForCurrentDomain()
+        const { conference, error } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+        })
         if (error || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -609,7 +623,9 @@ export const scheduleRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { conference, error } = await getConferenceForCurrentDomain()
+      const { conference, error } = await getConferenceForCurrentDomain({
+        includeTicketSetup: true,
+      })
       if (error || !conference) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',

@@ -26,6 +26,7 @@ import { selectConferenceSections, type RawConferenceRead } from './sections'
 import { CONFERENCE_QUERY_CORE, CONFERENCE_QUERY_FULL } from './query'
 import { CONFERENCE_CACHE_LIFE } from './cache-life'
 import { mergeConference, mergeConferences } from './merge'
+import { TICKET_SETUP_FIELDS } from './konf-api'
 import { EXPANDED_SECTIONS_KEY } from './sections'
 import { apiHost, fetchApiSchedules } from '@/lib/konf-api/program'
 
@@ -208,6 +209,7 @@ async function forCurrentDomain({
   includeSponsorRegistrationLink = false,
   includeSpeakerRegistrationLink = false,
   includeVolunteerRegistrationLink = false,
+  includeTicketSetup = false,
   uncached = false,
   publicSchedule = false,
   publicSponsors = false,
@@ -233,6 +235,8 @@ async function forCurrentDomain({
   includeSpeakerRegistrationLink?: boolean
   /** See {@link getConferenceForDomain}. Admin/server surfaces only. */
   includeVolunteerRegistrationLink?: boolean
+  /** See {@link getConferenceForDomain}. Admin/server surfaces only. */
+  includeTicketSetup?: boolean
   /** Fetch directly from the origin API instead of the CDN. Admin surfaces only. */
   uncached?: boolean
   publicSchedule?: boolean
@@ -258,6 +262,7 @@ async function forCurrentDomain({
       includeSponsorRegistrationLink,
       includeSpeakerRegistrationLink,
       includeVolunteerRegistrationLink,
+      includeTicketSetup,
       uncached,
       publicSchedule,
       publicSponsors,
@@ -313,6 +318,7 @@ async function readConference(
     includeSponsorRegistrationLink = false,
     includeSpeakerRegistrationLink = false,
     includeVolunteerRegistrationLink = false,
+    includeTicketSetup = false,
     publicSchedule = false,
     publicSponsors = false,
   }: {
@@ -375,6 +381,15 @@ async function readConference(
      * OFF by default. Private volunteer onboarding links; admin/email surfaces only.
      */
     includeVolunteerRegistrationLink?: boolean
+    /**
+     * Include the members-only ticket setup (`TICKET_SETUP_FIELDS`: vendor
+     * ids and slugs, capacity, sales targets, ticket-type roles, reminder
+     * state), with the D1 ones merged (#2080). OFF by default, because the
+     * object reaches the RSC payload of whatever page asked. Admin, router,
+     * cron and webhook readers ask for it; a public page that needs the
+     * binding server-side asks for it and must not pass it to the client.
+     */
+    includeTicketSetup?: boolean
     /** Internal: only {@link getPublicSchedule} sets it. Ignored if uncached. */
     publicSchedule?: boolean
     /**
@@ -465,7 +480,9 @@ async function readConference(
         schedule,
         confirmedTalksOnly,
       })
-      conference = await mergeConference(conference)
+      conference = await mergeConference(conference, {
+        ticketSetup: includeTicketSetup,
+      })
       status = 'resolved'
 
       if (publicSponsors && !uncached && conference._id) {
@@ -567,6 +584,8 @@ async function readConference(
   // tenant has no `topics` (see @/lib/onboarding/create.ts), any conference can
   // lose its `formats` the moment an organizer empties the list, and the public
   // CFP page dereferences both. See ./normalize.ts.
+  if (!includeTicketSetup && conference)
+    for (const k of TICKET_SETUP_FIELDS) delete conference[k]
   if (!includeSponsorRegistrationLink && conference?.sponsorRegistrationLink) {
     delete conference.sponsorRegistrationLink
   }
@@ -657,7 +676,10 @@ export async function getConferencesForWeeklyUpdate(): Promise<Conference[]> {
     { cache: 'no-store' },
   )
 
-  const merged = await mergeConferences(conferences ?? [])
+  // A cron: its status summary reads capacity and targets (#2080).
+  const merged = await mergeConferences(conferences ?? [], {
+    ticketSetup: true,
+  })
 
   return merged.filter((conference) => !isConferenceOver(conference))
 }
@@ -744,14 +766,23 @@ export async function getConferenceTenantByCheckinEventId(
     // this lookup IS the tenant resolution — there is no tenant to scope it to
     // yet, and it must see every tenant's conferences. Ambiguity is refused
     // rather than silently narrowed.
-    const query = `*[_type == "conference" && checkinEventId == $eventId]{ _id, organization, ticketingProvider }`
+    // Sanity stays the cross-tenant index of the binding (still written to
+    // both, #2080); the vendor comes through the merge, from D1 when flagged.
+    const query = `*[_type == "conference" && checkinEventId == $eventId]{ _id, organization, domains, ticketingProvider }`
 
-    const rows = await clientWrite.fetch<CheckinWebhookTenant[] | null>(query, {
-      eventId,
-    })
+    const rows = await clientWrite.fetch<
+      (CheckinWebhookTenant & { domains?: string[] | null })[] | null
+    >(query, { eventId })
 
     const { doc, error } = singleCheckinClaimant(rows ?? [], eventId)
-    return { tenant: doc, error }
+    if (!doc) return { tenant: null, error }
+    const { _id, organization, ticketingProvider } = await mergeConference({
+      ...doc,
+      organization: doc.organization?._ref
+        ? { _ref: doc.organization._ref }
+        : null,
+    })
+    return { tenant: { _id, organization, ticketingProvider }, error }
   } catch (err) {
     return { tenant: null, error: err as Error }
   }
@@ -793,7 +824,10 @@ export async function getConferenceByCheckinEventId(eventId: number): Promise<{
     })
 
     const { doc, error } = singleCheckinClaimant(conferences ?? [], eventId)
-    return { conference: doc, error }
+    if (!doc) return { conference: null, error }
+    // The vendor from D1 when flagged (#2080); the binding and roles stay on
+    // Sanity, which their writers serialise on. Server-side only.
+    return { conference: await mergeConference(doc), error }
   } catch (err) {
     return {
       conference: null,

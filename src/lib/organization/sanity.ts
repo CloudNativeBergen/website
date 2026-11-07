@@ -53,7 +53,9 @@ export async function getOrganizationRefForCurrentConference(): Promise<
   string | null
 > {
   try {
-    const { conference, error } = await getConferenceForCurrentDomain()
+    const { conference, error } = await getConferenceForCurrentDomain({
+      includeTicketSetup: true,
+    })
     if (error) return null
     return conference?.organization?._ref ?? null
   } catch {

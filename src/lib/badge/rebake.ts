@@ -97,7 +97,7 @@ export async function rebakeBadge(
     conference,
     domain,
     error: conferenceError,
-  } = await getConferenceForCurrentDomain()
+  } = await getConferenceForCurrentDomain({ includeTicketSetup: true })
   if (conferenceError || !conference) {
     return { success: false, reason: 'error', error: 'Conference not found' }
   }

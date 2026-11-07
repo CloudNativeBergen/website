@@ -339,7 +339,9 @@ export const messageRouter = router({
   send: organizerProcedure
     .input(SendMessageSchema)
     .mutation(async ({ ctx, input }) => {
-      const { conference, error } = await getConferenceForCurrentDomain()
+      const { conference, error } = await getConferenceForCurrentDomain({
+        includeTicketSetup: true,
+      })
       if (error || !conference?._id) {
         throw new TRPCError({
           code: 'NOT_FOUND',

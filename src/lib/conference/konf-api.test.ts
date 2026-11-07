@@ -8,6 +8,14 @@ vi.mock('../sanity/client', () => ({
   clientReadUncached: { fetch: (...a: unknown[]) => sanityFetch(...a) },
 }))
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
+// No real signing here: the members-only read only checks the key is set.
+vi.mock('@/lib/konf-api/client', async (orig) => ({
+  ...(await orig<typeof import('@/lib/konf-api/client')>()),
+  konfApiHeaders: async (host: string) => ({
+    'content-type': 'application/json',
+    origin: `https://${host}`,
+  }),
+}))
 vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }))
 vi.mock('@/lib/gallery/sanity', () => ({
   getGalleryImages: vi.fn(async () => []),
@@ -19,7 +27,7 @@ vi.mock('@/lib/sponsor-crm/sanity', () => ({
 
 import { cacheLife, cacheTag } from 'next/cache'
 import { getConferenceForDomain } from './sanity'
-import { fetchKonfApiConference } from './konf-api'
+import { fetchKonfApiConference, TICKET_SETUP_FIELDS } from './konf-api'
 import { isCfpOpen } from './state'
 
 /**
@@ -448,5 +456,171 @@ describe('settings phase 1 read flip (#2019)', () => {
       'travelSupportBudget',
     ])
       expect(query).not.toContain(f)
+  })
+})
+
+describe('settings phase 3 read flip (#2080)', () => {
+  // Sanity: workshop sign-up closed, early access for one type only.
+  const closed = {
+    ...sanityDoc,
+    ticketingProvider: 'checkin',
+    publicFreeTicketIds: [1],
+    workshopRegistrationStart: '2000-01-01T08:00:00Z',
+    workshopRegistrationEnd: '2000-02-01T08:00:00Z',
+    workshopEarlyAccessTicketTypes: ['Sanity pass'],
+    checkinCustomerId: 1,
+    checkinEventId: 11,
+    ticketCapacity: 100,
+    ticketTypeRoles: [{ _key: 'k', typeName: 'Sanity', admits: true }],
+  }
+  const NOW = new Date('2026-06-01T00:00:00Z')
+  // A fresh Response per call, with only the fields that query asked for, as
+  // the gateway answers: the public and the members-only read both fetch.
+  const apiReply = (conference: Record<string, unknown>) =>
+    fetchMock.mockImplementation(async (_: unknown, init: RequestInit) => {
+      const { query } = JSON.parse(String(init.body)) as { query: string }
+      const asked = Object.fromEntries(
+        Object.entries(conference).filter(([k]) =>
+          new RegExp(`\\b${k}\\b`).test(query),
+        ),
+      )
+      return new Response(
+        JSON.stringify({ data: { conference: { id: 'conf-1', ...asked } } }),
+      )
+    })
+  const read = (includeTicketSetup = false) =>
+    getConferenceForDomain('2026.example.com', { includeTicketSetup })
+  beforeEach(() => {
+    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    sanityFetch.mockResolvedValue(structuredClone(closed))
+  })
+
+  it('a valid D1 vendor wins; a bad one keeps Sanity', async () => {
+    apiReply({ ticketingProvider: 'tito' })
+    expect((await read()).conference.ticketingProvider).toBe('tito')
+    apiReply({ ticketingProvider: 'eventbrite' })
+    expect((await read()).conference.ticketingProvider).toBe('checkin')
+  })
+
+  it('never reads the windows, early-access types or free tickets from D1: their writers can leave D1 ahead of Sanity', async () => {
+    const { workshopRegistrationWindow } =
+      await import('@/lib/workshop/registration-window')
+    apiReply({
+      publicFreeTicketIds: [7],
+      workshopRegistrationStart: '2026-01-01T08:00:00Z',
+      workshopRegistrationEnd: '2099-01-01T08:00:00Z',
+      workshopEarlyAccessTicketTypes: ['D1 pass'],
+    })
+    const { conference } = await read(true)
+    expect(conference.workshopRegistrationEnd).toBe('2000-02-01T08:00:00Z')
+    expect(
+      workshopRegistrationWindow(conference, { now: NOW, earlyAccess: true })
+        .status,
+    ).toBe('closed')
+    expect(conference.workshopEarlyAccessTicketTypes).toEqual(['Sanity pass'])
+    expect(conference.publicFreeTicketIds).toEqual([1])
+    const queries = fetchMock.mock.calls.map(
+      ([, init]) => JSON.parse(init.body).query as string,
+    )
+    for (const q of queries)
+      for (const f of [
+        'publicFreeTicketIds',
+        'workshopRegistration',
+        'workshopEarlyAccessTicketTypes',
+      ])
+        expect(q).not.toContain(f)
+  })
+
+  it('reads the members-only fields in a separate request, never in the cached anonymous query', async () => {
+    vi.stubEnv('KONF_SITE_SIGNING_KEY', '{"kid":"k"}')
+    apiReply({ ticketCapacity: 500 })
+    await read(true)
+    const queries = fetchMock.mock.calls.map(
+      ([, init]) => JSON.parse(init.body).query as string,
+    )
+    const pub = queries.find((q) => q.includes('conferenceLifecycle'))!
+    expect(pub).toContain('ticketingProvider')
+    for (const f of [
+      'checkinCustomerId',
+      'ticketCapacity',
+      'ticketTargetsEnabled',
+      'workshopReminder',
+    ])
+      expect(pub).not.toContain(f)
+    expect(queries.some((q) => q.includes('ticketTargetCurve'))).toBe(true)
+  })
+
+  it('a public read (no includeTicketSetup) neither fetches nor carries the members-only fields', async () => {
+    vi.stubEnv('KONF_SITE_SIGNING_KEY', '{"kid":"k"}')
+    apiReply({ ticketCapacity: 500 })
+    const { conference } = await read()
+    for (const k of TICKET_SETUP_FIELDS)
+      expect(conference, k).not.toHaveProperty(k)
+    const queries = fetchMock.mock.calls.map(
+      ([, init]) => JSON.parse(init.body).query as string,
+    )
+    expect(queries.some((q) => q.includes('ticketCapacity'))).toBe(false)
+  })
+
+  describe('members-only fields, server side', () => {
+    beforeEach(() => vi.stubEnv('KONF_SITE_SIGNING_KEY', '{"kid":"k"}'))
+
+    it('valid D1 values win for capacity, targets and the customer id; the binding and roles stay on Sanity', async () => {
+      apiReply({
+        checkinCustomerId: 2,
+        checkinEventId: 9,
+        ticketCapacity: 500,
+        ticketTargetsEnabled: true,
+        ticketSalesStartDate: '2026-01-15',
+        ticketTargetCurve: 'linear',
+        ticketTargetMilestones: [
+          { date: '2026-03-01', targetPercentage: 50, label: null },
+        ],
+        ticketTypeRoles: [{ typeName: 'D1', grantsWorkshop: true }],
+      })
+      const { conference } = await read(true)
+      expect(conference.checkinCustomerId).toBe(2)
+      expect(conference.ticketCapacity).toBe(500)
+      expect(conference.ticketTargets).toEqual({
+        enabled: true,
+        salesStartDate: '2026-01-15',
+        targetCurve: 'linear',
+        milestones: [{ date: '2026-03-01', targetPercentage: 50, label: '' }],
+      })
+      expect(conference.checkinEventId).toBe(11)
+      expect(conference.ticketTypeRoles).toEqual(closed.ticketTypeRoles)
+    })
+
+    it('a bad or null value keeps Sanity', async () => {
+      apiReply({ ticketCapacity: -5, ticketTargetCurve: 'zigzag' })
+      const { conference } = await read(true)
+      expect(conference.ticketCapacity).toBe(100)
+      expect(conference.ticketTargets).toBeUndefined()
+    })
+
+    it('a failed members-only read keeps Sanity and the public merge', async () => {
+      fetchMock.mockImplementation(async (_: unknown, init: RequestInit) =>
+        String(init.body).includes('ticketTargetCurve')
+          ? new Response('boom', { status: 500 })
+          : new Response(
+              JSON.stringify({
+                data: {
+                  conference: { id: 'conf-1', ticketingProvider: 'tito' },
+                },
+              }),
+            ),
+      )
+      const { conference } = await read(true)
+      expect(conference.ticketingProvider).toBe('tito')
+      expect(conference.ticketCapacity).toBe(100)
+    })
+  })
+
+  it('an unflagged tenant never calls the gateway', async () => {
+    vi.stubEnv('KONF_API_TENANTS', '')
+    const { conference } = await read(true)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(conference.ticketingProvider).toBe('checkin')
+    expect(conference.ticketCapacity).toBe(100)
   })
 })

@@ -4,7 +4,7 @@ import { SponsorEmailTemplateEditorPage } from '@/components/admin/sponsor/Spons
 
 export default async function NewTemplatePage() {
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({})
+    await getConferenceForCurrentDomain({ includeTicketSetup: true })
 
   if (conferenceError) {
     return (
