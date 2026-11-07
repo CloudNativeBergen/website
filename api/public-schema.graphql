@@ -590,7 +590,9 @@ type SpeakerProfile {
   links: [String!]
   name: String
 
-  """R2 object key or URL of the photo. Upload is a follow-up."""
+  """
+  R2 object key of the photo (letters, digits, / _ . -; no URL). Upload is a follow-up.
+  """
   photoKey: String
   topics: [String!]
   updatedAt: String
