@@ -11,7 +11,7 @@ Workers Observability is configured per `wrangler.jsonc`:
   - Logs destination: `grafana-cloud-logs`
   - Traces destination: `grafana-cloud-traces`
 - **Gateway (`konf-api`):**
-  `api/wrangler.jsonc` currently lacks an `observability` block (#1895). Gateway requests, 429s, masked errors, and latency are not yet piped to Grafana Cloud until #1895 adds the destinations. (inferred)
+  Configured in `api/wrangler.jsonc` with the same destinations (#1895). It logs the two events under [Gateway Events](#gateway-events-konf-api).
 
 ## Crons and Schedules
 
@@ -39,7 +39,7 @@ Workers check for optional incoming webhook secrets in code. If unset, events ar
 #### `conference.parity.drift`
 
 - **Emitting Worker:** `konf-conference` ([services/conference/src/data/parity.ts:111](file:///Users/hans/go/src/github.com/RunKonf/website-obs/services/conference/src/data/parity.ts#L111))
-- **When it fires:** Emitted for each conference where column values in D1 differ from Sanity during the daily parity sweep.
+- **When it fires:** Emitted for each conference where a column still written to both D1 and Sanity (`PARITY_COLUMNS` in `services/conference/src/data/parity-core.ts`) differs during the daily parity sweep, or where Sanity no longer has the D1 row. Frozen moved fields (#2013) are not compared, so an organizer edit to one is not drift (#1917).
 - **Fields:** `event`, `conferenceId`, `fields`
 - **Suggested alert:** High (condition: `count > 0` over 24h).
 
@@ -185,42 +185,27 @@ Workers check for optional incoming webhook secrets in code. If unset, events ar
 
 ---
 
-### Gateway & Platform Errors, Authz, and Rate Limits (inferred)
+### Gateway Events (`konf-api`)
 
-The gateway (`konf-api`) emits status responses and GraphQL errors rather than named structured console events:
+All three are JSON lines on `console.error`, emitted from `api/src/gateway.ts`. String fields are capped at 64 characters, and the events carry no message, stack, token or request body. Yoga still logs every masked error's original (message and stack) on `console.error`, and with the `observability` block those lines reach Grafana too.
 
-#### Gateway Rate Limits (`rate limits`) (inferred)
+#### `gateway.response.5xx`
 
-- **Emitting Worker:** `konf-api` ([api/src/gateway.ts:353](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L353), [L458](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L458), [L512](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L512))
-- **When it fires:**
-  - IP pre-check rate limit (`API_IP_LIMITER`, 1200 req/min).
-  - Caller rate limit (`API_LIMITER`, 300 req/min).
-  - Mutation rate limit (`API_MUTATION_LIMITER`, 60 mut/min).
-- **Emitted format:** (inferred) Returns HTTP 429 response body `{ errors: [{ message: "too many requests", extensions: { code: "RATE_LIMITED" } }] }` or GraphQL error with `RATE_LIMITED` code and status 429. Also recorded in Cloudflare Rate Limiting metrics.
-- **Fields:** (inferred) HTTP status 429, error `message`, `extensions.code`
-- **Suggested alert:** Warning / High (condition: 429 rate > 5/min).
+- **When it fires:** The gateway answers 500 or more, e.g. the 503 `UNAVAILABLE` when tenant-directory fails, or an uncaught throw such as an unset `ENVELOPE_PRIVATE_KEY` (logged with `uncaught: true`, then rethrown; the runtime answers 500).
+- **Fields:** `event`, `status`, `uncaught` (only for a throw)
+- **Suggested alert:** Critical (condition: `count > 0` over 5 min).
 
-#### Gateway Authz / Authentication Failures (`authz`) (inferred)
+#### `gateway.error.masked`
 
-- **Emitting Worker:** `konf-api` ([api/src/gateway.ts:307](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L307), [L487](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L487), [L533](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L533), [L554](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L554), [L590](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L590))
-- **When it fires:**
-  - Unauthenticated operator lane access or malformed token (HTTP 401 `UNAUTHENTICATED`).
-  - Unknown user ID (HTTP 401 `UNAUTHENTICATED`).
-  - Caller not authorized for tenant (HTTP 403 `FORBIDDEN`).
-  - Unauthorized GraphQL introspection attempt (HTTP 403 `FORBIDDEN`).
-- **Emitted format:** (inferred) Returns HTTP 401 / 403 JSON responses or GraphQL errors with extension codes `UNAUTHENTICATED` or `FORBIDDEN`.
-- **Fields:** (inferred) HTTP status 401/403, error `message`, `extensions.code`
-- **Suggested alert:** Warning (condition: 401/403 rate spike above baseline).
+- **When it fires:** Once per error masked to `Unexpected error.` / `INTERNAL_SERVER_ERROR`: a subgraph error outside the safe codes, a subgraph that answered non-2xx (including the 403 `TENANT_MISMATCH` a subgraph without the current `GATEWAY_PUBLIC_KEY` answers), or an unexpected gateway error. The response is HTTP 200 (Hive fills `data` with nulls even when a subgraph sends none), so `gateway.response.5xx` does not see it. Safe codes (`BAD_USER_INPUT`, `NOT_FOUND`, `FORBIDDEN`, `UNAUTHENTICATED`) do not log it. One query touching N failing fields logs N events.
+- **Fields:** `event`, `subgraph` (Hive `serviceName`, when the error came from a subgraph), `path` (dot-joined), `code` (the original code, when it had one)
+- **Suggested alert:** Critical (condition: `count > 0` over 5 min). This is the signal the 2026-11-04 missing-key incident produced.
 
-#### Gateway Masked & Unhandled Errors (`gateway errors`) (inferred)
+#### `gateway.rejected`
 
-- **Emitting Worker:** `konf-api` ([api/src/gateway.ts:194-214](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L194-L214), [L503](file:///Users/hans/go/src/github.com/RunKonf/website-obs/api/src/gateway.ts#L503))
-- **When it fires:**
-  - Runtime or subgraph errors masked by `maskError` to `Unexpected error.` with code `INTERNAL_SERVER_ERROR`. Yoga logs the original unmasked error via `console.error` (inferred from `api/src/gateway.test.ts:425`).
-  - Tenant directory lookup failures return HTTP 503 `UNAVAILABLE` (`tenant lookup unavailable`).
-- **Emitted format:** (inferred) Yoga `console.error` server log with original error stack; client receives masked GraphQL error or HTTP 503.
-- **Fields:** (inferred) `message`, `extensions.code`, `extensions.unexpected`, stack trace in stdout.
-- **Suggested alert:** Critical (condition: 5xx response count > 0 or `INTERNAL_SERVER_ERROR` > 0).
+- **When it fires:** The gateway refuses a request itself, before any subgraph: 429 `RATE_LIMITED` (per IP, 1200/min; per caller, 300/min; mutation budget, 60/min, with `limit: "mutation"`), 401 `UNAUTHENTICATED` (operator lane without a session, invalid identity token, unknown user), 403 `FORBIDDEN` (not authorized for the tenant) and 400 `BAD_USER_INPUT` (unknown operator tenant). The introspection refusal (403) does not log it.
+- **Fields:** `event`, `status`, `code`, `limit` (mutation budget only)
+- **Suggested alert:** Warning on `status = 429` above 5/min; Warning on a 401/403 spike over baseline. Cloudflare's rate limiting metrics count the 429s too.
 
 #### Domain & Hostname Reconciliation Errors (inferred)
 

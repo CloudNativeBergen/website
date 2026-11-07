@@ -262,12 +262,6 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
             audit('invite.create', actorId, { invitationId: row.id, to: role }),
           ])
           .catch(clean)
-        emit({
-          type: 'member.invited',
-          organizationId: orgId,
-          invitationId: row.id,
-          actorId,
-        })
         return row
       },
       async cancelInvitation(invitationId: string) {
@@ -311,6 +305,7 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
           type: 'member.role_changed',
           organizationId: orgId,
           userId,
+          role,
           actorId,
         })
       },

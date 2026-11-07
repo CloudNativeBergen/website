@@ -8,6 +8,13 @@
   "workers_dev": false,
   // supergraph.graphql (pnpm compose) is bundled as a string.
   "rules": [{ "type": "Text", "globs": ["**/*.graphql"], "fallthrough": true }],
+  // OTLP export to Grafana Cloud, as the services (#1895). The destinations are
+  // configured once per account in the Cloudflare dashboard. Inherited by envs.
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true, "destinations": ["grafana-cloud-traces"] },
+    "logs": { "enabled": true, "destinations": ["grafana-cloud-logs"] },
+  },
   // Bindings do not inherit into envs, so each env lists its own.
   // Secrets per env: declared in secrets.json (mise run secrets:sync).
   // OVERRIDE_TENANTS: @override label -> orgIds routed to the native subgraph.
@@ -43,6 +50,7 @@
     { "binding": "DIRECTORY", "service": "konf-tenant-directory" },
     { "binding": "CONTENT", "service": "konf-content" },
     { "binding": "PROGRAM", "service": "konf-program" },
+    { "binding": "SPONSORS", "service": "konf-sponsors" },
     { "binding": "CONFERENCE", "service": "konf-conference" },
     { "binding": "IDENTITY", "service": "konf-identity" },
     {
@@ -92,6 +100,7 @@
         { "binding": "DIRECTORY", "service": "konf-tenant-directory-preview" },
         { "binding": "CONTENT", "service": "konf-content-preview" },
         { "binding": "PROGRAM", "service": "konf-program-preview" },
+        { "binding": "SPONSORS", "service": "konf-sponsors-preview" },
         { "binding": "CONFERENCE", "service": "konf-conference-preview" },
         { "binding": "IDENTITY", "service": "konf-identity-preview" },
         {
@@ -142,6 +151,7 @@
         { "binding": "DIRECTORY", "service": "konf-tenant-directory" },
         { "binding": "CONTENT", "service": "konf-content" },
         { "binding": "PROGRAM", "service": "konf-program" },
+        { "binding": "SPONSORS", "service": "konf-sponsors" },
         { "binding": "CONFERENCE", "service": "konf-conference" },
         { "binding": "IDENTITY", "service": "konf-identity" },
         {
