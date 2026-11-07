@@ -113,7 +113,7 @@ Workers check for optional incoming webhook secrets in code. If unset, events ar
 
 - **Emitting Worker:** `konf-identity` ([services/identity/src/data/member-sync.ts:278](file:///Users/hans/go/src/github.com/RunKonf/website-obs/services/identity/src/data/member-sync.ts#L278))
 - **When it fires:** When membership differences (missing in identity, missing in Sanity, role mismatch, or < 2 owners) are detected for an org in `MEMBER_SOURCE_ORGS`.
-- **Fields:** `event`, `orgId`, `counts`, `missingInIdentity`, `missingInSanity`, `roleMismatch`, `ownersBelowTwo` (optional)
+- **Fields:** `event`, `orgId`, `counts`, `missingInIdentity`, `missingInSanity`, `roleMismatch`, `ownersBelowTwo` (optional), `invitePending` (optional: the speaker ids in `missingInIdentity` with a pending, unexpired invitation)
 - **Suggested alert:** High (condition: `count > 0`).
 
 #### `identity.membership.drift_clean`

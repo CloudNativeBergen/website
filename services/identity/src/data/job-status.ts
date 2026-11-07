@@ -6,6 +6,7 @@ export interface MemberSyncDrift {
     missingInSanity: number
     roleMismatch: number
     ownersBelowTwo?: number
+    invitePending?: number
   }
 }
 

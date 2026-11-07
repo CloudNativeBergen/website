@@ -360,6 +360,131 @@ describe('syncMembers drift mode (MEMBER_SOURCE_ORGS)', () => {
     })
   })
 
+  /** A pending invitation for org-a, valid for an hour unless `expiresAt`. */
+  const invite = (
+    seed: (q: string, ...v: unknown[]) => Promise<unknown>,
+    id: string,
+    email: string,
+    {
+      org = 'org-a',
+      status = 'pending',
+      role = 'admin',
+      expiresAt = Date.now() + 3600_000,
+    } = {},
+  ) =>
+    seed(
+      'INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      id,
+      org,
+      email,
+      role,
+      status,
+      expiresAt,
+      'u-owner',
+    )
+
+  it('counts the missing organizers with a pending invite, by speaker id (#1949)', async () => {
+    const { env, seed } = await driftDb()
+    // Case and whitespace differ from the Sanity address; still the same person.
+    await invite(seed, 'inv-1', '\t Unverified@Example.COM\n')
+    await syncMembers(env)
+    expect(driftLog()).toEqual({
+      event: 'identity.membership.drift',
+      orgId: 'org-a',
+      counts: {
+        missingInIdentity: 1,
+        missingInSanity: 1,
+        roleMismatch: 1,
+        ownersBelowTwo: 1,
+        invitePending: 1,
+      },
+      missingInIdentity: ['sp-unverified'],
+      missingInSanity: ['u-stray'],
+      roleMismatch: ['u-ok'],
+      ownersBelowTwo: 1,
+      invitePending: ['sp-unverified'],
+    })
+    const { text } = JSON.parse(slackPosts[0])
+    expect(text).toContain(
+      'of them invited, pending (speaker ids): 1 (sp-unverified)',
+    )
+    expect(text).not.toContain('nverified@')
+  })
+
+  it('never counts an expired, settled or other-org invite (#1949)', async () => {
+    const { env, seed } = await driftDb()
+    const email = 'unverified@example.com'
+    await invite(seed, 'inv-exp', email, { expiresAt: Date.now() - 1 })
+    for (const status of ['accepted', 'rejected', 'canceled'])
+      await invite(seed, `inv-${status}`, email, { status })
+    await invite(seed, 'inv-b', email, { org: 'org-b' })
+    await syncMembers(env)
+    expect(driftLog().counts).toEqual({
+      missingInIdentity: 1,
+      missingInSanity: 1,
+      roleMismatch: 1,
+      ownersBelowTwo: 1,
+    })
+    expect(driftLog()).not.toHaveProperty('invitePending')
+  })
+
+  it('never counts a pending owner invite as an owner (#1949)', async () => {
+    const { env, seed } = await driftDb()
+    await invite(seed, 'inv-own', 'unverified@example.com', { role: 'owner' })
+    await syncMembers(env)
+    expect(driftLog()).toMatchObject({
+      ownersBelowTwo: 1,
+      invitePending: ['sp-unverified'],
+    })
+  })
+
+  it('never counts an invite to a ticket-linked address (#1949)', async () => {
+    // Membership matching ignores that address, so accepting this invite
+    // would not clear the drift: calling it "invited" would mislead.
+    const { env, seed } = await driftDb()
+    speakers[2] = {
+      _id: 'sp-unverified',
+      knownEmails: ['unverified@example.com', 'ticket@example.com'],
+      ticketEmailGrants: [{ email: 'Ticket@Example.com' }],
+    }
+    await invite(seed, 'inv-t', 'ticket@example.com')
+    await syncMembers(env)
+    expect(driftLog().missingInIdentity).toEqual(['sp-unverified'])
+    expect(driftLog()).not.toHaveProperty('invitePending')
+  })
+
+  it('dedupes drift with pending invites, whatever order organizers come in (#1949)', async () => {
+    const { env, seed } = await driftDb()
+    speakers.push({ _id: 'sp-new', knownEmails: ['new@example.com'] })
+    const ids = ['sp-owner', 'sp-ok', 'sp-new', 'sp-unverified']
+    conferences[0] = { orgId: 'org-a', ids }
+    await invite(seed, 'inv-1', 'unverified@example.com')
+    await invite(seed, 'inv-2', 'new@example.com')
+    await syncMembers(env)
+    expect(driftLog()).toMatchObject({
+      ownersBelowTwo: 1,
+      invitePending: ['sp-new', 'sp-unverified'],
+    })
+    expect(slackPosts).toHaveLength(1)
+    // The same organizers, listed in the other order.
+    conferences[0] = { orgId: 'org-a', ids: [...ids].reverse() }
+    await syncMembers(env)
+    expect(slackPosts).toHaveLength(1)
+    expect(events()).toContain('identity.membership.drift_deduped')
+  })
+
+  it('stores the pending-invite count in the job status (#1949)', async () => {
+    const { env, d1, seed } = await driftDb()
+    await invite(seed, 'inv-1', 'unverified@example.com')
+    await syncMembers(env)
+    expect(JSON.parse((await memberSyncStatus(d1))!.detail!)).toEqual([
+      expect.objectContaining({
+        orgId: 'org-a',
+        counts: expect.objectContaining({ invitePending: 1 }),
+      }),
+    ])
+  })
+
   /** org-a with only Sanity organizers as members: drift is owners alone. */
   async function ownerDb(okRole: string) {
     const { env, d1 } = await freshDb()
