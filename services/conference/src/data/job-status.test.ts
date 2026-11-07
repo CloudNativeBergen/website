@@ -78,7 +78,10 @@ describe('conference parity status storage', () => {
       granted: null,
       detail: '[]',
     })
-    sqlite.exec("UPDATE conferences SET city = 'private wrong city'")
+    // A dual-written column (#2064): frozen ones like city are not compared.
+    sqlite.exec(
+      "UPDATE conferences SET contact_email = 'private@wrong.example'",
+    )
     await run()
     expect(status()).toEqual({
       job: 'conference.parity',
@@ -87,7 +90,9 @@ describe('conference parity status storage', () => {
       checked: 1,
       affected: 1,
       granted: null,
-      detail: JSON.stringify([{ conferenceId: 'conf-a', fields: ['city'] }]),
+      detail: JSON.stringify([
+        { conferenceId: 'conf-a', fields: ['contact_email'] },
+      ]),
     })
     expect(
       sqlite.prepare('SELECT count(*) AS n FROM job_status').get(),
@@ -139,11 +144,24 @@ describe('conference parity status storage', () => {
     'preserves the %s outcome if only status writes fail',
     async (outcome) => {
       if (outcome === 'drift')
-        sqlite.exec("UPDATE conferences SET city = 'private wrong city'")
+        sqlite.exec(
+          "UPDATE conferences SET contact_email = 'private@wrong.example'",
+        )
       if (outcome === 'unknown')
         sanity.fetch.mockRejectedValue(new Error('private failure text'))
       await run()
       const expectedLogs = [...logs]
+      // Each case really is that outcome, so the comparison below means it.
+      const events = expectedLogs.map((l) => JSON.parse(l).event)
+      expect(events).toContain(
+        {
+          clean: 'conference.parity.sweep',
+          drift: 'conference.parity.drift',
+          unknown: 'conference.parity.error',
+        }[outcome],
+      )
+      if (outcome === 'clean')
+        expect(events).not.toContain('conference.parity.drift')
       logs.length = 0
       const prepare = db.prepare.bind(db)
       vi.spyOn(db, 'prepare').mockImplementation((sql) => {
