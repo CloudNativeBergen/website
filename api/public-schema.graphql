@@ -81,6 +81,16 @@ type Query {
   The session org's members. Null unless the caller is a member or an operator acting for the tenant.
   """
   members: [OrganizationMember!]
+
+  """
+  The session user's speaker profile; null until first update, and null without a session user.
+  """
+  myProfile: SpeakerProfile
+
+  """
+  Network and public speaker profiles, for organizers only; null for anyone else. Never private profiles, user ids or emails.
+  """
+  speakerDirectory(after: String, first: Int = 50, query: String): SpeakerDirectoryPage
   program: Program
   speaker(id: ID!): Speaker
   speakerBySlug(slug: String!): Speaker
@@ -340,6 +350,11 @@ type Mutation {
   unsubscribePush(endpoint: String!): Boolean
 
   """
+  Creates or updates the session user's speaker profile. New profiles default to network visibility.
+  """
+  updateMyProfile(input: SpeakerProfileInput!): SpeakerProfile
+
+  """
   Creates an Organization and its first Conference: the Sanity documents (through the site), the directory rows and the owner membership. Retrying with the same idempotencyKey returns the same ids. Platform operators only (operator lane, no tenant).
   """
   createOrganization(idempotencyKey: String!, input: CreateOrganizationInput!): CreatedOrganization
@@ -558,6 +573,30 @@ type PendingInvitation {
   expiresAt: String
   id: ID
   role: String
+}
+
+type SpeakerDirectoryPage {
+  endCursor: String
+  hasNextPage: Boolean
+  nodes: [SpeakerProfile!]
+}
+
+"""
+A global speaker profile (#2093). Carries an opaque id, never the user id or email.
+"""
+type SpeakerProfile {
+  bio: String
+  id: ID
+  links: [String!]
+  name: String
+
+  """
+  R2 object key of the photo (letters, digits, / _ . -; no URL). Upload is a follow-up.
+  """
+  photoKey: String
+  topics: [String!]
+  updatedAt: String
+  visibility: ProfileVisibility
 }
 
 type Attachment {
@@ -803,6 +842,12 @@ enum MemberRole {
   owner
 }
 
+enum ProfileVisibility {
+  network
+  private
+  public
+}
+
 """Public status class of a scheduled talk."""
 enum TalkStatus {
   CONFIRMED
@@ -931,6 +976,16 @@ input PushSubscriptionInput {
 input PushSubscriptionKeys {
   auth: String!
   p256dh: String!
+}
+
+"""Omitted fields keep their stored value. name is required on create."""
+input SpeakerProfileInput {
+  bio: String
+  links: [String!]
+  name: String
+  photoKey: String
+  topics: [String!]
+  visibility: ProfileVisibility
 }
 
 input CreateOrganizationInput {

@@ -173,6 +173,7 @@ describe('gateway', () => {
       'subscribePush',
       'unsubscribePush',
       'updateConference',
+      'updateMyProfile',
     ])
     // Operator-only list (#1973): in the served schema, refused by
     // requirePlatform; introspection of it is operator-only (#1961).

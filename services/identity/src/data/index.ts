@@ -17,6 +17,7 @@ export { MemberError, type MemberRole } from './members'
 import { syncMembers, type SyncEnv } from './member-sync'
 import { memberSyncStatus } from './job-status'
 import { createPushSubscriptions } from './push-subscriptions'
+import { createSpeakerProfiles } from './speaker-profiles'
 
 /** What the gateway needs per request to mint an envelope. */
 export interface Principal {
@@ -45,6 +46,8 @@ export function createData(env: DataEnv) {
     members: () => createMembers(env),
     /** Web push subscriptions (kontroll#61). */
     pushSubscriptions: () => createPushSubscriptions(env.DB),
+    /** Global speaker profiles (#2093). */
+    speakerProfiles: () => createSpeakerProfiles(env.DB),
     /**
      * True only for an exact `https://<host>` origin (no path, port or
      * userinfo) whose host the directory holds as verified for an active

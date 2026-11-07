@@ -5,6 +5,7 @@ import { createGraphQLError } from 'graphql-yoga'
 import { builder } from './builder'
 import './job-status'
 import { MemberError, type MemberRole } from './data'
+import { VISIBILITIES, type Profile } from './data/speaker-profiles'
 import type { ResolverContext } from './worker'
 
 const refuse = () =>
@@ -280,6 +281,107 @@ builder.mutationType({
     }
   },
 })
+
+const Visibility = builder.enumType('ProfileVisibility', {
+  values: VISIBILITIES,
+})
+
+const SpeakerProfile = builder.objectRef<Profile>('SpeakerProfile').implement({
+  description:
+    'A global speaker profile (#2093). Carries an opaque id, never the user id or email.',
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    name: t.exposeString('name'),
+    bio: t.exposeString('bio'),
+    photoKey: t.exposeString('photoKey', {
+      nullable: true,
+      description:
+        'R2 object key of the photo (letters, digits, / _ . -; no URL). Upload is a follow-up.',
+    }),
+    links: t.exposeStringList('links'),
+    topics: t.exposeStringList('topics'),
+    visibility: t.field({ type: Visibility, resolve: (p) => p.visibility }),
+    updatedAt: t.string({
+      resolve: (p) => new Date(p.updatedAt).toISOString(),
+    }),
+  }),
+})
+
+const SpeakerDirectoryPage = builder
+  .objectRef<{
+    nodes: Profile[]
+    endCursor: string | null
+    hasNextPage: boolean
+  }>('SpeakerDirectoryPage')
+  .implement({
+    fields: (t) => ({
+      nodes: t.field({ type: [SpeakerProfile], resolve: (p) => p.nodes }),
+      endCursor: t.exposeString('endCursor', { nullable: true }),
+      hasNextPage: t.exposeBoolean('hasNextPage'),
+    }),
+  })
+
+const SpeakerProfileInput = builder.inputType('SpeakerProfileInput', {
+  description:
+    'Omitted fields keep their stored value. name is required on create.',
+  fields: (t) => ({
+    name: t.string(),
+    bio: t.string(),
+    photoKey: t.string(),
+    links: t.stringList(),
+    topics: t.stringList(),
+    visibility: t.field({ type: Visibility }),
+  }),
+})
+
+/**
+ * Organizers (#2093, owner decision), decided from the envelope before any
+ * lookup: an owner or admin of the tenant org, an operator acting for the
+ * tenant, or a PlatformContext operator. Plain members are not organizers.
+ */
+const isOrganizer = (ctx: ResolverContext) =>
+  ctx.envelope?.typ === 'platform' || !!reader(ctx)?.manager
+
+builder.queryFields((t) => ({
+  myProfile: t.field({
+    type: SpeakerProfile,
+    nullable: true,
+    description:
+      "The session user's speaker profile; null until first update, and null without a session user.",
+    resolve: (_, __, ctx) => {
+      const id = ctx.envelope?.userId
+      return id ? ctx.data.speakerProfiles().mine(id) : null
+    },
+  }),
+  speakerDirectory: t.field({
+    type: SpeakerDirectoryPage,
+    nullable: true,
+    description:
+      'Network and public speaker profiles, for organizers only; null for anyone else. Never private profiles, user ids or emails.',
+    args: {
+      first: t.arg.int({ defaultValue: 50 }),
+      after: t.arg.string(),
+      query: t.arg.string(),
+    },
+    resolve: (_, a, ctx) =>
+      isOrganizer(ctx)
+        ? ctx.data.speakerProfiles().directory(a.first ?? 50, a.after, a.query)
+        : null,
+  }),
+}))
+
+builder.mutationFields((t) => ({
+  updateMyProfile: t.field({
+    type: SpeakerProfile,
+    description:
+      "Creates or updates the session user's speaker profile. New profiles default to network visibility.",
+    args: { input: t.arg({ type: SpeakerProfileInput, required: true }) },
+    resolve: (_, a, ctx) =>
+      answer(() =>
+        ctx.data.speakerProfiles().update(sessionUser(ctx), a.input),
+      ),
+  }),
+}))
 
 // toSubGraphSchema supplies Query._service.
 export const schema = builder.toSubGraphSchema({
