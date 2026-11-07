@@ -511,6 +511,7 @@ const ALONE = new Set([
   'sponsors',
   'sponsorTiers',
   'cfp',
+  'speakerDirectory',
 ])
 
 function queries(tenants: T[]) {
@@ -994,8 +995,9 @@ describe('cross-tenant mutation walk', () => {
       // Membership (#1923): probe ids name no member or invitation of A, and
       // probe emails are no address, so these refuse; the snapshot holds B.
       else if (
-        // subscribePush: the probe endpoint is not https.
-        /"(inviteMember|cancelInvitation|removeMember|changeMemberRole|subscribePush)"/.test(
+        // subscribePush: the probe endpoint is not https; updateMyProfile: the
+        // probe input has no name.
+        /"(inviteMember|cancelInvitation|removeMember|changeMemberRole|subscribePush|updateMyProfile)"/.test(
           json,
         )
       )

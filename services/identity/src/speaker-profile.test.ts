@@ -156,9 +156,9 @@ describe('myProfile / updateMyProfile', () => {
 
   it('refuses anonymous callers and takes no userId argument', async () => {
     for (const who of [null, tenant(null)]) {
-      expect((await gql(who, MINE)).errors?.[0].extensions.code).toBe(
-        'FORBIDDEN',
-      )
+      const mine = await gql(who, MINE)
+      expect(mine.errors).toBeUndefined()
+      expect(mine.data.myProfile).toBeNull()
       expect(
         (await update(who as Envelope, { name: 'X' })).errors?.[0].extensions
           .code,
@@ -227,12 +227,14 @@ describe('validation', () => {
 })
 
 describe('speakerDirectory', () => {
-  it('refuses anonymous and non-organizer callers', async () => {
+  it('gives anonymous and non-organizer callers null', async () => {
     const u = await newUser()
+    // A network profile exists, so a missing guard would return a page.
+    await update(tenant(u), { name: 'Visible' })
     for (const who of [null, tenant(null), tenant(u)]) {
       const r = await gql(who, DIR)
-      expect(r.errors?.[0].extensions.code).toBe('FORBIDDEN')
-      expect(r.data?.speakerDirectory ?? null).toBeNull()
+      expect(r.errors).toBeUndefined()
+      expect(r.data.speakerDirectory).toBeNull()
     }
   })
 

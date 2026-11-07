@@ -345,24 +345,27 @@ builder.queryFields((t) => ({
   myProfile: t.field({
     type: SpeakerProfile,
     nullable: true,
-    description: "The session user's speaker profile; null until first update.",
-    resolve: (_, __, ctx) => ctx.data.speakerProfiles().mine(sessionUser(ctx)),
+    description:
+      "The session user's speaker profile; null until first update, and null without a session user.",
+    resolve: (_, __, ctx) => {
+      const id = ctx.envelope?.userId
+      return id ? ctx.data.speakerProfiles().mine(id) : null
+    },
   }),
   speakerDirectory: t.field({
     type: SpeakerDirectoryPage,
+    nullable: true,
     description:
-      'Network and public speaker profiles, for organizers only. Never private profiles, user ids or emails.',
+      'Network and public speaker profiles, for organizers only; null for anyone else. Never private profiles, user ids or emails.',
     args: {
       first: t.arg.int({ defaultValue: 50 }),
       after: t.arg.string(),
       query: t.arg.string(),
     },
-    resolve: (_, a, ctx) => {
-      if (!isOrganizer(ctx)) throw refuse()
-      return ctx.data
-        .speakerProfiles()
-        .directory(a.first ?? 50, a.after, a.query)
-    },
+    resolve: (_, a, ctx) =>
+      isOrganizer(ctx)
+        ? ctx.data.speakerProfiles().directory(a.first ?? 50, a.after, a.query)
+        : null,
   }),
 }))
 
