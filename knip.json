@@ -32,7 +32,9 @@
         "src/components/admin/dashboard/widgets/__matrix__/mock-use-widget-data.ts"
       ]
     },
-    "api": {},
+    "api": {
+      "ignoreDependencies": ["cloudflare"]
+    },
     "packages/tenancy": { "entry": ["src/index.ts", "src/*.typecheck.ts"] },
     "services/identity": {
       "entry": ["src/data/schema.ts", "src/worker.ts"],
