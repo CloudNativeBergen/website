@@ -197,16 +197,6 @@ builder.mutationType({
             .pushSubscriptions()
             .unsubscribe(sessionUser(ctx), a.endpoint),
       }),
-      prunePushSubscriptions: t.int({
-        ...op,
-        description:
-          'Deletes endpoints the push service answered 404 or 410 for. Platform context only.',
-        args: { endpoints: t.arg.stringList({ required: true }) },
-        resolve: (_, a, ctx) => {
-          if (ctx.envelope?.typ !== 'platform') throw refuse()
-          return answer(() => ctx.data.pushSubscriptions().prune(a.endpoints))
-        },
-      }),
       inviteMember: t.field({
         type: Invitation,
         args: { email: email(), role: role() },

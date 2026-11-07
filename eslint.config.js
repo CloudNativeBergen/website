@@ -172,6 +172,7 @@ const eslintConfig = [
       'api/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
       'services/content/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
       'services/program/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+      'services/sponsors/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
     ],
     plugins: {
       tenancy: { rules: { 'no-unscoped-groq': noUnscopedGroq } },
@@ -190,6 +191,7 @@ const eslintConfig = [
       'api/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
       'services/content/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
       'services/program/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+      'services/sponsors/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
     ],
     plugins: {
       d1: {
@@ -304,6 +306,7 @@ const eslintConfig = [
     files: [
       'services/content/src/data/**/*.{ts,mts,cts,tsx,js,mjs}',
       'services/program/src/data/**/*.{ts,mts,cts,tsx,js,mjs}',
+      'services/sponsors/src/data/**/*.{ts,mts,cts,tsx,js,mjs}',
     ],
     rules: (() => {
       const rules = boundary({

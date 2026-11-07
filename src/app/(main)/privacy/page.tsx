@@ -130,7 +130,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'October 25, 2026'
+  const lastUpdated = 'November 6, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -543,6 +543,47 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           notifications are automatically deleted 90 days after
                           they are created, except an unread new-message
                           notification, which is kept until you read it.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Organizer Push Notifications (konf.app) */}
+                    <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-6 dark:border-cyan-800 dark:bg-cyan-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-cyan-800 dark:text-cyan-200">
+                        <ChatBubbleOvalLeftIcon className="mr-3 h-5 w-5" />
+                        Organizer Push Notifications
+                      </h3>
+                      <ul className="space-y-2 text-sm text-cyan-700 dark:text-cyan-300">
+                        <li>
+                          • <strong>Push subscription:</strong> If you turn on
+                          push notifications in the organizer control panel
+                          (my.konf.app), we store your browser&apos;s push
+                          endpoint, its encryption keys, your user ID and when
+                          you subscribed
+                        </li>
+                        <li>
+                          • <strong>Browser push services:</strong> Each
+                          notification is encrypted and sent through the push
+                          service your browser uses (Google, Mozilla, Apple or
+                          Microsoft). The service sees the endpoint and when a
+                          message is sent, but cannot read its content
+                        </li>
+                        <li>
+                          • <strong>What we send:</strong> Short updates about
+                          your organization, such as a new member, a changed
+                          role or changed conference settings. You are never
+                          notified about your own actions
+                        </li>
+                      </ul>
+                      <div className="mt-3 rounded-lg bg-cyan-100 p-2 dark:bg-cyan-800/30">
+                        <p className="text-xs text-cyan-800 dark:text-cyan-200">
+                          <strong>Purpose:</strong> Telling organizers about
+                          changes in their organization.{' '}
+                          <strong>Legal Basis:</strong> Consent, given when you
+                          turn on push notifications. Turning them off deletes
+                          the subscription. A subscription the push service
+                          reports as expired is deleted too, and all of them are
+                          deleted with your account.
                         </p>
                       </div>
                     </div>

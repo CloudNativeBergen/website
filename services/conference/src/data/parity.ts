@@ -1,8 +1,10 @@
 // Daily D1 vs Sanity parity sweep (#1892 phase 3, #1879). Reads the D1 table
 // directly, so it validates D1 itself, not the gateway (which serves Sanity
 // while `d1_override` is off). Alert-only: nothing is repaired (owner
-// decision). Every D1 column is compared with the row the backfill would
-// write from Sanity today, after the backfill's own normalisation.
+// decision). Only columns still written to both stores (PARITY_COLUMNS,
+// #1917) are compared with the row the backfill would write from Sanity
+// today, after the backfill's own normalisation; frozen moved fields are not.
+// A D1 row Sanity no longer has is always reported.
 // Logs carry conference ids and column names, never values.
 // The one conference file that reads Sanity (eslint.config.js, #1892).
 import { createClient } from '@sanity/client'
@@ -22,8 +24,8 @@ export interface ScheduledEnv {
 /** Conferences checked per run; more rotate through by day. */
 export const MAX_PER_RUN = 50
 
-import { findDrift, QUERY } from './parity-core'
-export { findDrift, QUERY }
+import { findDrift, PARITY_COLUMNS, QUERY } from './parity-core'
+export { findDrift, PARITY_COLUMNS, QUERY }
 
 /** The day's slice of `ids`, wrapping, so every row is seen within n/cap days. */
 export function window<T>(ids: T[], now: number, cap = MAX_PER_RUN): T[] {
@@ -63,7 +65,7 @@ async function sweep(env: ScheduledEnv, now: number) {
   return {
     rows: rows.length,
     total: results.length,
-    drift: findDrift(rows, docs),
+    drift: findDrift(rows, docs, PARITY_COLUMNS),
   }
 }
 

@@ -51,7 +51,9 @@
 export type SubprocessorId =
   | 'sanity'
   | 'vercel'
+  | 'cloudflare'
   | 'resend'
+  | 'grafana'
   | 'checkin'
   | 'tito'
   | 'posthog'
@@ -132,6 +134,18 @@ export const SUBPROCESSOR_CATALOGUE: Record<SubprocessorId, CatalogueEntry> = {
     chosenBy: 'platform',
     location: 'United States',
   },
+  // The conference API: Workers and D1. The D1 databases run in Western
+  // Europe (WEUR) but have no EU jurisdiction set, and Workers run at the edge
+  // nearest the visitor, so this is disclosed as a US transfer under SCCs.
+  cloudflare: {
+    id: 'cloudflare',
+    name: 'Cloudflare, Inc.',
+    purpose:
+      'Hosting for the conference API and its databases (Workers and D1): conference, organization, account and membership data. The databases are stored in Western Europe; requests are processed at the Cloudflare location nearest you',
+    group: 'infrastructure',
+    chosenBy: 'platform',
+    location: 'United States',
+  },
   resend: {
     id: 'resend',
     name: 'Resend.com',
@@ -139,6 +153,17 @@ export const SUBPROCESSOR_CATALOGUE: Record<SubprocessorId, CatalogueEntry> = {
     group: 'infrastructure',
     chosenBy: 'platform',
     location: 'United States',
+  },
+  // The conference API's Workers export their logs and traces to Grafana
+  // Cloud (#1895), on the EU cluster prod-eu-west-4: no `location`, so this
+  // row does not drive the international-transfer section.
+  grafana: {
+    id: 'grafana',
+    name: 'Grafana Labs (Grafana Cloud, EU)',
+    purpose:
+      'Error and performance diagnostics for the conference API, hosted in the EU: request logs and traces (request path, response status, timing, organization and conference ids, the signed-in user id, and error messages with their stack traces)',
+    group: 'infrastructure',
+    chosenBy: 'platform',
   },
   checkin: {
     id: 'checkin',
@@ -220,7 +245,9 @@ export const SUBPROCESSOR_CATALOGUE: Record<SubprocessorId, CatalogueEntry> = {
 const DISCLOSURE_ORDER: readonly SubprocessorId[] = [
   'sanity',
   'vercel',
+  'cloudflare',
   'resend',
+  'grafana',
   'checkin',
   'tito',
   'posthog',
@@ -388,7 +415,9 @@ export function subprocessorSignals(
     // `chosenBy: 'platform'` rather than implied to be the tenant's choice.
     sanity: 'yes',
     vercel: 'yes',
+    cloudflare: 'yes',
     resend: 'yes',
+    grafana: 'yes',
     'oauth-providers': 'yes',
 
     checkin: facts.tenantKnown

@@ -273,7 +273,9 @@ describe('a failed read must NOT shorten the list', () => {
     for (const id of [
       'sanity',
       'vercel',
+      'cloudflare',
       'resend',
+      'grafana',
       'checkin',
       'tito',
       'posthog',
@@ -294,11 +296,51 @@ describe('a failed read must NOT shorten the list', () => {
 })
 
 describe('shared platform infrastructure is disclosed for everyone', () => {
-  it('always lists Sanity, Vercel, Resend and the CFP sign-in providers', () => {
+  it('always lists Sanity, Vercel, Resend, Grafana and the CFP sign-in providers', () => {
     const list = ids(facts())
     expect(list).toEqual(
-      expect.arrayContaining(['sanity', 'vercel', 'resend', 'oauth-providers']),
+      expect.arrayContaining([
+        'sanity',
+        'vercel',
+        'cloudflare',
+        'resend',
+        'grafana',
+        'oauth-providers',
+      ]),
     )
+  })
+
+  it('discloses Cloudflare as the API host: EU storage, US transfer under SCCs', () => {
+    const disclosure = buildSubprocessorDisclosure(facts())
+    const cloudflare = disclosure.processors.find((p) => p.id === 'cloudflare')
+    expect(cloudflare).toMatchObject({
+      certainty: 'confirmed',
+      chosenBy: 'platform',
+      group: 'infrastructure',
+      location: 'United States',
+    })
+    expect(cloudflare?.purpose).toMatch(/stored in Western Europe/)
+    expect(
+      internationalTransferProcessors(disclosure).map((p) => p.id),
+    ).toContain('cloudflare')
+  })
+
+  it('discloses the API diagnostics in Grafana as confirmed EU processing (#1895)', () => {
+    const disclosure = buildSubprocessorDisclosure(facts())
+    const grafana = disclosure.processors.find((p) => p.id === 'grafana')
+    expect(grafana).toMatchObject({
+      certainty: 'confirmed',
+      chosenBy: 'platform',
+      group: 'infrastructure',
+    })
+    expect(grafana?.purpose).toMatch(/logs and traces/)
+    expect(grafana?.purpose).toMatch(/stack traces/)
+    // EU cluster: not an international transfer (Vercel, US, still is).
+    const transfers = internationalTransferProcessors(disclosure).map(
+      (p) => p.id,
+    )
+    expect(transfers).toContain('vercel')
+    expect(transfers).not.toContain('grafana')
   })
 
   it('labels who chose each processor', () => {
