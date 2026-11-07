@@ -316,6 +316,7 @@ describe('shared platform infrastructure is disclosed for everyone', () => {
     expect(cloudflare).toMatchObject({
       certainty: 'confirmed',
       chosenBy: 'platform',
+      group: 'infrastructure',
       location: 'United States',
     })
     expect(cloudflare?.purpose).toMatch(/stored in Western Europe/)
