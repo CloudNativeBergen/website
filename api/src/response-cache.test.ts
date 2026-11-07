@@ -384,7 +384,8 @@ describe('response cache through the gateway (#1789)', () => {
     const req = post(QUERY, await site())
     const headers = new Headers(req.headers)
     for (const [k, v] of Object.entries(over))
-      v ? headers.set(k, v) : headers.delete(k)
+      if (v) headers.set(k, v)
+      else headers.delete(k)
     const res = await gateway.fetch(
       new Request(req.url, { method: 'POST', headers, body: await req.text() }),
       env,
