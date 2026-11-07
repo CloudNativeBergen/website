@@ -203,6 +203,11 @@ async function runSync(env: SyncEnv, progress: Progress) {
       .map((s) => s.trim())
       .filter(Boolean),
   )
+  // A mistyped id would leave that org granting with no sign (#1949).
+  const known = new Set(orgs.map((o) => o.id))
+  for (const orgId of sourceOrgs)
+    if (!known.has(orgId))
+      log('warn', 'identity.membership.source_org_unknown', { orgId })
   let granted = 0
   for (const { id: orgId } of orgs) {
     progress.checked++
@@ -298,11 +303,13 @@ async function checkDrift(
     if (userId) inSanity.add(userId)
     if (!userId || !roles.has(userId)) missingInIdentity.push(speakerId)
   }
+  // Whitespace stripped anywhere, as isOwner and the LAST_OWNER trigger do.
   const roleOk = (r: string) =>
     r
       .toLowerCase()
+      .replace(/[ \t\n\r]/g, '')
       .split(',')
-      .some((x) => ['owner', 'admin'].includes(x.trim()))
+      .some((x) => ['owner', 'admin'].includes(x))
   const drift: Drift = {
     missingInIdentity: [...new Set(missingInIdentity)].sort(),
     missingInSanity: [...roles.keys()].filter((u) => !inSanity.has(u)).sort(),
@@ -345,19 +352,29 @@ async function checkDrift(
     return log('log', 'identity.membership.drift_deduped', { orgId })
   // Same gate and dedupe as the Slack post: ids only (kontroll#61).
   emit({ type: 'membership.drift', organizationId: orgId })
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text: slackText(orgId, drift) }),
-    signal: AbortSignal.timeout(5000),
-  })
-  if (!res.ok) {
+  // Never the URL in a log: it is the webhook's secret.
+  const failed = (detail: { status: number } | { error: string }) => {
     progress.failed = true
     return log('error', 'identity.membership.drift_alert_failed', {
       orgId,
-      status: res.status,
+      ...detail,
     })
   }
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: slackText(orgId, drift) }),
+      signal: AbortSignal.timeout(5000),
+      // A 307/308 would re-POST the drift to wherever it points (#1949).
+      redirect: 'error',
+    })
+  } catch (e) {
+    // Name only: a message may carry the URL.
+    return failed({ error: e instanceof Error ? e.name : 'unknown' })
+  }
+  if (!res.ok) return failed({ status: res.status })
   await env.DB.prepare(
     'INSERT INTO member_drift_alert (organizationId, hash, postedAt) VALUES (?1, ?2, ?3) ON CONFLICT (organizationId) DO UPDATE SET hash = excluded.hash, postedAt = excluded.postedAt',
   )
