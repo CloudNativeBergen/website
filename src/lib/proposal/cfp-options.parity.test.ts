@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { audiences, formats, languages, levels } from './types'
-import { OPTIONS } from '../../../services/cfp/src/subgraph'
+import { OPTIONS } from '../../../services/cfp/src/data/source'
 
 const pairs = (m: Map<string, string>) =>
   [...m].map(([value, label]) => ({ value, label }))

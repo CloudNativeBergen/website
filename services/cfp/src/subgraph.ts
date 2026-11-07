@@ -4,44 +4,16 @@
 // program. No proposal state other than confirmed, no review and no speaker
 // contact field exists in this schema.
 import { builder } from './builder'
-import type { CfpTalk, CfpTopic, Option, SpeakerRef } from './data'
+import {
+  OPTIONS,
+  type CfpTalk,
+  type CfpTopic,
+  type Option,
+  type SpeakerRef,
+} from './data'
 
 const size = (assumedSize: number) => ({ listSize: { assumedSize } })
 const str = { nullable: true } as const
-
-// The site's option catalogues (src/lib/proposal/types.ts), copied because a
-// Worker cannot import that module's `@/` graph;
-// src/lib/proposal/cfp-options.parity.test.ts pins them
-// equal.
-const opts = (m: Record<string, string>): Option[] =>
-  Object.entries(m).map(([value, label]) => ({ value, label }))
-export const OPTIONS = {
-  formats: opts({
-    lightning_10: 'Lightning Talk (10 min)',
-    presentation_20: 'Presentation (20 min)',
-    presentation_25: 'Presentation (25 min)',
-    presentation_40: 'Presentation (40 min)',
-    presentation_45: 'Presentation (45 min)',
-    workshop_120: 'Workshop (2 hours)',
-    workshop_240: 'Workshop (4 hours)',
-  }),
-  levels: opts({
-    beginner: 'Beginner',
-    intermediate: 'Intermediate',
-    advanced: 'Advanced',
-  }),
-  languages: opts({ norwegian: 'Norwegian', english: 'English' }),
-  audiences: opts({
-    developer: 'Developer',
-    architect: 'Architect',
-    operator: 'Operator',
-    manager: 'Manager',
-    dataEngineer: 'Data Engineer',
-    securityEngineer: 'Security Engineer',
-    qaEngineer: 'QA Engineer',
-    devopsEngineer: 'DevOps Engineer',
-  }),
-}
 
 const OptionType = builder.objectRef<Option>('CfpOption').implement({
   fields: (t) => ({

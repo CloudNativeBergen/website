@@ -168,7 +168,7 @@
         { "binding": "CONTENT", "service": "konf-content" },
         { "binding": "PROGRAM", "service": "konf-program" },
         { "binding": "SPONSORS", "service": "konf-sponsors" },
-    { "binding": "CFP", "service": "konf-cfp" },
+        { "binding": "CFP", "service": "konf-cfp" },
         { "binding": "CONFERENCE", "service": "konf-conference" },
         { "binding": "IDENTITY", "service": "konf-identity" },
         {
