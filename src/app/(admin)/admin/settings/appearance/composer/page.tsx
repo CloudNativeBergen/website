@@ -1,6 +1,6 @@
 import { ErrorDisplay } from '@/components/admin'
 import { HomepageComposer } from '@/components/admin/composer'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getEditableScheduleForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveHomepageSections } from '@/lib/homepage'
 
 export const metadata = { title: 'Homepage composer' }
@@ -27,9 +27,8 @@ export default async function HomepageComposerPage({
   searchParams: Promise<{ section?: string }>
 }) {
   const { section } = await searchParams
-  const { conference, error } = await getConferenceForCurrentDomain({
+  const { conference, error } = await getEditableScheduleForCurrentDomain({
     organizers: true,
-    schedule: true,
     featuredSpeakers: true,
   })
 

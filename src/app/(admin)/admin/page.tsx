@@ -1,4 +1,7 @@
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import {
+  getConferenceForCurrentDomain,
+  getEditableScheduleForCurrentDomain,
+} from '@/lib/conference/sanity'
 import { AdminDashboard } from '@/components/admin/dashboard/AdminDashboard'
 import { ActivationHero } from '@/components/admin/ActivationHero'
 import { resolveActivationChecklist } from '@/lib/settings/activation-server'
@@ -18,9 +21,8 @@ async function DashboardContent() {
   const eventWindow =
     !!loaded.conference && isEventHeroWindow(loaded.conference)
   const { conference, error } = eventWindow
-    ? await getConferenceForCurrentDomain({
+    ? await getEditableScheduleForCurrentDomain({
         topics: true,
-        schedule: true,
         // Same fields as the briefing send, so the briefing version matches.
         includeSpeakerRegistrationLink: true,
       })

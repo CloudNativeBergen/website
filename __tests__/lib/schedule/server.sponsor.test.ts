@@ -8,10 +8,20 @@ import { evaluate, parse } from 'groq-js'
 import { getScheduleData } from '@/lib/schedule/server'
 
 const mockGetConference = vi.fn()
-vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForCurrentDomain: (...args: unknown[]) =>
-    mockGetConference(...args),
-}))
+vi.mock('@/lib/conference/sanity', () => {
+  const m = {
+    getConferenceForCurrentDomain: (...args: unknown[]) =>
+      mockGetConference(...args),
+  }
+  // The explicit schedule seams (#1772) read through the same mock.
+  const withSchedule = (o: object = {}) =>
+    m.getConferenceForCurrentDomain({ ...o, schedule: true } as never)
+  return {
+    ...m,
+    getEditableScheduleForCurrentDomain: withSchedule,
+    getPublicScheduleForCurrentDomain: withSchedule,
+  }
+})
 
 vi.mock('@/lib/proposal/server', () => ({
   getProposals: () => Promise.resolve({ proposals: [], proposalsError: null }),

@@ -14,6 +14,10 @@
  * projection (#1887).
  */
 import 'server-only'
+import {
+  apiHostForConference,
+  fetchApiSpeakerTalks,
+} from '@/lib/konf-api/program'
 import type { ProposalExisting, ProposalInput, Status } from './types'
 import * as store from './data/sanity'
 import { toPublicTalk, type PublicTalk } from './public'
@@ -54,6 +58,19 @@ export async function listPublicTalks(
   conferenceId: string,
   { speakerId }: { speakerId: string },
 ): Promise<{ talks: PublicTalk[]; err: Error | null }> {
+  // apiRead tenants read through the gateway (#1772); any failure is Sanity.
+  const host = await apiHostForConference(conferenceId)
+  if (host) {
+    try {
+      const rows = await fetchApiSpeakerTalks(host, conferenceId, speakerId)
+      return { talks: rows.map(toPublicTalk), err: null }
+    } catch (err) {
+      console.warn(
+        `[konf-api] talks falling back to Sanity for ${conferenceId}:`,
+        (err as Error).message,
+      )
+    }
+  }
   const { talks, err } = await store.listPublicTalks(conferenceId, speakerId)
   return { talks: talks.map(toPublicTalk), err }
 }

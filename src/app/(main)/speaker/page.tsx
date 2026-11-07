@@ -3,7 +3,7 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
 import { SpeakersNotAnnouncedNotice } from '@/components/speaker/SpeakersNotAnnouncedNotice'
-import { getSpeakers } from '@/lib/speaker'
+import { getPublicSpeakers } from '@/lib/speaker/server'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
 import { hasSubmittableFormats, isCfpOpen } from '@/lib/conference/state'
@@ -48,7 +48,7 @@ async function CachedSpeakersContent({ domain }: { domain: string }) {
     return null
   }
 
-  const { speakers, err } = await getSpeakers(conference._id)
+  const { speakers, err } = await getPublicSpeakers(conference._id)
   // A failed read is not "no speakers" (#832). Throwing keeps the failure out
   // of the 'use cache' entry and lets (main)/error.tsx show a retry state
   // instead of the not-announced notice.

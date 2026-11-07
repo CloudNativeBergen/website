@@ -12,24 +12,37 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({
   readStreamWall: vi.fn(),
 }))
-vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForCurrentDomain: async () => ({
-    conference: {
-      _id: 'conf-1',
-      sponsors: [],
-      schedules: [
-        {
-          _id: '2026-10-27',
-          date: '2026-10-27',
-          tracks: [
-            { trackTitle: 'Hovedsalen', trackDescription: '', talks: [] },
-          ],
-        },
-      ],
-    },
-    error: null,
-  }),
-}))
+vi.mock('@/lib/conference/sanity', () => {
+  const m = {
+    getConferenceForCurrentDomain: async () => ({
+      conference: {
+        _id: 'conf-1',
+        sponsors: [],
+        schedules: [
+          {
+            _id: '2026-10-27',
+            date: '2026-10-27',
+            tracks: [
+              { trackTitle: 'Hovedsalen', trackDescription: '', talks: [] },
+            ],
+          },
+        ],
+      },
+      error: null,
+    }),
+  }
+  // The explicit schedule seams (#1772) read through the same mock.
+  const withSchedule = (o: object = {}) =>
+    (m.getConferenceForCurrentDomain as (o: object) => unknown)({
+      ...o,
+      schedule: true,
+    })
+  return {
+    ...m,
+    getEditableScheduleForCurrentDomain: withSchedule,
+    getPublicScheduleForCurrentDomain: withSchedule,
+  }
+})
 vi.mock('@/lib/stream/wall', () => ({ readStreamWall: h.readStreamWall }))
 
 import { StreamWallRotation } from '@/components/stream/StreamWallRotation'

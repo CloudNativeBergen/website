@@ -382,6 +382,9 @@ type Attachment {
   description: String
   filename: String
 
+  """The Sanity `_key`."""
+  key: String
+
   """file or url."""
   kind: String
   title: String
@@ -393,9 +396,19 @@ type GalleryImage {
   date: String
   featured: Boolean
   id: ID
+
+  """The Sanity image object (asset, hotspot, crop, alt) as JSON."""
+  image: String
   location: String
   photographer: String
+  speakers: [GallerySpeaker!]
   url: String
+}
+
+type GallerySpeaker {
+  id: ID
+  name: String
+  slug: String
 }
 
 type Program {
@@ -405,20 +418,33 @@ type Program {
 
 type ProgramDay {
   date: String
+  id: ID
   slots: [ProgramSlot!]
 }
 
 type ProgramSlot {
   end: String
+
+  """The slot references a talk, resolved or not."""
+  hasTalkRef: Boolean
   placeholder: String
+
+  """Index of the slot within its track."""
+  position: Int
 
   """The track title."""
   room: String
   start: String
 
-  """Null for a break or a talk not yet confirmed."""
+  """
+  Null for a break. An unconfirmed talk has title, description, language and speakers null (TBA).
+  """
   talk: Talk
+  talkStatus: TalkStatus
   track: ProgramTrack
+
+  """Index of the track within the day."""
+  trackIndex: Int
 }
 
 type ProgramTrack {
@@ -452,9 +478,12 @@ type Speaker {
   """Confirmed talks in this conference."""
   talks: [Talk!]
   title: String
+  updatedAt: String
 }
 
-"""A confirmed talk."""
+"""
+A talk. Every root returns confirmed talks only; a program slot also carries an unconfirmed one, with title, description, language and speakers null.
+"""
 type Talk {
   attachments: [Attachment!]
   audiences: [String!]
@@ -462,6 +491,11 @@ type Talk {
   """Portable Text as JSON (Sanity shape)."""
   description: String
   format: String
+
+  """
+  Whether the talk takes feedback, never the code. Program slots only; null elsewhere.
+  """
+  hasFeedbackCode: Boolean
   id: ID
   language: String
   level: String
@@ -485,6 +519,7 @@ type TalkSpeaker {
 
 type Topic {
   color: String
+  description: String
   id: ID
   slug: String
   title: String
@@ -578,6 +613,13 @@ enum MemberRole {
   admin
   member
   owner
+}
+
+"""Public status class of a scheduled talk."""
+enum TalkStatus {
+  CONFIRMED
+  PENDING
+  WITHDRAWN
 }
 
 enum ConferenceLifecycle {

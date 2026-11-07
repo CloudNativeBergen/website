@@ -1,5 +1,8 @@
 import type { Metadata } from 'next'
-import { getConferenceForDomain } from '@/lib/conference/sanity'
+import {
+  getConferenceForDomain,
+  getPublicSchedule,
+} from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
 import {
   getLowestTicketPrice,
@@ -74,13 +77,12 @@ async function CachedHomeContent({ domain }: { domain: string }) {
   cacheLife('hours')
   cacheTag('content:homepage')
 
-  const { conference, error, status } = await getConferenceForDomain(domain, {
+  const { conference, error, status } = await getPublicSchedule(domain, {
     organizers: true,
     sponsors: true,
     sponsorTiers: true,
     featuredSpeakers: true,
     featuredTalks: true,
-    schedule: true,
     gallery: { featuredOnly: true },
   })
 

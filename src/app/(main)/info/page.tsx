@@ -1,4 +1,4 @@
-import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { getPublicSchedule } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
@@ -25,9 +25,7 @@ async function CachedInfoContent({ domain }: { domain: string }) {
   cacheLife('hours')
   cacheTag('content:info')
 
-  const { conference, error } = await getConferenceForDomain(domain, {
-    schedule: true,
-  })
+  const { conference, error } = await getPublicSchedule(domain, {})
 
   if (conference?._id) {
     cacheTag(conferenceTag(conference._id))

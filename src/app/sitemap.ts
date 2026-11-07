@@ -3,7 +3,7 @@ import { headers } from 'next/headers'
 
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { getDiscoveryVisibilityForDomain } from '@/lib/conference/visibility'
-import { getSpeakers } from '@/lib/speaker'
+import { getPublicSpeakers } from '@/lib/speaker/server'
 import { buildSitemap } from '@/lib/seo/sitemap'
 import { canonicalHost } from '@/lib/seo/canonical'
 import { isProgramPublished } from '@/lib/conference/state'
@@ -33,7 +33,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return buildSitemap(host, { unlisted: true })
   }
 
-  const { speakers } = await getSpeakers(conference._id)
+  const { speakers } = await getPublicSpeakers(conference._id)
 
   // The canonical host, not the request host, so an alias or preview host
   // lists the same URLs the pages declare as canonical.

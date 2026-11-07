@@ -1,7 +1,7 @@
 import { resolvePageMetadata } from '@/lib/seo/brand'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
-import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { getPublicSchedule } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
 import { isProgramPublished } from '@/lib/conference/state'
 import { ProgramClient } from './ProgramClient'
@@ -56,9 +56,8 @@ async function CachedProgramContent({ domain }: { domain: string }) {
   cacheLife('hours')
   cacheTag('content:program')
 
-  const { conference, error } = await getConferenceForDomain(domain, {
+  const { conference, error } = await getPublicSchedule(domain, {
     organizers: false,
-    schedule: true,
     topics: true,
     sponsors: true,
     sponsorTiers: true,

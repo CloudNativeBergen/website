@@ -16,9 +16,19 @@ vi.mock('@/lib/auth', () => ({ getAuthSession: h.getAuthSession }))
 vi.mock('@/lib/authz/organizer', () => ({
   isOrganizerForCurrentOrg: h.isOrganizerForCurrentOrg,
 }))
-vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForCurrentDomain: h.getConference,
-}))
+vi.mock('@/lib/conference/sanity', () => {
+  const m = {
+    getConferenceForCurrentDomain: h.getConference,
+  }
+  // The explicit schedule seams (#1772) read through the same mock.
+  const withSchedule = (o: object = {}) =>
+    m.getConferenceForCurrentDomain({ ...o, schedule: true } as never)
+  return {
+    ...m,
+    getEditableScheduleForCurrentDomain: withSchedule,
+    getPublicScheduleForCurrentDomain: withSchedule,
+  }
+})
 vi.mock('@/components/photo-wall/admin', () => ({
   PhotoWallAdminPage: () => null,
 }))

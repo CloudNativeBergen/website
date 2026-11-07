@@ -26,13 +26,26 @@ vi.mock('@/lib/authz/page-guard', () => ({
   denyNonOrganizer: async () => null,
 }))
 vi.mock('@/lib/auth', () => ({ getAuthSession: async () => null }))
-vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForCurrentDomain: async () => ({
-    conference: CONFERENCE,
-    domain: '2026.cloudnativedays.no',
-    error: null,
-  }),
-}))
+vi.mock('@/lib/conference/sanity', () => {
+  const m = {
+    getConferenceForCurrentDomain: async () => ({
+      conference: CONFERENCE,
+      domain: '2026.cloudnativedays.no',
+      error: null,
+    }),
+  }
+  // The explicit schedule seams (#1772) read through the same mock.
+  const withSchedule = (o: object = {}) =>
+    (m.getConferenceForCurrentDomain as (o: object) => unknown)({
+      ...o,
+      schedule: true,
+    })
+  return {
+    ...m,
+    getEditableScheduleForCurrentDomain: withSchedule,
+    getPublicScheduleForCurrentDomain: withSchedule,
+  }
+})
 vi.mock('@/lib/system-status/checks', () => ({
   buildSystemChecks: async () => [],
 }))

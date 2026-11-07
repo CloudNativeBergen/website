@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { Container } from '@/components/Container'
 import { BackgroundImage } from '@/components/BackgroundImage'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getPublicScheduleForCurrentDomain } from '@/lib/conference/sanity'
 import NextTalkDisplay from '@/components/stream/NextTalkDisplay'
 import { StreamSponsors } from '@/components/stream/StreamSponsors'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
@@ -37,8 +37,7 @@ export default async function StreamRoomPage({ params, searchParams }: Props) {
   const { room: roomParam } = await params
   const room = decodeURIComponent(roomParam).trim()
 
-  const { conference, error } = await getConferenceForCurrentDomain({
-    schedule: true,
+  const { conference, error } = await getPublicScheduleForCurrentDomain({
     sponsors: true,
     confirmedTalksOnly: false,
   })

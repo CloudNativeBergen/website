@@ -34,9 +34,12 @@ export interface Topic {
   title: string | null
   slug: string | null
   color: string | null
+  description: string | null
 }
 /** A talk attachment. Every attachment is public on the site's profile. */
 export interface Attachment {
+  /** The Sanity array `_key`. */
+  key: string | null
   kind: 'file' | 'url'
   attachmentType: string | null
   title: string | null
@@ -52,18 +55,22 @@ export interface ScheduleInfo {
   endTime: string | null
 }
 export interface Talk {
-  id: string
+  /** Null on an unconfirmed program slot's talk. */
+  id: string | null
   title: string | null
   /** Portable Text as JSON (Sanity shape). */
   description: string | null
   format: string | null
   level: string | null
   language: string | null
-  audiences: string[]
-  topics: Topic[]
-  attachments: Attachment[]
-  speakers: SpeakerRef[]
+  /** The four lists are null when the talk has no such field, as in Sanity. */
+  audiences: string[] | null
+  topics: Topic[] | null
+  attachments: Attachment[] | null
+  speakers: SpeakerRef[] | null
   scheduleInfo: ScheduleInfo | null
+  /** Whether, never which (#1472). Only the program read projects it. */
+  hasFeedbackCode: boolean | null
 }
 export interface Track {
   name: string | null
@@ -79,10 +86,25 @@ export interface Slot {
   /** The track the slot is in; the site names the room by its track title. */
   room: string | null
   track: Track
-  /** Null for a break, or a talk that is not confirmed (TBA on the site). */
+  /**
+   * Null for a break. A talk that is not confirmed keeps its format,
+   * level, audiences and topics (the TBA card); its title, description,
+   * language and speakers stay null, exactly as SCHEDULE_TRACKS projects it.
+   */
   talk: Talk | null
+  /** The slot had a talk reference, resolved or not (TBA vs service session). */
+  hasTalkRef: boolean
+  /** Public status class of the slot's talk; null when none resolved. */
+  talkStatus: TalkStatus | null
+  /** Index of the slot's track within the day, and of the slot within it. */
+  trackIndex: number
+  position: number
 }
+/** confirmed; withdrawn, canceled or rejected; anything else. */
+export type TalkStatus = 'CONFIRMED' | 'WITHDRAWN' | 'PENDING'
 export interface Day {
+  /** The schedule document id. */
+  id: string | null
   date: string
   slots: Slot[]
 }
@@ -94,6 +116,9 @@ export interface GalleryImage {
   date: string | null
   location: string | null
   featured: boolean
+  /** The Sanity image object `{asset, hotspot, crop, alt}` as JSON. */
+  image: string | null
+  speakers: { id: string; name: string | null; slug: string | null }[]
 }
 /** The public profile: nothing private (no email, phone, consent). */
 export interface Speaker {
@@ -107,6 +132,8 @@ export interface Speaker {
   /** Only the flags the site shows publicly. */
   flags: string[]
   galleryImages: GalleryImage[]
+  /** The speaker document's `_updatedAt` (sitemap lastModified). */
+  updatedAt: string | null
   /** Confirmed talks in the tenant's conference. */
   talks: Talk[]
 }
@@ -143,12 +170,13 @@ export const PUBLIC_FLAGS = ['local']
 // groq-global-scoped: the talks are those of ^ speaker in $conferenceId of $orgId.
 const SPEAKER_TALKS = `*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId && conference->organization._ref == $orgId] | order(title asc) { ${PUBLIC_TALK_FIELDS} }`
 // Explicit projection: only these fields ever leave Sanity.
-const SPEAKER_FIELDS = `_id, name, "slug": slug.current, title, bio, links,
+const SPEAKER_FIELDS = `_id, _updatedAt, name, "slug": slug.current, title, bio, links,
   "flags": flags[@ in ${JSON.stringify(PUBLIC_FLAGS)}], "image": ${SPEAKER_IMAGE_URL},
   "galleryImages": ${PUBLIC_SPEAKER_GALLERY},
   "talks": ${SPEAKER_TALKS}`
 
 const PROGRAM = `*[_type == "schedule" && conference._ref == $conferenceId && conference->organization._ref == $orgId && ${/* groq-global-scoped: the tenant predicate is literal beside it; this is a status constant */ OFFICIAL_SCHEDULE_FILTER}] | order(date asc) {
+    _id,
     date,
     ${SCHEDULE_TRACKS}
   }`
@@ -173,6 +201,10 @@ const strings = (v: unknown) =>
 const slug = (v: unknown) =>
   s(v) ?? s((v as { current?: unknown } | null)?.current)
 
+/** null for a missing field, so the site can tell it from an empty list. */
+const orNull = <T>(v: unknown, f: (v: unknown) => T): T | null =>
+  v == null ? null : f(v)
+
 const toSpeakerRef = (r: Row): SpeakerRef => ({
   id: r._id as string,
   name: s(r.name),
@@ -181,6 +213,7 @@ const toSpeakerRef = (r: Row): SpeakerRef => ({
   image: s(r.image),
 })
 const toAttachment = (r: Row): Attachment => ({
+  key: s(r._key),
   kind: r._type === 'fileAttachment' ? 'file' : 'url',
   attachmentType: s(r.attachmentType),
   title: s(r.title),
@@ -206,21 +239,32 @@ const toTalk = (r: Row): Talk => ({
   format: s(r.format),
   level: s(r.level),
   language: s(r.language),
-  audiences: strings(r.audiences),
-  topics: list(r.topics)
-    .filter((t) => t._id)
-    .map((t) => ({
-      id: t._id as string,
-      title: s(t.title),
-      slug: slug(t.slug),
-      color: s(t.color),
-    })),
-  attachments: list(r.attachments).map(toAttachment),
-  speakers: list(r.speakers)
-    .filter((sp) => sp._id)
-    .map(toSpeakerRef),
+  audiences: orNull(r.audiences, strings),
+  topics:
+    orNull(r.topics, list)
+      ?.filter((t) => t._id)
+      .map((t) => ({
+        id: t._id as string,
+        title: s(t.title),
+        slug: slug(t.slug),
+        color: s(t.color),
+        description: s(t.description),
+      })) ?? null,
+  attachments: orNull(r.attachments, list)?.map(toAttachment) ?? null,
+  speakers:
+    orNull(r.speakers, list)
+      ?.filter((sp) => sp._id)
+      .map(toSpeakerRef) ?? null,
   scheduleInfo: toScheduleInfo(r.scheduleInfo),
+  hasFeedbackCode:
+    typeof r.hasFeedbackCode === 'boolean' ? r.hasFeedbackCode : null,
 })
+const talkStatus = (v: unknown): TalkStatus =>
+  v === 'confirmed'
+    ? 'CONFIRMED'
+    : v === 'withdrawn' || v === 'canceled' || v === 'rejected'
+      ? 'WITHDRAWN'
+      : 'PENDING'
 const toSpeaker = (r: Row): Speaker => ({
   ...toSpeakerRef(r),
   bio: s(r.bio),
@@ -236,7 +280,16 @@ const toSpeaker = (r: Row): Speaker => ({
       date: s(g.date),
       location: s(g.location),
       featured: g.featured === true,
+      image: g.image ? JSON.stringify(g.image) : null,
+      speakers: list(g.speakers)
+        .filter((x) => x._id)
+        .map((x) => ({
+          id: x._id as string,
+          name: s(x.name),
+          slug: slug(x.slug),
+        })),
     })),
+  updatedAt: s(r._updatedAt),
   talks: list(r.talks).map(toTalk),
 })
 
@@ -255,23 +308,36 @@ export class SanityProgramSource implements ProgramSource {
   async program(t: Tenant): Promise<Day[]> {
     const days = await this.sanity.fetch<Row[]>(PROGRAM, { ...t })
     return list(days).map((d) => ({
+      id: s(d._id),
       date: d.date as string,
       slots: list(d.tracks)
-        .flatMap((tr) => {
+        .flatMap((tr, trackIndex) => {
           const track: Track = {
             name: s(tr.trackTitle),
             description: s(tr.trackDescription),
             sponsorId: s((tr.sponsor as Row | null)?._ref),
           }
-          return list(tr.talks).map((sl): Slot => {
-            const talk = sl.talk as Row | null
+          return list(tr.talks).map((sl, position): Slot => {
+            const talk = (sl.talk as Row | null)?._id ? (sl.talk as Row) : null
             return {
               start: s(sl.startTime),
               end: s(sl.endTime),
               placeholder: s(sl.placeholder),
               room: track.name,
               track,
-              talk: talk?.status === 'confirmed' ? toTalk(talk) : null,
+              // An unconfirmed talk arrives without title, description,
+              // language and speakers (SCHEDULE_TRACKS), so toTalk gives null.
+              // Its id is withheld too: the talk(id) root and the profile
+              // never know an unconfirmed talk, so no id leads anywhere.
+              talk: talk
+                ? talk.status === 'confirmed'
+                  ? toTalk(talk)
+                  : { ...toTalk(talk), id: null }
+                : null,
+              hasTalkRef: sl.hasTalkRef === true,
+              talkStatus: talk ? talkStatus(talk.status) : null,
+              trackIndex,
+              position,
             }
           })
         })

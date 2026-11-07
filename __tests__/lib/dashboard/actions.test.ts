@@ -114,10 +114,20 @@ vi.mock('@/server/trpc', () => ({
 }))
 
 const mockGetConferenceForCurrentDomain = vi.fn<AnyFn>()
-vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForCurrentDomain: (...args: unknown[]) =>
-    mockGetConferenceForCurrentDomain(...args),
-}))
+vi.mock('@/lib/conference/sanity', () => {
+  const m = {
+    getConferenceForCurrentDomain: (...args: unknown[]) =>
+      mockGetConferenceForCurrentDomain(...args),
+  }
+  // The explicit schedule seams (#1772) read through the same mock.
+  const withSchedule = (o: object = {}) =>
+    m.getConferenceForCurrentDomain({ ...o, schedule: true } as never)
+  return {
+    ...m,
+    getEditableScheduleForCurrentDomain: withSchedule,
+    getPublicScheduleForCurrentDomain: withSchedule,
+  }
+})
 
 // Org resolution — `requireOrganizer` is ORG-SCOPED: it grants only when the
 // session speaker's `organizerOrgIds` contains the org the REQUEST resolves to

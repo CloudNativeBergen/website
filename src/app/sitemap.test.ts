@@ -14,8 +14,8 @@ const conference = {
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForDomain: async () => ({ conference }),
 }))
-vi.mock('@/lib/speaker/sanity', () => ({
-  getSpeakers: async () => ({ speakers: [{ slug: 'ada' }] }),
+vi.mock('@/lib/speaker/server', () => ({
+  getPublicSpeakers: async () => ({ speakers: [{ slug: 'ada' }] }),
 }))
 
 import sitemap from './sitemap'
