@@ -450,6 +450,50 @@ describe('gateway', () => {
     })
   })
 
+  // #1877: extensions.http from a subgraph would set the gateway's status and headers.
+  it('ignores a subgraph error extensions.http status and headers', async () => {
+    const { env } = makeEnv()
+    ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+      Response.json({
+        data: { conference: null },
+        errors: [
+          {
+            message: 'boom',
+            path: ['conference'],
+            extensions: {
+              code: 'SANITY_DOWN',
+              http: {
+                status: 418,
+                headers: { 'set-cookie': 'session=planted', 'x-planted': '1' },
+              },
+            },
+          },
+        ],
+      })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await gateway.fetch(post(SUBGRAPH_QUERY), env)
+    const text = await res.text()
+    expect(res.status).toBe(200)
+    expect(res.headers.get('set-cookie')).toBeNull()
+    expect(res.headers.get('x-planted')).toBeNull()
+    expect(text).not.toContain('418')
+    expect(JSON.parse(text).errors[0]).toEqual({
+      message: 'Unexpected error.',
+      path: ['conference'],
+      extensions: { code: 'INTERNAL_SERVER_ERROR', unexpected: true },
+    })
+  })
+
+  it('keeps extensions.http on a masked gateway error', () => {
+    const outer = new GraphQLError('secret detail', {
+      originalError: new Error('secret detail'),
+      extensions: { http: { status: 503 } },
+    })
+    const masked = maskError(outer, 'Unexpected error.') as GraphQLError
+    expect(masked.message).toBe('Unexpected error.')
+    expect(masked.extensions.http).toEqual({ status: 503 })
+  })
+
   it('masks a GraphQLError chain that ends in a plain Error', () => {
     const inner = new GraphQLError('inner', {
       originalError: new Error('secret detail'),
@@ -587,6 +631,275 @@ describe('gateway', () => {
       })
       expect(JSON.stringify(body)).not.toContain('serviceName')
     })
+  })
+
+  // #1895: the Grafana alerts match these lines (docs/OBSERVABILITY.md).
+  describe('log events', () => {
+    const events = (spy: { mock: { calls: unknown[][] } }) =>
+      spy.mock.calls.flatMap(([line]) => {
+        if (typeof line !== 'string') return []
+        try {
+          const parsed = JSON.parse(line) as { event?: unknown }
+          return typeof parsed.event === 'string' ? [parsed] : []
+        } catch {
+          return []
+        }
+      })
+
+    it('logs gateway.response.5xx with the status', async () => {
+      const { env } = makeEnv()
+      ;(env.DIRECTORY as unknown as { fetch: unknown }).fetch = async () => {
+        throw new Error('secret detail')
+      }
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        const res = await gateway.fetch(
+          post(SUBGRAPH_QUERY, { origin: VERIFIED }),
+          env,
+        )
+        expect(res.status).toBe(503)
+        expect(events(error)).toEqual([
+          { event: 'gateway.response.5xx', status: 503 },
+        ])
+      } finally {
+        error.mockRestore()
+      }
+    })
+
+    it('logs gateway.error.masked with the subgraph, path and its code', async () => {
+      const { env } = makeEnv()
+      ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+        Response.json({
+          data: { conference: null },
+          errors: [
+            {
+              message: 'secret detail',
+              path: ['conference'],
+              extensions: { code: 'TENANT_MISMATCH' },
+            },
+          ],
+        })
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        const res = await gateway.fetch(post(SUBGRAPH_QUERY), env)
+        expect(res.status).toBe(200)
+        const logged = events(error)
+        expect(logged).toEqual([
+          {
+            event: 'gateway.error.masked',
+            subgraph: 'content',
+            path: 'conference',
+            code: 'TENANT_MISMATCH',
+          },
+        ])
+        expect(JSON.stringify(logged)).not.toContain('secret detail')
+      } finally {
+        error.mockRestore()
+      }
+    })
+
+    it('logs gateway.error.masked when a subgraph answers 5xx', async () => {
+      const { env } = makeEnv()
+      ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+        new Response('upstream secret page', { status: 502 })
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        await gateway.fetch(post(SUBGRAPH_QUERY), env)
+        expect(events(error)).toMatchObject([
+          { event: 'gateway.error.masked', path: 'conference' },
+        ])
+        expect(JSON.stringify(events(error))).not.toContain('upstream secret')
+      } finally {
+        error.mockRestore()
+      }
+    })
+
+    // The 2026-11-04 incident: a subgraph without GATEWAY_PUBLIC_KEY refuses
+    // every envelope (packages/tenancy reject), and the caller sees a 200.
+    it('logs gateway.error.masked for a subgraph envelope refusal', async () => {
+      const { env } = makeEnv()
+      ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+        Response.json(
+          {
+            errors: [
+              {
+                message: 'invalid tenant envelope',
+                extensions: { code: 'TENANT_MISMATCH' },
+              },
+            ],
+          },
+          { status: 403 },
+        )
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        const res = await gateway.fetch(post(SUBGRAPH_QUERY), env)
+        expect(res.status).toBe(200)
+        expect(events(error)).toEqual([
+          {
+            event: 'gateway.error.masked',
+            subgraph: 'content',
+            path: 'conference',
+            code: 'TENANT_MISMATCH',
+          },
+        ])
+      } finally {
+        error.mockRestore()
+      }
+    })
+
+    it('logs gateway.response.5xx for an uncaught throw, then rethrows', async () => {
+      const { env } = makeEnv()
+      vi.mocked(env.API_IP_LIMITER.limit).mockRejectedValue(
+        new Error('secret detail'),
+      )
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        await expect(gateway.fetch(post(SUBGRAPH_QUERY), env)).rejects.toThrow(
+          'secret detail',
+        )
+        expect(events(error)).toEqual([
+          { event: 'gateway.response.5xx', status: 500, uncaught: true },
+        ])
+      } finally {
+        error.mockRestore()
+      }
+    })
+
+    it.each([
+      [
+        'the per-IP limit',
+        () => makeEnv(undefined, true, false),
+        {},
+        429,
+        'RATE_LIMITED',
+      ],
+      [
+        'the caller limit',
+        () => makeEnv(undefined, false),
+        {},
+        429,
+        'RATE_LIMITED',
+      ],
+      [
+        'an invalid identity token',
+        () => makeEnv(),
+        { authorization: 'Bearer nope' },
+        401,
+        'UNAUTHENTICATED',
+      ],
+    ] as const)(
+      'logs gateway.rejected for %s',
+      async (_, env, headers, status, code) => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+        try {
+          const res = await gateway.fetch(
+            post(SUBGRAPH_QUERY, { origin: VERIFIED, ...headers }),
+            env().env,
+          )
+          expect(res.status).toBe(status)
+          expect(events(error)).toEqual([
+            { event: 'gateway.rejected', status, code },
+          ])
+        } finally {
+          error.mockRestore()
+        }
+      },
+    )
+
+    it('logs gateway.rejected for the mutation budget', async () => {
+      const { env } = makeEnv(undefined, true, true, false)
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        const res = await gateway.fetch(
+          post(
+            { query: 'mutation { updateConference(input: {}) { id } }' },
+            { origin: VERIFIED, authorization: `Bearer ${await jwt()}` },
+          ),
+          env,
+        )
+        expect(res.status).toBe(429)
+        expect(events(error)).toEqual([
+          {
+            event: 'gateway.rejected',
+            status: 429,
+            code: 'RATE_LIMITED',
+            limit: 'mutation',
+          },
+        ])
+      } finally {
+        error.mockRestore()
+      }
+    })
+
+    // Hive fills data: { conference: null }, so a 5xx alert alone sees nothing.
+    it('answers 200 with only the masked event when a subgraph sends no data', async () => {
+      const { env } = makeEnv()
+      ;(env.CONTENT as unknown as { fetch: unknown }).fetch = async () =>
+        Response.json({
+          errors: [{ message: 'secret detail', extensions: { code: 'X' } }],
+        })
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        const res = await gateway.fetch(
+          post({ query: '{ conference { id } }' }),
+          env,
+        )
+        expect({ status: res.status, events: events(error) }).toEqual({
+          status: 200,
+          events: [
+            {
+              event: 'gateway.error.masked',
+              subgraph: 'content',
+              path: 'conference',
+              code: 'X',
+            },
+          ],
+        })
+      } finally {
+        error.mockRestore()
+      }
+    })
+
+    it('caps a subgraph code in the masked event', () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        maskError(
+          new GraphQLError('x', {
+            extensions: { code: 'X'.repeat(500), serviceName: 'conference' },
+          }),
+          'Unexpected error.',
+        )
+        expect(events(error)).toEqual([
+          {
+            event: 'gateway.error.masked',
+            subgraph: 'conference',
+            code: 'X'.repeat(64),
+          },
+        ])
+      } finally {
+        error.mockRestore()
+      }
+    })
+
+    it.each(['BAD_USER_INPUT', 'NOT_FOUND', 'FORBIDDEN', 'UNAUTHENTICATED'])(
+      'logs no masked event for the safe code %s',
+      (code) => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+        try {
+          const masked = maskError(
+            new GraphQLError('refused', {
+              extensions: { code, serviceName: 'conference' },
+            }),
+            'Unexpected error.',
+          ) as GraphQLError
+          // The value that proves this path ran: the code passed through.
+          expect(masked.extensions.code).toBe(code)
+          expect(events(error)).toEqual([])
+        } finally {
+          error.mockRestore()
+        }
+      },
+    )
   })
 
   describe('rate limiting', () => {

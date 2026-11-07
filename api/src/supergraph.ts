@@ -23,6 +23,7 @@ import {
 import { schema as content } from '../../services/content/src/subgraph'
 import { schema as conference } from '../../services/conference/src/subgraph'
 import { schema as program } from '../../services/program/src/subgraph'
+import { schema as sponsors } from '../../services/sponsors/src/subgraph'
 import { schema as identity } from '../../services/identity/src/subgraph'
 import { schema as tenantDirectory } from '../../services/tenant-directory/src/subgraph'
 
@@ -35,6 +36,7 @@ export const SUBGRAPHS = {
   'tenant-directory': tenantDirectory,
   content,
   program,
+  sponsors,
   conference,
   identity,
 }
