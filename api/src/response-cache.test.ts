@@ -200,12 +200,19 @@ function workersCache(env: Env, purgeFails = false) {
   return { ctx, store, seen, purged }
 }
 
-const post = (body: unknown, headers: Record<string, string>) =>
-  new Request('http://api.test/graphql', {
+// A real client declares the length; the gateway reads only such bodies.
+const post = (body: unknown, headers: Record<string, string>) => {
+  const text = JSON.stringify(body)
+  return new Request('http://api.test/graphql', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
-    body: JSON.stringify(body),
+    headers: {
+      'content-type': 'application/json',
+      'content-length': String(new TextEncoder().encode(text).length),
+      ...headers,
+    },
+    body: text,
   })
+}
 const site = async (host = 'conf.example') => ({
   [SITE_ASSERTION_HEADER]: await assertion(host),
 })
@@ -338,6 +345,54 @@ describe('response cache through the gateway (#1789)', () => {
       ctx,
     )
     expect(after.headers.get('x-konf-cache')).toBe('miss')
+  })
+
+  it('purges after a mutation in a body it did not read (application/graphql)', async () => {
+    const env = makeEnv()
+    const { ctx, store, purged } = workersCache(env)
+    await gateway.fetch(post(QUERY, await site()), env, ctx)
+    expect(store.size).toBe(1)
+    const write = await gateway.fetch(
+      new Request('http://api.test/graphql', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/graphql',
+          ...(await site()),
+          authorization: `Bearer ${await session()}`,
+        },
+        body: MUTATION.query,
+      }),
+      env,
+      ctx,
+    )
+    expect(await write.json()).toEqual({
+      data: { updateConference: { id: 'conf_a' } },
+    })
+    expect(purged).toEqual([['org:org_a', 'conf:conf_a']])
+    expect(store.size).toBe(0)
+  })
+
+  it.each([
+    ['no declared length', { 'content-length': '' }],
+    [
+      'a declared length over 64 KB',
+      { 'content-length': String(64 * 1024 + 1) },
+    ],
+  ])('neither buffers nor caches a body with %s', async (_, over) => {
+    const env = makeEnv()
+    const { ctx, seen } = workersCache(env)
+    const req = post(QUERY, await site())
+    const headers = new Headers(req.headers)
+    for (const [k, v] of Object.entries(over))
+      v ? headers.set(k, v) : headers.delete(k)
+    const res = await gateway.fetch(
+      new Request(req.url, { method: 'POST', headers, body: await req.text() }),
+      env,
+      ctx,
+    )
+    expect(await res.json()).toEqual({ data: { conference: { id: 'conf_a' } } })
+    expect(res.headers.get('x-konf-cache')).toBeNull()
+    expect(seen).toEqual([])
   })
 
   it('a failed purge never fails the write, and is logged', async () => {

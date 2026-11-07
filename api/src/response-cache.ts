@@ -64,6 +64,25 @@ export function cacheableRead(body: string): ReadPayload | null {
   }
 }
 
+/** Largest body the gateway reads to classify a request. */
+export const MAX_READ_BODY = 64 * 1024
+
+/**
+ * Whether the gateway may buffer this body: a POST of JSON with a declared
+ * length within MAX_READ_BODY. Anything else goes to Yoga untouched, so its
+ * own body limit applies, and is never cached.
+ */
+export function readableBody(request: Request) {
+  const length = Number(request.headers.get('content-length'))
+  return (
+    request.method === 'POST' &&
+    /^application\/json\b/i.test(request.headers.get('content-type') ?? '') &&
+    Number.isInteger(length) &&
+    length > 0 &&
+    length <= MAX_READ_BODY
+  )
+}
+
 /** Whether a request body is a mutation (purge after it succeeds). */
 export function isMutation(body: string): boolean {
   try {

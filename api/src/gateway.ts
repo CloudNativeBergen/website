@@ -26,6 +26,7 @@ import {
   cacheTtl,
   isMutation,
   loopback,
+  readableBody,
   storable,
   tagsFor,
   toClient,
@@ -691,9 +692,10 @@ export function createGateway(supergraph: string) {
         conferenceId: t.conferenceId,
         flags: t.flags ?? null,
       }
-      const body =
-        request.method === 'POST' ? await forwarded.clone().text() : ''
-      if (siteHost && auth === null && request.method === 'POST') {
+      // Only a small JSON body with a declared length is read here, so a
+      // large or streamed one still meets Yoga's body limit first.
+      const body = readableBody(request) ? await forwarded.clone().text() : null
+      if (siteHost && auth === null && body !== null) {
         const read = cacheableRead(body)
         const loop =
           read &&
@@ -712,7 +714,11 @@ export function createGateway(supergraph: string) {
       const res = await runtime(forwarded, context)
       // A write through the gateway drops the tenant's cached reads. A purge
       // failure never fails the write; entries then expire within the TTL.
-      if (res.status === 200 && isMutation(body)) {
+      // A POST whose body was not read (another content type, or too large)
+      // may be a mutation too, so it purges as well.
+      const write =
+        request.method === 'POST' && (body === null || isMutation(body))
+      if (res.status === 200 && write) {
         const tags = tagsFor(t)
         try {
           if (!tags) throw new Error('untaggable tenant')
