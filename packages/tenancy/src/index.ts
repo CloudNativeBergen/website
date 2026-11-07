@@ -3,6 +3,7 @@
 // extends, the audited escape hatch, and the per-resolver attempt counter.
 // Ported from RunKonf/konf-grapql-poc@poc (poc/shared/tenancy), hardened per
 // RunKonf/konf-grapql-poc#23.
+import { createGraphQLError } from 'graphql-yoga'
 import {
   SignJWT,
   jwtVerify,
@@ -126,9 +127,13 @@ export async function verifyEnvelope(
 }
 
 export function requireTenant(envelope: Envelope): TenantEnvelope {
+  // FORBIDDEN, not a plain Error: Yoga masks a plain Error into "Unexpected
+  // error.", which reads as an outage and fires gateway.error.masked (#1954).
+  // Yoga's own constructor, so its instanceof check holds across builds.
   if (envelope.typ !== 'tenant') {
-    throw new Error(
+    throw createGraphQLError(
       'tenant-scoped access requires a TenantEnvelope, not a PlatformContext or UserContext',
+      { extensions: { code: 'FORBIDDEN' } },
     )
   }
   if (!envelope.orgId) throw new Error('tenant envelope has no orgId')

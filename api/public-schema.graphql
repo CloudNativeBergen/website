@@ -137,7 +137,9 @@ type ConferenceParityStatus {
 }
 
 type Mutation {
-  """Patches the request's Conference. Requires an org owner or admin."""
+  """
+  Patches the request's Conference. Requires an org owner or admin, or a platform operator acting for the org (audited).
+  """
   updateConference(input: ConferencePatch!): Conference!
   cancelInvitation(invitationId: ID!): Boolean
   changeMemberRole(role: MemberRole!, userId: ID!): Boolean

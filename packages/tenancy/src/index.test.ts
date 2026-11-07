@@ -158,6 +158,23 @@ class TalksRepo extends ScopedRepository {
 }
 
 describe('ScopedRepository', () => {
+  // #1954: a GraphQL FORBIDDEN, so Yoga passes it through instead of masking
+  // it as "Unexpected error.".
+  it.each([
+    ['a PlatformContext', () => platform],
+    ['a UserContext', () => user],
+  ])('refuses %s with code FORBIDDEN', (_, envelope) => {
+    let thrown: unknown
+    try {
+      new TalksRepo(envelope(), { query: vi.fn() })
+    } catch (e) {
+      thrown = e
+    }
+    expect(
+      (thrown as { extensions?: { code?: string } })?.extensions?.code,
+    ).toBe('FORBIDDEN')
+  })
+
   it('refuses a PlatformContext', () => {
     expect(() => new TalksRepo(platform, { query: vi.fn() })).toThrow(
       /PlatformContext/,

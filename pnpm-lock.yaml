@@ -433,6 +433,9 @@ importers:
 
   packages/tenancy:
     dependencies:
+      graphql-yoga:
+        specifier: ^5
+        version: 5.24.6(graphql@16.14.2)
       jose:
         specifier: ^6.2.14
         version: 6.2.14

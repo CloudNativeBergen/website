@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "graphql-yoga": "^5",
     "jose": "^6.2.14"
   },
   "devDependencies": {

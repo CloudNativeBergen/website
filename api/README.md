@@ -116,8 +116,9 @@ verifies (#1954). Membership is re-read on every request.
   Scoped repository accepts.
 - Platform operator, `x-konf-operator-tenant: <tenant host>`: an ordinary
   tenant envelope for that tenant with the operator's own `orgRole` there
-  (often null) and scope `platform:operator`, so writes still need
-  owner/admin. An unknown host gets 400.
+  (often null) and scope `platform:operator`. That scope may write conference
+  settings without a role (each write logs `operator.write`, #1921); other
+  writes still need owner/admin. An unknown host gets 400.
 - Member, naming a tenant host of an org they belong to: an ordinary tenant
   envelope with their own `orgRole` and no scope. An org they do not belong
   to, and an unknown host, both get the same 403 before any subgraph read.

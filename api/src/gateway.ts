@@ -617,8 +617,10 @@ export function createGateway(supergraph: string) {
             : notAuthorized()
         if (tenant && !operator && !principal?.orgRole) return notAuthorized()
         // Acting for a tenant: an ordinary tenant envelope carrying the
-        // caller's own live orgRole there, so writes still need owner/admin.
-        // Only an operator's carries OPERATOR_SCOPE. Without a tenant: a
+        // caller's own live orgRole there. Only an operator's carries
+        // OPERATOR_SCOPE, which lets conference settings be written without a
+        // role (audited as operator.write, #1921); a member still needs
+        // owner/admin. Without a tenant: a
         // PlatformContext for an operator, which no Scoped repository accepts;
         // a UserContext (#2036) for anyone else identity knows: their userId
         // and no org, which only myOrganizations reads.
