@@ -21,6 +21,12 @@ const Drift = builder.objectRef<MemberSyncDrift>('MemberSyncDrift').implement({
       nullable: true,
       resolve: (d) => d.counts.ownersBelowTwo,
     }),
+    invitePending: t.int({
+      nullable: false,
+      description:
+        'Of missingInIdentity, how many have a pending, unexpired invitation.',
+      resolve: (d) => d.counts.invitePending ?? 0,
+    }),
   }),
 })
 const Status = builder.objectRef<JobStatusRow>('MemberSyncStatus').implement({

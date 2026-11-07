@@ -382,6 +382,8 @@ type MemberInvitation {
 }
 
 type MemberSyncDrift {
+  """Of missingInIdentity, how many have a pending, unexpired invitation."""
+  invitePending: Int!
   missingInIdentity: Int!
   missingInSanity: Int!
   orgId: ID!

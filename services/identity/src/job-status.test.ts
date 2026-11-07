@@ -58,7 +58,7 @@ beforeEach(async () => {
   reads = 0
 })
 const QUERY =
-  '{ memberSyncStatus { ranAt status checked affected granted drifted { orgId missingInIdentity missingInSanity roleMismatch ownersBelowTwo } } }'
+  '{ memberSyncStatus { ranAt status checked affected granted drifted { orgId missingInIdentity missingInSanity roleMismatch ownersBelowTwo invitePending } } }'
 async function query(envelope: Envelope | null) {
   const db = new Proxy(d1, {
     get(target, property) {
@@ -142,12 +142,39 @@ describe('memberSyncStatus', () => {
               missingInSanity: 0,
               roleMismatch: 1,
               ownersBelowTwo: 1,
+              // Absent in the stored counts (no pending invite): 0.
+              invitePending: 0,
             },
           ],
         },
       },
     })
     expect(reads).toBe(1)
+  })
+  it('returns the pending-invite count when the run stored one (#1949)', async () => {
+    await recordJobStatus(d1, {
+      job: 'identity.member_sync',
+      ran_at: 1794000000000,
+      status: 'drift',
+      checked: 1,
+      affected: 1,
+      granted: 0,
+      detail: JSON.stringify([
+        {
+          orgId: 'org-a',
+          counts: {
+            missingInIdentity: 3,
+            missingInSanity: 0,
+            roleMismatch: 0,
+            invitePending: 2,
+          },
+        },
+      ]),
+    })
+    const res = (await query(platform)) as {
+      data: { memberSyncStatus: { drifted: { invitePending: number }[] } }
+    }
+    expect(res.data.memberSyncStatus.drifted[0].invitePending).toBe(2)
   })
   it.each([
     tenant,

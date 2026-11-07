@@ -271,6 +271,9 @@ export interface Drift {
   roleMismatch: string[]
   /** Owner count, set only when under two. A count: no ids. */
   ownersBelowTwo?: number
+  /** Of missingInIdentity, the speaker ids with a pending, unexpired
+   * invitation to one of their known emails. Set only when some are (#1949). */
+  invitePending?: string[]
 }
 
 /** Same rule as the LAST_OWNER trigger (migration 0003): strip space, tab,
@@ -298,11 +301,34 @@ async function checkDrift(
   const roles = new Map(rows.map((r) => [r.userId, r.role]))
   const inSanity = new Set<string>()
   const missingInIdentity: string[] = []
-  for (const { speakerId, emails } of organizers) {
-    const userId = emails.map((e) => verified.get(e)).find(Boolean)
+  const missingEmails: Organizer[] = []
+  for (const o of organizers) {
+    const userId = o.emails.map((e) => verified.get(e)).find(Boolean)
     if (userId) inSanity.add(userId)
-    if (!userId || !roles.has(userId)) missingInIdentity.push(speakerId)
+    if (!userId || !roles.has(userId)) {
+      missingInIdentity.push(o.speakerId)
+      missingEmails.push(o)
+    }
   }
+  // An expired invitation stays `pending` until retired, so expiry is checked.
+  const invited = missingEmails.length
+    ? new Set(
+        (
+          await env.DB.prepare(
+            "SELECT lower(trim(email)) AS email FROM invitation WHERE organizationId = ?1 AND status = 'pending' AND expiresAt > ?2",
+          )
+            .bind(orgId, Date.now())
+            .all<{ email: string }>()
+        ).results.map((r) => r.email),
+      )
+    : new Set<string>()
+  const invitePending = [
+    ...new Set(
+      missingEmails
+        .filter((o) => o.emails.some((e) => invited.has(e)))
+        .map((o) => o.speakerId),
+    ),
+  ].sort()
   // As authorization reads a role (members.ts asMember: trim each item), so
   // a role it refuses, such as "ow ner", is a mismatch. ownersBelowTwo uses
   // isOwner instead, the LAST_OWNER trigger's rule: the two differ on purpose
@@ -319,7 +345,8 @@ async function checkDrift(
       .filter((u) => roles.has(u) && !roleOk(roles.get(u)!))
       .sort(),
   }
-  // Pending invites do not count (#1923 follow-up).
+  if (invitePending.length) drift.invitePending = invitePending
+  // A pending invite never counts as an owner: it may never be accepted.
   const owners = rows.filter((r) => isOwner(r.role)).length
   if (owners < 2) drift.ownersBelowTwo = owners
   const counts: MemberSyncDrift['counts'] = {
@@ -327,6 +354,7 @@ async function checkDrift(
     missingInSanity: drift.missingInSanity.length,
     roleMismatch: drift.roleMismatch.length,
     ...(drift.ownersBelowTwo === undefined ? {} : { ownersBelowTwo: 1 }),
+    ...(invitePending.length ? { invitePending: invitePending.length } : {}),
   }
   if (Object.values(counts).every((n) => n === 0)) {
     // Clean: forget the last alert, so a recurrence posts at once.
@@ -400,6 +428,9 @@ export function slackText(orgId: string, d: Drift) {
   return [
     `Organizer membership drift in org ${orgId}`,
     line('In Sanity, missing in identity (speaker ids)', d.missingInIdentity),
+    ...(d.invitePending
+      ? [line('  of them invited, pending (speaker ids)', d.invitePending)]
+      : []),
     line('In identity, missing in Sanity (user ids)', d.missingInSanity),
     line('Role neither owner nor admin (user ids)', d.roleMismatch),
     ...(d.ownersBelowTwo === undefined
