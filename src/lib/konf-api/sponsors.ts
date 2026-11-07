@@ -44,8 +44,8 @@ export async function fetchApiSponsors(
               website: sponsor.website ?? '',
               logo: null,
               logoBright: null,
-              logoUrl: sponsor.logoUrl,
-              logoBrightUrl: sponsor.logoBrightUrl,
+              logoUrl: dataImage(sponsor.logoUrl),
+              logoBrightUrl: dataImage(sponsor.logoBrightUrl),
             },
             tier: tier?.id
               ? {
@@ -59,4 +59,9 @@ export async function fetchApiSponsors(
         ]
       : [],
   )
+}
+
+/** Only `data:image/…` URLs reach <img src>; anything else (a remote URL) is dropped, so the API can't make visitors load third-party images. */
+export function dataImage(url: string | null | undefined): string | null {
+  return url && /^data:image\/[a-z0-9.+-]+;base64,/i.test(url) ? url : null
 }
