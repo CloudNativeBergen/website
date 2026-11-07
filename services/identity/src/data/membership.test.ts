@@ -295,6 +295,30 @@ describe('pending invitations', () => {
       }),
     ).rejects.toThrow()
   })
+
+  it('only lists pending invitations whose expiresAt is in the future (#1979)', async () => {
+    const { orgId, members } = await org('owner')
+    const activeId = `${orgId}-active`
+    const expiredId = `${orgId}-expired`
+    const ins = (id: string, email: string, expiresAt: number) =>
+      run(
+        "INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId) VALUES (?, ?, ?, 'admin', 'pending', ?, ?)",
+        id,
+        orgId,
+        email,
+        expiresAt,
+        members[0].userId,
+      )
+    await ins(activeId, 'active@example.com', Date.now() + 86_400_000)
+    await ins(expiredId, 'expired@example.com', Date.now() - 1000)
+
+    const pending = await createMembers({ ...env, DB: d1 }).pendingInvitations(
+      orgId,
+    )
+    const ids = pending.map((i) => i.id)
+    expect(ids).toContain(activeId)
+    expect(ids).not.toContain(expiredId)
+  })
 })
 
 describe('role rules', () => {

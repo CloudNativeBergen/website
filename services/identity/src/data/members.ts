@@ -9,7 +9,7 @@
 // rows and errors, never emails (#1310).
 import { runWithRequestState } from '@better-auth/core/context'
 import { isAPIError } from 'better-auth/api'
-import { and, eq, lte, sql } from 'drizzle-orm'
+import { and, eq, gt, lte, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   INVITATION_EXPIRES_IN,
@@ -362,7 +362,7 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
     }
     return rows.map((r) => ({ ...r, providers: byUser.get(r.userId) ?? [] }))
   }
-  const pendingInvitations = (orgId: string) =>
+  const pendingInvitations = (orgId: string, now = new Date()) =>
     db
       .select({
         id: invitation.id,
@@ -376,6 +376,7 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
         and(
           eq(invitation.organizationId, orgId),
           eq(invitation.status, 'pending'),
+          gt(invitation.expiresAt, now),
         ),
       )
       .orderBy(invitation.expiresAt)

@@ -2228,7 +2228,7 @@ describe('session org members (#1972)', () => {
   type Body = {
     data?: {
       members: { userId: string; email: string | null; role: string }[] | null
-      invitations: { email: string }[] | null
+      invitations: { id: string; email: string }[] | null
     }
     errors?: unknown[]
   }
@@ -2354,6 +2354,27 @@ describe('session org members (#1972)', () => {
       ])
     } finally {
       await sql('UPDATE user SET platformOperator = 0 WHERE id = ?', USER.a)
+    }
+  })
+
+  it('only lists pending invitations whose expiresAt is in the future (#1979)', async () => {
+    const activeId = 'inv-1972-TENANT_A'
+    const expiredId = 'inv-1972-expired'
+    await sql(
+      "INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt) VALUES (?, ?, ?, 'member', 'pending', ?, ?, 0)",
+      expiredId,
+      ORG.a,
+      'expired@example.com',
+      Date.now() - 1000,
+      USER.a,
+    )
+    try {
+      const { data } = await read(site())
+      const ids = data!.invitations!.map((i) => i.id)
+      expect(ids).toContain(activeId)
+      expect(ids).not.toContain(expiredId)
+    } finally {
+      await sql('DELETE FROM invitation WHERE id = ?', expiredId)
     }
   })
   describe('providers (#1990)', () => {
