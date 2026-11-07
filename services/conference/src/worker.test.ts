@@ -321,7 +321,13 @@ describe('updateConference', () => {
 
     it('refuses the operator scope without a user', async () => {
       const { body } = await update(
-        { ...as(['platform:operator']), userId: null },
+        {
+          ...(as(['platform:operator']) as Extract<
+            Envelope,
+            { typ: 'tenant' }
+          >),
+          userId: null,
+        },
         { title: 'x' },
       )
       expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
