@@ -49,10 +49,54 @@ const QUERY = `{ conference {
   cfpStartDate cfpEndDate cfpNotifyDate programDate travelSupportPaymentDate
   earlyBirdEndDate registrationCloseDate speakersAnnouncedDate sponsorDeadlineDate
   recordingsLiveDate registrationEnabled organizer socialHashtag showVanityMetrics
+  ticketingProvider publicFreeTicketIds workshopRegistrationSponsorStart
+  workshopRegistrationStart workshopRegistrationEnd workshopEarlyAccessTicketTypes
 } conferenceLifecycle }` as const
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
 const QUERY_DOC = graphql(QUERY)
 type QueryData = ResultOf<typeof QUERY_DOC>
+
+/**
+ * Settings phase 3 (#2080), the members-only ticket setup. Never part of
+ * QUERY: the subgraph serves these only to an org member or to the site's
+ * server lane (`site:server`, minted by the gateway for a verified site
+ * assertion alone), so this read only ever runs server-side with the signed
+ * assertion, as its own request and its own cache entry.
+ */
+const PRIVATE_QUERY = `{ conference {
+  id checkinCustomerId checkinEventId titoAccountSlug titoEventSlug ticketCapacity
+  ticketTargetsEnabled ticketSalesStartDate ticketTargetCurve
+  ticketTargetMilestones { date targetPercentage label }
+  ticketTypeRoles { typeName admits grantsWorkshop }
+  workshopReminderLastSentAt workshopReminderLastSentCount workshopReminderReservedAt
+} }` as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
+const PRIVATE_DOC = graphql(PRIVATE_QUERY)
+export type PrivateConference = NonNullable<
+  ResultOf<typeof PRIVATE_DOC>['conference']
+>
+
+/** Phase 3 public fields with their validity check (#2080). */
+// A real day (Date.parse rolls 02-30 over to March) with a time.
+const isInstant = (v: unknown) =>
+  typeof v === 'string' &&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v) &&
+  isDay(v.slice(0, 10)) &&
+  !Number.isNaN(Date.parse(v))
+const isPosInt = (v: unknown) =>
+  typeof v === 'number' && Number.isInteger(v) && v > 0
+const isList = (v: unknown, item: (x: unknown) => boolean) =>
+  Array.isArray(v) && v.length > 0 && v.every(item)
+const PHASE3_CHECKS: Record<string, (v: unknown) => boolean> = {
+  ticketingProvider: (v) => v === 'checkin' || v === 'tito',
+  publicFreeTicketIds: (v) => isList(v, isPosInt),
+  // Gates: a valid D1 time wins; null or anything else keeps Sanity's.
+  workshopRegistrationSponsorStart: isInstant,
+  workshopRegistrationStart: isInstant,
+  workshopRegistrationEnd: isInstant,
+  workshopEarlyAccessTicketTypes: (v) =>
+    isList(v, (x) => typeof x === 'string' && x.trim() !== ''),
+}
 
 type ApiConference = Partial<
   Omit<NonNullable<QueryData['conference']>, 'homepageSections'>
@@ -325,6 +369,7 @@ export async function mergeKonfApiConference(
       // Conservative for gates: a bad D1 value keeps Sanity's, never opens.
       if (DATE_KEYS.has(k) && !isDay(v)) continue
       if (BOOL_KEYS.has(k) && typeof v !== 'boolean') continue
+      if (k in PHASE3_CHECKS && !PHASE3_CHECKS[k](v)) continue
       merged[k] = v
     }
     if (typeof showVanityMetrics === 'boolean')
@@ -344,6 +389,7 @@ export async function mergeKonfApiConference(
     // `[]` means no value: keep Sanity's composition, hidden flags and all.
     if (Array.isArray(homepageSections) && homepageSections.length > 0)
       merged.homepageSections = homepageSections
+    await mergePrivate(host, conference, merged)
     return merged as unknown as Conference
   } catch (err) {
     console.warn(
@@ -352,4 +398,132 @@ export async function mergeKonfApiConference(
     )
     return conference
   }
+}
+
+/**
+ * The members-only read (#2080), cached server-side on the same tags as the
+ * public read. Throws on any failure, so a fallback is never stored.
+ */
+export async function fetchKonfApiPrivate(
+  host: string,
+  conferenceId: string,
+): Promise<PrivateConference> {
+  'use cache: remote'
+  cacheLife(CONFERENCE_CACHE_LIFE)
+  cacheTag('content:conferences')
+  cacheTag(domainTag(host))
+  cacheTag(conferenceTag(conferenceId))
+  const url = konfApiUrl()
+  if (!url) throw new Error('KONF_API_URL is not set on this environment')
+  // Without the site assertion the lane is anonymous and every field is null.
+  if (!process.env.KONF_SITE_SIGNING_KEY)
+    throw new Error('KONF_SITE_SIGNING_KEY is not set')
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: await konfApiHeaders(host),
+    body: JSON.stringify({ query: PRIVATE_QUERY }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const json = (await res.json()) as {
+    data?: ResultOf<typeof PRIVATE_DOC>
+    errors?: unknown[]
+  }
+  if (json.errors?.length) throw new Error(JSON.stringify(json.errors))
+  const c = json.data?.conference
+  if (!c) throw new Error('conference is null')
+  if (c.id !== conferenceId) throw new Error(`conference id mismatch: ${c.id}`)
+  return c
+}
+
+const isDayOrNull = (v: unknown) => v == null || isDay(v)
+const CURVES = new Set(['linear', 'early_push', 'late_push', 's_curve'])
+
+/**
+ * The members-only ticket setup over `merged`. Each field is taken only when
+ * D1 holds a valid value; null or a bad value keeps Sanity's. Any failure
+ * keeps every Sanity value.
+ */
+async function mergePrivate(
+  host: string,
+  conference: Conference,
+  merged: Record<string, unknown>,
+): Promise<void> {
+  let p: PrivateConference
+  try {
+    p = await fetchKonfApiPrivate(host, conference._id)
+  } catch (err) {
+    console.warn(
+      `[konf-api] members-only fields fall back to Sanity for ${host}:`,
+      (err as Error).message,
+    )
+    return
+  }
+  for (const k of [
+    'checkinCustomerId',
+    'checkinEventId',
+    'ticketCapacity',
+  ] as const)
+    if (isPosInt(p[k])) merged[k] = p[k]
+  for (const k of ['titoAccountSlug', 'titoEventSlug'] as const)
+    if (typeof p[k] === 'string' && p[k].trim()) merged[k] = p[k]
+  for (const k of [
+    'workshopReminderLastSentAt',
+    'workshopReminderReservedAt',
+  ] as const)
+    if (isInstant(p[k])) merged[k] = p[k]
+  if (isPosInt(p.workshopReminderLastSentCount))
+    merged.workshopReminderLastSentCount = p.workshopReminderLastSentCount
+
+  // ticketTargets is one object in Sanity and four columns in D1. Any valid
+  // D1 part means D1 holds the object (a save writes all four), so it is
+  // taken whole; one bad part keeps Sanity's whole object.
+  const {
+    ticketTargetsEnabled: enabled,
+    ticketSalesStartDate: start,
+    ticketTargetCurve: curve,
+    ticketTargetMilestones: ms,
+  } = p
+  const valid =
+    (enabled == null || typeof enabled === 'boolean') &&
+    isDayOrNull(start) &&
+    (curve == null || CURVES.has(curve)) &&
+    (ms == null ||
+      (Array.isArray(ms) &&
+        ms.every(
+          (m) => isDay(m.date) && typeof m.targetPercentage === 'number',
+        )))
+  if (valid && [enabled, start, curve, ms].some((v) => v != null))
+    merged.ticketTargets = {
+      enabled: enabled ?? false,
+      ...(start != null && { salesStartDate: start }),
+      ...(curve != null && { targetCurve: curve }),
+      milestones: (ms ?? []).map((m) => ({
+        date: m.date,
+        targetPercentage: m.targetPercentage,
+        label: m.label ?? '',
+      })),
+    }
+
+  // Absent stays absent: GraphQL's null for an unanswered question is
+  // dropped, never turned into `false`. D1 keeps no `_key`; one is made up
+  // per position for React lists (writers address entries by name).
+  const roles = p.ticketTypeRoles
+  if (
+    isList(
+      roles,
+      (r) =>
+        typeof (r as { typeName?: unknown }).typeName === 'string' &&
+        (r as { typeName: string }).typeName.trim() !== '',
+    )
+  )
+    merged.ticketTypeRoles = roles!.map((r, i) => ({
+      _key: `d1-${i}`,
+      typeName: r.typeName,
+      ...(typeof r.admits === 'boolean' && { admits: r.admits }),
+      ...(typeof r.grantsWorkshop === 'boolean' && {
+        grantsWorkshop: r.grantsWorkshop,
+      }),
+    }))
 }

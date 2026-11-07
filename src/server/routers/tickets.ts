@@ -1,4 +1,7 @@
-import { writeMovedToD1 } from '@/lib/konf-api/conference-write'
+import {
+  isMovedConferenceField,
+  writeMovedToD1,
+} from '@/lib/konf-api/conference-write'
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
@@ -664,17 +667,15 @@ async function saveTicketTypeRoles(
   }
 }
 
+/** Refuses with NOT_FOUND when the conference document is gone. */
 async function getTicketSettings(conferenceId: string) {
   try {
-    // groq-global-scoped: the conference document itself; every caller passes
-    // the id resolveConferenceId() resolved from the request domain.
-    const query = `*[_type == "conference" && _id == $conferenceId][0]{
-      _id,
-      ticketCapacity,
-      ticketTargets
-    }`
-
-    const conference = await clientWrite.fetch(query, { conferenceId })
+    // Only its existence is checked: the settings are read through the merge (#2080).
+    const conference = await clientWrite.fetch<{ _id: string } | null>(
+      // groq-global-scoped: the conference document itself; every caller passes the id resolveConferenceId() resolved from the request domain.
+      `*[_type == "conference" && _id == $conferenceId][0]{ _id }`,
+      { conferenceId },
+    )
 
     if (!conference) {
       throw new TRPCError({
@@ -924,14 +925,20 @@ export const ticketsRouter = router({
         }
 
         // D1 first for a d1_write tenant (#2080); a failure there throws
-        // before Sanity is touched.
-        await writeMovedToD1(conferenceId, updates)
+        // before Sanity is touched. Then D1 alone holds these (read through
+        // the merge), so Sanity is not written. The schema takes no null, so
+        // there is no unset to carry to Sanity here.
+        const d1 = await writeMovedToD1(conferenceId, updates)
+        const sanitySet = Object.fromEntries(
+          Object.entries(updates).filter(
+            ([k]) => !(d1 && isMovedConferenceField(k)),
+          ),
+        )
 
         try {
-          const result = await clientWrite
-            .patch(conferenceId)
-            .set(updates)
-            .commit()
+          const result = Object.keys(sanitySet).length
+            ? await clientWrite.patch(conferenceId).set(sanitySet).commit()
+            : null
 
           revalidateTag('admin:tickets', 'default')
           // `ticketCapacity`/`ticketTargets` live on the CONFERENCE document, which

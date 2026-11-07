@@ -486,6 +486,12 @@ function operatorFields(root: 'Query' | 'Mutation') {
 }
 /** Operator-only mutations: refused to every tenant envelope (#1924, #1923). */
 const OPERATOR_MUTATIONS = operatorFields('Mutation')
+/** The workshop reminder lock (#2080): the site's server lane or an operator only. */
+const SITE_LANE_MUTATIONS = new Set([
+  'reserveWorkshopReminder',
+  'releaseWorkshopReminder',
+  'recordWorkshopReminder',
+])
 /**
  * Query fields every walker (site lane, tenant envelope or none) is refused:
  * the @tag(operator) ones by requirePlatform, myOrganizations (#2036) because
@@ -980,7 +986,7 @@ describe('cross-tenant mutation walk', () => {
         await run(doc, { ...organizer(), origin: ORIGIN }),
       ) as { data?: unknown; errors?: unknown[] }
       const json = JSON.stringify(body)
-      if (OPERATOR_MUTATIONS.has(field))
+      if (OPERATOR_MUTATIONS.has(field) || SITE_LANE_MUTATIONS.has(field))
         expect(body.errors).toMatchObject([
           { extensions: { code: 'FORBIDDEN' } },
         ])

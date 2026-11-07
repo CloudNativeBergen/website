@@ -1858,6 +1858,9 @@ export const workshopRouter = router({
           // official opening is judged against the sponsor start time that is
           // stored, whether or not the form that sent it knew of one.
           //
+          // Sanity, not the merge, on purpose (#2080): these times are still
+          // written to D1 AND Sanity, and the rules must be judged on the copy
+          // the conditional patch below serialises on (lint baseline).
           // `_rev` comes from the SAME read as the times, and the patch below
           // is conditioned on it: two saves of different fields at once would
           // otherwise each pass against the same stored pair and together
@@ -1994,6 +1997,9 @@ export const workshopRouter = router({
       )
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
+        // Sanity on purpose, as the times above (#2080): both fields are still
+        // dual-written and this read carries the `_rev` the patch is
+        // conditioned on.
         const stored = await clientReadUncached.fetch<{
           _rev?: string
           ticketTypeRoles?: TicketTypeRole[] | null

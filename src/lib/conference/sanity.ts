@@ -744,14 +744,23 @@ export async function getConferenceTenantByCheckinEventId(
     // this lookup IS the tenant resolution — there is no tenant to scope it to
     // yet, and it must see every tenant's conferences. Ambiguity is refused
     // rather than silently narrowed.
-    const query = `*[_type == "conference" && checkinEventId == $eventId]{ _id, organization, ticketingProvider }`
+    // Sanity stays the cross-tenant index of the binding (still written to
+    // both, #2080); the vendor comes through the merge, from D1 when flagged.
+    const query = `*[_type == "conference" && checkinEventId == $eventId]{ _id, organization, domains, ticketingProvider }`
 
-    const rows = await clientWrite.fetch<CheckinWebhookTenant[] | null>(query, {
-      eventId,
-    })
+    const rows = await clientWrite.fetch<
+      (CheckinWebhookTenant & { domains?: string[] | null })[] | null
+    >(query, { eventId })
 
     const { doc, error } = singleCheckinClaimant(rows ?? [], eventId)
-    return { tenant: doc, error }
+    if (!doc) return { tenant: null, error }
+    const { _id, organization, ticketingProvider } = await mergeConference({
+      ...doc,
+      organization: doc.organization?._ref
+        ? { _ref: doc.organization._ref }
+        : null,
+    })
+    return { tenant: { _id, organization, ticketingProvider }, error }
   } catch (err) {
     return { tenant: null, error: err as Error }
   }
@@ -793,7 +802,19 @@ export async function getConferenceByCheckinEventId(eventId: number): Promise<{
     })
 
     const { doc, error } = singleCheckinClaimant(conferences ?? [], eventId)
-    return { conference: doc, error }
+    if (!doc) return { conference: null, error }
+    // The ticket setup (roles, vendor) from D1 when flagged (#2080). Sanity's
+    // binding found the row; if D1 now binds another event, refuse rather
+    // than act on a stale index.
+    const merged = await mergeConference(doc)
+    if (merged.checkinEventId !== doc.checkinEventId)
+      return {
+        conference: null,
+        error: new Error(
+          `Checkin event ID ${eventId}: the D1 binding of ${doc._id} differs; refusing`,
+        ),
+      }
+    return { conference: merged, error }
   } catch (err) {
     return {
       conference: null,

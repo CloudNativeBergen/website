@@ -15,7 +15,15 @@
  * to ACT on it where it already exists.
  */
 
-const h = vi.hoisted(() => ({ fetch: vi.fn() }))
+const h = vi.hoisted(() => ({
+  fetch: vi.fn(),
+  // The D1 merge (#2080): identity unless a test overlays D1 values.
+  d1: {} as Record<string, unknown>,
+}))
+vi.mock('./merge', () => ({
+  mergeConference: async (c: object) => ({ ...c, ...h.d1 }),
+  mergeConferences: async (cs: object[]) => cs.map((c) => ({ ...c, ...h.d1 })),
+}))
 
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: { fetch: h.fetch },
@@ -30,7 +38,39 @@ import {
   getConferenceTenantByCheckinEventId,
 } from './sanity'
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  h.d1 = {}
+})
+
+describe('the D1 ticket setup (#2080)', () => {
+  it('serves the merged roles and vendor once the binding agrees', async () => {
+    h.fetch.mockResolvedValue([{ _id: 'conf-A', checkinEventId: 4242 }])
+    h.d1 = { checkinEventId: 4242, ticketTypeRoles: [{ typeName: 'D1' }] }
+    const { conference, error } = await getConferenceByCheckinEventId(4242)
+    expect(error).toBeNull()
+    expect(conference?.ticketTypeRoles).toEqual([{ typeName: 'D1' }])
+  })
+
+  it('REFUSES when D1 binds the conference to another event than the Sanity index', async () => {
+    h.fetch.mockResolvedValue([{ _id: 'conf-A', checkinEventId: 4242 }])
+    h.d1 = { checkinEventId: 9999 }
+    const { conference, error } = await getConferenceByCheckinEventId(4242)
+    expect(conference).toBeNull()
+    expect(error?.message).toContain('conf-A')
+  })
+
+  it("takes the tenant's vendor from the merge", async () => {
+    h.fetch.mockResolvedValue([{ _id: 'conf-A', ticketingProvider: 'checkin' }])
+    h.d1 = { ticketingProvider: 'tito' }
+    const { tenant } = await getConferenceTenantByCheckinEventId(4242)
+    expect(tenant).toEqual({
+      _id: 'conf-A',
+      organization: null,
+      ticketingProvider: 'tito',
+    })
+  })
+})
 
 describe('getConferenceByCheckinEventId', () => {
   it('resolves the single claimant', async () => {
@@ -136,13 +176,13 @@ describe('getConferenceTenantByCheckinEventId', () => {
     expect(tenant?.organization?._ref).toBe('org-published')
   })
 
-  it('reads THREE FIELDS, not a whole conference', async () => {
+  it('reads three fields and the merge key, not a whole conference', async () => {
     // The point of this function existing. Widening the projection widens what
     // one unauthenticated POST costs, so the projection is asserted by VALUE.
     h.fetch.mockResolvedValue([])
     await getConferenceTenantByCheckinEventId(4242)
     const query = h.fetch.mock.calls[0][0] as string
-    expect(query).toContain('{ _id, organization, ticketingProvider }')
+    expect(query).toContain('{ _id, organization, domains, ticketingProvider }')
     expect(query).not.toContain('...')
   })
 

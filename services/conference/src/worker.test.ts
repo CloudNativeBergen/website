@@ -37,19 +37,27 @@ const { default: worker } = await import('./worker')
 const { schema } = await import('./subgraph')
 
 /** The slice of D1 that drizzle-orm/d1 uses, over node:sqlite. */
-function d1(db: DatabaseSync): D1Database {
+function d1(db: DatabaseSync, interleave = false): D1Database {
+  // With `interleave`, every statement first yields a macrotask, so
+  // concurrent requests interleave between statements as on a real D1.
+  const turn = () =>
+    interleave ? new Promise((r) => setTimeout(r, 0)) : undefined
   const stmt = (sql: string, params: SQLInputValue[] = []) => ({
     bind: (...p: SQLInputValue[]) => stmt(sql, p),
-    all: async () => ({
-      results: db.prepare(sql).all(...params),
-      success: true,
-    }),
+    all: async () => {
+      await turn()
+      return { results: db.prepare(sql).all(...params), success: true }
+    },
     raw: async () => {
+      await turn()
       const s = db.prepare(sql)
       s.setReturnArrays(true)
       return s.all(...params)
     },
-    first: async () => db.prepare(sql).get(...params) ?? null,
+    first: async () => {
+      await turn()
+      return db.prepare(sql).get(...params) ?? null
+    },
   })
   return { prepare: (sql: string) => stmt(sql) } as unknown as D1Database
 }
@@ -1140,5 +1148,124 @@ describe('settings phase 3 (#2080)', () => {
       )
       .get('conf-a')
     expect(Object.values(row as object).every((v) => v === null)).toBe(true)
+  })
+
+  const site: Envelope = {
+    ...(tenant('org-a', 'conf-a') as Extract<Envelope, { typ: 'tenant' }>),
+    scopes: ['site:server'],
+  }
+
+  it('serves the members-only ticket setup to the site lane, still not to an anonymous caller', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await gql(operator, MUTATION, {
+      input: { ...BINDING, ...PUBLIC, ...PRIVATE_SCALARS, ...LISTS_IN },
+    })
+    seedReminder()
+    expect(await read(site)).toEqual({
+      ...PUBLIC,
+      ...PRIVATE_SCALARS,
+      ...BINDING,
+      ...LISTS_OUT,
+      ...REMINDER,
+    })
+    expect(await read(tenant('org-a', 'conf-a'))).toEqual({
+      ...PUBLIC,
+      ...privateNulls,
+    })
+  })
+
+  describe('workshop reminder lock', () => {
+    const RESERVE =
+      'mutation { reserveWorkshopReminder { token retryAfterMs } }'
+    const RELEASE =
+      'mutation($t: String!) { releaseWorkshopReminder(token: $t) }'
+    const RECORD =
+      'mutation($at: String!, $n: Int!) { recordWorkshopReminder(sentAt: $at, count: $n) }'
+    const reserved = () =>
+      (
+        sqlite
+          .prepare(
+            'SELECT workshop_reminder_reserved_at AS r FROM conferences WHERE conference_id = ?',
+          )
+          .get('conf-a') as { r: string | null }
+      ).r
+
+    it('of concurrent claims, exactly one wins', async () => {
+      env.DB = d1(sqlite, true)
+      const results = await Promise.all(
+        Array.from({ length: 8 }, () => gql(site, RESERVE)),
+      )
+      const r = results.map((x) => x.body.data.reserveWorkshopReminder)
+      expect(r.filter((x) => x.token).length).toBe(1)
+      for (const x of r.filter((x) => !x.token))
+        expect(x.retryAfterMs).toBeGreaterThan(59 * 60 * 1000)
+      expect(reserved()).toBe(r.find((x) => x.token).token)
+    })
+
+    it('frees the hour after an hour, or for an unparsable reservation', async () => {
+      const set = (v: string) =>
+        sqlite
+          .prepare(
+            'UPDATE conferences SET workshop_reminder_reserved_at = ? WHERE conference_id = ?',
+          )
+          .run(v, 'conf-a')
+      set(new Date(Date.now() - 59 * 60 * 1000).toISOString())
+      expect(
+        (await gql(site, RESERVE)).body.data.reserveWorkshopReminder.token,
+      ).toBeNull()
+      set(new Date(Date.now() - 61 * 60 * 1000).toISOString())
+      expect(
+        (await gql(site, RESERVE)).body.data.reserveWorkshopReminder.token,
+      ).toBeTruthy()
+      set('garbage')
+      expect(
+        (await gql(site, RESERVE)).body.data.reserveWorkshopReminder.token,
+      ).toBeTruthy()
+    })
+
+    it('releases only its own reservation', async () => {
+      const { token } = (await gql(site, RESERVE)).body.data
+        .reserveWorkshopReminder
+      expect(
+        (await gql(site, RELEASE, { t: 'someone-else' })).body.data
+          .releaseWorkshopReminder,
+      ).toBe(false)
+      expect(reserved()).toBe(token)
+      expect(
+        (await gql(site, RELEASE, { t: token })).body.data
+          .releaseWorkshopReminder,
+      ).toBe(true)
+      expect(reserved()).toBeNull()
+    })
+
+    it('records the last send', async () => {
+      const at = '2026-05-03T10:00:00.000Z'
+      await gql(site, RECORD, { at, n: 3 })
+      expect(
+        sqlite
+          .prepare(
+            'SELECT workshop_reminder_last_sent_at AS a, workshop_reminder_last_sent_count AS n FROM conferences WHERE conference_id = ?',
+          )
+          .get('conf-a'),
+      ).toEqual({ a: at, n: 3 })
+    })
+
+    it('refuses every caller off the site lane, before touching the row', async () => {
+      for (const as of [
+        admin,
+        tenant('org-a', 'conf-a'),
+        tenant('org-a', 'conf-a', 'owner'),
+      ]) {
+        for (const [q, v] of [
+          [RESERVE, undefined],
+          [RELEASE, { t: 'x' }],
+          [RECORD, { at: '2026-05-03T10:00:00.000Z', n: 1 }],
+        ] as const) {
+          const { body } = await gql(as, q, v)
+          expect(body.errors?.[0].extensions.code).toBe('FORBIDDEN')
+        }
+      }
+      expect(reserved()).toBeNull()
+    })
   })
 })

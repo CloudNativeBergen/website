@@ -151,17 +151,21 @@ describe('findDrift', () => {
         ),
       ).toEqual([{ conferenceId: 'c1', fields: ['ticket_type_roles'] }])
     })
-    it('sweeps the dual-written columns, not the reminder state', () => {
+    it('sweeps the dual-written columns, not the D1-only ones or the reminder state', () => {
       const swept = new Set<string>(PARITY_COLUMNS)
       for (const c of [
-        'ticketing_provider',
         'checkin_event_id',
-        'ticket_capacity',
-        'ticket_target_curve',
         'ticket_type_roles',
         'workshop_registration_start',
+        'public_free_ticket_ids',
       ])
         expect(swept.has(c), c).toBe(true)
+      for (const c of [
+        'ticketing_provider',
+        'ticket_capacity',
+        'ticket_target_curve',
+      ])
+        expect(swept.has(c), c).toBe(false)
       expect(
         findDrift(
           [row({ workshop_reminder_reserved_at: 'x' })],

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { normalizeDomain } from '@/lib/conference/domains'
+import { mergeConference } from '@/lib/conference/merge'
 import {
   getDomainVerification,
   listConferenceDomainViews,
@@ -49,8 +50,12 @@ async function claimingConference(
     `*[_type == "conference" && _id == $id][0]{ domains, organization, ticketingProvider }`,
     { id: conferenceId },
   )
+  // The vendor from D1 when flagged (#2080); the raw domains are the merge key.
+  const merged = conference
+    ? await mergeConference({ ...conference, _id: conferenceId })
+    : null
   return {
-    ...conference,
+    ...merged,
     _id: conferenceId,
     domains: (conference?.domains ?? []).map(normalizeDomain).filter(Boolean),
   }

@@ -96,6 +96,28 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
+/**
+ * The D1 lock (#2080) as the subgraph holds it: the claim is one atomic
+ * check-and-set (a conditional UPDATE), after an await like a network call.
+ */
+let d1Reserved: string | null = null
+const d1Calls = vi.fn<(op: string) => void>()
+vi.mock('@/lib/konf-api/conference-write', () => ({
+  reserveReminderViaApi: async () => {
+    d1Calls('reserve')
+    await new Promise((r) => setTimeout(r, 0))
+    const now = Date.now()
+    if (d1Reserved) return { token: null, retryAfterMs: 1000 }
+    d1Reserved = new Date(now).toISOString()
+    return { token: d1Reserved, retryAfterMs: null }
+  },
+  releaseReminderViaApi: async (_: string, token: string) => {
+    d1Calls('release')
+    if (d1Reserved === token) d1Reserved = null
+  },
+  recordReminderViaApi: async () => d1Calls('record'),
+}))
+
 type BatchEmail = { from: string; to: string[]; subject: string; html: string }
 type BatchOptions = { batchValidation?: string; idempotencyKey?: string }
 type BatchResponse = {
@@ -804,6 +826,48 @@ describe('sendWorkshopReminder', () => {
       unconfirmed: 0,
     })
     expect(recipients()).toEqual(['linus@example.org'])
+  })
+
+  describe('the D1 lock for a d1_write tenant (#2080)', () => {
+    beforeEach(() => {
+      d1Reserved = null
+      vi.stubEnv('KONF_API_URL', 'https://api.example.com')
+      vi.stubEnv('KONF_D1_WRITE_TENANTS', 'conference-1')
+      vi.stubGlobal('fetch', vi.fn())
+    })
+
+    it('of eight concurrent presses, one sends, and Sanity is never written', async () => {
+      const outcomes = await Promise.all(
+        Array.from({ length: 8 }, () => remind(conference, 0)),
+      )
+      expect(outcomes.filter((o) => o.kind === 'sent')).toHaveLength(1)
+      expect(outcomes.filter((o) => o.kind === 'rate-limited')).toHaveLength(7)
+      expect(recipients()).toEqual(['ada@example.org', 'grace@example.org'])
+      expect(stored.workshopReminderReservedAt).toBeUndefined()
+      expect(lastSendWrite).not.toHaveBeenCalled()
+      expect(d1Calls).toHaveBeenCalledWith('record')
+    })
+
+    it('releases the D1 hour when nothing went out', async () => {
+      workshopPortalUrl.mockResolvedValue(PORTAL)
+      fetchEventTicketCandidates.mockResolvedValueOnce(null)
+      await remind(conference, 0)
+      expect(d1Reserved).toBeNull()
+      await expect(remind(conference, 1)).resolves.toMatchObject({
+        kind: 'sent',
+      })
+    })
+
+    it('sends nothing when the D1 lock cannot be reached', async () => {
+      d1Calls.mockImplementationOnce(() => {
+        throw new Error('gateway down')
+      })
+      await expect(remind(conference, 0)).resolves.toEqual({
+        kind: 'rate-limited',
+        retryAfterMs: 60_000,
+      })
+      expect(batchSend).not.toHaveBeenCalled()
+    })
   })
 
   describe('D1 gateway values and fallbacks (#1997)', () => {

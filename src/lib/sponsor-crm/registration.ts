@@ -237,6 +237,8 @@ type RegistrationConferenceDoc = {
   venueAddress?: string
   registrationLink?: string
   sponsorRegistrationLink?: string
+  workshopRegistrationSponsorStart?: string
+  workshopRegistrationStart?: string
 }
 
 /**
@@ -263,6 +265,9 @@ async function applyD1ConferenceFields(result: {
       venueName: c.venueName,
       venueAddress: c.venueAddress,
       ticketUrl: c.sponsorRegistrationLink ?? c.registrationLink,
+      // The workshop windows from D1 when flagged (#2080).
+      workshopSponsorStart: c.workshopRegistrationSponsorStart ?? null,
+      workshopOpening: c.workshopRegistrationStart ?? null,
     })
   }
 }
@@ -299,7 +304,7 @@ export async function validateRegistrationToken(token: string): Promise<{
         "tierTitle": tier->title,
         "conferenceName": conference->title,
         "conferenceStartDate": conference->startDate,
-        "conferenceDoc": conference->{ _id, domains, organization, title, startDate, endDate, venueName, venueAddress, registrationLink, sponsorRegistrationLink },
+        "conferenceDoc": conference->{ _id, domains, organization, title, startDate, endDate, venueName, venueAddress, registrationLink, sponsorRegistrationLink, workshopRegistrationSponsorStart, workshopRegistrationStart },
         contactPersons[]{ _key, name, email, phone, role, isPrimary },
         billing{ invoiceFormat, email, reference, comments },
         registrationComplete,
@@ -317,8 +322,6 @@ export async function validateRegistrationToken(token: string): Promise<{
           "discountCodes": coalesce(discountCodes[].code, []),
           "ticketUrl": coalesce(conference->sponsorRegistrationLink, conference->registrationLink),
           "earlyAccessToken": workshopEarlyAccessToken,
-          "workshopSponsorStart": conference->workshopRegistrationSponsorStart,
-          "workshopOpening": conference->workshopRegistrationStart,
           "startDate": conference->startDate,
           "endDate": conference->endDate,
           "venueName": conference->venueName,

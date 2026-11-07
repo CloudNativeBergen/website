@@ -28,7 +28,9 @@ const WRITERS = new Set(['owner', 'admin'])
  */
 const OPERATOR_SCOPE = 'platform:operator'
 /** The site's server lane (api/src/gateway.ts SITE_SCOPE), set only for a verified site assertion. */
-const SITE_SCOPE = 'site:server'
+export const SITE_SCOPE = 'site:server'
+/** The workshop reminder's rate limit (src/lib/workshop/reminder.ts). */
+export const REMINDER_WINDOW_MS = 60 * 60 * 1000
 const BINDING = ['checkinEventId', 'titoAccountSlug', 'titoEventSlug'] as const
 
 const fail = (message: string, code: string) =>
@@ -166,6 +168,87 @@ class Conferences extends ScopedRepository {
         }),
       )
     return updated
+  }
+
+  /**
+   * The workshop reminder's hourly lock (#2080). Only the site's server lane
+   * (whose router has already admitted a workshop admin) or an operator; the
+   * generic patch never touches these columns. Checked before any query.
+   */
+  private reminderWhere() {
+    const { scopes } = this.tenant
+    if (!scopes.includes(SITE_SCOPE) && !scopes.includes(OPERATOR_SCOPE))
+      throw fail('the reminder lock is for the site lane only', 'FORBIDDEN')
+    const { org_id, conference_id } = this.columns
+    if (!conference_id) throw fail('no conference in this request', 'NOT_FOUND')
+    return and(
+      eq(conferences.orgId, org_id),
+      eq(conferences.conferenceId, conference_id),
+    )
+  }
+
+  /**
+   * Claims the hour: ONE conditional UPDATE, so of two concurrent callers
+   * exactly one matches the row. Free means no reservation, an unparsable
+   * one, or one at least REMINDER_WINDOW_MS old. Returns the token (the
+   * stored time) to release with, or how long until the hour is free.
+   */
+  async reserveReminder(
+    now = Date.now(),
+  ): Promise<{ token: string | null; retryAfterMs: number | null }> {
+    const where = this.reminderWhere()
+    const token = new Date(now).toISOString()
+    const cutoff = new Date(now - REMINDER_WINDOW_MS).toISOString()
+    const col = conferences.workshopReminderReservedAt
+    const [row] = await this.db
+      .update(conferences)
+      .set({ workshopReminderReservedAt: token })
+      .where(
+        and(
+          where,
+          sql`(${col} IS NULL OR julianday(${col}) IS NULL OR julianday(${col}) <= julianday(${cutoff}))`,
+        ),
+      )
+      .returning({ at: col })
+    if (row) return { token, retryAfterMs: null }
+    const held = await this.db.query.conferences.findFirst({ where })
+    if (!held) throw fail('conference not found', 'NOT_FOUND')
+    const until = Date.parse(held.workshopReminderReservedAt ?? '')
+    return {
+      token: null,
+      retryAfterMs: Math.max(1000, until + REMINDER_WINDOW_MS - now),
+    }
+  }
+
+  /** Gives the hour back only if it is still `token`'s. */
+  async releaseReminder(token: string): Promise<boolean> {
+    const where = this.reminderWhere()
+    const rows = await this.db
+      .update(conferences)
+      .set({ workshopReminderReservedAt: null })
+      .where(and(where, eq(conferences.workshopReminderReservedAt, token)))
+      .returning({ id: conferences.conferenceId })
+    return rows.length > 0
+  }
+
+  /** The last send, for the dialog. */
+  async recordReminder(sentAt: string, count: number): Promise<boolean> {
+    const where = this.reminderWhere()
+    if (
+      Number.isNaN(Date.parse(sentAt)) ||
+      !Number.isInteger(count) ||
+      count < 0
+    )
+      throw fail('invalid reminder record', 'BAD_USER_INPUT')
+    const rows = await this.db
+      .update(conferences)
+      .set({
+        workshopReminderLastSentAt: sentAt,
+        workshopReminderLastSentCount: count,
+      })
+      .where(where)
+      .returning({ id: conferences.conferenceId })
+    return rows.length > 0
   }
 
   /** Entity resolution: an id other than the envelope's resolves to null. */

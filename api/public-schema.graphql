@@ -184,6 +184,17 @@ type ConferenceParityStatus {
 }
 
 type Mutation {
+  """Stores the last reminder send. Site server lane or operator only."""
+  recordWorkshopReminder(count: Int!, sentAt: String!): Boolean!
+
+  """Releases the lock if it is still held by `token`."""
+  releaseWorkshopReminder(token: String!): Boolean!
+
+  """
+  Claims the request's Conference's hourly workshop-reminder lock, atomically. Site server lane or operator only.
+  """
+  reserveWorkshopReminder: WorkshopReminderReservation!
+
   """
   Patches the request's Conference. Requires an org owner or admin, or a platform operator acting for the org (audited).
   """
@@ -300,6 +311,14 @@ type TicketTypeRole {
   admits: Boolean
   grantsWorkshop: Boolean
   typeName: String
+}
+
+type WorkshopReminderReservation {
+  """Set when the hour is held: when it frees up."""
+  retryAfterMs: Int
+
+  """Set when the hour was claimed: pass it to release."""
+  token: String
 }
 
 type Faq {
