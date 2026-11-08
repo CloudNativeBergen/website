@@ -353,7 +353,7 @@ function consumed(p: ProposalExisting, me = 'sp_me') {
       _id: t._id,
       title: t.title,
     })),
-    speakers: ((p.speakers ?? []) as Sp[]).map((s) => ({
+    speakers: ((p.speakers ?? []) as unknown as Sp[]).map((s) => ({
       _id: s._id,
       name: s.name,
       email: s.email,
@@ -439,7 +439,9 @@ describe('proposal detail through the API per host (#2135)', () => {
       speakerId: 'sp_me',
     })
     expect(h.apiCalls).toBe(1)
-    const co = (proposal.speakers as Sp[]).find((s) => s._id === 'sp_co')!
+    const co = (proposal.speakers as unknown as Sp[]).find(
+      (s) => s._id === 'sp_co',
+    )!
     expect(Object.keys(co).sort()).toEqual(
       ['_id', 'email', 'image', 'name', 'slug', 'title'].sort(),
     )
@@ -476,14 +478,34 @@ describe('proposal detail through the API per host (#2135)', () => {
   })
 
   it.each([
-    ['API error', () => void (h.apiFails = true), 1],
+    [
+      'API error',
+      (): void => {
+        h.apiFails = true
+      },
+      1,
+    ],
     [
       'KONF_API_DISABLED=1',
-      () => void (process.env.KONF_API_DISABLED = '1'),
+      (): void => {
+        process.env.KONF_API_DISABLED = '1'
+      },
       0,
     ],
-    ['no identity token', () => void (h.hasIdentityToken = false), 0],
-    ['tenant without apiRead', () => void (h.apiRead = false), 0],
+    [
+      'no identity token',
+      (): void => {
+        h.hasIdentityToken = false
+      },
+      0,
+    ],
+    [
+      'tenant without apiRead',
+      (): void => {
+        h.apiRead = false
+      },
+      0,
+    ],
   ] as const)('falls back to Sanity on %s', async (_, arrange, calls) => {
     const sanity = await sanityRead('talk_b')
     arrange()

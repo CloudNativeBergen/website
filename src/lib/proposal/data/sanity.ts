@@ -1305,9 +1305,9 @@ export async function getProposalApiContext(
   topics: { _id: string }[] | null
   files: { _key: string; file?: unknown }[] | null
 } | null> {
-  // groq-global-scoped: owner predicate — `$speakerId in speakers[]._ref`; a
-  // foreign or missing id reads null alike.
   return clientRead.fetch(
+    // groq-global-scoped: owner predicate — `$speakerId in speakers[]._ref`; a
+    // foreign or missing id reads null alike.
     groq`*[_type == "talk" && _id == $id && $speakerId in speakers[]._ref][0]{
       "conference": conference->{ _id, title, startDate, endDate, domains, organization },
       "topics": topics[]->{ _id, title, color, slug, description },
