@@ -538,6 +538,11 @@ type ConferenceEdition {
   lifecycleStatus: String
 
   """
+  The owning org's kind, `customer` or `demo` (#2150); the site sets `robots: noindex` for `demo`. Null off the tenant lane: operators read `Organization.kind`.
+  """
+  orgKind: String
+
+  """
   The edition's canonical host: a verified custom domain, else its verified platform-edition host, else null. Never pending or failed. Same visibility as lifecycleStatus.
   """
   primaryHost: String
@@ -781,6 +786,11 @@ type Organization {
   The plan the platform enforces now (#2129): `free`, `basic` or `pro`, from the plan, its source, the subscription status and the comp end date.
   """
   effectivePlan: String
+
+  """
+  `customer` or `demo` (#2150). A demo org is Pro without billing and is left out of operator totals: filter on it.
+  """
+  kind: String
   name: String
   plan: String
   slug: String

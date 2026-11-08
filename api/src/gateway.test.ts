@@ -255,6 +255,7 @@ describe('gateway', () => {
         orgRole: null,
         scopes: [],
         plan: 'free',
+        orgKind: 'customer',
       },
     )
   })
@@ -289,7 +290,28 @@ describe('gateway', () => {
     }
     await gateway.fetch(post(SUBGRAPH_QUERY, { origin: VERIFIED }), env)
     expect(asked).toHaveLength(1)
-    expect(asked[0]).toMatch(/tenantByHost\(host: \$host\) \{[^}]*\} plan \}/)
+    expect(asked[0]).toMatch(
+      /tenantByHost\(host: \$host\) \{[^}]*\} plan orgKind \}/,
+    )
+  })
+
+  // #2150: the directory's org kind, capped; absent or unknown is customer.
+  it.each([
+    ['demo', 'demo'],
+    ['customer', 'customer'],
+    [undefined, 'customer'],
+    [null, 'customer'],
+    ['operator', 'customer'],
+  ])('mints the directory orgKind %j as %j', async (orgKind, want) => {
+    const { env, envelopes } = makeEnv()
+    ;(env as unknown as { DIRECTORY: unknown }).DIRECTORY = {
+      fetch: async () =>
+        Response.json({ data: { tenantByHost: { ...TENANT, orgKind } } }),
+    }
+    await gateway.fetch(post(SUBGRAPH_QUERY, { origin: VERIFIED }), env)
+    expect(
+      await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem),
+    ).toMatchObject({ typ: 'tenant', orgKind: want })
   })
 
   it('mints userId and the live orgRole for a signed-in member', async () => {
@@ -310,6 +332,7 @@ describe('gateway', () => {
       orgRole: 'admin',
       scopes: [],
       plan: 'free',
+      orgKind: 'customer',
     })
     expect(second).toMatchObject({ orgRole: 'member' })
   })
@@ -1320,6 +1343,7 @@ describe('gateway', () => {
           orgRole: null,
           scopes: ['site:server'],
           plan: 'free',
+          orgKind: 'customer',
         })
         expect(forwarded[0].get(SITE_ASSERTION_HEADER)).toBeNull()
       },
@@ -1611,6 +1635,7 @@ describe('operator lane (#1892 phase 4)', () => {
         orgRole: 'admin',
         scopes: [OPERATOR_SCOPE],
         plan: 'free',
+        orgKind: 'customer',
       },
     )
   })

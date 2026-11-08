@@ -149,6 +149,6 @@ describe('the envelope plan claim', () => {
       ...(plan === undefined ? {} : { plan }),
     } as never)
     const e = await verifyEnvelope(token, keys.publicPem)
-    expect(e).toEqual({ ...base, plan: want })
+    expect(e).toEqual({ ...base, plan: want, orgKind: 'customer' })
   })
 })

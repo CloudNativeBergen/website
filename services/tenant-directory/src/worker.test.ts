@@ -277,6 +277,10 @@ beforeEach(() => {
       readFileSync(
         new URL('../migrations/0009_comp_existing_orgs.sql', import.meta.url),
         'utf8',
+      ) +
+      readFileSync(
+        new URL('../migrations/0010_org_kind.sql', import.meta.url),
+        'utf8',
       ),
   )
   env = {
@@ -2180,5 +2184,127 @@ describe('billing phase 1 (#2129)', () => {
         plan_source: 'default',
       })
     })
+  })
+})
+
+describe('org kind (#2150)', () => {
+  const kindOf = (id: string) =>
+    (
+      sqlite.prepare('SELECT kind FROM organizations WHERE id = ?').get(id) as {
+        kind: string
+      }
+    ).kind
+  const demo = (id: string) =>
+    sqlite.exec(`UPDATE organizations SET kind = 'demo' WHERE id = '${id}'`)
+
+  describe('migration 0010', () => {
+    it('defaults to customer, marks kkdemo demo, and reruns cleanly', () => {
+      const db = new DatabaseSync(':memory:')
+      const mig = (f: string) =>
+        readFileSync(new URL(`../migrations/${f}`, import.meta.url), 'utf8')
+      db.exec(
+        [
+          '0001_init.sql',
+          '0002_rollout_flags.sql',
+          '0004_org_created_at.sql',
+          '0005_lifecycle_cancelled.sql',
+          '0006_provisioning_conference.sql',
+          '0007_provisioning_created_by.sql',
+          '0008_billing_plan.sql',
+        ]
+          .map(mig)
+          .join('\n'),
+      )
+      db.exec(
+        "INSERT INTO organizations (id, slug, name) VALUES ('organization-cloud-native-days', 'cndn', 'CNDN'), ('kkdemo.org', 'kk', 'KK')",
+      )
+      db.exec(mig('0010_org_kind.sql'))
+      // Rerun the data step (the DDL is applied once by wrangler).
+      db.exec("UPDATE organizations SET kind = 'demo' WHERE id = 'kkdemo.org'")
+      expect(
+        db.prepare('SELECT id, kind FROM organizations ORDER BY id').all(),
+      ).toEqual([
+        { id: 'kkdemo.org', kind: 'demo' },
+        { id: 'organization-cloud-native-days', kind: 'customer' },
+      ])
+    })
+
+    it('refuses any other kind on insert and update', async () => {
+      const { id } = await provision()
+      expect(kindOf(id)).toBe('customer')
+      expect(() =>
+        sqlite.exec(
+          `UPDATE organizations SET kind = 'trial' WHERE id = '${id}'`,
+        ),
+      ).toThrow(/customer or demo/)
+      expect(() =>
+        sqlite.exec(
+          "INSERT INTO organizations (id, slug, name, kind) VALUES ('x', 'x', 'X', 'test')",
+        ),
+      ).toThrow(/customer or demo/)
+      expect(kindOf(id)).toBe('customer')
+    })
+  })
+
+  it('tenantByHost carries the kind, and a demo org is pro with no billing', async () => {
+    const { id } = await provision()
+    const Q = `query($host: String!) { tenantByHost(host: $host) { orgKind plan } }`
+    const host = { host: 'acme-2026.konf.run' }
+    expect((await gql(Q, host)).body.data.tenantByHost).toEqual({
+      orgKind: 'customer',
+      plan: 'free',
+    })
+    demo(id)
+    expect((await gql(Q, host)).body.data.tenantByHost).toEqual({
+      orgKind: 'demo',
+      plan: 'pro',
+    })
+  })
+
+  it('carries kind on the operator org list and conference rows, so Kontroll can leave demo out', async () => {
+    const { id } = await provision('acme')
+    await provision('beta', 'k2')
+    demo(id)
+    const { body } = await gql(
+      '{ organizations { slug kind effectivePlan } conferences { organization { slug kind } } }',
+      {},
+      operator,
+    )
+    expect(body.data.organizations).toEqual([
+      { slug: 'acme', kind: 'demo', effectivePlan: 'pro' },
+      { slug: 'beta', kind: 'customer', effectivePlan: 'free' },
+    ])
+    expect(
+      body.data.conferences.map(
+        (c: { organization: object }) => c.organization,
+      ),
+    ).toEqual([
+      { slug: 'acme', kind: 'demo' },
+      { slug: 'beta', kind: 'customer' },
+    ])
+  })
+
+  it('exposes the envelope kind on the edition for noindex', async () => {
+    const { id } = await provision()
+    const conf = conferenceOf(id)
+    const Q =
+      'query($r: [_Any!]!) { _entities(representations: $r) { ... on ConferenceEdition { orgKind } } }'
+    const r = { r: [{ __typename: 'ConferenceEdition', id: conf }] }
+    const as = (orgKind?: string) =>
+      ({
+        typ: 'tenant',
+        orgId: id,
+        conferenceId: conf,
+        userId: null,
+        orgRole: null,
+        scopes: [],
+        ...(orgKind ? { orgKind } : {}),
+      }) as Envelope
+    expect((await gql(Q, r, as('demo'))).body.data._entities).toEqual([
+      { orgKind: 'demo' },
+    ])
+    expect((await gql(Q, r, as())).body.data._entities).toEqual([
+      { orgKind: 'customer' },
+    ])
   })
 })
