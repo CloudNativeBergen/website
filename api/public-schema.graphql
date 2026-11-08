@@ -53,10 +53,12 @@ type CfpTopic {
 
 type CoSpeakerInvitation {
   createdAt: String
+  declineReason: String
   expiresAt: String
   id: ID
   invitedEmail: String
   invitedName: String
+  lastRemindedAt: String
   respondedAt: String
 
   """
@@ -329,6 +331,7 @@ type MyProposal {
   capacity: Int
   coSpeakerInvitations: [CoSpeakerInvitation!]
   conference: Conference
+  createdAt: String
 
   """
   Portable Text blocks: block with style normal, h1-h3, optional bullet or number list; spans with strong, em, underline and link marks.
@@ -346,7 +349,7 @@ type MyProposal {
   speakers: [MyProposalSpeaker!]
 
   """
-  draft, submitted, accepted, waitlisted, confirmed, rejected, withdrawn or canceled.
+  draft, submitted, accepted, waitlisted, confirmed, rejected, withdrawn, canceled or deleted.
   """
   status: String
   title: String
@@ -354,6 +357,9 @@ type MyProposal {
 
   """Whether the Terms of Service were accepted."""
   tos: Boolean
+
+  """myProposals is ordered by this, newest first."""
+  updatedAt: String
   withdrawnReason: String
 }
 
@@ -381,6 +387,12 @@ type MyProposalSchedule {
 A speaker on one of your proposals, as the site's speaker portal shows them.
 """
 type MyProposalSpeaker {
+  """Your own entry only, as the editor shows; null on a co-speaker."""
+  bio: String
+
+  """Your own entry only; null on a co-speaker."""
+  consent: MyProposalSpeakerConsent
+
   """
   Shown to the talk's speakers only, as on the site; null to anyone else.
   """
@@ -389,8 +401,20 @@ type MyProposalSpeaker {
 
   """Image URL (uploaded image with crop, else the login avatar)."""
   image: String
+
+  """Your own entry only; empty on a co-speaker."""
+  links: [String!]
   name: String
   slug: String
+  title: String
+}
+
+"""Whether each consent the proposal editor shows is granted."""
+type MyProposalSpeakerConsent {
+  dataProcessing: Boolean
+  marketing: Boolean
+  photography: Boolean
+  publicProfile: Boolean
 }
 
 type OperatorConferenceStats {
@@ -425,11 +449,13 @@ type Query {
   """The request's conference CFP. Null when the request has no conference."""
   cfp: CallForPapers
 
-  """One of your proposals. NOT_FOUND for anything else, existing or not."""
+  """
+  One of your proposals in the request's conference. NOT_FOUND for anything else, existing or not, including your proposal in another conference: ask that conference's host.
+  """
   myProposal(id: ID!): MyProposal
 
   """
-  The session user's proposals in the request's conference, including those they are a co-speaker on.
+  The session user's proposals in the request's conference, including those they are a co-speaker on and deleted ones (as the site lists them), newest update first. For another conference, ask that conference's host.
   """
   myProposals: [MyProposal!]
 

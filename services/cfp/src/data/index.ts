@@ -26,6 +26,7 @@ export * from './source'
 export type {
   MyProposal,
   MySpeaker,
+  Consent,
   Attachment,
   Invitation,
   ScheduleInfo,

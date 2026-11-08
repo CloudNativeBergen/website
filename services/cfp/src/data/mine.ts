@@ -43,6 +43,9 @@ export const STATUS = [
   'rejected',
   'withdrawn',
   'canceled',
+  // The site's Status.deleted: still listed to its speakers (getProposals has
+  // no status filter), never counted, never editable.
+  'deleted',
 ] as const
 export type Status = (typeof STATUS)[number]
 
@@ -59,6 +62,23 @@ export interface MySpeaker {
   image: string | null
   slug: string | null
   email: string | null
+  /** Shown next to every speaker (ProposalCoSpeaker.tsx speaker list). */
+  title: string | null
+  /**
+   * The caller's OWN entry only: the editor renders bio, links and consent in
+   * SpeakerDetailsForm for the signed-in speaker (resolveEditorSpeaker) and
+   * never for a co-speaker, so they are null on everyone else's entry.
+   */
+  bio: string | null
+  links: string[]
+  consent: Consent | null
+}
+/** The consents SpeakerDetailsForm shows: each one's `granted`. */
+export interface Consent {
+  dataProcessing: boolean
+  marketing: boolean
+  publicProfile: boolean
+  photography: boolean
 }
 export interface Attachment {
   key: string
@@ -78,6 +98,10 @@ export interface Invitation {
   expiresAt: string | null
   createdAt: string | null
   respondedAt: string | null
+  /** ProposalCoSpeaker shows it on a declined invite. */
+  declineReason: string | null
+  /** ProposalCoSpeaker's reminder cooldown. */
+  lastRemindedAt: string | null
 }
 export interface ScheduleInfo {
   date: string | null
@@ -110,6 +134,8 @@ export interface MyProposal {
   scheduleInfo: ScheduleInfo | null
   attachments: Attachment[]
   coSpeakerInvitations: Invitation[]
+  createdAt: string | null
+  updatedAt: string | null
 }
 export interface ProposalFields {
   title?: string | null
@@ -210,7 +236,7 @@ const WITHDRAWABLE: Status[] = [
   'confirmed',
 ]
 const ACTIVE = (s: Status) =>
-  !['draft', 'withdrawn', 'canceled', 'rejected'].includes(s)
+  !['draft', 'withdrawn', 'canceled', 'rejected', 'deleted'].includes(s)
 const ACCEPTED: Status[] = ['accepted', 'confirmed']
 const AFTER_ACCEPTANCE = new Set(['title', 'abstract', 'description'])
 const MAX_PROPOSALS = 3
@@ -372,8 +398,7 @@ function withDescription(p: ProposalFields): ProposalFields {
 
 // The site's read models, copied verbatim (a service cannot import src/):
 // src/lib/speaker/image-groq.ts SPEAKER_IMAGE_URL, and from
-// src/lib/proposal/data/sanity.ts COSPEAKER_INVITATIONS_PROJECTION (without
-// the decline reason and reminder time, which the portal does not show) and
+// src/lib/proposal/data/sanity.ts COSPEAKER_INVITATIONS_PROJECTION and
 // SCHEDULE_INFO_PROJECTION.
 const SPEAKER_IMAGE_URL = `coalesce(
   image.asset->url + select(
@@ -391,7 +416,7 @@ const SPEAKER_IMAGE_URL = `coalesce(
 // groq-global-scoped: parent-keyed — `proposal._ref == ^._id` bounds the read
 // to invitations of the enclosing talk, which is tenant- and speaker-scoped.
 const INVITATIONS = `"coSpeakerInvitations": *[_type == "coSpeakerInvitation" && proposal._ref == ^._id]{
-        _id, invitedEmail, invitedName, status, expiresAt, createdAt, respondedAt
+        _id, invitedEmail, invitedName, status, expiresAt, createdAt, respondedAt, declineReason, lastRemindedAt
       }`
 // groq-global-scoped: parent-correlated — `conference._ref == ^.conference._ref`
 // binds the schedule read to the enclosing, already scoped talk's conference.
@@ -405,18 +430,18 @@ const SCHEDULE_INFO = `"scheduleInfo": select(
           "timeSlot": schedule.tracks[^.talkId in talks[].talk._ref][0].talks[talk._ref == ^.talkId][0]{ startTime, endTime }
         }
       )`
-const FIELDS = `_id, _rev, status, title, description, format, level, language, audiences,
+const FIELDS = `_id, _rev, _createdAt, _updatedAt, status, title, description, format, level, language, audiences,
       "topicIds": topics[]._ref, outline, prerequisites, capacity,
       tos, withdrawnReason, "conferenceId": conference._ref,
-      "speakers": speakers[]->{ _id, name, email, "slug": slug.current, "image": ${SPEAKER_IMAGE_URL} },
+      "speakers": speakers[]->{ _id, name, email, title, bio, links, consent, "slug": slug.current, "image": ${SPEAKER_IMAGE_URL} },
       "attachments": attachments[]{ _key, _type, attachmentType, title, description, filename, url, uploadedAt, "fileUrl": file.asset->url },
       ${INVITATIONS},
       ${SCHEDULE_INFO}`
 // Every root filter carries the tenant AND the speaker predicate literally.
-export const MINE = `*[_type == "talk" && conference._ref == $conferenceId && conference->organization._ref == $orgId && $speakerId in speakers[]._ref && status != "deleted"] | order(_createdAt desc){
+export const MINE = `*[_type == "talk" && conference._ref == $conferenceId && conference->organization._ref == $orgId && $speakerId in speakers[]._ref] | order(_updatedAt desc){
       ${FIELDS}
     }`
-export const ONE = `*[_type == "talk" && _id == $id && conference._ref == $conferenceId && conference->organization._ref == $orgId && $speakerId in speakers[]._ref && status != "deleted"][0]{
+export const ONE = `*[_type == "talk" && _id == $id && conference._ref == $conferenceId && conference->organization._ref == $orgId && $speakerId in speakers[]._ref][0]{
       ${FIELDS}
     }`
 export const CONFERENCE_CFP = `*[_type == "conference" && _id == $conferenceId && organization._ref == $orgId][0]{
@@ -473,6 +498,17 @@ const schedule = (v: unknown): ScheduleInfo | null => {
     endTime: s(slot.endTime),
   }
 }
+const granted = (c: Row, k: string) =>
+  isObj(c[k]) && (c[k] as Row).granted === true
+const consent = (v: unknown): Consent => {
+  const c = isObj(v) ? v : {}
+  return {
+    dataProcessing: granted(c, 'dataProcessing'),
+    marketing: granted(c, 'marketing'),
+    publicProfile: granted(c, 'publicProfile'),
+    photography: granted(c, 'photography'),
+  }
+}
 // Allowlist mapping: nothing Sanity returns beyond these reaches the schema.
 const toProposal = (r: Row, speakerId: string, now: Date): Stored => {
   const people = rows(r.speakers).filter((p) => p._id)
@@ -501,6 +537,11 @@ const toProposal = (r: Row, speakerId: string, now: Date): Stored => {
       image: s(p.image),
       slug: s(p.slug),
       email: onTalk ? s(p.email) : null,
+      title: s(p.title),
+      // PII: the caller's own profile fields, never a co-speaker's.
+      ...(p._id === speakerId
+        ? { bio: s(p.bio), links: strs(p.links), consent: consent(p.consent) }
+        : { bio: null, links: [], consent: null }),
     })),
     description: Array.isArray(r.description)
       ? (r.description as Blocks)
@@ -527,7 +568,11 @@ const toProposal = (r: Row, speakerId: string, now: Date): Stored => {
       expiresAt: s(i.expiresAt),
       createdAt: s(i.createdAt),
       respondedAt: s(i.respondedAt),
+      declineReason: s(i.declineReason),
+      lastRemindedAt: s(i.lastRemindedAt),
     })),
+    createdAt: s(r._createdAt),
+    updatedAt: s(r._updatedAt),
   }
 }
 const strip = (p: Stored): MyProposal => {
