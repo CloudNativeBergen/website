@@ -103,42 +103,52 @@ const CONFERENCE = {
   ],
 }
 
-const ticket = (t: Partial<EventTicket> & { id: number; order_id: number }) =>
+const ticket = (t: Partial<EventTicket> & { id: string; order_id: string }) =>
   ({
     order_date: '2026-02-01T10:00:00Z',
     category: 'Regular',
     customer_name: null,
-    sum: '0',
-    sum_left: '0',
+    sum: { amountMinor: 0, currency: 'NOK' },
+    sum_left: { amountMinor: 0, currency: 'NOK' },
     fields: [],
     crm: crm('x@example.com'),
     ...t,
   }) as EventTicket
 
 const TICKETS: EventTicket[] = [
-  ticket({ id: 1, order_id: 100, sum: '2500', crm: crm('a@example.com') }),
-  ticket({ id: 2, order_id: 101, sum: '2500', crm: crm('b@example.com') }),
+  ticket({
+    id: '1',
+    order_id: '100',
+    sum: { amountMinor: 250000, currency: 'NOK' },
+    crm: crm('a@example.com'),
+  }),
+  ticket({
+    id: '2',
+    order_id: '101',
+    sum: { amountMinor: 250000, currency: 'NOK' },
+    crm: crm('b@example.com'),
+  }),
   // Invitation-gated: a grant, whatever it cost.
   ticket({
-    id: 3,
-    order_id: 102,
+    id: '3',
+    order_id: '102',
     category: 'Speaker ticket',
     crm: crm('speaker@example.com'),
     fields: [{ key: 'Monday workshop', value: 'yes' }],
   }),
   // A 100%-off sponsor code: a comp by GRANT, not by price.
   ticket({
-    id: 4,
-    order_id: 103,
+    id: '4',
+    order_id: '103',
     coupon: 'ACME100',
     crm: crm('sponsored@example.com'),
   }),
   // An add-on, on the same order and the same address as ticket 1.
   ticket({
-    id: 5,
-    order_id: 100,
+    id: '5',
+    order_id: '100',
     category: 'Workshop upgrade',
-    sum: '500',
+    sum: { amountMinor: 50000, currency: 'NOK' },
     crm: crm('a@example.com'),
   }),
 ]
@@ -154,14 +164,14 @@ beforeEach(() => {
   h.listDiscounts.mockResolvedValue({
     discounts: [
       {
-        id: 1,
+        id: '1',
         triggerValue: 'ACME100',
         type: 'percent',
         value: '100',
         tickets: [],
       },
     ],
-    ticketTypes: [{ id: 10, name: 'Regular' }],
+    ticketTypes: [{ id: '10', name: 'Regular' }],
   })
   h.resolveAccess.mockResolvedValue({
     state: 'ready',
@@ -175,7 +185,7 @@ beforeEach(() => {
     },
   })
   h.resolveSpeakerTicketType.mockResolvedValue({
-    id: 11,
+    id: '11',
     name: 'Speaker ticket',
   })
   h.getSpeakers.mockResolvedValue({

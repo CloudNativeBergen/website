@@ -44,6 +44,8 @@ export const MATRIX = {
   // envelope type; Op is the operator's PlatformContext on that lane.
   'signup.create_org': row('       Y  N   N   N   N'),
   'signup.manage_codes': row('     Y  N   N   N   N'),
+  'ticketing.read': row('         Y  Y   Y   N   N'),
+  'attendee.read_pii': row('      Y  Y   Y   N   N'),
   reminder_lock: row('             Y  N   N   N   Y'),
 } satisfies Record<string, Row>
 

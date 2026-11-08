@@ -40,7 +40,10 @@
       "entry": ["src/data/schema.ts", "src/worker.ts"],
       "ignoreDependencies": ["cloudflare"]
     },
-    "services/conference": { "ignoreDependencies": ["cloudflare"] }
+    "services/conference": { "ignoreDependencies": ["cloudflare"] },
+    "services/ticketing": {
+      "ignoreDependencies": ["cloudflare", "drizzle-orm"]
+    }
   },
   "ignoreDependencies": [
     "eslint-config-next",

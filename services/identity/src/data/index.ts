@@ -156,7 +156,8 @@ export function createData(env: DataEnv) {
     },
     /** Handoff audit row: ids, origin and match type only. */
     async audit(
-      action: 'handoff.exchange' | 'session.upgrade',
+      action:
+        'handoff.exchange' | 'session.upgrade' | 'operator.cli_token.mint',
       userId: string,
       origin: string,
       detail?: string,

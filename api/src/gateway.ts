@@ -53,6 +53,8 @@ export interface Env {
   SPONSORS: Fetcher
   /** konf-cfp: public CFP options and confirmed talks (Sanity-backed, #2077) */
   CFP: Fetcher
+  /** konf-ticketing: ticket sales in D1 (#2148) */
+  TICKETING: Fetcher
   /** konf-conference: its subgraph */
   CONFERENCE: Fetcher
   /** konf-identity default entrypoint: only /api/auth/* (JWKS) answers */
@@ -91,6 +93,7 @@ export const BINDINGS = {
   sponsors: 'SPONSORS',
   cfp: 'CFP',
   conference: 'CONFERENCE',
+  ticketing: 'TICKETING',
   identity: 'IDENTITY_GRAPH',
 } as const
 

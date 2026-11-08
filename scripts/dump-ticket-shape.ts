@@ -78,7 +78,7 @@ function groupBy<T, K>(items: T[], key: (item: T) => K): Map<K, T[]> {
 async function dumpConference(conference: ConferenceRow) {
   const { resolveTicketingProvider, ticketingBinding } =
     await import('../src/lib/tickets/provider')
-  const { parseTicketAmount } = await import('../src/lib/tickets/amount')
+  const { moneyToMajor } = await import('../src/lib/tickets/amount')
   const { calculateDiscountUsage } = await import('../src/lib/discounts/usage')
 
   console.log(`\n${RULE}`)
@@ -110,7 +110,7 @@ async function dumpConference(conference: ConferenceRow) {
     return
   }
 
-  const amount = (t: EventTicket) => parseTicketAmount(t.sum)
+  const amount = (t: EventTicket) => moneyToMajor(t.sum)
   const codeOf = (t: EventTicket) => t.coupon || t.discount || null
 
   // --- 1. per ticket type ---------------------------------------------------

@@ -121,10 +121,10 @@ export interface ChartData {
 
 export interface ProcessTicketSalesInput {
   tickets: Array<{
-    order_id: number
+    order_id: string
     order_date: string
     category: string
-    sum: string
+    sum: Money
   }>
   config: SalesTargetConfig
   capacity: number
@@ -133,13 +133,28 @@ export interface ProcessTicketSalesInput {
   speakerCount: number
 }
 
+/**
+ * Integer minor units plus an ISO 4217 code. Never a float. Mirrors `Money` in
+ * `services/ticketing/src/data` (a separate package, so mirrored, not imported).
+ */
+export interface Money {
+  amountMinor: number
+  currency: string
+}
+
+/**
+ * One ticket row in Konf terms: string ids, money as {@link Money}. Vendor
+ * parsing (Checkin's decimal strings, Tito's numbers) stays in the provider.
+ */
 export interface EventTicketWithoutDate {
-  id: number
-  order_id: number
+  id: string
+  order_id: string
   category: string
   customer_name: string | null
-  sum: string
-  sum_left: string
+  /** Per-ticket amount (providers normalize to `'per-ticket'`). */
+  sum: Money
+  /** Outstanding balance of this ticket. */
+  sum_left: Money
   coupon?: string
   discount?: string
   fields: { key: string; value: string }[]
@@ -161,7 +176,7 @@ export interface EventTicket extends EventTicketWithoutDate {
 }
 
 export interface GroupedOrder {
-  order_id: number
+  order_id: string
   order_date: string
   tickets: EventTicket[]
   totalTickets: number
@@ -170,10 +185,6 @@ export interface GroupedOrder {
   categories: string[]
   fields: { key: string; value: string }[]
   additionals?: { name: string; value: string }[]
-}
-
-export interface EventTicketsResponse {
-  eventTickets: EventTicket[]
 }
 
 export interface EventOrderUser {

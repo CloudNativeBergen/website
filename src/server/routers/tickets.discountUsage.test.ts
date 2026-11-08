@@ -115,12 +115,12 @@ const DISCOUNTS = [
 ]
 
 const ticket = (id: number, coupon?: string) => ({
-  id,
-  order_id: 500 + id,
+  id: String(id),
+  order_id: String(500 + id),
   category: 'Regular',
   customer_name: null,
-  sum: '1000.50',
-  sum_left: '0',
+  sum: { amountMinor: 100050, currency: 'NOK' },
+  sum_left: { amountMinor: 0, currency: 'NOK' },
   coupon,
   fields: [],
   crm: { first_name: 'A', last_name: 'B', email: `a${id}@example.com` },
@@ -176,7 +176,7 @@ beforeEach(() => {
   h.resolveCredentials.mockResolvedValue({ apiKey: 'k', apiSecret: 's' })
   h.listDiscounts.mockResolvedValue({
     discounts: DISCOUNTS,
-    ticketTypes: [{ id: 1, name: 'Conference', description: null }],
+    ticketTypes: [{ id: '1', name: 'Conference', description: null }],
   })
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -242,7 +242,7 @@ describe('a resolved read reports the usage it actually found', () => {
     const acme = result.discounts.find((d) => d.triggerValue === 'ACME2026')
     expect(acme?.actualUsage).toEqual({
       usageCount: 2,
-      ticketIds: [1, 2],
+      ticketIds: ['1', '2'],
       totalPaid: 2001,
     })
     // The unredeemed code sits next to it as a KNOWN zero, in the same payload.

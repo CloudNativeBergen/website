@@ -567,6 +567,25 @@ only difference is the `maxAge` (30 days vs the default session duration).
 - **No refresh tokens**: users re-run `cli login` when the token expires.
 - **Full permission parity**: CLI tokens have the same permissions as browser sessions.
 
+## Operator CLI token (`KONF_OPERATOR_TOKEN`)
+
+Operator scripts such as `pnpm demo:seed` call the API gateway on the operator lane.
+They need a short-lived operator token (#2168, `docs/AUTHORIZATION.md` §3.6).
+
+- **How to get it:** sign in to Kontroll (my.konf.app) as a platform operator and press
+  **Copy operator token**. Kontroll calls identity's `POST /operator/cli-token` with your
+  session. You get `{ token, expiresAt, origin }`.
+- **How to use it:** copy it just before you run the script:
+  `KONF_OPERATOR_TOKEN=<token> pnpm demo:seed`. The script sends
+  `Authorization: Bearer <token>` and `Origin: <origin>` (the operator origin) to the
+  gateway.
+- **How long it lasts:** 5 minutes, fixed. There is no refresh token, and a token
+  cannot mint another; get a new one from Kontroll. If you lose operator status, the
+  gateway refuses the token on the next request.
+- **Never commit it** or paste it in an issue, a PR, a log or a chat. Put it in the
+  environment of the one command that needs it. Identity records each mint as
+  `operator.cli_token.mint` (who, when, `jti`) and never stores the token.
+
 ## WorkOS AuthKit (Workshops)
 
 A separate auth system used only by the attendee workshop portal. It proves an email

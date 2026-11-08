@@ -340,20 +340,13 @@ builder.asEntity(Organization, {
 })
 
 // Per-conference counts for the operator lane (#2142). An entity keyed by the
-// conference id: cfp, program and sponsors each add their own count, gated on
+// conference id: cfp, program, sponsors and ticketing each add their own count, gated on
 // a PlatformContext. Integers only: no PII, no ids beyond the key.
 const OperatorConferenceStats = builder
   .objectRef<{ conferenceId: string }>('OperatorConferenceStats')
   .implement({
     fields: (t) => ({
       conferenceId: t.exposeID('conferenceId'),
-      ticketsSold: t.int({
-        nullable: true,
-        tag: 'operator',
-        description:
-          'Always null for now: tickets sold live in the external ticketing provider, which only the site reads (src/lib/tickets). No subgraph has a server-side source yet.',
-        resolve: () => null,
-      }),
     }),
   })
 

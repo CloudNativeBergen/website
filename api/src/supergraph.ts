@@ -24,6 +24,7 @@ import { schema as content } from '../../services/content/src/subgraph'
 import { schema as conference } from '../../services/conference/src/subgraph'
 import { schema as program } from '../../services/program/src/subgraph'
 import { schema as sponsors } from '../../services/sponsors/src/subgraph'
+import { schema as ticketing } from '../../services/ticketing/src/subgraph'
 import { schema as cfp } from '../../services/cfp/src/subgraph'
 import { schema as identity } from '../../services/identity/src/subgraph'
 import { schema as tenantDirectory } from '../../services/tenant-directory/src/subgraph'
@@ -40,6 +41,7 @@ export const SUBGRAPHS = {
   sponsors,
   cfp,
   conference,
+  ticketing,
   identity,
 }
 

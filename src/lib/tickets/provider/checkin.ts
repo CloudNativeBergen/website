@@ -2,7 +2,6 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import type {
   EventTicket,
   EventTicketWithoutDate,
-  EventTicketsResponse,
   EventOrderUser as EventOrder,
   AllEventOrderUsersResponse,
 } from '@/lib/tickets/types'
@@ -14,7 +13,7 @@ import type {
   CreateEventDiscountResponse,
   DeleteEventDiscountResponse,
 } from '@/lib/discounts/types'
-import { toMinorUnits, toPerTicketAmounts } from './types'
+import { toMinorUnits, toMoney, toPerTicketAmounts } from './types'
 import type {
   EventRef,
   FetchEventTicketsOptions,
@@ -112,6 +111,41 @@ export interface CheckinPayOrder {
   sumLeft: string
   paid: boolean
   sumVat: string
+}
+
+/** One `eventTickets` row as Checkin sends it: numeric ids, decimal strings. */
+export interface CheckinEventTicketRow extends Omit<
+  EventTicketWithoutDate,
+  'id' | 'order_id' | 'sum' | 'sum_left'
+> {
+  id: number
+  order_id: number
+  sum: string
+  sum_left: string
+}
+
+/** Checkin row to Konf ticket: string ids, money in minor units. */
+export function fromCheckinTicketRow(
+  row: CheckinEventTicketRow,
+): EventTicketWithoutDate {
+  return {
+    ...row,
+    id: String(row.id),
+    order_id: String(row.order_id),
+    sum: toMoney(row.sum),
+    sum_left: toMoney(row.sum_left),
+  }
+}
+
+/** A `findEventById` ticket as Checkin sends it. */
+interface CheckinPublicTicketType extends Omit<
+  PublicTicketType,
+  'id' | 'price'
+> {
+  id: number
+  price: (Omit<PublicTicketType['price'][number], 'price'> & {
+    price: string
+  })[]
 }
 
 export interface CheckinPayOrderResponse {
@@ -393,9 +427,9 @@ export class CheckinProvider implements TicketingProvider {
         this.fetchAllEventOrders(customerId, eventId),
       ])
 
-      const orderDateMap = new Map<number, string>()
+      const orderDateMap = new Map<string, string>()
       orderUsers.forEach((orderUser) => {
-        orderDateMap.set(orderUser.orderId, orderUser.createdAt)
+        orderDateMap.set(String(orderUser.orderId), orderUser.createdAt)
       })
 
       const dated = tickets.map((ticket): EventTicket => ({
@@ -452,12 +486,11 @@ export class CheckinProvider implements TicketingProvider {
   `
 
     const variables = { customerId, eventId }
-    const responseData = await this.query<EventTicketsResponse>(
-      query,
-      variables,
-    )
+    const responseData = await this.query<{
+      eventTickets: CheckinEventTicketRow[]
+    }>(query, variables)
 
-    return responseData.eventTickets || []
+    return (responseData.eventTickets || []).map(fromCheckinTicketRow)
   }
 
   async fetchOrderPaymentDetails(
@@ -709,7 +742,7 @@ export class CheckinProvider implements TicketingProvider {
         registrationOpensAt: string | null
         registrationClosesAt: string | null
         currencies: string[]
-        tickets: PublicTicketType[]
+        tickets: CheckinPublicTicketType[]
       }
     }>(query, { id: eventId })
 
@@ -726,7 +759,14 @@ export class CheckinProvider implements TicketingProvider {
         registrationClosesAt: eventData.registrationClosesAt,
         currencies: eventData.currencies,
       },
-      tickets: eventData.tickets || [],
+      tickets: (eventData.tickets || []).map((t) => ({
+        ...t,
+        id: String(t.id),
+        price: (t.price ?? []).map((p) => ({
+          ...p,
+          price: toMoney(p.price, eventData.currencies?.[0]),
+        })),
+      })),
     }
   }
 

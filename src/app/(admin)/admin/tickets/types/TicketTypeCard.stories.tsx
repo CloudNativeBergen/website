@@ -8,13 +8,13 @@ import { TicketTypeCard, type TicketTypeWorkshopAccess } from './TicketTypeCard'
 import type { PublicTicketType } from '@/lib/tickets/provider/types'
 
 const paidTicket: PublicTicketType = {
-  id: 4821,
+  id: '4821',
   name: 'Conference Pass',
   type: 'regular',
   description: 'Two days of talks, lunch and the evening social.',
   price: [
     {
-      price: '4500.00',
+      price: { amountMinor: 450000, currency: 'NOK' },
       vat: '25',
       description: 'Early bird, until 1 May',
       key: 'nok',
@@ -28,11 +28,18 @@ const paidTicket: PublicTicketType = {
 }
 
 const freeTicket: PublicTicketType = {
-  id: 4822,
+  id: '4822',
   name: 'Community Ticket',
   type: 'free',
   description: null,
-  price: [{ price: '0.00', vat: '0', description: null, key: 'nok' }],
+  price: [
+    {
+      price: { amountMinor: 0, currency: 'NOK' },
+      vat: '0',
+      description: null,
+      key: 'nok',
+    },
+  ],
   available: null,
   requiresInvitation: false,
   visibleStartsAt: null,
@@ -165,7 +172,7 @@ export const RoleProposed: Story = {
   args: {
     ticket: {
       ...paidTicket,
-      id: 4823,
+      id: '4823',
       name: 'Sponsor discount (workshop upgrade)',
       description: null,
     },

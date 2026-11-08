@@ -163,6 +163,9 @@ function value(
   if (table === 'organizations' && n === 'kind') return 'customer'
   // 0011: a signup code needs at least one use (CHECK max_uses > 0).
   if (table === 'signup_codes' && n === 'max_uses') return 1
+  // ticketing 0001 (#2148): ISO 4217, and a line holds at least one ticket.
+  if (n === 'currency') return 'NOK'
+  if (table === 'ticket_order_lines' && n === 'quantity') return 1
   if (/INT|REAL|FLOA|DOUB/i.test(col.type)) return 0
   const text = `${tag(t)} ${table}.${n}`
   // A JSON id list holds numbers (conference 0007 public_free_ticket_ids).
@@ -523,6 +526,8 @@ const ALONE = new Set([
   'speakerDirectory',
   'myProposal',
   'myProposals',
+  'ticketSales',
+  'ticketOrders',
 ])
 
 function queries(tenants: T[]) {
@@ -1060,6 +1065,12 @@ describe('cross-tenant mutation walk', () => {
           (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions
             ?.code,
         )
+      // Demo seed (#2148): org A is a customer org, so it refuses; binding
+      // a ticketing event is operator-only.
+      else if (field === 'seedTicketOrders' || field === 'bindTicketEvent')
+        expect(body.errors).toMatchObject([
+          { extensions: { code: 'FORBIDDEN' } },
+        ])
       else expect(body.errors).toBeUndefined()
       expect(JSON.stringify(body)).not.toMatch(MARKER)
     }

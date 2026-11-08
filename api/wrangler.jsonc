@@ -55,6 +55,7 @@
     { "binding": "SPONSORS", "service": "konf-sponsors" },
     { "binding": "CFP", "service": "konf-cfp" },
     { "binding": "CONFERENCE", "service": "konf-conference" },
+    { "binding": "TICKETING", "service": "konf-ticketing" },
     { "binding": "IDENTITY", "service": "konf-identity" },
     {
       "binding": "IDENTITY_GRAPH",
@@ -105,6 +106,7 @@
         { "binding": "SPONSORS", "service": "konf-sponsors-preview" },
         { "binding": "CFP", "service": "konf-cfp-preview" },
         { "binding": "CONFERENCE", "service": "konf-conference-preview" },
+        { "binding": "TICKETING", "service": "konf-ticketing-preview" },
         { "binding": "IDENTITY", "service": "konf-identity-preview" },
         {
           "binding": "IDENTITY_GRAPH",
@@ -154,6 +156,7 @@
         { "binding": "SPONSORS", "service": "konf-sponsors" },
         { "binding": "CFP", "service": "konf-cfp" },
         { "binding": "CONFERENCE", "service": "konf-conference" },
+        { "binding": "TICKETING", "service": "konf-ticketing" },
         { "binding": "IDENTITY", "service": "konf-identity" },
         {
           "binding": "IDENTITY_GRAPH",
