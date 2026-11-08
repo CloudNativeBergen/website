@@ -28,6 +28,7 @@ import { schema as ticketing } from '../../services/ticketing/src/subgraph'
 import { schema as cfp } from '../../services/cfp/src/subgraph'
 import { schema as identity } from '../../services/identity/src/subgraph'
 import { schema as tenantDirectory } from '../../services/tenant-directory/src/subgraph'
+import { GATEWAY_TYPEDEFS } from './gateway-typedefs'
 
 /**
  * Subgraph name -> schema. The name is the host of the subgraph URL in the
@@ -82,11 +83,6 @@ export const compose = (): string => composeAll().supergraphSdl!
 
 /** The client-facing schema the gateway serves (no join directives). */
 export const publicSdl = (): string => composeAll().publicSdl!
-
-/** Fields the gateway itself serves (see gateway.ts), outside any subgraph. */
-export const GATEWAY_TYPEDEFS = `
-  type SiteRolloutFlags { apiRead: Boolean! identityLogin: Boolean! d1Write: Boolean! }
-  extend type Query { health: String! rolloutFlags: SiteRolloutFlags }`
 
 /** What a client sees: the public SDL plus the gateway's own fields. */
 export const clientSdl = (): string =>
