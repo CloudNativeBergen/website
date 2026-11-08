@@ -447,7 +447,16 @@ describe('OperatorConferenceStats.ticketsSold', () => {
     expect(data._entities).toEqual([
       { conferenceId: 'conf-a', ticketsSold: 2 },
       { conferenceId: 'conf-b', ticketsSold: 7 },
-      { conferenceId: 'conf-none', ticketsSold: 0 },
+      { conferenceId: 'conf-none', ticketsSold: null },
+    ])
+  })
+
+  it('is 0 for a bound event with no orders, null without a bound event', async () => {
+    const { data } = await gql(platform, STATS, { r: reps })
+    expect(data._entities).toEqual([
+      { conferenceId: 'conf-a', ticketsSold: 0 },
+      { conferenceId: 'conf-b', ticketsSold: 0 },
+      { conferenceId: 'conf-none', ticketsSold: null },
     ])
   })
 
