@@ -440,6 +440,8 @@ describe('#2172 P0', () => {
     // B's writes wait until A has finished, so B writes from a stale read.
     let release!: () => void
     const gate = new Promise<void>((r) => (release = r))
+    let reached!: () => void
+    const atWrite = new Promise<void>((r) => (reached = r))
     const gated = {
       prepare(sql: string) {
         const st = d1.prepare(sql)
@@ -447,13 +449,13 @@ describe('#2172 P0', () => {
         return {
           bind: (...args: unknown[]) => {
             const b = st.bind(...args)
-            return { first: async () => (await gate, b.first()) }
+            return { first: async () => (reached(), await gate, b.first()) }
           },
         }
       },
     } as unknown as D1Database
     const b = createSpeakerProfiles(gated).update(u, { bio: 'new' })
-    await new Promise((r) => setTimeout(r, 20))
+    await atWrite // B has read and is about to write
     await sp.update(u, { visibility: 'private' })
     release()
     await b
@@ -508,8 +510,11 @@ describe('migration 0011 keeps existing rows', () => {
           .run()
       }
       const dump = async () =>
-        (await db.prepare('SELECT * FROM speaker_profile ORDER BY user_id').all())
-          .results
+        (
+          await db
+            .prepare('SELECT * FROM speaker_profile ORDER BY user_id')
+            .all()
+        ).results
       const before = await dump()
       // m3 took the old default.
       expect(before.map((r) => r.visibility)).toEqual([
