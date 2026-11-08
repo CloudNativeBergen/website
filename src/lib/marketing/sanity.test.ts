@@ -6,6 +6,12 @@
  * the seed commit captured mutation by mutation.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 import { evaluate, parse } from 'groq-js'
 
 const h = vi.hoisted(() => {
@@ -547,7 +553,7 @@ describe('getPlanView D1 gateway values and fallbacks (#1997)', () => {
 
   it('uses merged D1 title for copiedFromTitle when flagged and values differ', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-prior')
+    flagTenants('apiRead', 'conf-prior')
 
     h.dataset.length = 0
     h.dataset.push(
@@ -592,7 +598,7 @@ describe('getPlanView D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity title for copiedFromTitle when unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
 
     h.dataset.length = 0
     h.dataset.push(
@@ -627,7 +633,7 @@ describe('getPlanView D1 gateway values and fallbacks (#1997)', () => {
   it('falls back to Sanity title for copiedFromTitle on gateway error', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-prior')
+    flagTenants('apiRead', 'conf-prior')
 
     h.dataset.length = 0
     h.dataset.push(

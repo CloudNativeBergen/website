@@ -54,7 +54,12 @@ import {
 } from '@/lib/domain-verification'
 import { planEditionPlatformHosts } from '@/lib/conference/platformEditionHosts'
 import {
+  PROVISIONING_RECEIPT_RETENTION_DAYS,
+  PROVISIONING_REQUEST_TYPE,
+} from '@/lib/provisioning/constants'
+import {
   buildEditionDocuments,
+  type CreateEditionInput,
   type SourceConference,
   type SourceSponsorTier,
   type SourceContractTemplate,
@@ -446,6 +451,240 @@ async function applyConferencePatch(
       message: 'Failed to update conference settings',
       cause: error,
     })
+  }
+}
+
+export interface EditionReceipt {
+  /** `receiptDocId(key, 'edition')`. */
+  id: string
+  organizationId: string
+  inputHash: string
+  createdBy: string
+}
+
+async function readEditionReceipt(receipt: EditionReceipt) {
+  const done = await clientReadUncached.fetch<{
+    conferenceId?: string
+    domains?: string[]
+    inputHash?: string
+  } | null>(
+    // groq-global: platform-internal provisioning receipt, keyed by its salted id (as onboarding's).
+    `*[_type == $type && _id == $id][0]{ conferenceId, domains, inputHash }`,
+    { type: PROVISIONING_REQUEST_TYPE, id: receipt.id },
+  )
+  if (!done?.conferenceId) return null
+  if (done.inputHash !== receipt.inputHash) {
+    throw new TRPCError({ code: 'CONFLICT', message: 'idempotency_conflict' })
+  }
+  return {
+    conferenceId: done.conferenceId,
+    domains: done.domains,
+    replayed: true,
+    summary: {},
+  }
+}
+
+/**
+ * The body of {@link conferenceRouter.createEdition}, shared with the gateway's
+ * `provisionConference` (`/api/provisioning/service/conferences`, kontroll#85).
+ * `sourceId` is the caller's own, already authorized edition. With `receipt`,
+ * the Sanity transaction also creates that idempotency receipt, so a retry
+ * returns the first id and a reused key with another input is refused
+ * (`CONFLICT`, `idempotency_conflict`).
+ */
+export async function createEditionFromSource(
+  sourceId: string,
+  input: CreateEditionInput,
+  receipt?: EditionReceipt,
+): Promise<{
+  conferenceId: string
+  domains?: string[]
+  replayed?: boolean
+  summary: Record<string, number>
+}> {
+  if (receipt) {
+    const done = await readEditionReceipt(receipt)
+    if (done) return done
+  }
+
+  const [sanitySource, sourceTiers, sourceTemplates, claimedDomains, orgSlug] =
+    await Promise.all([
+      clientReadUncached.fetch<SourceConference | null>(
+        // groq-global-scoped: the source conference document itself, by
+        // the id resolveConferenceId() resolved from the request domain.
+        `*[_type == "conference" && _id == $id][0]`,
+        { id: sourceId },
+      ),
+      clientReadUncached.fetch<SourceSponsorTier[]>(
+        `*[_type == "sponsorTier" && conference._ref == $conferenceId]`,
+        { conferenceId: sourceId },
+      ),
+      clientReadUncached.fetch<SourceContractTemplate[]>(
+        `*[_type == "contractTemplate" && conference._ref == $conferenceId]`,
+        { conferenceId: sourceId },
+      ),
+      fetchClaimedDomains(),
+      // The org slug is what the platform hosts are minted FROM. Read from
+      // the source conference's organization ref — never from client input.
+      clientReadUncached.fetch<string | null>(
+        // groq-global-scoped: keyed by the SERVER-resolved source conference id (`resolveConferenceId`, from the request Host), exactly like the reads above it.
+        `*[_type == "conference" && _id == $id][0].organization->slug.current`,
+        { id: sourceId },
+      ),
+    ])
+
+  if (!sanitySource?._id) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Could not resolve the source conference',
+    })
+  }
+  // #1997: D1 owns the moved fields, so clone from the merged values;
+  // editorial fields stay Sanity's. Unflagged or failing: Sanity as-is.
+  const source = await mergeConference(sanitySource)
+
+  // GLOBAL domain uniqueness — the authority. `input.domains` is already
+  // normalized/validated for shape by the schema. Uniqueness is judged by
+  // ROUTING overlap, not string equality (see {@link findClaimedOverlaps}).
+  const taken = findClaimedOverlaps(input.domains, claimedDomains)
+  if (taken.length > 0) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: `${DOMAIN_ALREADY_CLAIMED}: ${taken.join(', ')}`,
+    })
+  }
+
+  const newConferenceId = generateKey('conference')
+
+  // PLATFORM ZONE (#683): a new edition is a NEW conference, so it holds no
+  // allocation of its own — every in-zone hostname it asks for is
+  // unallocated by definition and is refused here. Another platform
+  // subdomain for a new edition is a platform grant, not something a tenant
+  // can self-serve. Refused BEFORE the transaction, so nothing is written.
+  const unallocated = await findUnallocatedPlatformDomains(
+    newConferenceId,
+    input.domains,
+  )
+  if (unallocated.length > 0) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: `${PLATFORM_DOMAIN_NOT_ALLOCATED}: ${unallocated.join(', ')}`,
+    })
+  }
+
+  // PLATFORM HOSTS FOR THE NEW EDITION: its own permanent
+  // `<org-slug>-<year>` address, plus the short `<org-slug>` address when
+  // this edition is genuinely the org's latest — which means TRANSFERRING
+  // that one off the edition currently holding it.
+  const hostPlan = await planEditionPlatformHosts({
+    orgSlug,
+    organizationId: source.organization?._ref ?? null,
+    startDate: input.startDate,
+    claimedDomains,
+  })
+  if (hostPlan.conflict !== null) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: `${DOMAIN_ALREADY_CLAIMED}: ${hostPlan.conflict}`,
+    })
+  }
+
+  const { conference, sponsorTiers, contractTemplates, summary } =
+    buildEditionDocuments(
+      {
+        conference: source,
+        sponsorTiers: sourceTiers ?? [],
+        contractTemplates: sourceTemplates ?? [],
+      },
+      // The minted hosts lead, so the short address is the edition's
+      // primary one; the organizer's own domains follow, deduplicated.
+      {
+        ...input,
+        domains: [
+          ...hostPlan.claim,
+          ...input.domains.filter(
+            (entry) => !hostPlan.claim.includes(normalizeDomain(entry)),
+          ),
+        ],
+      },
+      {
+        newConferenceId,
+        mintId: () => generateKey('doc'),
+        mintKey: () => generateKey('key'),
+      },
+    )
+
+  try {
+    let tx = clientWrite.transaction().create(conference)
+    for (const tier of sponsorTiers) tx = tx.create(tier)
+    for (const tpl of contractTemplates) tx = tx.create(tpl)
+    // THE TRANSFER, in the SAME all-or-nothing transaction that claims it.
+    // `domains[]` is globally unique, so releasing and claiming cannot be
+    // two writes: one of them failing would leave the short address on
+    // both editions (a routing collision) or on neither (an address that
+    // resolves nowhere). Atomicity is what rules both out.
+    if (hostPlan.releaseFrom !== null && hostPlan.transferring !== null) {
+      const releasing = hostPlan.transferring
+      tx = tx.patch(hostPlan.releaseFrom, (p) =>
+        p.unset([`domains[@ == "${releasing}"]`]),
+      )
+    }
+    if (receipt) {
+      const now = Date.now()
+      tx = tx.create({
+        _id: receipt.id,
+        _type: PROVISIONING_REQUEST_TYPE,
+        organizationId: receipt.organizationId,
+        conferenceId: newConferenceId,
+        domains: conference.domains as string[],
+        createdBy: receipt.createdBy,
+        inputHash: receipt.inputHash,
+        createdAt: new Date(now).toISOString(),
+        expiresAt: new Date(
+          now + PROVISIONING_RECEIPT_RETENTION_DAYS * 86_400_000,
+        ).toISOString(),
+      })
+    }
+    await tx.commit()
+  } catch (error) {
+    // A twin with the same key committed first: its receipt answers.
+    if (receipt) {
+      const done = await readEditionReceipt(receipt).catch((e) =>
+        e instanceof TRPCError ? Promise.reject(e) : null,
+      )
+      if (done) return done
+    }
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to create the new edition',
+      cause: error,
+    })
+  }
+
+  // A new edition CLAIMS new domains, so it needs verification records —
+  // pending, never inherited from the source edition. Best-effort (#683):
+  // the edition is already committed and a missing record fails closed.
+  await syncDomainVerifications(newConferenceId, input.domains)
+  // The minted hosts are ALLOCATED (#778) — and only these, because they
+  // were derived server-side from the tenant's OWN org slug rather than
+  // typed. Anything the organizer types is still refused above by
+  // `findUnallocatedPlatformDomains`, so a tenant can never self-serve a
+  // grant on a label outside its own namespace. A transferred host is
+  // re-pointed to the new holder by the same call.
+  if (hostPlan.claim.length > 0) {
+    await syncDomainVerifications(newConferenceId, hostPlan.claim, [], {
+      allocatePlatformHosts: true,
+    })
+  }
+
+  // New edition adds a conference document; bust the shared conferences tag
+  // so domain resolution can see it once its domain actually resolves.
+  revalidateTag('content:conferences', 'default')
+
+  return {
+    conferenceId: newConferenceId,
+    domains: conference.domains as string[],
+    summary: { conference: 1, ...summary },
   }
 }
 
@@ -1553,170 +1792,9 @@ export const conferenceRouter = router({
    */
   createEdition: adminProcedure
     .input(CreateEditionSchema)
-    .mutation(async ({ input }) => {
-      const sourceId = await resolveConferenceId()
-
-      const [
-        sanitySource,
-        sourceTiers,
-        sourceTemplates,
-        claimedDomains,
-        orgSlug,
-      ] = await Promise.all([
-        clientReadUncached.fetch<SourceConference | null>(
-          // groq-global-scoped: the source conference document itself, by
-          // the id resolveConferenceId() resolved from the request domain.
-          `*[_type == "conference" && _id == $id][0]`,
-          { id: sourceId },
-        ),
-        clientReadUncached.fetch<SourceSponsorTier[]>(
-          `*[_type == "sponsorTier" && conference._ref == $conferenceId]`,
-          { conferenceId: sourceId },
-        ),
-        clientReadUncached.fetch<SourceContractTemplate[]>(
-          `*[_type == "contractTemplate" && conference._ref == $conferenceId]`,
-          { conferenceId: sourceId },
-        ),
-        fetchClaimedDomains(),
-        // The org slug is what the platform hosts are minted FROM. Read from
-        // the source conference's organization ref — never from client input.
-        clientReadUncached.fetch<string | null>(
-          // groq-global-scoped: keyed by the SERVER-resolved source conference id (`resolveConferenceId`, from the request Host), exactly like the reads above it.
-          `*[_type == "conference" && _id == $id][0].organization->slug.current`,
-          { id: sourceId },
-        ),
-      ])
-
-      if (!sanitySource?._id) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Could not resolve the source conference',
-        })
-      }
-      // #1997: D1 owns the moved fields, so clone from the merged values;
-      // editorial fields stay Sanity's. Unflagged or failing: Sanity as-is.
-      const source = await mergeConference(sanitySource)
-
-      // GLOBAL domain uniqueness — the authority. `input.domains` is already
-      // normalized/validated for shape by the schema. Uniqueness is judged by
-      // ROUTING overlap, not string equality (see {@link findClaimedOverlaps}).
-      const taken = findClaimedOverlaps(input.domains, claimedDomains)
-      if (taken.length > 0) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: `${DOMAIN_ALREADY_CLAIMED}: ${taken.join(', ')}`,
-        })
-      }
-
-      const newConferenceId = generateKey('conference')
-
-      // PLATFORM ZONE (#683): a new edition is a NEW conference, so it holds no
-      // allocation of its own — every in-zone hostname it asks for is
-      // unallocated by definition and is refused here. Another platform
-      // subdomain for a new edition is a platform grant, not something a tenant
-      // can self-serve. Refused BEFORE the transaction, so nothing is written.
-      const unallocated = await findUnallocatedPlatformDomains(
-        newConferenceId,
-        input.domains,
-      )
-      if (unallocated.length > 0) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: `${PLATFORM_DOMAIN_NOT_ALLOCATED}: ${unallocated.join(', ')}`,
-        })
-      }
-
-      // PLATFORM HOSTS FOR THE NEW EDITION: its own permanent
-      // `<org-slug>-<year>` address, plus the short `<org-slug>` address when
-      // this edition is genuinely the org's latest — which means TRANSFERRING
-      // that one off the edition currently holding it.
-      const hostPlan = await planEditionPlatformHosts({
-        orgSlug,
-        organizationId: source.organization?._ref ?? null,
-        startDate: input.startDate,
-        claimedDomains,
-      })
-      if (hostPlan.conflict !== null) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: `${DOMAIN_ALREADY_CLAIMED}: ${hostPlan.conflict}`,
-        })
-      }
-
-      const { conference, sponsorTiers, contractTemplates, summary } =
-        buildEditionDocuments(
-          {
-            conference: source,
-            sponsorTiers: sourceTiers ?? [],
-            contractTemplates: sourceTemplates ?? [],
-          },
-          // The minted hosts lead, so the short address is the edition's
-          // primary one; the organizer's own domains follow, deduplicated.
-          {
-            ...input,
-            domains: [
-              ...hostPlan.claim,
-              ...input.domains.filter(
-                (entry) => !hostPlan.claim.includes(normalizeDomain(entry)),
-              ),
-            ],
-          },
-          {
-            newConferenceId,
-            mintId: () => generateKey('doc'),
-            mintKey: () => generateKey('key'),
-          },
-        )
-
-      try {
-        let tx = clientWrite.transaction().create(conference)
-        for (const tier of sponsorTiers) tx = tx.create(tier)
-        for (const tpl of contractTemplates) tx = tx.create(tpl)
-        // THE TRANSFER, in the SAME all-or-nothing transaction that claims it.
-        // `domains[]` is globally unique, so releasing and claiming cannot be
-        // two writes: one of them failing would leave the short address on
-        // both editions (a routing collision) or on neither (an address that
-        // resolves nowhere). Atomicity is what rules both out.
-        if (hostPlan.releaseFrom !== null && hostPlan.transferring !== null) {
-          const releasing = hostPlan.transferring
-          tx = tx.patch(hostPlan.releaseFrom, (p) =>
-            p.unset([`domains[@ == "${releasing}"]`]),
-          )
-        }
-        await tx.commit()
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to create the new edition',
-          cause: error,
-        })
-      }
-
-      // A new edition CLAIMS new domains, so it needs verification records —
-      // pending, never inherited from the source edition. Best-effort (#683):
-      // the edition is already committed and a missing record fails closed.
-      await syncDomainVerifications(newConferenceId, input.domains)
-      // The minted hosts are ALLOCATED (#778) — and only these, because they
-      // were derived server-side from the tenant's OWN org slug rather than
-      // typed. Anything the organizer types is still refused above by
-      // `findUnallocatedPlatformDomains`, so a tenant can never self-serve a
-      // grant on a label outside its own namespace. A transferred host is
-      // re-pointed to the new holder by the same call.
-      if (hostPlan.claim.length > 0) {
-        await syncDomainVerifications(newConferenceId, hostPlan.claim, [], {
-          allocatePlatformHosts: true,
-        })
-      }
-
-      // New edition adds a conference document; bust the shared conferences tag
-      // so domain resolution can see it once its domain actually resolves.
-      revalidateTag('content:conferences', 'default')
-
-      return {
-        conferenceId: newConferenceId,
-        summary: { conference: 1, ...summary },
-      }
-    }),
+    .mutation(async ({ input }) =>
+      createEditionFromSource(await resolveConferenceId(), input),
+    ),
 
   // === Homepage composer preview (E3) ======================================
 

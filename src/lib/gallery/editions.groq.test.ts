@@ -10,6 +10,12 @@
  * hide behind an empty other tenant.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 import { evaluate, parse } from 'groq-js'
 
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
@@ -193,7 +199,7 @@ describe('getPreviousEditions D1 gateway values and fallbacks (#1997)', () => {
 
   it('uses merged D1 title and dates when tenant is flagged and values differ', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-a-2025')
+    flagTenants('apiRead', 'conf-a-2025')
 
     const conf2025 = h.dataset.find((d) => d._id === 'conf-a-2025')!
     conf2025.domains = ['2025.example.com']
@@ -227,7 +233,7 @@ describe('getPreviousEditions D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity values when tenant is unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
 
     const conf2025 = h.dataset.find((d) => d._id === 'conf-a-2025')!
     conf2025.domains = ['2025.example.com']
@@ -250,7 +256,7 @@ describe('getPreviousEditions D1 gateway values and fallbacks (#1997)', () => {
   it('falls back to Sanity values on gateway error', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-a-2025')
+    flagTenants('apiRead', 'conf-a-2025')
 
     const conf2025 = h.dataset.find((d) => d._id === 'conf-a-2025')!
     conf2025.domains = ['2025.example.com']
@@ -275,7 +281,7 @@ describe('getPreviousEditions D1 gateway values and fallbacks (#1997)', () => {
 
   it('includes an edition whose endDate is only defined in D1 when flagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-a-2025')
+    flagTenants('apiRead', 'conf-a-2025')
 
     const conf2025 = h.dataset.find((d) => d._id === 'conf-a-2025')!
     conf2025.domains = ['2025.example.com']

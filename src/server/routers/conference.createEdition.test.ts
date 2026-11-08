@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 import type { Context } from '@/server/trpc'
 import { DEFAULT_CLONE_FLAGS } from '@/lib/conference/edition'
 
@@ -85,7 +91,11 @@ let platformHostHolders: Array<{
 let sourceOrgSlug: string | null = null
 let sourceDoc: Record<string, unknown> = SOURCE_DOC
 
+/** The provisionConference receipt (`_type == $type`), when one exists. */
+let receiptDoc: Record<string, unknown> | null = null
+
 const fetchMock = vi.fn(async (query: string) => {
+  if (query.includes('_type == $type')) return receiptDoc
   if (query.includes('_type == "sponsorTier"')) return SOURCE_TIERS
   if (query.includes('_type == "contractTemplate"')) return SOURCE_TEMPLATES
   if (query.includes('organization->slug.current')) return sourceOrgSlug
@@ -135,7 +145,7 @@ vi.mock('@/lib/domain-verification', async () => {
   }
 })
 
-import { conferenceRouter } from './conference'
+import { conferenceRouter, createEditionFromSource } from './conference'
 import { DOMAIN_ALREADY_CLAIMED } from '@/lib/conference/domains'
 
 /**
@@ -176,6 +186,7 @@ beforeEach(() => {
   platformHostHolders = []
   sourceOrgSlug = null
   sourceDoc = SOURCE_DOC
+  receiptDoc = null
   commitMock.mockResolvedValue({})
   // The domain conference carries the org the authz waist gates on, so
   // `resolveOrganizationId()` yields ORG_ID for every request in this file.
@@ -511,7 +522,7 @@ describe('createEdition — D1 merge of the source', () => {
   })
 
   it('flagged: clones the D1 city', async () => {
-    vi.stubEnv('KONF_API_TENANTS', SOURCE_ID)
+    flagTenants('apiRead', SOURCE_ID)
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation(
@@ -528,7 +539,7 @@ describe('createEdition — D1 merge of the source', () => {
   })
 
   it('unflagged: Sanity city, gateway never called', async () => {
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
     const gw = vi.fn()
     vi.stubGlobal('fetch', gw)
     await makeCaller({ isOrganizer: true }).createEdition(input())
@@ -537,9 +548,49 @@ describe('createEdition — D1 merge of the source', () => {
   })
 
   it('gateway failure: Sanity city', async () => {
-    vi.stubEnv('KONF_API_TENANTS', SOURCE_ID)
+    flagTenants('apiRead', SOURCE_ID)
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('D1 down')))
     await makeCaller({ isOrganizer: true }).createEdition(input())
     expect(created().city).toBe('Bergen')
+  })
+})
+
+describe('createEditionFromSource — provisionConference receipt (kontroll#85)', () => {
+  const receipt = {
+    id: 'provisioningRequest.abc',
+    organizationId: ORG_ID,
+    inputHash: 'h1',
+    createdBy: 'u_1',
+  }
+
+  it('writes the receipt in the same transaction as the edition', async () => {
+    const out = await createEditionFromSource(SOURCE_ID, input(), receipt)
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        _id: 'provisioningRequest.abc',
+        _type: 'provisioningRequest',
+        conferenceId: out.conferenceId,
+        inputHash: 'h1',
+        createdBy: 'u_1',
+      }),
+    )
+    expect(commitMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a retry with the same input replays the first id without writing', async () => {
+    receiptDoc = { conferenceId: 'conf_first', domains: [], inputHash: 'h1' }
+    await expect(
+      createEditionFromSource(SOURCE_ID, input(), receipt),
+    ).resolves.toMatchObject({ conferenceId: 'conf_first', replayed: true })
+    expect(createSpy).not.toHaveBeenCalled()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('a reused key with another input is CONFLICT without writing', async () => {
+    receiptDoc = { conferenceId: 'conf_first', domains: [], inputHash: 'h0' }
+    await expect(
+      createEditionFromSource(SOURCE_ID, input(), receipt),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(createSpy).not.toHaveBeenCalled()
   })
 })

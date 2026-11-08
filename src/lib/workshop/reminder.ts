@@ -195,9 +195,9 @@ export async function reminderPortal(
  * tenant (#2080), with ONE conditional UPDATE in the conference subgraph, so
  * two concurrent presses cannot both claim it; Sanity's revision lock for
  * everyone else, unchanged.
- * ponytail: an instance whose flag read fails with no recent good value sees
- * d1Write off and takes the Sanity lock; a press on another instance in that
- * window could send twice. Both locks at once if that ever matters.
+ * A flag read that fails with no recent good value refuses (the caller turns
+ * the throw into a retryable rate-limit): taking the Sanity lock then would
+ * record the send in Sanity only while readers prefer D1.
  */
 async function reminderLock(
   host: string | null,
@@ -208,7 +208,12 @@ async function reminderLock(
   release: () => Promise<void>
   record: (sent: number) => Promise<void>
 }> {
-  if (host && (await rolloutFlags(host, conference)).d1Write) {
+  const flags = host
+    ? await rolloutFlags(host, conference, { verify: true })
+    : null
+  if (flags?.unverified && !flags.d1Write)
+    throw new Error('rollout flags unavailable; not taking the Sanity lock')
+  if (host && flags?.d1Write) {
     let token: string | null = null
     return {
       reserve: async () => {

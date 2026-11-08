@@ -16,6 +16,11 @@
  * JS filter would have kept.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../helpers/rolloutFlags')).fakeRolloutFlags,
+}))
+import { flagTenants } from '../../helpers/rolloutFlags'
 
 const liveFetch = vi.fn()
 
@@ -127,7 +132,7 @@ describe('getConferencesForWeeklyUpdate — bounded cron selection', () => {
 describe('getConferencesForWeeklyUpdate — D1 merge', () => {
   it('flagged tenant with differing D1 merges D1 fields', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'c-live')
+    flagTenants('apiRead', 'c-live')
     liveFetch.mockResolvedValue([
       {
         _id: 'c-live',
@@ -159,7 +164,7 @@ describe('getConferencesForWeeklyUpdate — D1 merge', () => {
 
   it('unflagged tenant keeps Sanity values with no gateway read', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', '')
+    flagTenants('apiRead', '')
     liveFetch.mockResolvedValue([
       {
         _id: 'c-live',
@@ -180,7 +185,7 @@ describe('getConferencesForWeeklyUpdate — D1 merge', () => {
 
   it('gateway error falls back to Sanity', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'c-live')
+    flagTenants('apiRead', 'c-live')
     liveFetch.mockResolvedValue([
       {
         _id: 'c-live',

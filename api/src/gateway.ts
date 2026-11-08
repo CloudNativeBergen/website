@@ -41,7 +41,6 @@ export interface Env {
   /** identity's Better Auth base URL, the JWT `iss` (wrangler var, per env) */
   IDENTITY_ISSUER: string
   /** @override label -> orgIds that get the native subgraph (wrangler var, per env) */
-  OVERRIDE_TENANTS: Record<string, string[]>
   /** konf-tenant-directory: tenant lookup and its subgraph */
   DIRECTORY: Fetcher
   /** konf-content: Sanity-backed editorial data (#1835) */
@@ -186,6 +185,15 @@ const SAFE_CODES: ReadonlyMap<string, string | null> = new Map([
   ['NOT_FOUND', 'Not found.'],
 ])
 
+/** Stable BAD_USER_INPUT reasons a client may branch on (kontroll#81). */
+export const INPUT_REASONS: ReadonlySet<string> = new Set([
+  'SLUG_TAKEN',
+  'DOMAIN_TAKEN',
+  'IDEMPOTENCY_KEY_REUSED',
+  'INVALID_INPUT',
+  'COPY_FROM_NOT_IN_ORG',
+])
+
 export const MAX_INPUT_MESSAGE = 300
 const MAX_FIELD = 100
 // A field is a schema name or input path, nothing else.
@@ -197,7 +205,12 @@ const FIELD_NAME = /^[A-Za-z_][\w.[\]]*$/
  */
 function inputDetail(gql: GraphQLError) {
   const field = gql.extensions?.field
+  const reason = gql.extensions?.reason
   return {
+    reason:
+      typeof reason === 'string' && INPUT_REASONS.has(reason)
+        ? reason
+        : undefined,
     message: gql.message.slice(0, MAX_INPUT_MESSAGE),
     field:
       typeof field === 'string' &&
@@ -252,6 +265,7 @@ export function maskError(error: unknown, message: string): Error {
       path: gql?.path,
       extensions: {
         code: safe ? code : 'INTERNAL_SERVER_ERROR',
+        ...(detail?.reason ? { reason: detail.reason } : {}),
         ...(detail?.field ? { field: detail.field } : {}),
         // As yoga's default: unexpected answers 500, an http status is kept.
         ...(safe ? {} : { unexpected: true }),
@@ -307,21 +321,22 @@ async function resolveTenant(
   return data.tenantByHost
 }
 
+/** @override labels that d1_override switches to the native subgraph. */
+export const D1_OVERRIDE_LABELS = new Set(['conference', 'conference-settings'])
+
 /**
- * Progressive override per tenant: an @override label is on for the orgIds
- * OVERRIDE_TENANTS lists (transition, #1925), or for `conference` when the
- * resolved conference has d1_override. Both come from the host the envelope
- * is minted for, never from the caller.
+ * Progressive override per tenant: `conference` and `conference-settings`
+ * are on when the resolved conference has d1_override, the only switch since
+ * OVERRIDE_TENANTS was removed. The flags come from the host the envelope is
+ * minted for, never from the caller. No flags (lookup failed) means off.
  */
 export function progressiveOverride(label: string, context: unknown) {
-  const { env, orgId, flags } = context as {
-    env: Env
+  const { orgId, flags } = context as {
     orgId: string | null
     flags?: RolloutFlags | null
   }
   if (!orgId) return false
-  if (env.OVERRIDE_TENANTS?.[label]?.includes(orgId)) return true
-  return label === 'conference' && !!flags?.d1Override
+  return D1_OVERRIDE_LABELS.has(label) && flags?.d1Override === true
 }
 
 type GatewayContext = {

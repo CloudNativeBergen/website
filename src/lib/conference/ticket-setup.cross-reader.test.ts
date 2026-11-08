@@ -9,12 +9,15 @@
  * take a conference as a parameter get it from one of these paths; the lint
  * rule `d1/no-sanity-d1-conference-fields` catches a new direct GROQ read.
  */
+import type { ReactElement } from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TICKET_SETUP_FIELDS } from './konf-api'
 
 vi.mock('server-only', () => ({}))
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
-vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }))
+vi.mock('next/headers', () => ({
+  headers: vi.fn(async () => new Headers({ host: '2026.example.com' })),
+}))
 vi.mock('@/lib/konf-api/client', async (orig) => ({
   ...(await orig<typeof import('@/lib/konf-api/client')>()),
   konfApiHeaders: async (host: string) => ({
@@ -29,11 +32,26 @@ vi.mock('@/lib/gallery/sanity', () => ({
 vi.mock('@/lib/sponsor-crm/sanity', () => ({
   getPublicSponsorsForConference: vi.fn(async () => []),
 }))
-const seen = vi.hoisted(() => ({ binding: null as unknown }))
+const seen = vi.hoisted(() => ({
+  binding: null as unknown,
+  homepageBinding: null as unknown,
+}))
 vi.mock('@/lib/tickets/admin-access', () => ({
   resolveTicketingAdminAccess: async (b: unknown) => (
     (seen.binding = b),
     { state: 'off' }
+  ),
+}))
+vi.mock('@/lib/tickets/public-read', () => ({
+  getPublicTicketTypes: async (b: unknown) => (
+    (seen.homepageBinding = b),
+    {
+      status: 'ok',
+      event: {},
+      tickets: [],
+      freeTickets: [],
+      complimentaryTickets: [],
+    }
   ),
 }))
 
@@ -58,6 +76,7 @@ const SANITY = {
   workshopEarlyAccessTicketTypes: ['Sanity'],
   workshopReminderLastSentAt: '2026-01-04T08:00:00Z',
   workshopReminderLastSentCount: 1,
+  workshopReminderReservedAt: '2026-01-05T08:00:00Z',
 }
 /** D1's copy, as the gateway answers it. The binding agrees (see below). */
 const D1 = {
@@ -81,6 +100,7 @@ const D1 = {
   workshopEarlyAccessTicketTypes: ['D1'],
   workshopReminderLastSentAt: '2026-02-04T08:00:00Z',
   workshopReminderLastSentCount: 2,
+  workshopReminderReservedAt: '2026-02-05T08:00:00Z',
 }
 /**
  * The intended source of each field a server-side reader sees: D1 for the
@@ -100,6 +120,7 @@ const EXPECTED: Record<string, unknown> = {
   },
   workshopReminderLastSentAt: '2026-02-04T08:00:00Z',
   workshopReminderLastSentCount: 2,
+  workshopReminderReservedAt: '2026-02-05T08:00:00Z',
   // Sanity:
   checkinEventId: 4242,
   titoAccountSlug: 'sanity-acct',
@@ -150,7 +171,9 @@ vi.mock('@/lib/sanity/client', () => {
 const gateway = vi.fn(async (_: unknown, init: RequestInit) => {
   const { query } = JSON.parse(String(init.body)) as { query: string }
   if (query.includes('rolloutFlags'))
-    return new Response(JSON.stringify({ data: { rolloutFlags: null } }))
+    return new Response(
+      JSON.stringify({ data: { rolloutFlags: { apiRead: true } } }),
+    )
   const asked = Object.fromEntries(
     Object.entries(D1).filter(([k]) => new RegExp(`\\b${k}\\b`).test(query)),
   )
@@ -160,8 +183,9 @@ const gateway = vi.fn(async (_: unknown, init: RequestInit) => {
 })
 
 beforeEach(() => {
+  seen.binding = null
+  seen.homepageBinding = null
   vi.stubEnv('KONF_API_URL', 'https://api.example.com/graphql')
-  vi.stubEnv('KONF_API_TENANTS', 'conf-1')
   vi.stubEnv('KONF_SITE_SIGNING_KEY', '{"kid":"k"}')
   vi.stubGlobal('fetch', gateway)
   vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -180,11 +204,92 @@ describe('every ticket-setup reader sees each field from its intended source', (
   it('a public page: the members-only fields are absent, the rest as intended', async () => {
     const { getConferenceForDomain } = await import('./sanity')
     const { conference } = await getConferenceForDomain('2026.example.com')
-    for (const k of TICKET_SETUP_FIELDS)
+    for (const k of TICKET_SETUP_FIELDS) {
+      expect(SANITY, k).toHaveProperty(k)
       expect(conference, k).not.toHaveProperty(k)
+    }
     expect(pick(conference as never, Object.keys(PUBLIC_EXPECTED))).toEqual(
       PUBLIC_EXPECTED,
     )
+  })
+
+  it('the public homepage: SectionRenderer props and JSON-LD carry none of the members-only fields', async () => {
+    const { default: Home } = await import('@/app/(main)/page')
+    const { HomepageSectionRenderer } =
+      await import('@/components/homepage/SectionRenderer')
+    const { EventJsonLd, OrganizationJsonLd } =
+      await import('@/components/seo/EventJsonLd')
+
+    const outer = (await Home()) as ReactElement<{ domain: string }>
+    const tree = await (
+      outer.type as (p: {
+        domain: string
+      }) => Promise<
+        ReactElement<{ children: ReactElement<Record<string, unknown>>[] }>
+      >
+    )(outer.props)
+    const children = tree.props.children
+    const renderer = children.find((el) => el.type === HomepageSectionRenderer)!
+    const eventJsonLd = children.find((el) => el.type === EventJsonLd)!
+    const orgJsonLd = children.find((el) => el.type === OrganizationJsonLd)!
+
+    expect(renderer).toBeDefined()
+    expect(eventJsonLd).toBeDefined()
+    expect(orgJsonLd).toBeDefined()
+
+    // Server-side ticket lookup on the same render still sees the full binding.
+    expect(
+      pick(seen.homepageBinding as never, [
+        'ticketingProvider',
+        'checkinCustomerId',
+        'checkinEventId',
+        'titoAccountSlug',
+        'titoEventSlug',
+      ]),
+    ).toEqual(
+      pick(EXPECTED, [
+        'ticketingProvider',
+        'checkinCustomerId',
+        'checkinEventId',
+        'titoAccountSlug',
+        'titoEventSlug',
+      ]),
+    )
+
+    for (const el of [renderer, eventJsonLd, orgJsonLd]) {
+      const conf = el.props.conference as Record<string, unknown>
+      for (const k of TICKET_SETUP_FIELDS) expect(conf, k).not.toHaveProperty(k)
+      expect(pick(conf, Object.keys(PUBLIC_EXPECTED))).toEqual(PUBLIC_EXPECTED)
+    }
+
+    const jsonLdScripts = [
+      EventJsonLd(eventJsonLd.props as never),
+      OrganizationJsonLd(orgJsonLd.props as never),
+    ].map(
+      (s) =>
+        (
+          s.props as {
+            dangerouslySetInnerHTML: { __html: string }
+          }
+        ).dangerouslySetInnerHTML.__html,
+    )
+    expect(JSON.parse(jsonLdScripts[0])).toMatchObject({
+      '@type': 'Event',
+      name: 'T',
+    })
+    expect(JSON.parse(jsonLdScripts[1])).toMatchObject({
+      '@type': 'Organization',
+    })
+    const combinedJsonLd = jsonLdScripts.join('\n')
+    for (const k of TICKET_SETUP_FIELDS) expect(combinedJsonLd).not.toContain(k)
+    for (const secret of [
+      'sanity-acct',
+      'sanity-event',
+      'd1-acct',
+      'd1-event',
+      '4242',
+    ])
+      expect(combinedJsonLd).not.toContain(secret)
   })
 
   it('the server-side conference read (admin, routers, jobs) with includeTicketSetup', async () => {
