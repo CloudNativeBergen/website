@@ -81,6 +81,7 @@
     "@react-email/render": "^2.2.0",
     "@react-pdf/renderer": "^4.9.0",
     "@resvg/resvg-js": "^2.6.2",
+    "@runkonf/tenancy": "workspace:*",
     "@sanity/image-url": "^2.1.1",
     "@sanity/types": "^6.21.0",
     "@tanstack/react-query": "^5.105.0",

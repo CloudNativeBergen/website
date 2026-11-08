@@ -943,8 +943,9 @@ export async function getAuthSession(req?: {
         await getSessionFromBearerToken(bearerToken),
       )
     // identity session cookie, flagged tenants only (#1892).
+    // Through the live check too: it applies the identity member source (#2101).
     const { identitySession } = await import('@/lib/auth/identity-session')
-    return identitySession()
+    return withLiveOrganizerRights(await identitySession())
   }
 
   // SECURITY: Impersonation is ONLY allowed in development mode

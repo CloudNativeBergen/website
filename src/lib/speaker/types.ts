@@ -204,6 +204,13 @@ export interface Speaker extends SpeakerBase {
    */
   organizerOrgIds?: string[]
   /**
+   * Session-only, never stored (#2101): why the request org's organizer right
+   * was withheld when identity owns that org's roles. `unavailable`: identity
+   * could not be read (fail closed); `konf_sign_in`: no Konf sign-in to read
+   * the role with. Only for the error message; the decision is organizerOrgIds.
+   */
+  adminDenyReason?: 'unavailable' | 'konf_sign_in'
+  /**
    * Opt-in web push subscriptions for this speaker (#444). Additive/optional —
    * legacy documents without it remain valid. Managed exclusively by the tRPC
    * `push` router, always scoped to the authenticated caller's own `_id`.

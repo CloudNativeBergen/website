@@ -1,5 +1,10 @@
 import { TRPCError } from '@trpc/server'
 import {
+  inviteThroughIdentity,
+  orgAuthority,
+} from '@/lib/authz/identity-members'
+import { requestHost } from '@/lib/konf-api/conference-write'
+import {
   router,
   adminProcedure,
   protectedProcedure,
@@ -140,6 +145,42 @@ export const organizerInviteRouter = router({
           message:
             'That email address contains characters we cannot deliver to reliably. Please retype it using plain characters.',
         })
+      }
+
+      // #2101: an org whose roles identity owns gets an identity invitation,
+      // never a Sanity one: organizers[] no longer grants anything there.
+      const host = await requestHost()
+      let authority = null
+      try {
+        authority = host ? await orgAuthority(host) : null
+      } catch {
+        // Unknown member source: neither path is safe to take.
+        throw new TRPCError({
+          code: 'SERVICE_UNAVAILABLE',
+          message:
+            'Invitations cannot be sent right now. Wait a minute and try again.',
+        })
+      }
+      if (host && authority?.identitySource) {
+        try {
+          const inv = await inviteThroughIdentity(host, canonical)
+          return {
+            _id: inv.id,
+            invitedEmail: canonical,
+            invitedName: input.name,
+            status: 'pending' as OrganizerInvitationStatus,
+            expiresAt: inv.expiresAt,
+            createdAt: new Date().toISOString(),
+            invitedByName: ctx.speaker.name,
+          }
+        } catch (error) {
+          console.error('[organizer-invite] identity invitation failed', error)
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'Could not create the invitation in Konf. Sign in with Konf and try again, or invite from Kontroll.',
+          })
+        }
       }
 
       if (normalized === normalizeEmail(ctx.speaker.email)) {

@@ -217,10 +217,23 @@ const requireAuth = t.middleware(({ ctx, next }) => {
 const requireAdmin = t.middleware(async ({ ctx, next }) => {
   const orgId = await resolveOrganizationId()
   if (!isOrganizerForOrg(ctx.session?.speaker, orgId)) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Admin privileges required',
-    })
+    // #2101: an identity-source org says why, so a refusal is not a mystery.
+    const reason = ctx.session?.speaker?.adminDenyReason
+    throw new TRPCError(
+      reason === 'unavailable'
+        ? {
+            code: 'SERVICE_UNAVAILABLE',
+            message:
+              'Organizer rights cannot be checked right now. Wait a minute and try again.',
+          }
+        : reason === 'konf_sign_in'
+          ? {
+              code: 'FORBIDDEN',
+              message:
+                'This organization manages organizers in Kontroll. Sign out and sign in with Konf to use the admin.',
+            }
+          : { code: 'FORBIDDEN', message: 'Admin privileges required' },
+    )
   }
 
   return next({

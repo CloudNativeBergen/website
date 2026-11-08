@@ -33,6 +33,10 @@ import {
   sendOrganizerInvitationEmail,
 } from '@/lib/organizer-invite/server'
 import { mintOrganizerInviteToken } from '@/lib/organizer-invite/token'
+import {
+  inviteThroughIdentity,
+  orgAuthority,
+} from '@/lib/authz/identity-members'
 
 const ORG_A = 'org-test'
 const ORG_B = 'org-other'
@@ -81,6 +85,10 @@ vi.mock('@/lib/sanity/client', () => ({
   clientRead: { fetch: vi.fn() },
 }))
 vi.mock('@/lib/organizer-invite/sanity')
+vi.mock('@/lib/authz/identity-members')
+vi.mock('@/lib/konf-api/conference-write', () => ({
+  requestHost: vi.fn().mockResolvedValue('test.example'),
+}))
 vi.mock('@/lib/organizer-invite/server')
 // `vi.mock` factories are hoisted above every import and const, so the ids are
 // inlined here rather than referenced from the constants above.
@@ -130,6 +138,12 @@ beforeEach(() => {
   vi.mocked(hasPendingOrganizerInvitation).mockResolvedValue(false)
   vi.mocked(getConferenceOrganizerIds).mockResolvedValue(['founder-1'])
   vi.mocked(sendOrganizerInvitationEmail).mockResolvedValue(true)
+  // Sanity is the member source unless a test switches the org (#2101).
+  vi.mocked(orgAuthority).mockResolvedValue({
+    identitySource: false,
+    admin: false,
+    signedIn: false,
+  })
 })
 
 /** `getDocumentTenant` binds the id in params, so the mock dispatches on it. */
@@ -269,6 +283,52 @@ describe('organizerInvite.invite', () => {
         invitedEmail: 'Ada@Example.com',
       }),
     )
+  })
+
+  describe('an org whose roles identity owns (#2101)', () => {
+    beforeEach(() => {
+      vi.mocked(orgAuthority).mockResolvedValue({
+        identitySource: true,
+        admin: true,
+        signedIn: true,
+      })
+      vi.mocked(inviteThroughIdentity).mockResolvedValue({
+        id: 'idinv-1',
+        status: 'pending',
+        expiresAt: '2026-12-01T00:00:00.000Z',
+      })
+    })
+
+    it('creates an identity invitation, not a Sanity one', async () => {
+      const result = await callerFor(founder).organizerInvite.invite({
+        email: 'Ada@Example.com',
+      })
+      expect(inviteThroughIdentity).toHaveBeenCalledWith(
+        'test.example',
+        INVITED,
+      )
+      expect(result).toMatchObject({ _id: 'idinv-1', invitedEmail: INVITED })
+      expect(createOrganizerInvitation).not.toHaveBeenCalled()
+      expect(sendOrganizerInvitationEmail).not.toHaveBeenCalled()
+      expect(clientWrite.create).not.toHaveBeenCalled()
+    })
+
+    it('a refused identity invitation writes nothing to Sanity', async () => {
+      vi.mocked(inviteThroughIdentity).mockRejectedValue(new Error('FORBIDDEN'))
+      await expect(
+        callerFor(founder).organizerInvite.invite({ email: INVITED }),
+      ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' })
+      expect(createOrganizerInvitation).not.toHaveBeenCalled()
+    })
+
+    it('an unreadable member source refuses rather than guess a path', async () => {
+      vi.mocked(orgAuthority).mockRejectedValue(new Error('down'))
+      await expect(
+        callerFor(founder).organizerInvite.invite({ email: INVITED }),
+      ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' })
+      expect(createOrganizerInvitation).not.toHaveBeenCalled()
+      expect(inviteThroughIdentity).not.toHaveBeenCalled()
+    })
   })
 
   it('never returns the bearer token to the inviter (regression)', async () => {
