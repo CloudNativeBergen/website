@@ -10,7 +10,10 @@ import {
   editionHost,
   normalizeHost,
 } from '../src/data/naming'
-import { isPlan } from '@runkonf/tenancy'
+
+// Migration 0008's plan vocabulary. Not from @runkonf/tenancy: the repo-root
+// script that imports this file has no Workers types.
+const PLANS = new Set(['free', 'basic', 'pro'])
 
 export interface SanityOrg {
   _id: string
@@ -101,7 +104,7 @@ export function mapBackfill(
       slug,
       name: o.name || slug,
       // The plan vocabulary of migration 0008; anything else is free.
-      plan: isPlan(o.plan) ? o.plan : 'free',
+      plan: o.plan && PLANS.has(o.plan) ? o.plan : 'free',
     }
     orgs.set(o._id, row)
     out.orgs.push(row)
