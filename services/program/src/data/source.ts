@@ -326,13 +326,22 @@ export class SanityProgramSource implements ProgramSource {
               room: track.name,
               track,
               // An unconfirmed talk arrives without title, description,
-              // language and speakers (SCHEDULE_TRACKS), so toTalk gives null.
-              // Its id is withheld too: the talk(id) root and the profile
-              // never know an unconfirmed talk, so no id leads anywhere.
+              // language and speakers (SCHEDULE_TRACKS). Null them here too,
+              // independent of the projection (second layer). The id goes as
+              // well: the talk(id) root and the profile never know an
+              // unconfirmed talk, so no id leads anywhere.
               talk: talk
                 ? talk.status === 'confirmed'
                   ? toTalk(talk)
-                  : { ...toTalk(talk), id: null }
+                  : {
+                      ...toTalk(talk),
+                      id: null,
+                      title: null,
+                      description: null,
+                      language: null,
+                      speakers: null,
+                      attachments: null,
+                    }
                 : null,
               hasTalkRef: sl.hasTalkRef === true,
               talkStatus: talk ? talkStatus(talk.status) : null,
