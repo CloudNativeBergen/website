@@ -5,7 +5,11 @@
 // Sanity, the data does not move). A D1 source implements the same interface
 // later; the schema only sees the plain types below.
 import { createClient } from '@sanity/client'
-import { ScopedRepository, type Envelope } from '@runkonf/tenancy'
+import {
+  ScopedRepository,
+  platformBatch,
+  type Envelope,
+} from '@runkonf/tenancy'
 import {
   SanitySponsorSource,
   type DataEnv,
@@ -39,22 +43,39 @@ class Sponsors extends ScopedRepository {
   }
 }
 
+// Operator lane only: platformBatch refuses anything but a PlatformContext.
+// One read per page, bounded to the page's conference ids.
+export const CLOSED_WON = `*[_type == "sponsorForConference" && conference._ref in $conferenceIds && status == "closed-won"].conference._ref`
+
 export function createData(env: DataEnv, envelope: Envelope) {
-  const source = new SanitySponsorSource(
-    createClient({
-      projectId: env.SANITY_PROJECT_ID,
-      dataset: env.SANITY_DATASET,
-      apiVersion: '2023-05-03',
-      useCdn: true,
-      // The dataset is private: no token reads nothing.
-      token: env.SANITY_API_TOKEN_READ,
-      requestTagPrefix: 'sponsors.read',
-    }),
-  )
+  const client = createClient({
+    projectId: env.SANITY_PROJECT_ID,
+    dataset: env.SANITY_DATASET,
+    apiVersion: '2023-05-03',
+    useCdn: true,
+    // The dataset is private: no token reads nothing.
+    token: env.SANITY_API_TOKEN_READ,
+    requestTagPrefix: 'sponsors.read',
+  })
+  const source = new SanitySponsorSource(client)
   // Built on first use: the constructor refuses a PlatformContext, and that
   // should fail the resolver, not the whole request.
   let sponsors: Sponsors | undefined
+  // Closed-won sponsorships, tiered or not (#2142).
+  const sponsorCount = platformBatch<number>(
+    envelope,
+    'operator conference stats: sponsors (#2142)',
+    async (ids) => {
+      const refs = await client.fetch<string[]>(CLOSED_WON, {
+        conferenceIds: ids,
+      })
+      const n = new Map<string, number>()
+      for (const c of refs ?? []) n.set(c, (n.get(c) ?? 0) + 1)
+      return n
+    },
+  )
   return {
+    sponsorCount,
     sponsors: () => (sponsors ??= new Sponsors(source, envelope)),
   }
 }

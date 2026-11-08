@@ -1,9 +1,11 @@
 // Public data layer. Exports functions and the auth instance, never the raw handle.
-import { and, eq, like, lt } from 'drizzle-orm'
+import { and, count, eq, gt, like, lt, sql, type AnyColumn } from 'drizzle-orm'
+import { platformBatch, type Envelope } from '@runkonf/tenancy'
 import { rawDb } from './db'
 import {
   account,
   auditEvent,
+  invitation,
   member,
   organization,
   user,
@@ -37,9 +39,53 @@ export interface DataEnv extends SyncEnv, AuthEnv {
 const TENANT_QUERY =
   'query ($host: String!) { tenantByHost(host: $host) { hostname } }'
 
+/** Member and pending-invite counts of one Organization (#2142). */
+export type OrgCounts = { members: number; pendingInvites: number }
+
 export function createData(env: DataEnv) {
   const db = rawDb(env.DB)
+  let orgCounts: ((id: string) => Promise<OrgCounts | undefined>) | undefined
   return {
+    /**
+     * Operator lane only (platformBatch refuses anything else): counts for
+     * a page of orgs in two grouped queries. The ids go in as one JSON
+     * parameter: D1 caps bound parameters at 100 (#2018).
+     */
+    orgCounts: (envelope: Envelope | null) =>
+      (orgCounts ??= platformBatch<OrgCounts>(
+        envelope,
+        'operator organization counts (#2142)',
+        async (ids) => {
+          const inPage = (c: AnyColumn) =>
+            sql`${c} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`
+          const [members, invites] = await Promise.all([
+            db
+              .select({ id: member.organizationId, n: count() })
+              .from(member)
+              .where(inPage(member.organizationId))
+              .groupBy(member.organizationId),
+            db
+              .select({ id: invitation.organizationId, n: count() })
+              .from(invitation)
+              .where(
+                and(
+                  inPage(invitation.organizationId),
+                  eq(invitation.status, 'pending'),
+                  gt(invitation.expiresAt, new Date()),
+                ),
+              )
+              .groupBy(invitation.organizationId),
+          ])
+          const m = new Map(members.map((r) => [r.id, r.n]))
+          const i = new Map(invites.map((r) => [r.id, r.n]))
+          return new Map(
+            ids.map((id) => [
+              id,
+              { members: m.get(id) ?? 0, pendingInvites: i.get(id) ?? 0 },
+            ]),
+          )
+        },
+      )),
     memberSyncStatus: () => memberSyncStatus(env.DB),
     /** Grants missing organizer memberships from Sanity (cron, #1907). */
     syncMembers: () => syncMembers(env),

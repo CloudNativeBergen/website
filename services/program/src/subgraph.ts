@@ -246,6 +246,29 @@ const SpeakerType = builder.objectRef<Speaker>('Speaker').implement({
   }),
 })
 
+// Operator conference stats (#2142): this subgraph's count on the entity
+// tenant-directory's operator `conferences` list returns. Guard before fetch:
+// only a PlatformContext resolves the reference.
+const OperatorConferenceStats = builder
+  .objectRef<{ conferenceId: string }>('OperatorConferenceStats')
+  .implement({
+    fields: (t) => ({
+      conferenceId: t.exposeID('conferenceId'),
+      confirmedSpeakers: t.int({
+        tag: 'operator',
+        description:
+          'Distinct speakers with a confirmed talk, published or not.',
+        resolve: async ({ conferenceId }, _, ctx) =>
+          (await ctx.data.confirmedSpeakerCount(conferenceId)) ?? 0,
+      }),
+    }),
+  })
+builder.asEntity(OperatorConferenceStats, {
+  key: builder.selection<{ conferenceId: string }>('conferenceId'),
+  resolveReference: (ref, ctx) =>
+    ctx.envelope?.typ === 'platform' ? ref : null,
+})
+
 builder.queryType({
   fields: (t) => ({
     program: t.field({
@@ -282,5 +305,5 @@ builder.queryType({
 // v2.9 is the first federation version with @listSize.
 export const schema = builder.toSubGraphSchema({
   linkUrl: 'https://specs.apollo.dev/federation/v2.9',
-  federationDirectives: ['@listSize'],
+  federationDirectives: ['@listSize', '@key', '@tag'],
 })

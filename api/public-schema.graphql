@@ -388,6 +388,34 @@ type MyProposalSpeaker {
   slug: String
 }
 
+type OperatorConferenceStats {
+  conferenceId: ID
+  proposals: ProposalCounts
+
+  """Distinct speakers with a confirmed talk, published or not."""
+  confirmedSpeakers: Int
+
+  """Closed-won sponsorships."""
+  sponsors: Int
+
+  """
+  Always null for now: tickets sold live in the external ticketing provider, which only the site reads (src/lib/tickets). No subgraph has a server-side source yet.
+  """
+  ticketsSold: Int
+}
+
+"""Every proposal of the conference, draft and deleted included."""
+type ProposalCounts {
+  """Sorted by status; a status with no proposals is absent."""
+  byStatus: [ProposalStatusCount!]
+  total: Int
+}
+
+type ProposalStatusCount {
+  count: Int
+  status: String
+}
+
 type Query {
   """The request's conference CFP. Null when the request has no conference."""
   cfp: CallForPapers
@@ -731,6 +759,24 @@ type MemberSyncStatus {
   status: String!
 }
 
+type Organization {
+  id: ID
+
+  """Platform operators only (operator lane); null otherwise."""
+  memberCount: Int
+
+  """
+  Pending, unexpired invitations. Platform operators only (operator lane); null otherwise.
+  """
+  pendingInviteCount: Int
+  createdAt: String
+  domains: [Domain!]
+  name: String
+  plan: String
+  slug: String
+  status: String
+}
+
 type OrganizationMember {
   """Owners, admins and operators only; null otherwise."""
   email: String
@@ -1013,16 +1059,11 @@ type OperatorConference {
   id: ID
   lifecycleStatus: String
   organization: Organization
-}
 
-type Organization {
-  createdAt: String
-  domains: [Domain!]
-  id: ID
-  name: String
-  plan: String
-  slug: String
-  status: String
+  """
+  Counts for this conference (#2142): proposals, confirmed speakers, sponsors, tickets sold. Platform operators only.
+  """
+  stats: OperatorConferenceStats
 }
 
 type ProvisionedConference {
