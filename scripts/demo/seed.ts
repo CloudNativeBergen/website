@@ -17,6 +17,7 @@
  * (default production gateway), NEXT_PUBLIC_SANITY_PROJECT_ID,
  * NEXT_PUBLIC_SANITY_DATASET, SANITY_API_TOKEN_WRITE.
  */
+import { createHmac, randomBytes } from 'node:crypto'
 import { generateDemoFixtures } from './fixtures/generate'
 import type { DemoFixtures } from './fixtures/types'
 import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
@@ -98,6 +99,20 @@ export const ORG_ID = id('organization', 'kontainerkonf')
  * lives in Sanity (title, dates for references and branding); D1 settings
  * come from seedDemoD1 and win via d1_override.
  */
+/**
+ * Co-speaker invite tokens grant access, so they must not follow from the
+ * source: HMAC-SHA256 of the key with DEMO_SEED_TOKEN_SECRET (stable across
+ * runs), else random per run.
+ */
+export function inviteToken(
+  key: string,
+  secret = process.env.DEMO_SEED_TOKEN_SECRET,
+): string {
+  return secret
+    ? createHmac('sha256', secret).update(key).digest('hex')
+    : randomBytes(32).toString('hex')
+}
+
 export function buildDocuments(f: DemoFixtures): {
   upsert: Doc[]
   ifMissing: Doc[]
@@ -189,9 +204,7 @@ export function buildDocuments(f: DemoFixtures): {
       invitedEmail: c.invitedEmail,
       invitedName: c.invitedName,
       status: c.status,
-      // ponytail: deterministic token, so anyone reading this file can answer a
-      // demo co-speaker invite; harmless on sample data, random if that changes.
-      token: `demo-${c.key}`,
+      token: inviteToken(c.key),
       expiresAt: c.expiresAt,
       createdAt: c.createdAt,
     })),

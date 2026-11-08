@@ -4,6 +4,7 @@ import {
   buildDocuments,
   DEMO_PREFIX,
   DEMO_SEED,
+  inviteToken,
   NotDemoOrgError,
   run,
   type Deps,
@@ -74,7 +75,31 @@ describe('demo:seed', () => {
     await run({ host: 'kk.example.com', dryRun: false, now }, b.d)
     expect(a.commit).toHaveBeenCalled()
     expect(a.mutations.length).toBeGreaterThan(400)
-    expect(a.mutations).toEqual(b.mutations)
+    // Tokens are random without DEMO_SEED_TOKEN_SECRET; everything else matches.
+    const noTokens = (m: unknown[]) =>
+      JSON.parse(JSON.stringify(m).replace(/"token":"[^"]*"/g, '"token":""'))
+    expect(noTokens(a.mutations)).toEqual(noTokens(b.mutations))
+  })
+
+  it('invite tokens are not derivable from the fixture key', () => {
+    const { upsert } = buildDocuments(
+      generateDemoFixtures({ seed: DEMO_SEED, now }),
+    )
+    const invites = upsert.filter((d) => d._type === 'coSpeakerInvitation')
+    expect(invites.length).toBeGreaterThan(0)
+    for (const d of invites) {
+      expect(d.token).toMatch(/^[0-9a-f]{64}$/)
+      expect(d.token).not.toContain(d._id.split('.').pop())
+    }
+    expect(inviteToken('cospeaker-0', 's')).toBe(
+      inviteToken('cospeaker-0', 's'),
+    )
+    expect(inviteToken('cospeaker-0', 's')).not.toBe(
+      inviteToken('cospeaker-0', 't'),
+    )
+    expect(inviteToken('cospeaker-0', '')).not.toBe(
+      inviteToken('cospeaker-0', ''),
+    )
   })
 
   it('every _id and every reference stays inside the demo prefix', () => {
