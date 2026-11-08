@@ -2,7 +2,7 @@ import { connection } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
-import { getProposals } from '@/lib/proposal/server'
+import { getMyProposals } from '@/lib/proposal/server'
 import { getGalleryImages } from '@/lib/gallery/sanity'
 import { readSpeakerTalkPhotos } from '@/lib/photo-wall/wall-page'
 import { getWorkshopSignupStatisticsBySpeaker } from '@/lib/workshop/sanity'
@@ -155,10 +155,9 @@ export default async function SpeakerDashboard() {
         badges,
         talkPhotos,
       ] = await Promise.all([
-        getProposals({
+        getMyProposals({
+          conference,
           speakerId,
-          conferenceId: conference._id,
-          returnAll: false,
           includeSchedule: true,
         }),
         getGalleryImages(
