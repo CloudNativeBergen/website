@@ -17,6 +17,8 @@ vi.mock('@/lib/sanity/client', () => ({
 vi.mock('@/lib/conference/konf-api', () => ({
   rolloutFlags: h.rolloutFlags,
   mergeKonfApiConference: h.mergeKonfApiConference,
+  // The members-only read (#2038): a pass-through here.
+  mergeTicketSetup: async (_host: string, c: unknown) => c,
 }))
 
 import { getSponsorForConference } from './sanity'

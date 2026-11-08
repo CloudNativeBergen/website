@@ -28,6 +28,12 @@ import { CONFERENCE_QUERY_CORE, CONFERENCE_QUERY_FULL } from './query'
 import { CONFERENCE_CACHE_LIFE } from './cache-life'
 import { mergeConference, mergeConferences } from './merge'
 import { TICKET_SETUP_FIELDS } from './konf-api'
+
+const SLACK_CHANNEL_FIELDS = [
+  'salesNotificationChannel',
+  'cfpNotificationChannel',
+  'speakerSlackChannel',
+] as const
 import { EXPANDED_SECTIONS_KEY } from './sections'
 import { apiHost, fetchApiSchedules } from '@/lib/konf-api/program'
 
@@ -389,7 +395,8 @@ async function readConference(
     /**
      * Include the members-only ticket setup (`TICKET_SETUP_FIELDS`: vendor
      * ids and slugs, capacity, sales targets, ticket-type roles, reminder
-     * state), with the D1 ones merged (#2080). OFF by default, because the
+     * state) and the Slack channel names, with the D1 ones merged (#2080,
+     * #2038). OFF by default, because the
      * object reaches the RSC payload of whatever page asked. Admin, router,
      * cron and webhook readers ask for it; a public page that needs the
      * binding server-side asks for it and must not pass it to the client.
@@ -490,8 +497,14 @@ async function readConference(
         schedule,
         confirmedTalksOnly,
       })
+      // The members-only read also carries the phase 2 settings (#2038);
+      // whatever the caller did not opt into is stripped below.
       conference = await mergeConference(conference, {
-        ticketSetup: includeTicketSetup,
+        ticketSetup:
+          includeTicketSetup ||
+          includeSponsorRegistrationLink ||
+          includeSpeakerRegistrationLink ||
+          includeVolunteerRegistrationLink,
       })
       status = 'resolved'
 
@@ -600,8 +613,11 @@ async function readConference(
   // tenant has no `topics` (see @/lib/onboarding/create.ts), any conference can
   // lose its `formats` the moment an organizer empties the list, and the public
   // CFP page dereferences both. See ./normalize.ts.
-  if (!includeTicketSetup && conference)
+  if (!includeTicketSetup && conference) {
     for (const k of TICKET_SETUP_FIELDS) delete conference[k]
+    // Internal Slack channel names (#2038): members-only in D1.
+    for (const k of SLACK_CHANNEL_FIELDS) delete conference[k]
+  }
   if (!includeSponsorRegistrationLink && conference?.sponsorRegistrationLink) {
     delete conference.sponsorRegistrationLink
   }

@@ -32,6 +32,10 @@ export const MATRIX = {
   'conference.set_lifecycle': row('Y  Y   Y   N   N'),
   'conference.bind_ticketing': row('Y N   N   N   N'),
   'speaker_directory.read': row('  Y  Y   Y   N   N'),
+  'api_client.read': row('         Y  Y   Y   N   N'),
+  'api_client.create': row('       N  Y   N   N   N'),
+  'api_client.revoke': row('       Y  Y   N   N   N'),
+  'pat.manage_own': row('          N  Y   Y   Y   N'),
   'user.revoke_all': row('         Y  N   N   N   N'),
   reminder_lock: row('             Y  N   N   N   Y'),
 } satisfies Record<string, Row>

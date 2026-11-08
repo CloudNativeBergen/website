@@ -5,6 +5,7 @@ import { createGraphQLError } from 'graphql-yoga'
 import { can, principalOf } from '@runkonf/tenancy'
 import { builder } from './builder'
 import './job-status'
+import './api-clients'
 import { MemberError, type MemberRole } from './data'
 import { VISIBILITIES, type Profile } from './data/speaker-profiles'
 import type { ResolverContext } from './worker'
@@ -134,6 +135,36 @@ const PendingInvitation = builder
       }),
     }),
   })
+
+// Operator-lane counts on tenant-directory's Organization (#2142). Guard
+// before fetch: only a PlatformContext resolves the reference. Integers only.
+const Organization = builder
+  .objectRef<{ id: string }>('Organization')
+  .implement({
+    fields: (t) => ({
+      id: t.exposeID('id'),
+      memberCount: t.int({
+        nullable: true,
+        tag: 'operator',
+        description: 'Platform operators only (operator lane); null otherwise.',
+        resolve: async ({ id }, _, ctx) =>
+          (await ctx.data.orgCounts(ctx.envelope)(id))?.members ?? null,
+      }),
+      pendingInviteCount: t.int({
+        nullable: true,
+        tag: 'operator',
+        description:
+          'Pending, unexpired invitations. Platform operators only (operator lane); null otherwise.',
+        resolve: async ({ id }, _, ctx) =>
+          (await ctx.data.orgCounts(ctx.envelope)(id))?.pendingInvites ?? null,
+      }),
+    }),
+  })
+builder.asEntity(Organization, {
+  key: builder.selection<{ id: string }>('id'),
+  resolveReference: (ref, ctx) =>
+    ctx.envelope?.typ === 'platform' ? ref : null,
+})
 
 builder.queryType({
   fields: (t) => ({

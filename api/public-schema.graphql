@@ -77,7 +77,7 @@ type Conference {
   cfpEmail: String
   cfpEndDate: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   cfpNotificationChannel: String
   cfpNotifyDate: String
   cfpStartDate: String
@@ -109,7 +109,7 @@ type Conference {
   registrationEnabled: Boolean
   registrationLink: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   salesNotificationChannel: String
 
   """ticketCustomization.showVanityMetrics in Sanity."""
@@ -117,19 +117,19 @@ type Conference {
   socialHashtag: String
   socialLinks: [String!]
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   speakerRegistrationLink: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   speakerSlackChannel: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   speakerSlackInviteUrl: String
   speakersAnnouncedDate: String
   sponsorDeadlineDate: String
   sponsorEmail: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   sponsorRegistrationLink: String
   startDate: String
   tagline: String
@@ -170,7 +170,7 @@ type Conference {
   visibility: String
   volunteerRegistrationLink: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   volunteerSlackInviteUrl: String
   workshopEarlyAccessTicketTypes: [String!]
   workshopRegistrationEnd: String
@@ -252,6 +252,16 @@ type Mutation {
   updateConference(input: ConferencePatch!): Conference!
   cancelInvitation(invitationId: ID!): Boolean
   changeMemberRole(role: MemberRole!, userId: ID!): Boolean
+
+  """
+  Owners only. Refusals: PLAN_REQUIRED, SCOPE_NOT_ALLOWED, LIMIT_REACHED, INVALID_INPUT.
+  """
+  createApiClient(input: CreateApiClientInput!): ApiClientSecretPayload
+
+  """
+  Self-service. Scopes must fit the caller's current role and the org's plan. Refusals: PLAN_REQUIRED, SCOPE_NOT_ALLOWED, LIMIT_REACHED, INVALID_INPUT.
+  """
+  createPersonalAccessToken(input: CreatePersonalAccessTokenInput!): PersonalAccessTokenPayload
   inviteMember(email: String!, role: MemberRole!): MemberInvitation
   operatorCancelInvitation(invitationId: ID!, orgId: ID!): Boolean
   operatorChangeMemberRole(orgId: ID!, role: MemberRole!, userId: ID!): Boolean
@@ -263,6 +273,17 @@ type Mutation {
   Emergency revocation: removes the user's memberships (except where they are an org's last owner, reported in keptLastOwnerOf), sessions and operator flag, audited. Platform operators only. An issued identity JWT lives up to 300 s more.
   """
   revokeAll(userId: ID!): RevokeAllResult
+
+  """
+  Owners and operators. Immediate: bumps token_version, so outstanding access tokens fail on the next request.
+  """
+  revokeApiClient(id: ID!): Boolean
+
+  """Revokes one of the caller's own tokens. Immediate."""
+  revokePersonalAccessToken(id: ID!): Boolean
+
+  """Owners only. The old secret keeps working for a short grace."""
+  rotateApiClientSecret(id: ID!): ApiClientSecretPayload
 
   """
   Stores a web push subscription for the session user. An endpoint another user held moves to the caller.
@@ -391,6 +412,34 @@ type MyProposalSpeakerConsent {
   publicProfile: Boolean
 }
 
+type OperatorConferenceStats {
+  conferenceId: ID
+  proposals: ProposalCounts
+
+  """Distinct speakers with a confirmed talk, published or not."""
+  confirmedSpeakers: Int
+
+  """Closed-won sponsorships."""
+  sponsors: Int
+
+  """
+  Always null for now: tickets sold live in the external ticketing provider, which only the site reads (src/lib/tickets). No subgraph has a server-side source yet.
+  """
+  ticketsSold: Int
+}
+
+"""Every proposal of the conference, draft and deleted included."""
+type ProposalCounts {
+  """Sorted by status; a status with no proposals is absent."""
+  byStatus: [ProposalStatusCount!]
+  total: Int
+}
+
+type ProposalStatusCount {
+  count: Int
+  status: String
+}
+
 type Query {
   """The request's conference CFP. Null when the request has no conference."""
   cfp: CallForPapers
@@ -421,6 +470,11 @@ type Query {
   conferenceParityStatus: ConferenceParityStatus
 
   """
+  The session org's API clients, without secrets. Owners, admins and operators; null otherwise.
+  """
+  apiClients: [ApiClient!]
+
+  """
   The session org's pending invitations. Owners, admins and operators only; null otherwise.
   """
   invitations: [PendingInvitation!]
@@ -434,6 +488,11 @@ type Query {
   The session org's members. Null unless the caller is a member or an operator acting for the tenant.
   """
   members: [OrganizationMember!]
+
+  """
+  The session user's tokens for the session org, without secrets. Null without an org role.
+  """
+  myPersonalAccessTokens: [PersonalAccessToken!]
 
   """
   The session user's speaker profile; null until first update, and null without a session user.
@@ -680,6 +739,26 @@ type VanityMetric {
   value: String
 }
 
+"""A machine principal bound to one org, authorized by its scopes only."""
+type ApiClient {
+  createdAt: String
+
+  """User id."""
+  createdBy: ID
+  id: ID
+  lastUsedAt: String
+  name: String
+  revokedAt: String
+  scopes: [ApiScope!]
+}
+
+type ApiClientSecretPayload {
+  client: ApiClient
+
+  """`konf_cs_<id>_<secret>`. Returned once; only a hash is stored."""
+  clientSecret: String
+}
+
 type MemberInvitation {
   expiresAt: String
   id: ID
@@ -706,6 +785,24 @@ type MemberSyncStatus {
   status: String!
 }
 
+type Organization {
+  id: ID
+
+  """Platform operators only (operator lane); null otherwise."""
+  memberCount: Int
+
+  """
+  Pending, unexpired invitations. Platform operators only (operator lane); null otherwise.
+  """
+  pendingInviteCount: Int
+  createdAt: String
+  domains: [Domain!]
+  name: String
+  plan: String
+  slug: String
+  status: String
+}
+
 type OrganizationMember {
   """Owners, admins and operators only; null otherwise."""
   email: String
@@ -725,6 +822,25 @@ type PendingInvitation {
   expiresAt: String
   id: ID
   role: String
+}
+
+"""
+A user's token for one org. Effective permission: the user's live role ∩ scopes.
+"""
+type PersonalAccessToken {
+  createdAt: String
+  expiresAt: String
+  id: ID
+  lastUsedAt: String
+  name: String
+  revokedAt: String
+  scopes: [ApiScope!]
+}
+
+type PersonalAccessTokenPayload {
+  """`konf_pat_<id>_<secret>`. Returned once; only a hash is stored."""
+  secret: String
+  token: PersonalAccessToken
 }
 
 type RevokeAllResult {
@@ -969,16 +1085,11 @@ type OperatorConference {
   id: ID
   lifecycleStatus: String
   organization: Organization
-}
 
-type Organization {
-  createdAt: String
-  domains: [Domain!]
-  id: ID
-  name: String
-  plan: String
-  slug: String
-  status: String
+  """
+  Counts for this conference (#2142): proposals, confirmed speakers, sponsors, tickets sold. Platform operators only.
+  """
+  stats: OperatorConferenceStats
 }
 
 type ProvisionedConference {
@@ -996,6 +1107,47 @@ interface HomepageSection {
   hidden: Boolean
   key: String
   variant: String
+}
+
+"""
+A grantable token scope. No platform scope exists. Write implies read. PII_READ is owner-granted only and off by default.
+"""
+enum ApiScope {
+  """cfp:read"""
+  CFP_READ
+
+  """cfp:write"""
+  CFP_WRITE
+
+  """conference:read"""
+  CONFERENCE_READ
+
+  """conference:write"""
+  CONFERENCE_WRITE
+
+  """content:read"""
+  CONTENT_READ
+
+  """content:write"""
+  CONTENT_WRITE
+
+  """members:read"""
+  MEMBERS_READ
+
+  """pii:read"""
+  PII_READ
+
+  """program:read"""
+  PROGRAM_READ
+
+  """program:write"""
+  PROGRAM_WRITE
+
+  """sponsors:read"""
+  SPONSORS_READ
+
+  """sponsors:write"""
+  SPONSORS_WRITE
 }
 
 enum MemberRole {
@@ -1172,6 +1324,18 @@ input TicketTypeRoleInput {
   admits: Boolean
   grantsWorkshop: Boolean
   typeName: String!
+}
+
+input CreateApiClientInput {
+  name: String!
+  scopes: [ApiScope!]!
+}
+
+input CreatePersonalAccessTokenInput {
+  """ISO 8601, at most one year ahead."""
+  expiresAt: String!
+  name: String!
+  scopes: [ApiScope!]!
 }
 
 input PushSubscriptionInput {

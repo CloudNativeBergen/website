@@ -20,6 +20,7 @@ import {
   type CfpTalk,
   type CfpTopic,
   type Option,
+  type ProposalCounts,
   type SpeakerRef,
 } from './data'
 
@@ -238,6 +239,54 @@ builder.asEntity(ConferenceRef, {
   resolveReference: () => null,
 })
 
+// Operator conference stats (#2142): cfp adds proposal counts to the entity
+// tenant-directory's operator `conferences` list returns. Guard before fetch:
+// only a PlatformContext resolves the reference, so nobody else reaches a
+// count resolver.
+const ProposalStatusCount = builder
+  .objectRef<[string, number]>('ProposalStatusCount')
+  .implement({
+    fields: (t) => ({
+      status: t.string({ resolve: ([s]) => s }),
+      count: t.int({ resolve: ([, n]) => n }),
+    }),
+  })
+const ProposalCountsType = builder
+  .objectRef<ProposalCounts>('ProposalCounts')
+  .implement({
+    description:
+      'Every proposal of the conference, draft and deleted included.',
+    fields: (t) => ({
+      total: t.exposeInt('total'),
+      byStatus: t.field({
+        type: [ProposalStatusCount],
+        description: 'Sorted by status; a status with no proposals is absent.',
+        resolve: (c) => [...c.byStatus].sort(([a], [b]) => a.localeCompare(b)),
+      }),
+    }),
+  })
+const OperatorConferenceStats = builder
+  .objectRef<{ conferenceId: string }>('OperatorConferenceStats')
+  .implement({
+    fields: (t) => ({
+      conferenceId: t.exposeID('conferenceId'),
+      proposals: t.field({
+        type: ProposalCountsType,
+        tag: 'operator',
+        resolve: async ({ conferenceId }, _, ctx) =>
+          (await ctx.data.proposalCounts(conferenceId)) ?? {
+            total: 0,
+            byStatus: new Map(),
+          },
+      }),
+    }),
+  })
+builder.asEntity(OperatorConferenceStats, {
+  key: builder.selection<{ conferenceId: string }>('conferenceId'),
+  resolveReference: (ref, ctx) =>
+    ctx.envelope?.typ === 'platform' ? ref : null,
+})
+
 const MyProposalType = builder.objectRef<MyProposal>('MyProposal').implement({
   description:
     "One of the session user's own proposals (they are a speaker on it, #2078): their text and its status. Never reviews, scores or organizer notes.",
@@ -408,5 +457,5 @@ builder.queryType({
 // v2.9 is the first federation version with @listSize.
 export const schema = builder.toSubGraphSchema({
   linkUrl: 'https://specs.apollo.dev/federation/v2.9',
-  federationDirectives: ['@key', '@listSize'],
+  federationDirectives: ['@key', '@listSize', '@tag'],
 })

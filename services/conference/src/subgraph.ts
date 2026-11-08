@@ -186,7 +186,8 @@ const isMember = ({ envelope: e }: ResolverContext) =>
  * Ticket setup (C5): insiders, and the site's server lane (`site:server`, minted by the gateway only for a
  * verified site assertion). The site already holds the Sanity copy of the
  * phase 3 ticket setup with a full read token, and its readers include jobs
- * and webhooks with no signed-in user (#2080), so the lane may read it.
+ * and webhooks with no signed-in user (#2080), so the lane may read it. The
+ * phase 2 members-only settings (#2038) use the same lane for the same reason.
  */
 const isMemberOrSite = ({ envelope: e }: ResolverContext) =>
   e.typ === 'tenant' && can(principalOf(e), 'conference.read_ticket_setup')
@@ -254,9 +255,9 @@ const Conference = builder.objectRef<ConferenceRow>('Conference').implement({
         k,
         t.string({
           nullable: true,
-          description: 'Org members only.',
+          description: 'Org members and the site server lane only.',
           ...(IN_CONTENT.has(k) ? settings : {}),
-          resolve: (c, _, ctx) => (isMember(ctx) ? c[k] : null),
+          resolve: (c, _, ctx) => (isMemberOrSite(ctx) ? c[k] : null),
         }),
       ]),
     ),
