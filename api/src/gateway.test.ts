@@ -172,6 +172,7 @@ describe('gateway', () => {
       'reserveWorkshopReminder',
       'revokeAll',
       'setConferenceLifecycle',
+      'setMemberSource',
       'submitProposal',
       'subscribePush',
       'unsubscribePush',
