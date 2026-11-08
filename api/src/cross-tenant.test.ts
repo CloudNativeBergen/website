@@ -2573,7 +2573,6 @@ describe('myOrganizations: member lane, no tenant (#2036)', () => {
       .run()
   })
   beforeEach(async () => {
-    env.OVERRIDE_TENANTS = {}
     await setOperator(false)
     await setLifecycle(CONF.a, 'live')
   })
@@ -2841,9 +2840,6 @@ describe('members-only ticket setup over the site lane (#2080)', () => {
   })
   afterAll(() => {
     delete (env as { SITE_PUBLIC_KEYS?: string }).SITE_PUBLIC_KEYS
-  })
-  beforeEach(() => {
-    env.OVERRIDE_TENANTS = {}
   })
 
   const Q = '{ conference { id ticketCapacity checkinCustomerId } }'

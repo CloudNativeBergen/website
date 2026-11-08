@@ -103,7 +103,6 @@ function makeEnv(over: Partial<Record<string, unknown>> = {}) {
     API_CACHE_TTL_SECONDS: '60',
     ENVELOPE_PRIVATE_KEY: envelopeKeys.privatePem,
     IDENTITY_ISSUER: 'https://id.test',
-    OVERRIDE_TENANTS: {},
     DIRECTORY: {
       fetch: async (_url: string, init: RequestInit) => {
         const { variables } = JSON.parse(String(init.body))
