@@ -157,6 +157,55 @@ describe('ensureOrganization', () => {
   })
 })
 
+describe('signupOwner (#2163)', () => {
+  it('writes org, owner membership and an org.signup audit together', async () => {
+    const u = await newUser('signup@example.com', true)
+    const data = createData({ DB: d1 } as DataEnv)
+    await data.signupOwner('organization.sg', 'sg', 'Sign Up', u.id, 'code-1')
+    expect(await data.memberships(u.id)).toEqual([
+      { orgId: 'organization.sg', role: 'owner' },
+    ])
+    const { results } = await d1
+      .prepare(
+        "SELECT userId, detail FROM audit_event WHERE action = 'org.signup'",
+      )
+      .all()
+    expect(results).toEqual([
+      {
+        userId: u.id,
+        detail: JSON.stringify({ orgId: 'organization.sg', codeId: 'code-1' }),
+      },
+    ])
+  })
+
+  it('refuses an org identity already has: no co-owner is added', async () => {
+    const owner = await newUser('first-owner@example.com', true)
+    const intruder = await newUser('intruder@example.com', true)
+    const data = createData({ DB: d1 } as DataEnv)
+    await data.signupOwner('organization.taken', 'taken', 'T', owner.id, 'c1')
+    await expect(
+      data.signupOwner('organization.taken', 'taken', 'T', intruder.id, 'c2'),
+    ).rejects.toThrow()
+    expect(await data.memberships(intruder.id)).toEqual([])
+    expect(await data.isOwner('organization.taken', owner.id)).toBe(true)
+    expect(await data.isOwner('organization.taken', intruder.id)).toBe(false)
+  })
+
+  it('writes nothing when the membership fails', async () => {
+    const data = createData({ DB: d1 } as DataEnv)
+    // An unknown user breaks the member foreign key.
+    await expect(
+      data.signupOwner('organization.sx', 'sx', 'X', 'nobody', 'code-2'),
+    ).rejects.toThrow()
+    const { results } = await d1
+      .prepare(
+        "SELECT (SELECT count(*) FROM organization WHERE id = 'organization.sx') AS o, (SELECT count(*) FROM audit_event WHERE detail LIKE '%code-2%') AS a",
+      )
+      .all()
+    expect(results).toEqual([{ o: 0, a: 0 }])
+  })
+})
+
 describe('account linking (#807)', () => {
   const signIn = async (
     email: string,

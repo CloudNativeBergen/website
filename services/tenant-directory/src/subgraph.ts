@@ -462,7 +462,7 @@ const SignupOrganizationInput = builder.inputType('SignupOrganizationInput', {
     slug: t.string({
       required: true,
       description:
-        'Lowercase a-z, 0-9 and -, 3 to 40 characters; becomes <slug>.konf.app.',
+        'Lowercase a-z, 0-9 and -, 3 to 40 characters; becomes <slug>.konf.run.',
     }),
   }),
 })
@@ -483,7 +483,7 @@ const SignupResult = builder
         resolve: (r) => r.conference,
       }),
       host: t.exposeString('host', {
-        description: 'The closed-preview host, <slug>.konf.app.',
+        description: 'The closed-preview host, <slug>.konf.run.',
       }),
     }),
   })
@@ -798,36 +798,47 @@ builder.mutationType({
     signUpOrganization: t.field({
       type: SignupResult,
       description:
-        'Self-serve sign-up in closed preview (#2129): creates an Organization (free, kind customer) with the caller as owner, its first draft edition and the host <slug>.konf.app, and spends one use of `inviteCode`. Any signed-in user, on a session with no tenant.',
+        'Self-serve sign-up in closed preview (#2129): creates an Organization (free, kind customer) with the caller as owner, its first draft edition and the host <slug>.konf.run, and spends one use of `inviteCode`. Returns after the owner membership is written, so `myOrganizations` sees it on the next request. Any signed-in user, on a session with no tenant; attempts are rate-limited per user (RATE_LIMITED). Refusals are BAD_USER_INPUT with `field` inviteCode, then slug, then name.',
       args: {
         input: t.arg({ type: SignupOrganizationInput, required: true }),
         inviteCode: t.arg.string({ required: true }),
       },
       resolve: async (_, { input, inviteCode }, ctx) => {
         const e = ctx.envelope
-        // Guard before fetch: a user lane session (an operator's included),
-        // never a tenant envelope.
-        if ((e?.typ !== 'user' && e?.typ !== 'platform') || !e.userId)
+        // Guard before fetch: a browser session on the user lane only. Not
+        // an operator (they use createOrganization), not a CLI token.
+        if (e?.typ !== 'user' || !e.userId || e.cli)
           throw createGraphQLError(
             'signing up requires a signed-in session with no tenant',
             { extensions: { code: 'FORBIDDEN' } },
           )
-        const name = input.name.trim()
-        if (!name || name.length > 100)
-          throw bad('name', 'name is required (at most 100 characters)')
-        if (!inviteCode.trim())
-          throw bad('inviteCode', 'an invite code is required')
+        if (!(await ctx.data.signupAttempt(e.userId)))
+          throw createGraphQLError('too many sign-up attempts', {
+            extensions: { code: 'RATE_LIMITED' },
+          })
+        // The code first: without one, the slug check is no oracle (#2163).
+        if (!(await ctx.data.signupCodeId(inviteCode)))
+          throw bad('inviteCode', 'this invite code is not valid')
         const problem = await ctx.data.signupSlugProblem(input.slug)
         if (problem === 'format')
           throw bad(
             'slug',
-            'slug must be 3 to 40 characters of a-z, 0-9 and -, not starting or ending with -',
+            'slug must be 3 to 40 characters of a-z, 0-9 and -, not starting or ending with - and without --',
           )
-        // Same message for reserved and taken.
+        // Same message for reserved and taken; never repeats the slug.
         if (problem) throw bad('slug', 'this slug is not available')
-        // ponytail: provisioning, the per-user attempt limit and the code
-        // spend (consumeSignupCode) land together in the follow-up.
-        return notImplemented()
+        const name = input.name.trim()
+        if (name.length < 2 || name.length > 80)
+          throw bad('name', 'name must be 2 to 80 characters')
+        const out = await ctx.data.signUp(
+          e.userId,
+          name,
+          input.slug,
+          inviteCode,
+        )
+        // Lost the race for the code's last use.
+        if (!out) throw bad('inviteCode', 'this invite code is not valid')
+        return out
       },
     }),
     createSignupCode: t.field({

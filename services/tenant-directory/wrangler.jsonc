@@ -44,6 +44,16 @@
         },
       ],
       "name": "konf-tenant-directory-preview",
+      "ratelimits": [
+        {
+          "name": "SIGNUP_LIMIT",
+          "namespace_id": "2163",
+          "simple": {
+            "limit": 5,
+            "period": 60,
+          },
+        },
+      ],
       "services": [
         {
           "binding": "IDENTITY",
@@ -71,6 +81,16 @@
         },
       ],
       "name": "konf-tenant-directory",
+      "ratelimits": [
+        {
+          "name": "SIGNUP_LIMIT",
+          "namespace_id": "2173",
+          "simple": {
+            "limit": 5,
+            "period": 60,
+          },
+        },
+      ],
       "services": [
         {
           "binding": "IDENTITY",

@@ -1701,6 +1701,18 @@ describe('operator lane (#1892 phase 4)', () => {
     expect(e).toEqual({ typ: 'user', userId: expect.any(String) })
   })
 
+  it('marks a non-operator CLI token on the UserContext (#2163)', async () => {
+    const { env, envelopes } = opsEnv(false)
+    const cli = await jwt({
+      iat: Math.floor(Date.now() / 1000),
+      claims: { [SESSION_ORIGIN_CLAIM]: OPS, cli: true, jti: 'j2' },
+    })
+    await call(env, { origin: OPS, authorization: `Bearer ${cli}` })
+    expect(await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem)).toEqual(
+      { typ: 'user', userId: expect.any(String), cli: true },
+    )
+  })
+
   it('refuses an anonymous caller', async () => {
     const { env, envelopes } = opsEnv()
     const res = await call(env, {

@@ -124,6 +124,14 @@ describe('envelope verification', () => {
     const signer = await createSigner(keys.privatePem)
     const token = await signer.sign({ ...user, orgId: 'org_b' } as never)
     expect(await verifyEnvelope(token, keys.publicPem)).toEqual(user)
+    const cli = await signer.sign({ ...user, cli: true })
+    expect(await verifyEnvelope(cli, keys.publicPem)).toEqual({
+      ...user,
+      cli: true,
+    })
+    // Only a literal true survives.
+    const fake = await signer.sign({ ...user, cli: 'yes' } as never)
+    expect(await verifyEnvelope(fake, keys.publicPem)).toEqual(user)
     const blank = await signer.sign({ typ: 'user', userId: '' } as never)
     await expect(verifyEnvelope(blank, keys.publicPem)).rejects.toThrow(/shape/)
   })

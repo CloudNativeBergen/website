@@ -53,7 +53,19 @@ export interface DataEnv extends CloudflareEnv {
     memberships(userId: string): Promise<{ orgId: string; role: string }[]>
     /** An operator write as an audit_event row (docs/AUTHORIZATION.md §3.6). */
     audit(event: OperatorAuditEvent): Promise<void>
+    /** Sign-up (#2163): org, owner membership and `org.signup` audit, atomic. */
+    signupOwner(
+      orgId: string,
+      slug: string,
+      name: string,
+      userId: string,
+      codeId: string,
+    ): Promise<void>
+    /** Whether `userId` owns `orgId` (a lost signupOwner reply). */
+    isOwner(orgId: string, userId: string): Promise<boolean>
   }
+  /** Sign-up attempts per user (#2163), Workers Rate Limiting. */
+  SIGNUP_LIMIT: RateLimit
   /** konf-conference's ProgramDate entrypoint: is an edition ticketed? */
   CONFERENCE: {
     ticketed(orgId: string, conferenceId: string): Promise<boolean>
@@ -313,10 +325,7 @@ function primaryHost(
   return null
 }
 
-/** Self-serve sign-up hosts: `<slug>.konf.app` in closed preview (#2129). */
-export const SIGNUP_DOMAIN = 'konf.app'
-
-/** 128 random bits, base32-ish, grouped for reading aloud. */
+/** 128 random bits as base-36 byte pairs, grouped for reading aloud. */
 function newSignupCode() {
   const b = crypto.getRandomValues(new Uint8Array(16))
   const s = [...b].map((x) => x.toString(36).padStart(2, '0')).join('')
@@ -570,10 +579,7 @@ export function createData(
           columns: { id: true },
         }),
         db.query.domains.findFirst({
-          where: inArray(domains.hostname, [
-            `${slug}.${SIGNUP_DOMAIN}`,
-            aliasHost(slug),
-          ]),
+          where: eq(domains.hostname, aliasHost(slug)),
           columns: { hostname: true },
         }),
       ])
@@ -621,10 +627,120 @@ export function createData(
       return row ?? null
     },
 
+    /** One sign-up attempt per call, keyed on the user, never the code. */
+    async signupAttempt(userId: string) {
+      const { success } = await env.SIGNUP_LIMIT.limit({
+        key: `signup|user:${userId}`,
+      })
+      return success
+    },
+
+    /** The id of a code that can still be spent; null otherwise. Read only. */
+    async signupCodeId(code: string, now = new Date()) {
+      const row = await db.query.signupCodes.findFirst({
+        where: and(
+          eq(signupCodes.codeHash, await hashSignupCode(code.trim())),
+          isNull(signupCodes.revokedAt),
+          gt(signupCodes.expiresAt, now.toISOString()),
+          lt(signupCodes.uses, signupCodes.maxUses),
+        ),
+        columns: { id: true },
+      })
+      return row?.id ?? null
+    },
+
+    /**
+     * Self-serve sign-up (#2163), after the resolver's checks. Steps and
+     * what undoes them when a later one fails:
+     * 1. spend the code (conditional UPDATE): losing a race on the last use
+     *    refuses with `inviteCode`, nothing written;
+     * 2. one D1 batch: the org (free, customer), its first draft edition and
+     *    `<slug>.konf.run` (verified, platform cert), as provision() writes
+     *    them; on failure (a slug race) the use is refunded;
+     * 3. identity's signupOwner: org, OWNER membership and audit in one
+     *    batch, and it fails if identity already has the org. On an error
+     *    identity is asked whether the caller owns the org: yes (a lost
+     *    reply) is success; no deletes the step-2 rows and refunds the use;
+     *    no answer logs `signup.unresolved` with the org id and keeps both.
+     * Returns after step 3, so membership is readable on the next request.
+     */
+    async signUp(userId: string, name: string, slug: string, code: string) {
+      const codeId = await api.consumeSignupCode(code)
+      if (!codeId) return null
+      const refund = () =>
+        db
+          .update(signupCodes)
+          .set({ uses: sql`${signupCodes.uses} - 1` })
+          .where(eq(signupCodes.id, codeId))
+      const orgId = `organization.${slug}`
+      const host = aliasHost(slug)
+      const conference = {
+        id: `conference.${crypto.randomUUID()}`,
+        orgId,
+        slug: String(new Date().getUTCFullYear()),
+        name,
+        lifecycle: 'draft' as const,
+      }
+      try {
+        await db.batch([
+          db.insert(organizations).values({
+            id: orgId,
+            slug,
+            name,
+            status: 'active',
+            plan: 'free',
+            kind: 'customer',
+            createdAt: new Date().toISOString(),
+          }),
+          db.insert(conferences).values(conference),
+          db.insert(domains).values({
+            hostname: host,
+            kind: 'platform-alias',
+            orgId,
+            conferenceId: conference.id,
+            verification: 'verified',
+          }),
+        ])
+      } catch (error) {
+        console.error(error)
+        await refund()
+        throw invalid('slug', 'this slug is not available')
+      }
+      try {
+        await env.IDENTITY.signupOwner(orgId, slug, name, userId, codeId)
+      } catch (error) {
+        console.error(error)
+        // The write may have committed with only the reply lost: ask.
+        const owned = await env.IDENTITY.isOwner(orgId, userId).catch(
+          () => null,
+        )
+        if (owned === null) {
+          console.error(JSON.stringify({ event: 'signup.unresolved', orgId }))
+          throw fail('INTERNAL_SERVER_ERROR', 'sign-up state is unknown')
+        }
+        if (!owned) {
+          await db.batch([
+            db.delete(domains).where(eq(domains.orgId, orgId)),
+            db.delete(conferences).where(eq(conferences.orgId, orgId)),
+            db.delete(organizations).where(eq(organizations.id, orgId)),
+            refund(),
+          ])
+          throw fail(
+            'INTERNAL_SERVER_ERROR',
+            'sign-up failed; nothing was kept',
+          )
+        }
+      }
+      return {
+        organization: (await organization(orgId))!,
+        conference,
+        host,
+      }
+    },
+
     /**
      * Spends one use of a valid code in a single conditional UPDATE: not
-     * revoked, not expired, uses left. True when a use was spent. The sign-up
-     * mutation calls it inside its write once provisioning lands.
+     * revoked, not expired, uses left. The spent code's id, or null.
      */
     async consumeSignupCode(code: string, now = new Date()) {
       const rows = await db
@@ -639,7 +755,7 @@ export function createData(
           ),
         )
         .returning({ id: signupCodes.id })
-      return rows.length === 1
+      return rows[0]?.id ?? null
     },
 
     /**

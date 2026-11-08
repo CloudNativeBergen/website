@@ -6,16 +6,16 @@ and gates: `docs/AUTHORIZATION.md` §4.1. Who may call what: §4 rows
 
 ## Status
 
-| Operation                       | Lane     | Gate                  | State                                         |
-| ------------------------------- | -------- | --------------------- | --------------------------------------------- |
-| `Organization.billing`          | tenant   | `billing.read`        | Built                                         |
-| `startCheckout(plan, currency)` | tenant   | `billing.manage`      | Authz and refusals built; `NOT_IMPLEMENTED`   |
-| `openBillingPortal`             | tenant   | `billing.manage`      | Authz built; `NOT_IMPLEMENTED`                |
-| `POST /billing/stripe/webhook`  | none     | Stripe signature      | Documented; not built                         |
-| `signUpOrganization`            | user     | `signup.create_org`   | Authz and slug check built; `NOT_IMPLEMENTED` |
-| `createSignupCode`              | operator | `signup.manage_codes` | Built                                         |
-| `signupCodes`                   | operator | `signup.manage_codes` | Built                                         |
-| `revokeSignupCode(id)`          | operator | `signup.manage_codes` | Built                                         |
+| Operation                       | Lane     | Gate                  | State                                       |
+| ------------------------------- | -------- | --------------------- | ------------------------------------------- |
+| `Organization.billing`          | tenant   | `billing.read`        | Built                                       |
+| `startCheckout(plan, currency)` | tenant   | `billing.manage`      | Authz and refusals built; `NOT_IMPLEMENTED` |
+| `openBillingPortal`             | tenant   | `billing.manage`      | Authz built; `NOT_IMPLEMENTED`              |
+| `POST /billing/stripe/webhook`  | none     | Stripe signature      | Documented; not built                       |
+| `signUpOrganization`            | user     | `signup.create_org`   | Built                                       |
+| `createSignupCode`              | operator | `signup.manage_codes` | Built                                       |
+| `signupCodes`                   | operator | `signup.manage_codes` | Built                                       |
+| `revokeSignupCode(id)`          | operator | `signup.manage_codes` | Built                                       |
 
 Every resolver checks the caller before it reads anything. A refusal is
 `FORBIDDEN`; bad input is `BAD_USER_INPUT` with `extensions.reason =
@@ -53,25 +53,43 @@ stripe`, `stripe_customer_id`, `stripe_subscription_id`,
 ## Self-serve sign-up (closed preview)
 
 `signUpOrganization(input: { name, slug }, inviteCode: String!)` is for any
-signed-in user on a session with no tenant. When built, it creates in one go:
-the org (plan `free`, kind `customer`), the caller as owner, the first draft
-edition, the host `<slug>.konf.app` in closed preview, and one spent use of
-the code. It reuses the internals of `provisionConference` (#2114). The name
-differs from the operator's `createOrganization`, which already exists with
-another input; GraphQL allows one field per name.
+signed-in user on a session with no tenant (#2163). It returns
+`{ organization, conference, host }`. The name differs from the operator's
+`createOrganization`, which takes another input.
 
-What this PR builds of it:
+Checks, in this order, each before any write:
 
-- **Slug:** lowercase `a-z`, `0-9` and `-`, 3 to 40 characters, not starting
-  or ending with `-`. Reserved names (`packages/tenancy/src/reserved.ts`, the
-  one list the site and tenant-directory share), existing org slugs and
-  existing hosts (`<slug>.konf.app`, `<slug>.konf.run`) are refused with the
-  same message, so the check reveals no more than the public hosts do.
-- **Codes:** table `signup_codes` (migration 0011). Only the SHA-256 of a
-  code is stored. The plain code appears once, in the `createSignupCode`
-  result. `consumeSignupCode` spends a use in one conditional `UPDATE`: not
-  revoked, not expired, uses left.
+1. **Rate limit:** `SIGNUP_LIMIT` (Workers Rate Limiting, 5 a minute), keyed
+   on the user, never the code. `RATE_LIMITED` before any read.
+2. **Invite code:** a hash lookup in `signup_codes` (migration 0011): it
+   exists, is not revoked or expired, and has uses left. Otherwise
+   `field: inviteCode`. This runs before the slug check, so a user without a
+   valid code cannot probe which slugs exist.
+3. **Slug:** lowercase `a-z`, `0-9` and `-`, 3 to 40 characters, not starting
+   or ending with `-`, no `--` (which also refuses `xn--` punycode). Reserved
+   names (`packages/tenancy/src/reserved.ts`, the one list the site and
+   tenant-directory share), existing org slugs and the existing host
+   `<slug>.konf.run` get one message that never repeats the slug.
+4. **Name:** trimmed, 2 to 80 characters, `field: name`.
 
-Still to build: the provisioning write, the per-user attempt limit (a Workers
-rate-limit binding keyed on the user, counted before the code lookup) and the
-email verification the PRD asks for.
+The writes, and what undoes each when a later step fails:
+
+1. **Spend the code** (`consumeSignupCode`, one conditional `UPDATE`). Losing
+   the race for the last use refuses with `field: inviteCode`; nothing is
+   written.
+2. **One D1 batch:** the org (plan `free`, kind `customer`, id
+   `organization.<slug>`), its first edition as `draft`, and the host
+   `<slug>.konf.run` (`platform-alias`, verified under the platform
+   certificate). On failure (a slug race) the code use is refunded.
+3. **identity `signupOwner`:** the org, the caller's `owner` membership and
+   an `org.signup` audit row (actor, org id, code id; never the code) in one
+   batch. On failure the step 2 rows are deleted and the use refunded.
+
+The mutation answers only after step 3, so `myOrganizations` and the
+envelope's role see the membership on the next request.
+
+The edition exists in D1 only: no Sanity documents are written. Only the
+SHA-256 of a code is stored; the plain code appears once, in the
+`createSignupCode` result.
+
+Still to build: the email verification the PRD asks for.

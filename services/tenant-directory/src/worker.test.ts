@@ -40,7 +40,10 @@ const identity = {
     async (): Promise<{ orgId: string; role: string }[]> => [],
   ),
   audit: vi.fn(async (): Promise<void> => undefined),
+  signupOwner: vi.fn(async (): Promise<void> => undefined),
+  isOwner: vi.fn(async (): Promise<boolean> => false),
 }
+const signupLimit = { limit: vi.fn(async () => ({ success: true })) }
 const conferenceRpc = { ticketed: vi.fn(async () => false) }
 vi.mock('./data/cloudflare', () => ({ cloudflareHostnames: () => hostnames }))
 
@@ -295,6 +298,7 @@ beforeEach(() => {
     CF_ZONE_ID: 'unused',
     IDENTITY: identity,
     CONFERENCE: conferenceRpc,
+    SIGNUP_LIMIT: signupLimit as unknown as RateLimit,
     SANITY_PROJECT_ID: 'p',
     SANITY_DATASET: 'd',
     SANITY_API_TOKEN_READ: 'token',
@@ -327,6 +331,11 @@ beforeEach(() => {
   identity.ensure.mockReset()
   identity.syncMembers.mockReset()
   identity.audit.mockReset()
+  identity.signupOwner.mockReset()
+  identity.isOwner.mockReset()
+  identity.isOwner.mockResolvedValue(false)
+  signupLimit.limit.mockReset()
+  signupLimit.limit.mockResolvedValue({ success: true })
   conferenceRpc.ticketed.mockReset()
   conferenceRpc.ticketed.mockResolvedValue(false)
 })
@@ -2415,7 +2424,7 @@ describe('billing and sign-up contract (#2129)', () => {
   const ORG = `{ organization { billing { plan effectivePlan planSource subscriptionStatus currentPeriodEnd cancelAtPeriodEnd compUntil graceUntil } } }`
   const CHECKOUT = `mutation { startCheckout(plan: PRO, currency: NOK) { url } }`
   const PORTAL = `mutation { openBillingPortal { url } }`
-  const SIGNUP = `mutation($slug: String!) { signUpOrganization(input: { name: "Acme", slug: $slug }, inviteCode: "c") { host } }`
+  const SIGNUP = `mutation($slug: String!, $name: String = "Acme", $code: String = "c") { signUpOrganization(input: { name: $name, slug: $slug }, inviteCode: $code) { host organization { id name } conference { id lifecycleStatus } } }`
   const CREATE_CODE = `mutation($exp: String!) { createSignupCode(note: "n", maxUses: 2, expiresAt: $exp) { id code uses maxUses } }`
   const CODES = `{ signupCodes { id note uses } }`
   const REVOKE = `mutation { revokeSignupCode(id: "x") { id } }`
@@ -2449,6 +2458,12 @@ describe('billing and sign-up contract (#2129)', () => {
       ['openBillingPortal anonymous', PORTAL, undefined],
       ['signUpOrganization on a tenant', SIGNUP, as('org', 'owner')],
       ['signUpOrganization anonymous', SIGNUP, undefined],
+      ['signUpOrganization as operator', SIGNUP, operator],
+      [
+        'signUpOrganization with a CLI token',
+        SIGNUP,
+        { typ: 'user', userId: 'u', cli: true } as Envelope,
+      ],
       ['createSignupCode as user', CREATE_CODE, user],
       ['createSignupCode as owner', CREATE_CODE, as('org', 'owner')],
       ['signupCodes as user', CODES, user],
@@ -2497,6 +2512,28 @@ describe('billing and sign-up contract (#2129)', () => {
         })
       },
     )
+
+    it('gives an operator acting for the org the values (#2163)', async () => {
+      const id = await org()
+      const { body } = await gql(
+        ORG,
+        {},
+        as(id, 'member', { scopes: ['platform:operator'] }),
+      )
+      expect(body.data.organization.billing.plan).toBe('basic')
+    })
+
+    it('is null for an operator listing orgs on the platform lane', async () => {
+      await org()
+      const { body } = await gql(
+        `{ conferences { organization { billing { plan } } } }`,
+        {},
+        operator,
+      )
+      expect(body.data.conferences.length).toBeGreaterThan(0)
+      for (const c of body.data.conferences)
+        expect(c.organization.billing).toBeNull()
+    })
 
     it('is null for a member', async () => {
       const id = await org()
@@ -2548,38 +2585,221 @@ describe('billing and sign-up contract (#2129)', () => {
     })
   })
 
-  describe('sign-up slug', () => {
+  describe('signUpOrganization (#2163)', () => {
     const user: Envelope = { typ: 'user', userId: 'u' }
-    const field = async (slug: string) => {
-      const { body } = await gql(SIGNUP, { slug }, user)
-      return body.errors[0]
-    }
-    it.each(['ab', 'a'.repeat(41), 'Acme', 'ac_me', '-acme', 'acme-', 'æøå'])(
-      'refuses format %s',
-      async (slug) => {
-        expect((await field(slug)).extensions).toMatchObject({
-          code: 'BAD_USER_INPUT',
-          reason: 'INVALID_INPUT',
-          field: 'slug',
-        })
+    const newCode = async (maxUses = 2) =>
+      (await createData(env).createSignupCode('op', 'n', maxUses, FUTURE)).code
+    const uses = () =>
+      (
+        sqlite.prepare('SELECT uses FROM signup_codes').get() as {
+          uses: number
+        }
+      ).uses
+    const count = (t: string) =>
+      (sqlite.prepare(`SELECT count(*) AS n FROM ${t}`).get() as { n: number })
+        .n
+    const signUp = async (vars: Record<string, unknown>) =>
+      (await gql(SIGNUP, vars, user)).body
+    const field = async (slug: string, code?: string) =>
+      (await signUp({ slug, code: code ?? (await newCode()) })).errors[0]
+
+    it('creates org, draft edition and <slug>.konf.run, spends the code, writes the owner first', async () => {
+      const code = await newCode()
+      const body = await signUp({ slug: 'new-org', code, name: '  New Org ' })
+      expect(body.errors).toBeUndefined()
+      const out = body.data.signUpOrganization
+      expect(out).toMatchObject({
+        host: 'new-org.konf.run',
+        organization: { id: 'organization.new-org', name: 'New Org' },
+        conference: { lifecycleStatus: 'draft' },
+      })
+      expect(
+        sqlite
+          .prepare(
+            `SELECT o.plan, o.kind, d.kind AS host, d.verification FROM organizations o JOIN domains d ON d.org_id = o.id`,
+          )
+          .get(),
+      ).toEqual({
+        plan: 'free',
+        kind: 'customer',
+        host: 'platform-alias',
+        verification: 'verified',
+      })
+      expect(uses()).toBe(1)
+      expect(identity.signupOwner).toHaveBeenCalledWith(
+        'organization.new-org',
+        'new-org',
+        'New Org',
+        'u',
+        expect.any(String),
+      )
+      // The audit carries the code's id, never the code.
+      expect(JSON.stringify(identity.signupOwner.mock.calls)).not.toContain(
+        code,
+      )
+      // Owner membership is readable on the next request.
+      identity.memberships.mockResolvedValueOnce([
+        { orgId: 'organization.new-org', role: 'owner' },
+      ])
+      const mine = await gql(
+        `{ myOrganizations { id role conferenceEditions { lifecycleStatus } } }`,
+        {},
+        user,
+      )
+      expect(mine.body.data.myOrganizations).toEqual([
+        {
+          id: 'organization.new-org',
+          role: 'owner',
+          conferenceEditions: [{ lifecycleStatus: 'draft' }],
+        },
+      ])
+    })
+
+    it.each([
+      ['an unknown code', 'inviteCode', { slug: 'new-org', code: 'nope' }],
+      ['a short name', 'name', { slug: 'new-org', name: ' a ' }],
+      ['a long name', 'name', { slug: 'new-org', name: 'x'.repeat(81) }],
+      ['a bad slug', 'slug', { slug: 'Acme' }],
+      ['a reserved slug', 'slug', { slug: 'kontroll' }],
+    ])('refuses %s with field %s and writes nothing', async (_, f, vars) => {
+      const code = await newCode()
+      const body = await signUp({ code, ...vars })
+      expect(body.errors[0].extensions).toMatchObject({
+        code: 'BAD_USER_INPUT',
+        reason: 'INVALID_INPUT',
+        field: f,
+      })
+      expect([uses(), count('organizations'), count('domains')]).toEqual([
+        0, 0, 0,
+      ])
+      expect(identity.signupOwner).not.toHaveBeenCalled()
+    })
+
+    it.each(['expired', 'revoked', 'used up'])(
+      'refuses a %s code as inviteCode',
+      async (kind) => {
+        const code = await newCode(1)
+        if (kind === 'expired')
+          sqlite.exec(`UPDATE signup_codes SET expires_at = '2000-01-01'`)
+        if (kind === 'revoked')
+          sqlite.exec(`UPDATE signup_codes SET revoked_at = '2000-01-01'`)
+        if (kind === 'used up') sqlite.exec(`UPDATE signup_codes SET uses = 1`)
+        expect((await field('new-org', code)).extensions.field).toBe(
+          'inviteCode',
+        )
       },
     )
-    it('gives reserved and taken the same message', async () => {
+
+    it('checks the code before the slug: no slug oracle without one', async () => {
       await provision('acme')
-      sqlite.exec(
-        `INSERT INTO domains (hostname, org_id, conference_id, kind, verification) SELECT 'hosted.konf.app', org_id, id, 'custom', 'verified' FROM conferences LIMIT 1`,
-      )
-      const msgs = await Promise.all(
-        ['auth', 'kontroll', 'acme', 'hosted'].map(field),
-      )
-      for (const m of msgs)
+      for (const slug of ['acme', 'auth', 'Acme', 'free-one'])
+        expect(await field(slug, 'nope')).toMatchObject({
+          message: 'this invite code is not valid',
+          extensions: { field: 'inviteCode' },
+        })
+    })
+
+    it.each([
+      'ab',
+      'a'.repeat(41),
+      'Acme',
+      'ac_me',
+      '-acme',
+      'acme-',
+      'æøå',
+      'xn--acme',
+      'ac--me',
+    ])('refuses format %s', async (slug) => {
+      expect((await field(slug)).extensions).toMatchObject({
+        code: 'BAD_USER_INPUT',
+        reason: 'INVALID_INPUT',
+        field: 'slug',
+      })
+    })
+
+    it('gives reserved and taken the same message, never the slug', async () => {
+      await provision('acme')
+      for (const slug of ['auth', 'kontroll', 'signup', 'acme']) {
+        const m = await field(slug)
         expect(m).toMatchObject({
           message: 'this slug is not available',
           extensions: { field: 'slug' },
         })
+        expect(m.message).not.toContain(slug)
+      }
     })
-    it('passes a free slug to NOT_IMPLEMENTED', async () => {
-      expect((await field('new-org')).extensions.code).toBe('NOT_IMPLEMENTED')
+
+    it('gives the last use to one of two racing sign-ups', async () => {
+      const code = await newCode(1)
+      const [a, b] = await Promise.all([
+        signUp({ slug: 'org-a', code }),
+        signUp({ slug: 'org-b', code }),
+      ])
+      const ok = [a, b].filter((x) => !x.errors)
+      const lost = [a, b].filter((x) => x.errors)
+      expect(ok).toHaveLength(1)
+      expect(lost[0].errors[0].extensions.field).toBe('inviteCode')
+      expect([uses(), count('organizations')]).toEqual([1, 1])
+    })
+
+    it('is rate-limited per user, before any read', async () => {
+      signupLimit.limit.mockResolvedValueOnce({ success: false })
+      const spy = watchDb()
+      const body = await signUp({ slug: 'new-org', code: 'x' })
+      expect(code(body)).toBe('RATE_LIMITED')
+      expect(spy).not.toHaveBeenCalled()
+      expect(signupLimit.limit).toHaveBeenCalledWith({ key: 'signup|user:u' })
+    })
+
+    it('leaves no org and an unspent code when the owner write fails', async () => {
+      identity.signupOwner.mockRejectedValueOnce(new Error('down'))
+      const c = await newCode()
+      const body = await signUp({ slug: 'new-org', code: c })
+      expect(code(body)).toBe('INTERNAL_SERVER_ERROR')
+      expect([
+        uses(),
+        count('organizations'),
+        count('conferences'),
+        count('domains'),
+      ]).toEqual([0, 0, 0, 0])
+      // The slug is free again.
+      expect(
+        (await signUp({ slug: 'new-org', code: c })).errors,
+      ).toBeUndefined()
+    })
+
+    it('keeps the sign-up when identity committed but the reply was lost', async () => {
+      identity.signupOwner.mockRejectedValueOnce(new Error('reply lost'))
+      identity.isOwner.mockResolvedValueOnce(true)
+      const body = await signUp({ slug: 'new-org', code: await newCode() })
+      expect(body.errors).toBeUndefined()
+      expect(identity.isOwner).toHaveBeenCalledWith('organization.new-org', 'u')
+      expect([uses(), count('organizations')]).toEqual([1, 1])
+    })
+
+    it('keeps everything and logs the org when identity cannot answer', async () => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+      identity.signupOwner.mockRejectedValueOnce(new Error('down'))
+      identity.isOwner.mockRejectedValueOnce(new Error('down'))
+      const body = await signUp({ slug: 'new-org', code: await newCode() })
+      expect(code(body)).toBe('INTERNAL_SERVER_ERROR')
+      expect([uses(), count('organizations')]).toEqual([1, 1])
+      expect(log).toHaveBeenCalledWith(
+        JSON.stringify({
+          event: 'signup.unresolved',
+          orgId: 'organization.new-org',
+        }),
+      )
+      log.mockRestore()
+    })
+
+    it('refunds the code when the D1 write loses a slug race', async () => {
+      const c = await newCode()
+      vi.spyOn(env.DB, 'batch').mockRejectedValueOnce(new Error('UNIQUE'))
+      const body = await signUp({ slug: 'new-org', code: c })
+      expect(body.errors[0].extensions.field).toBe('slug')
+      expect([uses(), count('organizations')]).toEqual([0, 0])
+      expect(identity.signupOwner).not.toHaveBeenCalled()
     })
   })
 
@@ -2613,14 +2833,14 @@ describe('billing and sign-up contract (#2129)', () => {
     it('spends uses up to maxUses, never past expiry or revocation', async () => {
       const data = createData(env)
       const c = await data.createSignupCode('op', 'n', 2, FUTURE)
-      expect(await data.consumeSignupCode('wrong')).toBe(false)
-      expect(await data.consumeSignupCode(c.code)).toBe(true)
-      expect(await data.consumeSignupCode(c.code)).toBe(true)
-      expect(await data.consumeSignupCode(c.code)).toBe(false)
+      expect(await data.consumeSignupCode('wrong')).toBeNull()
+      expect(await data.consumeSignupCode(c.code)).toBe(c.id)
+      expect(await data.consumeSignupCode(c.code)).toBe(c.id)
+      expect(await data.consumeSignupCode(c.code)).toBeNull()
       const e = await data.createSignupCode('op', 'n', 5, FUTURE)
-      expect(await data.consumeSignupCode(e.code, new Date('2100-01-01'))).toBe(
-        false,
-      )
+      expect(
+        await data.consumeSignupCode(e.code, new Date('2100-01-01')),
+      ).toBeNull()
       const r = await data.createSignupCode('op', 'n', 5, FUTURE)
       const { body } = await gql(
         `mutation($id: ID!) { revokeSignupCode(id: $id) { revokedAt } }`,
@@ -2628,7 +2848,7 @@ describe('billing and sign-up contract (#2129)', () => {
         operator,
       )
       expect(body.data.revokeSignupCode.revokedAt).toBeTruthy()
-      expect(await data.consumeSignupCode(r.code)).toBe(false)
+      expect(await data.consumeSignupCode(r.code)).toBeNull()
     })
   })
 })
