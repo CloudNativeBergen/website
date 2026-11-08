@@ -60,6 +60,7 @@ import { summaryTitle } from './summary-copy'
 import { talkTotals, type FeedbackTotals, type TalkCounts } from './totals'
 import { SESSION_FEEDBACK_ANCHOR } from './url'
 import { answersClosed, feedbackWindow } from './window'
+import { mergeConference } from '@/lib/conference/merge'
 
 /** A talk the summary is due for. */
 export interface DueSummary {
@@ -206,7 +207,9 @@ async function selectConference(
     read =
       conference?._type === 'conference'
         ? {
-            conference,
+            // D1-owned fields (cfpEmail, dates, title; #2038), Sanity as
+            // the fallback.
+            conference: await mergeConference(conference),
             slots: await getConferenceFeedbackSlots(
               conferenceId,
               clientReadUncached,
