@@ -4,6 +4,7 @@
 // Ported from RunKonf/konf-grapql-poc@poc (poc/shared/tenancy), hardened per
 // RunKonf/konf-grapql-poc#23.
 import { createGraphQLError } from 'graphql-yoga'
+import { isPlan, type Plan } from './plan'
 import {
   SignJWT,
   jwtVerify,
@@ -30,6 +31,12 @@ export interface TenantEnvelope {
   userId: string | null
   orgRole: string | null
   scopes: string[]
+  /**
+   * The org's effective plan (#2129), minted per request like orgRole.
+   * verifyEnvelope always sets it: an absent or unknown value is `free`, so
+   * the gateway and the subgraphs deploy in either order.
+   */
+  plan?: Plan
 }
 
 /**
@@ -115,6 +122,7 @@ export async function verifyEnvelope(
       userId: p.userId,
       orgRole: p.orgRole,
       scopes: p.scopes,
+      plan: isPlan(p.plan) ? p.plan : 'free',
     }
   }
   if (p.typ === 'platform' && isString(p.userId) && isString(p.platformRole)) {
@@ -283,3 +291,4 @@ export async function generateEnvelopeKeyPair(): Promise<{
 }
 export * from './push'
 export * from './authz'
+export * from './plan'

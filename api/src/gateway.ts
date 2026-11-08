@@ -15,6 +15,7 @@ import { createRemoteJWKSet, customFetch, jwtVerify } from 'jose'
 import {
   createSigner,
   ENVELOPE_HEADER,
+  isPlan,
   type Envelope,
   type TenantEnvelope,
 } from '@runkonf/tenancy'
@@ -97,7 +98,7 @@ const JWT_MAX_SECONDS = 300
 const ENVELOPE_TTL_SECONDS = 60
 
 const TENANT_QUERY =
-  'query($host: String!) { tenantByHost(host: $host) { orgId conferenceId flags { apiRead identityLogin d1Write d1Override } } }'
+  'query($host: String!) { tenantByHost(host: $host) { orgId conferenceId flags { apiRead identityLogin d1Write d1Override } plan } }'
 
 /** Operator lane: the host of the tenant the operator acts for. */
 export const OPERATOR_TENANT_HEADER = 'x-konf-operator-tenant'
@@ -168,6 +169,8 @@ type Tenant = {
   orgId: string
   conferenceId: string | null
   flags?: RolloutFlags | null
+  /** The org's effective plan (#2129); verifyEnvelope caps it. */
+  plan?: string | null
 }
 
 /**
@@ -192,7 +195,12 @@ export const INPUT_REASONS: ReadonlySet<string> = new Set([
   'IDEMPOTENCY_KEY_REUSED',
   'INVALID_INPUT',
   'COPY_FROM_NOT_IN_ORG',
+  // Billing (#2129): with `requiredPlan`, below.
+  'PLAN_REQUIRED',
 ])
+
+/** Plans a PLAN_REQUIRED refusal may name in `requiredPlan`. */
+const PLANS: ReadonlySet<string> = new Set(['basic', 'pro'])
 
 export const MAX_INPUT_MESSAGE = 300
 const MAX_FIELD = 100
@@ -206,7 +214,12 @@ const FIELD_NAME = /^[A-Za-z_][\w.[\]]*$/
 function inputDetail(gql: GraphQLError) {
   const field = gql.extensions?.field
   const reason = gql.extensions?.reason
+  const plan = gql.extensions?.requiredPlan
   return {
+    requiredPlan:
+      reason === 'PLAN_REQUIRED' && typeof plan === 'string' && PLANS.has(plan)
+        ? plan
+        : undefined,
     reason:
       typeof reason === 'string' && INPUT_REASONS.has(reason)
         ? reason
@@ -267,6 +280,7 @@ export function maskError(error: unknown, message: string): Error {
         code: safe ? code : 'INTERNAL_SERVER_ERROR',
         ...(detail?.reason ? { reason: detail.reason } : {}),
         ...(detail?.field ? { field: detail.field } : {}),
+        ...(detail?.requiredPlan ? { requiredPlan: detail.requiredPlan } : {}),
         // As yoga's default: unexpected answers 500, an http status is kept.
         ...(safe ? {} : { unexpected: true }),
         // Not a subgraph's: yoga would apply its status and headers (#1877).
@@ -665,6 +679,7 @@ export function createGateway(supergraph: string) {
               userId,
               orgRole: principal!.orgRole,
               scopes: operator ? [OPERATOR_SCOPE] : [],
+              plan: isPlan(tenant.plan) ? tenant.plan : 'free',
             }
           : operator
             ? { typ: 'platform', userId: userId!, platformRole: 'operator' }
@@ -696,6 +711,7 @@ export function createGateway(supergraph: string) {
           userId,
           orgRole,
           scopes: siteHost ? [SITE_SCOPE] : [],
+          plan: isPlan(tenant.plan) ? tenant.plan : 'free',
         }
         forwarded.headers.set(
           ENVELOPE_HEADER,

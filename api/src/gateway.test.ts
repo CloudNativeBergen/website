@@ -171,6 +171,7 @@ describe('gateway', () => {
       'removeMember',
       'reserveWorkshopReminder',
       'revokeAll',
+      'setComplimentaryPlan',
       'setConferenceLifecycle',
       'submitProposal',
       'subscribePush',
@@ -242,8 +243,48 @@ describe('gateway', () => {
     )
     expect(envelopes[0]).not.toBe('forged')
     expect(await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem)).toEqual(
-      { typ: 'tenant', ...TENANT, userId: null, orgRole: null, scopes: [] },
+      {
+        typ: 'tenant',
+        ...TENANT,
+        userId: null,
+        orgRole: null,
+        scopes: [],
+        plan: 'free',
+      },
     )
+  })
+
+  // Billing phase 1 (#2129): the directory's effective plan, capped to the
+  // vocabulary; absent (an older directory) or unknown is free.
+  it.each([
+    ['pro', 'pro'],
+    ['basic', 'basic'],
+    [undefined, 'free'],
+    [null, 'free'],
+    ['enterprise', 'free'],
+  ])('mints the directory plan %j as %j', async (plan, want) => {
+    const { env, envelopes } = makeEnv()
+    ;(env as unknown as { DIRECTORY: unknown }).DIRECTORY = {
+      fetch: async () =>
+        Response.json({ data: { tenantByHost: { ...TENANT, plan } } }),
+    }
+    await gateway.fetch(post(SUBGRAPH_QUERY, { origin: VERIFIED }), env)
+    expect(
+      await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem),
+    ).toMatchObject({ typ: 'tenant', plan: want })
+  })
+
+  it('asks the directory for the plan with the tenant lookup', async () => {
+    const { env } = makeEnv()
+    const asked: string[] = []
+    const inner = env.DIRECTORY.fetch
+    env.DIRECTORY.fetch = async (url: string, init: RequestInit) => {
+      asked.push(JSON.parse(String(init.body)).query)
+      return inner(url, init)
+    }
+    await gateway.fetch(post(SUBGRAPH_QUERY, { origin: VERIFIED }), env)
+    expect(asked).toHaveLength(1)
+    expect(asked[0]).toMatch(/tenantByHost\(host: \$host\) \{[^}]*\} plan \}/)
   })
 
   it('mints userId and the live orgRole for a signed-in member', async () => {
@@ -263,6 +304,7 @@ describe('gateway', () => {
       userId: 'user_1',
       orgRole: 'admin',
       scopes: [],
+      plan: 'free',
     })
     expect(second).toMatchObject({ orgRole: 'member' })
   })
@@ -891,6 +933,37 @@ describe('gateway', () => {
       }
     })
 
+    // Billing phase 1 (#2129): PLAN_REQUIRED and its plan pass; anything
+    // else in requiredPlan, or a requiredPlan on another reason, is dropped.
+    it.each([
+      [
+        'PLAN_REQUIRED',
+        'basic',
+        { reason: 'PLAN_REQUIRED', requiredPlan: 'basic' },
+      ],
+      [
+        'PLAN_REQUIRED',
+        'pro',
+        { reason: 'PLAN_REQUIRED', requiredPlan: 'pro' },
+      ],
+      ['PLAN_REQUIRED', 'free', { reason: 'PLAN_REQUIRED' }],
+      ['PLAN_REQUIRED', '<script>', { reason: 'PLAN_REQUIRED' }],
+      ['SLUG_TAKEN', 'pro', { reason: 'SLUG_TAKEN' }],
+    ])('passes reason %s with requiredPlan %j as %j', (reason, plan, want) => {
+      const masked = maskError(
+        new GraphQLError('this needs the plan', {
+          extensions: {
+            code: 'BAD_USER_INPUT',
+            reason,
+            requiredPlan: plan,
+            serviceName: 'tenant-directory',
+          },
+        }),
+        'Unexpected error.',
+      ) as GraphQLError
+      expect(masked.extensions).toEqual({ code: 'BAD_USER_INPUT', ...want })
+    })
+
     it.each(['BAD_USER_INPUT', 'NOT_FOUND', 'FORBIDDEN', 'UNAUTHENTICATED'])(
       'logs no masked event for the safe code %s',
       (code) => {
@@ -1206,6 +1279,7 @@ describe('gateway', () => {
           userId: null,
           orgRole: null,
           scopes: ['site:server'],
+          plan: 'free',
         })
         expect(forwarded[0].get(SITE_ASSERTION_HEADER)).toBeNull()
       },
@@ -1496,8 +1570,24 @@ describe('operator lane (#1892 phase 4)', () => {
         userId: 'user_1',
         orgRole: 'admin',
         scopes: [OPERATOR_SCOPE],
+        plan: 'free',
       },
     )
+  })
+
+  it('mints the named tenant plan on the operator lane (#2129)', async () => {
+    const { env, envelopes } = opsEnv()
+    env.DIRECTORY.fetch = vi.fn(async () =>
+      Response.json({ data: { tenantByHost: { ...TENANT, plan: 'basic' } } }),
+    )
+    await call(env, {
+      origin: OPS,
+      authorization: `Bearer ${await opsJwt()}`,
+      [OPERATOR_TENANT_HEADER]: 'conf.example',
+    })
+    expect(
+      await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem),
+    ).toMatchObject({ typ: 'tenant', plan: 'basic' })
   })
 
   it('gives a non-operator with no tenant named a UserContext only (#2036)', async () => {

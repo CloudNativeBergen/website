@@ -14,7 +14,9 @@ import {
   sql,
 } from 'drizzle-orm'
 import { createGraphQLError } from 'graphql-yoga'
+import type { OperatorAuditEvent } from '@runkonf/tenancy'
 import { importJWK, SignJWT, type JWK } from 'jose'
+import { effectivePlan, type Plan } from '@runkonf/tenancy'
 import { rawDb } from './db'
 import {
   cloudflareHostnames,
@@ -48,6 +50,12 @@ export interface DataEnv extends CloudflareEnv {
     syncMembers(): Promise<unknown>
     /** The orgs a user is a member of, with the role there (#2036). */
     memberships(userId: string): Promise<{ orgId: string; role: string }[]>
+    /** An operator write as an audit_event row (docs/AUTHORIZATION.md §3.6). */
+    audit(event: OperatorAuditEvent): Promise<void>
+  }
+  /** konf-conference's ProgramDate entrypoint: is an edition ticketed? */
+  CONFERENCE: {
+    ticketed(orgId: string, conferenceId: string): Promise<boolean>
   }
   /** Sanity ids as in services/identity; provisioning verifies against it. */
   SANITY_PROJECT_ID?: string
@@ -520,6 +528,45 @@ export function createData(
       return row ?? null
     },
 
+    /** Whether the edition sells tickets: its ticketingProvider is set. */
+    ticketed: (orgId: string, id: string) => env.CONFERENCE.ticketed(orgId, id),
+
+    /**
+     * Operator-only (#2129): grants `plan` until `until` (ISO 8601, null for
+     * no end), or with `free` ends a grant. Writes, then records the write in
+     * identity's audit_event before answering. Null for an unknown org.
+     */
+    async setComplimentaryPlan(
+      actorId: string,
+      orgId: string,
+      plan: Plan,
+      until: string | null,
+      reason: string,
+    ) {
+      const free = plan === 'free'
+      const [row] = await db
+        .update(organizations)
+        .set({
+          plan,
+          planSource: free ? 'default' : 'comp',
+          compUntil: free ? null : until,
+          compReason: free ? null : reason,
+        })
+        .where(eq(organizations.id, orgId))
+        .returning()
+      if (!row) return null
+      const event: OperatorAuditEvent = {
+        type: 'operator.write',
+        actorId,
+        organizationId: orgId,
+        conferenceId: null,
+        fields: ['plan', 'plan_source', 'comp_until', 'comp_reason'],
+      }
+      console.log(JSON.stringify({ event: 'billing.comp_plan', orgId, plan }))
+      await env.IDENTITY.audit(event)
+      return row
+    },
+
     /** One org's hostnames; the caller already decided it may see them. */
     domainsOf: (orgId: string) =>
       db.query.domains.findMany({
@@ -543,6 +590,11 @@ export function createData(
           conferenceId: domains.conferenceId,
           orgStatus: organizations.status,
           lifecycle: conferences.lifecycle,
+          plan: organizations.plan,
+          planSource: organizations.planSource,
+          subscriptionStatus: organizations.subscriptionStatus,
+          currentPeriodEnd: organizations.currentPeriodEnd,
+          compUntil: organizations.compUntil,
           apiRead: conferences.apiRead,
           identityLogin: conferences.identityLogin,
           d1Write: conferences.d1Write,
@@ -561,8 +613,30 @@ export function createData(
       ) {
         return null
       }
-      const { apiRead, identityLogin, d1Write, d1Override, ...rest } = row
-      return { ...rest, flags: { apiRead, identityLogin, d1Write, d1Override } }
+      const {
+        apiRead,
+        identityLogin,
+        d1Write,
+        d1Override,
+        plan,
+        planSource,
+        subscriptionStatus,
+        currentPeriodEnd,
+        compUntil,
+        ...rest
+      } = row
+      return {
+        ...rest,
+        flags: { apiRead, identityLogin, d1Write, d1Override },
+        // The gateway mints it into the envelope (#2129).
+        plan: effectivePlan({
+          plan,
+          planSource,
+          subscriptionStatus,
+          currentPeriodEnd,
+          compUntil,
+        }),
+      }
     },
 
     async conference(id: string, trusted: boolean) {

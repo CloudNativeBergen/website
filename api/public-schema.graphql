@@ -287,6 +287,11 @@ type Mutation {
   provisionOrganization(conferenceId: ID!, idempotencyKey: String!, orgId: ID!, orgSlug: String!): Organization
 
   """
+  Grants an Organization a plan without Stripe (#2129), until `until` (ISO 8601; omitted means no end), or ends a grant with `free`. Platform operators only (operator lane, no tenant); audited. Null for an unknown org.
+  """
+  setComplimentaryPlan(orgId: ID!, plan: Plan!, reason: String!, until: String): Organization
+
+  """
   Sets the request's Conference homepage override, or clears it with null (back to `live`; a draft stays draft). Org owner or admin, or an operator acting for the org (#1997).
   """
   setConferenceLifecycle(status: ConferenceLifecycleOverride): ConferenceEdition
@@ -1001,6 +1006,12 @@ enum ConferenceLifecycle {
 enum ConferenceLifecycleOverride {
   archived
   cancelled
+}
+
+enum Plan {
+  basic
+  free
+  pro
 }
 
 enum RolloutFlag {

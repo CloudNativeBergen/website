@@ -10,6 +10,7 @@ import {
   editionHost,
   normalizeHost,
 } from '../src/data/naming'
+import { isPlan } from '@runkonf/tenancy'
 
 export interface SanityOrg {
   _id: string
@@ -99,7 +100,8 @@ export function mapBackfill(
       id: o._id,
       slug,
       name: o.name || slug,
-      plan: o.plan || 'free',
+      // The plan vocabulary of migration 0008; anything else is free.
+      plan: isPlan(o.plan) ? o.plan : 'free',
     }
     orgs.set(o._id, row)
     out.orgs.push(row)
@@ -242,7 +244,7 @@ export function toSql(b: Backfill) {
   const directory = [
     ...b.orgs.map(
       (o) =>
-        `INSERT INTO organizations (id, slug, name, plan) VALUES (${q(o.id)}, ${q(o.slug)}, ${q(o.name)}, ${q(o.plan)}) ON CONFLICT (id) DO UPDATE SET name = excluded.name, plan = excluded.plan;`,
+        `INSERT INTO organizations (id, slug, name, plan) VALUES (${q(o.id)}, ${q(o.slug)}, ${q(o.name)}, ${q(o.plan)}) ON CONFLICT (id) DO UPDATE SET name = excluded.name;`,
     ),
     ...b.conferences.map(
       (c) =>
