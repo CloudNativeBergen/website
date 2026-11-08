@@ -44,6 +44,8 @@ export interface GraphQLClient {
     host: string | null,
     query: string,
     variables?: Record<string, unknown>,
+    /** Another conference of the host's org (x-konf-operator-conference). */
+    conferenceId?: string,
   ): Promise<T>
 }
 
@@ -487,9 +489,9 @@ export async function run(
     throw new OperatorTokenError('KONF_OPERATOR_ORIGIN is not set')
   checkOperatorToken(opts.token, Date.now())
   const api: GraphQLClient = {
-    request: (host, query, variables) => {
+    request: (host, query, variables, conferenceId) => {
       checkOperatorToken(opts.token, Date.now())
-      return deps.api.request(host, query, variables)
+      return deps.api.request(host, query, variables, conferenceId)
     },
   }
   const { organization } = await api.request<{
@@ -585,6 +587,7 @@ function operatorClient(token: string, origin: string): GraphQLClient {
       host: string | null,
       query: string,
       variables?: Record<string, unknown>,
+      conferenceId?: string,
     ) {
       const res = await fetch(url, {
         method: 'POST',
@@ -593,6 +596,9 @@ function operatorClient(token: string, origin: string): GraphQLClient {
           origin,
           authorization: `Bearer ${token}`,
           ...(host ? { 'x-konf-operator-tenant': host } : {}),
+          ...(conferenceId
+            ? { 'x-konf-operator-conference': conferenceId }
+            : {}),
         },
         body: JSON.stringify({ query, variables }),
       })

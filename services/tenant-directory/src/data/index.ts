@@ -535,7 +535,7 @@ export function createData(
     async setLifecycle(
       orgId: string,
       id: string,
-      status: 'cancelled' | 'archived' | null,
+      status: 'cancelled' | 'archived' | 'draft' | 'live' | null,
     ) {
       const where = and(eq(conferences.id, id), eq(conferences.orgId, orgId))
       const [row] = await db
@@ -691,7 +691,7 @@ export function createData(
      * `trusted` (a PlatformContext) sees every row. Everyone else only gets
      * a verified hostname of an active Organization's non-draft Conference.
      */
-    async resolveHost(input: string, trusted: boolean) {
+    async resolveHost(input: string, trusted: boolean, conferenceId?: string) {
       const hostname = normalizeHost(input)
       if (!hostname) return null
       const [row] = await db
@@ -726,6 +726,25 @@ export function createData(
           row.lifecycle === 'draft')
       ) {
         return null
+      }
+      // #2150: the operator lane may name another edition of the host's org.
+      // The org is part of the query, so another org's id resolves nothing.
+      if (conferenceId) {
+        const conf = await db.query.conferences.findFirst({
+          where: and(
+            eq(conferences.id, conferenceId),
+            eq(conferences.orgId, row.orgId),
+          ),
+        })
+        if (!conf) return null
+        Object.assign(row, {
+          conferenceId: conf.id,
+          lifecycle: conf.lifecycle,
+          apiRead: conf.apiRead,
+          identityLogin: conf.identityLogin,
+          d1Write: conf.d1Write,
+          d1Override: conf.d1Override,
+        })
       }
       const {
         apiRead,

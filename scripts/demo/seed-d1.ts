@@ -21,6 +21,8 @@ export interface DemoGraphQLClient {
     host: string | null,
     query: string,
     variables?: Record<string, unknown>,
+    /** Another conference of the host's org (x-konf-operator-conference). */
+    conferenceId?: string,
   ): Promise<T>
 }
 
@@ -61,9 +63,8 @@ const LIFECYCLE = `mutation($status: ConferenceLifecycleOverride) {
   setConferenceLifecycle(status: $status) { id } }`
 const SEED_USER = `mutation($email: String!, $name: String!, $role: MemberRole, $profile: SpeakerProfileInput) {
   seedDemoUser(email: $email, name: $name, role: $role, profile: $profile) }`
-const INVITES = '{ invitations { email } members { email } }'
-const INVITE = `mutation($orgId: ID!, $email: String!, $role: MemberRole!) {
-  operatorInviteMember(orgId: $orgId, email: $email, role: $role) { id } }`
+const INVITE = `mutation($email: String!, $role: MemberRole!, $status: SeedInvitationStatus!) {
+  seedDemoInvitation(email: $email, role: $role, status: $status) { id } }`
 const ORDERS = `mutation($event: TicketEventRefInput!, $orders: [TicketOrderInput!]!) {
   seedTicketOrders(event: $event, orders: $orders) }`
 
@@ -99,12 +100,6 @@ export async function seedDemoD1(
     ticketOrders: 0,
   }
   const skipped: string[] = []
-  const pendingInvites = d1.invites.filter((i) => i.status === 'pending')
-  for (const i of d1.invites)
-    if (i.status !== 'pending')
-      skipped.push(
-        `invite ${i.key}: no mutation creates a ${i.status} invitation`,
-      )
 
   if (dryRun)
     return {
@@ -112,26 +107,27 @@ export async function seedDemoD1(
       counts: {
         editions: d1.editions.length,
         settings: d1.editions.length,
-        lifecycle: d1.editions.filter((e) => e.lifecycle !== 'draft').length,
+        lifecycle: d1.editions.length,
         members: d1.members.length,
         speakerProfiles: d1.speakerProfiles.length,
-        invites: pendingInvites.length,
+        invites: d1.invites.length,
         ticketOrders: d1.ticketOrders.length,
       },
       skipped,
     }
 
-  // --- editions: the current one is the host's; others match on title.
+  // --- editions: the current one is the host's; others match on title and
+  // are targeted by id on the operator lane, verified host or not.
   const read = () =>
     client.request<{
       conference: { id: string }
       conferenceEditions: Edition[]
     }>(host, EDITIONS)
   let state = await read()
-  const hostOf = new Map<string, string>()
+  const idOf = new Map<string, string | undefined>()
   for (const e of d1.editions) {
     if (e.key === currentEditionKey) {
-      hostOf.set(e.key, host)
+      idOf.set(e.key, undefined)
       continue
     }
     let found = state.conferenceEditions.find((x) => x.title === e.title)
@@ -144,28 +140,22 @@ export async function seedDemoD1(
       state = await read()
       found = state.conferenceEditions.find((x) => x.title === e.title)
     }
-    if (found?.primaryHost) hostOf.set(e.key, found.primaryHost)
-    else
-      skipped.push(
-        `edition ${e.key}: no verified host, so no settings, lifecycle or orders (operator lane targets a conference by host only)`,
-      )
+    if (found) idOf.set(e.key, found.id)
+    else skipped.push(`edition ${e.key}: not found after provisioning`)
   }
+  const target = (key: string) => idOf.get(key)
 
-  // --- settings (phases 1-3) and lifecycle, per edition with a host.
+  // --- settings (phases 1-3) and lifecycle, per edition.
   for (const e of d1.editions) {
-    const h = hostOf.get(e.key)
-    if (!h) continue
-    await client.request(h, UPDATE, { input: patchOf(e) })
+    if (!idOf.has(e.key)) continue
+    await client.request(host, UPDATE, { input: patchOf(e) }, target(e.key))
     counts.settings++
-    if (e.lifecycle === 'draft') {
-      skipped.push(
-        `edition ${e.key}: no mutation moves an edition back to draft`,
-      )
-      continue
-    }
-    await client.request(h, LIFECYCLE, {
-      status: e.lifecycle === 'live' ? null : e.lifecycle,
-    })
+    await client.request(
+      host,
+      LIFECYCLE,
+      { status: e.lifecycle },
+      target(e.key),
+    )
     counts.lifecycle++
   }
 
@@ -213,52 +203,45 @@ export async function seedDemoD1(
     counts.speakerProfiles++
   }
 
-  // --- invites: pending only, skipping an address already pending or a member.
-  const { invitations, members } = await client.request<{
-    invitations: { email: string | null }[] | null
-    members: { email: string | null }[] | null
-  }>(host, INVITES)
-  const taken = new Set(
-    [...(invitations ?? []), ...(members ?? [])].map((x) =>
-      x.email?.toLowerCase(),
-    ),
-  )
-  for (const i of pendingInvites) {
-    if (taken.has(i.email.toLowerCase())) continue
-    await client.request(null, INVITE, { orgId, email: i.email, role: i.role })
+  // --- invites: every state, never mailed; idempotent per email and status.
+  for (const i of d1.invites) {
+    await client.request(host, INVITE, {
+      email: i.email,
+      role: i.role,
+      status: i.status,
+    })
     counts.invites++
   }
 
   // --- ticket orders: one demo event per edition, idempotent per externalId.
   const typeOf = new Map(d1.ticketTypes.map((t) => [t.key, t]))
   for (const e of d1.editions) {
-    const h = hostOf.get(e.key)
     const orders = d1.ticketOrders.filter((o) => o.editionKey === e.key)
-    if (!orders.length) continue
-    if (!h) {
-      skipped.push(
-        `edition ${e.key}: ${orders.length} ticket orders not seeded (no host)`,
-      )
-      continue
-    }
-    await client.request(h, ORDERS, {
-      event: { provider: 'demo', accountId: orgId, externalId: e.key },
-      orders: orders.map((o) => ({
-        externalId: o.key,
-        status: o.status,
-        total: money(o.total),
-        buyerEmail: o.buyerEmail,
-        createdAt: o.createdAt,
-        updatedAt: o.updatedAt,
-        lines: o.lines.map((l) => ({
-          ticketTypeExternalId: l.ticketTypeKey,
-          ticketTypeName: typeOf.get(l.ticketTypeKey)?.name ?? l.ticketTypeKey,
-          capacity: typeOf.get(l.ticketTypeKey)?.capacity,
-          quantity: l.quantity,
-          unitPrice: money(l.unitPrice),
+    if (!orders.length || !idOf.has(e.key)) continue
+    await client.request(
+      host,
+      ORDERS,
+      {
+        event: { provider: 'demo', accountId: orgId, externalId: e.key },
+        orders: orders.map((o) => ({
+          externalId: o.key,
+          status: o.status,
+          total: money(o.total),
+          buyerEmail: o.buyerEmail,
+          createdAt: o.createdAt,
+          updatedAt: o.updatedAt,
+          lines: o.lines.map((l) => ({
+            ticketTypeExternalId: l.ticketTypeKey,
+            ticketTypeName:
+              typeOf.get(l.ticketTypeKey)?.name ?? l.ticketTypeKey,
+            capacity: typeOf.get(l.ticketTypeKey)?.capacity,
+            quantity: l.quantity,
+            unitPrice: money(l.unitPrice),
+          })),
         })),
-      })),
-    })
+      },
+      target(e.key),
+    )
     counts.ticketOrders += orders.length
   }
 
@@ -269,7 +252,6 @@ const money = (m: Money) => ({ amountMinor: m.amount, currency: m.currency })
 
 /** The edition's settings as a ConferencePatch (phases 1-3). */
 function patchOf(e: D1Edition) {
-  // travelSupportPaymentDate has no ConferencePatch field yet.
-  const omit = new Set(['key', 'lifecycle', 'travelSupportPaymentDate'])
+  const omit = new Set(['key', 'lifecycle'])
   return Object.fromEntries(Object.entries(e).filter(([k]) => !omit.has(k)))
 }

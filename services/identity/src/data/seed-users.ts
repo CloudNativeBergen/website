@@ -5,7 +5,8 @@ import { and, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { rawDb } from './db'
 import { MemberError, type MemberRole } from './members'
-import { auditEvent, member, organization, user } from './schema'
+import { INVITATION_EXPIRES_IN } from './auth'
+import { auditEvent, invitation, member, organization, user } from './schema'
 import { createSpeakerProfiles, type ProfileInput } from './speaker-profiles'
 
 const bad = (m: string) => new MemberError('BAD_USER_INPUT', m)
@@ -92,4 +93,70 @@ export async function seedDemoUser(
   if (input.profile)
     await createSpeakerProfiles(d1).update(userId, input.profile)
   return userId
+}
+
+export const SEED_INVITATION_STATUSES = [
+  'pending',
+  'accepted',
+  'rejected',
+  'canceled',
+] as const
+
+/**
+ * Writes a demo invitation in any state (#2150), for an @example.com or .test
+ * address. Never delivered: the audit row records `delivery: skipped_demo`.
+ * Converges on re-run: an invitation with the same org, email and status is
+ * returned as it is.
+ */
+export async function seedDemoInvitation(
+  d1: D1Database,
+  actorId: string,
+  orgId: string,
+  input: {
+    email: string
+    role: MemberRole
+    status: (typeof SEED_INVITATION_STATUSES)[number]
+  },
+) {
+  if (!isSeedEmail(input.email))
+    throw bad('Seed invitations need an @example.com or .test address')
+  const email = input.email.trim().toLowerCase()
+  const db = rawDb(d1)
+  const [found] = await db
+    .select()
+    .from(invitation)
+    .where(
+      and(
+        eq(invitation.organizationId, orgId),
+        eq(sql`lower(${invitation.email})`, email),
+        eq(invitation.status, input.status),
+      ),
+    )
+  if (found) return found
+  const row = {
+    id: crypto.randomUUID(),
+    organizationId: orgId,
+    email,
+    role: input.role,
+    status: input.status,
+    expiresAt: new Date(Date.now() + INVITATION_EXPIRES_IN * 1000),
+    inviterId: actorId,
+  }
+  await db.batch([
+    db.insert(invitation).values(row),
+    db.insert(auditEvent).values({
+      action: 'demo.seed_invitation',
+      userId: actorId,
+      subjectUserId: actorId,
+      detail: JSON.stringify({
+        actorId,
+        operator: true,
+        orgId,
+        invitationId: row.id,
+        status: row.status,
+        delivery: 'skipped_demo',
+      }),
+    }),
+  ])
+  return row
 }

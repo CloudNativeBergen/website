@@ -21,7 +21,7 @@ import { syncMembers, type SyncEnv } from './member-sync'
 import { memberSyncStatus } from './job-status'
 import { createPushSubscriptions } from './push-subscriptions'
 import { createSpeakerProfiles } from './speaker-profiles'
-import { seedDemoUser } from './seed-users'
+import { seedDemoInvitation, seedDemoUser } from './seed-users'
 
 /** What the gateway needs per request to mint an envelope. */
 export interface Principal {
@@ -102,6 +102,11 @@ export function createData(env: DataEnv) {
       orgId: string,
       input: Parameters<typeof seedDemoUser>[3],
     ) => seedDemoUser(env.DB, actorId, orgId, input),
+    seedDemoInvitation: (
+      actorId: string,
+      orgId: string,
+      input: Parameters<typeof seedDemoInvitation>[3],
+    ) => seedDemoInvitation(env.DB, actorId, orgId, input),
     /**
      * True only for an exact `https://<host>` origin (no path, port or
      * userinfo) whose host the directory holds as verified for an active

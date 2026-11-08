@@ -415,7 +415,7 @@ const MyOrganization = builder
 const PlanEnum = builder.enumType('Plan', { values: PLANS })
 
 const LifecycleOverride = builder.enumType('ConferenceLifecycleOverride', {
-  values: ['cancelled', 'archived'] as const,
+  values: ['cancelled', 'archived', 'draft', 'live'] as const,
 })
 
 const bad = (field: string, message: string) =>
@@ -619,9 +619,19 @@ builder.queryType({
       tag: 'internal',
       description:
         'Resolves an Origin or hostname. Without a PlatformContext only a verified hostname of an active Organization resolves.',
-      args: { host: t.arg.string({ required: true }) },
-      resolve: (_, { host }, ctx) =>
-        ctx.data.resolveHost(host, isPlatform(ctx)),
+      args: {
+        host: t.arg.string({ required: true }),
+        conferenceId: t.arg.id({
+          description:
+            "Another Conference of the host's org (#2150, operator lane): it replaces the host's conferenceId and flags. Null when the org has no such Conference.",
+        }),
+      },
+      resolve: (_, { host, conferenceId }, ctx) =>
+        ctx.data.resolveHost(
+          host,
+          isPlatform(ctx),
+          conferenceId ? String(conferenceId) : undefined,
+        ),
     }),
     conference: t.field({
       type: Conference,
@@ -642,7 +652,7 @@ builder.mutationType({
       type: ConferenceEdition,
       nullable: true,
       description:
-        "Sets the request's Conference homepage override, or clears it with null (back to `live`; a draft stays draft). Org owner or admin, or an operator acting for the org (#1997).",
+        "Sets the request's Conference lifecycle. `cancelled` or `archived` set the homepage override; null clears it (back to `live`; a draft stays draft). `draft` unpublishes and `live` publishes, a draft included (#2150). Org owner or admin, or an operator acting for the org (#1997).",
       args: { status: t.arg({ type: LifecycleOverride }) },
       resolve: async (_, { status }, ctx) => {
         const e = ctx.envelope
@@ -657,18 +667,18 @@ builder.mutationType({
           )
         }
         if (!e.conferenceId) return null
-        // Clearing the override puts a cancelled or archived edition back
-        // live: a ticketed one needs a paid plan (#2129). No read on a paid
-        // plan or for any other change.
+        // Going live (clearing a cancelled or archived override, or
+        // publishing with `live`): a ticketed edition needs a paid plan
+        // (#2129). No read on a paid plan or for any other change.
         if (
-          status == null &&
+          (status == null || status === 'live') &&
           !planAllows(e.plan, 'conference.publish_ticketed')
         ) {
           const conf = await ctx.data.conferenceOf(e.orgId, e.conferenceId)
           if (
             conf &&
-            conf.lifecycle !== 'draft' &&
             conf.lifecycle !== 'live' &&
+            (status === 'live' || conf.lifecycle !== 'draft') &&
             (await ctx.data.ticketed(e.orgId, e.conferenceId))
           )
             requirePlan(e.plan, 'conference.publish_ticketed')

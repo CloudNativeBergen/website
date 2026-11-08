@@ -7,6 +7,7 @@ import { builder } from './builder'
 import './job-status'
 import './api-clients'
 import { MemberError, type MemberRole } from './data'
+import { SEED_INVITATION_STATUSES } from './data/seed-users'
 import { VISIBILITIES, type Profile } from './data/speaker-profiles'
 import type { ResolverContext } from './worker'
 
@@ -446,6 +447,10 @@ const asDemoOperator = (ctx: ResolverContext) => {
   return { actorId: e.userId, orgId: e.orgId }
 }
 
+const SeedInvitationStatus = builder.enumType('SeedInvitationStatus', {
+  values: SEED_INVITATION_STATUSES,
+})
+
 builder.mutationFields((t) => ({
   seedDemoUser: t.id({
     tag: 'operator',
@@ -465,6 +470,26 @@ builder.mutationFields((t) => ({
           name: a.name,
           role: a.role as MemberRole | null | undefined,
           profile: a.profile,
+        })
+      }),
+  }),
+  seedDemoInvitation: t.field({
+    type: Invitation,
+    tag: 'operator',
+    description:
+      'Writes a demo invitation in any state (#2150). The email must be @example.com or *.test; no email is ever sent (audited as skipped). Platform operators acting for a demo org only (operator lane with a tenant). Idempotent per org, email and status.',
+    args: {
+      email: t.arg.string({ required: true }),
+      role: t.arg({ type: Role, required: true }),
+      status: t.arg({ type: SeedInvitationStatus, required: true }),
+    },
+    resolve: (_, a, ctx) =>
+      answer(() => {
+        const { actorId, orgId } = asDemoOperator(ctx)
+        return ctx.data.seedDemoInvitation(actorId, orgId, {
+          email: a.email,
+          role: a.role as MemberRole,
+          status: a.status,
         })
       }),
   }),

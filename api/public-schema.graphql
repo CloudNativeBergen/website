@@ -286,6 +286,11 @@ type Mutation {
   rotateApiClientSecret(id: ID!): ApiClientSecretPayload
 
   """
+  Writes a demo invitation in any state (#2150). The email must be @example.com or *.test; no email is ever sent (audited as skipped). Platform operators acting for a demo org only (operator lane with a tenant). Idempotent per org, email and status.
+  """
+  seedDemoInvitation(email: String!, role: MemberRole!, status: SeedInvitationStatus!): MemberInvitation
+
+  """
   Creates or updates a demo seed user (#2150): optionally their membership with `role` and their speaker profile. The email must be @example.com or *.test. A seed user has no credential and can never sign in. Platform operators acting for a demo org only (operator lane with a tenant); audited. Returns the user id.
   """
   seedDemoUser(email: String!, name: String!, profile: SpeakerProfileInput, role: MemberRole): ID
@@ -335,7 +340,7 @@ type Mutation {
   setComplimentaryPlan(orgId: ID!, plan: Plan!, reason: String!, until: String): Organization
 
   """
-  Sets the request's Conference homepage override, or clears it with null (back to `live`; a draft stays draft). Org owner or admin, or an operator acting for the org (#1997).
+  Sets the request's Conference lifecycle. `cancelled` or `archived` set the homepage override; null clears it (back to `live`; a draft stays draft). `draft` unpublishes and `live` publishes, a draft included (#2150). Org owner or admin, or an operator acting for the org (#1997).
   """
   setConferenceLifecycle(status: ConferenceLifecycleOverride): ConferenceEdition
 
@@ -1335,6 +1340,13 @@ enum MemberRole {
   owner
 }
 
+enum SeedInvitationStatus {
+  accepted
+  canceled
+  pending
+  rejected
+}
+
 enum ProfileVisibility {
   network
   private
@@ -1358,6 +1370,8 @@ enum ConferenceLifecycle {
 enum ConferenceLifecycleOverride {
   archived
   cancelled
+  draft
+  live
 }
 
 enum Currency {

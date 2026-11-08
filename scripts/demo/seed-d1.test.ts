@@ -10,19 +10,28 @@ const HOST = 'kontainerkonf.konf.run'
 
 /** A fake gateway keeping just enough state to answer the seeder's reads. */
 function fakeGateway(kind: string | null = 'demo') {
-  const calls: { host: string | null; op: string; vars?: unknown }[] = []
-  const editions = [{ id: 'conf-current', title: 'Current', primaryHost: HOST }]
-  const emails = new Set<string>()
+  const calls: {
+    host: string | null
+    op: string
+    vars?: unknown
+    conferenceId?: string
+  }[] = []
+  const editions: {
+    id: string
+    title: string
+    primaryHost: string | null
+  }[] = [{ id: 'conf-current', title: 'Current', primaryHost: HOST }]
   const client: DemoGraphQLClient = {
     async request<T>(
       host: string | null,
       query: string,
       vars?: Record<string, unknown>,
+      conferenceId?: string,
     ) {
       const op = /^(\w+)/.exec(
         query.replace(/^\s*(mutation|query)?\s*(\([^)]*\))?\s*\{\s*/, ''),
       )![1]
-      calls.push({ host, op, vars })
+      calls.push({ host, op, vars, conferenceId })
       const answer = (data: unknown) => data as T
       switch (op) {
         case 'organization':
@@ -35,30 +44,17 @@ function fakeGateway(kind: string | null = 'demo') {
         case 'provisionConference': {
           const input = vars!.input as { title: string }
           const id = `conf-${editions.length}`
-          editions.push({
-            id,
-            title: input.title,
-            primaryHost: `${id}.konf.run`,
-          })
+          // No verified host: the seeder must target it by id.
+          editions.push({ id, title: input.title, primaryHost: null })
           return answer({ provisionConference: { conferenceId: id } })
         }
-        case 'invitations':
-          return answer({
-            invitations: [...emails].map((email) => ({ email })),
-            members: [],
-          })
-        case 'operatorInviteMember':
-          emails.add(vars!.email as string)
-          return answer({ operatorInviteMember: { id: 'i' } })
         default:
           return answer({ [op]: true })
       }
     },
   }
   const writes = () =>
-    calls.filter(
-      (c) => !['organization', 'conference', 'invitations'].includes(c.op),
-    )
+    calls.filter((c) => !['organization', 'conference'].includes(c.op))
   return { client, calls, writes }
 }
 
@@ -85,7 +81,7 @@ describe('seedDemoD1', () => {
       lifecycle: fixtures.d1.editions.length,
       members: fixtures.d1.members.length,
       speakerProfiles: fixtures.d1.speakerProfiles.length,
-      invites: fixtures.d1.invites.filter((i) => i.status === 'pending').length,
+      invites: fixtures.d1.invites.length,
       ticketOrders: fixtures.d1.ticketOrders.length,
     })
     expect(r.counts.members).toBeGreaterThan(0)
@@ -102,19 +98,40 @@ describe('seedDemoD1', () => {
     expect(count('provisionConference')).toBe(2)
     expect(count('updateConference')).toBe(3)
     expect(count('setConferenceLifecycle')).toBe(3)
-    expect(count('operatorInviteMember')).toBe(first.counts.invites)
+    expect(count('seedDemoInvitation')).toBe(fixtures.d1.invites.length)
+    expect(first.skipped).toEqual([])
+    // Every invite state the fixtures hold is seeded, terminal ones included.
+    expect(
+      new Set(
+        firstWrites
+          .filter((c) => c.op === 'seedDemoInvitation')
+          .map((c) => (c.vars as { status: string }).status),
+      ).size,
+    ).toBeGreaterThan(1)
     expect(first.counts.ticketOrders).toBe(fixtures.d1.ticketOrders.length)
     expect(count('seedDemoUser')).toBeGreaterThanOrEqual(
       fixtures.d1.members.length,
     )
-    // Settings go to each edition's own host.
-    expect(
-      new Set(
+    // Settings, lifecycle and orders go to each edition by id on the
+    // operator lane (the current one by its host), even with no verified host.
+    for (const op of ['updateConference', 'setConferenceLifecycle'])
+      expect(
         firstWrites
-          .filter((c) => c.op === 'updateConference')
-          .map((c) => c.host),
-      ).size,
-    ).toBe(3)
+          .filter((c) => c.op === op)
+          .map((c) => [c.host, c.conferenceId]),
+      ).toEqual([
+        ...fixtures.d1.editions.map((e) =>
+          e.key === 'edition-live'
+            ? [HOST, undefined]
+            : [HOST, expect.stringMatching(/^conf-\d$/)],
+        ),
+      ])
+    // Draft and live are set like any other state.
+    expect(
+      firstWrites
+        .filter((c) => c.op === 'setConferenceLifecycle')
+        .map((c) => (c.vars as { status: string }).status),
+    ).toEqual(fixtures.d1.editions.map((e) => e.lifecycle))
     // Ticket orders always name the demo provider and the org as account.
     for (const c of firstWrites.filter((c) => c.op === 'seedTicketOrders'))
       expect(c.vars).toMatchObject({
@@ -125,18 +142,12 @@ describe('seedDemoD1', () => {
     const second = await seedDemoD1(fixtures, g.client, { host: HOST })
     const secondWrites = g.calls
       .slice(before)
-      .filter(
-        (c) => !['organization', 'conference', 'invitations'].includes(c.op),
-      )
+      .filter((c) => !['organization', 'conference'].includes(c.op))
     expect(count('provisionConference', secondWrites)).toBe(0)
-    expect(count('operatorInviteMember', secondWrites)).toBe(0)
     // Everything else is an upsert on its natural key: the same calls again.
     const upserts = (ws: typeof firstWrites) =>
-      ws.filter(
-        (c) => !['provisionConference', 'operatorInviteMember'].includes(c.op),
-      )
+      ws.filter((c) => c.op !== 'provisionConference')
     expect(upserts(secondWrites)).toEqual(upserts(firstWrites))
     expect(second.counts.editions).toBe(0)
-    expect(second.counts.invites).toBe(0)
   })
 })

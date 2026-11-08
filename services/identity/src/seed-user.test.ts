@@ -267,3 +267,102 @@ describe('a seed user can never log in', () => {
     expect(await sessions(id)).toBe(0)
   })
 })
+
+describe('seedDemoInvitation (#2150)', () => {
+  const invite = async (envelope: Envelope, vars: Record<string, unknown>) => {
+    const res = await graph.fetch(
+      new Request('http://identity/graphql', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          [ENVELOPE_HEADER]: await signer.sign(envelope),
+        },
+        body: JSON.stringify({
+          query:
+            'mutation($email: String!, $role: MemberRole!, $status: SeedInvitationStatus!) { seedDemoInvitation(email: $email, role: $role, status: $status) { id status } }',
+          variables: vars,
+        }),
+      }),
+      // Mail is configured: only the code path decides whether it is sent.
+      {
+        ...env,
+        RESEND_API_KEY: 're_test',
+        INVITE_FROM: 'x@konf.test',
+        GATEWAY_PUBLIC_KEY: keys.publicPem,
+      },
+    )
+    return (await res.json()) as {
+      data?: { seedDemoInvitation: { id: string; status: string } | null }
+      errors?: unknown[]
+    }
+  }
+  const rows = async (email: string) =>
+    (
+      await d1
+        .prepare('SELECT status FROM invitation WHERE email = ?1')
+        .bind(email)
+        .all<{ status: string }>()
+    ).results
+  beforeAll(async () => {
+    await d1
+      .prepare(
+        "INSERT OR IGNORE INTO user (id, name, email) VALUES ('op-1', 'Op', 'op@konf.test')",
+      )
+      .run()
+  })
+
+  it.each([
+    ['a customer org', operatorFor('customer')],
+    ['a demo member without the operator scope', operatorFor('demo', [])],
+  ])('refuses %s and writes nothing', async (_, envelope) => {
+    const r = await invite(envelope, {
+      email: 'inv-x@example.com',
+      role: 'member',
+      status: 'accepted',
+    })
+    expect(code(r)).toBe('FORBIDDEN')
+    expect(await rows('inv-x@example.com')).toEqual([])
+  })
+
+  it('refuses a real address', async () => {
+    const r = await invite(operatorFor('demo'), {
+      email: 'someone@gmail.com',
+      role: 'member',
+      status: 'pending',
+    })
+    expect(code(r)).toBe('BAD_USER_INPUT')
+    expect(await rows('someone@gmail.com')).toEqual([])
+  })
+
+  it('writes every state without mailing, audited, and converges on re-run', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    try {
+      for (const status of ['pending', 'accepted', 'rejected', 'canceled']) {
+        const vars = { email: 'Inv@Example.com', role: 'member', status }
+        const first = await invite(operatorFor('demo'), vars)
+        expect(first.data?.seedDemoInvitation?.status).toBe(status)
+        const again = await invite(operatorFor('demo'), vars)
+        expect(again.data?.seedDemoInvitation?.id).toBe(
+          first.data?.seedDemoInvitation?.id,
+        )
+      }
+      expect(fetchSpy).not.toHaveBeenCalled()
+    } finally {
+      fetchSpy.mockRestore()
+    }
+    expect((await rows('inv@example.com')).map((r) => r.status).sort()).toEqual(
+      ['accepted', 'canceled', 'pending', 'rejected'],
+    )
+    const a = await d1
+      .prepare(
+        "SELECT detail FROM audit_event WHERE action = 'demo.seed_invitation'",
+      )
+      .all<{ detail: string }>()
+    expect(a.results).toHaveLength(4)
+    expect(JSON.parse(a.results[0].detail)).toMatchObject({
+      operator: true,
+      orgId: ORG,
+      delivery: 'skipped_demo',
+    })
+  })
+})

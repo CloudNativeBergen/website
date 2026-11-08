@@ -20,6 +20,7 @@ import {
   MUTATION_LIMIT_PER_MINUTE,
   OPERATOR_SCOPE,
   OPERATOR_TENANT_HEADER,
+  OPERATOR_CONFERENCE_HEADER,
   SESSION_ORIGIN_CLAIM,
   type Env,
 } from './gateway'
@@ -180,6 +181,7 @@ describe('gateway', () => {
       'revokePersonalAccessToken',
       'revokeSignupCode',
       'rotateApiClientSecret',
+      'seedDemoInvitation',
       'seedDemoUser',
       'seedTicketOrders',
       'setComplimentaryPlan',
@@ -299,7 +301,7 @@ describe('gateway', () => {
     await gateway.fetch(post(SUBGRAPH_QUERY, { origin: VERIFIED }), env)
     expect(asked).toHaveLength(1)
     expect(asked[0]).toMatch(
-      /tenantByHost\(host: \$host\) \{[^}]*\} plan orgKind \}/,
+      /tenantByHost\(host: \$host, conferenceId: \$conferenceId\) \{[^}]*\} plan orgKind \}/,
     )
   })
 
@@ -1723,6 +1725,89 @@ describe('operator lane (#1892 phase 4)', () => {
     ).toMatchObject({ typ: 'tenant', orgRole: null })
   })
 
+  describe('conference by id (#2150)', () => {
+    const askedFor = (env: Env) =>
+      (env.DIRECTORY.fetch as ReturnType<typeof vi.fn>).mock.calls.map(
+        ([, init]) =>
+          JSON.parse((init as RequestInit).body as string).variables,
+      )
+    const byId = (env: Env) => {
+      env.DIRECTORY.fetch = vi.fn(async (_: unknown, init?: RequestInit) => {
+        const { conferenceId } = JSON.parse(init!.body as string).variables
+        // The directory resolves only conf_b of the host's org (worker.test).
+        if (conferenceId && conferenceId !== 'conf_b')
+          return Response.json({ data: { tenantByHost: null } })
+        return Response.json({
+          data: {
+            tenantByHost: {
+              ...TENANT,
+              conferenceId: conferenceId ?? TENANT.conferenceId,
+            },
+          },
+        })
+      }) as unknown as Fetcher['fetch']
+    }
+
+    it("mints the named conference into an operator's envelope", async () => {
+      const { env, envelopes } = opsEnv()
+      byId(env)
+      await call(env, {
+        origin: OPS,
+        authorization: `Bearer ${await opsJwt()}`,
+        [OPERATOR_TENANT_HEADER]: 'conf.example',
+        [OPERATOR_CONFERENCE_HEADER]: 'conf_b',
+      })
+      expect(askedFor(env)).toEqual([
+        { host: 'conf.example', conferenceId: 'conf_b' },
+      ])
+      expect(
+        await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem),
+      ).toMatchObject({
+        typ: 'tenant',
+        orgId: TENANT.orgId,
+        conferenceId: 'conf_b',
+      })
+    })
+
+    it("refuses another org's conference id (the directory resolves none)", async () => {
+      const { env, envelopes } = opsEnv()
+      byId(env)
+      const res = await call(env, {
+        origin: OPS,
+        authorization: `Bearer ${await opsJwt()}`,
+        [OPERATOR_TENANT_HEADER]: 'conf.example',
+        [OPERATOR_CONFERENCE_HEADER]: 'conf_other_org',
+      })
+      expect(res.status).toBe(400)
+      expect(envelopes).toEqual([])
+    })
+
+    it('refuses an org admin who is not a platform operator', async () => {
+      const { env, envelopes } = opsEnv(false)
+      byId(env)
+      const res = await call(env, {
+        origin: OPS,
+        authorization: `Bearer ${await opsJwt()}`,
+        [OPERATOR_TENANT_HEADER]: 'conf.example',
+        [OPERATOR_CONFERENCE_HEADER]: 'conf_b',
+      })
+      expect(res.status).toBe(403)
+      expect(envelopes).toEqual([])
+    })
+
+    it('is ignored off the operator lane', async () => {
+      const { env } = opsEnv()
+      byId(env)
+      await call(env, {
+        origin: 'https://conf.example',
+        [OPERATOR_CONFERENCE_HEADER]: 'conf_b',
+      })
+      expect(askedFor(env)).toEqual([
+        { host: 'conf.example', conferenceId: null },
+      ])
+    })
+  })
+
   it('refuses an unknown tenant host', async () => {
     const { env, envelopes } = opsEnv()
     const res = await call(env, {
@@ -1827,7 +1912,12 @@ describe('operator lane (#1892 phase 4)', () => {
     expect(res.headers.get('access-control-allow-credentials')).toBe('true')
     expect(
       res.headers.get('access-control-allow-headers')?.split(', '),
-    ).toEqual(['authorization', 'content-type', OPERATOR_TENANT_HEADER])
+    ).toEqual([
+      'authorization',
+      'content-type',
+      OPERATOR_TENANT_HEADER,
+      OPERATOR_CONFERENCE_HEADER,
+    ])
     expect(env.DIRECTORY.fetch).not.toHaveBeenCalled()
     expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
   })
