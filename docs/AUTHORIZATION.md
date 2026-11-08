@@ -1,6 +1,6 @@
 # Authorization: inventory and target design
 
-Status: proposal for owner decision (2026-11-07). Supersedes the agy draft of the same name.
+Status: decided (owner, 2026-11-08, PR #2102). Supersedes the agy draft of the same name.
 Related: #1928 (role vocabularies), #1907 (organizer backfill), #2022 (speaker model),
 #2077–#2079 (CFP steps a–c), #2093/#2097 (speaker profile), #2098 (per-org secrets),
 #745/#2085 (vendor binding rule). Line numbers refer to `main` at `0f0c6953`.
@@ -140,10 +140,10 @@ rest (a reviewer until the review deadline).
   batch; other services emit on the existing event bus and identity records it. Add an
   indexed `subject_user_id` column so "everything done to or by this person" is one query.
 - **Erasure.** Deleting an identity user cascades their `conference_role` rows and profile
-  (#2097 cascades). Audit rows keep the opaque user id (decision 8). cfp `talk.speakers`
+  (#2097 cascades). Audit rows keep the opaque user id (§9 decision 8). cfp `talk.speakers`
   user ids: the talk is org-owned (#2022 layer 3), so erasure replaces the user id with a
   tombstone id and clears the profile snapshot; published program entries keep the
-  snapshot only if decision 8 says the archive survives erasure.
+  snapshot only if §9 decision 8 says the archive survives erasure.
 - **Fail closed.** Unknown action, unknown role string, expired row, missing resource fact:
   deny.
 
@@ -289,42 +289,42 @@ not yet checked for this).
 ## 4. Role × action matrix
 
 Y = allowed, N = denied, own = only their own resource, asg = only where assigned,
-★ = needs an owner decision (§8). Org roles inherit downward (owner ⊇ admin ⊇ member);
+All cells are owner-decided (§9). Org roles inherit downward (owner ⊇ admin ⊇ member);
 admin ⊇ conference organizer. "Spk" = speaker on the talk; "CoS" = invited co-speaker
 before acceptance; "Site" = `site:server` with no user token.
 
-| Action                                | Op  | Own | Adm | Mem | Org | Rev        | Vol  | Spk  | CoS | Spn | Site |
-| ------------------------------------- | --- | --- | --- | --- | --- | ---------- | ---- | ---- | --- | --- | ---- |
-| org.read_settings                     | Y   | Y   | Y   | Y   | Y   | N          | N    | N    | N   | N   | N    |
-| org.update_settings / billing         | Y   | Y   | Y   | N   | N   | N          | N    | N    | N   | N   | N    |
-| org.manage_members (admin, member)    | Y   | Y   | Y   | N   | N   | N          | N    | N    | N   | N   | N    |
-| org.manage_owners                     | Y   | Y   | N   | N   | N   | N          | N    | N    | N   | N   | N    |
-| org.create (provision)                | Y   | N   | N   | N   | N   | N          | N    | N    | N   | N   | N    |
-| org.write_secrets (#2098, write-only) | Y   | Y   | Y★  | N   | N   | N          | N    | N    | N   | N   | N    |
-| conference.read_draft                 | Y   | Y   | Y   | Y★  | Y   | Y          | N    | N    | N   | N   | N    |
-| conference.read_ticket_setup (C5)     | Y   | Y   | Y   | Y   | Y   | N          | N    | N    | N   | N   | Y    |
-| conference.update_settings            | Y   | Y   | Y   | N   | Y★  | N          | N    | N    | N   | N   | N    |
-| conference.set_lifecycle              | Y   | Y   | Y   | N   | N★  | N          | N    | N    | N   | N   | N    |
-| conference.bind_ticketing             | Y   | N★  | N★  | N   | N   | N          | N    | N    | N   | N   | N    |
-| conference.manage_roles               | Y   | Y   | Y   | N   | Y★  | N          | N    | N    | N   | N   | N    |
-| proposal.submit (CFP open)            | Y   | Y   | Y   | Y   | Y   | Y          | Y    | Y    | Y   | Y   | N    |
-| proposal.read                         | Y   | Y   | Y   | N   | Y   | asg★       | N    | own  | own | N   | N    |
-| proposal.edit                         | N   | Y   | Y   | N   | Y   | N          | N    | own★ | N   | N   | N    |
-| proposal.read_reviews                 | Y   | Y   | Y   | N   | Y   | after own★ | N    | N    | N   | N   | N    |
-| proposal.review (score)               | N   | Y   | Y   | N   | Y★  | asg        | N    | N    | N   | N   | N    |
-| proposal.set_status / email           | N   | Y   | Y   | N   | Y   | N          | N    | N    | N   | N   | N    |
-| schedule.edit                         | Y   | Y   | Y   | N   | Y   | N          | N    | N    | N   | N   | N    |
-| speaker_directory.read (#2097)        | Y   | Y   | Y   | N   | N★  | N          | N    | N    | N   | N   | N    |
-| profile.read_private / update         | N   | N   | N   | N   | N   | N          | N    | own  | own | N   | N    |
-| shift.read                            | Y   | Y   | Y   | N   | Y   | N          | own★ | N    | N   | N   | N    |
-| shift.manage                          | Y   | Y   | Y   | N   | Y   | N          | N    | N    | N   | N   | N    |
-| sponsor.read_crm                      | Y   | Y   | Y   | N   | Y   | N          | N    | N    | N   | N   | N    |
-| sponsor.edit_own_profile              | Y   | Y   | Y   | N   | Y   | N          | N    | N    | N   | own | N    |
-| attendee.read_pii                     | Y   | Y   | Y   | N   | Y★  | N          | N★   | N    | N   | N   | N    |
-| person.erase (GDPR)                   | Y   | Y   | Y★  | N   | N★  | N          | N    | N    | N   | N   | N    |
-| audit.read                            | Y   | Y   | N   | N   | N   | N          | N    | N    | N   | N   | N    |
-| user.revoke_all                       | Y   | N   | N   | N   | N   | N          | N    | N    | N   | N   | N    |
-| reminder_lock (C4)                    | Y   | N   | N   | N   | N   | N          | N    | N    | N   | N   | Y    |
+| Action                                | Op  | Own | Adm | Mem | Org | Rev                 | Vol | Spk | CoS | Spn | Site |
+| ------------------------------------- | --- | --- | --- | --- | --- | ------------------- | --- | --- | --- | --- | ---- |
+| org.read_settings                     | Y   | Y   | Y   | Y   | Y   | N                   | N   | N   | N   | N   | N    |
+| org.update_settings / billing         | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| org.manage_members (admin, member)    | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| org.manage_owners                     | Y   | Y   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| org.create (provision)                | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| org.write_secrets (#2098, write-only) | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| conference.read_draft                 | Y   | Y   | Y   | Y   | Y   | Y                   | N   | N   | N   | N   | N    |
+| conference.read_ticket_setup (C5)     | Y   | Y   | Y   | Y   | Y   | N                   | N   | N   | N   | N   | Y    |
+| conference.update_settings            | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
+| conference.set_lifecycle              | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| conference.bind_ticketing             | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| conference.manage_roles               | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
+| proposal.submit (CFP open)            | Y   | Y   | Y   | Y   | Y   | Y                   | Y   | Y   | Y   | Y   | N    |
+| proposal.read                         | Y   | Y   | Y   | N   | Y   | Y (asg if assigned) | N   | own | own | N   | N    |
+| proposal.edit                         | N   | Y   | Y   | N   | Y   | N                   | N   | own | N   | N   | N    |
+| proposal.read_reviews                 | Y   | Y   | Y   | N   | Y   | after own           | N   | N   | N   | N   | N    |
+| proposal.review (score)               | N   | Y   | Y   | N   | Y   | asg                 | N   | N   | N   | N   | N    |
+| proposal.set_status / email           | N   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
+| schedule.edit                         | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
+| speaker_directory.read (#2097)        | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| profile.read_private / update         | N   | N   | N   | N   | N   | N                   | N   | own | own | N   | N    |
+| shift.read                            | Y   | Y   | Y   | N   | Y   | N                   | own | N   | N   | N   | N    |
+| shift.manage                          | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
+| sponsor.read_crm                      | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
+| sponsor.edit_own_profile              | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | own | N    |
+| attendee.read_pii                     | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
+| person.erase (GDPR)                   | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| audit.read                            | Y   | Y   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| user.revoke_all                       | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| reminder_lock (C4)                    | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | Y    |
 
 Operator is N on reviewing and editing proposals by default: operators act for a tenant
 for support, not as a juror. Operator access is only on the operator lane and is audited.
@@ -393,36 +393,52 @@ New milestone: **Platform 7: Authorization** (phases 1–2b); CFP b/c carry 3b a
 to file: phase 1, 1b (S7 + flag together), 2 (split per surface), 2b, 3 (gateway admission +
 `conference_role`), break-glass doc, `CONTROL_MODEL.md:3` fix.
 
-## 8. Open decisions for the owner
+## 8. Where things are managed
 
-Settled by the Fable review (2026-11-07), no longer open: evaluation model C (claims +
-local resource facts); one object type (`conference_role`), sponsor contacts resource-local,
-no Cedar, no `volunteer_lead`; `site:server` limited to C4/C5; one audit sink in identity;
-phase order 3b before 3; 1b ships with S7.
+Owner decision, 2026-11-08 (PR #2102). The API is the only write path, so a field may be
+editable in more than one place.
 
-1. **What is an org `member`?** (a) read-only insider: drafts, settings and ticket setup,
-   no PII, no directory (today's behaviour plus #2097); (b) only "belongs to the org".
-   _Recommend (a)_: matches current code.
-2. **Close the revocation gap (1b).** (a) flag all orgs identity-source after zero drift,
-   with S7 through identity in the same change; (b) make the sync delete; (c) wait for
-   phase 5. _Recommend (a)_.
-3. **Per-conference organizer powers.** Settings, lifecycle, granting roles?
-   _Recommend_: settings yes, lifecycle no, may grant reviewer and volunteer only.
-4. **Site operator source.** (a) identity `platformOperator`, retire `PLATFORM_ORG_ID`;
-   (b) keep both. _Recommend (a)_.
-5. **Vendor binding.** (a) operator-only until #2098, then admins bind their own account;
-   (b) admins now. _Recommend (a)_ (#745).
-6. **Review process.** _Recommend_: blind until the reviewer has scored; reviewers see all
-   proposals of their conference unless the organizer assigns; operators never score.
-7. **GDPR erasure and attendee PII.** _Recommend_: erase = owner/admin/operator; attendee
-   PII = admin and conference organizer; volunteers get check-in lookups only.
-8. **Erasure versus the archive.** Do published program entries keep the speaker snapshot
-   after erasure, and do audit rows keep the opaque user id? _Recommend_: audit keeps the
-   id (legitimate interest, no PII in it); published entries drop name and photo unless
-   the speaker consented to archival.
-9. **Speaker edits after acceptance.** _Recommend_: bio and links always (profile); title
-   and abstract until the program is published, then via the organizer.
-10. **Speaker directory for per-conference organizers.** _Recommend_: keep owner/admin only
-    (#2097) until someone asks.
-11. **Is 300 s session revocation acceptable?** (a) yes, `revokeAll` + key rotation for
-    emergencies; (b) gateway checks the session row (one more D1 read). _Recommend (a)_.
+- **Same mutation everywhere.** A field editable in both Kontroll and the conference admin
+  uses the same API mutation from both. No surface gets its own write path.
+- **Org members and roles** (owner/admin/member, invitations): **Kontroll only.** The site
+  shows them read-only with a link to Kontroll. Sanity `organizers[]` is no longer an
+  editing surface.
+- **Per-conference roles, split:** conference organizers are granted in **Kontroll**;
+  reviewers and volunteers in the **conference admin**. Both show every role read-only,
+  with a link to where it is managed.
+- **Conference details** (name, dates, venue and the other settings): mainly the
+  **conference admin**, which has onboarding and the pre-conference checklist. Kontroll
+  may offer them through the same mutation, kept minimal, linking to the conference admin
+  (kontroll#84).
+- **Kontroll** is mostly for org admins: the org, members, plan, integrations and secrets,
+  and the conference lifecycle (create edition, publish, archive).
+
+## 9. Owner decisions (all decided)
+
+Settled by the Fable review (2026-11-07): evaluation model C (claims + local resource
+facts); one object type (`conference_role`), sponsor contacts resource-local, no Cedar, no
+`volunteer_lead`; `site:server` limited to C4/C5; one audit sink in identity; phase 3b
+before 3; 1b ships with S7.
+
+Decided by the owner, 2026-11-08 (PR #2102), all as recommended:
+
+1. **Org member:** read-only insider: drafts, settings and ticket setup; no personal data,
+   no directory, no writes.
+2. **Revocation gap:** identity becomes the source of org roles for all orgs after a week
+   with no drift, shipped together with site invites through identity (phase 1b; closes
+   #2101 in both directions).
+3. **Per-conference organizer:** may edit settings, not lifecycle; may grant reviewer and
+   volunteer for that conference only.
+4. **Site operator:** identity `platformOperator`; `PLATFORM_ORG_ID` retires.
+5. **Vendor binding:** operator-only until per-org credentials (#2098).
+6. **Review:** blind until the reviewer has scored; covers the whole conference unless
+   assigned; operators never score.
+7. **GDPR erasure:** owner, admin or operator. **Attendee personal data:** org admin and the
+   conference's organizers.
+8. **Erasure vs archive:** audit rows keep an opaque id; published program entries drop
+   name and photo unless the speaker consented. Refines #2022's archive rule.
+9. **Speaker edits:** accepted speakers edit title and abstract until the program is
+   published, then through the organizer.
+10. **Speaker directory:** owner, admin and operator only.
+11. **Session revocation:** up to 300 s accepted; `revokeAll` and key rotation for
+    emergencies.
