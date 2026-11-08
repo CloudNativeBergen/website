@@ -15,7 +15,11 @@ import type { AuthEnv } from './auth'
 import { createMembers } from './members'
 export { MemberError, type MemberRole } from './members'
 import { syncMembers, type SyncEnv } from './member-sync'
-import { memberSyncStatus } from './job-status'
+import {
+  isIdentitySource,
+  memberSyncStatus,
+  setMemberSource,
+} from './job-status'
 import { createPushSubscriptions } from './push-subscriptions'
 import { createSpeakerProfiles } from './speaker-profiles'
 
@@ -40,6 +44,11 @@ export function createData(env: DataEnv) {
   const db = rawDb(env.DB)
   return {
     memberSyncStatus: () => memberSyncStatus(env.DB),
+    /** Whether identity owns the org's roles (#2101). */
+    isIdentitySource: (orgId: string) => isIdentitySource(env.DB, orgId),
+    /** Operator switch (#2101). Returns a refusal reason, or null. */
+    setMemberSource: (orgId: string, identity: boolean, actorId: string) =>
+      setMemberSource(env.DB, orgId, identity, actorId),
     /** Grants missing organizer memberships from Sanity (cron, #1907). */
     syncMembers: () => syncMembers(env),
     /** Membership writes for the subgraph (#1923): member and operator paths. */

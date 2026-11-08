@@ -17,7 +17,7 @@ import {
   vi,
 } from 'vitest'
 import type { DataEnv } from './data'
-import { recordJobStatus } from './data/job-status'
+import { PREFLIGHT_JOB, recordJobStatus } from './data/job-status'
 import graph from './worker'
 
 // Exercise signed envelopes with the real verifier rather than the suite stub.
@@ -186,5 +186,129 @@ describe('memberSyncStatus', () => {
     const result = await query(envelope)
     expect(result.errors?.[0].extensions.code).toBe('FORBIDDEN')
     expect(reads).toBe(0)
+  })
+})
+
+describe('member source switch (#2101)', () => {
+  async function gql(
+    envelope: Envelope | null,
+    q: string,
+  ): Promise<{
+    data: Record<string, unknown> | null
+    errors?: { message: string; extensions: { code: string } }[]
+  }> {
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+    }
+    if (envelope) headers[ENVELOPE_HEADER] = await signer.sign(envelope)
+    const res = await graph.fetch(
+      new Request('http://identity/graphql', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ query: q }),
+      }),
+      { DB: d1, GATEWAY_PUBLIC_KEY: keys.publicPem } as DataEnv & {
+        GATEWAY_PUBLIC_KEY: string
+      },
+    )
+    return res.json() as never
+  }
+  const SWITCH =
+    'mutation { setMemberSource(orgId: "org-s", identity: true) }' as const
+  const switched = async () =>
+    !!(await d1
+      .prepare("SELECT 1 FROM member_source WHERE organizationId = 'org-s'")
+      .first())
+  const cleanRun = async (driftFor?: string) => {
+    for (const job of ['identity.member_sync', PREFLIGHT_JOB])
+      await recordJobStatus(d1, {
+        job,
+        ran_at: Date.now(),
+        status: driftFor ? 'drift' : 'ok',
+        checked: 1,
+        affected: driftFor ? 1 : 0,
+        granted: 0,
+        detail: JSON.stringify(
+          driftFor && job === PREFLIGHT_JOB
+            ? [
+                {
+                  orgId: driftFor,
+                  counts: {
+                    missingInIdentity: 0,
+                    missingInSanity: 1,
+                    roleMismatch: 0,
+                  },
+                },
+              ]
+            : [],
+        ),
+      })
+  }
+  beforeEach(async () => {
+    await d1.prepare('DELETE FROM member_source').run()
+    await d1
+      .prepare(
+        "INSERT OR IGNORE INTO organization (id, name, slug) VALUES ('org-s', 's', 's')",
+      )
+      .run()
+  })
+
+  it.each([
+    ['an org owner', { ...tenant, orgId: 'org-s' }],
+    ['a user context', { typ: 'user', userId: 'op' } satisfies Envelope],
+    ['anonymous', null],
+  ] as const)('refuses %s, before any write', async (_, envelope) => {
+    await cleanRun()
+    const res = await gql(envelope, SWITCH)
+    expect(res.errors?.[0].extensions.code).toBe('FORBIDDEN')
+    expect(await switched()).toBe(false)
+  })
+
+  it('an operator switches after a clean sync, audited; false rolls back', async () => {
+    await cleanRun()
+    expect(await gql(platform, SWITCH)).toEqual({
+      data: { setMemberSource: true },
+    })
+    expect(await switched()).toBe(true)
+    const audit = await d1
+      .prepare(
+        "SELECT action, userId FROM audit_event WHERE action LIKE 'member_source.%' ORDER BY id DESC",
+      )
+      .first()
+    expect(audit).toEqual({ action: 'member_source.identity', userId: 'op' })
+    await gql(
+      platform,
+      'mutation { setMemberSource(orgId: "org-s", identity: false) }',
+    )
+    expect(await switched()).toBe(false)
+  })
+
+  it.each([
+    ['drift for the org', () => cleanRun('org-s'), /drift/],
+    [
+      'no recent sync',
+      () => d1.prepare('DELETE FROM job_status').run(),
+      /two hours/,
+    ],
+  ])('refuses an operator on %s', async (_, arrange, message) => {
+    await arrange()
+    const res = await gql(platform, SWITCH)
+    expect(res.errors?.[0].extensions.code).toBe('FAILED_PRECONDITION')
+    expect(res.errors?.[0].message).toMatch(message)
+    expect(await switched()).toBe(false)
+  })
+
+  it('memberAuthority answers the session org flag and live role', async () => {
+    await cleanRun()
+    const Q = '{ memberAuthority { identitySource role } }'
+    const as = { ...tenant, orgId: 'org-s', orgRole: 'admin' }
+    expect((await gql(as, Q)).data).toEqual({
+      memberAuthority: { identitySource: false, role: 'admin' },
+    })
+    await gql(platform, SWITCH)
+    expect((await gql(as, Q)).data).toEqual({
+      memberAuthority: { identitySource: true, role: 'admin' },
+    })
+    expect((await gql(platform, Q)).data).toEqual({ memberAuthority: null })
   })
 })

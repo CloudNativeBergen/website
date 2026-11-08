@@ -6,7 +6,7 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
 import { evaluate, parse } from 'groq-js'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { memberId, syncMembers, type SyncEnv } from './member-sync'
-import { memberSyncStatus } from './job-status'
+import { memberSyncStatus, PREFLIGHT_JOB, switchRefusal } from './job-status'
 
 const emit = vi.fn()
 vi.mock('./push', () => ({ emit: (e: unknown) => emit(e) }))
@@ -339,6 +339,45 @@ describe('syncMembers drift mode (MEMBER_SOURCE_ORGS)', () => {
         .map((l) => JSON.parse(l))
         .filter((e) => e.event === 'identity.membership.granted'),
     ).toEqual([expect.objectContaining({ orgId: 'org-b', userId: 'u-ok' })])
+  })
+
+  it('an org switched by an operator (member_source row) is never granted (#2101)', async () => {
+    const { d1, seed, env } = await freshDb()
+    await seed(
+      "INSERT INTO member_source (organizationId, switchedAt, switchedBy) VALUES ('org-b', 1, 'op')",
+    )
+    await syncMembers(env)
+    expect(
+      (await members(d1)).filter((m) => m.organizationId === 'org-b'),
+    ).toEqual([])
+    // org-a still grants: only the switched org stopped.
+    expect(
+      (await members(d1)).some(
+        (m) => m.organizationId === 'org-a' && m.role === 'admin',
+      ),
+    ).toBe(true)
+  })
+
+  it("records granting orgs' access drift as preflight, the switch gate's evidence (#2101)", async () => {
+    const { d1, user, env } = await freshDb()
+    await user('u-only-identity', 'x@example.com', 1)
+    await d1
+      .prepare(
+        "INSERT INTO member (id, organizationId, userId, role) VALUES ('m-x', 'org-b', 'u-only-identity', 'admin')",
+      )
+      .run()
+    await syncMembers(env)
+    const pre = await memberSyncStatus(d1, PREFLIGHT_JOB)
+    expect(pre?.status).toBe('drift')
+    expect(JSON.parse(pre!.detail!)).toContainEqual(
+      expect.objectContaining({
+        orgId: 'org-b',
+        counts: expect.objectContaining({ missingInSanity: 1 }),
+      }),
+    )
+    expect(await switchRefusal(d1, 'org-b')).toMatch(/drift/)
+    // The main status keeps meaning drift in identity-source orgs only.
+    expect((await memberSyncStatus(d1))?.status).toBe('ok')
   })
 
   it('computes drift both ways plus role mismatches, by id', async () => {
@@ -850,9 +889,10 @@ describe('member sync status', () => {
         granted: 0,
         detail: '[]',
       })
+      // One row per job, replaced on each run: the status and the preflight.
       expect(
         (await d1.prepare('SELECT * FROM job_status').all()).results,
-      ).toHaveLength(1)
+      ).toHaveLength(2)
     } finally {
       now.mockRestore()
     }
@@ -946,8 +986,9 @@ describe('member sync status', () => {
       'identity.membership.granted',
       'identity.membership.synced',
       'job_status.write_failed',
+      'job_status.write_failed',
     ])
-    expect(JSON.parse(logs.at(-1)!)).toEqual({
+    expect(JSON.parse(logs.at(-2)!)).toEqual({
       event: 'job_status.write_failed',
       job: 'identity.member_sync',
     })
