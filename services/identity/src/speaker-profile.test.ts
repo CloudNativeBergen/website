@@ -116,14 +116,14 @@ const update = (who: Envelope, input: Record<string, unknown>) =>
   gql(who, UPDATE, { input })
 
 describe('myProfile / updateMyProfile', () => {
-  it('creates on first update with network default, and reads only the caller', async () => {
+  it('creates on first update with private default, and reads only the caller', async () => {
     const a = await newUser()
     const b = await newUser()
     const r = await update(tenant(a), { name: 'Ada', bio: 'Hi' })
     expect(r.errors).toBeUndefined()
     expect(r.data.updateMyProfile).toMatchObject({
       name: 'Ada',
-      visibility: 'network',
+      visibility: 'private',
     })
     expect((await gql(tenant(a), MINE)).data.myProfile.name).toBe('Ada')
     // b sees no profile of its own, never a's.
@@ -303,7 +303,7 @@ describe('speakerDirectory', () => {
   it('the opaque id is not the user id', async () => {
     const a = await newUser()
     const tag = `t${crypto.randomUUID().slice(0, 8)}`
-    await update(tenant(a), { name: tag })
+    await update(tenant(a), { name: tag, visibility: 'network' })
     const r = await gql(tenant(a, 'owner'), DIR, { q: tag })
     expect(r.data.speakerDirectory.nodes).toHaveLength(1)
     expect(r.data.speakerDirectory.nodes[0].id).not.toBe(a)

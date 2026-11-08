@@ -428,7 +428,7 @@ builder.mutationFields((t) => ({
   updateMyProfile: t.field({
     type: SpeakerProfile,
     description:
-      "Creates or updates the session user's speaker profile. New profiles default to network visibility.",
+      "Creates or updates the session user's speaker profile. New profiles default to private visibility; network is opt-in.",
     args: { input: t.arg({ type: SpeakerProfileInput, required: true }) },
     resolve: (_, a, ctx) =>
       answer(() =>
