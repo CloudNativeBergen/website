@@ -69,7 +69,7 @@ function deps(
     ) as unknown as SanityWriter['fetch'],
     // Like Sanity: the asset id is the sha1 of the uploaded bytes.
     assets: {
-      upload: vi.fn(async (_t: string, body: Buffer) => ({
+      upload: vi.fn<SanityWriter['assets']['upload']>(async (_t, body) => ({
         _id: `image-${createHash('sha1').update(body).digest('hex')}-256x256-svg`,
       })),
     },
