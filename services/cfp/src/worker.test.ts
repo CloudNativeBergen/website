@@ -103,6 +103,9 @@ const env = {
   SANITY_PROJECT_ID: 'p',
   SANITY_DATASET: 'd',
   SANITY_API_TOKEN_READ: 't',
+  SANITY_API_TOKEN_WRITE: 'w',
+  IDENTITY: { link: vi.fn() },
+  CONFERENCE: { cfpWindow: vi.fn() },
 }
 const tenant = (orgId: string, conferenceId: string | null): Envelope => ({
   typ: 'tenant',
@@ -237,9 +240,19 @@ describe('cfp subgraph', () => {
     expect(fields('CfpTopic')).toEqual(['color', 'description', 'id', 'title'])
     expect(fields('CfpOption')).toEqual(['label', 'value'])
     const q = Object.keys(schema.getQueryType()!.getFields())
-    expect(q.filter((f) => !f.startsWith('_'))).toEqual(['cfp'])
+    expect(q.filter((f) => !f.startsWith('_'))).toEqual([
+      'cfp',
+      'myProposal',
+      'myProposals',
+    ])
+    // Every object type but MyProposal, the speaker's own data, whose list
+    // mine.test.ts pins.
     for (const t of Object.values(schema.getTypeMap()))
-      if (t instanceof GraphQLObjectType && !t.name.startsWith('_'))
+      if (
+        t instanceof GraphQLObjectType &&
+        !t.name.startsWith('_') &&
+        t.name !== 'MyProposal'
+      )
         for (const f of Object.keys(t.getFields()))
           expect(f).not.toMatch(
             /email|phone|bio|status|review|score|note|outline|feedback|private|draft|address|slack|travel/i,

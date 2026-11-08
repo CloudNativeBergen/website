@@ -78,6 +78,17 @@ export class Push extends WorkerEntrypoint<Env> {
   }
 }
 
+/**
+ * RPC for konf-cfp (`"entrypoint": "SpeakerLink"`, #2078): the user's safe
+ * speaker match keys and profile. The userId comes from cfp's verified
+ * envelope, never a caller argument. No HTTP route.
+ */
+export class SpeakerLink extends WorkerEntrypoint<Env> {
+  link(userId: string) {
+    return createData(this.env).speakerProfiles().speakerLink(userId)
+  }
+}
+
 export default {
   fetch(request: Request, env: Env) {
     const { pathname } = new URL(request.url)
