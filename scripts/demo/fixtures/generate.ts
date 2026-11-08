@@ -120,10 +120,12 @@ export function generateDemoFixtures({
   const t0 = now.getTime()
   const at = (days: number) => t0 + days * DAY
 
-  const names = r.shuffle(FIRST).map((f, i) => `${f} ${LAST[i % LAST.length]}`)
+  // Every first × last pair, shuffled: names (and so emails) never repeat.
+  const names = r.shuffle(FIRST.flatMap((f) => LAST.map((l) => `${f} ${l}`)))
   let n = 0
   const person = (prefix: string): FakePerson => {
-    const name = names[n++ % names.length]
+    if (n >= names.length) throw new Error('demo fixtures: out of unique names')
+    const name = names[n++]
     return {
       key: `${prefix}-${n}`,
       name,
