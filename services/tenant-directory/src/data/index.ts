@@ -66,6 +66,20 @@ const RECHECK_VERIFIED_MS = 60 * 60 * 1000
 const fail = (code: string, message: string) =>
   createGraphQLError(message, { extensions: { code } })
 
+/** Stable BAD_USER_INPUT reasons (kontroll#81); the gateway passes these on. */
+type Reason =
+  | 'SLUG_TAKEN'
+  | 'DOMAIN_TAKEN'
+  | 'IDEMPOTENCY_KEY_REUSED'
+  | 'INVALID_INPUT'
+  | 'COPY_FROM_NOT_IN_ORG'
+const refuse = (reason: Reason, message: string, field?: string) =>
+  createGraphQLError(message, {
+    extensions: { code: 'BAD_USER_INPUT', reason, ...(field && { field }) },
+  })
+const invalid = (field: string, message: string) =>
+  refuse('INVALID_INPUT', message, field)
+
 /** Sanity document ids: what the site mints for a conference. */
 const SANITY_ID = /^[A-Za-z0-9._-]{1,128}$/
 
@@ -98,38 +112,80 @@ export interface CreateOrganizationInput {
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
-const isDate = (s: string) =>
-  DATE.test(s) && new Date(`${s}T00:00:00Z`).toISOString().startsWith(s)
+// An impossible date (2027-13-01) parses to NaN; toISOString would throw.
+const isDate = (s: string) => {
+  const t = Date.parse(`${s}T00:00:00Z`)
+  return (
+    DATE.test(s) && !Number.isNaN(t) && new Date(t).toISOString().startsWith(s)
+  )
+}
 const HOSTNAME =
   /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /** Every input rule, checked before anything is read or written. */
-function validateCreate(input: CreateOrganizationInput, key: string) {
-  const bad = (m: string) => fail('BAD_USER_INPUT', m)
+/** The rules createOrganization and provisionConference share. */
+function validateEdition(
+  e: { startDate: string; endDate: string; domain?: string | null },
+  key: string,
+) {
   // The site's Idempotency-Key rule (src/lib/provisioning/constants.ts).
   if (!/^[\x20-\x7e]{16,200}$/.test(key))
-    throw bad('idempotencyKey is 16-200 printable ASCII characters')
-  if (!input.name.trim() || input.name.length > 200)
-    throw bad('name is required')
-  if (!input.conferenceTitle.trim() || input.conferenceTitle.length > 200)
-    throw bad('conferenceTitle is required')
-  if (input.slug.length > 63 || !SLUG.test(input.slug))
-    throw bad('slugs are lowercase a-z, 0-9 and -')
-  if (RESERVED_SLUGS.has(input.slug))
-    throw bad(`"${input.slug}" is reserved for a platform host`)
-  if (!isDate(input.startDate) || !isDate(input.endDate))
-    throw bad('dates are YYYY-MM-DD')
-  if (input.endDate < input.startDate) throw bad('endDate is before startDate')
+    throw invalid(
+      'idempotencyKey',
+      'idempotencyKey is 16-200 printable ASCII characters',
+    )
+  if (!isDate(e.startDate)) throw invalid('startDate', 'dates are YYYY-MM-DD')
+  if (!isDate(e.endDate)) throw invalid('endDate', 'dates are YYYY-MM-DD')
+  if (e.endDate < e.startDate)
+    throw invalid('endDate', 'endDate is before startDate')
   if (
-    input.domain != null &&
-    (!HOSTNAME.test(input.domain) ||
-      input.domain === PLATFORM_DOMAIN ||
-      input.domain.endsWith(`.${PLATFORM_DOMAIN}`))
+    e.domain != null &&
+    (!HOSTNAME.test(e.domain) ||
+      e.domain === PLATFORM_DOMAIN ||
+      e.domain.endsWith(`.${PLATFORM_DOMAIN}`))
   )
-    throw bad('domain must be a lowercase hostname outside the platform zone')
+    throw invalid(
+      'domain',
+      'domain must be a lowercase hostname outside the platform zone',
+    )
+}
+
+/** Every input rule, checked before anything is read or written. */
+function validateCreate(input: CreateOrganizationInput, key: string) {
+  if (!input.name.trim() || input.name.length > 200)
+    throw invalid('name', 'name is required')
+  if (!input.conferenceTitle.trim() || input.conferenceTitle.length > 200)
+    throw invalid('conferenceTitle', 'conferenceTitle is required')
+  if (input.slug.length > 63 || !SLUG.test(input.slug))
+    throw invalid('slug', 'slugs are lowercase a-z, 0-9 and -')
+  if (RESERVED_SLUGS.has(input.slug))
+    throw invalid('slug', `"${input.slug}" is reserved for a platform host`)
+  validateEdition(input, key)
   if (input.ownerEmail.length > 254 || !EMAIL.test(input.ownerEmail))
-    throw bad('ownerEmail is not an email address')
+    throw invalid('ownerEmail', 'ownerEmail is not an email address')
+}
+
+/** provisionConference's input (kontroll#85). */
+export interface ProvisionConferenceInput {
+  title: string
+  startDate: string
+  endDate: string
+  domain?: string | null
+  copyFrom?: string | null
+}
+
+/** Site refusal codes (the service routes' 400/409 `code`) to reasons. */
+const SITE_REFUSALS: Record<string, [Reason, string?]> = {
+  idempotency_conflict: ['IDEMPOTENCY_KEY_REUSED', 'idempotencyKey'],
+  slug_taken: ['SLUG_TAKEN', 'slug'],
+  platform_host_taken: ['SLUG_TAKEN', 'slug'],
+  domain_claimed: ['DOMAIN_TAKEN', 'domain'],
+  copy_from_not_in_org: ['COPY_FROM_NOT_IN_ORG', 'copyFrom'],
+}
+const siteRefusal = (code: string | undefined, status: number) => {
+  const [reason, field] = SITE_REFUSALS[code ?? ''] ?? ['INVALID_INPUT']
+  return refuse(reason, `refused by the site (${code ?? status})`, field)
 }
 
 /** A tenant-directory assertion over `body` (src/lib/provisioning/service.ts). */
@@ -253,6 +309,62 @@ export function createData(
   hostnames: CustomHostnames = cloudflareHostnames(env),
 ) {
   const db = rawDb(env.DB)
+
+  /** The configured site, only on an allowlisted https host. */
+  const siteUrl = () => {
+    const site = env.SITE_URL ? URL.parse(env.SITE_URL) : null
+    if (
+      !site ||
+      site.protocol !== 'https:' ||
+      !SITE_HOSTS.has(site.hostname) ||
+      !env.PROVISIONING_SIGNING_KEY
+    ) {
+      throw fail('INTERNAL_SERVER_ERROR', 'site provisioning is not configured')
+    }
+    return site
+  }
+
+  /** POSTs `payload` to a site service route under a body-bound assertion. */
+  const callSite = async (
+    site: URL,
+    path: string,
+    payload: unknown,
+    createdBy: string,
+  ) => {
+    const body = JSON.stringify(payload)
+    let res: Response
+    try {
+      res = await fetch(new URL(path, site), {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-konf-service': await siteAssertion(
+            env.PROVISIONING_SIGNING_KEY!,
+            createdBy,
+            body,
+          ),
+        },
+        body,
+        signal: AbortSignal.timeout(30_000),
+      })
+    } catch {
+      throw fail('INTERNAL_SERVER_ERROR', 'the site did not answer')
+    }
+    const out = ((await res.json().catch(() => null)) ?? {}) as {
+      organizationId?: string
+      conferenceId?: string
+      domains?: unknown[]
+      code?: string
+    }
+    if (res.status === 400 || res.status === 409)
+      throw siteRefusal(out.code, res.status)
+    if (!res.ok)
+      throw fail(
+        'INTERNAL_SERVER_ERROR',
+        `site provisioning failed (${res.status})`,
+      )
+    return out
+  }
 
   const organization = (id: string) =>
     db.query.organizations.findFirst({ where: eq(organizations.id, id) })
@@ -640,18 +752,7 @@ export function createData(
       createdBy: string,
     ) {
       validateCreate(input, idempotencyKey)
-      const site = env.SITE_URL ? URL.parse(env.SITE_URL) : null
-      if (
-        !site ||
-        site.protocol !== 'https:' ||
-        !SITE_HOSTS.has(site.hostname) ||
-        !env.PROVISIONING_SIGNING_KEY
-      ) {
-        throw fail(
-          'INTERNAL_SERVER_ERROR',
-          'createOrganization is not configured',
-        )
-      }
+      const site = siteUrl()
       const done = await db.query.provisioningRequests.findFirst({
         where: eq(
           provisioningRequests.idempotencyKey,
@@ -671,47 +772,18 @@ export function createData(
               })
             : undefined,
         ])
-        if (slugRow) throw fail('BAD_USER_INPUT', 'that slug is taken')
-        if (domainRow) throw fail('BAD_USER_INPUT', 'that domain is claimed')
+        if (slugRow) throw refuse('SLUG_TAKEN', 'that slug is taken', 'slug')
+        if (domainRow)
+          throw refuse('DOMAIN_TAKEN', 'that domain is claimed', 'domain')
       }
-      const body = JSON.stringify({ idempotencyKey, input })
-      let res: Response
-      try {
-        res = await fetch(
-          new URL('/api/provisioning/service/organizations', site),
-          {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              'x-konf-service': await siteAssertion(
-                env.PROVISIONING_SIGNING_KEY,
-                createdBy,
-                body,
-              ),
-            },
-            body,
-            signal: AbortSignal.timeout(30_000),
-          },
-        )
-      } catch {
-        throw fail('INTERNAL_SERVER_ERROR', 'the site did not answer')
-      }
-      const out = (await res.json().catch(() => null)) as {
-        organizationId?: string
-        conferenceId?: string
-        code?: string
-      } | null
-      if (res.status === 400 || res.status === 409) {
-        throw fail(
-          'BAD_USER_INPUT',
-          `refused by the site (${out?.code ?? res.status})`,
-        )
-      }
-      if (!res.ok || !out?.organizationId || !out.conferenceId) {
-        throw fail(
-          'INTERNAL_SERVER_ERROR',
-          `site provisioning failed (${res.status})`,
-        )
+      const out = await callSite(
+        site,
+        '/api/provisioning/service/organizations',
+        { idempotencyKey, input },
+        createdBy,
+      )
+      if (!out.organizationId || !out.conferenceId) {
+        throw fail('INTERNAL_SERVER_ERROR', 'site provisioning failed')
       }
       await api.provision({
         idempotencyKey,
@@ -724,6 +796,126 @@ export function createData(
         organizationId: out.organizationId,
         conferenceId: out.conferenceId,
       }
+    },
+
+    /**
+     * kontroll#85: a new edition of an existing org. The caller is already
+     * authorised for `orgId` (src/subgraph.ts). Checks the input and
+     * `copyFrom` against D1 before the site writes anything; the site writes
+     * the Sanity conference (cloning `copyFrom`, or the org's latest edition
+     * with nothing but its identity) under its own input-hashed receipt, then
+     * the D1 row lands as a draft with this key's receipt.
+     */
+    async provisionConference(
+      orgId: string,
+      input: ProvisionConferenceInput,
+      idempotencyKey: string,
+      createdBy: string,
+    ) {
+      if (!input.title.trim() || input.title.length > 200)
+        throw invalid('title', 'title is required')
+      validateEdition(input, idempotencyKey)
+      if (input.copyFrom != null && !SANITY_ID.test(input.copyFrom))
+        throw invalid('copyFrom', 'copyFrom is not a conference id')
+      const site = siteUrl()
+      // Its own keyspace: a createOrganization key never replays here.
+      const keyHash = await sha256(`conference|${idempotencyKey}`)
+      const receipt = () =>
+        db.query.provisioningRequests.findFirst({
+          where: eq(provisioningRequests.idempotencyKey, keyHash),
+        })
+      const [org, source, done] = await Promise.all([
+        organization(orgId),
+        input.copyFrom ? conference(input.copyFrom) : undefined,
+        receipt(),
+      ])
+      if (!org) throw invalid('orgId', 'no such organization')
+      // Same answer for a missing and a foreign edition: no existence oracle.
+      if (input.copyFrom && source?.orgId !== orgId)
+        throw refuse(
+          'COPY_FROM_NOT_IN_ORG',
+          'copyFrom is not an edition of this organization',
+          'copyFrom',
+        )
+      if (done && done.orgId !== orgId)
+        throw refuse(
+          'IDEMPOTENCY_KEY_REUSED',
+          'idempotencyKey was used with different arguments',
+          'idempotencyKey',
+        )
+      if (!done && input.domain) {
+        const taken = await db.query.domains.findFirst({
+          where: eq(domains.hostname, input.domain),
+        })
+        if (taken)
+          throw refuse('DOMAIN_TAKEN', 'that domain is claimed', 'domain')
+      }
+      const out = await callSite(
+        site,
+        '/api/provisioning/service/conferences',
+        { idempotencyKey, orgId, input },
+        createdBy,
+      )
+      const conferenceId = out.conferenceId
+      if (typeof conferenceId !== 'string' || !SANITY_ID.test(conferenceId))
+        throw fail('INTERNAL_SERVER_ERROR', 'site provisioning failed')
+      if (done) {
+        if (done.conferenceId !== conferenceId)
+          throw fail('INTERNAL_SERVER_ERROR', 'receipt mismatch')
+        return { conferenceId }
+      }
+      // Rollout flags: on only where every other edition of the org has it
+      // on, so a new edition never runs a path its siblings do not; the
+      // column defaults (off) for an org with no editions in D1.
+      const siblings = await db.query.conferences.findMany({
+        where: eq(conferences.orgId, orgId),
+      })
+      const flags = Object.fromEntries(
+        (['apiRead', 'identityLogin', 'd1Write', 'd1Override'] as const).map(
+          (f) => [f, siblings.length > 0 && siblings.every((c) => c[f])],
+        ),
+      )
+      const year = input.startDate.slice(0, 4)
+      const host = editionHost(org.slug, year)
+      const minted = (out.domains ?? []).some(
+        (d: unknown) => typeof d === 'string' && normalizeHost(d) === host,
+      )
+      try {
+        await db.batch([
+          db.insert(conferences).values({
+            id: conferenceId,
+            orgId,
+            slug: year,
+            name: input.title,
+            lifecycle: 'draft',
+            ...flags,
+          }),
+          ...(minted
+            ? [
+                db.insert(domains).values({
+                  hostname: host,
+                  kind: 'platform-edition' as const,
+                  orgId,
+                  conferenceId,
+                  verification: 'verified' as const,
+                }),
+              ]
+            : []),
+          db.insert(provisioningRequests).values({
+            idempotencyKey: keyHash,
+            orgId,
+            conferenceId,
+            createdBy,
+          }),
+        ])
+      } catch (error) {
+        // A concurrent request with the same key won the race.
+        if ((await receipt())?.conferenceId === conferenceId)
+          return { conferenceId }
+        console.error(error)
+        throw fail('CONFLICT', 'conference or platform host is taken')
+      }
+      return { conferenceId }
     },
 
     /** Points the Organization's latest-edition alias at this Conference. */

@@ -165,6 +165,46 @@ Both windows are milliseconds, and the only caller is kontroll.
 
 ---
 
+## New editions: `provisionConference` (kontroll#85)
+
+The gateway mutation `provisionConference(input, idempotencyKey, orgId?)`
+creates a new edition of an existing organization. Who may call it:
+
+- an org **owner or admin** on the tenant lane, for the envelope's org;
+  `orgId` is refused there (FORBIDDEN);
+- a platform **operator** on the operator lane (no tenant), who must pass
+  `orgId`.
+
+Members, per-conference organizers, operators acting through a tenant header
+and anonymous callers are refused before anything is read
+(docs/AUTHORIZATION.md, owner decision 3).
+
+tenant-directory validates the input, checks `copyFrom` against its own
+`conferences` row (`COPY_FROM_NOT_IN_ORG` for another org's edition or an
+unknown id) and a custom `domain` against its `domains` table, then calls
+`POST /api/provisioning/service/conferences` under the same body-bound
+assertion, `SITE_URL` allowlist and keys as `createOrganization`. The site
+re-checks that `copyFrom` belongs to `orgId`, and runs the new-edition wizard's
+write (`createEditionFromSource`, the body of `conference.createEdition`):
+with `copyFrom`, every clone family from that edition; without it, nothing but
+the identity of the org's latest edition. A `provisioningRequest` receipt in a
+separate keyspace (`receiptDocId(key, 'edition')`) with an input hash makes a
+retry return the first id and a changed input `IDEMPOTENCY_KEY_REUSED`.
+
+D1 then gets the edition as `draft`, its `<org>-<year>` host, and a receipt.
+A rollout flag is on only if every other edition of the org has it on, so a new
+edition never runs a code path none of its siblings run; an org with no D1
+editions gets the column defaults (off). The custom domain stays in Sanity,
+unverified until DNS, as with `createOrganization`.
+
+## Error reasons (kontroll#81)
+
+`createOrganization` and `provisionConference` add `extensions.reason` to
+every `BAD_USER_INPUT`, and `extensions.field` where one input is at fault:
+`SLUG_TAKEN`, `DOMAIN_TAKEN`, `IDEMPOTENCY_KEY_REUSED`, `INVALID_INPUT`,
+`COPY_FROM_NOT_IN_ORG`. The gateway's `maskError` passes `reason` (only these
+values) and `field` for `BAD_USER_INPUT`, and no other extension.
+
 # Cache Invalidation API
 
 `POST /api/provisioning/cache/invalidate` lets kontroll bust this app's caches after it has written a document. Tracked as RunKonf/platform#36.

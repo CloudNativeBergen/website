@@ -996,8 +996,9 @@ describe('cross-tenant mutation walk', () => {
       // probe emails are no address, so these refuse; the snapshot holds B.
       else if (
         // subscribePush: the probe endpoint is not https; updateMyProfile: the
-        // probe input has no name.
-        /"(inviteMember|cancelInvitation|removeMember|changeMemberRole|subscribePush|updateMyProfile)"/.test(
+        // probe input has no name; provisionConference: the probe dates are
+        // not dates.
+        /"(inviteMember|cancelInvitation|removeMember|changeMemberRole|subscribePush|updateMyProfile|provisionConference)"/.test(
           json,
         )
       )
