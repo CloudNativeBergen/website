@@ -165,19 +165,19 @@ function toTrackTalk(sl: ApiSlot) {
     talk: t && {
       ...(t.id != null && { _id: t.id }),
       format: t.format,
-      level: t.level,
       status: sl.talkStatus ? STATUS[sl.talkStatus] : null,
       hasFeedbackCode: t.hasFeedbackCode,
-      audiences: t.audiences,
-      topics:
-        t.topics?.map((x) => ({
-          _id: x.id,
-          title: x.title,
-          color: x.color,
-          slug: x.slug == null ? null : { current: x.slug },
-          description: x.description,
-        })) ?? null,
       ...(confirmed && {
+        level: t.level,
+        audiences: t.audiences,
+        topics:
+          t.topics?.map((x) => ({
+            _id: x.id,
+            title: x.title,
+            color: x.color,
+            slug: x.slug == null ? null : { current: x.slug },
+            description: x.description,
+          })) ?? null,
         title: t.title,
         description: json(t.description),
         language: t.language,
