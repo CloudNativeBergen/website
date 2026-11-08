@@ -146,6 +146,13 @@ function value(
   if (col.pk && /^id$/.test(n)) {
     return /INT/i.test(col.type) ? null : idOf(table)
   }
+  // #2172: a private profile never reaches the directory, so with both
+  // private the walk saw an empty page and could not catch a leak. A's
+  // profile is network (the walk reads rows); B's is private, so B's marker
+  // in the directory is a private profile leaking. A network profile is
+  // cross-org by design (#2022), so it cannot carry the marker.
+  if (table === 'speaker_profile' && n === 'visibility')
+    return t === 'a' ? 'network' : 'private'
   const check = new RegExp(
     `\\b${n}\\b[^,]*CHECK\\s*\\(\\s*${n}\\s+IN\\s*\\(([^)]*)\\)`,
     'i',

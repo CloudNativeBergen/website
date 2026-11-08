@@ -316,7 +316,7 @@ describe('speakerDirectory', () => {
       users.map((u, i) =>
         d1
           .prepare(
-            'INSERT INTO speaker_profile (user_id, id, name, created_at, updated_at) VALUES (?1, ?2, ?3, 0, 0)',
+            "INSERT INTO speaker_profile (user_id, id, name, visibility, created_at, updated_at) VALUES (?1, ?2, ?3, 'network', 0, 0)",
           )
           .bind(u, crypto.randomUUID(), `${tag} ${i}`),
       ),
@@ -384,5 +384,154 @@ describe('SpeakerLink (cfp, #2078)', () => {
         photoKey: null,
       },
     })
+  })
+})
+
+describe('#2172 P0', () => {
+  it('a demo org sees seed profiles only, never a real network profile', async () => {
+    const tag = `demo${crypto.randomUUID().slice(0, 8)}`
+    const real = await newUser()
+    const seed = await newUser()
+    await d1
+      .prepare('UPDATE user SET is_seed = 1 WHERE id = ?1')
+      .bind(seed)
+      .run()
+    for (const u of [real, seed])
+      await update(tenant(u), { name: tag, visibility: 'network' })
+    const owner = await newUser()
+    const demo = { ...tenant(owner, 'owner'), orgKind: 'demo' } as Envelope
+    const names = async (e: Envelope) => {
+      const r = await gql(e, DIR, { q: tag })
+      expect(r.errors).toBeUndefined()
+      return r.data.speakerDirectory.nodes.map(
+        (p: { id: string }) => p.id,
+      ) as string[]
+    }
+    const ids = async (u: string) =>
+      (await gql(tenant(u), MINE)).data.myProfile.id as string
+    const [realId, seedId] = [await ids(real), await ids(seed)]
+    expect(await names(demo)).toEqual([seedId])
+    // A customer org still sees both: the filter is the demo kind, not a bug.
+    expect((await names(tenant(owner, 'owner'))).sort()).toEqual(
+      [realId, seedId].sort(),
+    )
+  })
+
+  it('a raw insert without visibility is private', async () => {
+    const u = await newUser()
+    await d1
+      .prepare(
+        "INSERT INTO speaker_profile (user_id, id, name, created_at, updated_at) VALUES (?1, ?2, 'X', 0, 0)",
+      )
+      .bind(u, crypto.randomUUID())
+      .run()
+    const r = await d1
+      .prepare('SELECT visibility FROM speaker_profile WHERE user_id = ?1')
+      .bind(u)
+      .first<{ visibility: string }>()
+    expect(r?.visibility).toBe('private')
+  })
+
+  it('a stale concurrent update cannot undo a switch to private', async () => {
+    const u = await newUser()
+    const { createSpeakerProfiles } = await import('./data/speaker-profiles')
+    const sp = createSpeakerProfiles(d1)
+    await sp.update(u, { name: 'N', bio: 'old', visibility: 'network' })
+    // B's writes wait until A has finished, so B writes from a stale read.
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    let reached!: () => void
+    const atWrite = new Promise<void>((r) => (reached = r))
+    const gated = {
+      prepare(sql: string) {
+        const st = d1.prepare(sql)
+        if (!/^\s*(UPDATE|INSERT)/.test(sql)) return st
+        return {
+          bind: (...args: unknown[]) => {
+            const b = st.bind(...args)
+            return { first: async () => (reached(), await gate, b.first()) }
+          },
+        }
+      },
+    } as unknown as D1Database
+    const b = createSpeakerProfiles(gated).update(u, { bio: 'new' })
+    await atWrite // B has read and is about to write
+    await sp.update(u, { visibility: 'private' })
+    release()
+    await b
+    expect(await sp.mine(u)).toMatchObject({
+      visibility: 'private',
+      bio: 'new',
+      name: 'N',
+    })
+  })
+})
+
+describe('migration 0011 keeps existing rows', () => {
+  it('rebuilds the table without changing any stored row', async () => {
+    const m = new Miniflare(
+      convertV4MiniflareOptions({
+        modules: true,
+        script: 'export default {}',
+        compatibilityDate: '2026-08-01',
+        d1Databases: ['DB'],
+      }),
+    )
+    try {
+      const db = (await m.getD1Database('DB')) as unknown as D1Database
+      const dir = join(import.meta.dirname, '../migrations')
+      const run = async (files: string[]) => {
+        for (const s of files
+          .map((f) => readFileSync(join(dir, f), 'utf8'))
+          .join(';\n')
+          .split(/;\s*\n/)
+          .map((s) => s.replace(/^--.*$/gm, '').trim()))
+          if (s) await db.prepare(s).run()
+      }
+      const all = readdirSync(dir).sort()
+      const i = all.indexOf('0011_speaker_profile_private_default.sql')
+      await run(all.slice(0, i))
+      for (const [u, vis] of [
+        ['m1', 'network'],
+        ['m2', 'private'],
+        ['m3', null],
+      ] as const) {
+        await db
+          .prepare('INSERT INTO user (id, name, email) VALUES (?1, ?1, ?2)')
+          .bind(u, `${u}@example.com`)
+          .run()
+        await db
+          .prepare(
+            vis
+              ? `INSERT INTO speaker_profile (user_id, id, name, bio, photo_key, links, topics, visibility, created_at, updated_at) VALUES (?1, 'p-' || ?1, 'N', 'B', 'k/x.png', '["https://a/"]', '["t"]', '${vis}', 1, 2)`
+              : "INSERT INTO speaker_profile (user_id, id, name, created_at, updated_at) VALUES (?1, 'p-' || ?1, 'N', 1, 2)",
+          )
+          .bind(u)
+          .run()
+      }
+      const dump = async () =>
+        (
+          await db
+            .prepare('SELECT * FROM speaker_profile ORDER BY user_id')
+            .all()
+        ).results
+      const before = await dump()
+      // m3 took the old default.
+      expect(before.map((r) => r.visibility)).toEqual([
+        'network',
+        'private',
+        'network',
+      ])
+      await run(all.slice(i))
+      expect(await dump()).toEqual(before)
+      const idx = await db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'speaker_profile' AND name = 'speaker_profile_visibility_idx'",
+        )
+        .first()
+      expect(idx).not.toBeNull()
+    } finally {
+      await m.dispose()
+    }
   })
 })
