@@ -298,13 +298,17 @@ export async function findSpeakersByEmail(
  * the key would let them confirm a guessed key (and, with it, replay a
  * provisioning request).
  */
-function receiptDocId(idempotencyKey: string): string {
+export function receiptDocId(
+  idempotencyKey: string,
+  /** `edition`: provisionConference's keyspace, apart from onboarding's. */
+  scope: 'receipt' | 'edition' = 'receipt',
+): string {
   const secret = process.env.AUTH_SECRET
   if (!secret) {
     throw new Error('AUTH_SECRET is not set; provisioning cannot be idempotent')
   }
   const digest = createHash('sha256')
-    .update(`konf.provisioning.receipt.v1|${idempotencyKey}|${secret}`)
+    .update(`konf.provisioning.${scope}.v1|${idempotencyKey}|${secret}`)
     .digest('hex')
   return `${PROVISIONING_REQUEST_TYPE}.${digest}`
 }

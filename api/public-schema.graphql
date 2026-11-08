@@ -358,6 +358,11 @@ type Mutation {
   Creates an Organization and its first Conference: the Sanity documents (through the site), the directory rows and the owner membership. Retrying with the same idempotencyKey returns the same ids. Platform operators only (operator lane, no tenant).
   """
   createOrganization(idempotencyKey: String!, input: CreateOrganizationInput!): CreatedOrganization
+
+  """
+  Creates a new conference edition (draft) in an Organization: the Sanity document (through the site) and the directory row. Org owner or admin on the tenant lane, for the envelope's org; or a platform operator (operator lane, no tenant) naming `orgId`, which no other caller may pass. Retrying with the same idempotencyKey returns the same id.
+  """
+  provisionConference(idempotencyKey: String!, input: ProvisionConferenceInput!, orgId: ID): ProvisionedConference
   provisionOrganization(conferenceId: ID!, idempotencyKey: String!, orgId: ID!, orgSlug: String!): Organization
 
   """
@@ -823,6 +828,10 @@ type Organization {
   status: String
 }
 
+type ProvisionedConference {
+  conferenceId: ID
+}
+
 type RolloutFlags {
   apiRead: Boolean
   d1Override: Boolean
@@ -1006,6 +1015,23 @@ input CreateOrganizationInput {
 
   """YYYY-MM-DD"""
   startDate: String!
+}
+
+input ProvisionConferenceInput {
+  """
+  An edition of the same org to clone the structure of. Without it the edition starts empty, with the org's identity (name, logo, theme) from its latest edition.
+  """
+  copyFrom: ID
+
+  """Optional custom hostname; proves itself by DNS later."""
+  domain: String
+
+  """YYYY-MM-DD, on or after startDate"""
+  endDate: String!
+
+  """YYYY-MM-DD"""
+  startDate: String!
+  title: String!
 }
 
 type SiteRolloutFlags {
