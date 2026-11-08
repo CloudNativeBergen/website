@@ -624,6 +624,8 @@ export function createGateway(supergraph: string) {
 
       // 4. Identity: optional, but a header that is present must verify.
       let userId: string | null = null
+      // A CLI token (identity cli-token.ts), carried so user-only actions refuse it.
+      let cli = false
       const auth = request.headers.get('authorization')
       if (auth === null) {
         if (await limited(`anon:${tenant?.orgId ?? null}:${ip}`))
@@ -634,6 +636,7 @@ export function createGateway(supergraph: string) {
           if (!token) throw new Error('malformed authorization header')
           const payload = await verifyIdentity(token, env)
           userId = payload.sub!
+          cli = payload.cli === true
           // The session must have been handed off to this caller; a token
           // without the claim is refused. The operator lane compares exactly,
           // as the lane itself was chosen (identity mints that claim from an
@@ -697,7 +700,7 @@ export function createGateway(supergraph: string) {
           : operator
             ? { typ: 'platform', userId: userId!, platformRole: 'operator' }
             : principal
-              ? { typ: 'user', userId: userId! }
+              ? { typ: 'user', userId: userId!, ...(cli && { cli: true }) }
               : null
         platform = envelope?.typ === 'platform'
         if (envelope) {

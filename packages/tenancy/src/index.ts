@@ -64,6 +64,8 @@ export interface PlatformContext {
 export interface UserContext {
   typ: 'user'
   userId: string
+  /** Set when the caller used a CLI token; user-only actions refuse it. */
+  cli?: true
 }
 
 export type Envelope = TenantEnvelope | PlatformContext | UserContext
@@ -136,7 +138,11 @@ export async function verifyEnvelope(
     return { typ: 'platform', userId: p.userId, platformRole: p.platformRole }
   }
   if (p.typ === 'user' && isString(p.userId)) {
-    return { typ: 'user', userId: p.userId }
+    return {
+      typ: 'user',
+      userId: p.userId,
+      ...(p.cli === true && { cli: true }),
+    }
   }
   throw new Error('envelope has no recognized context shape')
 }

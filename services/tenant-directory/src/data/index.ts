@@ -61,6 +61,8 @@ export interface DataEnv extends CloudflareEnv {
       userId: string,
       codeId: string,
     ): Promise<void>
+    /** Whether `userId` owns `orgId` (a lost signupOwner reply). */
+    isOwner(orgId: string, userId: string): Promise<boolean>
   }
   /** Sign-up attempts per user (#2163), Workers Rate Limiting. */
   SIGNUP_LIMIT: RateLimit
@@ -656,7 +658,10 @@ export function createData(
      *    `<slug>.konf.run` (verified, platform cert), as provision() writes
      *    them; on failure (a slug race) the use is refunded;
      * 3. identity's signupOwner: org, OWNER membership and audit in one
-     *    batch; on failure the step-2 rows are deleted and the use refunded.
+     *    batch, and it fails if identity already has the org. On an error
+     *    identity is asked whether the caller owns the org: yes (a lost
+     *    reply) is success; no deletes the step-2 rows and refunds the use;
+     *    no answer logs `signup.unresolved` with the org id and keeps both.
      * Returns after step 3, so membership is readable on the next request.
      */
     async signUp(userId: string, name: string, slug: string, code: string) {
@@ -704,17 +709,27 @@ export function createData(
       try {
         await env.IDENTITY.signupOwner(orgId, slug, name, userId, codeId)
       } catch (error) {
-        // ponytail: a lost reply after identity committed leaves its org and
-        // membership pointing at nothing here; a retry with the slug heals
-        // it only if identity's insert is made idempotent. Rare; revisit.
         console.error(error)
-        await db.batch([
-          db.delete(domains).where(eq(domains.orgId, orgId)),
-          db.delete(conferences).where(eq(conferences.orgId, orgId)),
-          db.delete(organizations).where(eq(organizations.id, orgId)),
-          refund(),
-        ])
-        throw fail('INTERNAL_SERVER_ERROR', 'sign-up failed; nothing was kept')
+        // The write may have committed with only the reply lost: ask.
+        const owned = await env.IDENTITY.isOwner(orgId, userId).catch(
+          () => null,
+        )
+        if (owned === null) {
+          console.error(JSON.stringify({ event: 'signup.unresolved', orgId }))
+          throw fail('INTERNAL_SERVER_ERROR', 'sign-up state is unknown')
+        }
+        if (!owned) {
+          await db.batch([
+            db.delete(domains).where(eq(domains.orgId, orgId)),
+            db.delete(conferences).where(eq(conferences.orgId, orgId)),
+            db.delete(organizations).where(eq(organizations.id, orgId)),
+            refund(),
+          ])
+          throw fail(
+            'INTERNAL_SERVER_ERROR',
+            'sign-up failed; nothing was kept',
+          )
+        }
       }
       return {
         organization: (await organization(orgId))!,

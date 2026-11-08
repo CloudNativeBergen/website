@@ -209,10 +209,9 @@ export function createData(env: DataEnv) {
       codeId: string,
     ): Promise<void> {
       await db.batch([
-        db
-          .insert(organization)
-          .values({ id: orgId, slug, name })
-          .onConflictDoNothing({ target: organization.id }),
+        // A plain insert: an existing org fails the whole batch, so sign-up
+        // never adds an owner to someone else's org.
+        db.insert(organization).values({ id: orgId, slug, name }),
         db.insert(member).values({
           id: crypto.randomUUID(),
           organizationId: orgId,
@@ -225,6 +224,21 @@ export function createData(env: DataEnv) {
           detail: JSON.stringify({ orgId, codeId }),
         }),
       ])
+    },
+    /** Whether `userId` owns `orgId`: settles a sign-up whose reply was lost. */
+    async isOwner(orgId: string, userId: string): Promise<boolean> {
+      const [row] = await db
+        .select({ id: member.id })
+        .from(member)
+        .where(
+          and(
+            eq(member.organizationId, orgId),
+            eq(member.userId, userId),
+            eq(member.role, 'owner'),
+          ),
+        )
+        .limit(1)
+      return !!row
     },
     /**
      * Kontroll (an operator origin) admits platform operators and members of

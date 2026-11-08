@@ -795,9 +795,9 @@ builder.mutationType({
       },
       resolve: async (_, { input, inviteCode }, ctx) => {
         const e = ctx.envelope
-        // Guard before fetch: a user lane session (an operator's included),
-        // never a tenant envelope.
-        if ((e?.typ !== 'user' && e?.typ !== 'platform') || !e.userId)
+        // Guard before fetch: a browser session on the user lane only. Not
+        // an operator (they use createOrganization), not a CLI token.
+        if (e?.typ !== 'user' || !e.userId || e.cli)
           throw createGraphQLError(
             'signing up requires a signed-in session with no tenant',
             { extensions: { code: 'FORBIDDEN' } },

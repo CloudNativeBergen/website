@@ -41,6 +41,7 @@ const identity = {
   ),
   audit: vi.fn(async (): Promise<void> => undefined),
   signupOwner: vi.fn(async (): Promise<void> => undefined),
+  isOwner: vi.fn(async (): Promise<boolean> => false),
 }
 const signupLimit = { limit: vi.fn(async () => ({ success: true })) }
 const conferenceRpc = { ticketed: vi.fn(async () => false) }
@@ -331,6 +332,8 @@ beforeEach(() => {
   identity.syncMembers.mockReset()
   identity.audit.mockReset()
   identity.signupOwner.mockReset()
+  identity.isOwner.mockReset()
+  identity.isOwner.mockResolvedValue(false)
   signupLimit.limit.mockReset()
   signupLimit.limit.mockResolvedValue({ success: true })
   conferenceRpc.ticketed.mockReset()
@@ -2365,6 +2368,12 @@ describe('billing and sign-up contract (#2129)', () => {
       ['openBillingPortal anonymous', PORTAL, undefined],
       ['signUpOrganization on a tenant', SIGNUP, as('org', 'owner')],
       ['signUpOrganization anonymous', SIGNUP, undefined],
+      ['signUpOrganization as operator', SIGNUP, operator],
+      [
+        'signUpOrganization with a CLI token',
+        SIGNUP,
+        { typ: 'user', userId: 'u', cli: true } as Envelope,
+      ],
       ['createSignupCode as user', CREATE_CODE, user],
       ['createSignupCode as owner', CREATE_CODE, as('org', 'owner')],
       ['signupCodes as user', CODES, user],
@@ -2667,6 +2676,31 @@ describe('billing and sign-up contract (#2129)', () => {
       expect(
         (await signUp({ slug: 'new-org', code: c })).errors,
       ).toBeUndefined()
+    })
+
+    it('keeps the sign-up when identity committed but the reply was lost', async () => {
+      identity.signupOwner.mockRejectedValueOnce(new Error('reply lost'))
+      identity.isOwner.mockResolvedValueOnce(true)
+      const body = await signUp({ slug: 'new-org', code: await newCode() })
+      expect(body.errors).toBeUndefined()
+      expect(identity.isOwner).toHaveBeenCalledWith('organization.new-org', 'u')
+      expect([uses(), count('organizations')]).toEqual([1, 1])
+    })
+
+    it('keeps everything and logs the org when identity cannot answer', async () => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+      identity.signupOwner.mockRejectedValueOnce(new Error('down'))
+      identity.isOwner.mockRejectedValueOnce(new Error('down'))
+      const body = await signUp({ slug: 'new-org', code: await newCode() })
+      expect(code(body)).toBe('INTERNAL_SERVER_ERROR')
+      expect([uses(), count('organizations')]).toEqual([1, 1])
+      expect(log).toHaveBeenCalledWith(
+        JSON.stringify({
+          event: 'signup.unresolved',
+          orgId: 'organization.new-org',
+        }),
+      )
+      log.mockRestore()
     })
 
     it('refunds the code when the D1 write loses a slug race', async () => {

@@ -178,6 +178,19 @@ describe('signupOwner (#2163)', () => {
     ])
   })
 
+  it('refuses an org identity already has: no co-owner is added', async () => {
+    const owner = await newUser('first-owner@example.com', true)
+    const intruder = await newUser('intruder@example.com', true)
+    const data = createData({ DB: d1 } as DataEnv)
+    await data.signupOwner('organization.taken', 'taken', 'T', owner.id, 'c1')
+    await expect(
+      data.signupOwner('organization.taken', 'taken', 'T', intruder.id, 'c2'),
+    ).rejects.toThrow()
+    expect(await data.memberships(intruder.id)).toEqual([])
+    expect(await data.isOwner('organization.taken', owner.id)).toBe(true)
+    expect(await data.isOwner('organization.taken', intruder.id)).toBe(false)
+  })
+
   it('writes nothing when the membership fails', async () => {
     const data = createData({ DB: d1 } as DataEnv)
     // An unknown user breaks the member foreign key.

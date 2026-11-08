@@ -77,6 +77,11 @@ export class Organizations extends WorkerEntrypoint<Env> {
     return createData(this.env).signupOwner(orgId, slug, name, userId, codeId)
   }
 
+  /** Sign-up's lost-reply check: does `userId` own `orgId`? */
+  isOwner(orgId: string, userId: string) {
+    return createData(this.env).isOwner(orgId, userId)
+  }
+
   /** tenant-directory's operator writes (complimentary plans, #2129). */
   audit(event: OperatorAuditEvent) {
     return recordOperatorWrite(this.env.DB, event)
