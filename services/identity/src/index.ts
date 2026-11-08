@@ -8,6 +8,7 @@ import { accountPage } from './account-page'
 import { errorPage } from './error-page'
 import { handoff, type HandoffEnv } from './handoff'
 import { invitePage } from './invite-page'
+import { mintOperatorCliToken } from './cli-token'
 import { loginTestPage } from './login-test'
 import { orgWriteGate } from './org-write-gate'
 import graph, { type WorkerEnv } from './worker'
@@ -114,6 +115,8 @@ export default {
     }
     if (pathname === '/error') return errorPage(request, env)
     if (pathname.startsWith('/invite/')) return invitePage(request, env)
+    if (pathname === '/operator/cli-token')
+      return mintOperatorCliToken(request, env)
     if (pathname === '/account' && request.method === 'GET') {
       return accountPage(request, env)
     }

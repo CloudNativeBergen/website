@@ -21,6 +21,7 @@ import { syncMembers, type SyncEnv } from './member-sync'
 import { memberSyncStatus } from './job-status'
 import { createPushSubscriptions } from './push-subscriptions'
 import { createSpeakerProfiles } from './speaker-profiles'
+import { seedDemoUser } from './seed-users'
 
 /** What the gateway needs per request to mint an envelope. */
 export interface Principal {
@@ -95,6 +96,12 @@ export function createData(env: DataEnv) {
     pushSubscriptions: () => createPushSubscriptions(env.DB),
     /** Global speaker profiles (#2093). */
     speakerProfiles: () => createSpeakerProfiles(env.DB),
+    /** Demo seed users (#2150); the subgraph checks the envelope first. */
+    seedDemoUser: (
+      actorId: string,
+      orgId: string,
+      input: Parameters<typeof seedDemoUser>[3],
+    ) => seedDemoUser(env.DB, actorId, orgId, input),
     /**
      * True only for an exact `https://<host>` origin (no path, port or
      * userinfo) whose host the directory holds as verified for an active
@@ -156,7 +163,8 @@ export function createData(env: DataEnv) {
     },
     /** Handoff audit row: ids, origin and match type only. */
     async audit(
-      action: 'handoff.exchange' | 'session.upgrade',
+      action:
+        'handoff.exchange' | 'session.upgrade' | 'operator.cli_token.mint',
       userId: string,
       origin: string,
       detail?: string,

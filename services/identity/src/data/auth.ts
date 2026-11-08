@@ -80,6 +80,20 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
       detail: JSON.stringify({ actorId: actorId(), ...detail }),
     })
 
+  // #2150: a demo seed user never logs in. Every sign-in and handoff ends in
+  // a session or an account write, so refusing both here closes them all,
+  // whatever the org's kind is now.
+  const refuseSeed = async (userId: string) => {
+    const [u] = await db
+      .select({ isSeed: schema.user.isSeed })
+      .from(schema.user)
+      .where(eq(schema.user.id, userId))
+    if (u?.isSeed)
+      throw new APIError('FORBIDDEN', {
+        message: 'This account cannot sign in',
+      })
+  }
+
   return betterAuth({
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
@@ -128,6 +142,9 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
     databaseHooks: {
       account: {
         create: {
+          before: async (a) => {
+            await refuseSeed(a.userId)
+          },
           after: async (a) => {
             // First account of a user is a sign-up; any later one is a link.
             const [{ n }] = await db
@@ -147,6 +164,9 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
       },
       session: {
         create: {
+          before: async (s) => {
+            await refuseSeed(s.userId)
+          },
           after: async (s) => {
             await audit('session.created', s.userId)
           },

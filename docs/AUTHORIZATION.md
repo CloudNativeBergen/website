@@ -285,6 +285,16 @@ not yet checked for this).
 - Operator writes (`conference/src/data/index.ts:159-164`) move from log lines to the bus →
   identity `audit_event`.
 - `audit.read`: owners for their org; operators for all.
+- **`operator.cli_token`** (#2168): `POST /operator/cli-token` on identity mints the
+  gateway's own identity JWT (EdDSA, `aud: konf-gateway`, 300 s, `origin` = the
+  operator origin) with `cli: true` and a `jti`, for CLI scripts on the operator lane.
+  Only a real session handed off to an `OPERATOR_ORIGINS` entry, with
+  `user.platformOperator` read live from D1 at mint time; anyone else gets the same 403
+  before any write. A JWT credential (a CLI token included) never mints, so it cannot
+  renew itself. Audited as `operator.cli_token.mint` with actor, `jti` and `exp`, never
+  the token. Revocation: the gateway re-reads `platformOperator` on every request, so a
+  revoked role stops the token at once; a revoked session leaves it valid for at most
+  the remaining 300 s, like any identity JWT.
 
 ## 4. Role × action matrix
 
@@ -296,6 +306,7 @@ before acceptance; "Site" = `site:server` with no user token.
 | Action                                | Op  | Own | Adm | Mem | Org | Rev                 | Vol | Spk | CoS | Spn | Site |
 | ------------------------------------- | --- | --- | --- | --- | --- | ------------------- | --- | --- | --- | --- | ---- |
 | org.read_settings                     | Y   | Y   | Y   | Y   | Y   | N                   | N   | N   | N   | N   | N    |
+| operator.cli_token                    | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
 | org.update_settings / billing         | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
 | org.manage_members (admin, member)    | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
 | org.manage_owners                     | Y   | Y   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
