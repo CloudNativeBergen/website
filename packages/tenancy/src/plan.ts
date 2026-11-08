@@ -23,6 +23,8 @@ export interface BillingRow {
   currentPeriodEnd: string | null
   /** ISO 8601; null means no end. */
   compUntil: string | null
+  /** organizations.kind (#2150); omitted means customer. */
+  kind?: string | null
 }
 
 const after = (iso: string | null, now: number, plusMs = 0) => {
@@ -37,8 +39,11 @@ const after = (iso: string | null, now: number, plusMs = 0) => {
  *   of `current_period_end`;
  * - anything else (default, canceled, incomplete, expired, unknown): free.
  * Fails closed: an unknown plan value is free.
+ * A demo org (#2150) is pro whatever its billing columns say. It is never
+ * billed: phase 2's Stripe checkout must refuse an org with kind `demo`.
  */
 export function effectivePlan(r: BillingRow, now = Date.now()): Plan {
+  if (r.kind === 'demo') return 'pro'
   const plan = isPlan(r.plan) ? r.plan : 'free'
   if (r.planSource === 'comp')
     return r.compUntil === null || after(r.compUntil, now) ? plan : 'free'

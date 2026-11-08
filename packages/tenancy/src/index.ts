@@ -5,6 +5,7 @@
 // RunKonf/konf-grapql-poc#23.
 import { createGraphQLError } from 'graphql-yoga'
 import { isPlan, type Plan } from './plan'
+import { toOrgKind, type OrgKind } from './org-kind'
 import {
   SignJWT,
   jwtVerify,
@@ -37,6 +38,11 @@ export interface TenantEnvelope {
    * the gateway and the subgraphs deploy in either order.
    */
   plan?: Plan
+  /**
+   * The org's kind (#2150), minted from tenantByHost like plan.
+   * verifyEnvelope always sets it: absent or unknown is `customer`.
+   */
+  orgKind?: OrgKind
 }
 
 /**
@@ -123,6 +129,7 @@ export async function verifyEnvelope(
       orgRole: p.orgRole,
       scopes: p.scopes,
       plan: isPlan(p.plan) ? p.plan : 'free',
+      orgKind: toOrgKind(p.orgKind),
     }
   }
   if (p.typ === 'platform' && isString(p.userId) && isString(p.platformRole)) {
@@ -326,3 +333,4 @@ export async function generateEnvelopeKeyPair(): Promise<{
 export * from './push'
 export * from './authz'
 export * from './plan'
+export * from './org-kind'

@@ -369,17 +369,28 @@ that read fails, the site refuses with `SERVICE_UNAVAILABLE`, which is retryable
 
 **Effective plan:** `comp` gives the stored plan while `comp_until` is unset or ahead.
 `stripe` gives it while `active`, or while `past_due` and within 14 days of
-`current_period_end`. Everything else is `free`.
+`current_period_end`. Everything else is `free`. A demo org (`organizations.kind =
+'demo'`, #2150) is `pro` whatever its billing columns say, and is never billed: phase 2's
+Stripe checkout must refuse an org with kind `demo`.
 
 **Existing orgs:** migration 0009 gives `organization-cloud-native-days` comp `pro`
 (no end date, reason "existing customer (owner decision 2026-11-08)"). It ships in the
-same deploy as the gates, so CNDN is never blocked. `kkdemo.org` stays `free` on
-purpose: it is the test org the gates are exercised on.
+same deploy as the gates, so CNDN is never blocked. `kkdemo.org` is the demo org
+(migration 0010, #2150) and so `pro`: it is no longer where the gates are tested. The
+gates are covered by unit tests (`packages/tenancy/src/plan.test.ts`, the subgraph
+tests) and, end to end, by a `free` test org on a preview.
 
 **Runbook:** grant or change a plan on the operator lane with
 `setComplimentaryPlan(orgId: "...", plan: basic|pro, until: "...", reason: "...")`.
 Leave out `until` for no end date; `plan: free` ends a grant. Each change is audited as
 `operator.write` in identity's `audit_event`, before the plan is written.
+
+**Org kind (#2150):** `organizations.kind` is `customer` or `demo` (triggers hold the
+vocabulary). The gateway mints it into the tenant envelope as `orgKind`; absent or
+unknown is `customer`. A demo org mails only its own members (`allowedRecipients` in
+`@runkonf/tenancy`); invitations are exempt, because a prospect is invited to become a
+member. `Organization.kind` lets Kontroll leave demo orgs out of operator totals, and
+`ConferenceEdition.orgKind` lets the site set `robots: noindex`.
 
 ## 5. Migration plan
 

@@ -57,7 +57,9 @@ describe('envelope verification', () => {
   it('accepts a valid envelope and returns its claims', async () => {
     const token = await (await createSigner(keys.privatePem)).sign(tenant)
     const result = await envelopeFromRequest(requestWith(token), keys.publicPem)
-    expect(result).toEqual({ envelope: { ...tenant, plan: 'free' } })
+    expect(result).toEqual({
+      envelope: { ...tenant, plan: 'free', orgKind: 'customer' },
+    })
   })
 
   it('rejects a missing envelope with 401', async () => {

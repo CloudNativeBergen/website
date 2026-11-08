@@ -597,6 +597,7 @@ export function createData(
           subscriptionStatus: organizations.subscriptionStatus,
           currentPeriodEnd: organizations.currentPeriodEnd,
           compUntil: organizations.compUntil,
+          orgKind: organizations.kind,
           apiRead: conferences.apiRead,
           identityLogin: conferences.identityLogin,
           d1Write: conferences.d1Write,
@@ -625,6 +626,7 @@ export function createData(
         subscriptionStatus,
         currentPeriodEnd,
         compUntil,
+        orgKind,
         ...rest
       } = row
       return {
@@ -637,7 +639,9 @@ export function createData(
           subscriptionStatus,
           currentPeriodEnd,
           compUntil,
+          kind: orgKind,
         }),
+        orgKind,
       }
     },
 

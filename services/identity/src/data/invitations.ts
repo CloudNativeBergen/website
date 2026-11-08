@@ -25,7 +25,9 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 /**
  * Sends the invitation email: org name, inviter name and the accept link,
- * nothing else. Never throws: the invitation row is already written and
+ * nothing else. Not filtered by tenancy's allowedRecipients, demo orgs
+ * included (#2150): an operator invites a prospect to become a member, so
+ * the invitee is a non-member by definition. Never throws: the invitation row is already written and
  * audited, and the inviter can resend. Returns whether it was sent.
  */
 export async function deliverInvitation(

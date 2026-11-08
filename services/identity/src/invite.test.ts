@@ -13,6 +13,7 @@ import {
   it,
   vi,
 } from 'vitest'
+import { allowedRecipients } from '@runkonf/tenancy'
 import { createAuth, type AuthEnv } from './data/auth'
 import { createMembers } from './data/members'
 import { invitePage, KONTROLL_URL } from './invite-page'
@@ -167,6 +168,24 @@ describe('delivery', () => {
     expectMail(mails[0], 'a@example.com', invitationId, 'Ada')
     expect(mails[0].reply_to).toBe(`owner-${n}@example.com`)
     expect(owner.id).toBeTruthy()
+  })
+
+  // #2150: a demo org mails only its members, but a prospect is invited to
+  // become one, so invites are exempt from allowedRecipients by design.
+  it('a demo org still mails its invite to the non-member prospect', async () => {
+    const { orgId, invitationId } = await invited('prospect@example.com')
+    const memberEmails = (
+      await all<{ email: string }>(
+        'SELECT u.email FROM member m JOIN user u ON u.id = m.userId WHERE m.organizationId = ?',
+        orgId,
+      )
+    ).map((r) => r.email)
+    expect(
+      allowedRecipients('demo', ['prospect@example.com'], memberEmails),
+    ).toEqual([])
+    const mails = await sent()
+    expect(mails).toHaveLength(1)
+    expectMail(mails[0], 'prospect@example.com', invitationId, 'Ada')
   })
 
   it('an operator invite sends exactly one email; an unverified inviter gets no reply-to', async () => {
