@@ -419,7 +419,16 @@ builder.queryFields((t) => ({
     },
     resolve: (_, a, ctx) =>
       isOrganizer(ctx)
-        ? ctx.data.speakerProfiles().directory(a.first ?? 50, a.after, a.query)
+        ? ctx.data
+            .speakerProfiles()
+            .directory(
+              a.first ?? 50,
+              a.after,
+              a.query,
+              // #2172: a demo org hosts prospects; it sees seed profiles only.
+              ctx.envelope?.typ === 'tenant' &&
+                ctx.envelope.orgKind === 'demo',
+            )
         : null,
   }),
 }))

@@ -158,10 +158,42 @@ export function createSpeakerProfiles(db: D1Database) {
         },
       }
     },
-    /** Creates on first update; later updates merge over the stored profile. */
+    /**
+     * Creates on first update. A later update writes only the columns the
+     * input carries, so a concurrent update from a stale read cannot undo
+     * another field (#2172: a switch to private must stick).
+     */
     async update(userId: string, input: ProfileInput) {
-      const v = validate(input, (await mine(userId)) ?? undefined)
+      const current = await mine(userId)
+      const v = validate(input, current ?? undefined)
       const now = Date.now()
+      const vals = {
+        name: v.name,
+        bio: v.bio,
+        photo_key: v.photoKey,
+        links: JSON.stringify(v.links),
+        topics: JSON.stringify(v.topics),
+        visibility: v.visibility,
+      }
+      if (current) {
+        // validate() reads null as "keep" for every field but photoKey,
+        // where null clears it.
+        const sent = (Object.keys(vals) as (keyof typeof vals)[]).filter(
+          (c) =>
+            c === 'photo_key'
+              ? input.photoKey !== undefined
+              : input[c as keyof ProfileInput] != null,
+        )
+        const set = sent.map((c, i) => `${c} = ?${i + 3}`)
+        const r = await db
+          .prepare(
+            `UPDATE speaker_profile SET ${[...set, 'updated_at = ?2'].join(', ')}
+             WHERE user_id = ?1 RETURNING ${COLS}`,
+          )
+          .bind(userId, now, ...sent.map((c) => vals[c]))
+          .first<Row>()
+        if (r) return toProfile(r)
+      }
       const r = await db
         .prepare(
           `INSERT INTO speaker_profile (user_id, id, name, bio, photo_key, links, topics, visibility, created_at, updated_at)
@@ -172,25 +204,28 @@ export function createSpeakerProfiles(db: D1Database) {
         .bind(
           userId,
           crypto.randomUUID(),
-          v.name,
-          v.bio,
-          v.photoKey,
-          JSON.stringify(v.links),
-          JSON.stringify(v.topics),
-          v.visibility,
+          vals.name,
+          vals.bio,
+          vals.photo_key,
+          vals.links,
+          vals.topics,
+          vals.visibility,
           now,
         )
         .first<Row>()
       return toProfile(r!)
     },
     /**
-     * network and public profiles only, ordered by opaque id. At most four
+     * network and public profiles only, ordered by opaque id. seedOnly
+     * limits it to demo seed users (#2172: a demo org hosts prospects, who
+     * must never see real speakers). At most four
      * bound parameters per page, far under D1's 100.
      */
     async directory(
       first: number,
       after?: string | null,
       query?: string | null,
+      seedOnly = false,
     ) {
       const limit = Math.min(Math.max(first, 1), MAX_PAGE)
       const q = query?.trim().slice(0, MAX_QUERY).toLowerCase() || null
@@ -198,11 +233,12 @@ export function createSpeakerProfiles(db: D1Database) {
         .prepare(
           `SELECT ${COLS} FROM speaker_profile
            WHERE visibility IN ('network', 'public')
+             AND (?4 = 0 OR user_id IN (SELECT id FROM user WHERE is_seed = 1))
              AND (?1 IS NULL OR id > ?1)
              AND (?2 IS NULL OR instr(lower(name || ' ' || topics || ' ' || bio), ?2) > 0)
            ORDER BY id LIMIT ?3`,
         )
-        .bind(after ?? null, q, limit + 1)
+        .bind(after ?? null, q, limit + 1, seedOnly ? 1 : 0)
         .all<Row>()
       const nodes = results.slice(0, limit).map(toProfile)
       return {
