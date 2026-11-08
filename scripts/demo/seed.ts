@@ -16,7 +16,7 @@
  *      Same UTC day gives identical mutations, except invite tokens.
  *
  * Env: KONF_OPERATOR_TOKEN (identity JWT of a platform operator, origin
- * claim = KONF_OPERATOR_ORIGIN, default https://my.konf.app), KONF_API_URL
+ * claim = KONF_OPERATOR_ORIGIN, required; both from Kontroll), KONF_API_URL
  * (default production gateway), NEXT_PUBLIC_SANITY_PROJECT_ID,
  * NEXT_PUBLIC_SANITY_DATASET, SANITY_API_TOKEN_WRITE.
  */
@@ -91,11 +91,13 @@ export function checkOperatorToken(token: string | undefined, nowMs: number) {
   }
   if (typeof exp !== 'number')
     throw new OperatorTokenError('KONF_OPERATOR_TOKEN has no exp')
-  if (exp * 1000 <= nowMs)
+  // Tokens live 5 minutes: stop cleanly rather than fail mid-seed.
+  if (exp * 1000 - nowMs < TOKEN_MARGIN_MS)
     throw new OperatorTokenError(
-      'KONF_OPERATOR_TOKEN has expired; copy a fresh one from Kontroll',
+      'KONF_OPERATOR_TOKEN expires in under 30 s; copy a fresh one from Kontroll',
     )
 }
+const TOKEN_MARGIN_MS = 30_000
 
 // ------------------------------------------------------------ documents
 
@@ -486,12 +488,28 @@ export const today = (d = new Date()) =>
 const TX_SIZE = 200
 
 export async function run(
-  opts: { host: string; dryRun: boolean; now: Date; token: string | undefined },
+  opts: {
+    host: string
+    dryRun: boolean
+    now: Date
+    token: string | undefined
+    origin: string | undefined
+  },
   deps: Deps,
 ) {
-  // 0. Token sanity, then the guard: nothing below runs for a non-demo org.
+  // 0. Token and origin up front, then the guard: nothing below runs for a
+  //    non-demo org. Every API call re-checks expiry. All API calls happen
+  //    before the Sanity writes, which need no token.
+  if (!opts.origin)
+    throw new OperatorTokenError('KONF_OPERATOR_ORIGIN is not set')
   checkOperatorToken(opts.token, Date.now())
-  const { organization } = await deps.api.request<{
+  const api: GraphQLClient = {
+    request: (host, query, variables) => {
+      checkOperatorToken(opts.token, Date.now())
+      return deps.api.request(host, query, variables)
+    },
+  }
+  const { organization } = await api.request<{
     organization: { id: string; kind: string | null } | null
   }>(opts.host, '{ organization { id kind } }')
   if (organization?.kind !== 'demo')
@@ -506,7 +524,7 @@ export async function run(
   const seedDemoD1 = await deps.loadSeedDemoD1()
   if (seedDemoD1)
     deps.log(
-      `D1: ${JSON.stringify(await seedDemoD1(fixtures, deps.api, { host: opts.host, dryRun: opts.dryRun }))}`,
+      `D1: ${JSON.stringify(await seedDemoD1(fixtures, api, { host: opts.host, dryRun: opts.dryRun }))}`,
     )
   else if (!opts.dryRun)
     throw new Error(
@@ -515,7 +533,7 @@ export async function run(
   else deps.log('D1: seedDemoD1 not available yet (#2164), skipped.')
 
   // 2. Edition ids from D1, matched by title. The live edition is LIVE_CONFERENCE_ID.
-  const { conferenceEditions } = await deps.api.request<{
+  const { conferenceEditions } = await api.request<{
     conferenceEditions: { id: string; title: string | null }[] | null
   }>(opts.host, '{ conferenceEditions { id title primaryHost } }')
   const editionIds: Record<string, string> = {}
@@ -569,9 +587,8 @@ export async function run(
 
 // ------------------------------------------------------------------ CLI
 
-function operatorClient(token: string): GraphQLClient {
+function operatorClient(token: string, origin: string): GraphQLClient {
   const url = process.env.KONF_API_URL?.trim() || 'https://api.konf.app/graphql'
-  const origin = process.env.KONF_OPERATOR_ORIGIN || 'https://my.konf.app'
   return {
     async request<T>(
       host: string | null,
@@ -608,9 +625,13 @@ async function main() {
       dryRun: args.includes('--dry-run'),
       now: today(),
       token: process.env.KONF_OPERATOR_TOKEN,
+      origin: process.env.KONF_OPERATOR_ORIGIN,
     },
     {
-      api: operatorClient(process.env.KONF_OPERATOR_TOKEN ?? ''),
+      api: operatorClient(
+        process.env.KONF_OPERATOR_TOKEN ?? '',
+        process.env.KONF_OPERATOR_ORIGIN ?? '',
+      ),
       createSanityClient: async () => {
         // Imported lazily so a refused or dry run never loads a write client.
         const { createClient } = await import('next-sanity')

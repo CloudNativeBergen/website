@@ -73,6 +73,7 @@ const opts = (o: Partial<Parameters<typeof run>[0]> = {}) => ({
   dryRun: false,
   now,
   token: TOKEN,
+  origin: 'https://my.konf.app',
   ...o,
 })
 
@@ -92,6 +93,40 @@ describe('demo:seed', () => {
       expect(d.createSanityClient).not.toHaveBeenCalled()
     },
   )
+
+  it('refuses a missing origin before the guard or any client', async () => {
+    const { d } = deps('demo')
+    await expect(run(opts({ origin: undefined }), d)).rejects.toThrow(
+      /KONF_OPERATOR_ORIGIN/,
+    )
+    expect(d.api.request).not.toHaveBeenCalled()
+    expect(d.createSanityClient).not.toHaveBeenCalled()
+  })
+
+  it('refuses a token with under 30 s left', async () => {
+    const { d } = deps('demo')
+    await expect(
+      run(opts({ token: jwt(Math.floor(Date.now() / 1000) + 20) }), d),
+    ).rejects.toThrow(OperatorTokenError)
+    expect(d.api.request).not.toHaveBeenCalled()
+  })
+
+  it('re-checks expiry before each API call and stops before Sanity', async () => {
+    const { d } = deps('demo')
+    const t0 = Date.now()
+    // The guard call passes; then the clock jumps past the margin.
+    vi.mocked(d.api.request).mockImplementationOnce((async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(t0 + 890_000)
+      return { organization: { id: 'org-1', kind: 'demo' } }
+    }) as unknown as Deps['api']['request'])
+    try {
+      await expect(run(opts(), d)).rejects.toThrow(/under 30 s/)
+    } finally {
+      vi.restoreAllMocks()
+    }
+    expect(d.api.request).toHaveBeenCalledTimes(1)
+    expect(d.createSanityClient).not.toHaveBeenCalled()
+  })
 
   it('never puts the token in an error message', async () => {
     const { d } = deps('demo')
