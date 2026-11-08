@@ -178,11 +178,10 @@ export function createSpeakerProfiles(db: D1Database) {
       if (current) {
         // validate() reads null as "keep" for every field but photoKey,
         // where null clears it.
-        const sent = (Object.keys(vals) as (keyof typeof vals)[]).filter(
-          (c) =>
-            c === 'photo_key'
-              ? input.photoKey !== undefined
-              : input[c as keyof ProfileInput] != null,
+        const sent = (Object.keys(vals) as (keyof typeof vals)[]).filter((c) =>
+          c === 'photo_key'
+            ? input.photoKey !== undefined
+            : input[c as keyof ProfileInput] != null,
         )
         const set = sent.map((c, i) => `${c} = ?${i + 3}`)
         const r = await db
