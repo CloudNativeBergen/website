@@ -176,6 +176,7 @@ describe('gateway', () => {
       'revokeApiClient',
       'revokePersonalAccessToken',
       'rotateApiClientSecret',
+      'seedTicketOrders',
       'setComplimentaryPlan',
       'setConferenceLifecycle',
       'submitProposal',

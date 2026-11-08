@@ -1,0 +1,52 @@
+{
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "konf-ticketing",
+      "database_id": "TO_BE_CREATED",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "name": "konf-ticketing",
+  "account_id": "eefa2cb5c8528a07d7bf8b00a6606dcd",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "env": {
+    "preview": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "konf-ticketing-preview",
+          "database_id": "TO_BE_CREATED",
+          "migrations_dir": "migrations",
+        },
+      ],
+      "name": "konf-ticketing-preview",
+    },
+    "production": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "konf-ticketing",
+          "database_id": "TO_BE_CREATED",
+          "migrations_dir": "migrations",
+        },
+      ],
+      "name": "konf-ticketing",
+    },
+  },
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true,
+      "destinations": ["grafana-cloud-traces"],
+    },
+    "logs": {
+      "enabled": true,
+      "destinations": ["grafana-cloud-logs"],
+    },
+  },
+}

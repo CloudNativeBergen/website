@@ -174,7 +174,7 @@ jobs:
               pnpm exec tsx scripts/secrets-sync.ts "$1" production --check
             fi
           }
-          for pkg in identity tenant-directory content conference program sponsors cfp; do
+          for pkg in identity tenant-directory content conference program sponsors cfp ticketing; do
             echo "::group::$pkg ($DEPLOY_ENV)"
             # `db: false` services (content, program, sponsors, cfp) have no D1 and no migrations.
             if [ -d "services/$pkg/migrations" ]; then
