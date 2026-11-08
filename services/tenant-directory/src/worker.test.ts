@@ -1202,6 +1202,96 @@ describe('lifecycle override (#1997)', () => {
   })
 })
 
+describe('conference by id in tenantByHost (#2150)', () => {
+  const BY_ID = `query($host: String!, $id: ID) { tenantByHost(host: $host, conferenceId: $id) { orgId conferenceId flags { d1Override } } }`
+  it("swaps in another of the org's conferences, with its own flags", async () => {
+    const org = await provision()
+    sqlite
+      .prepare(
+        "INSERT INTO conferences (id, org_id, slug, name, lifecycle, d1_override) VALUES ('c-draft', ?, '2027', 'Conf 2027', 'draft', 1)",
+      )
+      .run(org.id)
+    const { body } = await gql(BY_ID, { host: 'acme.konf.run', id: 'c-draft' })
+    expect(body.data.tenantByHost).toEqual({
+      orgId: org.id,
+      conferenceId: 'c-draft',
+      flags: { d1Override: true },
+    })
+  })
+
+  it("resolves nothing for another org's conference id", async () => {
+    await provision()
+    const other = await provision('bravo', 'k2')
+    const { body } = await gql(BY_ID, {
+      host: 'acme.konf.run',
+      id: conferenceOf(other.id),
+    })
+    expect(body.data.tenantByHost).toBeNull()
+  })
+})
+
+describe('publish and unpublish (#2150)', () => {
+  const SET = `mutation($s: ConferenceLifecycleOverride) { setConferenceLifecycle(status: $s) { lifecycleStatus } }`
+  const lifecycle = (id: string) =>
+    (
+      sqlite
+        .prepare('SELECT lifecycle FROM conferences WHERE id = ?')
+        .get(id) as { lifecycle: string }
+    ).lifecycle
+  async function setup() {
+    const org = await provision()
+    const confId = conferenceOf(org.id)
+    const admin: Envelope = {
+      typ: 'tenant',
+      orgId: org.id,
+      conferenceId: confId,
+      userId: 'u',
+      orgRole: 'admin',
+      scopes: [],
+    }
+    return { confId, admin }
+  }
+
+  it('unpublishes to draft and publishes a draft live', async () => {
+    const { confId, admin } = await setup()
+    await gql(SET, { s: 'draft' }, admin)
+    expect(lifecycle(confId)).toBe('draft')
+    const { body } = await gql(SET, { s: 'live' }, admin)
+    expect(body.data.setConferenceLifecycle).toEqual({
+      lifecycleStatus: 'live',
+    })
+    expect(lifecycle(confId)).toBe('live')
+  })
+
+  it.each(['draft', 'live'])(
+    'refuses a member %s before touching D1 or the plan',
+    async (s) => {
+      const { confId, admin } = await setup()
+      const { body } = await gql(SET, { s }, { ...admin, orgRole: 'member' })
+      expect(body.errors?.[0]?.extensions.code).toBe('FORBIDDEN')
+      expect(conferenceRpc.ticketed).not.toHaveBeenCalled()
+      expect(lifecycle(confId)).toBe('live')
+    },
+  )
+
+  it('refuses publishing a ticketed draft on free, allows it on pro', async () => {
+    const { confId, admin } = await setup()
+    await gql(SET, { s: 'draft' }, admin)
+    conferenceRpc.ticketed.mockResolvedValue(true)
+    const refused = await gql(SET, { s: 'live' }, admin)
+    expect(refused.body.errors?.[0]?.extensions).toMatchObject({
+      reason: 'PLAN_REQUIRED',
+    })
+    expect(lifecycle(confId)).toBe('draft')
+    const ok = await gql(SET, { s: 'live' }, {
+      ...admin,
+      plan: 'pro',
+    } as Envelope)
+    expect(ok.body.errors).toBeUndefined()
+    expect(lifecycle(confId)).toBe('live')
+  })
+})
+
 describe('migration 0005', () => {
   it('rebuilds conferences keeping rows, flags and domain references', () => {
     const db = new DatabaseSync(':memory:')

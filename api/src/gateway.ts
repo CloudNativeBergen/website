@@ -102,10 +102,16 @@ const JWT_MAX_SECONDS = 300
 const ENVELOPE_TTL_SECONDS = 60
 
 const TENANT_QUERY =
-  'query($host: String!) { tenantByHost(host: $host) { orgId conferenceId flags { apiRead identityLogin d1Write d1Override } plan orgKind } }'
+  'query($host: String!, $conferenceId: ID) { tenantByHost(host: $host, conferenceId: $conferenceId) { orgId conferenceId flags { apiRead identityLogin d1Write d1Override } plan orgKind } }'
 
 /** Operator lane: the host of the tenant the operator acts for. */
 export const OPERATOR_TENANT_HEADER = 'x-konf-operator-tenant'
+
+/**
+ * Operator lane, platform operators only (#2150): another Conference of the
+ * named tenant's org, by id, for an edition with no verified host.
+ */
+export const OPERATOR_CONFERENCE_HEADER = 'x-konf-operator-conference'
 
 /** Scope on a tenant envelope minted in the operator lane. */
 export const OPERATOR_SCOPE = 'platform:operator'
@@ -125,14 +131,21 @@ export function operatorCors(request: Request, env: Env) {
       origin: [origin],
       credentials: true,
       methods: ['GET', 'POST'],
-      allowedHeaders: ['authorization', 'content-type', OPERATOR_TENANT_HEADER],
+      allowedHeaders: [
+        'authorization',
+        'content-type',
+        OPERATOR_TENANT_HEADER,
+        OPERATOR_CONFERENCE_HEADER,
+      ],
     }
   const asked = request.headers.get('access-control-request-headers') ?? ''
   if (
     asked
       .toLowerCase()
       .split(/\s*,\s*/)
-      .includes(OPERATOR_TENANT_HEADER)
+      .some(
+        (h) => h === OPERATOR_TENANT_HEADER || h === OPERATOR_CONFERENCE_HEADER,
+      )
   )
     return false as const
   return {}
@@ -326,6 +339,7 @@ function reject(
 async function resolveTenant(
   host: string | null,
   env: Env,
+  conferenceId: string | null = null,
 ): Promise<Tenant | null> {
   if (!host) return null
   const res = await env.DIRECTORY.fetch(
@@ -333,7 +347,10 @@ async function resolveTenant(
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ query: TENANT_QUERY, variables: { host } }),
+      body: JSON.stringify({
+        query: TENANT_QUERY,
+        variables: { host, conferenceId },
+      }),
     },
   )
   if (!res.ok) throw new Error(`tenant lookup failed: ${res.status}`)
@@ -574,6 +591,7 @@ export function createGateway(supergraph: string) {
       )
       forwarded.headers.delete(SITE_ASSERTION_HEADER)
       forwarded.headers.delete(OPERATOR_TENANT_HEADER)
+      forwarded.headers.delete(OPERATOR_CONFERENCE_HEADER)
       const host = hostOf(
         siteHost ? `https://${siteHost}` : request.headers.get('origin'),
       )
@@ -602,6 +620,9 @@ export function createGateway(supergraph: string) {
           tenant = await resolveTenant(
             operatorLane ? request.headers.get(OPERATOR_TENANT_HEADER) : host,
             env,
+            operatorLane
+              ? request.headers.get(OPERATOR_CONFERENCE_HEADER)
+              : null,
           )
           return true
         } catch {
@@ -668,6 +689,9 @@ export function createGateway(supergraph: string) {
         // would let a subgraph read the tenant is never minted.
         const notAuthorized = () =>
           reject(403, 'FORBIDDEN', 'not authorized for this tenant')
+        // Naming a conference by id is for platform operators only.
+        if (request.headers.has(OPERATOR_CONFERENCE_HEADER) && !operator)
+          return notAuthorized()
         if (request.headers.has(OPERATOR_TENANT_HEADER) && !tenant)
           return operator
             ? reject(400, 'BAD_USER_INPUT', 'unknown tenant')
