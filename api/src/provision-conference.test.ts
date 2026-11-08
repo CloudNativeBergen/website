@@ -227,7 +227,7 @@ describe('provisionConference (kontroll#85)', () => {
       }),
     )
     const res = await call(...(await tenant('owner')))
-    expect((await res.json()).errors).toEqual([
+    expect(((await res.json()) as { errors: unknown }).errors).toEqual([
       {
         message: 'copyFrom is not an edition of this organization',
         path: ['provisionConference'],
@@ -248,7 +248,9 @@ describe('provisionConference (kontroll#85)', () => {
       createGraphQLError('refused', { extensions: { code, reason } }),
     )
     const res = await call(...(await tenant('owner')))
-    const [error] = (await res.json()).errors
+    const [error] = (
+      (await res.json()) as { errors: { extensions: unknown }[] }
+    ).errors
     expect(error.extensions).toEqual({ code })
   })
 })
