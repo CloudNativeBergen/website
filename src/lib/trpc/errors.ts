@@ -14,7 +14,25 @@ interface ClientError {
     code?: string
     missingFields?: MissingField[]
     tagIssues?: TagIssue[]
+    reason?: string
+    requiredPlan?: 'basic' | 'pro'
+    orgId?: string
+    isOwner?: boolean
   } | null
+}
+
+/** A PLAN_REQUIRED refusal (#2129), as the upgrade prompt needs it. */
+export interface PlanRequired {
+  requiredPlan: 'basic' | 'pro'
+  orgId?: string
+  isOwner?: boolean
+}
+
+/** The plan refusal an error carries, as seen on the client; null otherwise. */
+export function clientPlanRequired(error: unknown): PlanRequired | null {
+  const d = (error as ClientError | null)?.data
+  if (d?.reason !== 'PLAN_REQUIRED' || !d.requiredPlan) return null
+  return { requiredPlan: d.requiredPlan, orgId: d.orgId, isOwner: d.isOwner }
 }
 
 /** The structured tag issues a refused save or approval carries (tagging spec §4.4). */

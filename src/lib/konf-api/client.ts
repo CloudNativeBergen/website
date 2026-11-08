@@ -86,3 +86,50 @@ export async function konfApiHeaders(
   }
   return headers
 }
+
+/** A paid plan, lower-cased: the gateway's `PaidPlan` enum is BASIC|PRO. */
+export type RequiredPlan = 'basic' | 'pro'
+
+/**
+ * A refusal from the gateway, keeping the stable `extensions` the site acts
+ * on (#2129): `reason` (e.g. PLAN_REQUIRED), `requiredPlan` and `field`.
+ * `orgId` and `isOwner` are added by the site when it knows them, for the
+ * upgrade prompt's Kontroll link and copy.
+ */
+export class KonfApiError extends Error {
+  reason?: string
+  requiredPlan?: RequiredPlan
+  field?: string
+  orgId?: string
+  isOwner?: boolean
+  constructor(
+    message: string,
+    init: Partial<
+      Pick<
+        KonfApiError,
+        'reason' | 'requiredPlan' | 'field' | 'orgId' | 'isOwner'
+      >
+    > = {},
+  ) {
+    super(message)
+    this.name = 'KonfApiError'
+    Object.assign(this, init)
+  }
+
+  get planRequired(): boolean {
+    return this.reason === 'PLAN_REQUIRED' && !!this.requiredPlan
+  }
+}
+
+/** Builds a KonfApiError from a GraphQL `errors` array. */
+export function konfApiErrorFrom(
+  errors: { message?: string; extensions?: Record<string, unknown> }[],
+): KonfApiError {
+  const ext = errors.find((e) => e.extensions?.reason)?.extensions ?? {}
+  const plan = String(ext.requiredPlan ?? '').toLowerCase()
+  return new KonfApiError(errors.map((e) => e.message).join('; '), {
+    reason: typeof ext.reason === 'string' ? ext.reason : undefined,
+    requiredPlan: plan === 'basic' || plan === 'pro' ? plan : undefined,
+    field: typeof ext.field === 'string' ? ext.field : undefined,
+  })
+}
