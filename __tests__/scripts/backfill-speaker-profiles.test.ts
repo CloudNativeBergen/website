@@ -107,7 +107,7 @@ describe('profile mapping', () => {
       accounts,
     )
     const [row] = p.rows
-    expect(row.profile.visibility).toBe('private')
+    expect(toSql(p.rows)).toContain("'private', ")
     expect(row.profile.photoKey).toBeNull()
     expect(row.profile.links).toHaveLength(10)
     expect(row.profile.links.every((l) => l.startsWith('https://e'))).toBe(true)

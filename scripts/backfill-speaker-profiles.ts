@@ -30,7 +30,6 @@ import { randomUUID } from 'crypto'
 import { mkdirSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
 import { pathToFileURL } from 'url'
-import { validate } from '../services/identity/src/data/speaker-profiles'
 import { readRows, type IdentityUser } from './backfill-identity-members'
 import { requireReadToken } from './backfill-conference'
 
@@ -64,6 +63,17 @@ export interface ReportRow {
 }
 
 const MAX_LINKS = 10
+interface Profile {
+  name: string
+  bio: string
+  photoKey: string | null
+  links: string[]
+  topics: string[]
+}
+// Same limits as services/identity/src/data/speaker-profiles.ts (not imported:
+// it pulls Worker types into the root typecheck).
+const MAX_NAME = 120
+const MAX_BIO = 4000
 const PHOTO_KEY = /^[A-Za-z0-9/_.-]{1,200}$/
 const q = (s: string) => `'${s.replace(/'/g, "''")}'`
 
@@ -71,7 +81,9 @@ function httpsOnly(links: string[]) {
   const ok = links.filter((l) => {
     try {
       const u = new URL(l)
-      return u.protocol === 'https:' && !u.username && !u.password
+      return (
+        l.length <= 500 && u.protocol === 'https:' && !u.username && !u.password
+      )
     } catch {
       return false
     }
@@ -115,7 +127,7 @@ export function planProfiles(
   const rows: {
     userId: string
     id: string
-    profile: ReturnType<typeof validate>
+    profile: Profile
   }[] = []
   const report: ReportRow[] = []
   for (const { s, viaProvider, viaEmail, all } of candidates) {
@@ -145,25 +157,18 @@ export function planProfiles(
       skip('ambiguous')
       continue
     }
-    let profile: ReturnType<typeof validate>
-    try {
-      profile = validate({
-        name: s.name ?? '',
-        bio: s.bio ?? '',
-        links: kept,
-        topics: [],
-        photoKey,
-        visibility: 'private',
-      })
-    } catch {
+    const name = (s.name ?? '').trim()
+    const bio = (s.bio ?? '').trim()
+    if (!name || name.length > MAX_NAME || bio.length > MAX_BIO) {
       skip('invalid')
       continue
     }
+    const profile: Profile = { name, bio, photoKey, links: kept, topics: [] }
     const [userId] = userIds
     rows.push({
       userId,
       id: randomUUID(),
-      profile: { ...profile, visibility: 'private' },
+      profile,
     })
     report.push({
       ...base,
