@@ -270,7 +270,6 @@ const money = (m: Money) => ({ amountMinor: m.amount, currency: m.currency })
 /** The edition's settings as a ConferencePatch (phases 1-3). */
 function patchOf(e: D1Edition) {
   // travelSupportPaymentDate has no ConferencePatch field yet.
-  const { key, lifecycle, travelSupportPaymentDate, ...patch } = e
-  ;(void key, void lifecycle, void travelSupportPaymentDate)
-  return patch
+  const omit = new Set(['key', 'lifecycle', 'travelSupportPaymentDate'])
+  return Object.fromEntries(Object.entries(e).filter(([k]) => !omit.has(k)))
 }
