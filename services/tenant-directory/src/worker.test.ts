@@ -2219,8 +2219,10 @@ describe('org kind (#2150)', () => {
         "INSERT INTO organizations (id, slug, name) VALUES ('organization-cloud-native-days', 'cndn', 'CNDN'), ('kkdemo.org', 'kk', 'KK')",
       )
       db.exec(mig('0010_org_kind.sql'))
-      // Rerun the data step (the DDL is applied once by wrangler).
-      db.exec("UPDATE organizations SET kind = 'demo' WHERE id = 'kkdemo.org'")
+      // Rerun the migration's data step (wrangler applies the DDL once).
+      const update = mig('0010_org_kind.sql').match(/^UPDATE [^;]+;/m)
+      expect(update).not.toBeNull()
+      db.exec(update![0])
       expect(
         db.prepare('SELECT id, kind FROM organizations ORDER BY id').all(),
       ).toEqual([
