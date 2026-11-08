@@ -21,11 +21,18 @@ export type ConferenceCandidate = {
  *
  * `ticketSetup` also merges the members-only ticket setup from D1
  * (`mergeTicketSetup`, #2080). Server-side readers only: never for a row that
- * reaches a public page.
+ * reaches a public page. It also merges the phase 2 members-only settings
+ * (registration links, Slack channels and invites, #2038).
+ *
+ * `settings` merges only those phase 2 members-only settings, and only the
+ * keys the row already has (the caller projected them): for server-side
+ * readers of a narrow projection.
  */
+export type MergeOptions = { ticketSetup?: boolean; settings?: boolean }
+
 export async function mergeConference<T extends ConferenceCandidate>(
   conf: T,
-  { ticketSetup = false }: { ticketSetup?: boolean } = {},
+  { ticketSetup = false, settings = false }: MergeOptions = {},
 ): Promise<T> {
   try {
     const origin = findOutboundOrigin(conf)
@@ -40,8 +47,13 @@ export async function mergeConference<T extends ConferenceCandidate>(
       host,
       conf as unknown as Conference,
     )
-    if (!ticketSetup) return merged as unknown as T
-    return (await mergeTicketSetup(host, merged)) as unknown as T
+    if (ticketSetup)
+      return (await mergeTicketSetup(host, merged)) as unknown as T
+    if (settings)
+      return (await mergeTicketSetup(host, merged, {
+        settingsOnly: true,
+      })) as unknown as T
+    return merged as unknown as T
   } catch (err) {
     console.warn(
       `[conference/merge] falling back to Sanity for ${conf._id}:`,
@@ -53,7 +65,7 @@ export async function mergeConference<T extends ConferenceCandidate>(
 
 export function mergeConferences<T extends ConferenceCandidate>(
   conferences: readonly T[],
-  options: { ticketSetup?: boolean } = {},
+  options: MergeOptions = {},
 ): Promise<T[]> {
   return Promise.all(conferences.map((c) => mergeConference(c, options)))
 }

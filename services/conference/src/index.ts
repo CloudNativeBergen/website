@@ -1,7 +1,7 @@
 // Worker entry: the generated worker, plus the ProgramDate entrypoint that
 // services/program binds to (programDate is D1-owned, #2023).
 import { WorkerEntrypoint } from 'cloudflare:workers'
-import { createData } from './data'
+import { createData, isTicketed } from './data'
 import worker, { type WorkerEnv } from './worker'
 
 export class ProgramDate extends WorkerEntrypoint<WorkerEnv> {
@@ -46,6 +46,14 @@ export class ProgramDate extends WorkerEntrypoint<WorkerEnv> {
           startDate: row.startDate,
         }
       : null
+  }
+
+  /**
+   * Whether the edition sells tickets (ticketingProvider set), published or
+   * not: tenant-directory's plan gate on going live (#2129). A boolean only.
+   */
+  ticketed(orgId: string, conferenceId: string) {
+    return isTicketed(this.env.DB, orgId, conferenceId)
   }
 }
 

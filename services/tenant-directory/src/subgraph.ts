@@ -6,7 +6,15 @@
 // requirePlatform.
 // `organization` is public and returns only the envelope's own org.
 import { createGraphQLError } from 'graphql-yoga'
-import { can, parseOrgRoles, principalOf } from '@runkonf/tenancy'
+import {
+  PLANS,
+  can,
+  effectivePlan,
+  parseOrgRoles,
+  planAllows,
+  principalOf,
+  requirePlan,
+} from '@runkonf/tenancy'
 import { builder } from './builder'
 import type { ResolverContext } from './worker'
 
@@ -165,6 +173,7 @@ const Domain = builder
   .objectRef<
     Row<'hostname' | 'kind' | 'verification' | 'orgId' | 'conferenceId'> & {
       flags?: Flags
+      plan?: string
     }
   >('Domain')
   .implement({
@@ -176,6 +185,12 @@ const Domain = builder
         tag: 'internal',
         resolve: (d) => d.flags ?? null,
       }),
+      // The org's effective plan (#2129); only tenantByHost fills it.
+      plan: t.string({
+        nullable: true,
+        tag: 'internal',
+        resolve: (d) => d.plan ?? null,
+      }),
       hostname: t.exposeString('hostname'),
       kind: t.exposeString('kind'),
       verification: t.exposeString('verification'),
@@ -186,6 +201,10 @@ const Domain = builder
 
 type OrgRow = Row<'id' | 'slug' | 'name' | 'status' | 'plan'> & {
   createdAt: string | null
+  planSource?: string | null
+  subscriptionStatus?: string | null
+  currentPeriodEnd?: string | null
+  compUntil?: string | null
 }
 
 // After Domain: Organization.domains refers to it.
@@ -196,6 +215,18 @@ const Organization = builder.objectRef<OrgRow>('Organization').implement({
     name: t.exposeString('name'),
     status: t.exposeString('status'),
     plan: t.exposeString('plan'),
+    effectivePlan: t.string({
+      description:
+        'The plan the platform enforces now (#2129): `free`, `basic` or `pro`, from the plan, its source, the subscription status and the comp end date.',
+      resolve: (o) =>
+        effectivePlan({
+          plan: o.plan,
+          planSource: o.planSource ?? null,
+          subscriptionStatus: o.subscriptionStatus ?? null,
+          currentPeriodEnd: o.currentPeriodEnd ?? null,
+          compUntil: o.compUntil ?? null,
+        }),
+    }),
     // ISO 8601; null for orgs provisioned before #1973.
     createdAt: t.exposeString('createdAt', { nullable: true }),
     // Every hostname of this org, any verification state (#1969).
@@ -204,6 +235,37 @@ const Organization = builder.objectRef<OrgRow>('Organization').implement({
       resolve: (org, _, ctx) => ctx.data.domainsOf(org.id),
     }),
   }),
+})
+
+// An entity so identity can add memberCount and pendingInviteCount (#2142).
+// Never resolved by reference here: an Organization only reaches identity
+// from a field of this subgraph, and identity gates its own fields.
+builder.asEntity(Organization, {
+  key: builder.selection<{ id: string }>('id'),
+  resolveReference: () => null,
+})
+
+// Per-conference counts for the operator lane (#2142). An entity keyed by the
+// conference id: cfp, program and sponsors each add their own count, gated on
+// a PlatformContext. Integers only: no PII, no ids beyond the key.
+const OperatorConferenceStats = builder
+  .objectRef<{ conferenceId: string }>('OperatorConferenceStats')
+  .implement({
+    fields: (t) => ({
+      conferenceId: t.exposeID('conferenceId'),
+      ticketsSold: t.int({
+        nullable: true,
+        tag: 'operator',
+        description:
+          'Always null for now: tickets sold live in the external ticketing provider, which only the site reads (src/lib/tickets). No subgraph has a server-side source yet.',
+        resolve: () => null,
+      }),
+    }),
+  })
+
+builder.asEntity(OperatorConferenceStats, {
+  key: builder.selection<{ conferenceId: string }>('conferenceId'),
+  resolveReference: () => null,
 })
 
 const Lifecycle = builder.enumType('ConferenceLifecycle', {
@@ -232,6 +294,13 @@ const OperatorConference = builder
         type: ConferenceEdition,
         resolve: ({ conf }) => conf,
       }),
+      stats: t.field({
+        type: OperatorConferenceStats,
+        tag: 'operator',
+        description:
+          'Counts for this conference (#2142): proposals, confirmed speakers, sponsors, tickets sold. Platform operators only.',
+        resolve: ({ conf }) => ({ conferenceId: conf.id }),
+      }),
     }),
   })
 
@@ -255,6 +324,8 @@ const MyOrganization = builder
       }),
     }),
   })
+
+const PlanEnum = builder.enumType('Plan', { values: PLANS })
 
 const LifecycleOverride = builder.enumType('ConferenceLifecycleOverride', {
   values: ['cancelled', 'archived'] as const,
@@ -376,7 +447,7 @@ builder.mutationType({
       description:
         "Sets the request's Conference homepage override, or clears it with null (back to `live`; a draft stays draft). Org owner or admin, or an operator acting for the org (#1997).",
       args: { status: t.arg({ type: LifecycleOverride }) },
-      resolve: (_, { status }, ctx) => {
+      resolve: async (_, { status }, ctx) => {
         const e = ctx.envelope
         // Guard before fetch: a refusal says nothing about the row.
         if (
@@ -389,6 +460,22 @@ builder.mutationType({
           )
         }
         if (!e.conferenceId) return null
+        // Clearing the override puts a cancelled or archived edition back
+        // live: a ticketed one needs a paid plan (#2129). No read on a paid
+        // plan or for any other change.
+        if (
+          status == null &&
+          !planAllows(e.plan, 'conference.publish_ticketed')
+        ) {
+          const conf = await ctx.data.conferenceOf(e.orgId, e.conferenceId)
+          if (
+            conf &&
+            conf.lifecycle !== 'draft' &&
+            conf.lifecycle !== 'live' &&
+            (await ctx.data.ticketed(e.orgId, e.conferenceId))
+          )
+            requirePlan(e.plan, 'conference.publish_ticketed')
+        }
         return ctx.data.setLifecycle(e.orgId, e.conferenceId, status ?? null)
       },
     }),
@@ -434,6 +521,10 @@ builder.mutationType({
             )
           }
           org = e.orgId
+          // A custom domain is paid (#2129), checked on the envelope's plan
+          // before any read. The operator lane is exempt: staff grant a
+          // complimentary plan instead (setComplimentaryPlan).
+          if (input.domain) requirePlan(e.plan, 'domain.connect_custom')
         }
         return ctx.data.provisionConference(
           org,
@@ -461,6 +552,43 @@ builder.mutationType({
         requirePlatform(ctx)
         const userId = (ctx.envelope as { userId: string }).userId
         return ctx.data.createOrganization(input, idempotencyKey, userId)
+      },
+    }),
+    setComplimentaryPlan: t.field({
+      type: Organization,
+      nullable: true,
+      tag: 'operator',
+      description:
+        'Grants an Organization a plan without Stripe (#2129), until `until` (ISO 8601; omitted means no end), or ends a grant with `free`. Platform operators only (operator lane, no tenant); audited. Null for an unknown org.',
+      args: {
+        orgId: t.arg.id({ required: true }),
+        plan: t.arg({ type: PlanEnum, required: true }),
+        until: t.arg.string(),
+        reason: t.arg.string({ required: true }),
+      },
+      resolve: (_, { orgId, plan, until, reason }, ctx) => {
+        // Guard before fetch: nothing is read or written for anyone else.
+        requirePlatform(ctx)
+        const bad = (field: string, message: string) =>
+          createGraphQLError(message, {
+            extensions: {
+              code: 'BAD_USER_INPUT',
+              reason: 'INVALID_INPUT',
+              field,
+            },
+          })
+        const t = until == null ? null : Date.parse(until)
+        if (t !== null && (Number.isNaN(t) || t <= Date.now()))
+          throw bad('until', 'until must be a future ISO 8601 time')
+        if (!reason.trim() || reason.length > 500)
+          throw bad('reason', 'reason is required (at most 500 characters)')
+        return ctx.data.setComplimentaryPlan(
+          (ctx.envelope as { userId: string }).userId,
+          String(orgId),
+          plan,
+          t === null ? null : new Date(t).toISOString(),
+          reason.trim(),
+        )
       },
     }),
     provisionOrganization: t.field({

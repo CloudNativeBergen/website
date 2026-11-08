@@ -1,6 +1,7 @@
 import 'server-only'
 import { groq } from 'next-sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
+import { mergeConference } from '@/lib/conference/merge'
 import type { Conference } from '@/lib/conference/types'
 
 /**
@@ -113,6 +114,11 @@ export async function getSponsorFanoutContext(
     { cache: 'no-store' },
   )
   if (!row) return null
+  // Server-side only: the sales channel and sponsorEmail from D1 (#2038).
+  if (row.conference?._id)
+    row.conference = await mergeConference(row.conference, {
+      ticketSetup: true,
+    })
   const contactPersons = (row.contactPersons ?? [])
     .filter(
       (c): c is { name: string; email: string } =>

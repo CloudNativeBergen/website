@@ -3,7 +3,7 @@
  *
  * Conference metadata fields (title, tagline, city, country, venueName,
  * venueAddress, startDate, endDate, visibility, backgroundPattern, theme,
- * registrationLink, socialLinks, and the settings phase 1 and 3 fields) are owned
+ * registrationLink, socialLinks, and the settings phase 1, 2 and 3 fields) are owned
  * by D1/Cloudflare and should not
  * be read from Sanity conference documents. Instead, they should be read
  * from D1 via merge.ts or konf-api.ts.
@@ -130,6 +130,18 @@ const D1_FIELDS = new Set([
   'workshopReminderLastSentAt',
   'workshopReminderLastSentCount',
   'workshopReminderReservedAt',
+  // Settings phase 2 (#2038): contact emails, registration links, Slack.
+  'contactEmail',
+  'cfpEmail',
+  'sponsorEmail',
+  'volunteerRegistrationLink',
+  'sponsorRegistrationLink',
+  'speakerRegistrationLink',
+  'salesNotificationChannel',
+  'cfpNotificationChannel',
+  'speakerSlackChannel',
+  'speakerSlackInviteUrl',
+  'volunteerSlackInviteUrl',
 ])
 
 const CONFERENCE_FILTER_RE = /_type\s*==\s*["']conference["']/

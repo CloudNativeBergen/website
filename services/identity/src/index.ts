@@ -1,5 +1,5 @@
 // Identity entry: Better Auth under /api/auth, the login handoff under
-// /handoff, its error page at /error, the linked-accounts page at /account, the RPC entrypoints, and 404 for everything else.
+// /handoff, its error page at /error, the linked-accounts page at /account, the invitation page at /invite/<id>, the RPC entrypoints, and 404 for everything else.
 import { WorkerEntrypoint } from 'cloudflare:workers'
 import type { ConferencePushEvent, OperatorAuditEvent } from '@runkonf/tenancy'
 import { createAuth, createData } from './data'
@@ -7,6 +7,7 @@ import { notify, recordOperatorWrite, type PushEnv } from './data/push'
 import { accountPage } from './account-page'
 import { errorPage } from './error-page'
 import { handoff, type HandoffEnv } from './handoff'
+import { invitePage } from './invite-page'
 import { loginTestPage } from './login-test'
 import { orgWriteGate } from './org-write-gate'
 import graph, { type WorkerEnv } from './worker'
@@ -60,6 +61,11 @@ export class Organizations extends WorkerEntrypoint<Env> {
   syncMembers() {
     return createData(this.env).syncMembers()
   }
+
+  /** tenant-directory's operator writes (complimentary plans, #2129). */
+  audit(event: OperatorAuditEvent) {
+    return recordOperatorWrite(this.env.DB, event)
+  }
 }
 
 /**
@@ -107,6 +113,7 @@ export default {
       return handoff(request, env)
     }
     if (pathname === '/error') return errorPage(request, env)
+    if (pathname.startsWith('/invite/')) return invitePage(request, env)
     if (pathname === '/account' && request.method === 'GET') {
       return accountPage(request, env)
     }

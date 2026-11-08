@@ -29,6 +29,14 @@ const ref = (_ref: string) => ({ _type: 'reference', _ref })
 const blocks = (text: string) => [
   { _type: 'block', children: [{ _type: 'span', text }] },
 ]
+// Not creation order, so the sort is visible.
+const UPDATED: Record<string, string> = {
+  t_sub: '2026-03-01T00:00:00Z',
+  t_draft: '2026-03-02T00:00:00Z',
+  t_acc: '2026-03-03T00:00:00Z',
+  t_del: '2026-03-04T00:00:00Z',
+  t_rej: '2026-03-05T00:00:00Z',
+}
 const talk = (
   id: string,
   conf: string,
@@ -39,6 +47,7 @@ const talk = (
   _rev: 'r0',
   _type: 'talk',
   _createdAt: '2026-01-01T00:00:00Z',
+  _updatedAt: UPDATED[id] ?? '2026-01-01T00:00:00Z',
   conference: ref(conf),
   status,
   title: `${id} title`,
@@ -75,6 +84,14 @@ const seed = (): Doc[] => [
     email: 'me@x.no',
     slug: { current: 'me' },
     imageURL: 'https://avatars.example/me.png',
+    title: 'Engineer',
+    bio: 'Me bio',
+    links: ['https://me.example'],
+    consent: {
+      dataProcessing: { granted: true, grantedAt: '2026-01-01' },
+      marketing: { granted: false },
+      publicProfile: { granted: true },
+    },
   },
   {
     _id: 'sp_co',
@@ -82,6 +99,15 @@ const seed = (): Doc[] => [
     name: 'Co',
     knownEmails: ['co@x.no'],
     email: 'co@x.no',
+    title: 'Co title',
+    bio: 'CO-BIO',
+    links: ['https://co.example'],
+    consent: {
+      dataProcessing: { granted: true },
+      marketing: { granted: true },
+      publicProfile: { granted: true },
+      photography: { granted: true },
+    },
   },
   { _id: 'sp_other', _type: 'speaker', name: 'Other', providers: ['github:9'] },
   // An organizer added this address off a ticket: it never links a login.
@@ -107,7 +133,8 @@ const seed = (): Doc[] => [
     status: 'pending',
     expiresAt: '2099-01-01T00:00:00Z',
     createdAt: '2026-02-01T00:00:00Z',
-    declineReason: 'PRIVATE',
+    declineReason: 'Too busy',
+    lastRemindedAt: '2026-02-03T00:00:00Z',
   },
   {
     _id: 'inv_2',
@@ -248,13 +275,92 @@ beforeEach(() => {
 })
 
 describe('myProposals / myProposal', () => {
-  it('lists my proposals in this conference, co-spoken included, never deleted', async () => {
-    const me = await gql(LIST, as('u_me'))
+  it('lists my proposals in this conference, co-spoken and deleted included, newest update first', async () => {
+    const me = await gql(
+      `{ myProposals { id status updatedAt createdAt } }`,
+      as('u_me'),
+    )
     expect(me.errors).toBeUndefined()
-    expect(me.data.myProposals.map((p: { id: string }) => p.id).sort()).toEqual(
-      ['t_acc', 't_draft', 't_rej', 't_sub'],
+    // The site's getProposals: no status filter, `_updatedAt desc` within a
+    // conference.
+    expect(me.data.myProposals).toEqual(
+      ['t_rej', 't_del', 't_acc', 't_draft', 't_sub'].map((id) => ({
+        id,
+        status: doc(id).status,
+        updatedAt: doc(id)._updatedAt,
+        createdAt: '2026-01-01T00:00:00Z',
+      })),
     )
     expect(JSON.stringify(me)).not.toContain('PRIVATE')
+  })
+
+  it('a deleted proposal reads with its status and cannot be changed or counted', async () => {
+    const r = await gql(ONE, as('u_me'), { id: 't_del' })
+    expect(r.data.myProposal.status).toBe('deleted')
+    expect(
+      errOf(
+        await gql(UPDATE, as('u_me'), { id: 't_del', input: { title: 'x' } }),
+      )?.[0].code,
+    ).toBe('FORBIDDEN')
+    expect(
+      errOf(await gql(WITHDRAW, as('u_me'), { id: 't_del' }))?.[0].code,
+    ).toBe('FORBIDDEN')
+    expect(doc('t_del').title).toBe('t_del title')
+  })
+
+  it("speaker fields: title for every speaker; bio, links and consent on the caller's own entry only", async () => {
+    const q = `query($id: ID!) { myProposal(id: $id) { speakers { id title bio links consent { dataProcessing marketing publicProfile photography } } } }`
+    const mine = await gql(q, as('u_me'), { id: 't_sub' })
+    expect(mine.errors).toBeUndefined()
+    expect(mine.data.myProposal.speakers).toEqual([
+      {
+        id: 'sp_me',
+        title: 'Engineer',
+        bio: 'Me bio',
+        links: ['https://me.example'],
+        consent: {
+          dataProcessing: true,
+          marketing: false,
+          publicProfile: true,
+          photography: false,
+        },
+      },
+      { id: 'sp_co', title: 'Co title', bio: null, links: [], consent: null },
+    ])
+    // The same talk read by the co-speaker: the mirror image.
+    const co = await gql(q, as('u_co'), { id: 't_sub' })
+    expect(co.data.myProposal.speakers).toEqual([
+      { id: 'sp_me', title: 'Engineer', bio: null, links: [], consent: null },
+      {
+        id: 'sp_co',
+        title: 'Co title',
+        bio: 'CO-BIO',
+        links: ['https://co.example'],
+        consent: {
+          dataProcessing: true,
+          marketing: true,
+          publicProfile: true,
+          photography: true,
+        },
+      },
+    ])
+    expect(JSON.stringify(mine)).not.toMatch(/CO-BIO|co\.example/)
+  })
+
+  it('invitations carry declineReason and lastRemindedAt, as the site shows them', async () => {
+    const r = await gql(
+      `query($id: ID!) { myProposal(id: $id) { coSpeakerInvitations { id declineReason lastRemindedAt } } }`,
+      as('u_me'),
+      { id: 't_sub' },
+    )
+    expect(r.data.myProposal.coSpeakerInvitations).toEqual([
+      {
+        id: 'inv_1',
+        declineReason: 'Too busy',
+        lastRemindedAt: '2026-02-03T00:00:00Z',
+      },
+      { id: 'inv_2', declineReason: null, lastRemindedAt: null },
+    ])
   })
 
   it('another speaker’s proposal is NOT_FOUND exactly like a nonexistent id', async () => {
@@ -314,6 +420,23 @@ describe('myProposals / myProposal', () => {
     })
     expect(anon).toEqual({ data: { myProposals: [] } })
     expect(link).not.toHaveBeenCalled()
+  })
+})
+
+describe('without SANITY_API_TOKEN_WRITE', () => {
+  it('reads still work and every write refuses with SERVICE_UNAVAILABLE', async () => {
+    const saved = env.SANITY_API_TOKEN_WRITE
+    ;(env as { SANITY_API_TOKEN_WRITE?: string }).SANITY_API_TOKEN_WRITE =
+      undefined
+    try {
+      const list = await gql(`{ myProposals { id } }`, as('u_me'), {})
+      expect(list.errors).toBeUndefined()
+      const r = await gql(SUBMIT, as('u_me'), { input: INPUT })
+      expect(r.data?.submitProposal ?? null).toBeNull()
+      expect(r.errors?.[0]?.extensions?.code).toBe('SERVICE_UNAVAILABLE')
+    } finally {
+      env.SANITY_API_TOKEN_WRITE = saved
+    }
   })
 })
 
@@ -725,6 +848,7 @@ describe('schema', () => {
       'capacity',
       'coSpeakerInvitations',
       'conference',
+      'createdAt',
       'description',
       'format',
       'id',
@@ -738,25 +862,32 @@ describe('schema', () => {
       'title',
       'topicIds',
       'tos',
+      'updatedAt',
       'withdrawnReason',
     ])
     const of = (t: string) =>
       Object.keys((schema.getType(t) as GraphQLObjectType).getFields()).sort()
     expect(of('CoSpeakerInvitation')).toEqual([
       'createdAt',
+      'declineReason',
       'expiresAt',
       'id',
       'invitedEmail',
       'invitedName',
+      'lastRemindedAt',
       'respondedAt',
       'status',
     ])
     expect(of('MyProposalSpeaker')).toEqual([
+      'bio',
+      'consent',
       'email',
       'id',
       'image',
+      'links',
       'name',
       'slug',
+      'title',
     ])
     // The public talk list's speaker carries no contact.
     expect(of('CfpSpeakerRef')).toEqual(['id', 'name'])
@@ -766,8 +897,7 @@ describe('schema', () => {
       'MyProposalAttachment',
       'CoSpeakerInvitation',
     ])
-      for (const x of of(t))
-        expect(x).not.toMatch(/review|score|note|rating|decline|remind/i)
+      for (const x of of(t)) expect(x).not.toMatch(/review|score|note|rating/i)
     for (const x of f)
       expect(x).not.toMatch(
         /review|score|note|feedback|rating|comment|snapshot|email/i,

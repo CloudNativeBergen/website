@@ -359,6 +359,30 @@ export async function setLifecycleViaApi(
   if (id !== conferenceId) throw new Error(`conference id mismatch: ${id}`)
 }
 
+const ORG_PLAN = `query { organization { effectivePlan } }` as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
+const ORG_PLAN_DOC = graphql(ORG_PLAN)
+
+/**
+ * The request org's effective plan (#2129), read as the signed-in organizer:
+ * the gateway names the org from the host, never from input. Throws on any
+ * HTTP or GraphQL error, and when the org is not returned.
+ */
+export async function orgPlanViaApi(
+  host: string,
+  userJwt: string,
+): Promise<string> {
+  const data = await mutate<ResultOf<typeof ORG_PLAN_DOC>>(
+    host,
+    ORG_PLAN,
+    {},
+    userJwt,
+  )
+  const plan = data?.organization?.effectivePlan
+  if (!plan) throw new Error('no organization plan')
+  return plan
+}
+
 const RESERVE_REMINDER =
   `mutation { reserveWorkshopReminder { token retryAfterMs } }` as const
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only

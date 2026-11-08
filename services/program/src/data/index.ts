@@ -5,7 +5,11 @@
 // Sanity, the data does not move). A D1 source implements the same interface
 // later; the schema only sees the plain types below.
 import { createClient } from '@sanity/client'
-import { ScopedRepository, type Envelope } from '@runkonf/tenancy'
+import {
+  ScopedRepository,
+  platformBatch,
+  type Envelope,
+} from '@runkonf/tenancy'
 import {
   osloToday,
   SanityProgramSource,
@@ -95,18 +99,21 @@ class Program extends ScopedRepository {
   }
 }
 
+// Operator lane only: platformBatch refuses anything but a PlatformContext.
+// One read per page, bounded to the page's conference ids.
+export const CONFIRMED_TALK_SPEAKERS = `*[_type == "talk" && conference._ref in $conferenceIds && status == "confirmed"]{ "c": conference._ref, "s": speakers[]._ref }`
+
 export function createData(env: DataEnv, envelope: Envelope) {
-  const source = new SanityProgramSource(
-    createClient({
-      projectId: env.SANITY_PROJECT_ID,
-      dataset: env.SANITY_DATASET,
-      apiVersion: '2023-05-03',
-      useCdn: true,
-      // The dataset is private: no token reads nothing.
-      token: env.SANITY_API_TOKEN_READ,
-      requestTagPrefix: 'program.read',
-    }),
-  )
+  const client = createClient({
+    projectId: env.SANITY_PROJECT_ID,
+    dataset: env.SANITY_DATASET,
+    apiVersion: '2023-05-03',
+    useCdn: true,
+    // The dataset is private: no token reads nothing.
+    token: env.SANITY_API_TOKEN_READ,
+    requestTagPrefix: 'program.read',
+  })
+  const source = new SanityProgramSource(client)
   // async: a missing binding rejects, so published() fails closed.
   const programDate: DataEnv['CONFERENCE']['programDate'] = async (o, c) =>
     env.CONFERENCE.programDate(o, c)
@@ -114,7 +121,26 @@ export function createData(env: DataEnv, envelope: Envelope) {
   // should fail the resolver, not the whole request. One per request, so
   // programDate is read once.
   let program: Program | undefined
+  // Distinct speakers on confirmed talks, published or not (#2142).
+  const confirmedSpeakerCount = platformBatch<number>(
+    envelope,
+    'operator conference stats: confirmed speakers (#2142)',
+    async (ids) => {
+      const rows = await client.fetch<{ c: string; s: unknown }[]>(
+        CONFIRMED_TALK_SPEAKERS,
+        { conferenceIds: ids },
+      )
+      const by = new Map<string, Set<unknown>>()
+      for (const r of rows ?? []) {
+        const set = by.get(r.c) ?? new Set()
+        for (const sp of Array.isArray(r.s) ? r.s : []) if (sp) set.add(sp)
+        by.set(r.c, set)
+      }
+      return new Map([...by].map(([c, set]) => [c, set.size]))
+    },
+  )
   return {
+    confirmedSpeakerCount,
     program: () => (program ??= new Program(source, programDate, envelope)),
   }
 }

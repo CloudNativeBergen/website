@@ -38,7 +38,9 @@ const identity = {
   memberships: vi.fn(
     async (): Promise<{ orgId: string; role: string }[]> => [],
   ),
+  audit: vi.fn(async (): Promise<void> => undefined),
 }
+const conferenceRpc = { ticketed: vi.fn(async () => false) }
 vi.mock('./data/cloudflare', () => ({ cloudflareHostnames: () => hostnames }))
 
 const { default: worker } = await import('./worker')
@@ -267,6 +269,14 @@ beforeEach(() => {
           import.meta.url,
         ),
         'utf8',
+      ) +
+      readFileSync(
+        new URL('../migrations/0008_billing_plan.sql', import.meta.url),
+        'utf8',
+      ) +
+      readFileSync(
+        new URL('../migrations/0009_comp_existing_orgs.sql', import.meta.url),
+        'utf8',
       ),
   )
   env = {
@@ -275,6 +285,7 @@ beforeEach(() => {
     CF_API_TOKEN: 'unused',
     CF_ZONE_ID: 'unused',
     IDENTITY: identity,
+    CONFERENCE: conferenceRpc,
     SANITY_PROJECT_ID: 'p',
     SANITY_DATASET: 'd',
     SANITY_API_TOKEN_READ: 'token',
@@ -306,6 +317,9 @@ beforeEach(() => {
   hostnames.delete.mockReset()
   identity.ensure.mockReset()
   identity.syncMembers.mockReset()
+  identity.audit.mockReset()
+  conferenceRpc.ticketed.mockReset()
+  conferenceRpc.ticketed.mockResolvedValue(false)
 })
 
 async function gql(
@@ -451,7 +465,7 @@ describe('provisioning', () => {
     const { body } = await gql('{ _service { sdl } }')
     const mutation = /type Mutation[^}]*}/.exec(body.data._service.sdl)![0]
     const fields = mutation.split('\n').filter((l) => /^\s+\w+\(/.test(l))
-    expect(fields).toHaveLength(8)
+    expect(fields).toHaveLength(9)
     for (const f of fields)
       if (
         f.includes('setConferenceLifecycle(') ||
@@ -461,7 +475,8 @@ describe('provisioning', () => {
       else
         expect(f).toContain(
           f.includes('provisionOrganization(') ||
-            f.includes('createOrganization(')
+            f.includes('createOrganization(') ||
+            f.includes('setComplimentaryPlan(')
             ? '@tag(name: "operator")'
             : '@tag(name: "internal")',
         )
@@ -1706,13 +1721,14 @@ describe('provisionConference (kontroll#85)', () => {
     sqlite.exec(
       "INSERT INTO domains (hostname, kind, org_id, conference_id, verification) VALUES ('d1.example.com', 'custom', 'organization.beta', 'conference-beta', 'pending')",
     )
-    const d1 = await pc(owner, { domain: 'd1.example.com' })
+    const paid = { ...owner, plan: 'basic' } as Envelope
+    const d1 = await pc(paid, { domain: 'd1.example.com' })
     expect(reasonOf(d1.body)).toMatchObject({
       reason: 'DOMAIN_TAKEN',
       field: 'domain',
     })
     expect(sanityFetch).not.toHaveBeenCalled()
-    const inSanity = await pc(owner, { domain: 'conf.beta.org' })
+    const inSanity = await pc(paid, { domain: 'conf.beta.org' })
     expect(reasonOf(inSanity.body)).toMatchObject({
       reason: 'DOMAIN_TAKEN',
       field: 'domain',
@@ -1727,8 +1743,442 @@ describe('provisionConference (kontroll#85)', () => {
     [{ endDate: '2027-09-01' }, 'endDate'],
     [{ domain: 'x.konf.run' }, 'domain'],
   ])('invalid input %j is INVALID_INPUT on %s', async (over, field) => {
-    const { body } = await pc(owner, over)
+    // On a paid plan, so the domain reaches validation (#2129).
+    const { body } = await pc({ ...owner, plan: 'pro' } as Envelope, over)
     expect(reasonOf(body)).toMatchObject({ reason: 'INVALID_INPUT', field })
     expect(sanityFetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('billing phase 1 (#2129)', () => {
+  const PLAN_RESOLVE = `query($host: String!) { tenantByHost(host: $host) { orgId plan } }`
+  const SET = `mutation($s: ConferenceLifecycleOverride) { setConferenceLifecycle(status: $s) { lifecycleStatus } }`
+  const COMP = `mutation($org: ID!, $plan: Plan!, $until: String, $reason: String!) {
+    setComplimentaryPlan(orgId: $org, plan: $plan, until: $until, reason: $reason) { id plan }
+  }`
+  const PC = `mutation($input: ProvisionConferenceInput!, $key: String!) {
+    provisionConference(input: $input, idempotencyKey: $key) { conferenceId }
+  }`
+  const orgRow = (id: string) =>
+    sqlite
+      .prepare(
+        'SELECT plan, plan_source, comp_until, comp_reason FROM organizations WHERE id = ?',
+      )
+      .get(id)
+  const lifecycle = (id: string) =>
+    (
+      sqlite
+        .prepare('SELECT lifecycle FROM conferences WHERE id = ?')
+        .get(id) as {
+        lifecycle: string
+      }
+    ).lifecycle
+  async function setup() {
+    const org = await provision()
+    const confId = conferenceOf(org.id)
+    const admin: Envelope = {
+      typ: 'tenant',
+      orgId: org.id,
+      conferenceId: confId,
+      userId: 'u',
+      orgRole: 'admin',
+      scopes: [],
+    }
+    return { org, confId, admin }
+  }
+  const planError = (body: { errors?: { extensions: object }[] }) =>
+    body.errors?.[0]?.extensions
+
+  describe('migration 0008', () => {
+    it('defaults existing and new orgs to free from the default source', async () => {
+      const { org } = await setup()
+      expect(orgRow(org.id)).toEqual({
+        plan: 'free',
+        plan_source: 'default',
+        comp_until: null,
+        comp_reason: null,
+      })
+    })
+
+    it('applies on top of 0001..0007 holding a row, and refuses unknown values', () => {
+      const { org } = { org: { id: 'x' } }
+      sqlite.exec(
+        `INSERT INTO organizations (id, slug, name) VALUES ('${org.id}', 'x', 'X')`,
+      )
+      for (const bad of [
+        "UPDATE organizations SET plan = 'enterprise'",
+        "UPDATE organizations SET plan_source = 'gift'",
+        "UPDATE organizations SET subscription_status = 'trialing'",
+        "INSERT INTO organizations (id, slug, name, plan) VALUES ('y', 'y', 'Y', 'gold')",
+      ])
+        expect(() => sqlite.exec(bad), bad).toThrow()
+      sqlite.exec(
+        "UPDATE organizations SET plan = 'pro', plan_source = 'stripe', subscription_status = 'past_due'",
+      )
+    })
+
+    it('applies to a copy of the pre-0008 schema with data in place', () => {
+      const db = new DatabaseSync(':memory:')
+      const mig = (f: string) =>
+        readFileSync(new URL(`../migrations/${f}`, import.meta.url), 'utf8')
+      db.exec(
+        [
+          '0001_init.sql',
+          '0002_rollout_flags.sql',
+          '0004_org_created_at.sql',
+          '0005_lifecycle_cancelled.sql',
+          '0006_provisioning_conference.sql',
+          '0007_provisioning_created_by.sql',
+        ]
+          .map(mig)
+          .join('\n'),
+      )
+      db.exec(
+        "INSERT INTO organizations (id, slug, name, plan) VALUES ('o', 'o', 'O', 'free')",
+      )
+      db.exec(mig('0008_billing_plan.sql'))
+      expect(
+        db
+          .prepare(
+            'SELECT plan, plan_source, subscription_status FROM organizations',
+          )
+          .get(),
+      ).toEqual({
+        plan: 'free',
+        plan_source: 'default',
+        subscription_status: null,
+      })
+    })
+  })
+
+  describe('migration 0009', () => {
+    it('gives CNDN comp pro, leaves every other org (kkdemo included) free, and reruns cleanly', () => {
+      const db = new DatabaseSync(':memory:')
+      const mig = (f: string) =>
+        readFileSync(new URL(`../migrations/${f}`, import.meta.url), 'utf8')
+      db.exec(
+        [
+          '0001_init.sql',
+          '0002_rollout_flags.sql',
+          '0004_org_created_at.sql',
+          '0005_lifecycle_cancelled.sql',
+          '0006_provisioning_conference.sql',
+          '0007_provisioning_created_by.sql',
+        ]
+          .map(mig)
+          .join('\n'),
+      )
+      db.exec(
+        "INSERT INTO organizations (id, slug, name) VALUES ('organization-cloud-native-days', 'cndn', 'CNDN'), ('kkdemo.org', 'kk', 'KK')",
+      )
+      db.exec(mig('0008_billing_plan.sql'))
+      db.exec(mig('0009_comp_existing_orgs.sql'))
+      db.exec(mig('0009_comp_existing_orgs.sql'))
+      expect(
+        db
+          .prepare(
+            'SELECT id, plan, plan_source, comp_until, comp_reason FROM organizations ORDER BY id',
+          )
+          .all(),
+      ).toEqual([
+        {
+          id: 'kkdemo.org',
+          plan: 'free',
+          plan_source: 'default',
+          comp_until: null,
+          comp_reason: null,
+        },
+        {
+          id: 'organization-cloud-native-days',
+          plan: 'pro',
+          plan_source: 'comp',
+          comp_until: null,
+          comp_reason: 'existing customer (owner decision 2026-11-08)',
+        },
+      ])
+    })
+  })
+
+  it('serves effectivePlan on the session organization', async () => {
+    const { org, admin } = await setup()
+    const Q = '{ organization { plan effectivePlan } }'
+    expect((await gql(Q, {}, admin)).body.data.organization).toEqual({
+      plan: 'free',
+      effectivePlan: 'free',
+    })
+    sqlite.exec(
+      `UPDATE organizations SET plan = 'basic', plan_source = 'comp' WHERE id = '${org.id}'`,
+    )
+    expect((await gql(Q, {}, admin)).body.data.organization).toEqual({
+      plan: 'basic',
+      effectivePlan: 'basic',
+    })
+    // A stored plan with no grant behind it is not enforced.
+    sqlite.exec(
+      `UPDATE organizations SET plan_source = 'default' WHERE id = '${org.id}'`,
+    )
+    expect((await gql(Q, {}, admin)).body.data.organization.effectivePlan).toBe(
+      'free',
+    )
+  })
+
+  describe('tenantByHost carries the effective plan', () => {
+    it.each([
+      ["plan = 'pro', plan_source = 'default'", 'free'],
+      ["plan = 'pro', plan_source = 'comp', comp_until = NULL", 'pro'],
+      [
+        "plan = 'basic', plan_source = 'comp', comp_until = '2000-01-01T00:00:00Z'",
+        'free',
+      ],
+      [
+        "plan = 'basic', plan_source = 'stripe', subscription_status = 'active'",
+        'basic',
+      ],
+      [
+        "plan = 'basic', plan_source = 'stripe', subscription_status = 'canceled'",
+        'free',
+      ],
+    ])('%s → %s', async (set, want) => {
+      const { org } = await setup()
+      sqlite.exec(`UPDATE organizations SET ${set} WHERE id = '${org.id}'`)
+      const { body } = await gql(PLAN_RESOLVE, { host: 'acme-2026.konf.run' })
+      expect(body.data.tenantByHost).toEqual({ orgId: org.id, plan: want })
+    })
+  })
+
+  describe('going live with ticket sales', () => {
+    it('refuses to put a ticketed cancelled edition back live on free', async () => {
+      const { confId, admin } = await setup()
+      await gql(SET, { s: 'cancelled' }, admin)
+      conferenceRpc.ticketed.mockResolvedValue(true)
+      const { body } = await gql(SET, { s: null }, admin)
+      expect(planError(body)).toEqual({
+        code: 'BAD_USER_INPUT',
+        reason: 'PLAN_REQUIRED',
+        requiredPlan: 'basic',
+      })
+      expect(conferenceRpc.ticketed).toHaveBeenCalledWith(admin.orgId, confId)
+      expect(lifecycle(confId)).toBe('cancelled')
+    })
+
+    it.each(['basic', 'pro'])(
+      'allows it on %s, asking nothing',
+      async (plan) => {
+        const { confId, admin } = await setup()
+        await gql(SET, { s: 'archived' }, admin)
+        conferenceRpc.ticketed.mockResolvedValue(true)
+        const { body } = await gql(SET, { s: null }, {
+          ...admin,
+          plan,
+        } as Envelope)
+        expect(body.data.setConferenceLifecycle).toEqual({
+          lifecycleStatus: 'live',
+        })
+        expect(conferenceRpc.ticketed).not.toHaveBeenCalled()
+        expect(lifecycle(confId)).toBe('live')
+      },
+    )
+
+    it('lets a free org put a free-to-attend edition back live', async () => {
+      const { confId, admin } = await setup()
+      await gql(SET, { s: 'cancelled' }, admin)
+      const { body } = await gql(SET, { s: null }, admin)
+      expect(body.data.setConferenceLifecycle).toEqual({
+        lifecycleStatus: 'live',
+      })
+      expect(lifecycle(confId)).toBe('live')
+    })
+
+    it('never gates cancelling or archiving, ticketed or not', async () => {
+      const { confId, admin } = await setup()
+      conferenceRpc.ticketed.mockResolvedValue(true)
+      for (const s of ['cancelled', 'archived']) {
+        const { body } = await gql(SET, { s }, admin)
+        expect(body.errors).toBeUndefined()
+        expect(lifecycle(confId)).toBe(s)
+      }
+      expect(conferenceRpc.ticketed).not.toHaveBeenCalled()
+    })
+
+    it('refuses a non-writer with FORBIDDEN before the plan is looked at', async () => {
+      const { admin } = await setup()
+      const { body } = await gql(
+        SET,
+        { s: null },
+        { ...admin, orgRole: 'member' },
+      )
+      expect(planError(body)).toMatchObject({ code: 'FORBIDDEN' })
+      expect(conferenceRpc.ticketed).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('custom domain on a new edition', () => {
+    const input = (domain?: string) => ({
+      title: 'Acme 2027',
+      startDate: '2027-10-01',
+      endDate: '2027-10-02',
+      ...(domain ? { domain } : {}),
+    })
+    const owner = async (plan?: string) => {
+      const { admin } = await setup()
+      sanityFetch.mockClear()
+      return {
+        ...admin,
+        orgRole: 'owner',
+        ...(plan ? { plan } : {}),
+      } as Envelope
+    }
+
+    it('refuses it on free before any read or write', async () => {
+      const as = await owner()
+      const prepare = vi.spyOn(env.DB, 'prepare')
+      const { body } = await gql(
+        PC,
+        { input: input('conf.acme-new.org'), key: 'edition-key-00001' },
+        as,
+      )
+      expect(planError(body)).toMatchObject({
+        code: 'BAD_USER_INPUT',
+        reason: 'PLAN_REQUIRED',
+        requiredPlan: 'basic',
+      })
+      expect(prepare).not.toHaveBeenCalled()
+      expect(sanityFetch).not.toHaveBeenCalled()
+      expect(site.writes).toBe(0)
+    })
+
+    it.each(['basic', 'pro'])('allows it on %s', async (plan) => {
+      const as = await owner(plan)
+      const { body } = await gql(
+        PC,
+        { input: input('conf.acme-new.org'), key: 'edition-key-00001' },
+        as,
+      )
+      expect(body.errors).toBeUndefined()
+      expect(body.data.provisionConference.conferenceId).toBeTruthy()
+    })
+
+    it('leaves an edition without a custom domain alone on free', async () => {
+      const as = await owner()
+      const { body } = await gql(
+        PC,
+        { input: input(), key: 'edition-key-00001' },
+        as,
+      )
+      expect(body.errors).toBeUndefined()
+    })
+  })
+
+  describe('setComplimentaryPlan', () => {
+    const vars = (org: string, over: Record<string, unknown> = {}) => ({
+      org,
+      plan: 'pro',
+      until: '2099-01-01T00:00:00Z',
+      reason: 'CNDN, organizer of the platform',
+      ...over,
+    })
+
+    it('grants a plan, audited, and the effective plan follows', async () => {
+      const { org } = await setup()
+      const { body } = await gql(COMP, vars(org.id), operator)
+      expect(body.errors).toBeUndefined()
+      expect(body.data.setComplimentaryPlan).toEqual({
+        id: org.id,
+        plan: 'pro',
+      })
+      expect(orgRow(org.id)).toEqual({
+        plan: 'pro',
+        plan_source: 'comp',
+        comp_until: '2099-01-01T00:00:00.000Z',
+        comp_reason: 'CNDN, organizer of the platform',
+      })
+      expect(identity.audit).toHaveBeenCalledWith({
+        type: 'operator.write',
+        actorId: 'op',
+        organizationId: org.id,
+        conferenceId: null,
+        fields: ['plan', 'plan_source', 'comp_until', 'comp_reason'],
+      })
+      const { body: r } = await gql(PLAN_RESOLVE, {
+        host: 'acme-2026.konf.run',
+      })
+      expect(r.data.tenantByHost.plan).toBe('pro')
+    })
+
+    it('ends a grant with free', async () => {
+      const { org } = await setup()
+      await gql(COMP, vars(org.id), operator)
+      await gql(COMP, vars(org.id, { plan: 'free', until: null }), operator)
+      expect(orgRow(org.id)).toEqual({
+        plan: 'free',
+        plan_source: 'default',
+        comp_until: null,
+        comp_reason: null,
+      })
+      expect(identity.audit).toHaveBeenCalledTimes(2)
+    })
+
+    it('audits before it writes, and a failed audit writes nothing', async () => {
+      const { org } = await setup()
+      identity.audit.mockImplementation(async () => {
+        expect(orgRow(org.id)).toMatchObject({ plan: 'free' })
+        throw new Error('identity down')
+      })
+      const { body } = await gql(COMP, vars(org.id), operator)
+      expect(body.errors?.[0]).toBeDefined()
+      expect(orgRow(org.id)).toMatchObject({
+        plan: 'free',
+        plan_source: 'default',
+      })
+    })
+
+    it('answers null for an unknown org, without an audit row', async () => {
+      await setup()
+      const { body } = await gql(COMP, vars('organization.nope'), operator)
+      expect(body.data.setComplimentaryPlan).toBeNull()
+      expect(identity.audit).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      [{ until: '2000-01-01T00:00:00Z' }, 'until'],
+      [{ until: 'soon' }, 'until'],
+      [{ reason: '  ' }, 'reason'],
+    ])('refuses %j as INVALID_INPUT', async (over, field) => {
+      const { org } = await setup()
+      const { body } = await gql(COMP, vars(org.id, over), operator)
+      expect(planError(body)).toMatchObject({ reason: 'INVALID_INPUT', field })
+      expect(orgRow(org.id)).toMatchObject({ plan: 'free' })
+    })
+
+    it.each([
+      ['anonymous', undefined],
+      ['an org owner', 'owner'],
+      ['an operator acting for a tenant', 'op-tenant'],
+      ['a user context', 'user'],
+    ])('refuses %s before any read', async (_, who) => {
+      const { org, admin } = await setup()
+      const as: Envelope | undefined =
+        who === 'owner'
+          ? { ...admin, orgRole: 'owner' }
+          : who === 'op-tenant'
+            ? {
+                ...admin,
+                userId: 'op',
+                orgRole: null,
+                scopes: ['platform:operator'],
+              }
+            : who === 'user'
+              ? { typ: 'user', userId: 'u' }
+              : undefined
+      const prepare = vi.spyOn(env.DB, 'prepare')
+      const { body } = await gql(COMP, vars(org.id), as)
+      expect(planError(body)).toMatchObject({ code: 'FORBIDDEN' })
+      expect(prepare).not.toHaveBeenCalled()
+      expect(identity.audit).not.toHaveBeenCalled()
+      expect(orgRow(org.id)).toMatchObject({
+        plan: 'free',
+        plan_source: 'default',
+      })
+    })
   })
 })

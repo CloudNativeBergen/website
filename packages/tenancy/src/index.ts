@@ -4,6 +4,7 @@
 // Ported from RunKonf/konf-grapql-poc@poc (poc/shared/tenancy), hardened per
 // RunKonf/konf-grapql-poc#23.
 import { createGraphQLError } from 'graphql-yoga'
+import { isPlan, type Plan } from './plan'
 import {
   SignJWT,
   jwtVerify,
@@ -30,6 +31,12 @@ export interface TenantEnvelope {
   userId: string | null
   orgRole: string | null
   scopes: string[]
+  /**
+   * The org's effective plan (#2129), minted per request like orgRole.
+   * verifyEnvelope always sets it: an absent or unknown value is `free`, so
+   * the gateway and the subgraphs deploy in either order.
+   */
+  plan?: Plan
 }
 
 /**
@@ -115,6 +122,7 @@ export async function verifyEnvelope(
       userId: p.userId,
       orgRole: p.orgRole,
       scopes: p.scopes,
+      plan: isPlan(p.plan) ? p.plan : 'free',
     }
   }
   if (p.typ === 'platform' && isString(p.userId) && isString(p.platformRole)) {
@@ -221,6 +229,40 @@ export function unscopedForPlatformOps<T>(
   return open()
 }
 
+/**
+ * Operator-lane reads keyed by id (#2142), batched per request: every call
+ * made in the same tick shares one `load` and one `operator.read` log line.
+ * Goes through unscopedForPlatformOps, so anything but a PlatformContext
+ * rejects before `load` runs. Callers still guard first (guard before fetch).
+ */
+export function platformBatch<V>(
+  envelope: Envelope | null | undefined,
+  reason: string,
+  load: (ids: string[]) => Promise<Map<string, V>>,
+): (id: string) => Promise<V | undefined> {
+  let ids: Set<string> | null = null
+  let result: Promise<Map<string, V>> | null = null
+  return (id) => {
+    if (!ids) {
+      const batch = (ids = new Set())
+      result = Promise.resolve().then(() => {
+        ids = null
+        return unscopedForPlatformOps(
+          envelope as PlatformContext,
+          reason,
+          (e) =>
+            console.log(
+              JSON.stringify({ event: 'operator.read', ...e, n: batch.size }),
+            ),
+          () => load([...batch]),
+        )
+      })
+    }
+    ids.add(id)
+    return result!.then((m) => m.get(id))
+  }
+}
+
 /** Thrown by `countAttempt` once a caller has spent its attempts. */
 export class AttemptLimitError extends Error {
   readonly code = 'RATE_LIMITED'
@@ -283,3 +325,4 @@ export async function generateEnvelopeKeyPair(): Promise<{
 }
 export * from './push'
 export * from './authz'
+export * from './plan'

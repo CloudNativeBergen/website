@@ -271,6 +271,26 @@ class Conferences extends ScopedRepository {
   }
 }
 
+/**
+ * Whether the edition sells tickets (ticketingProvider set), published or
+ * not: tenant-directory's plan gate on going live (#2129). Both ids match,
+ * and only a boolean leaves.
+ */
+export async function isTicketed(
+  d1: D1Database,
+  orgId: string,
+  conferenceId: string,
+) {
+  const row = await rawDb(d1).query.conferences.findFirst({
+    columns: { ticketingProvider: true },
+    where: and(
+      eq(conferences.orgId, orgId),
+      eq(conferences.conferenceId, conferenceId),
+    ),
+  })
+  return !!row?.ticketingProvider
+}
+
 export function createData(d1: D1Database, envelope: Envelope) {
   const db = rawDb(d1)
   // Built on first use: the constructor refuses a PlatformContext, and that

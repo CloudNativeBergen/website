@@ -9,7 +9,7 @@ export interface DataEnv {
   /** wrangler secret put SANITY_API_TOKEN_READ (per environment) */
   SANITY_API_TOKEN_READ: string
   /** wrangler secret put SANITY_API_TOKEN_WRITE (per environment) */
-  SANITY_API_TOKEN_WRITE: string
+  SANITY_API_TOKEN_WRITE?: string
   /** konf-identity `SpeakerLink`: match keys and profile, D1-owned. */
   IDENTITY: { link(userId: string): Promise<import('./mine').SpeakerLink> }
   /** konf-conference `ProgramDate`: CFP and program dates, D1-owned. */

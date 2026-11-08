@@ -156,6 +156,9 @@ function value(
     return /INT/i.test(col.type) ? Number(pick) : pick
   }
   if (n === 'role') return 'admin'
+  // tenant-directory 0008 holds organizations.plan to free|basic|pro by
+  // trigger (the column predates any CHECK), so no marker fits it.
+  if (table === 'organizations' && n === 'plan') return 'free'
   if (/INT|REAL|FLOA|DOUB/i.test(col.type)) return 0
   const text = `${tag(t)} ${table}.${n}`
   // A JSON id list holds numbers (conference 0007 public_free_ticket_ids).
@@ -503,6 +506,8 @@ const OPERATOR_QUERIES = new Set([
 ])
 /** Public roots too costly to batch: each gets its own document. */
 const ALONE = new Set([
+  'apiClients',
+  'myPersonalAccessTokens',
   'program',
   'talk',
   'speakers',
@@ -835,6 +840,14 @@ describe.each([
           !(
             e.extensions?.code === 'NOT_FOUND' &&
             roots[String(e.path?.[0])] === 'myProposal'
+          ) &&
+          // API credentials (#2115) are a contract only: a caller with access
+          // gets NOT_IMPLEMENTED. Drop this when they are implemented.
+          !(
+            e.extensions?.code === 'NOT_IMPLEMENTED' &&
+            /^(apiClients|myPersonalAccessTokens)$/.test(
+              roots[String(e.path?.[0])] ?? '',
+            )
           ),
       )
       expect(unexpected, query).toEqual([])
@@ -1011,6 +1024,17 @@ describe('cross-tenant mutation walk', () => {
         )
       )
         expect(['NOT_FOUND', 'BAD_USER_INPUT']).toContain(
+          (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions
+            ?.code,
+        )
+      // API credentials (#2115): contract only. The admin organizer may not
+      // create or rotate (owners only); the rest refuse NOT_IMPLEMENTED.
+      else if (
+        /"(createApiClient|rotateApiClientSecret|revokeApiClient|createPersonalAccessToken|revokePersonalAccessToken)"/.test(
+          json,
+        )
+      )
+        expect(['NOT_IMPLEMENTED', 'FORBIDDEN']).toContain(
           (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions
             ?.code,
         )
@@ -1471,6 +1495,8 @@ describe('operator lane: Kontroll members (#1956)', () => {
       userId: USER.a,
       orgRole: 'admin',
       scopes: [],
+      // The real directory's effective plan (#2129): a default-source org.
+      plan: 'free',
     })
   })
 
@@ -2025,7 +2051,7 @@ describe('organization: session org, plan and domains (#1968, #1969)', () => {
   const own = {
     id: ORG.a,
     name: 'TENANT_A organizations.name',
-    plan: 'TENANT_A organizations.plan',
+    plan: 'free',
     slug: 'TENANT_A organizations.slug',
     status: 'active',
     domains: [

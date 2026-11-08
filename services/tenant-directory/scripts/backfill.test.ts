@@ -202,3 +202,17 @@ describe('lifecycleOf (#1997)', () => {
     expect(r.conferences[0].lifecycle).toBe('cancelled')
   })
 })
+
+describe('plan (#2129)', () => {
+  it('maps an unknown Sanity plan to free and never overwrites a D1 plan', () => {
+    const out = mapBackfill(
+      [{ _id: 'org-x', name: 'X', slug: 'x', plan: 'enterprise' }],
+      [],
+      [],
+    )
+    expect(out.orgs[0].plan).toBe('free')
+    expect(toSql(out).directory).toContain(
+      'ON CONFLICT (id) DO UPDATE SET name = excluded.name;',
+    )
+  })
+})
