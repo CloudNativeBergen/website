@@ -317,6 +317,23 @@ describe('myProposals / myProposal', () => {
   })
 })
 
+describe('without SANITY_API_TOKEN_WRITE', () => {
+  it('reads still work and every write refuses with SERVICE_UNAVAILABLE', async () => {
+    const saved = env.SANITY_API_TOKEN_WRITE
+    ;(env as { SANITY_API_TOKEN_WRITE?: string }).SANITY_API_TOKEN_WRITE =
+      undefined
+    try {
+      const list = await gql(`{ myProposals { id } }`, as('u_me'), {})
+      expect(list.errors).toBeUndefined()
+      const r = await gql(SUBMIT, as('u_me'), { input: INPUT })
+      expect(r.data?.submitProposal ?? null).toBeNull()
+      expect(r.errors?.[0]?.extensions?.code).toBe('SERVICE_UNAVAILABLE')
+    } finally {
+      env.SANITY_API_TOKEN_WRITE = saved
+    }
+  })
+})
+
 describe('submitProposal', () => {
   it('submits, and snapshots the profile without writing back to it', async () => {
     const r = await gql(SUBMIT, as('u_me'), { input: INPUT })
