@@ -98,6 +98,8 @@ const NOT_PUBLIC = [...PHASE2_PRIVATE_FIELDS, 'volunteerRegistrationLink']
 
 const sanityFetch = vi.fn(async (query: string) => {
   const doc = structuredClone(SANITY)
+  if (query.includes('conference._ref == $conferenceId'))
+    return [{ _id: 'sfc', conference: doc }]
   if (query.includes('"sponsorForConference"'))
     return {
       _id: 'sfc',
@@ -333,5 +335,13 @@ describe('every phase 2 settings reader sees each field from D1 (#2038)', () => 
         'volunteerSlackInviteUrl',
       ]),
     )
+  })
+
+  it('the sponsor CRM list: sponsorEmail', async () => {
+    const { listSponsorsForConference } = await vi.importActual<
+      typeof import('@/lib/sponsor-crm/sanity')
+    >('@/lib/sponsor-crm/sanity')
+    const { sponsors } = await listSponsorsForConference('conf-1')
+    expect(sponsors?.[0].conference?.sponsorEmail).toBe(D1.sponsorEmail)
   })
 })
