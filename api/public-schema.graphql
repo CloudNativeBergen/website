@@ -319,6 +319,11 @@ type Mutation {
   createSignupCode(expiresAt: String!, maxUses: Int!, note: String!): SignupCode
 
   """
+  Deletes every invite request from `email` (erasure, #2161); returns how many. Platform operators only (operator lane, no tenant).
+  """
+  eraseInviteRequests(email: String!): Int
+
+  """
   Opens the Stripe billing portal for the envelope's org (#2129). Org owner only.
   """
   openBillingPortal: BillingPortalSession
@@ -328,6 +333,16 @@ type Mutation {
   """
   provisionConference(idempotencyKey: String!, input: ProvisionConferenceInput!, orgId: ID): ProvisionedConference
   provisionOrganization(conferenceId: ID!, idempotencyKey: String!, orgId: ID!, orgSlug: String!): Organization
+
+  """
+  The konf.app "Request an invite" form (#2161). Public; creates no account. Answers true whether or not the email already has an open request. Rate-limited per IP and per email (RATE_LIMITED). Refusals are BAD_USER_INPUT with `field`.
+  """
+  requestInvite(input: RequestInviteInput!): Boolean
+
+  """
+  Sets an invite request's status (#2161), optionally linking the signup code sent; `new` reopens it. Null for an unknown id. Platform operators only (operator lane, no tenant).
+  """
+  resolveInviteRequest(id: ID!, signupCodeId: ID, status: InviteRequestStatus!): InviteRequest
 
   """
   Revokes a sign-up invite code; null for an unknown id. Platform operators only (operator lane, no tenant).
@@ -574,6 +589,16 @@ type Query {
   Every org's conferences, ordered by id. Platform operators only (operator lane, no tenant). At most 100 per page: pass the last id as `after` for the next. `lifecycle` and `flag` (that flag on) filter.
   """
   conferences(after: ID, first: Int = 100, flag: RolloutFlag, lifecycle: ConferenceLifecycle): [OperatorConference!]
+
+  """
+  A signed timestamp for the konf.app invite form (#2161): fetch it when the form is shown and send it as `token`. Public. Null when invite requests are not configured.
+  """
+  inviteRequestToken: String
+
+  """
+  Invite requests (#2161), newest first (at most 500), optionally by status. Platform operators only (operator lane, no tenant).
+  """
+  inviteRequests(status: InviteRequestStatus): [InviteRequest!]
 
   """
   The signed-in user's own organizations, with their role and every conference edition (#2036). Kontroll's member lane: a session with no tenant. Refused with a tenant envelope or none.
@@ -1194,6 +1219,20 @@ type Domain {
   verification: String
 }
 
+type InviteRequest {
+  codeId: ID
+  conference: String
+  createdAt: String
+  email: String
+  id: ID
+  message: String
+  name: String
+  resolvedAt: String
+  size: String
+  status: InviteRequestStatus
+  ticketed: Boolean
+}
+
 type MyOrganization {
   conferenceEditions: [ConferenceEdition!]
   id: ID
@@ -1378,6 +1417,13 @@ enum Currency {
   EUR
   NOK
   USD
+}
+
+enum InviteRequestStatus {
+  declined
+  invited
+  new
+  spam
 }
 
 enum Plan {
@@ -1609,6 +1655,32 @@ input ProvisionConferenceInput {
   """YYYY-MM-DD"""
   startDate: String!
   title: String!
+}
+
+input RequestInviteInput {
+  """The conference name, 1 to 200 characters."""
+  conference: String!
+
+  """At most 254 characters."""
+  email: String!
+
+  """At most 2000 characters."""
+  message: String
+
+  """1 to 100 characters."""
+  name: String!
+
+  """Expected attendees, free text, 1 to 50 characters."""
+  size: String!
+  ticketed: Boolean!
+
+  """From `inviteRequestToken`, fetched when the form was shown."""
+  token: String!
+
+  """
+  Honeypot: a hidden field people leave empty. Any value drops the request silently.
+  """
+  website: String
 }
 
 input SignupOrganizationInput {

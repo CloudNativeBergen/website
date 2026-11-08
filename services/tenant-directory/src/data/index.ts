@@ -27,6 +27,7 @@ import {
   conferences,
   domains,
   organizations,
+  inviteRequests,
   provisioningRequests,
   signupCodes,
 } from './schema'
@@ -66,6 +67,10 @@ export interface DataEnv extends CloudflareEnv {
   }
   /** Sign-up attempts per user (#2163), Workers Rate Limiting. */
   SIGNUP_LIMIT: RateLimit
+  /** requestInvite attempts (#2161), keyed per caller IP and per email. */
+  INVITE_LIMIT: RateLimit
+  /** wrangler secret put INVITE_TOKEN_SECRET: HMAC key for the form's time token. Without it requestInvite refuses. */
+  INVITE_TOKEN_SECRET?: string
   /** konf-conference's ProgramDate entrypoint: is an edition ticketed? */
   CONFERENCE: {
     ticketed(orgId: string, conferenceId: string): Promise<boolean>
@@ -633,6 +638,104 @@ export function createData(
         key: `signup|user:${userId}`,
       })
       return success
+    },
+
+    /** A signed `<issued ms>.<hmac>` for the invite form; null without a secret. */
+    async inviteToken(now = Date.now()) {
+      if (!env.INVITE_TOKEN_SECRET) return null
+      return `${now}.${await hmac(env.INVITE_TOKEN_SECRET, String(now))}`
+    },
+
+    /** Milliseconds since a valid token was issued; null if forged or malformed. */
+    async inviteTokenAge(token: string, now = Date.now()) {
+      const [ts, sig, extra] = token.split('.')
+      if (!env.INVITE_TOKEN_SECRET || !ts || !sig || extra !== undefined)
+        return null
+      if (!/^\d{1,15}$/.test(ts)) return null
+      const expected = await hmac(env.INVITE_TOKEN_SECRET, ts)
+      if (!timingSafeEqual(sig, expected)) return null
+      return now - Number(ts)
+    },
+
+    /** One invite request attempt: both the IP and the email budget must allow it. */
+    async inviteAttempt(ip: string, email: string) {
+      const [byIp, byEmail] = await Promise.all([
+        env.INVITE_LIMIT.limit({ key: `invite|ip:${ip}` }),
+        env.INVITE_LIMIT.limit({ key: `invite|email:${email}` }),
+      ])
+      return byIp.success && byEmail.success
+    },
+
+    /** Stores a request; a second open one for the same email is dropped. */
+    async requestInvite(input: {
+      name: string
+      email: string
+      conference: string
+      size: string
+      ticketed: boolean
+      message: string | null
+    }) {
+      await db
+        .insert(inviteRequests)
+        .values({
+          id: crypto.randomUUID(),
+          ...input,
+          createdAt: new Date().toISOString(),
+        })
+        .onConflictDoNothing()
+    },
+
+    /** Operator-only: requests, newest first, optionally by status. */
+    inviteRequests: (status?: InviteStatus | null) =>
+      db.query.inviteRequests.findMany({
+        where: status ? eq(inviteRequests.status, status) : undefined,
+        orderBy: sql`${inviteRequests.createdAt} DESC`,
+        limit: 500,
+      }),
+
+    /** Operator-only: sets a status (and code); null for an unknown id. */
+    async resolveInviteRequest(
+      id: string,
+      status: InviteStatus,
+      codeId: string | null,
+    ) {
+      const [row] = await db
+        .update(inviteRequests)
+        .set({
+          status,
+          codeId,
+          resolvedAt: status === 'new' ? null : new Date().toISOString(),
+        })
+        .where(eq(inviteRequests.id, id))
+        .returning()
+      return row ?? null
+    },
+
+    /** Operator-only: deletes every request from an email; the number deleted. */
+    async eraseInviteRequests(email: string) {
+      const rows = await db
+        .delete(inviteRequests)
+        .where(eq(inviteRequests.email, email))
+        .returning({ id: inviteRequests.id })
+      return rows.length
+    },
+
+    /** Retention: 12 months after resolved_at, or after created_at if unresolved. */
+    async purgeInviteRequests(now = new Date()) {
+      const cutoff = new Date(now)
+      cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 1)
+      const c = cutoff.toISOString()
+      await db
+        .delete(inviteRequests)
+        .where(
+          or(
+            lt(inviteRequests.resolvedAt, c),
+            and(
+              isNull(inviteRequests.resolvedAt),
+              lt(inviteRequests.createdAt, c),
+            ),
+          ),
+        )
     },
 
     /** The id of a code that can still be spent; null otherwise. Read only. */
@@ -1377,6 +1480,31 @@ export function createData(
   return api
 }
 
+export type InviteStatus = 'new' | 'invited' | 'declined' | 'spam'
+
+async function hmac(secret: string, msg: string) {
+  const enc = new TextEncoder()
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(msg))
+  return btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+}
+
+function timingSafeEqual(a: string, b: string) {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
+}
+
 /** Cron Trigger: mirror Cloudflare status onto custom domains due a check. */
 export async function scheduled(
   data: ReturnType<typeof createData>,
@@ -1391,6 +1519,16 @@ export async function scheduled(
   // its scheduledTime, so it neither skips nor repeats an hour. The sync is
   // insert-only, so a rare double run is harmless anyway.
   if (new Date(scheduledTime).getUTCMinutes() !== 0) return
+  // Invite request retention (#2161) rides the 03:00 UTC run, once a day.
+  if (new Date(scheduledTime).getUTCHours() === 3)
+    await data.purgeInviteRequests(new Date(scheduledTime)).catch((e) =>
+      console.error(
+        JSON.stringify({
+          event: 'invite_requests.purge_failed',
+          error: e instanceof Error ? e.name : 'unknown',
+        }),
+      ),
+    )
   try {
     await data.syncMembers()
   } catch (e) {

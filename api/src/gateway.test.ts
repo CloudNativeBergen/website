@@ -8,6 +8,7 @@ import {
   type CryptoKey,
 } from 'jose'
 import {
+  CALLER_IP_HEADER,
   ENVELOPE_HEADER,
   generateEnvelopeKeyPair,
   verifyEnvelope,
@@ -164,6 +165,7 @@ describe('gateway', () => {
       'createOrganization',
       'createPersonalAccessToken',
       'createSignupCode',
+      'eraseInviteRequests',
       'inviteMember',
       'openBillingPortal',
       'operatorCancelInvitation',
@@ -175,7 +177,9 @@ describe('gateway', () => {
       'recordWorkshopReminder',
       'releaseWorkshopReminder',
       'removeMember',
+      'requestInvite',
       'reserveWorkshopReminder',
+      'resolveInviteRequest',
       'revokeAll',
       'revokeApiClient',
       'revokePersonalAccessToken',
@@ -239,6 +243,18 @@ describe('gateway', () => {
       env,
     )
     expect(envelopes).toEqual([null])
+  })
+
+  it('forwards its own caller IP, never a client-sent one (#2161)', async () => {
+    const { env, forwarded } = makeEnv()
+    await gateway.fetch(
+      post(SUBGRAPH_QUERY, {
+        'cf-connecting-ip': '10.1.2.3',
+        [CALLER_IP_HEADER]: '6.6.6.6',
+      }),
+      env,
+    )
+    expect(forwarded.map((h) => h.get(CALLER_IP_HEADER))).toEqual(['10.1.2.3'])
   })
 
   it('gives an unverified host no tenant', async () => {
