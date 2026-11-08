@@ -183,6 +183,8 @@ const SAFE_CODES: ReadonlyMap<string, string | null> = new Map([
   ['FORBIDDEN', 'Not allowed.'],
   ['BAD_USER_INPUT', null],
   ['NOT_FOUND', 'Not found.'],
+  // A schema-first contract whose resolver is not built yet (#2115).
+  ['NOT_IMPLEMENTED', 'Not implemented yet.'],
 ])
 
 /** Stable BAD_USER_INPUT reasons a client may branch on (kontroll#81). */
@@ -192,7 +194,14 @@ export const INPUT_REASONS: ReadonlySet<string> = new Set([
   'IDEMPOTENCY_KEY_REUSED',
   'INVALID_INPUT',
   'COPY_FROM_NOT_IN_ORG',
+  // API credentials (#2115, docs/API_CLIENTS.md).
+  'PLAN_REQUIRED',
+  'SCOPE_NOT_ALLOWED',
+  'LIMIT_REACHED',
 ])
+
+/** Plans a PLAN_REQUIRED refusal may name in `requiredPlan`. */
+const PLANS: ReadonlySet<string> = new Set(['basic', 'pro'])
 
 export const MAX_INPUT_MESSAGE = 300
 const MAX_FIELD = 100
@@ -206,7 +215,12 @@ const FIELD_NAME = /^[A-Za-z_][\w.[\]]*$/
 function inputDetail(gql: GraphQLError) {
   const field = gql.extensions?.field
   const reason = gql.extensions?.reason
+  const plan = gql.extensions?.requiredPlan
   return {
+    requiredPlan:
+      reason === 'PLAN_REQUIRED' && typeof plan === 'string' && PLANS.has(plan)
+        ? plan
+        : undefined,
     reason:
       typeof reason === 'string' && INPUT_REASONS.has(reason)
         ? reason
@@ -267,6 +281,7 @@ export function maskError(error: unknown, message: string): Error {
         code: safe ? code : 'INTERNAL_SERVER_ERROR',
         ...(detail?.reason ? { reason: detail.reason } : {}),
         ...(detail?.field ? { field: detail.field } : {}),
+        ...(detail?.requiredPlan ? { requiredPlan: detail.requiredPlan } : {}),
         // As yoga's default: unexpected answers 500, an http status is kept.
         ...(safe ? {} : { unexpected: true }),
         // Not a subgraph's: yoga would apply its status and headers (#1877).

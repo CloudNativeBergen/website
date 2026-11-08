@@ -503,6 +503,8 @@ const OPERATOR_QUERIES = new Set([
 ])
 /** Public roots too costly to batch: each gets its own document. */
 const ALONE = new Set([
+  'apiClients',
+  'myPersonalAccessTokens',
   'program',
   'talk',
   'speakers',
@@ -835,6 +837,14 @@ describe.each([
           !(
             e.extensions?.code === 'NOT_FOUND' &&
             roots[String(e.path?.[0])] === 'myProposal'
+          ) &&
+          // API credentials (#2115) are a contract only: a caller with access
+          // gets NOT_IMPLEMENTED. Drop this when they are implemented.
+          !(
+            e.extensions?.code === 'NOT_IMPLEMENTED' &&
+            /^(apiClients|myPersonalAccessTokens)$/.test(
+              roots[String(e.path?.[0])] ?? '',
+            )
           ),
       )
       expect(unexpected, query).toEqual([])
@@ -1011,6 +1021,17 @@ describe('cross-tenant mutation walk', () => {
         )
       )
         expect(['NOT_FOUND', 'BAD_USER_INPUT']).toContain(
+          (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions
+            ?.code,
+        )
+      // API credentials (#2115): contract only. The admin organizer may not
+      // create or rotate (owners only); the rest refuse NOT_IMPLEMENTED.
+      else if (
+        /"(createApiClient|rotateApiClientSecret|revokeApiClient|createPersonalAccessToken|revokePersonalAccessToken)"/.test(
+          json,
+        )
+      )
+        expect(['NOT_IMPLEMENTED', 'FORBIDDEN']).toContain(
           (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions
             ?.code,
         )

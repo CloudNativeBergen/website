@@ -167,3 +167,50 @@ Secrets are never committed. Set
 them per environment with `npx wrangler secret put <NAME> --env <env>`, and
 never reuse a production value in `preview`. List each new secret here, with
 the environments that need it, in the PR that adds it.
+
+## Token endpoint (contract, #2115)
+
+Not implemented yet. API clients exchange their credentials for a short-lived
+access token (OAuth 2.1 client credentials). The principal model, scopes and
+plan gating are in `docs/API_CLIENTS.md`.
+
+Request, form-encoded, client authentication by HTTP Basic (`client_id:client_secret`)
+or in the body:
+
+```http
+POST /oauth/token
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic base64(<client_id>:<konf_cs_...>)
+
+grant_type=client_credentials&scope=conference:read%20program:read
+```
+
+`scope` is optional and may only narrow the client's granted scopes; omitted, the
+token carries all of them. The org comes from the client record, never from the
+request.
+
+Success, `200`:
+
+```json
+{
+  "access_token": "konf_at_<id>_<secret>",
+  "token_type": "Bearer",
+  "expires_in": 900,
+  "scope": "conference:read program:read"
+}
+```
+
+The token lives 15 minutes, carries the client's `token_version`, and is sent as
+`Authorization: Bearer <token>` to `/graphql`. Revoking the client bumps
+`token_version`, so outstanding tokens fail on the next request. There is no
+refresh token.
+
+Errors (RFC 6749 §5.2, `Cache-Control: no-store` on every response):
+
+| Status | `error`                  | When                                                  |
+| ------ | ------------------------ | ----------------------------------------------------- |
+| 400    | `invalid_request`        | missing or repeated parameter, wrong content type     |
+| 400    | `unsupported_grant_type` | anything but `client_credentials`                     |
+| 400    | `invalid_scope`          | a scope the client was not granted, or unknown        |
+| 401    | `invalid_client`         | unknown, revoked or wrong secret (one answer for all) |
+| 429    | `rate_limited`           | per-client or per-org limit; `Retry-After` set        |
