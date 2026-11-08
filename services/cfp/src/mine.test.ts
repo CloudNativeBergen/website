@@ -13,6 +13,7 @@ import {
   createSigner,
   generateEnvelopeKeyPair,
   type Envelope,
+  type TenantEnvelope,
 } from '@runkonf/tenancy'
 import type { CfpWindow, SpeakerLink } from './data/mine'
 
@@ -258,12 +259,15 @@ describe('myProposals / myProposal', () => {
     expect(forged.data.myProposals).toEqual([])
   })
 
-  it('refuses the user lane and an anonymous tenant envelope', async () => {
+  it('refuses the user lane; an anonymous envelope has no proposals', async () => {
     const user = await gql(LIST, { typ: 'user', userId: 'u_me' })
     expect(errOf(user)?.[0].code).toBe('FORBIDDEN')
-    const anon = await gql(LIST, { ...as('u_me'), userId: null })
-    expect(errOf(anon)?.[0].code).toBe('UNAUTHENTICATED')
-    expect(link).not.toHaveBeenCalledWith(null)
+    const anon = await gql(LIST, {
+      ...(as('u_me') as TenantEnvelope),
+      userId: null,
+    })
+    expect(anon).toEqual({ data: { myProposals: [] } })
+    expect(link).not.toHaveBeenCalled()
   })
 })
 

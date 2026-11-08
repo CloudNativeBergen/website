@@ -61,13 +61,10 @@ class Mine extends ScopedRepository {
     return (this.who ??= (async () => {
       const { org_id, conference_id } = this.columns
       const userId = this.tenant.userId
+      // Anonymous, or no conference: nobody's speaker, so an empty list and
+      // NOT_FOUND, like any other caller with no proposals.
       if (!userId || !conference_id)
-        throw createGraphQLError(
-          'Sign in on a conference to use your proposals',
-          {
-            extensions: { code: 'UNAUTHENTICATED' },
-          },
-        )
+        return { who: null, link: { providers: [], emails: [], profile: null } }
       const link = await this.identity.link(userId)
       const rows =
         link.providers.length || link.emails.length
