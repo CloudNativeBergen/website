@@ -11,6 +11,10 @@ import {
   normalizeHost,
 } from '../src/data/naming'
 
+// Migration 0008's plan vocabulary. Not from @runkonf/tenancy: the repo-root
+// script that imports this file has no Workers types.
+const PLANS = new Set(['free', 'basic', 'pro'])
+
 export interface SanityOrg {
   _id: string
   name?: string | null
@@ -99,7 +103,8 @@ export function mapBackfill(
       id: o._id,
       slug,
       name: o.name || slug,
-      plan: o.plan || 'free',
+      // The plan vocabulary of migration 0008; anything else is free.
+      plan: o.plan && PLANS.has(o.plan) ? o.plan : 'free',
     }
     orgs.set(o._id, row)
     out.orgs.push(row)
@@ -242,7 +247,7 @@ export function toSql(b: Backfill) {
   const directory = [
     ...b.orgs.map(
       (o) =>
-        `INSERT INTO organizations (id, slug, name, plan) VALUES (${q(o.id)}, ${q(o.slug)}, ${q(o.name)}, ${q(o.plan)}) ON CONFLICT (id) DO UPDATE SET name = excluded.name, plan = excluded.plan;`,
+        `INSERT INTO organizations (id, slug, name, plan) VALUES (${q(o.id)}, ${q(o.slug)}, ${q(o.name)}, ${q(o.plan)}) ON CONFLICT (id) DO UPDATE SET name = excluded.name;`,
     ),
     ...b.conferences.map(
       (c) =>

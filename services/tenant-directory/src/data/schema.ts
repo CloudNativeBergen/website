@@ -1,6 +1,6 @@
 // Drizzle mirror of migrations/0001_init.sql, 0002_rollout_flags.sql,
 // 0005_lifecycle_cancelled.sql and 0006_provisioning_conference.sql
-// and 0007_provisioning_created_by.sql.
+// 0007_provisioning_created_by.sql and 0008_billing_plan.sql.
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const organizations = sqliteTable('organizations', {
@@ -8,8 +8,20 @@ export const organizations = sqliteTable('organizations', {
   slug: text('slug').notNull(),
   name: text('name').notNull(),
   status: text('status', { enum: ['active', 'suspended'] }).notNull(),
-  plan: text('plan').notNull(),
+  plan: text('plan', { enum: ['free', 'basic', 'pro'] }).notNull(),
   createdAt: text('created_at'),
+  // Billing (#2129): tenancy's effectivePlan reads these.
+  planSource: text('plan_source', { enum: ['stripe', 'comp', 'default'] })
+    .notNull()
+    .default('default'),
+  stripeCustomerId: text('stripe_customer_id'),
+  stripeSubscriptionId: text('stripe_subscription_id'),
+  subscriptionStatus: text('subscription_status', {
+    enum: ['active', 'past_due', 'canceled', 'incomplete'],
+  }),
+  currentPeriodEnd: text('current_period_end'),
+  compUntil: text('comp_until'),
+  compReason: text('comp_reason'),
 })
 
 export const conferences = sqliteTable('conferences', {

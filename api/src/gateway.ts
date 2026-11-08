@@ -15,6 +15,7 @@ import { createRemoteJWKSet, customFetch, jwtVerify } from 'jose'
 import {
   createSigner,
   ENVELOPE_HEADER,
+  isPlan,
   type Envelope,
   type TenantEnvelope,
 } from '@runkonf/tenancy'
@@ -97,7 +98,7 @@ const JWT_MAX_SECONDS = 300
 const ENVELOPE_TTL_SECONDS = 60
 
 const TENANT_QUERY =
-  'query($host: String!) { tenantByHost(host: $host) { orgId conferenceId flags { apiRead identityLogin d1Write d1Override } } }'
+  'query($host: String!) { tenantByHost(host: $host) { orgId conferenceId flags { apiRead identityLogin d1Write d1Override } plan } }'
 
 /** Operator lane: the host of the tenant the operator acts for. */
 export const OPERATOR_TENANT_HEADER = 'x-konf-operator-tenant'
@@ -168,6 +169,8 @@ type Tenant = {
   orgId: string
   conferenceId: string | null
   flags?: RolloutFlags | null
+  /** The org's effective plan (#2129); verifyEnvelope caps it. */
+  plan?: string | null
 }
 
 /**
@@ -680,6 +683,7 @@ export function createGateway(supergraph: string) {
               userId,
               orgRole: principal!.orgRole,
               scopes: operator ? [OPERATOR_SCOPE] : [],
+              plan: isPlan(tenant.plan) ? tenant.plan : 'free',
             }
           : operator
             ? { typ: 'platform', userId: userId!, platformRole: 'operator' }
@@ -711,6 +715,7 @@ export function createGateway(supergraph: string) {
           userId,
           orgRole,
           scopes: siteHost ? [SITE_SCOPE] : [],
+          plan: isPlan(tenant.plan) ? tenant.plan : 'free',
         }
         forwarded.headers.set(
           ENVELOPE_HEADER,

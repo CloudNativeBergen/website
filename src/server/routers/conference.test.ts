@@ -133,6 +133,14 @@ vi.mock('@/lib/domain-verification', () => ({
     'That hostname belongs to the platform and has not been allocated to this conference',
 }))
 
+// Billing (#2129): the plan gate itself is tested in src/lib/billing; here
+// only whether the router asks it, and that a refusal stops the write.
+const requireOrgPlanMock = vi.fn<(gate: string) => Promise<void>>()
+vi.mock('@/lib/billing', async (orig) => ({
+  ...(await orig<typeof import('@/lib/billing')>()),
+  requireOrgPlan: (gate: string) => requireOrgPlanMock(gate),
+}))
+
 // The teams cache clear is a side effect updateTeams performs on success.
 const clearTeamsCacheMock = vi.fn()
 vi.mock('@/lib/teams', () => ({
@@ -259,6 +267,7 @@ beforeEach(() => {
     domain: 'cloudnativebergen.no',
     error: null,
   })
+  requireOrgPlanMock.mockResolvedValue(undefined)
 })
 
 describe('conference router — authorization', () => {
@@ -1998,5 +2007,97 @@ describe('conference router — D1 write path (#1881)', () => {
     })
     expect(apiCalls()).toHaveLength(0)
     expect(lastSet).toEqual({ cateringInfo: 'Pizza' })
+  })
+})
+
+describe('conference router — plan gates (#2129)', () => {
+  const planRefusal = async () => {
+    const { PlanRequiredError } = await import('@/lib/billing')
+    const { TRPCError } = await import('@trpc/server')
+    const cause = new PlanRequiredError('basic')
+    return new TRPCError({ code: 'FORBIDDEN', message: cause.message, cause })
+  }
+  const conference = (over: Record<string, unknown>) =>
+    getConferenceMock.mockResolvedValue({
+      conference: {
+        _id: CONFERENCE_ID,
+        organization: { _type: 'reference', _ref: ORG_ID },
+        ...over,
+      },
+      domain: 'cloudnativebergen.no',
+      error: null,
+    })
+
+  it('refuses publishing an unlisted ticketed edition on free, writing nothing', async () => {
+    conference({ visibility: 'unlisted', ticketingProvider: 'tito' })
+    requireOrgPlanMock.mockRejectedValue(await planRefusal())
+    await expect(
+      makeCaller({ isOrganizer: true }).updateVisibility({
+        visibility: 'live',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(requireOrgPlanMock).toHaveBeenCalledWith(
+      'conference.publish_ticketed',
+    )
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('publishes it when the plan covers it', async () => {
+    conference({ visibility: 'unlisted', ticketingProvider: 'checkin' })
+    await makeCaller({ isOrganizer: true }).updateVisibility({
+      visibility: 'live',
+    })
+    expect(requireOrgPlanMock).toHaveBeenCalledTimes(1)
+    expect(lastSet).toEqual({ visibility: 'live' })
+  })
+
+  it.each([
+    ['a free-to-attend edition', { visibility: 'unlisted' }, 'live'],
+    [
+      'an already live edition',
+      { visibility: 'live', ticketingProvider: 'tito' },
+      'live',
+    ],
+    [
+      'an edition with no visibility (live)',
+      { ticketingProvider: 'tito' },
+      'live',
+    ],
+    [
+      'unlisting',
+      { visibility: 'live', ticketingProvider: 'tito' },
+      'unlisted',
+    ],
+  ] as const)('never asks for %s', async (_, over, visibility) => {
+    conference(over)
+    await makeCaller({ isOrganizer: true }).updateVisibility({ visibility })
+    expect(requireOrgPlanMock).not.toHaveBeenCalled()
+    expect(lastSet).toEqual({ visibility })
+  })
+
+  it('refuses adding a new custom domain on free, writing nothing', async () => {
+    requireOrgPlanMock.mockRejectedValue(await planRefusal())
+    await expect(
+      makeCaller({ isOrganizer: true }).updateDomains({
+        domains: ['cloudnativebergen.no', 'new.example.org'],
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(requireOrgPlanMock).toHaveBeenCalledWith('domain.connect_custom')
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps, reorders and removes existing domains without asking', async () => {
+    requireOrgPlanMock.mockRejectedValue(await planRefusal())
+    domainsByConference = {
+      [CONFERENCE_ID]: ['cloudnativebergen.no', 'old.example.org'],
+    }
+    await makeCaller({ isOrganizer: true }).updateDomains({
+      domains: ['OLD.example.org', 'cloudnativebergen.no'],
+    })
+    await makeCaller({ isOrganizer: true }).updateDomains({
+      domains: ['cloudnativebergen.no'],
+    })
+    expect(requireOrgPlanMock).not.toHaveBeenCalled()
+    expect(lastSet).toEqual({ domains: ['cloudnativebergen.no'] })
   })
 })

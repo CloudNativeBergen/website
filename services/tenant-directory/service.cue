@@ -28,5 +28,9 @@ service: #PlatformService & {
 	// SITE_URL or the key, createOrganization refuses. Preview sets no
 	// SITE_URL: no preview site writes to a dataset the worker can trust yet.
 	files: "package.json": dependencies: jose: "^6.2.14"
-	serviceBindings: [{binding: "IDENTITY", service: "konf-identity", entrypoint: "Organizations"}]
+	// CONFERENCE: is an edition ticketed, for the plan gate on going live (#2129).
+	serviceBindings: [
+		{binding: "IDENTITY", service: "konf-identity", entrypoint: "Organizations"},
+		{binding: "CONFERENCE", service: "konf-conference", entrypoint: "ProgramDate"},
+	]
 }

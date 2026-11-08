@@ -61,6 +61,11 @@ export class Organizations extends WorkerEntrypoint<Env> {
   syncMembers() {
     return createData(this.env).syncMembers()
   }
+
+  /** tenant-directory's operator writes (complimentary plans, #2129). */
+  audit(event: OperatorAuditEvent) {
+    return recordOperatorWrite(this.env.DB, event)
+  }
 }
 
 /**

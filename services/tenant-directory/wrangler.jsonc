@@ -18,6 +18,11 @@
       "service": "konf-identity",
       "entrypoint": "Organizations",
     },
+    {
+      "binding": "CONFERENCE",
+      "service": "konf-conference",
+      "entrypoint": "ProgramDate",
+    },
   ],
   "triggers": {
     "crons": ["*/5 * * * *"],
@@ -45,6 +50,11 @@
           "entrypoint": "Organizations",
           "service": "konf-identity-preview",
         },
+        {
+          "binding": "CONFERENCE",
+          "entrypoint": "ProgramDate",
+          "service": "konf-conference-preview",
+        },
       ],
       "vars": {
         "SANITY_PROJECT_ID": "mvzwvw14",
@@ -66,6 +76,11 @@
           "binding": "IDENTITY",
           "service": "konf-identity",
           "entrypoint": "Organizations",
+        },
+        {
+          "binding": "CONFERENCE",
+          "service": "konf-conference",
+          "entrypoint": "ProgramDate",
         },
       ],
       "vars": {

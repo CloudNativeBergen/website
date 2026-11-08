@@ -10,6 +10,9 @@ vi.mock('./data', () => ({
   createData: () => ({ syncMembers }),
 }))
 
+const recordOperatorWrite = vi.fn(async () => undefined)
+vi.mock('./data/push', () => ({ notify: vi.fn(), recordOperatorWrite }))
+
 const { default: worker, Membership, Organizations } = await import('./index')
 const env = {} as never
 
@@ -69,6 +72,19 @@ describe('membership sync RPC (#1907)', () => {
     expect(await rpc.syncMembers()).toBe('synced')
     expect(syncMembers).toHaveBeenCalledTimes(1)
     expect('syncMembers' in Membership.prototype).toBe(false)
+  })
+  it('Organizations.audit records tenant-directory operator writes (#2129)', async () => {
+    const rpc = new Organizations({} as never, {} as never)
+    Object.assign(rpc, { env: { DB: 'db' } })
+    const event = {
+      type: 'operator.write' as const,
+      actorId: 'op',
+      organizationId: 'org',
+      conferenceId: null,
+      fields: ['plan'],
+    }
+    await rpc.audit(event)
+    expect(recordOperatorWrite).toHaveBeenCalledWith('db', event)
   })
   it('has no cron of its own (the account allows 5; tenant-directory drives it)', () => {
     const cfg = readFileSync(

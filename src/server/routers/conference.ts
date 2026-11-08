@@ -52,6 +52,8 @@ import {
   PLATFORM_DOMAIN_NOT_ALLOCATED,
   syncDomainVerifications,
 } from '@/lib/domain-verification'
+import { isPlatformZoneHost } from '@/lib/domain-verification/platform'
+import { requireOrgPlan } from '@/lib/billing'
 import { planEditionPlatformHosts } from '@/lib/conference/platformEditionHosts'
 import {
   PROVISIONING_RECEIPT_RETENTION_DAYS,
@@ -707,6 +709,22 @@ export const conferenceRouter = router({
     .input(UpdateVisibilitySchema)
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
+      // Billing (#2129): this flip is how an edition goes public. A ticketed
+      // one (ticketingProvider set) needs a paid plan; an edition that is
+      // already live, or sells no tickets, is never asked.
+      if (input.visibility === 'live') {
+        const { conference } = await getConferenceForCurrentDomain({
+          includeTicketSetup: true,
+          uncached: true,
+        })
+        if (
+          conference?.ticketingProvider &&
+          // Absent means live (lib/conference/visibility.ts).
+          conference.visibility &&
+          conference.visibility !== 'live'
+        )
+          await requireOrgPlan('conference.publish_ticketed')
+      }
       return applyConferencePatch(conferenceId, input)
     }),
 
@@ -1325,6 +1343,15 @@ export const conferenceRouter = router({
         `*[_type == "conference" && _id == $id][0].domains`,
         { id: conferenceId },
       )
+      // Billing (#2129): adding a custom domain needs a paid plan. Keeping
+      // or removing existing entries, and platform hosts, are never asked.
+      const had = new Set((previous ?? []).map(normalizeDomain))
+      if (
+        input.domains.some(
+          (d) => !had.has(normalizeDomain(d)) && !isPlatformZoneHost(d),
+        )
+      )
+        await requireOrgPlan('domain.connect_custom')
       const result = await applyConferencePatch(conferenceId, {
         domains: input.domains,
       })

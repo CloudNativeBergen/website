@@ -31,6 +31,12 @@ const cf = vi.hoisted(() => ({
 vi.mock('cloudflare:workers', () => ({
   env: cf.env,
   waitUntil: (p: Promise<unknown>) => cf.pending.push(p),
+  WorkerEntrypoint: class {
+    constructor(
+      _ctx: unknown,
+      readonly env: unknown,
+    ) {}
+  },
 }))
 
 const { default: worker } = await import('./worker')
@@ -1374,5 +1380,20 @@ describe('authz phase 1', () => {
     await gql(site(), UPDATE, { input: { title: 'x' } })
     await settled()
     expect(audits).toEqual([])
+  })
+})
+
+describe('ProgramDate.ticketed (#2129)', () => {
+  it('answers whether an edition of that org has a ticketing provider, published or not', async () => {
+    const { ProgramDate } = await import('./index')
+    sqlite.exec(
+      "UPDATE conferences SET ticketing_provider = 'tito' WHERE conference_id IN ('conf-a', 'conf-a-draft')",
+    )
+    const rpc = new ProgramDate({} as never, env as never)
+    expect(await rpc.ticketed('org-a', 'conf-a')).toBe(true)
+    expect(await rpc.ticketed('org-a', 'conf-a-draft')).toBe(true)
+    expect(await rpc.ticketed('org-b', 'conf-b')).toBe(false)
+    // Another org's id finds nothing.
+    expect(await rpc.ticketed('org-b', 'conf-a')).toBe(false)
   })
 })
