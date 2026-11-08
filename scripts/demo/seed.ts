@@ -126,9 +126,6 @@ const refs = (type: string, keys: string[], prefix: string) =>
     prefix,
   )
 
-/** Referenced only, never written: Sanity org `_id` = tenant-directory org id. */
-export const ORG_ID = DEMO_ORG_ID
-
 /**
  * Sanity documents for the fixtures. Conference documents carry only what
  * lives in Sanity (title, dates for references and branding); D1 settings
@@ -189,7 +186,7 @@ export function buildDocuments(
         ({ ai: 'AI', finops: 'FinOps' } as Record<string, string>)[t] ??
         t[0].toUpperCase() + t.slice(1),
       slug: { _type: 'slug', current: t },
-      organization: { _type: 'reference', _ref: ORG_ID },
+      organization: { _type: 'reference', _ref: DEMO_ORG_ID },
     })),
     // Members are speakers too: reviewers, assignees and notification recipients.
     ...[...members, ...s.speakers].map((p) => ({
@@ -206,7 +203,7 @@ export function buildDocuments(
             links: p.links,
           }
         : {}),
-      organizations: [{ _type: 'reference', _ref: ORG_ID, _key: 'org0' }],
+      organizations: [{ _type: 'reference', _ref: DEMO_ORG_ID, _key: 'org0' }],
     })),
     ...s.proposals.map((p) => ({
       _id: id('talk', p.key),
@@ -273,7 +270,7 @@ export function buildDocuments(
       name: sp.name,
       website: sp.website,
       logo: sp.logo,
-      organization: { _type: 'reference', _ref: ORG_ID },
+      organization: { _type: 'reference', _ref: DEMO_ORG_ID },
     })),
     ...s.sponsorTiers.map((t) => ({
       _id: id('sponsorTier', t.key),
@@ -411,7 +408,7 @@ export function buildDocuments(
           body: m.body,
           origin: m.origin,
           createdAt: m.createdAt,
-          organization: { _type: 'reference', _ref: ORG_ID },
+          organization: { _type: 'reference', _ref: DEMO_ORG_ID },
         })),
       ]
     }),
@@ -433,7 +430,7 @@ export function buildDocuments(
     setIfMissing: {
       title: e.title,
       tagline: e.tagline,
-      organization: { _type: 'reference', _ref: ORG_ID },
+      organization: { _type: 'reference', _ref: DEMO_ORG_ID },
       city: e.city,
       country: e.country,
       startDate: e.startDate,
@@ -561,7 +558,7 @@ export async function run(
   // 3. Write. Conference docs must already exist; they get setIfMissing only.
   const client = await deps.createSanityClient()
   // The org and conference documents are referenced or patched, never created.
-  const ids = [ORG_ID, ...conferences.map((c) => c.id)]
+  const ids = [DEMO_ORG_ID, ...conferences.map((c) => c.id)]
   const found = await client.fetch<string[]>('*[_id in $ids]._id', { ids })
   const absent = ids.filter((id) => !found.includes(id))
   if (absent.length)
