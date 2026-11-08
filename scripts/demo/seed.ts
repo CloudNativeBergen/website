@@ -15,7 +15,10 @@
  *      checked against `kkdemo.seed.*` or the allowlist before any write.
  *      Conference docs get setIfMissing only, and must already exist.
  *   4. --dry-run: print counts per type and stop. No write client.
- *   5. createOrReplace everything else under DEMO_PREFIX, in transactions.
+ *   5. Upload missing speaker avatars (content-addressed, so unchanged ones
+ *      are skipped), then createOrReplace everything else under DEMO_PREFIX,
+ *      in transactions. kkdemo.conference also gets the KontainerKonf logos
+ *      and theme, setIfMissing.
  *      Same UTC day gives identical mutations, except invite tokens.
  *
  * Env: KONF_OPERATOR_TOKEN (identity JWT of a platform operator, origin
@@ -24,6 +27,7 @@
  * SANITY_API_TOKEN_WRITE. The dataset is pinned to `production`.
  */
 import { createHmac, randomBytes } from 'node:crypto'
+import { avatarAsset } from './assets'
 import { generateDemoFixtures } from './fixtures/generate'
 import type { DemoFixtures } from './fixtures/types'
 import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
@@ -55,6 +59,13 @@ export interface SanityWriter {
     commit(): Promise<unknown>
   }
   fetch<T>(query: string, params: Record<string, unknown>): Promise<T>
+  assets: {
+    upload(
+      type: 'image',
+      body: Buffer,
+      opts: { filename: string },
+    ): Promise<{ _id: string }>
+  }
 }
 
 export interface Deps {
@@ -165,6 +176,7 @@ export function buildDocuments(
 ): {
   upsert: Doc[]
   conferences: ConferencePatch[]
+  avatars: ReturnType<typeof avatarAsset>[]
 } {
   const s = f.sanity
   const confId = (key: string) => {
@@ -176,6 +188,8 @@ export function buildDocuments(
   const members = f.d1.members
   const talkEdition = new Map(s.proposals.map((p) => [p.key, p.editionKey]))
   const speakersOf = new Map(s.proposals.map((p) => [p.key, p.speakerKeys]))
+  const people = [...members, ...s.speakers]
+  const avatars = people.map((p) => avatarAsset(p.key, p.name))
   const topics = [...new Set(s.proposals.flatMap((p) => p.topics))]
 
   const upsert: Doc[] = [
@@ -189,7 +203,7 @@ export function buildDocuments(
       organization: { _type: 'reference', _ref: DEMO_ORG_ID },
     })),
     // Members are speakers too: reviewers, assignees and notification recipients.
-    ...[...members, ...s.speakers].map((p) => ({
+    ...people.map((p, i) => ({
       _id: id('speaker', p.key),
       _type: 'speaker',
       name: p.name,
@@ -203,6 +217,10 @@ export function buildDocuments(
             links: p.links,
           }
         : {}),
+      image: {
+        _type: 'image',
+        asset: { _type: 'reference', _ref: avatars[i].assetId },
+      },
       organizations: [{ _type: 'reference', _ref: DEMO_ORG_ID, _key: 'org0' }],
     })),
     ...s.proposals.map((p) => ({
@@ -441,9 +459,22 @@ export function buildDocuments(
         members.filter((m) => m.role !== 'member').map((m) => m.key),
         'og',
       ),
+      // Branding only on the live edition, the one DEMO_HOST renders.
+      ...(e.key === LIVE_KEY
+        ? {
+            logoBright: s.branding.logoBright,
+            logoDark: s.branding.logoDark,
+            logomarkBright: s.branding.logomarkBright,
+            logomarkDark: s.branding.logomarkDark,
+            theme: {
+              primaryColor: s.branding.primaryColor,
+              accentColor: s.branding.accentColor,
+            },
+          }
+        : {}),
     },
   }))
-  return { upsert, conferences }
+  return { upsert, conferences, avatars }
 }
 
 /** Every write target must be `kkdemo.seed.*` or an allowlisted conference id. */
@@ -538,7 +569,7 @@ export async function run(
       }
   }
 
-  const { upsert, conferences } = buildDocuments(fixtures, editionIds)
+  const { upsert, conferences, avatars } = buildDocuments(fixtures, editionIds)
   // Before any transaction: every target is a seed id or an allowlisted edition.
   assertDemoIds(
     upsert.map((d) => d._id),
@@ -565,6 +596,21 @@ export async function run(
     throw new Error(
       `stopping: document(s) missing in Sanity: ${absent.join(', ')}`,
     )
+  // Avatars: after every check above, before the speakers that reference them.
+  const haveAssets = await client.fetch<string[]>('*[_id in $ids]._id', {
+    ids: avatars.map((a) => a.assetId),
+  })
+  const toUpload = avatars.filter((a) => !haveAssets.includes(a.assetId))
+  for (const a of toUpload) {
+    const { _id } = await client.assets.upload('image', Buffer.from(a.svg), {
+      filename: a.filename,
+    })
+    if (_id !== a.assetId)
+      throw new Error(
+        `stopping: avatar uploaded as ${_id}, expected ${a.assetId}`,
+      )
+  }
+  deps.log(`  avatars uploaded       ${toUpload.length}/${avatars.length}`)
   for (let i = 0; i < upsert.length; i += TX_SIZE) {
     const tx = client.transaction()
     if (i === 0) {

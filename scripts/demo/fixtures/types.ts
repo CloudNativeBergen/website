@@ -164,7 +164,7 @@ export interface D1TicketOrder {
 
 /** conference.logoBright/logoDark/logomarkBright/logomarkDark (Sanity only). */
 export interface SanityBranding {
-  /** Repo asset paths. */
+  /** Inline SVG markup from scripts/demo/assets (the fields are `inlineSvg`). */
   logoBright: string
   logoDark: string
   logomarkBright: string

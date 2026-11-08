@@ -9,6 +9,7 @@
  * 25 notifications, 150 ticket orders.
  */
 import { Format, Level, Status } from '@/lib/proposal/types'
+import { brandingSvgs, sponsorLogoSvg } from '../assets'
 import type { DemoFixtures, D1Edition, FakePerson, Money } from './types'
 import {
   BIO_TAILS,
@@ -46,7 +47,7 @@ export function prng(seed: number) {
 }
 
 const DAY = 86_400_000
-// TODO(#2150): /demo/*.svg logos and generated avatars do not exist yet.
+// Sanity speakers get generated avatars in seed.ts (scripts/demo/assets.ts).
 const AVATAR = '/images/default-avatar.png'
 
 const iso = (ms: number) => new Date(ms).toISOString()
@@ -384,11 +385,11 @@ export function generateDemoFixtures({
     ],
   })
 
-  const sponsors = SPONSOR_BRANDS.map(([name, colour], i) => ({
+  const sponsors = SPONSOR_BRANDS.map(([name]) => ({
     key: `sponsor-${slug(name)}`,
     name,
     website: `https://${slug(name)}.example.com`,
-    logo: wordmark(name, colour, i),
+    logo: sponsorLogoSvg(name),
   }))
   const tier = (
     key: string,
@@ -697,10 +698,7 @@ export function generateDemoFixtures({
     },
     sanity: {
       branding: {
-        logoBright: '/demo/kontainerkonf-bright.svg',
-        logoDark: '/demo/kontainerkonf-dark.svg',
-        logomarkBright: '/demo/kontainerkonf-mark-bright.svg',
-        logomarkDark: '/demo/kontainerkonf-mark-dark.svg',
+        ...brandingSvgs(),
         primaryColor: '#0f5c8a',
         accentColor: '#f2a541',
       },
@@ -720,16 +718,4 @@ export function generateDemoFixtures({
       notifications,
     },
   }
-}
-
-/** A fictional wordmark: a coloured glyph plus the name. No real brand. */
-function wordmark(name: string, colour: string, i: number): string {
-  const glyph = [
-    `<circle cx="16" cy="16" r="12" fill="${colour}"/>`,
-    `<rect x="4" y="4" width="24" height="24" rx="6" fill="${colour}"/>`,
-    `<path d="M16 3 29 28H3Z" fill="${colour}"/>`,
-    `<path d="M4 16 16 4l12 12-12 12Z" fill="${colour}"/>`,
-  ][i % 4]
-  const w = 44 + name.length * 12
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} 32" role="img" aria-label="${name}">${glyph}<text x="38" y="23" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" font-weight="600" fill="currentColor">${name}</text></svg>`
 }
