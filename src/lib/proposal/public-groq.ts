@@ -62,24 +62,24 @@ export const SCHEDULE_TRACKS = `tracks[]{
         talk->{
           _id,
           format,
-          level,
           status,
           // Whether, never which: the programme's "Give feedback" link looks
           // the code up when followed (#1472), so it never rides this read.
           "hasFeedbackCode": defined(feedbackCode),
-          audiences,
-          topics[]-> {
-            _id,
-            title,
-            color,
-            slug,
-            description
-          },
-          // Only a confirmed talk ships its title, description and speakers.
-          // Any other talk keeps its slot on the public programme (shown as
-          // TBA), but an unconfirmed proposal or a speaker who withdrew is
-          // never named.
+          // Only a confirmed talk ships its title, description, speakers,
+          // level, audiences and topics. Any other talk keeps its slot on the
+          // public programme (shown as TBA), but an unconfirmed proposal or a
+          // speaker who withdrew is never named or hinted at by its topics.
           status == "confirmed" => {
+            level,
+            audiences,
+            topics[]-> {
+              _id,
+              title,
+              color,
+              slug,
+              description
+            },
             title,
             description,
             language,
