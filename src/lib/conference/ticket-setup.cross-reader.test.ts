@@ -150,7 +150,9 @@ vi.mock('@/lib/sanity/client', () => {
 const gateway = vi.fn(async (_: unknown, init: RequestInit) => {
   const { query } = JSON.parse(String(init.body)) as { query: string }
   if (query.includes('rolloutFlags'))
-    return new Response(JSON.stringify({ data: { rolloutFlags: { apiRead: true } } }))
+    return new Response(
+      JSON.stringify({ data: { rolloutFlags: { apiRead: true } } }),
+    )
   const asked = Object.fromEntries(
     Object.entries(D1).filter(([k]) => new RegExp(`\\b${k}\\b`).test(query)),
   )
