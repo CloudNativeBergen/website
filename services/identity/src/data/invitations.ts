@@ -1,42 +1,71 @@
-// Invitation delivery and the accept page's lookup (#2130). The email is sent
-// by the site (Resend) through tenant-directory, which already signs site
-// service calls (PROVISIONING_SIGNING_KEY): no mail secret on this worker.
+// Invitation delivery and the accept page's lookup (#2130). identity mails
+// invitations itself through Resend's REST API with a sending-only key.
 import { and, eq, gt, sql } from 'drizzle-orm'
 import { rawDb } from './db'
 import { invitation, organization, user } from './schema'
 
-/** What the site's invitation route gets: nothing beyond these four fields. */
+export interface MailEnv {
+  BETTER_AUTH_URL: string
+  /** wrangler secret put RESEND_API_KEY (sending-only); unset, nothing is sent. */
+  RESEND_API_KEY?: string
+  /** The From header, a wrangler var (service.cue). */
+  INVITE_FROM?: string
+}
+
 export interface InvitationMail {
   invitationId: string
   email: string
-  orgId: string
   orgName: string
   inviterName: string
+  /** Reply-To, set only when the inviter's email is verified. */
+  inviterEmail?: string | null
 }
 
-/** tenant-directory's `SiteMail` entrypoint (services/tenant-directory/src/index.ts). */
-export interface SiteMail {
-  invitation(mail: InvitationMail & { inviterId: string }): Promise<unknown>
-}
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 /**
- * Sends the invitation email. Never throws: the invitation row is already
- * written and audited, and the inviter can resend. Unbound (preview, tests)
- * sends nothing.
+ * Sends the invitation email: org name, inviter name and the accept link,
+ * nothing else. Never throws: the invitation row is already written and
+ * audited, and the inviter can resend. Returns whether it was sent.
  */
 export async function deliverInvitation(
-  siteMail: SiteMail | undefined,
-  mail: InvitationMail & { inviterId: string },
-) {
-  if (!siteMail) {
-    console.warn(`[invite] SITE_MAIL unbound; ${mail.invitationId} not mailed`)
-    return
+  env: MailEnv,
+  mail: InvitationMail,
+): Promise<boolean> {
+  if (!env.RESEND_API_KEY || !env.INVITE_FROM) {
+    console.warn(
+      `[invite] RESEND_API_KEY or INVITE_FROM unset; ${mail.invitationId} not mailed`,
+    )
+    return false
   }
+  const url = `${env.BETTER_AUTH_URL}/invite/${encodeURIComponent(mail.invitationId)}`
+  const org = mail.orgName.replace(/[\r\n]/g, ' ')
+  const inviter = mail.inviterName.replace(/[\r\n]/g, ' ') || 'A member'
   try {
-    await siteMail.invitation(mail)
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: env.INVITE_FROM,
+        to: [mail.email],
+        ...(mail.inviterEmail ? { reply_to: mail.inviterEmail } : {}),
+        subject: `You've been invited to join ${org}`,
+        text: `${inviter} has invited you to join ${org}.\n\nReview the invitation: ${url}\n\nSign in with an account that uses this email address. If you were not expecting this, ignore this message: nothing happens until the invitation is accepted.\n`,
+        html: `<p><strong>${esc(inviter)}</strong> has invited you to join <strong>${esc(org)}</strong>.</p><p><a href="${esc(url)}">Review invitation</a></p><p>Sign in with an account that uses this email address. If you were not expecting this, ignore this message: nothing happens until the invitation is accepted.</p>`,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (res.ok) return true
+    console.error(
+      `[invite] Resend refused ${mail.invitationId} (${res.status})`,
+    )
   } catch (e) {
     console.error(`[invite] mail for ${mail.invitationId} failed`, e)
   }
+  return false
 }
 
 /** Org and inviter names for an invitation created outside the plugin. */
@@ -47,10 +76,18 @@ export async function namesFor(d1: D1Database, orgId: string, userId: string) {
     .from(organization)
     .where(eq(organization.id, orgId))
   const [u] = await db
-    .select({ name: user.name })
+    .select({
+      name: user.name,
+      email: user.email,
+      verified: user.emailVerified,
+    })
     .from(user)
     .where(eq(user.id, userId))
-  return { orgName: o?.name ?? '', inviterName: u?.name ?? '' }
+  return {
+    orgName: o?.name ?? '',
+    inviterName: u?.name ?? '',
+    inviterEmail: u?.verified ? u.email : null,
+  }
 }
 
 /**

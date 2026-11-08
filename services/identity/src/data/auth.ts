@@ -15,7 +15,7 @@ import { bearer, jwt, organization } from 'better-auth/plugins'
 import { and, count, eq, gt, lte, sql } from 'drizzle-orm'
 import { parseOrgRoles } from '@runkonf/tenancy'
 import { rawDb } from './db'
-import { deliverInvitation, type SiteMail } from './invitations'
+import { deliverInvitation, type MailEnv } from './invitations'
 import { emit } from './push'
 import * as schema from './schema'
 
@@ -32,8 +32,8 @@ export interface AuthEnv {
   GITHUB_CLIENT_SECRET: string
   LINKEDIN_CLIENT_ID: string
   LINKEDIN_CLIENT_SECRET: string
-  /** tenant-directory's SiteMail entrypoint; unbound, invitations are not mailed. */
-  SITE_MAIL?: SiteMail
+  RESEND_API_KEY?: MailEnv['RESEND_API_KEY']
+  INVITE_FROM?: MailEnv['INVITE_FROM']
 }
 
 /** Security requirement 4: identity JWTs live 5 minutes or less. */
@@ -268,14 +268,15 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
         invitationExpiresIn: INVITATION_EXPIRES_IN,
         // #2130: the invitee gets a link to /invite/<id> (src/invite-page.ts).
         sendInvitationEmail: ({ id, email, organization: o, inviter }) =>
-          deliverInvitation(env.SITE_MAIL, {
+          deliverInvitation(env, {
             invitationId: id,
             email,
-            orgId: o.id,
             orgName: o.name,
             inviterName: inviter.user.name,
-            inviterId: inviter.user.id,
-          }),
+            inviterEmail: inviter.user.emailVerified
+              ? inviter.user.email
+              : null,
+          }).then(() => undefined),
         disableOrganizationDeletion: true,
         // Role rules (#1923): the plugin already lets admins manage admins
         // and keeps owners (invite, role change, removal) to owners. The one

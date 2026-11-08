@@ -27,10 +27,6 @@ service: #PlatformService & {
 	// site holds the public half in TENANT_DIRECTORY_PUBLIC_KEYS). Without
 	// SITE_URL or the key, createOrganization refuses. Preview sets no
 	// SITE_URL: no preview site writes to a dataset the worker can trust yet.
-	files: {
-		"package.json": dependencies: jose: "^6.2.14"
-		// src/index.ts adds the SiteMail entrypoint (#2130) to the generated worker.
-		"wrangler.jsonc": main: "src/index.ts"
-	}
+	files: "package.json": dependencies: jose: "^6.2.14"
 	serviceBindings: [{binding: "IDENTITY", service: "konf-identity", entrypoint: "Organizations"}]
 }

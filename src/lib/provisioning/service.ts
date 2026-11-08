@@ -29,7 +29,6 @@ export async function verifyServiceAssertion(
   token: string | null,
   publicKeys: string | undefined,
   body: string,
-  audience: string = AUDIENCE,
 ): Promise<string | null> {
   if (!token || !publicKeys) return null
   try {
@@ -43,7 +42,7 @@ export async function verifyServiceAssertion(
       },
       {
         issuer: ISSUER,
-        audience,
+        audience: AUDIENCE,
         algorithms: ['EdDSA'],
         requiredClaims: ['exp', 'iat', 'sub', 'bh'],
         maxTokenAge: MAX_SECONDS,

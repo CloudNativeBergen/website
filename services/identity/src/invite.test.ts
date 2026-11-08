@@ -19,7 +19,19 @@ import { invitePage, KONTROLL_URL } from './invite-page'
 import { orgWriteGate } from './org-write-gate'
 
 const BASE = 'http://identity.test'
-const siteMail = { invitation: vi.fn(async () => undefined) }
+const resend = vi.fn<typeof fetch>()
+vi.stubGlobal('fetch', resend)
+/** The Resend calls made, as parsed bodies (fetch may get a Request). */
+const sent = () =>
+  Promise.all(
+    resend.mock.calls
+      .map(([u, init]) => new Request(u as RequestInfo, init))
+      .filter((r) => r.url === 'https://api.resend.com/emails')
+      .map(async (r) => {
+        expect(r.headers.get('authorization')).toBe('Bearer re_test')
+        return JSON.parse(await r.clone().text())
+      }),
+  )
 const limit = vi.fn(async () => ({ success: true }))
 const env: AuthEnv = {
   BETTER_AUTH_URL: BASE,
@@ -29,7 +41,8 @@ const env: AuthEnv = {
   GITHUB_CLIENT_SECRET: 'gh',
   LINKEDIN_CLIENT_ID: 'li',
   LINKEDIN_CLIENT_SECRET: 'li',
-  SITE_MAIL: siteMail,
+  RESEND_API_KEY: 're_test',
+  INVITE_FROM: 'Konf <no-reply@konf.app>',
 }
 
 let mf: Miniflare
@@ -64,7 +77,7 @@ beforeAll(async () => {
 })
 afterAll(() => mf?.dispose())
 beforeEach(() => {
-  siteMail.invitation.mockReset().mockResolvedValue(undefined)
+  resend.mockReset().mockResolvedValue(Response.json({ id: 'e1' }))
   limit.mockReset().mockResolvedValue({ success: true })
 })
 
@@ -131,42 +144,69 @@ const membersOf = (orgId: string) =>
   )
 
 describe('delivery', () => {
-  it('a member invite sends exactly one email with org, inviter and id', async () => {
-    const { orgId, owner, invitationId } = await invited('a@example.com')
-    expect(siteMail.invitation).toHaveBeenCalledTimes(1)
-    expect(siteMail.invitation).toHaveBeenCalledWith({
-      invitationId,
-      email: 'a@example.com',
-      orgId,
-      orgName: expect.stringMatching(/^Org \d+$/),
-      inviterName: 'Ada',
-      inviterId: owner.id,
-    })
+  const expectMail = (
+    m: Record<string, unknown>,
+    to: string,
+    invitationId: string,
+    inviter: string,
+  ) => {
+    expect(m.from).toBe('Konf <no-reply@konf.app>')
+    expect(m.to).toEqual([to])
+    expect(m.subject).toMatch(/^You've been invited to join Org \d+$/)
+    const link = `${BASE}/invite/${invitationId}`
+    for (const body of [m.text, m.html]) {
+      expect(body).toContain(link)
+      expect(body).toContain(inviter)
+    }
+  }
+
+  it('a member invite sends exactly one email, reply-to the verified inviter', async () => {
+    const { owner, invitationId } = await invited('a@example.com')
+    const mails = await sent()
+    expect(mails).toHaveLength(1)
+    expectMail(mails[0], 'a@example.com', invitationId, 'Ada')
+    expect(mails[0].reply_to).toBe(`owner-${n}@example.com`)
+    expect(owner.id).toBeTruthy()
   })
 
-  it('an operator invite sends exactly one email', async () => {
+  it('an operator invite sends exactly one email; an unverified inviter gets no reply-to', async () => {
     const { orgId } = await invited('first@example.com')
-    siteMail.invitation.mockClear()
-    const op = await user(`op-${n}@example.com`, true, 'Operator')
+    resend.mockClear()
+    const op = await user(`op-${n}@example.com`, false, 'Operator')
     const inv = await (
       await createMembers({ ...env, DB: d1 }).asOperator(op.id, orgId)
     ).invite('b@example.com', 'admin')
-    expect(siteMail.invitation).toHaveBeenCalledTimes(1)
-    expect(siteMail.invitation).toHaveBeenCalledWith({
-      invitationId: inv.id,
-      email: 'b@example.com',
-      orgId,
-      orgName: expect.stringMatching(/^Org \d+$/),
-      inviterName: 'Operator',
-      inviterId: op.id,
-    })
+    const mails = await sent()
+    expect(mails).toHaveLength(1)
+    expectMail(mails[0], 'b@example.com', inv.id, 'Operator')
+    expect(mails[0]).not.toHaveProperty('reply_to')
   })
 
   it('a failed send keeps the invitation', async () => {
-    siteMail.invitation.mockRejectedValue(new Error('site down'))
+    resend.mockResolvedValue(new Response('no', { status: 500 }))
     const { invitationId } = await invited('c@example.com')
     expect(
       await all('SELECT id FROM invitation WHERE id = ?', invitationId),
+    ).toHaveLength(1)
+  })
+
+  it('without RESEND_API_KEY the invite succeeds and nothing is sent', async () => {
+    const orgId = `org-${++n}`
+    await d1
+      .prepare('INSERT INTO organization (id, name, slug) VALUES (?, ?, ?)')
+      .bind(orgId, orgId, orgId)
+      .run()
+    const op = await user(`op2-${n}@example.com`)
+    const inv = await (
+      await createMembers({
+        ...env,
+        RESEND_API_KEY: undefined,
+        DB: d1,
+      }).asOperator(op.id, orgId)
+    ).invite('nokey@example.com', 'member')
+    expect(await sent()).toHaveLength(0)
+    expect(
+      await all('SELECT id FROM invitation WHERE id = ?', inv.id),
     ).toHaveLength(1)
   })
 })

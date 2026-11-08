@@ -40,11 +40,7 @@
       "entry": ["src/data/schema.ts", "src/worker.ts"],
       "ignoreDependencies": ["cloudflare"]
     },
-    "services/conference": { "ignoreDependencies": ["cloudflare"] },
-    "services/tenant-directory": {
-      "entry": ["src/worker.ts"],
-      "ignoreDependencies": ["cloudflare"]
-    }
+    "services/conference": { "ignoreDependencies": ["cloudflare"] }
   },
   "ignoreDependencies": [
     "eslint-config-next",

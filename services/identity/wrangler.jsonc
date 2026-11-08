@@ -17,11 +17,6 @@
       "binding": "DIRECTORY",
       "service": "konf-tenant-directory",
     },
-    {
-      "binding": "SITE_MAIL",
-      "service": "konf-tenant-directory",
-      "entrypoint": "SiteMail",
-    },
   ],
   "vars": {
     "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z",
@@ -30,6 +25,7 @@
     "SANITY_DATASET": "development",
     "MEMBER_SOURCE_ORGS": "",
     "VAPID_SUBJECT": "mailto:hei@konf.app",
+    "INVITE_FROM": "Konf <no-reply@konf.app>",
   },
   "workers_dev": false,
   "preview_urls": false,
@@ -73,11 +69,6 @@
           "binding": "DIRECTORY",
           "service": "konf-tenant-directory-preview",
         },
-        {
-          "binding": "SITE_MAIL",
-          "entrypoint": "SiteMail",
-          "service": "konf-tenant-directory-preview",
-        },
       ],
       "vars": {
         "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z",
@@ -86,6 +77,7 @@
         "SANITY_DATASET": "development",
         "MEMBER_SOURCE_ORGS": "",
         "VAPID_SUBJECT": "mailto:hei@konf.app",
+        "INVITE_FROM": "Konf <no-reply@konf.app>",
       },
     },
     "production": {
@@ -127,11 +119,6 @@
           "binding": "DIRECTORY",
           "service": "konf-tenant-directory",
         },
-        {
-          "binding": "SITE_MAIL",
-          "service": "konf-tenant-directory",
-          "entrypoint": "SiteMail",
-        },
       ],
       "vars": {
         "OPERATOR_ORIGINS": "https://my.konf.app",
@@ -140,6 +127,7 @@
         "SANITY_DATASET": "production",
         "MEMBER_SOURCE_ORGS": "",
         "VAPID_SUBJECT": "mailto:hei@konf.app",
+        "INVITE_FROM": "Konf <no-reply@konf.app>",
       },
     },
   },
