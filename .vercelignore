@@ -19,7 +19,9 @@ docs/
 # A top-level api/ is otherwise deployed as Vercel Functions (#1960).
 /api/
 /services/
-/packages/
+/packages/*
+# The site imports @runkonf/tenancy/authz (parseOrgRoles, can(); #2101).
+!/packages/tenancy/
 
 # DO NOT ignore cache directories - we need Vercel to rebuild CSS
 # Commenting out potential cache ignores to ensure fresh CSS builds
