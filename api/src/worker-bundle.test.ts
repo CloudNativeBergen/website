@@ -104,6 +104,8 @@ describe('Worker bundle', () => {
   it('reaches the gateway it serves', () => {
     expect(files).toContain('api/src/gateway.ts')
     expect(files).toContain('api/src/gateway-typedefs.ts')
+    // Workspace packages are repo source too, and are walked.
+    expect(files).toContain('packages/tenancy/src/index.ts')
   })
 
   it('never reaches build-time composition or a subgraph schema', () => {
