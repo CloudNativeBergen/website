@@ -82,14 +82,14 @@ nothing is deleted.
 
 Refusals use `extensions.code` and, for business refusals, a stable `extensions.reason`:
 
-| code / reason                       | Extra field    | When                                                           |
-| ----------------------------------- | -------------- | -------------------------------------------------------------- |
-| `FORBIDDEN`                         |                | the caller may not perform the operation                       |
+| code / reason                          | Extra field    | When                                                           |
+| -------------------------------------- | -------------- | -------------------------------------------------------------- |
+| `FORBIDDEN`                            |                | the caller may not perform the operation                       |
 | `BAD_USER_INPUT` / `PLAN_REQUIRED`     | `requiredPlan` | a write scope or another client needs a higher plan            |
 | `BAD_USER_INPUT` / `SCOPE_NOT_ALLOWED` |                | a scope above the creator's role, or `pii:read` by a non-owner |
 | `BAD_USER_INPUT` / `LIMIT_REACHED`     |                | the active client or PAT cap for the org is reached            |
 | `BAD_USER_INPUT` / `INVALID_INPUT`     | `field`        | empty name, no scopes, expiry missing, past or over 1 year     |
-| `NOT_IMPLEMENTED`                   |                | contract only; returned after the authorization check          |
+| `NOT_IMPLEMENTED`                      |                | contract only; returned after the authorization check          |
 
 ## Tokens
 
