@@ -45,7 +45,7 @@ const identity = {
 }
 const signupLimit = { limit: vi.fn(async () => ({ success: true })) }
 const inviteLimit = {
-  limit: vi.fn(async (_: { key: string }) => ({ success: true })),
+  limit: vi.fn(async (opts: { key: string }) => ({ success: !!opts })),
 }
 const conferenceRpc = { ticketed: vi.fn(async () => false) }
 vi.mock('./data/cloudflare', () => ({ cloudflareHostnames: () => hostnames }))
