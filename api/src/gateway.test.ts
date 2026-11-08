@@ -1642,6 +1642,31 @@ describe('operator lane (#1892 phase 4)', () => {
     )
   })
 
+  // #2168: identity's CLI token is the same JWT plus `cli: true` and a jti.
+  it('accepts a CLI operator token and refuses it once expired', async () => {
+    const iat = Math.floor(Date.now() / 1000)
+    const cli = await jwt({
+      iat,
+      claims: { [SESSION_ORIGIN_CLAIM]: OPS, cli: true, jti: 'j1' },
+    })
+    const { env, envelopes } = opsEnv()
+    const ok = await call(env, { origin: OPS, authorization: `Bearer ${cli}` })
+    expect(ok.status).not.toBe(401)
+    expect(await verifyEnvelope(envelopes[0]!, envelopeKeys.publicPem)).toEqual(
+      { typ: 'platform', userId: 'user_1', platformRole: 'operator' },
+    )
+    vi.useFakeTimers({ now: (iat + 301 + 5) * 1000 })
+    try {
+      const late = await call(opsEnv().env, {
+        origin: OPS,
+        authorization: `Bearer ${cli}`,
+      })
+      expect(late.status).toBe(401)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('mints the named tenant plan on the operator lane (#2129)', async () => {
     const { env, envelopes } = opsEnv()
     env.DIRECTORY.fetch = vi.fn(async () =>
