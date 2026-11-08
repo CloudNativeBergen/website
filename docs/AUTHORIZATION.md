@@ -389,9 +389,7 @@ It **departs** in four places:
    would force it; this closes gaps 1–3 and the mirror gap.
 4. `site:server` shrinks to a lane marker with two machine capabilities.
 
-New milestone: **Platform 7: Authorization** (phases 1–2b); CFP b/c carry 3b and 3. Issues
-to file: phase 1, 1b (S7 + flag together), 2 (split per surface), 2b, 3 (gateway admission +
-`conference_role`), break-glass doc, `CONTROL_MODEL.md:3` fix.
+New milestone: **Platform 7: Authorization** (phases 1–2b); CFP b/c carry 3b and 3. Milestone "Platform 7: Authorization": phase 0 #2105, phase 1 #2106 and #2107 (break-glass), 1b #2101, 2 #2108, 2b #2109, 3 #2110; 3b is CFP b (#2078).
 
 ## 8. Where things are managed
 
