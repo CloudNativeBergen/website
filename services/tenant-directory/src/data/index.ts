@@ -16,7 +16,7 @@ import {
 import { createGraphQLError } from 'graphql-yoga'
 import type { OperatorAuditEvent } from '@runkonf/tenancy'
 import { importJWK, SignJWT, type JWK } from 'jose'
-import { effectivePlan, type Plan } from '@runkonf/tenancy'
+import { effectivePlan, signupSlugProblem, type Plan } from '@runkonf/tenancy'
 import { rawDb } from './db'
 import {
   cloudflareHostnames,
@@ -28,6 +28,7 @@ import {
   domains,
   organizations,
   provisioningRequests,
+  signupCodes,
 } from './schema'
 import {
   PLATFORM_DOMAIN,
@@ -312,6 +313,27 @@ function primaryHost(
   return null
 }
 
+/** Self-serve sign-up hosts: `<slug>.konf.app` in closed preview (#2129). */
+export const SIGNUP_DOMAIN = 'konf.app'
+
+/** 128 random bits, base32-ish, grouped for reading aloud. */
+function newSignupCode() {
+  const b = crypto.getRandomValues(new Uint8Array(16))
+  const s = [...b].map((x) => x.toString(36).padStart(2, '0')).join('')
+  return s.match(/.{1,8}/g)!.join('-')
+}
+
+/** SHA-256 hex. A code is random, so no salt or slow hash is needed. */
+export async function hashSignupCode(code: string) {
+  const d = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(code),
+  )
+  return [...new Uint8Array(d)]
+    .map((x) => x.toString(16).padStart(2, '0'))
+    .join('')
+}
+
 export function createData(
   env: DataEnv,
   hostnames: CustomHostnames = cloudflareHostnames(env),
@@ -530,6 +552,95 @@ export function createData(
 
     /** Whether the edition sells tickets: its ticketingProvider is set. */
     ticketed: (orgId: string, id: string) => env.CONFERENCE.ticketed(orgId, id),
+
+    /**
+     * Sign-up slug check (#2129): format and reserved first (no read), then
+     * an existing org slug or host. One answer for reserved and taken, so
+     * the check reveals no more than the public hosts already do.
+     */
+    async signupSlugProblem(
+      slug: string,
+    ): Promise<'format' | 'unavailable' | null> {
+      const pure = signupSlugProblem(slug)
+      if (pure === 'format') return 'format'
+      if (pure === 'reserved') return 'unavailable'
+      const [org, host] = await Promise.all([
+        db.query.organizations.findFirst({
+          where: eq(organizations.slug, slug),
+          columns: { id: true },
+        }),
+        db.query.domains.findFirst({
+          where: inArray(domains.hostname, [
+            `${slug}.${SIGNUP_DOMAIN}`,
+            aliasHost(slug),
+          ]),
+          columns: { hostname: true },
+        }),
+      ])
+      return org || host ? 'unavailable' : null
+    },
+
+    /** Operator-only: a new code, returned once; only its hash is stored. */
+    async createSignupCode(
+      createdBy: string,
+      note: string,
+      maxUses: number,
+      expiresAt: string,
+    ) {
+      const code = newSignupCode()
+      const [row] = await db
+        .insert(signupCodes)
+        .values({
+          id: crypto.randomUUID(),
+          codeHash: await hashSignupCode(code),
+          note,
+          maxUses,
+          expiresAt,
+          createdBy,
+          createdAt: new Date().toISOString(),
+        })
+        .returning()
+      return { ...row, code }
+    },
+
+    /** Operator-only: every code, newest first, without hashes. */
+    signupCodes: () =>
+      db.query.signupCodes.findMany({
+        orderBy: sql`${signupCodes.createdAt} DESC`,
+      }),
+
+    /** Operator-only: revokes a code; null for an unknown id. */
+    async revokeSignupCode(id: string) {
+      const [row] = await db
+        .update(signupCodes)
+        .set({
+          revokedAt: sql`coalesce(${signupCodes.revokedAt}, ${new Date().toISOString()})`,
+        })
+        .where(eq(signupCodes.id, id))
+        .returning()
+      return row ?? null
+    },
+
+    /**
+     * Spends one use of a valid code in a single conditional UPDATE: not
+     * revoked, not expired, uses left. True when a use was spent. The sign-up
+     * mutation calls it inside its write once provisioning lands.
+     */
+    async consumeSignupCode(code: string, now = new Date()) {
+      const rows = await db
+        .update(signupCodes)
+        .set({ uses: sql`${signupCodes.uses} + 1` })
+        .where(
+          and(
+            eq(signupCodes.codeHash, await hashSignupCode(code.trim())),
+            isNull(signupCodes.revokedAt),
+            gt(signupCodes.expiresAt, now.toISOString()),
+            lt(signupCodes.uses, signupCodes.maxUses),
+          ),
+        )
+        .returning({ id: signupCodes.id })
+      return rows.length === 1
+    },
 
     /**
      * Operator-only (#2129): grants `plan` until `until` (ISO 8601, null for

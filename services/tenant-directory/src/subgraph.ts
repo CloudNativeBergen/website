@@ -10,6 +10,7 @@ import {
   PLANS,
   can,
   effectivePlan,
+  graceUntil,
   parseOrgRoles,
   planAllows,
   principalOf,
@@ -223,9 +224,62 @@ type OrgRow = Row<'id' | 'slug' | 'name' | 'status' | 'plan'> & {
   planSource?: string | null
   subscriptionStatus?: string | null
   currentPeriodEnd?: string | null
+  cancelAtPeriodEnd?: boolean | null
   compUntil?: string | null
   kind?: string | null
 }
+
+const billingRow = (o: OrgRow) => ({
+  plan: o.plan,
+  planSource: o.planSource ?? null,
+  subscriptionStatus: o.subscriptionStatus ?? null,
+  currentPeriodEnd: o.currentPeriodEnd ?? null,
+  compUntil: o.compUntil ?? null,
+  kind: o.kind ?? null,
+})
+
+// The org's billing state (#2129, docs/BILLING.md). Only through
+// Organization.billing, which gates it.
+const Billing = builder.objectRef<OrgRow>('Billing').implement({
+  fields: (t) => ({
+    plan: t.exposeString('plan', {
+      description: 'The stored plan: `free`, `basic` or `pro`.',
+    }),
+    effectivePlan: t.string({
+      description: 'The plan the platform enforces now.',
+      resolve: (o) => effectivePlan(billingRow(o)),
+    }),
+    planSource: t.string({
+      description: '`stripe`, `comp` or `default`.',
+      resolve: (o) => o.planSource ?? 'default',
+    }),
+    subscriptionStatus: t.string({
+      nullable: true,
+      description:
+        '`active`, `past_due`, `canceled` or `incomplete`; null without a subscription.',
+      resolve: (o) => o.subscriptionStatus ?? null,
+    }),
+    currentPeriodEnd: t.string({
+      nullable: true,
+      description: 'ISO 8601.',
+      resolve: (o) => o.currentPeriodEnd ?? null,
+    }),
+    cancelAtPeriodEnd: t.boolean({
+      resolve: (o) => o.cancelAtPeriodEnd ?? false,
+    }),
+    compUntil: t.string({
+      nullable: true,
+      description: 'ISO 8601; null for no end or no grant.',
+      resolve: (o) => o.compUntil ?? null,
+    }),
+    graceUntil: t.string({
+      nullable: true,
+      description:
+        'While `past_due`: when the org drops to free (read-only), current_period_end + 14 days. ISO 8601; null otherwise.',
+      resolve: (o) => graceUntil(billingRow(o)),
+    }),
+  }),
+})
 
 // After Domain: Organization.domains refers to it.
 const Organization = builder.objectRef<OrgRow>('Organization').implement({
@@ -252,6 +306,20 @@ const Organization = builder.objectRef<OrgRow>('Organization').implement({
       description:
         '`customer` or `demo` (#2150). A demo org is Pro without billing and is left out of operator totals: filter on it.',
       resolve: (o) => toOrgKind(o.kind),
+    }),
+    billing: t.field({
+      type: Billing,
+      nullable: true,
+      description:
+        "The org's billing state (#2129). Owners and admins of this org on the tenant lane, or an operator acting for it; null for everyone else.",
+      resolve: (o, _, ctx) => {
+        const e = ctx.envelope
+        return e?.typ === 'tenant' &&
+          e.orgId === o.id &&
+          can(principalOf(e), 'billing.read')
+          ? o
+          : null
+      },
     }),
     // ISO 8601; null for orgs provisioned before #1973.
     createdAt: t.exposeString('createdAt', { nullable: true }),
@@ -350,6 +418,106 @@ const LifecycleOverride = builder.enumType('ConferenceLifecycleOverride', {
   values: ['cancelled', 'archived'] as const,
 })
 
+const bad = (field: string, message: string) =>
+  createGraphQLError(message, {
+    extensions: { code: 'BAD_USER_INPUT', reason: 'INVALID_INPUT', field },
+  })
+
+const notImplemented = (): never => {
+  throw createGraphQLError('Not implemented yet', {
+    extensions: { code: 'NOT_IMPLEMENTED' },
+  })
+}
+
+const PaidPlan = builder.enumType('PaidPlan', {
+  values: ['BASIC', 'PRO'] as const,
+})
+const Currency = builder.enumType('Currency', {
+  values: ['EUR', 'USD', 'NOK'] as const,
+})
+const CheckoutSession = builder
+  .objectRef<{ url: string }>('CheckoutSession')
+  .implement({ fields: (t) => ({ url: t.exposeString('url') }) })
+const BillingPortalSession = builder
+  .objectRef<{ url: string }>('BillingPortalSession')
+  .implement({ fields: (t) => ({ url: t.exposeString('url') }) })
+
+/** Owner on the tenant lane with a signed-in user; guard before fetch. */
+function requireBillingOwner(ctx: ResolverContext) {
+  const e = ctx.envelope
+  if (
+    e?.typ !== 'tenant' ||
+    !e.userId ||
+    !can(principalOf(e), 'billing.manage')
+  )
+    throw createGraphQLError('billing is managed by the org owner', {
+      extensions: { code: 'FORBIDDEN' },
+    })
+  return e
+}
+
+const SignupOrganizationInput = builder.inputType('SignupOrganizationInput', {
+  fields: (t) => ({
+    name: t.string({ required: true }),
+    slug: t.string({
+      required: true,
+      description:
+        'Lowercase a-z, 0-9 and -, 3 to 40 characters; becomes <slug>.konf.app.',
+    }),
+  }),
+})
+const SignupResult = builder
+  .objectRef<{
+    organization: OrgRow
+    conference: Row<'id' | 'orgId' | 'lifecycle'>
+    host: string
+  }>('SignupResult')
+  .implement({
+    fields: (t) => ({
+      organization: t.field({
+        type: Organization,
+        resolve: (r) => r.organization,
+      }),
+      conference: t.field({
+        type: ConferenceEdition,
+        resolve: (r) => r.conference,
+      }),
+      host: t.exposeString('host', {
+        description: 'The closed-preview host, <slug>.konf.app.',
+      }),
+    }),
+  })
+
+type SignupCodeRow = {
+  id: string
+  note: string
+  maxUses: number
+  uses: number
+  expiresAt: string
+  revokedAt: string | null
+  createdBy: string
+  createdAt: string
+  code?: string
+}
+const SignupCode = builder.objectRef<SignupCodeRow>('SignupCode').implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    code: t.string({
+      nullable: true,
+      description:
+        'The plain code: only in the createSignupCode result, never stored or shown again.',
+      resolve: (c) => c.code ?? null,
+    }),
+    note: t.exposeString('note'),
+    maxUses: t.exposeInt('maxUses'),
+    uses: t.exposeInt('uses'),
+    expiresAt: t.exposeString('expiresAt'),
+    revokedAt: t.exposeString('revokedAt', { nullable: true }),
+    createdBy: t.exposeID('createdBy'),
+    createdAt: t.exposeString('createdAt'),
+  }),
+})
+
 builder.queryType({
   fields: (t) => ({
     conferenceLifecycle: t.string({
@@ -430,6 +598,16 @@ builder.queryType({
           lifecycle,
           flag,
         )
+      },
+    }),
+    signupCodes: t.field({
+      type: [SignupCode],
+      tag: 'operator',
+      description:
+        'Every sign-up invite code, newest first, without the code itself. Platform operators only (operator lane, no tenant).',
+      resolve: (_, __, ctx) => {
+        requirePlatform(ctx)
+        return ctx.data.signupCodes()
       },
     }),
     tenantByHost: t.field({
@@ -573,6 +751,114 @@ builder.mutationType({
         return ctx.data.createOrganization(input, idempotencyKey, userId)
       },
     }),
+    startCheckout: t.field({
+      type: CheckoutSession,
+      description:
+        "Starts a Stripe Checkout session for a yearly plan for the envelope's org (#2129, docs/BILLING.md). Org owner only. Refused for a demo org and an org on an active complimentary plan.",
+      args: {
+        plan: t.arg({ type: PaidPlan, required: true }),
+        currency: t.arg({ type: Currency, required: true }),
+      },
+      resolve: async (_, __, ctx) => {
+        const e = requireBillingOwner(ctx)
+        // Demo orgs are never billed; the envelope says so without a read.
+        if (toOrgKind(e.orgKind) === 'demo')
+          throw bad('organization', 'a demo organization is not billed')
+        const org = await ctx.data.organization(e.orgId)
+        if (
+          org?.planSource === 'comp' &&
+          (org.compUntil === null || Date.parse(org.compUntil) > Date.now())
+        )
+          throw bad(
+            'organization',
+            'this organization has a complimentary plan',
+          )
+        return notImplemented()
+      },
+    }),
+    openBillingPortal: t.field({
+      type: BillingPortalSession,
+      description:
+        "Opens the Stripe billing portal for the envelope's org (#2129). Org owner only.",
+      resolve: (_, __, ctx) => {
+        requireBillingOwner(ctx)
+        return notImplemented()
+      },
+    }),
+    signUpOrganization: t.field({
+      type: SignupResult,
+      description:
+        'Self-serve sign-up in closed preview (#2129): creates an Organization (free, kind customer) with the caller as owner, its first draft edition and the host <slug>.konf.app, and spends one use of `inviteCode`. Any signed-in user, on a session with no tenant.',
+      args: {
+        input: t.arg({ type: SignupOrganizationInput, required: true }),
+        inviteCode: t.arg.string({ required: true }),
+      },
+      resolve: async (_, { input, inviteCode }, ctx) => {
+        const e = ctx.envelope
+        // Guard before fetch: a user lane session (an operator's included),
+        // never a tenant envelope.
+        if ((e?.typ !== 'user' && e?.typ !== 'platform') || !e.userId)
+          throw createGraphQLError(
+            'signing up requires a signed-in session with no tenant',
+            { extensions: { code: 'FORBIDDEN' } },
+          )
+        const name = input.name.trim()
+        if (!name || name.length > 100)
+          throw bad('name', 'name is required (at most 100 characters)')
+        if (!inviteCode.trim())
+          throw bad('inviteCode', 'an invite code is required')
+        const problem = await ctx.data.signupSlugProblem(input.slug)
+        if (problem === 'format')
+          throw bad(
+            'slug',
+            'slug must be 3 to 40 characters of a-z, 0-9 and -, not starting or ending with -',
+          )
+        // Same message for reserved and taken.
+        if (problem) throw bad('slug', 'this slug is not available')
+        // ponytail: provisioning, the per-user attempt limit and the code
+        // spend (consumeSignupCode) land together in the follow-up.
+        return notImplemented()
+      },
+    }),
+    createSignupCode: t.field({
+      type: SignupCode,
+      tag: 'operator',
+      description:
+        'Creates a sign-up invite code (#2129), valid until `expiresAt` (ISO 8601, in the future). The code is in this result only; just its hash is stored. Platform operators only (operator lane, no tenant).',
+      args: {
+        note: t.arg.string({ required: true }),
+        maxUses: t.arg.int({ required: true }),
+        expiresAt: t.arg.string({ required: true }),
+      },
+      resolve: (_, { note, maxUses, expiresAt }, ctx) => {
+        requirePlatform(ctx)
+        if (!note.trim() || note.length > 200)
+          throw bad('note', 'note is required (at most 200 characters)')
+        if (!Number.isInteger(maxUses) || maxUses < 1 || maxUses > 1000)
+          throw bad('maxUses', 'maxUses must be 1 to 1000')
+        const t = Date.parse(expiresAt)
+        if (Number.isNaN(t) || t <= Date.now())
+          throw bad('expiresAt', 'expiresAt must be a future ISO 8601 time')
+        return ctx.data.createSignupCode(
+          (ctx.envelope as { userId: string }).userId,
+          note.trim(),
+          maxUses,
+          new Date(t).toISOString(),
+        )
+      },
+    }),
+    revokeSignupCode: t.field({
+      type: SignupCode,
+      nullable: true,
+      tag: 'operator',
+      description:
+        'Revokes a sign-up invite code; null for an unknown id. Platform operators only (operator lane, no tenant).',
+      args: { id: t.arg.id({ required: true }) },
+      resolve: (_, { id }, ctx) => {
+        requirePlatform(ctx)
+        return ctx.data.revokeSignupCode(String(id))
+      },
+    }),
     setComplimentaryPlan: t.field({
       type: Organization,
       nullable: true,
@@ -588,14 +874,6 @@ builder.mutationType({
       resolve: (_, { orgId, plan, until, reason }, ctx) => {
         // Guard before fetch: nothing is read or written for anyone else.
         requirePlatform(ctx)
-        const bad = (field: string, message: string) =>
-          createGraphQLError(message, {
-            extensions: {
-              code: 'BAD_USER_INPUT',
-              reason: 'INVALID_INPUT',
-              field,
-            },
-          })
         const t = until == null ? null : Date.parse(until)
         if (t !== null && (Number.isNaN(t) || t <= Date.now()))
           throw bad('until', 'until must be a future ISO 8601 time')

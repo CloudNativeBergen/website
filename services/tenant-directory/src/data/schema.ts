@@ -1,6 +1,7 @@
 // Drizzle mirror of migrations/0001_init.sql, 0002_rollout_flags.sql,
 // 0005_lifecycle_cancelled.sql and 0006_provisioning_conference.sql
-// 0007_provisioning_created_by.sql, 0008_billing_plan.sql and 0010_org_kind.sql.
+// 0007_provisioning_created_by.sql, 0008_billing_plan.sql, 0010_org_kind.sql
+// and 0011_billing_signup.sql.
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const organizations = sqliteTable('organizations', {
@@ -22,6 +23,9 @@ export const organizations = sqliteTable('organizations', {
   currentPeriodEnd: text('current_period_end'),
   compUntil: text('comp_until'),
   compReason: text('comp_reason'),
+  cancelAtPeriodEnd: integer('cancel_at_period_end', { mode: 'boolean' })
+    .notNull()
+    .default(false),
   // #2150: a demo org is Pro, unbilled, and mails only its members.
   kind: text('kind', { enum: ['customer', 'demo'] })
     .notNull()
@@ -68,4 +72,16 @@ export const provisioningRequests = sqliteTable('provisioning_requests', {
   conferenceId: text('conference_id'),
   // 0007 (kontroll#79): operator user id; null on older rows.
   createdBy: text('created_by'),
+})
+
+export const signupCodes = sqliteTable('signup_codes', {
+  id: text('id').primaryKey(),
+  codeHash: text('code_hash').notNull(),
+  note: text('note').notNull(),
+  maxUses: integer('max_uses').notNull(),
+  uses: integer('uses').notNull().default(0),
+  expiresAt: text('expires_at').notNull(),
+  revokedAt: text('revoked_at'),
+  createdBy: text('created_by').notNull(),
+  createdAt: text('created_at').notNull(),
 })

@@ -37,6 +37,13 @@ export const MATRIX = {
   'api_client.revoke': row('       Y  Y   N   N   N'),
   'pat.manage_own': row('          N  Y   Y   Y   N'),
   'user.revoke_all': row('         Y  N   N   N   N'),
+  'billing.read': row('            Y  Y   Y   N   N'),
+  'billing.manage': row('          N  Y   N   N   N'),
+  // User lane: any signed-in session with no tenant (docs/AUTHORIZATION.md
+  // §4). A UserContext holds no column, so the resolver checks the
+  // envelope type; Op is the operator's PlatformContext on that lane.
+  'signup.create_org': row('       Y  N   N   N   N'),
+  'signup.manage_codes': row('     Y  N   N   N   N'),
   'ticketing.read': row('         Y  Y   Y   N   N'),
   'attendee.read_pii': row('      Y  Y   Y   N   N'),
   reminder_lock: row('             Y  N   N   N   Y'),
