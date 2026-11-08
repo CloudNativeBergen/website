@@ -8,6 +8,7 @@
   },
   "scripts": {
     "demo:seed": "tsx scripts/demo/seed.ts",
+    "demo:shots": "tsx scripts/demo/shots.ts",
     "dev": "next dev --turbopack",
     "build": "node scripts/stamp-sw.mjs && next build",
     "build:clean": "rm -rf .next && pnpm run build",

@@ -67,3 +67,6 @@ evals/content-judgement/.image-cache/
 .wrangler/
 .dev.vars*
 /tmp/
+
+# pnpm demo:shots output
+/demo-shots/
