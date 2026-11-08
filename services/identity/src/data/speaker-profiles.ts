@@ -123,40 +123,6 @@ export function createSpeakerProfiles(db: D1Database) {
   }
   return {
     mine,
-    /**
-     * What the cfp subgraph needs to find the user's Sanity speaker and
-     * snapshot their profile (#2078): the safe match keys only (provider
-     * accounts and the login email when verified, as the site's login and
-     * #2094's import match), plus the profile. Never the display email of an
-     * unverified user, never tokens.
-     */
-    async speakerLink(userId: string) {
-      const [accounts, verified, profile] = await Promise.all([
-        db
-          .prepare(
-            'SELECT providerId, accountId FROM account WHERE userId = ?1',
-          )
-          .bind(userId)
-          .all<{ providerId: string; accountId: string }>(),
-        db
-          .prepare('SELECT email FROM user WHERE id = ?1 AND emailVerified = 1')
-          .bind(userId)
-          .first<{ email: string }>(),
-        mine(userId),
-      ])
-      return {
-        providers: accounts.results.map(
-          (a) => `${a.providerId}:${a.accountId}`,
-        ),
-        emails: verified ? [verified.email.trim().toLowerCase()] : [],
-        profile: profile && {
-          name: profile.name,
-          bio: profile.bio,
-          links: profile.links,
-          photoKey: profile.photoKey,
-        },
-      }
-    },
     /** Creates on first update; later updates merge over the stored profile. */
     async update(userId: string, input: ProfileInput) {
       const v = validate(input, (await mine(userId)) ?? undefined)

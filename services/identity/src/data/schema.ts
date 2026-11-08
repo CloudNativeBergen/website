@@ -151,4 +151,6 @@ export const auditEvent = sqliteTable('audit_event', {
   // Handoff rows: the tenant origin and the upgrade match type.
   origin: text(),
   detail: text(),
+  // The user the action was done to (revokeAll, operator member writes).
+  subjectUserId: text('subject_user_id'),
 })

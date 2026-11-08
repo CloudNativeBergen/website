@@ -4,7 +4,12 @@
 // send runs after the response via waitUntil and only logs a failure.
 // `cloudflare:workers` is imported lazily: api/scripts/compose.ts loads the
 // subgraph schema under Node, where the module does not exist.
-import type { PushEvent } from '@runkonf/tenancy'
+import {
+  can,
+  principalOfRole,
+  type OperatorAuditEvent,
+  type PushEvent,
+} from '@runkonf/tenancy'
 import { sendWebPush, type StoredSubscription, type VapidEnv } from './web-push'
 
 export interface PushEnv extends VapidEnv {
@@ -14,12 +19,16 @@ export interface PushEnv extends VapidEnv {
 const APP = 'https://my.konf.app'
 const SUB = 'SELECT p.endpoint, p.p256dh, p.auth FROM push_subscription p'
 
-/** Recipients' subscriptions as SQL; the actor (if any) is always excluded. */
+/**
+ * Recipients' subscriptions as SQL; the actor (if any) is always excluded.
+ * A query that selects `m.role` is filtered by org.manage_members afterwards,
+ * through parseOrgRoles (I4): SQL cannot parse "member,admin".
+ */
 function recipients(e: PushEvent): [string, unknown[]] {
   switch (e.type) {
     case 'invite.accepted':
       return [
-        `${SUB} JOIN member m ON m.userId = p.user_id WHERE m.organizationId = ?1 AND m.role IN ('owner', 'admin') AND p.user_id <> ?2`,
+        `${SUB.replace(' FROM', ', m.role FROM')} JOIN member m ON m.userId = p.user_id WHERE m.organizationId = ?1 AND p.user_id <> ?2`,
         [e.organizationId, e.userId],
       ]
     case 'member.role_changed':
@@ -108,9 +117,14 @@ export async function notify(env: PushEnv, e: PushEvent): Promise<void> {
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT) return
     const vapid = { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT }
     const [sql, binds] = recipients(e)
-    const { results } = await env.DB.prepare(sql)
+    const { results: rows } = await env.DB.prepare(sql)
       .bind(...binds)
-      .all<StoredSubscription>()
+      .all<StoredSubscription & { role?: string }>()
+    const results = rows.filter(
+      (r) =>
+        r.role === undefined ||
+        can(principalOfRole(r.role), 'org.manage_members'),
+    )
     if (!results.length) return
     let targets = results
     if (targets.length > MAX_RECIPIENTS) {
@@ -164,4 +178,49 @@ export function emit(event: PushEvent) {
         error: e instanceof Error ? e.message : 'unknown',
       }),
     )
+}
+
+const id = (v: unknown): v is string =>
+  typeof v === 'string' && v.length > 0 && v.length <= 200
+/**
+ * An operator write raised in another service, as an audit_event row. Malformed
+ * input is dropped and logged; never rejects into the caller.
+ */
+export async function recordOperatorWrite(
+  db: D1Database,
+  e: OperatorAuditEvent,
+): Promise<void> {
+  try {
+    if (
+      e?.type !== 'operator.write' ||
+      !id(e.actorId) ||
+      !id(e.organizationId) ||
+      !(e.conferenceId === null || id(e.conferenceId)) ||
+      !Array.isArray(e.fields) ||
+      e.fields.length > 100 ||
+      !e.fields.every(id)
+    ) {
+      console.error(JSON.stringify({ event: 'audit.rejected' }))
+      return
+    }
+    const detail = JSON.stringify({
+      operator: true,
+      orgId: e.organizationId,
+      conferenceId: e.conferenceId,
+      fields: e.fields,
+    })
+    await db
+      .prepare(
+        "INSERT INTO audit_event (action, userId, detail) VALUES ('operator.write', ?1, ?2)",
+      )
+      .bind(e.actorId, detail)
+      .run()
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        event: 'audit.write_failed',
+        error: err instanceof Error ? err.message : 'unknown',
+      }),
+    )
+  }
 }

@@ -33,3 +33,15 @@ export type ConferencePushEvent = Extract<
   PushEvent,
   { type: 'conference.settings_changed' | 'parity.drift' }
 >
+
+/**
+ * An operator write in another service, recorded by identity in `audit_event`
+ * (docs/AUTHORIZATION.md §3.6). Ids and field names only, never values.
+ */
+export interface OperatorAuditEvent {
+  type: 'operator.write'
+  actorId: string
+  organizationId: string
+  conferenceId: string | null
+  fields: string[]
+}

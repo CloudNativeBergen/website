@@ -1124,6 +1124,9 @@ describe('lifecycle override (#1997)', () => {
     ['anonymous', undefined],
     ['a member without a writer role', { orgRole: 'member' }],
     ['no user', { userId: null }],
+    // Authz phase 1 (#2106): the site lane is not a lifecycle writer.
+    ['the site lane', { userId: null, orgRole: null, scopes: ['site:server'] }],
+    ['an unknown role', { orgRole: 'guest' }],
   ])('refuses %s before touching D1', async (_, over) => {
     const { confId, as } = await setup()
     const { body } = await gql(
@@ -1160,6 +1163,13 @@ describe('lifecycle override (#1997)', () => {
     expect((await gql(READ, {}, as)).body.data.conferenceLifecycle).toBe(
       'draft',
     )
+    // Authz phase 1 (#2106): not to the site lane alone; a member, yes.
+    const site = { ...anon, scopes: ['site:server'] }
+    expect((await gql(READ, {}, site)).body.data.conferenceLifecycle).toBeNull()
+    expect(
+      (await gql(READ, {}, { ...as, orgRole: 'member' })).body.data
+        .conferenceLifecycle,
+    ).toBe('draft')
   })
 })
 

@@ -1,9 +1,9 @@
 // Identity entry: Better Auth under /api/auth, the login handoff under
 // /handoff, its error page at /error, the linked-accounts page at /account, the RPC entrypoints, and 404 for everything else.
 import { WorkerEntrypoint } from 'cloudflare:workers'
-import type { ConferencePushEvent } from '@runkonf/tenancy'
+import type { ConferencePushEvent, OperatorAuditEvent } from '@runkonf/tenancy'
 import { createAuth, createData } from './data'
-import { notify, type PushEnv } from './data/push'
+import { notify, recordOperatorWrite, type PushEnv } from './data/push'
 import { accountPage } from './account-page'
 import { errorPage } from './error-page'
 import { handoff, type HandoffEnv } from './handoff'
@@ -76,16 +76,13 @@ export class Push extends WorkerEntrypoint<Env> {
       return Promise.resolve()
     return notify(this.env, event)
   }
-}
 
-/**
- * RPC for konf-cfp (`"entrypoint": "SpeakerLink"`, #2078): the user's safe
- * speaker match keys and profile. The userId comes from cfp's verified
- * envelope, never a caller argument. No HTTP route.
- */
-export class SpeakerLink extends WorkerEntrypoint<Env> {
-  link(userId: string) {
-    return createData(this.env).speakerProfiles().speakerLink(userId)
+  /**
+   * Operator writes in konf-conference (docs/AUTHORIZATION.md §3.6), recorded
+   * in audit_event. Only this shape passes; ids and field names only.
+   */
+  audit(event: OperatorAuditEvent) {
+    return recordOperatorWrite(this.env.DB, event)
   }
 }
 

@@ -351,38 +351,3 @@ describe('erasure', () => {
     expect(r?.n).toBe(0)
   })
 })
-
-describe('SpeakerLink (cfp, #2078)', () => {
-  it('returns provider keys, the email only when verified, and the profile', async () => {
-    const { createSpeakerProfiles } = await import('./data/speaker-profiles')
-    const sp = createSpeakerProfiles(d1)
-    const a = await newUser()
-    await d1
-      .prepare(
-        "INSERT INTO account (id, accountId, providerId, userId) VALUES (?1, '42', 'github', ?2)",
-      )
-      .bind(crypto.randomUUID(), a)
-      .run()
-    const unverified = await sp.speakerLink(a)
-    expect(unverified).toEqual({
-      providers: ['github:42'],
-      emails: [],
-      profile: null,
-    })
-    await d1
-      .prepare('UPDATE user SET emailVerified = 1 WHERE id = ?1')
-      .bind(a)
-      .run()
-    await sp.update(a, { name: 'A', bio: 'B', links: ['https://a.example'] })
-    expect(await sp.speakerLink(a)).toEqual({
-      providers: ['github:42'],
-      emails: [`${a}@example.com`.toLowerCase()],
-      profile: {
-        name: 'A',
-        bio: 'B',
-        links: ['https://a.example/'],
-        photoKey: null,
-      },
-    })
-  })
-})

@@ -512,8 +512,6 @@ const ALONE = new Set([
   'sponsorTiers',
   'cfp',
   'speakerDirectory',
-  'myProposal',
-  'myProposals',
 ])
 
 function queries(tenants: T[]) {
@@ -681,12 +679,7 @@ beforeAll(async () => {
         ensure: async () => undefined,
         memberships: (userId: string) =>
           createData(identityEnv).memberships(userId),
-        // cfp's speaker link (#2078), from the same identity D1.
-        link: (userId: string) =>
-          createData(identityEnv).speakerProfiles().speakerLink(userId),
       },
-      // cfp's CFP dates: none, so the CFP reads as closed.
-      CONFERENCE: { cfpWindow: async () => null },
       SANITY_PROJECT_ID: 'p',
       SANITY_DATASET: 'd',
       SANITY_API_TOKEN_READ: 't',
@@ -825,17 +818,10 @@ describe.each([
       }
       // A failed field would count as walked while proving nothing.
       const { errors = [] } = JSON.parse(body) as {
-        errors?: { path?: unknown[]; extensions?: { code?: string } }[]
+        errors?: { extensions?: { code?: string } }[]
       }
-      // myProposal (#2078): a probe id is nobody's proposal, so NOT_FOUND,
-      // the same for a foreign and a nonexistent id.
       const unexpected = errors.filter(
-        (e) =>
-          !EXPECTED_ERRORS.has(e.extensions?.code ?? '') &&
-          !(
-            e.extensions?.code === 'NOT_FOUND' &&
-            roots[String(e.path?.[0])] === 'myProposal'
-          ),
+        (e) => !EXPECTED_ERRORS.has(e.extensions?.code ?? ''),
       )
       expect(unexpected, query).toEqual([])
       sawA ||= body.includes('TENANT_A')
@@ -1011,15 +997,6 @@ describe('cross-tenant mutation walk', () => {
         )
       )
         expect(['NOT_FOUND', 'BAD_USER_INPUT']).toContain(
-          (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions
-            ?.code,
-        )
-      // A speaker's own proposals (#2078): the organizer has no Sanity
-      // speaker and the CFP has no dates, so nothing is written.
-      else if (
-        /"(submitProposal|updateMyProposal|withdrawMyProposal)"/.test(json)
-      )
-        expect(['NOT_FOUND', 'FORBIDDEN']).toContain(
           (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions
             ?.code,
         )

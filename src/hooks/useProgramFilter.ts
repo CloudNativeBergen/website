@@ -230,9 +230,8 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
         return false
       }
 
-      if (filters.selectedTopic) {
-        // A TBA slot has no topics: it never matches a topic filter.
-        const matchesTopic = (talk.talk.topics ?? []).some(
+      if (filters.selectedTopic && talk.talk.topics) {
+        const matchesTopic = talk.talk.topics.some(
           (topic) =>
             typeof topic === 'object' &&
             'slug' in topic &&

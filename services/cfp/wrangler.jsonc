@@ -4,18 +4,6 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
-  "services": [
-    {
-      "binding": "IDENTITY",
-      "service": "konf-identity",
-      "entrypoint": "SpeakerLink",
-    },
-    {
-      "binding": "CONFERENCE",
-      "service": "konf-conference",
-      "entrypoint": "ProgramDate",
-    },
-  ],
   "vars": {
     "SANITY_PROJECT_ID": "mvzwvw14",
     "SANITY_DATASET": "development",
@@ -25,18 +13,6 @@
   "env": {
     "preview": {
       "name": "konf-cfp-preview",
-      "services": [
-        {
-          "binding": "IDENTITY",
-          "entrypoint": "SpeakerLink",
-          "service": "konf-identity-preview",
-        },
-        {
-          "binding": "CONFERENCE",
-          "entrypoint": "ProgramDate",
-          "service": "konf-conference-preview",
-        },
-      ],
       "vars": {
         "SANITY_PROJECT_ID": "mvzwvw14",
         "SANITY_DATASET": "development",
@@ -44,18 +20,6 @@
     },
     "production": {
       "name": "konf-cfp",
-      "services": [
-        {
-          "binding": "IDENTITY",
-          "service": "konf-identity",
-          "entrypoint": "SpeakerLink",
-        },
-        {
-          "binding": "CONFERENCE",
-          "service": "konf-conference",
-          "entrypoint": "ProgramDate",
-        },
-      ],
       "vars": {
         "SANITY_PROJECT_ID": "mvzwvw14",
         "SANITY_DATASET": "production",

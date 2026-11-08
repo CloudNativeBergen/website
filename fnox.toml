@@ -70,5 +70,3 @@ KONF_PRODUCTION_IDENTITY_ISSUER= { provider = "keychain", value = "KONF_PRODUCTI
 KONF_PRODUCTION_VAPID_PUBLIC_KEY= { provider = "keychain", value = "KONF_PRODUCTION_VAPID_PUBLIC_KEY", if_missing = "warn" }
 KONF_PRODUCTION_VAPID_PRIVATE_KEY= { provider = "keychain", value = "KONF_PRODUCTION_VAPID_PRIVATE_KEY", if_missing = "warn" }
 KONF_PRODUCTION_SLACK_MEMBER_DRIFT_WEBHOOK_URL= { provider = "keychain", value = "KONF_PRODUCTION_SLACK_MEMBER_DRIFT_WEBHOOK_URL", if_missing = "warn" }
-KONF_PREVIEW_SANITY_API_TOKEN_WRITE= { provider = "keychain", value = "KONF_PREVIEW_SANITY_API_TOKEN_WRITE", if_missing = "warn" }
-KONF_PRODUCTION_SANITY_API_TOKEN_WRITE= { provider = "keychain", value = "KONF_PRODUCTION_SANITY_API_TOKEN_WRITE", if_missing = "warn" }

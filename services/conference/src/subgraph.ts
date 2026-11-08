@@ -10,7 +10,8 @@ import { builder } from './builder'
 import { registerJobStatus } from './job-status'
 import { emit } from './push'
 import { createGraphQLError } from 'graphql-yoga'
-import { SITE_SCOPE, type ConferencePatch, type ConferenceRow } from './data'
+import { can, principalOf } from '@runkonf/tenancy'
+import { type ConferencePatch, type ConferenceRow } from './data'
 import {
   milestone,
   ticketTypeRole,
@@ -177,21 +178,18 @@ const TicketTypeRoleInput = builder.inputType('TicketTypeRoleInput', {
   }),
 })
 
-/** A member of the envelope's org, or an operator acting for it. */
+/** Settings: a member of the envelope's org, or an operator acting for it. */
 const isMember = ({ envelope: e }: ResolverContext) =>
-  e.typ === 'tenant' &&
-  (!!e.orgRole?.trim() || e.scopes.includes('platform:operator'))
+  e.typ === 'tenant' && can(principalOf(e), 'org.read_settings')
 
 /**
- * The site's server lane (`site:server`, minted by the gateway only for a
+ * Ticket setup (C5): insiders, and the site's server lane (`site:server`, minted by the gateway only for a
  * verified site assertion). The site already holds the Sanity copy of the
  * phase 3 ticket setup with a full read token, and its readers include jobs
  * and webhooks with no signed-in user (#2080), so the lane may read it.
  */
-const isSiteLane = ({ envelope: e }: ResolverContext) =>
-  e.typ === 'tenant' && e.scopes.includes(SITE_SCOPE)
-const isMemberOrSite = (ctx: ResolverContext) =>
-  isMember(ctx) || isSiteLane(ctx)
+const isMemberOrSite = ({ envelope: e }: ResolverContext) =>
+  e.typ === 'tenant' && can(principalOf(e), 'conference.read_ticket_setup')
 
 const Conference = builder.objectRef<ConferenceRow>('Conference').implement({
   fields: (t) => ({

@@ -1573,36 +1573,3 @@ describe('buildErasurePlan — Session Feedback (speaker feedback spec §12.3)',
     expect(unfolded.noop).toBe(false)
   })
 })
-
-describe('cfp speaker snapshot (#2078)', () => {
-  it("clears the subject's profile snapshot on a talk, and only theirs", () => {
-    const snap = (id: string) => ({
-      speaker: { _type: 'reference', _ref: id, _weak: true },
-      name: 'Real Name',
-      bio: 'bio',
-      photoKey: 'p.jpg',
-    })
-    const plan = buildErasurePlan(
-      inputs({
-        referencingDocs: [
-          {
-            _id: 'talk-s',
-            _type: 'talk',
-            _rev: 'r1',
-            speakerSnapshot: snap(SPEAKER),
-          },
-          {
-            _id: 'talk-o',
-            _type: 'talk',
-            _rev: 'r2',
-            speakerSnapshot: snap('other'),
-          },
-        ],
-      }),
-    )
-    expect(plan.documentPatches.filter((p) => p.id === 'talk-s')).toMatchObject(
-      [{ rev: 'r1', unset: ['speakerSnapshot'] }],
-    )
-    expect(plan.documentPatches.map((p) => p.id)).not.toContain('talk-o')
-  })
-})

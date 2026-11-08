@@ -48,107 +48,9 @@ type CfpTopic {
   title: String
 }
 
-type Mutation {
-  """
-  Submit a proposal to the request's conference while its CFP is open. Snapshots the speaker profile into it.
-  """
-  submitProposal(input: SubmitProposalInput!): MyProposal
-  updateMyProposal(id: ID!, input: UpdateMyProposalInput!): MyProposal
-
-  """
-  Withdraw a submitted, waitlisted, accepted or confirmed proposal, up to 14 days before the event.
-  """
-  withdrawMyProposal(id: ID!): MyProposal
-
-  """Stores the last reminder send. Site server lane or operator only."""
-  recordWorkshopReminder(count: Int!, sentAt: String!): Boolean!
-
-  """Releases the lock if it is still held by `token`."""
-  releaseWorkshopReminder(token: String!): Boolean!
-
-  """
-  Claims the request's Conference's hourly workshop-reminder lock, atomically. Site server lane or operator only.
-  """
-  reserveWorkshopReminder: WorkshopReminderReservation!
-
-  """
-  Patches the request's Conference. Requires an org owner or admin, or a platform operator acting for the org (audited).
-  """
-  updateConference(input: ConferencePatch!): Conference!
-  cancelInvitation(invitationId: ID!): Boolean
-  changeMemberRole(role: MemberRole!, userId: ID!): Boolean
-  inviteMember(email: String!, role: MemberRole!): MemberInvitation
-  operatorCancelInvitation(invitationId: ID!, orgId: ID!): Boolean
-  operatorChangeMemberRole(orgId: ID!, role: MemberRole!, userId: ID!): Boolean
-  operatorInviteMember(email: String!, orgId: ID!, role: MemberRole!): MemberInvitation
-  operatorRemoveMember(orgId: ID!, userId: ID!): Boolean
-  removeMember(userId: ID!): Boolean
-
-  """
-  Stores a web push subscription for the session user. An endpoint another user held moves to the caller.
-  """
-  subscribePush(input: PushSubscriptionInput!): Boolean
-
-  """Removes the session user's subscription for the endpoint."""
-  unsubscribePush(endpoint: String!): Boolean
-
-  """
-  Creates or updates the session user's speaker profile. New profiles default to network visibility.
-  """
-  updateMyProfile(input: SpeakerProfileInput!): SpeakerProfile
-
-  """
-  Creates an Organization and its first Conference: the Sanity documents (through the site), the directory rows and the owner membership. Retrying with the same idempotencyKey returns the same ids. Platform operators only (operator lane, no tenant).
-  """
-  createOrganization(idempotencyKey: String!, input: CreateOrganizationInput!): CreatedOrganization
-
-  """
-  Creates a new conference edition (draft) in an Organization: the Sanity document (through the site) and the directory row. Org owner or admin on the tenant lane, for the envelope's org; or a platform operator (operator lane, no tenant) naming `orgId`, which no other caller may pass. Retrying with the same idempotencyKey returns the same id.
-  """
-  provisionConference(idempotencyKey: String!, input: ProvisionConferenceInput!, orgId: ID): ProvisionedConference
-  provisionOrganization(conferenceId: ID!, idempotencyKey: String!, orgId: ID!, orgSlug: String!): Organization
-
-  """
-  Sets the request's Conference homepage override, or clears it with null (back to `live`; a draft stays draft). Org owner or admin, or an operator acting for the org (#1997).
-  """
-  setConferenceLifecycle(status: ConferenceLifecycleOverride): ConferenceEdition
-}
-
-"""
-One of the session user's own proposals (they are a speaker on it, #2078): their text and its status. Never reviews, scores or organizer notes.
-"""
-type MyProposal {
-  """Plain text; paragraphs separated by a blank line."""
-  abstract: String
-  audiences: [String!]
-  capacity: Int
-  format: String
-  id: ID
-  language: String
-  level: String
-  outline: String
-  prerequisites: String
-  speakers: [CfpSpeakerRef!]
-
-  """
-  draft, submitted, accepted, waitlisted, confirmed, rejected, withdrawn or canceled.
-  """
-  status: String
-  title: String
-  topicIds: [ID!]
-}
-
 type Query {
   """The request's conference CFP. Null when the request has no conference."""
   cfp: CallForPapers
-
-  """One of your proposals. NOT_FOUND for anything else, existing or not."""
-  myProposal(id: ID!): MyProposal
-
-  """
-  The session user's proposals in the request's conference, including those they are a co-speaker on.
-  """
-  myProposals: [MyProposal!]
 
   """
   The request's Conference. Null when the request has none, or it is unpublished and the caller is not an org member.
@@ -414,6 +316,66 @@ type ConferenceParityStatus {
   status: String!
 }
 
+type Mutation {
+  """Stores the last reminder send. Site server lane or operator only."""
+  recordWorkshopReminder(count: Int!, sentAt: String!): Boolean!
+
+  """Releases the lock if it is still held by `token`."""
+  releaseWorkshopReminder(token: String!): Boolean!
+
+  """
+  Claims the request's Conference's hourly workshop-reminder lock, atomically. Site server lane or operator only.
+  """
+  reserveWorkshopReminder: WorkshopReminderReservation!
+
+  """
+  Patches the request's Conference. Requires an org owner or admin, or a platform operator acting for the org (audited).
+  """
+  updateConference(input: ConferencePatch!): Conference!
+  cancelInvitation(invitationId: ID!): Boolean
+  changeMemberRole(role: MemberRole!, userId: ID!): Boolean
+  inviteMember(email: String!, role: MemberRole!): MemberInvitation
+  operatorCancelInvitation(invitationId: ID!, orgId: ID!): Boolean
+  operatorChangeMemberRole(orgId: ID!, role: MemberRole!, userId: ID!): Boolean
+  operatorInviteMember(email: String!, orgId: ID!, role: MemberRole!): MemberInvitation
+  operatorRemoveMember(orgId: ID!, userId: ID!): Boolean
+  removeMember(userId: ID!): Boolean
+
+  """
+  Emergency revocation: removes the user's memberships (except where they are an org's last owner, reported in keptLastOwnerOf), sessions and operator flag, audited. Platform operators only. An issued identity JWT lives up to 300 s more.
+  """
+  revokeAll(userId: ID!): RevokeAllResult
+
+  """
+  Stores a web push subscription for the session user. An endpoint another user held moves to the caller.
+  """
+  subscribePush(input: PushSubscriptionInput!): Boolean
+
+  """Removes the session user's subscription for the endpoint."""
+  unsubscribePush(endpoint: String!): Boolean
+
+  """
+  Creates or updates the session user's speaker profile. New profiles default to network visibility.
+  """
+  updateMyProfile(input: SpeakerProfileInput!): SpeakerProfile
+
+  """
+  Creates an Organization and its first Conference: the Sanity documents (through the site), the directory rows and the owner membership. Retrying with the same idempotencyKey returns the same ids. Platform operators only (operator lane, no tenant).
+  """
+  createOrganization(idempotencyKey: String!, input: CreateOrganizationInput!): CreatedOrganization
+
+  """
+  Creates a new conference edition (draft) in an Organization: the Sanity document (through the site) and the directory row. Org owner or admin on the tenant lane, for the envelope's org; or a platform operator (operator lane, no tenant) naming `orgId`, which no other caller may pass. Retrying with the same idempotencyKey returns the same id.
+  """
+  provisionConference(idempotencyKey: String!, input: ProvisionConferenceInput!, orgId: ID): ProvisionedConference
+  provisionOrganization(conferenceId: ID!, idempotencyKey: String!, orgId: ID!, orgSlug: String!): Organization
+
+  """
+  Sets the request's Conference homepage override, or clears it with null (back to `live`; a draft stays draft). Org owner or admin, or an operator acting for the org (#1997).
+  """
+  setConferenceLifecycle(status: ConferenceLifecycleOverride): ConferenceEdition
+}
+
 type TicketTargetMilestone {
   date: String
   label: String
@@ -621,6 +583,12 @@ type PendingInvitation {
   expiresAt: String
   id: ID
   role: String
+}
+
+type RevokeAllResult {
+  keptLastOwnerOf: [ID!]
+  membersRemoved: Int
+  sessionsRevoked: Int
 }
 
 type SpeakerDirectoryPage {
@@ -924,40 +892,6 @@ enum RolloutFlag {
   d1Override
   d1Write
   identityLogin
-}
-
-input SubmitProposalInput {
-  """Plain text; paragraphs separated by a blank line."""
-  abstract: String!
-  audiences: [String!]!
-  capacity: Int
-  format: String!
-  language: String!
-  level: String!
-  outline: String
-  prerequisites: String
-  title: String!
-  topicIds: [ID!]!
-
-  """Must be true."""
-  tos: Boolean!
-}
-
-"""
-Only the fields to change. After acceptance only title and abstract, until the program is published.
-"""
-input UpdateMyProposalInput {
-  """Plain text; paragraphs separated by a blank line."""
-  abstract: String
-  audiences: [String!]
-  capacity: Int
-  format: String
-  language: String
-  level: String
-  outline: String
-  prerequisites: String
-  title: String
-  topicIds: [ID!]
 }
 
 """

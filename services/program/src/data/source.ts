@@ -87,9 +87,9 @@ export interface Slot {
   room: string | null
   track: Track
   /**
-   * Null for a break. A talk that is not confirmed keeps only its format
-   * (the TBA card); its title, description, language, speakers, level,
-   * audiences and topics stay null, exactly as SCHEDULE_TRACKS projects it.
+   * Null for a break. A talk that is not confirmed keeps its format,
+   * level, audiences and topics (the TBA card); its title, description,
+   * language and speakers stay null, exactly as SCHEDULE_TRACKS projects it.
    */
   talk: Talk | null
   /** The slot had a talk reference, resolved or not (TBA vs service session). */
@@ -326,7 +326,7 @@ export class SanityProgramSource implements ProgramSource {
               room: track.name,
               track,
               // An unconfirmed talk arrives without title, description,
-              // language, speakers, level, audiences and topics (SCHEDULE_TRACKS). Null them here too,
+              // language and speakers (SCHEDULE_TRACKS). Null them here too,
               // independent of the projection (second layer). The id goes as
               // well: the talk(id) root and the profile never know an
               // unconfirmed talk, so no id leads anywhere.
@@ -341,9 +341,6 @@ export class SanityProgramSource implements ProgramSource {
                       language: null,
                       speakers: null,
                       attachments: null,
-                      level: null,
-                      audiences: null,
-                      topics: null,
                     }
                 : null,
               hasTalkRef: sl.hasTalkRef === true,

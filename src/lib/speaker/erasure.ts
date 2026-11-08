@@ -744,20 +744,6 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
         if (typeof conferenceRef === 'string') {
           affectedConferenceIds.add(conferenceRef)
         }
-        // The profile snapshot cfp takes at submission (#2078, #2022): name,
-        // bio, links and photo. Decision 8 keeps name and photo only with
-        // consent, and the snapshot has no consent field: cleared whole. Its
-        // weak `speaker` ref is what lets `references()` find the talk.
-        const snapshot = doc.speakerSnapshot as { speaker?: unknown } | null
-        if (snapshot && refPointsAt(snapshot.speaker, speakerId)) {
-          mergeInto(documentPatches, {
-            id,
-            type,
-            rev,
-            unset: ['speakerSnapshot'],
-            reason: 'speaker profile snapshot',
-          })
-        }
         break
       }
 

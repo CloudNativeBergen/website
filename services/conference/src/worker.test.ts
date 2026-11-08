@@ -1269,3 +1269,103 @@ describe('settings phase 3 (#2080)', () => {
     })
   })
 })
+
+// Authorization phase 1 (#2106): site:server keeps only the reminder lock and
+// the ticket-setup read (+ the vendor binding until phase 2b); operator writes
+// go to identity's audit sink over the PUSH binding.
+describe('authz phase 1', () => {
+  const settled = async () => {
+    await new Promise((r) => setTimeout(r))
+    await Promise.all(cf.pending)
+  }
+  const UPDATE =
+    'mutation($input: ConferencePatch!) { updateConference(input: $input) { id title } }'
+  const site = (conferenceId = 'conf-a'): Envelope => ({
+    ...(tenant('org-a', conferenceId) as Extract<Envelope, { typ: 'tenant' }>),
+    scopes: ['site:server'],
+  })
+  const operator: Envelope = {
+    ...(tenant('org-a', 'conf-a') as Extract<Envelope, { typ: 'tenant' }>),
+    userId: 'op',
+    scopes: ['platform:operator'],
+  }
+  const title = (id: string) =>
+    (
+      sqlite
+        .prepare('SELECT title FROM conferences WHERE conference_id = ?')
+        .get(id) as { title: string }
+    ).title
+  const audits: unknown[] = []
+  beforeEach(() => {
+    audits.length = 0
+    cf.pending.length = 0
+    cf.env.PUSH = {
+      send: vi.fn(async () => {}),
+      audit: vi.fn(async (e: unknown) => void audits.push(e)),
+    }
+    return () => {
+      delete cf.env.PUSH
+    }
+  })
+
+  it('the site lane does not read a draft', async () => {
+    expect((await gql(site('conf-a-draft'))).body.data.conference).toBeNull()
+  })
+
+  it('the site lane does not write settings', async () => {
+    const { body } = await gql(site(), UPDATE, { input: { title: 'x' } })
+    expect(body.errors?.[0].extensions.code).toBe('FORBIDDEN')
+    expect(title('conf-a')).toBe('A 2026')
+  })
+
+  it('a plain member reads a draft (owner decision 1) but does not write', async () => {
+    const member = tenant('org-a', 'conf-a-draft', 'member')
+    expect((await gql(member)).body.data.conference).toMatchObject({
+      id: 'conf-a-draft',
+    })
+    const { body } = await gql(member, UPDATE, { input: { title: 'x' } })
+    expect(body.errors?.[0].extensions.code).toBe('FORBIDDEN')
+    expect(title('conf-a-draft')).toBe('A 2027')
+  })
+
+  it('"Admin" writes now (parser fix, docs/AUTHORIZATION.md §1.2 #4)', async () => {
+    const { body } = await gql(tenant('org-a', 'conf-a', ' Admin '), UPDATE, {
+      input: { title: 'Cased' },
+    })
+    expect(body.errors).toBeUndefined()
+    expect(title('conf-a')).toBe('Cased')
+  })
+
+  it('an unknown role string neither reads a draft nor writes', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const guest = tenant('org-a', 'conf-a-draft', 'guest')
+    expect((await gql(guest)).body.data.conference).toBeNull()
+    const { body } = await gql(guest, UPDATE, { input: { title: 'x' } })
+    expect(body.errors?.[0].extensions.code).toBe('FORBIDDEN')
+  })
+
+  it('audits an operator write to identity, with ids and field names only', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { body } = await gql(operator, UPDATE, { input: { title: 'Op' } })
+    expect(body.errors).toBeUndefined()
+    await settled()
+    expect(audits).toEqual([
+      {
+        type: 'operator.write',
+        actorId: 'op',
+        organizationId: 'org-a',
+        conferenceId: 'conf-a',
+        fields: ['title'],
+      },
+    ])
+  })
+
+  it('audits nothing for an org admin or a refused write', async () => {
+    await gql(tenant('org-a', 'conf-a', 'admin'), UPDATE, {
+      input: { title: 'Adm' },
+    })
+    await gql(site(), UPDATE, { input: { title: 'x' } })
+    await settled()
+    expect(audits).toEqual([])
+  })
+})

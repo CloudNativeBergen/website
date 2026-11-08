@@ -22,31 +22,6 @@ export class ProgramDate extends WorkerEntrypoint<WorkerEnv> {
       .current()
     return row?.programDate ?? null
   }
-
-  /**
-   * The dates cfp's speaker writes are judged by (#2078), read the same way:
-   * an unpublished or missing conference is null, which cfp treats as closed.
-   */
-  async cfpWindow(orgId: string, conferenceId: string) {
-    const row = await createData(this.env.DB, {
-      typ: 'tenant',
-      orgId,
-      conferenceId,
-      userId: null,
-      orgRole: null,
-      scopes: [],
-    })
-      .conferences()
-      .current()
-    return row
-      ? {
-          cfpStartDate: row.cfpStartDate,
-          cfpEndDate: row.cfpEndDate,
-          programDate: row.programDate,
-          startDate: row.startDate,
-        }
-      : null
-  }
 }
 
 export default worker

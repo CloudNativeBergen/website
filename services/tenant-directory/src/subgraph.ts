@@ -6,6 +6,7 @@
 // requirePlatform.
 // `organization` is public and returns only the envelope's own org.
 import { createGraphQLError } from 'graphql-yoga'
+import { can, parseOrgRoles, principalOf } from '@runkonf/tenancy'
 import { builder } from './builder'
 import type { ResolverContext } from './worker'
 
@@ -28,7 +29,7 @@ function requirePlatform(ctx: ResolverContext) {
 function sessionOrgId(ctx: ResolverContext) {
   const e = ctx.envelope
   if (e?.typ !== 'tenant') return null
-  return e.orgRole || e.scopes.includes('platform:operator') ? e.orgId : null
+  return can(principalOf(e), 'org.read_settings') ? e.orgId : null
 }
 
 const CreateOrganizationInput = builder.inputType('CreateOrganizationInput', {
@@ -137,7 +138,10 @@ builder.asEntity(ConferenceEdition, {
     if (e?.typ !== 'tenant') return null
     const conf = await ctx.data.conferenceOf(e.orgId, id)
     if (!conf) return null
-    return e.orgRole || conf.lifecycle === 'live' ? conf : null
+    return conf.lifecycle === 'live' ||
+      can(principalOf(e), 'conference.read_draft')
+      ? conf
+      : null
   },
 })
 
@@ -256,8 +260,6 @@ const LifecycleOverride = builder.enumType('ConferenceLifecycleOverride', {
   values: ['cancelled', 'archived'] as const,
 })
 
-const WRITERS = new Set(['owner', 'admin'])
-
 builder.queryType({
   fields: (t) => ({
     conferenceLifecycle: t.string({
@@ -269,7 +271,10 @@ builder.queryType({
         if (e?.typ !== 'tenant' || !e.conferenceId) return null
         const conf = await ctx.data.conferenceOf(e.orgId, e.conferenceId)
         if (!conf) return null
-        return conf.lifecycle === 'draft' && !e.orgRole ? null : conf.lifecycle
+        return conf.lifecycle === 'draft' &&
+          !can(principalOf(e), 'conference.read_draft')
+          ? null
+          : conf.lifecycle
       },
     }),
     organization: t.field({
@@ -373,18 +378,10 @@ builder.mutationType({
       args: { status: t.arg({ type: LifecycleOverride }) },
       resolve: (_, { status }, ctx) => {
         const e = ctx.envelope
-        const roles =
-          e?.typ === 'tenant'
-            ? (e.orgRole?.split(',').map((r) => r.trim()) ?? [])
-            : []
         // Guard before fetch: a refusal says nothing about the row.
         if (
           e?.typ !== 'tenant' ||
-          !e.userId ||
-          !(
-            e.scopes.includes('platform:operator') ||
-            roles.some((r) => WRITERS.has(r))
-          )
+          !can(principalOf(e), 'conference.set_lifecycle')
         ) {
           throw createGraphQLError(
             'setting the lifecycle requires an org owner or admin',
@@ -420,17 +417,16 @@ builder.mutationType({
             })
           org = String(orgId)
         } else {
-          const roles =
-            e?.typ === 'tenant'
-              ? (e.orgRole?.split(',').map((r) => r.trim()) ?? [])
-              : []
+          const roles = parseOrgRoles(e?.typ === 'tenant' ? e.orgRole : null)
           // Owner decision 3 (docs/AUTHORIZATION.md): lifecycle is the org
           // owner's or admin's, never a member's or a conference organizer's.
+          // Not can(): the tenant lane's operator scope does not provision;
+          // operators use the platform lane with an explicit orgId.
           if (
             e?.typ !== 'tenant' ||
             !e.userId ||
             orgId != null ||
-            !roles.some((r) => WRITERS.has(r))
+            !(roles.has('owner') || roles.has('admin'))
           ) {
             throw createGraphQLError(
               'provisioning a conference requires an org owner or admin',
