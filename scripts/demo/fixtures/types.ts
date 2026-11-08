@@ -9,7 +9,10 @@
  * - d1.editions: services/conference/migrations/0001,0004,0005,0007 (camelCased)
  * - d1.members/invites: services/identity/migrations/0001 + ORG_ROLES in packages/tenancy
  * - d1.speakerProfiles: services/identity/migrations/0008_speaker_profile.sql
- * - d1.ticketOrders: no D1 table yet (#2148); shape is provisional
+ * - d1.ticketTypes/ticketOrders: PROVISIONAL, mirrors services/ticketing/migrations/0001
+ *   from #2157 (ticket_types, ticket_orders, ticket_order_lines); not merged yet
+ * - d1.editions.lifecycle: tenant-directory conferences.lifecycle (0005); past/live/upcoming
+ *   is derived from the dates, not stored
  * - sanity.*: sanity/schemaTypes/<type>.ts
  *
  * Cross-references use the fixture `key` (stable, seed-derived string), never
@@ -44,17 +47,13 @@ export interface FakePerson {
 
 // ---------------------------------------------------------------- D1
 
-export type EditionPhase = 'past' | 'live' | 'upcoming'
-
-export interface SocialLink {
-  label: string
-  url: string
-}
+/** tenant-directory conferences.lifecycle (0005_lifecycle_cancelled.sql). */
+export type Lifecycle = 'draft' | 'live' | 'cancelled' | 'archived'
 
 /** One row of `conferences` (conference subgraph). */
 export interface D1Edition {
   key: Key
-  phase: EditionPhase
+  lifecycle: Lifecycle
   published: boolean
   visibility: 'live' | 'unlisted'
   title: string
@@ -66,15 +65,13 @@ export interface D1Edition {
   startDate: IsoDate
   endDate: IsoDate
   // branding
-  logoBright: string
-  logoDark: string
-  logomarkBright: string
-  logomarkDark: string
+  // logos live in Sanity only (conference 0002_drop_logos.sql): see SanityBranding
   backgroundPattern?: string
   primaryColor: string
   accentColor: string
   registrationLink: string
-  socialLinks: SocialLink[]
+  /** JSON array of URLs (conference 0001_init.sql social_links). */
+  socialLinks: string[]
   // settings phase 1: scalar fields
   cfpStartDate: IsoDate
   cfpEndDate: IsoDate
@@ -89,7 +86,8 @@ export interface D1Edition {
   /** Stored as REAL in D1, in major units of the edition currency. */
   travelSupportBudget?: number
   registrationEnabled: boolean
-  organizerName: string
+  /** Column organizer_name; Drizzle/mutation property `organizer`. */
+  organizer: string
   organizerAddress: string
   organizerOrgNumber: string
   socialHashtag: string
@@ -141,32 +139,36 @@ export interface D1SpeakerProfile {
   visibility: 'private' | 'network' | 'public'
 }
 
+/** PROVISIONAL: ticket_types in #2157 (services/ticketing 0001). */
 export interface D1TicketType {
   key: Key
   editionKey: Key
   name: string
   price: Money
-  capacity: number
+  capacity?: number
 }
 
-/** Provisional until #2148 lands the orders table. Ids are strings. */
+/** PROVISIONAL: ticket_orders + ticket_order_lines in #2157. */
 export interface D1TicketOrder {
   key: Key
   editionKey: Key
-  ticketTypeKey: Key
-  buyer: FakePerson
-  quantity: number
+  status: 'pending' | 'paid' | 'cancelled'
   total: Money
-  status: 'paid' | 'refunded' | 'pending'
+  buyerEmail?: string
+  lines: { ticketTypeKey: Key; quantity: number; unitPrice: Money }[]
   createdAt: IsoDateTime
+  updatedAt: IsoDateTime
 }
 
 // ---------------------------------------------------------------- Sanity
 
+/** conference.logoBright/logoDark/logomarkBright/logomarkDark (Sanity only). */
 export interface SanityBranding {
   /** Repo asset paths. */
-  logo: string
-  logomark: string
+  logoBright: string
+  logoDark: string
+  logomarkBright: string
+  logomarkDark: string
   primaryColor: string
   accentColor: string
 }

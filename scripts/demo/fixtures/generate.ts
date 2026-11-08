@@ -9,13 +9,7 @@
  *   notifications ~25, schedule: 2 tracks x full day with breaks and TBA.
  */
 import { Format, Level, Status } from '@/lib/proposal/types'
-import type {
-  DemoFixtures,
-  D1Edition,
-  EditionPhase,
-  FakePerson,
-  Money,
-} from './types'
+import type { DemoFixtures, D1Edition, FakePerson, Money } from './types'
 
 /** mulberry32: tiny, seedable, good enough for fake data. */
 export function prng(seed: number) {
@@ -139,12 +133,12 @@ export function generateDemoFixtures({
   }
 
   // --- D1 -------------------------------------------------------------
-  const edition = (phase: EditionPhase, offsetDays: number): D1Edition => {
+  const edition = (phase: string, offsetDays: number): D1Edition => {
     const year = new Date(at(offsetDays)).getUTCFullYear()
     const start = at(offsetDays)
     return {
       key: `edition-${phase}`,
-      phase,
+      lifecycle: 'live',
       published: true,
       visibility: 'live',
       title: `KontainerKonf ${year}`,
@@ -155,16 +149,10 @@ export function generateDemoFixtures({
       venueAddress: 'Kaigaten 1, 5015 Bergen',
       startDate: date(start),
       endDate: date(start + DAY),
-      logoBright: '/demo/kontainerkonf-bright.svg',
-      logoDark: '/demo/kontainerkonf-dark.svg',
-      logomarkBright: '/demo/kontainerkonf-mark-bright.svg',
-      logomarkDark: '/demo/kontainerkonf-mark-dark.svg',
       primaryColor: '#0f5c8a',
       accentColor: '#f2a541',
       registrationLink: 'https://tickets.example.com/kontainerkonf',
-      socialLinks: [
-        { label: 'Bluesky', url: 'https://bsky.example.com/kontainerkonf' },
-      ],
+      socialLinks: ['https://bsky.example.com/kontainerkonf'],
       cfpStartDate: date(start - 200 * DAY),
       cfpEndDate: date(start - 120 * DAY),
       cfpNotifyDate: date(start - 100 * DAY),
@@ -172,7 +160,7 @@ export function generateDemoFixtures({
       earlyBirdEndDate: date(start - 60 * DAY),
       travelSupportBudget: 50_000,
       registrationEnabled: phase !== 'past',
-      organizerName: 'KontainerKonf AS',
+      organizer: 'KontainerKonf AS',
       organizerAddress: 'Kaigaten 1, 5015 Bergen',
       organizerOrgNumber: '999 999 999',
       socialHashtag: '#kontainerkonf',
@@ -247,18 +235,19 @@ export function generateDemoFixtures({
   const ticketOrders = Array.from({ length: 4 }, (_, i) => {
     const tt = r.pick(ticketTypes)
     const quantity = r.int(1, 3)
+    const createdAt = iso(at(-r.int(5, 120)))
     return {
       key: `order-${i}`,
       editionKey: live,
-      ticketTypeKey: tt.key,
-      buyer: person('buyer'),
-      quantity,
+      status: i === 3 ? ('cancelled' as const) : ('paid' as const),
       total: {
         amount: tt.price.amount * quantity,
         currency: tt.price.currency,
       },
-      status: i === 3 ? ('refunded' as const) : ('paid' as const),
-      createdAt: iso(at(-r.int(5, 120))),
+      buyerEmail: person('buyer').email,
+      lines: [{ ticketTypeKey: tt.key, quantity, unitPrice: tt.price }],
+      createdAt,
+      updatedAt: createdAt,
     }
   })
 
@@ -291,6 +280,19 @@ export function generateDemoFixtures({
       i === 1
         ? [speakers[1].key, speakers[2].key]
         : [speakers[i % speakers.length].key],
+    topics: ['kubernetes'],
+  }))
+  // Past-edition talks, so feedback points at a talk that has happened.
+  const pastTalks = [6, 7].map((i) => ({
+    key: `proposal-${i}`,
+    editionKey: editions[0].key,
+    title: TALKS[i],
+    description: `${TALKS[i]}. A practical talk with real numbers and the mistakes we made getting there.`,
+    language: 'english' as const,
+    format: Format.presentation_40,
+    level: Level.intermediate,
+    status: Status.confirmed,
+    speakerKeys: [speakers[i % speakers.length].key],
     topics: ['kubernetes'],
   }))
   const reviews = proposals.slice(0, 4).map((p, i) => ({
@@ -431,11 +433,10 @@ export function generateDemoFixtures({
       submittedAt: iso(at(-r.int(5, 40))),
     }),
   )
-  // TODO(#2150): point feedback at past-edition talks once those exist.
   const feedback = (['green', 'green', 'yellow', 'red'] as const).map(
     (colour, i) => ({
       key: `feedback-${i}`,
-      talkKey: proposals[0].key,
+      talkKey: pastTalks[i % pastTalks.length].key,
       colour,
       ...(i % 2 === 0
         ? {
@@ -495,13 +496,15 @@ export function generateDemoFixtures({
     },
     sanity: {
       branding: {
-        logo: '/demo/kontainerkonf-bright.svg',
-        logomark: '/demo/kontainerkonf-mark-bright.svg',
+        logoBright: '/demo/kontainerkonf-bright.svg',
+        logoDark: '/demo/kontainerkonf-dark.svg',
+        logomarkBright: '/demo/kontainerkonf-mark-bright.svg',
+        logomarkDark: '/demo/kontainerkonf-mark-dark.svg',
         primaryColor: '#0f5c8a',
         accentColor: '#f2a541',
       },
       speakers,
-      proposals,
+      proposals: [...proposals, ...pastTalks],
       reviews,
       coSpeakerInvitations,
       schedules,
