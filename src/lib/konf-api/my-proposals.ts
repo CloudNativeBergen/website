@@ -40,11 +40,13 @@ const MY_PROPOSAL_FIELDS = `
   capacity
   tos
   withdrawnReason
+  createdAt
+  updatedAt
   conference { id }
   scheduleInfo { date trackTitle startTime endTime }
   speakers { id name email slug image }
   attachments { key kind attachmentType title description filename url uploadedAt }
-  coSpeakerInvitations { id invitedEmail invitedName status expiresAt createdAt respondedAt }
+  coSpeakerInvitations { id invitedEmail invitedName status expiresAt createdAt respondedAt declineReason lastRemindedAt }
 ` as const
 
 const MY_PROPOSALS = `query {
@@ -64,8 +66,8 @@ function toProposalExisting(t: ApiProposal): ProposalExisting {
     _id: t.id ?? '',
     _type: 'talk',
     _rev: '',
-    _createdAt: '',
-    _updatedAt: '',
+    _createdAt: t.createdAt ?? '',
+    _updatedAt: t.updatedAt ?? '',
     status: (t.status ?? 'draft') as Status,
     title: t.title ?? '',
     description: t.description
@@ -168,6 +170,8 @@ function toProposalExisting(t: ApiProposal): ProposalExisting {
               expiresAt: i.expiresAt ?? '',
               createdAt: i.createdAt ?? undefined,
               respondedAt: i.respondedAt ?? undefined,
+              declineReason: i.declineReason ?? undefined,
+              lastRemindedAt: i.lastRemindedAt ?? undefined,
             },
           ]
         : [],

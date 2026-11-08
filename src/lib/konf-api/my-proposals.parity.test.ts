@@ -133,10 +133,24 @@ const DATASET = [
     status: 'pending',
     expiresAt: '2099-01-01T00:00:00Z',
     createdAt: '2026-01-01T00:00:00Z',
+    lastRemindedAt: '2026-01-05T00:00:00Z',
+  },
+  {
+    _id: 'inv_2',
+    _type: 'coSpeakerInvitation',
+    proposal: ref('talk_1'),
+    invitedEmail: 'no@example.com',
+    status: 'declined',
+    expiresAt: '2099-01-01T00:00:00Z',
+    createdAt: '2026-01-02T00:00:00Z',
+    respondedAt: '2026-01-03T00:00:00Z',
+    declineReason: 'Busy that week',
   },
   {
     _id: 'talk_1',
     _type: 'talk',
+    _createdAt: '2026-01-01T00:00:00Z',
+    _updatedAt: '2026-01-10T00:00:00Z',
     conference: ref('conf'),
     status: 'confirmed',
     title: 'Full Featured Talk',
@@ -185,6 +199,8 @@ const DATASET = [
   {
     _id: 'talk_2',
     _type: 'talk',
+    _createdAt: '2026-01-03T00:00:00Z',
+    _updatedAt: '2026-01-04T00:00:00Z',
     conference: ref('conf'),
     status: 'withdrawn',
     withdrawnReason: 'Cannot attend due to travel constraints',
@@ -208,6 +224,17 @@ const DATASET = [
     tos: true,
     topics: [ref('t1')],
     speakers: [ref('sp_me')],
+  },
+  {
+    _id: 'talk_deleted',
+    _type: 'talk',
+    _createdAt: '2026-01-02T00:00:00Z',
+    _updatedAt: '2026-01-06T00:00:00Z',
+    conference: ref('conf'),
+    status: 'deleted',
+    title: 'Deleted Talk',
+    format: 'lightning_10',
+    speakers: [ref('sp_me'), ref('sp_co')],
   },
   {
     _id: 'talk_other',
@@ -303,7 +330,7 @@ beforeEach(() => {
  * image), SpeakerShareWrapper (format) and src/lib/speaker/briefing.ts
  * (speakers' _id, attachments' attachmentType, invitations' status and
  * expiresAt, scheduleInfo). Everything else Sanity's `...` spread returns
- * (speaker flags/providers, _rev, _updatedAt, topic objects, file asset refs,
+ * (speaker flags/providers, _rev, topic objects, file asset refs,
  * description, ...) is not read on this page and is deliberately not compared.
  * `issuedSpeakerTickets` is read by briefing only with a ticketState, which
  * loadDashboardBriefing never passes.
@@ -330,13 +357,14 @@ function consumed(p: ProposalExisting) {
       _id: i._id,
       status: i.status,
       expiresAt: i.expiresAt,
+      // Sanity yields null for an absent field; the mapper yields undefined.
+      declineReason: i.declineReason ?? undefined,
+      lastRemindedAt: i.lastRemindedAt ?? undefined,
     })),
     // Sanity's select() yields null off-schedule; the mapper yields undefined.
     scheduleInfo: p.scheduleInfo ?? null,
   }
 }
-const byId = (a: ProposalExisting, b: ProposalExisting) =>
-  a._id.localeCompare(b._id)
 
 const sanityList = async () => {
   const r = await getProposals({
@@ -359,9 +387,16 @@ describe('speaker dashboard proposals through the API (#2078)', () => {
     expect(proposalsError).toBeNull()
     expect(h.apiCalls).toBe(1) // the API path ran, not the fallback
 
-    expect(
-      api.map(consumed).sort((a, b) => a._id.localeCompare(b._id)),
-    ).toEqual([...sanity].sort(byId).map(consumed))
+    // Same order (both newest update first) and deleted entries included.
+    expect(api.map(consumed)).toEqual(sanity.map(consumed))
+    expect(api.map((p) => p._id)).toEqual([
+      'talk_1',
+      'talk_deleted',
+      'talk_2',
+    ])
+    expect(api.map((p) => p._updatedAt)).toEqual(
+      sanity.map((p) => p._updatedAt),
+    )
     // Guard against a vacuous match: the rich fields really are populated.
     const t1 = consumed(api.find((p) => p._id === 'talk_1')!)
     expect(t1.scheduleInfo).toEqual({
@@ -378,7 +413,20 @@ describe('speaker dashboard proposals through the API (#2078)', () => {
       'demo',
     ])
     expect(t1.coSpeakerInvitations).toEqual([
-      { _id: 'inv_1', status: 'pending', expiresAt: '2099-01-01T00:00:00Z' },
+      {
+        _id: 'inv_1',
+        status: 'pending',
+        expiresAt: '2099-01-01T00:00:00Z',
+        declineReason: undefined,
+        lastRemindedAt: '2026-01-05T00:00:00Z',
+      },
+      {
+        _id: 'inv_2',
+        status: 'declined',
+        expiresAt: '2099-01-01T00:00:00Z',
+        declineReason: 'Busy that week',
+        lastRemindedAt: undefined,
+      },
     ])
   })
 
@@ -389,7 +437,7 @@ describe('speaker dashboard proposals through the API (#2078)', () => {
     })
     expect(h.apiCalls).toBe(1)
     // The speaker comes from the identity token's envelope, not the argument.
-    expect(proposals.map((p) => p._id).sort()).toEqual(['talk_1', 'talk_2'])
+    expect(proposals.map((p) => p._id).sort()).toEqual(['talk_1', 'talk_2', 'talk_deleted'])
     expect(lastVariables).toBeUndefined()
     expect(lastQuery).not.toMatch(/speakerId|conferenceId|sp_client_supplied/)
     expect(lastQuery).not.toMatch(/\(/) // no arguments on any field
