@@ -129,7 +129,12 @@ export interface ProposalFields {
 
 export class ProposalError extends Error {
   constructor(
-    readonly code: 'NOT_FOUND' | 'FORBIDDEN' | 'BAD_USER_INPUT' | 'CONFLICT',
+    readonly code:
+      | 'NOT_FOUND'
+      | 'FORBIDDEN'
+      | 'BAD_USER_INPUT'
+      | 'CONFLICT'
+      | 'SERVICE_UNAVAILABLE',
     message: string,
   ) {
     super(message)
