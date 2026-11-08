@@ -329,6 +329,36 @@ before acceptance; "Site" = `site:server` with no user token.
 Operator is N on reviewing and editing proposals by default: operators act for a tenant
 for support, not as a juror. Operator access is only on the operator lane and is audited.
 
+### 4.1 Plan dimension (billing phase 1, #2129)
+
+A role check passes first; a paid-only action then also needs the org's **effective plan**
+(`packages/tenancy/src/plan.ts`, `PLAN_GATES`). The gateway mints it into the tenant
+envelope per request from tenant-directory's `tenantByHost`; `verifyEnvelope` caps it to
+`free | basic | pro` and reads an absent or unknown value as `free`.
+
+| Gate                          | Needs | Checked at                                                          |
+| ----------------------------- | ----- | ------------------------------------------------------------------- |
+| `conference.publish_ticketed` | basic | `setConferenceLifecycle(null)` putting a ticketed edition back live |
+| `domain.connect_custom`       | basic | `provisionConference` with a `domain`, tenant lane                  |
+| `api_client.create`           | basic | API client creation (#2115; resolver not built yet)                 |
+| `pat.create_write`            | basic | a PAT with any write scope (#2115; resolver not built yet)          |
+
+A refusal is `BAD_USER_INPUT` with `extensions.reason = PLAN_REQUIRED` and
+`extensions.requiredPlan`; the gateway passes both. "Ticketed" means the edition's
+`ticketingProvider` is set (konf-conference D1). `provisionConference` creates drafts only,
+so it never publishes. The operator lane is exempt (`createOrganization`, and
+`provisionConference` naming `orgId`): staff grant a plan with `setComplimentaryPlan`
+instead. The live-event count limit waits for the owner's Pro decision.
+
+**Effective plan:** `comp` gives the stored plan while `comp_until` is unset or ahead;
+`stripe` gives it while `active`, or `past_due` within 14 days of `current_period_end`;
+everything else is `free`.
+
+**Runbook:** once deployed, give CNDN its complimentary plan on the operator lane:
+`setComplimentaryPlan(orgId: "organization-cloud-native-days", plan: pro, reason: "...")`
+(add `until` for an end date). It is audited as `operator.write` in identity's
+`audit_event`. `plan: free` ends a grant.
+
 ## 5. Migration plan
 
 Each phase ships alone, keeps every current user's access, and carries a **cross-reader
