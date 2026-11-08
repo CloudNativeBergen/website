@@ -98,7 +98,11 @@ describe('CheckinProvider.sendTicketInvitation', () => {
     )
 
     await provider()
-      .fetchPublicTicketTypes(777)
+      .fetchPublicTicketTypes({
+        provider: 'checkin',
+        accountId: '1',
+        externalId: '777',
+      })
       .catch(() => {})
 
     expect(fetchMock).toHaveBeenCalledTimes(1)

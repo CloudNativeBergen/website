@@ -303,7 +303,7 @@ beforeEach(() => {
   ticketing.resolve.mockResolvedValue({
     configured: true,
     provider: { fetchEventTickets: ticketing.fetchEventTickets },
-    eventRef: { customerId: 1, eventId: 2 },
+    eventRef: { provider: 'checkin', accountId: '1', externalId: '2' },
   })
   vi.stubEnv('PLATFORM_ORG_ID', 'org-test')
   stubPlatformTicketingAccount()

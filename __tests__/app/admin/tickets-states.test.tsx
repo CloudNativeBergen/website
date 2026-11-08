@@ -685,8 +685,8 @@ describe('a Tito-bound conference', () => {
     // The provider-shaped ref, not a bare Checkin event id.
     expect(h.fetchPublicTicketTypes).toHaveBeenCalledWith({
       provider: 'tito',
-      accountSlug: 'cndn',
-      eventSlug: '2026',
+      accountId: 'cndn',
+      externalId: '2026',
     })
   })
 
@@ -695,8 +695,8 @@ describe('a Tito-bound conference', () => {
     expect(markup).not.toContain('Configuration Error')
     expect(h.fetchEventTickets).toHaveBeenCalledWith({
       provider: 'tito',
-      accountSlug: 'cndn',
-      eventSlug: '2026',
+      accountId: 'cndn',
+      externalId: '2026',
     })
   })
 

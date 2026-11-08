@@ -100,7 +100,7 @@ beforeEach(() => {
       listDiscounts: h.listDiscounts,
       fetchPublicTicketTypes: h.fetchPublicTicketTypes,
     },
-    eventRef: { provider: 'checkin', customerId: 7, eventId: 4242 },
+    eventRef: { provider: 'checkin', accountId: '7', externalId: '4242' },
   })
   h.fetchEventTickets.mockResolvedValue([
     {

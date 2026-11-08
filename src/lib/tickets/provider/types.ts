@@ -1,4 +1,5 @@
-import type { EventTicket, CheckinPayOrder } from '@/lib/tickets/types'
+import type { EventTicket } from '@/lib/tickets/types'
+import type { CheckinWebhookPayload, CheckinOrderCreatedData } from './checkin'
 import { parseTicketAmount } from '@/lib/tickets/amount'
 import type {
   EventDiscount,
@@ -6,38 +7,87 @@ import type {
   CreateEventDiscountInput,
 } from '@/lib/discounts/types'
 
+/** The vendors behind {@link TicketingProvider}. */
+export type TicketingProviderType = 'checkin' | 'tito'
+
 /**
- * Provider-shaped reference to an event.
+ * Konf reference to an event at a ticketing vendor. Every id is a string; the
+ * vendor's own meaning stays inside its provider module.
  *
- * GENERALIZED FOR THE SECOND PROVIDER (Tito): `EventRef` is now a discriminated
- * union keyed by `provider`. Each provider narrows to its own binding shape and
- * throws (or unsupported-errors) if handed another provider's ref.
+ *  - Checkin: `accountId` = customer id, `externalId` = event id (both numeric
+ *    on the wire, carried here as decimal strings).
+ *  - Tito: `accountId` = account slug, `externalId` = event slug.
  *
- * BACKWARD COMPATIBILITY: `provider` is OPTIONAL on the Checkin variant and
- * absent means Checkin, so every pre-existing `{ customerId, eventId }` literal
- * (admin pages, tRPC router, resolver output) is still a valid `EventRef` with
- * zero edits — the discriminant `'tito'` appears only on the Tito variant, so
- * narrowing with `ref.provider === 'tito'` is exhaustive.
+ * A provider handed another provider's ref throws (a resolver wiring bug).
  */
-export interface CheckinEventRef {
-  /** Optional discriminant; absent ⇒ Checkin (the historical default). */
-  provider?: 'checkin'
-  /** Checkin customer (tenant) id — `conference.checkinCustomerId`. */
-  customerId: number
-  /** Checkin event id — `conference.checkinEventId`. */
-  eventId: number
+export interface EventRef {
+  provider: TicketingProviderType
+  accountId: string
+  externalId: string
 }
 
-/** Tito keys an event by two URL slugs: `/:account/:event`. */
-export interface TitoEventRef {
-  provider: 'tito'
-  /** Tito account slug — `conference.titoAccountSlug`. */
-  accountSlug: string
-  /** Tito event slug — `conference.titoEventSlug`. */
-  eventSlug: string
+/**
+ * The optional operations a provider supports. Required operations (ticket
+ * types, orders, webhook verification) are not listed. A caller checks the
+ * flag instead of catching {@link ProviderUnsupportedError}; the admin UI uses
+ * it to hide what the provider cannot do.
+ */
+export interface TicketingCapabilities {
+  /** `listDiscounts` / `createDiscount` / `deleteDiscount`. */
+  discounts: boolean
+  /** `fetchOrderPaymentDetails`. */
+  paymentDetails: boolean
+  /** Attendee check-in. No provider exposes it through this interface yet. */
+  checkin: boolean
 }
 
-export type EventRef = CheckinEventRef | TitoEventRef
+/** Money as an integer in the currency's minor unit (øre, cents). */
+export interface Money {
+  amountMinor: number
+  currency: string | null
+}
+
+/** A person as the provider reports them on an order. */
+export interface OrderContact {
+  firstName: string
+  lastName: string
+  email: string
+}
+
+/**
+ * The payment state of ONE order, in Konf terms. Amounts are minor units; the
+ * currency is the provider's (`null` when it did not say).
+ */
+export interface OrderPaymentDetails {
+  provider: TicketingProviderType
+  /** The vendor's payment-document id. */
+  externalId: string
+  /** The vendor's order id, as shown to organizers. */
+  orderId: string
+  currency: string | null
+  totalMinor: number
+  amountLeftMinor: number
+  vatMinor: number
+  paid: boolean
+  paymentStatus: string
+  paymentMethod: string
+  actionRequired: string | null
+  invoiceReference: string | null
+  kid: string | null
+  createdAt: string
+  dueAt: string
+  invoiceDate: string | null
+  deliveryDate: string | null
+  contact: OrderContact
+  billing: OrderContact | null
+}
+
+/** Convert a provider's decimal amount (`"1234.50"`) to minor units. */
+export function toMinorUnits(
+  value: string | number | null | undefined,
+): number {
+  return Math.round(parseTicketAmount(value) * 100)
+}
 
 /**
  * Thrown by a provider for an interface member that has NO faithful equivalent
@@ -112,50 +162,14 @@ export interface PublicEventInfo {
 
 // ── Webhook shapes ───────────────────────────────────────────────────────────
 //
-// SECOND-PROVIDER DEBT: the Checkin webhook envelope (`event`, `data`, per-user
-// `crm`/`ticket` records, HMAC over `data`). A second provider will define its
-// own envelope + signature scheme; `parseOrderCreated` is the seam.
+// The order-created webhook is still the Checkin envelope. The shapes live in
+// `./checkin`; the interface names them only through these aliases until #2146
+// normalises webhooks to Konf events.
 
-export interface CheckinWebhookUser {
-  id: number
-  crm: {
-    id: number
-    firstName: string
-    lastName: string
-    email: {
-      email: string
-    }
-  }
-  ticket: {
-    id: number
-    name: string
-    type: string
-  }
-  isPaid: boolean
-}
-
-export interface CheckinOrderCreatedData {
-  id: number
-  eventId: number
-  users: CheckinWebhookUser[]
-  orderContact: {
-    crm: {
-      id: number
-      firstName: string
-      lastName: string
-      email: {
-        email: string
-      }
-    }
-  }
-}
-
-export interface CheckinWebhookPayload {
-  payloadId: string
-  event: string
-  dataType: string
-  data: CheckinOrderCreatedData
-}
+/** The raw order-created webhook body (Checkin's envelope until #2146). */
+export type LegacyOrderWebhookPayload = CheckinWebhookPayload
+/** The order-created data extracted from {@link LegacyOrderWebhookPayload}. */
+export type LegacyOrderCreatedData = CheckinOrderCreatedData
 
 /**
  * What ONE ticket row's money fields (`sum`, `sum_left`) mean.
@@ -254,6 +268,9 @@ export interface TicketingProvider {
    */
   readonly amountsIncludeVat: boolean
 
+  /** Which optional operations this provider supports. */
+  readonly capabilities: TicketingCapabilities
+
   /** Whether API credentials are present (does not perform a network call). */
   isConfigured(): boolean
 
@@ -262,30 +279,23 @@ export interface TicketingProvider {
     eventRef: EventRef,
     options?: FetchEventTicketsOptions,
   ): Promise<EventTicket[]>
-  fetchOrderPaymentDetails(orderId: number): Promise<CheckinPayOrder>
+  fetchOrderPaymentDetails(orderId: string): Promise<OrderPaymentDetails>
 
   /**
-   * Public ticket types for an event.
-   *
-   * Accepts either a bare numeric event id (the historical Checkin-only form —
-   * Checkin's public lookup is not tenant-scoped, so an id alone suffices) OR a
-   * provider-shaped {@link EventRef}. A provider whose public lookup needs more
-   * than a number (Tito needs `account/event` slugs) requires the ref form and
-   * unsupported-errors on a bare number. The resolver path always passes the
-   * ref; direct Checkin callers may still pass the number. Throws on
-   * transport/not-found; callers that want soft-fail wrap this (see
-   * `getPublicTicketTypes`).
+   * Public ticket types for an event. Throws on transport/not-found; callers
+   * that want soft-fail wrap this (see `getPublicTicketTypes`).
    */
   fetchPublicTicketTypes(
-    event: EventRef | number,
+    event: EventRef,
   ): Promise<{ event: PublicEventInfo; tickets: PublicTicketType[] }>
 
-  // ── Discounts (same vendor + event id) ────────────────────────────
+  // ── Discounts (capabilities.discounts) ────────────────────────────
+  // `eventId` is the event's `EventRef.externalId`.
   listDiscounts(
-    eventId: number,
+    eventId: string,
   ): Promise<{ discounts: EventDiscount[]; ticketTypes: TicketType[] }>
   createDiscount(input: CreateEventDiscountInput): Promise<EventDiscount>
-  deleteDiscount(eventId: number, discountCode: string): Promise<boolean>
+  deleteDiscount(eventId: string, discountCode: string): Promise<boolean>
 
   // ── Webhooks ──────────────────────────────────────────────────────
   /** Verify an inbound webhook using the injected webhook secret. */
@@ -295,8 +305,8 @@ export interface TicketingProvider {
    * order-created notification.
    */
   parseOrderCreated(
-    payload: CheckinWebhookPayload,
-  ): CheckinOrderCreatedData | null
+    payload: LegacyOrderWebhookPayload,
+  ): LegacyOrderCreatedData | null
 
   // ── Invitations ───────────────────────────────────────────────────
   /**

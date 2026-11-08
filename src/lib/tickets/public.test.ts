@@ -54,7 +54,7 @@ describe('getPublicTicketTypes — resolver routing (B7)', () => {
     resolveTicketingProviderMock.mockResolvedValue({
       configured: true,
       provider: { fetchPublicTicketTypes },
-      eventRef: { customerId: 42, eventId: 7 },
+      eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
 
     const result = await getPublicTicketTypes(CONF, 'conf-1')
@@ -63,8 +63,9 @@ describe('getPublicTicketTypes — resolver routing (B7)', () => {
     // Now passes the provider-shaped eventRef (not a bare id) so a Tito-bound
     // conference can route to its account/event slugs.
     expect(fetchPublicTicketTypes).toHaveBeenCalledWith({
-      customerId: 42,
-      eventId: 7,
+      provider: 'checkin',
+      accountId: '42',
+      externalId: '7',
     })
     expect(result.status).toBe('ok')
     assert(result.status === 'ok')
@@ -90,7 +91,7 @@ describe('getPublicTicketTypes — resolver routing (B7)', () => {
           .fn()
           .mockRejectedValue(new Error('checkin down')),
       },
-      eventRef: { customerId: 42, eventId: 7 },
+      eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
     const result = await getPublicTicketTypes(CONF, 'conf-1')
     expect(result.status).toBe('unavailable')
@@ -111,7 +112,7 @@ describe('getPublicTicketTypes — empty is not unknown, and free is not empty',
           .fn()
           .mockResolvedValue({ event: { id: 7, name: 'Event' }, tickets }),
       },
-      eventRef: { customerId: 42, eventId: 7 },
+      eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
   }
 
@@ -145,7 +146,7 @@ describe('getPublicTicketTypes — empty is not unknown, and free is not empty',
       provider: {
         fetchPublicTicketTypes: vi.fn().mockRejectedValue(new Error('boom')),
       },
-      eventRef: { customerId: 42, eventId: 7 },
+      eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
     const failed = await getPublicTicketTypes(CONF, 'conf-1')
 
@@ -278,7 +279,7 @@ describe('resolveDisplayTickets', () => {
             ],
           }),
         },
-        eventRef: { customerId: 42, eventId: 7 },
+        eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
       })
       const result = await getPublicTicketTypes(CONF, 'conf-1')
       assert(result.status === 'ok')

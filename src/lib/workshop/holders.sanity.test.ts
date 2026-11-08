@@ -28,7 +28,7 @@ vi.mock('@/lib/tickets/provider', () => ({
   resolveTicketingProvider: async () => ({
     configured: true,
     provider: { fetchEventTickets: h.fetchEventTickets },
-    eventRef: { customerId: 1, eventId: 2 },
+    eventRef: { provider: 'checkin', accountId: '1', externalId: '2' },
   }),
 }))
 // The operator's ticketing kill switch (`enabled: false` on the org).

@@ -222,7 +222,7 @@ beforeEach(() => {
   ticketing.resolve.mockResolvedValue({
     configured: true,
     provider: { fetchEventTickets: ticketing.fetchEventTickets },
-    eventRef: { customerId: 1, eventId: 2 },
+    eventRef: { provider: 'checkin', accountId: '1', externalId: '2' },
   })
   // Names the org above (`org-test`) as the platform org by its document id,
   // which gives its pro plan the ticketing credentials `workshops` requires
@@ -761,7 +761,7 @@ describe('workshop.admin.ticketHolders (#1333)', () => {
     ticketing.resolve.mockResolvedValue({
       configured: true,
       provider: { fetchEventTickets: ticketing.fetchEventTickets },
-      eventRef: { customerId: 1, eventId: 1 },
+      eventRef: { provider: 'checkin', accountId: '1', externalId: '1' },
     })
   })
 

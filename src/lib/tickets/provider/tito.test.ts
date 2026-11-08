@@ -11,8 +11,8 @@ const CREDS = {
 
 const TITO_REF: EventRef = {
   provider: 'tito',
-  accountSlug: 'acme',
-  eventSlug: '2026',
+  accountId: 'acme',
+  externalId: '2026',
 }
 
 interface JsonResponse {
@@ -210,10 +210,14 @@ describe('TitoProvider — fetchPublicTicketTypes', () => {
     ).rejects.toThrow(/access denied/i)
   })
 
-  it('unsupported-errors on a bare numeric event id (Checkin-shaped)', async () => {
+  it('refuses a Checkin event ref (resolver wiring bug)', async () => {
     await expect(
-      getTicketingProvider('tito', CREDS).fetchPublicTicketTypes(7),
-    ).rejects.toBeInstanceOf(ProviderUnsupportedError)
+      getTicketingProvider('tito', CREDS).fetchPublicTicketTypes({
+        provider: 'checkin',
+        accountId: '1',
+        externalId: '7',
+      }),
+    ).rejects.toThrow(/non-Tito event reference/)
   })
 })
 
@@ -550,8 +554,9 @@ describe('TitoProvider — fetchEventTickets', () => {
   it('throws a wiring error when handed a Checkin-shaped ref', async () => {
     await expect(
       getTicketingProvider('tito', CREDS).fetchEventTickets({
-        customerId: 1,
-        eventId: 2,
+        provider: 'checkin',
+        accountId: '1',
+        externalId: '2',
       }),
     ).rejects.toThrow(/non-Tito event reference/i)
   })
@@ -561,19 +566,19 @@ describe('TitoProvider — unsupported members (typed, not generic)', () => {
   const provider = getTicketingProvider('tito', CREDS)
 
   it('fetchOrderPaymentDetails is ProviderUnsupportedError', async () => {
-    await expect(provider.fetchOrderPaymentDetails(1)).rejects.toBeInstanceOf(
+    await expect(provider.fetchOrderPaymentDetails('1')).rejects.toBeInstanceOf(
       ProviderUnsupportedError,
     )
   })
   it('listDiscounts is ProviderUnsupportedError', async () => {
-    await expect(provider.listDiscounts(1)).rejects.toBeInstanceOf(
+    await expect(provider.listDiscounts('1')).rejects.toBeInstanceOf(
       ProviderUnsupportedError,
     )
   })
   it('createDiscount is ProviderUnsupportedError', async () => {
     await expect(
       provider.createDiscount({
-        eventId: 1,
+        eventId: '1',
         discountCode: 'X',
         numberOfTickets: 1,
         ticketTypes: [],
@@ -581,7 +586,7 @@ describe('TitoProvider — unsupported members (typed, not generic)', () => {
     ).rejects.toBeInstanceOf(ProviderUnsupportedError)
   })
   it('deleteDiscount is ProviderUnsupportedError', async () => {
-    await expect(provider.deleteDiscount(1, 'X')).rejects.toBeInstanceOf(
+    await expect(provider.deleteDiscount('1', 'X')).rejects.toBeInstanceOf(
       ProviderUnsupportedError,
     )
   })

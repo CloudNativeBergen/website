@@ -9,17 +9,25 @@ import { isPlatformOrganization } from '@/lib/features/platform'
 // Every name re-exported below must be BOUND BEFORE the export block. TypeScript
 // hoists imports so a later `import type` compiles fine, but Storybook's Babel
 // docgen pass strips type-only imports and then fails the file with "Export
-// 'CheckinEventRef' is not defined" — which takes down `build-storybook` for any
+// 'EventRef' is not defined" — which takes down `build-storybook` for any
 // story whose component graph reaches this barrel.
 import type {
   EventRef,
   TicketingProvider,
   TicketingProviderCredentials,
-  CheckinEventRef,
-  TitoEventRef,
+  TicketingCapabilities,
+  TicketingProviderType,
+  OrderPaymentDetails,
 } from './types'
 
-export type { TicketingProvider, TicketingProviderCredentials, EventRef }
+export type {
+  TicketingProvider,
+  TicketingProviderCredentials,
+  EventRef,
+  TicketingCapabilities,
+  TicketingProviderType,
+  OrderPaymentDetails,
+}
 /**
  * The PURE order-created discriminator. Exported here so the inbound webhook can
  * read a payload's shape before it has a tenant — and therefore before it has
@@ -27,11 +35,8 @@ export type { TicketingProvider, TicketingProviderCredentials, EventRef }
  * empty-bag construction is not an acceptable substitute (#886).
  */
 export { parseCheckinOrderCreated }
-export type { PublicTicketType, CheckinWebhookPayload } from './types'
-
-/** Provider discriminator. Checkin.no is the default; Tito (this PR) is the
- * second provider — the proof the adapter generalizes. */
-export type TicketingProviderType = 'checkin' | 'tito'
+export type { PublicTicketType } from './types'
+export type { CheckinWebhookPayload } from './checkin'
 
 /**
  * Returns a ticketing provider bound to the given credentials.
@@ -276,10 +281,10 @@ export async function resolveTicketingProvider(
       return { configured: false, provider: null, eventRef: null }
     }
 
-    const eventRef: TitoEventRef = {
+    const eventRef: EventRef = {
       provider: 'tito',
-      accountSlug: conference.titoAccountSlug,
-      eventSlug: conference.titoEventSlug,
+      accountId: conference.titoAccountSlug,
+      externalId: conference.titoEventSlug,
     }
     return {
       configured: true,
@@ -298,9 +303,10 @@ export async function resolveTicketingProvider(
     return { configured: false, provider: null, eventRef: null }
   }
 
-  const eventRef: CheckinEventRef = {
-    customerId: conference.checkinCustomerId,
-    eventId: conference.checkinEventId,
+  const eventRef: EventRef = {
+    provider: 'checkin',
+    accountId: String(conference.checkinCustomerId),
+    externalId: String(conference.checkinEventId),
   }
   return {
     configured: true,

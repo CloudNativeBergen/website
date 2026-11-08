@@ -148,7 +148,7 @@ beforeEach(() => {
   h.resolveAccess.mockResolvedValue({
     state: 'ready',
     providerType: 'checkin',
-    eventRef: { provider: 'checkin', customerId: 7, eventId: 4242 },
+    eventRef: { provider: 'checkin', accountId: '7', externalId: '4242' },
     provider: {
       amountsIncludeVat: false,
       amountBasis: 'per-order',
@@ -274,7 +274,7 @@ describe('what it refuses to flatten', () => {
     h.resolveAccess.mockResolvedValue({
       state: 'ready',
       providerType: 'tito',
-      eventRef: { provider: 'tito', accountSlug: 'a', eventSlug: 'e' },
+      eventRef: { provider: 'tito', accountId: 'a', externalId: 'e' },
       provider: {
         amountsIncludeVat: true,
         amountBasis: 'per-ticket',
