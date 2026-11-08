@@ -23,6 +23,8 @@ const talk = (status: string) => ({
   language: 'en',
   format: 'presentation_40',
   level: 'beginner',
+  audiences: ['developers'],
+  topics: [{ _type: 'reference', _ref: 'topic_secret' }],
   speakers: [{ _type: 'reference', _ref: 'sp_a' }],
 })
 const dataset = [
@@ -32,6 +34,7 @@ const dataset = [
     name: 'Ada Secret',
     slug: { current: 'ada' },
   },
+  { _id: 'topic_secret', _type: 'topic', title: 'Secret topic' },
   ...STATUSES.map(talk),
   {
     _id: 'sch',
@@ -50,7 +53,7 @@ const dataset = [
 ]
 
 describe('SCHEDULE_TRACKS (GROQ layer)', () => {
-  it('nulls title, description, language and speakers unless confirmed', async () => {
+  it('nulls title, description, language, speakers, level, audiences and topics unless confirmed', async () => {
     const q = `*[_type == "schedule"][0]{ ${SCHEDULE_TRACKS} }`
     const out = (await (await evaluate(parse(q), { dataset })).get()) as {
       tracks: { talks: { talk: Record<string, unknown> }[] }[]
@@ -60,20 +63,32 @@ describe('SCHEDULE_TRACKS (GROQ layer)', () => {
     )
     for (const t of [pending, withdrawn]) {
       expect(t.format).toBe('presentation_40')
-      for (const k of ['title', 'description', 'language', 'speakers'])
+      for (const k of [
+        'title',
+        'description',
+        'language',
+        'speakers',
+        'level',
+        'audiences',
+        'topics',
+      ])
         expect(t[k] ?? null).toBeNull()
     }
     expect(confirmed.title).toBe('Secret title')
+    expect(confirmed.level).toBe('beginner')
+    expect(confirmed.audiences).toEqual(['developers'])
+    expect(confirmed.topics).toMatchObject([{ title: 'Secret topic' }])
     expect(confirmed.speakers).toHaveLength(1)
   })
 })
 
 describe('SanityProgramSource.program (code layer)', () => {
-  it('nulls id, title, description, language and speakers unless confirmed', async () => {
+  it('nulls id, title, description, language, speakers, level, audiences and topics unless confirmed', async () => {
     // A leaky projection: every field present whatever the status.
     const leaky = (status: string) => ({
       ...talk(status),
       speakers: [{ _id: 'sp_a', name: 'Ada Secret' }],
+      topics: [{ _id: 'topic_secret', title: 'Secret topic' }],
       attachments: [
         {
           _type: 'urlAttachment',
@@ -114,11 +129,17 @@ describe('SanityProgramSource.program (code layer)', () => {
         language: null,
         speakers: null,
         attachments: null,
+        level: null,
+        audiences: null,
+        topics: null,
         format: 'presentation_40',
       })
     expect(slots[2].talk).toMatchObject({
       id: 'talk_confirmed',
       title: 'Secret title',
+      level: 'beginner',
+      audiences: ['developers'],
+      topics: [{ title: 'Secret topic' }],
     })
   })
 })
