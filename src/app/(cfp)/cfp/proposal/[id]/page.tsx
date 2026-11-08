@@ -2,7 +2,7 @@ import { pickCfpConference } from '@/lib/conference/logo'
 import { connection } from 'next/server'
 import { notFound, redirect } from 'next/navigation'
 import { headers } from 'next/headers'
-import { getProposalSanity as getProposal } from '@/lib/proposal/server'
+import { getMyProposal as getProposal } from '@/lib/proposal/my-proposals'
 import { getAuthSession } from '@/lib/auth'
 import {
   isOrganizerForCurrentOrg,

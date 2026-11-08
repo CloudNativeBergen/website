@@ -24,7 +24,7 @@ import { convertStringToPortableTextBlocks } from '@/lib/proposal/utils/validati
 const TIMEOUT_MS = 5000
 
 /* eslint-disable @typescript-eslint/no-unused-vars -- typing only */
-const MY_PROPOSAL_FIELDS = `
+const PROPOSAL_FIELDS = `
   id
   status
   title
@@ -44,10 +44,12 @@ const MY_PROPOSAL_FIELDS = `
   updatedAt
   conference { id }
   scheduleInfo { date trackTitle startTime endTime }
-  speakers { id name email slug image }
   attachments { key kind attachmentType title description filename url uploadedAt }
   coSpeakerInvitations { id invitedEmail invitedName status expiresAt createdAt respondedAt declineReason lastRemindedAt }
 ` as const
+const SPEAKER_FIELDS = `id name email slug image` as const
+const MY_PROPOSAL_FIELDS =
+  `${PROPOSAL_FIELDS} speakers { ${SPEAKER_FIELDS} }` as const
 
 const MY_PROPOSALS = `query {
   myProposals {
@@ -55,6 +57,16 @@ const MY_PROPOSALS = `query {
   }
 }` as const
 const MY_PROPOSALS_DOC = graphql(MY_PROPOSALS)
+
+// The detail page also renders co-speakers' title and, for the caller's own
+// entry only (the API nulls them on a co-speaker), bio, links and consent.
+const MY_PROPOSAL = `query($id: ID!) {
+  myProposal(id: $id) {
+    ${PROPOSAL_FIELDS}
+    speakers { ${SPEAKER_FIELDS} title bio links consent { dataProcessing marketing publicProfile photography } }
+  }
+}` as const
+const MY_PROPOSAL_DOC = graphql(MY_PROPOSAL)
 /* eslint-enable @typescript-eslint/no-unused-vars */
 
 type ApiProposal = NonNullable<
@@ -179,6 +191,44 @@ function toProposalExisting(t: ApiProposal): ProposalExisting {
   }
 }
 
+type ApiProposalDetail = NonNullable<
+  ResultOf<typeof MY_PROPOSAL_DOC>['myProposal']
+>
+const grant = (v: boolean | null | undefined) =>
+  v == null ? undefined : { granted: v }
+function toProposalDetail(t: ApiProposalDetail): ProposalExisting {
+  const p = toProposalExisting(t)
+  p.speakers = (t.speakers ?? []).flatMap((s) => {
+    if (!s?.id) return []
+    const c = s.consent
+    // Absent keys stay absent: resolveEditorSpeaker spreads this entry over
+    // the caller's full speaker read, so an undefined would erase a value.
+    return [
+      Object.fromEntries(
+        Object.entries({
+          _id: s.id,
+          name: s.name ?? '',
+          email: s.email ?? '',
+          slug: s.slug ?? '',
+          image: s.image ?? undefined,
+          title: s.title ?? undefined,
+          bio: s.bio ?? undefined,
+          links: s.links?.length ? s.links : undefined,
+          consent: c
+            ? {
+                dataProcessing: grant(c.dataProcessing),
+                marketing: grant(c.marketing),
+                publicProfile: grant(c.publicProfile),
+                photography: grant(c.photography),
+              }
+            : undefined,
+        }).filter(([, v]) => v !== undefined),
+      ) as unknown as Speaker,
+    ]
+  })
+  return p
+}
+
 async function userRead<T>(
   host: string,
   query: string,
@@ -231,4 +281,29 @@ export async function fetchMyProposals(
   if (!json.data) throw new Error('no data')
   const list = json.data.myProposals ?? []
   return list.flatMap((p) => (p ? [toProposalExisting(p)] : []))
+}
+
+/**
+ * One of the speaker's proposals, asked of that proposal's own conference host
+ * (myProposal is tenant-scoped). Null on NOT_FOUND; throws on any other error.
+ */
+export async function fetchMyProposal(
+  host: string,
+  id: string,
+  userJwt: string,
+): Promise<ProposalExisting | null> {
+  const json = await userRead<ResultOf<typeof MY_PROPOSAL_DOC>>(
+    host,
+    MY_PROPOSAL,
+    { id },
+    userJwt,
+  )
+  if (json.errors?.length) {
+    if (json.errors.every((e) => e.extensions?.code === 'NOT_FOUND'))
+      return null
+    throw new Error(json.errors.map((e) => e.message).join('; '))
+  }
+  if (!json.data) throw new Error('no data')
+  const p = json.data.myProposal
+  return p ? toProposalDetail(p) : null
 }
