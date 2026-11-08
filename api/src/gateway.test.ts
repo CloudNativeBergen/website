@@ -164,6 +164,7 @@ describe('gateway', () => {
       'operatorChangeMemberRole',
       'operatorInviteMember',
       'operatorRemoveMember',
+      'provisionConference',
       'provisionOrganization',
       'recordWorkshopReminder',
       'releaseWorkshopReminder',

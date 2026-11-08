@@ -186,6 +186,15 @@ const SAFE_CODES: ReadonlyMap<string, string | null> = new Map([
   ['NOT_FOUND', 'Not found.'],
 ])
 
+/** Stable BAD_USER_INPUT reasons a client may branch on (kontroll#81). */
+export const INPUT_REASONS: ReadonlySet<string> = new Set([
+  'SLUG_TAKEN',
+  'DOMAIN_TAKEN',
+  'IDEMPOTENCY_KEY_REUSED',
+  'INVALID_INPUT',
+  'COPY_FROM_NOT_IN_ORG',
+])
+
 export const MAX_INPUT_MESSAGE = 300
 const MAX_FIELD = 100
 // A field is a schema name or input path, nothing else.
@@ -197,7 +206,12 @@ const FIELD_NAME = /^[A-Za-z_][\w.[\]]*$/
  */
 function inputDetail(gql: GraphQLError) {
   const field = gql.extensions?.field
+  const reason = gql.extensions?.reason
   return {
+    reason:
+      typeof reason === 'string' && INPUT_REASONS.has(reason)
+        ? reason
+        : undefined,
     message: gql.message.slice(0, MAX_INPUT_MESSAGE),
     field:
       typeof field === 'string' &&
@@ -252,6 +266,7 @@ export function maskError(error: unknown, message: string): Error {
       path: gql?.path,
       extensions: {
         code: safe ? code : 'INTERNAL_SERVER_ERROR',
+        ...(detail?.reason ? { reason: detail.reason } : {}),
         ...(detail?.field ? { field: detail.field } : {}),
         // As yoga's default: unexpected answers 500, an http status is kept.
         ...(safe ? {} : { unexpected: true }),

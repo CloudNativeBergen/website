@@ -150,6 +150,8 @@ async function fakeSite(req: Request): Promise<Response> {
   )
   if (!op) return Response.json({ error: 'unauthorized' }, { status: 401 })
   site.operators.push(op)
+  if (new URL(req.url).pathname === '/api/provisioning/service/conferences')
+    return fakeEditionSite(JSON.parse(raw), op)
   const { idempotencyKey, input } = JSON.parse(raw)
   let out = site.receipts.get(idempotencyKey)
   if (!out) {
@@ -178,6 +180,52 @@ async function fakeSite(req: Request): Promise<Response> {
     site.writes++
   }
   if (site.fail) return new Response('gateway timeout', { status: 504 })
+  return Response.json(out)
+}
+// The site's edition route: input-hashed receipt, copyFrom kept in orgId.
+const editions = new Map<
+  string,
+  { hash: string; out: { conferenceId: string; domains: string[] } }
+>()
+function fakeEditionSite(
+  {
+    idempotencyKey,
+    orgId,
+    input,
+  }: {
+    idempotencyKey: string
+    orgId: string
+    input: Record<string, string | null>
+  },
+  op: string,
+) {
+  const hash = JSON.stringify([orgId, input, op])
+  const done = editions.get(idempotencyKey)
+  if (done)
+    return done.hash === hash
+      ? Response.json({ ...done.out, replayed: true })
+      : Response.json({ code: 'idempotency_conflict' }, { status: 409 })
+  if (input.copyFrom && sanity.confs[input.copyFrom]?.orgRef !== orgId)
+    return Response.json({ code: 'copy_from_not_in_org' }, { status: 409 })
+  const claimed = Object.values(sanity.confs).flatMap((c) => c.domains ?? [])
+  if (input.domain && claimed.includes(input.domain))
+    return Response.json({ code: 'domain_claimed' }, { status: 409 })
+  const slug = sanity.orgs[orgId]!.slug
+  const out = {
+    conferenceId: `conference-e${editions.size}`,
+    domains: [
+      `${slug}-${input.startDate!.slice(0, 4)}.konf.run`,
+      ...(input.domain ? [input.domain] : []),
+    ],
+  }
+  sanity.confs[out.conferenceId] = {
+    orgRef: orgId,
+    title: input.title,
+    startDate: input.startDate,
+    domains: out.domains,
+  }
+  editions.set(idempotencyKey, { hash, out })
+  site.writes++
   return Response.json(out)
 }
 const sanityFetch = vi.fn<typeof fetch>()
@@ -235,6 +283,7 @@ beforeEach(() => {
   }
   sanity = tenantDocs()
   site.receipts.clear()
+  editions.clear()
   site.writes = 0
   site.fail = false
   site.operators = []
@@ -402,9 +451,13 @@ describe('provisioning', () => {
     const { body } = await gql('{ _service { sdl } }')
     const mutation = /type Mutation[^}]*}/.exec(body.data._service.sdl)![0]
     const fields = mutation.split('\n').filter((l) => /^\s+\w+\(/.test(l))
-    expect(fields).toHaveLength(7)
+    expect(fields).toHaveLength(8)
     for (const f of fields)
-      if (f.includes('setConferenceLifecycle(')) expect(f).not.toContain('@tag')
+      if (
+        f.includes('setConferenceLifecycle(') ||
+        f.includes('provisionConference(')
+      )
+        expect(f).not.toContain('@tag')
       else
         expect(f).toContain(
           f.includes('provisionOrganization(') ||
@@ -968,14 +1021,14 @@ describe('rollout flags (#1925)', () => {
     expect(mutation).not.toMatch(
       /apiRead|identityLogin|d1Write|d1Override|flags/i,
     )
-    // The only input type is createOrganization's, and it carries no flag.
+    // The only input types are the two provisioning ones; neither has a flag.
     const inputs = sdl.match(/^input [^}]*}/gm) ?? []
-    expect(inputs.map((i) => i.split(' ')[1])).toEqual([
+    expect(inputs.map((i) => i.split(' ')[1]).sort()).toEqual([
       'CreateOrganizationInput',
+      'ProvisionConferenceInput',
     ])
-    expect(inputs[0]).not.toMatch(
-      /apiRead|identityLogin|d1Write|d1Override|flags/i,
-    )
+    for (const i of inputs)
+      expect(i).not.toMatch(/apiRead|identityLogin|d1Write|d1Override|flags/i)
     expect(sdl).toMatch(/flags: RolloutFlags @tag\(name: "internal"\)/)
   })
 
@@ -1387,13 +1440,21 @@ describe('createOrganization (kontroll#79)', () => {
 
   it('a duplicate slug is BAD_USER_INPUT with nothing created', async () => {
     const { body } = await create({ slug: 'acme', domain: null })
-    expect(body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    expect(body.errors[0].extensions).toEqual({
+      code: 'BAD_USER_INPUT',
+      reason: 'SLUG_TAKEN',
+      field: 'slug',
+    })
     nothingWritten()
   })
 
   it('a duplicate domain is BAD_USER_INPUT with nothing created', async () => {
     const { body } = await create({ domain: 'conf.acme.org' })
-    expect(body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    expect(body.errors[0].extensions).toEqual({
+      code: 'BAD_USER_INPUT',
+      reason: 'DOMAIN_TAKEN',
+      field: 'domain',
+    })
     nothingWritten()
   })
 
@@ -1402,7 +1463,7 @@ describe('createOrganization (kontroll#79)', () => {
     sanityFetch.mockClear()
     delete sanity.orgs['organization.acme']
     const slug = await create({ slug: 'acme', domain: null })
-    expect(slug.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    expect(slug.body.errors[0].extensions.reason).toBe('SLUG_TAKEN')
     sqlite
       .prepare(
         "INSERT INTO domains (hostname, kind, org_id, conference_id, verification) VALUES ('custom.example.com', 'custom', 'organization.acme', 'conference-acme', 'pending')",
@@ -1412,14 +1473,18 @@ describe('createOrganization (kontroll#79)', () => {
       { domain: 'custom.example.com' },
       'create-key-000002',
     )
-    expect(domain.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    expect(domain.body.errors[0].extensions.reason).toBe('DOMAIN_TAKEN')
     expect(sanityFetch).not.toHaveBeenCalled()
     expect(site.writes).toBe(0)
   })
 
   it('rejects a short idempotency key', async () => {
     const { body } = await create({}, 'short')
-    expect(body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    expect(body.errors[0].extensions).toEqual({
+      code: 'BAD_USER_INPUT',
+      reason: 'INVALID_INPUT',
+      field: 'idempotencyKey',
+    })
     nothingWritten()
   })
 
@@ -1439,5 +1504,221 @@ describe('createOrganization (kontroll#79)', () => {
     expect(body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
     expect(prepare).not.toHaveBeenCalled()
     nothingWritten()
+  })
+})
+
+describe('provisionConference (kontroll#85)', () => {
+  const PC = `mutation($input: ProvisionConferenceInput!, $key: String!, $orgId: ID) {
+    provisionConference(input: $input, idempotencyKey: $key, orgId: $orgId) { conferenceId }
+  }`
+  const owner: Envelope = {
+    typ: 'tenant',
+    orgId: 'organization.acme',
+    conferenceId: 'conference-acme',
+    userId: 'u1',
+    orgRole: 'owner',
+    scopes: [],
+  }
+  const input = (over: Record<string, unknown> = {}) => ({
+    title: 'Acme 2027',
+    startDate: '2027-10-01',
+    endDate: '2027-10-02',
+    ...over,
+  })
+  const pc = (
+    as: Envelope | undefined,
+    over = {},
+    key = 'edition-key-00001',
+    orgId?: string,
+  ) => gql(PC, { input: input(over), key, orgId }, as)
+  const editionRows = () =>
+    sqlite
+      .prepare(
+        "SELECT id, org_id, lifecycle, api_read, d1_write FROM conferences WHERE id LIKE 'conference-e%'",
+      )
+      .all()
+  const reasonOf = (body: { errors: { extensions: object }[] }) =>
+    body.errors[0].extensions
+
+  beforeEach(async () => {
+    await provision('acme')
+    await provision('beta', 'k2')
+    sanityFetch.mockClear()
+  })
+
+  it.each(['owner', 'admin', 'member, admin'])(
+    'an org %s creates a draft edition, recorded as theirs',
+    async (orgRole) => {
+      const { body } = await pc({ ...owner, orgRole } as Envelope)
+      expect(body.errors).toBeUndefined()
+      expect(body.data.provisionConference).toEqual({
+        conferenceId: 'conference-e0',
+      })
+      expect(editionRows()).toEqual([
+        {
+          id: 'conference-e0',
+          org_id: 'organization.acme',
+          lifecycle: 'draft',
+          api_read: 0,
+          d1_write: 0,
+        },
+      ])
+      expect(site.operators).toEqual(['u1'])
+      expect(
+        sqlite
+          .prepare(
+            "SELECT hostname, kind, verification FROM domains WHERE conference_id = 'conference-e0'",
+          )
+          .all(),
+      ).toEqual([
+        {
+          hostname: 'acme-2027.konf.run',
+          kind: 'platform-edition',
+          verification: 'verified',
+        },
+      ])
+    },
+  )
+
+  it('inherits a rollout flag only when every sibling edition has it', async () => {
+    sqlite.exec(
+      "UPDATE conferences SET api_read = 1, d1_write = 1 WHERE org_id = 'organization.acme'",
+    )
+    sqlite.exec(
+      "INSERT INTO conferences (id, org_id, slug, name, lifecycle, api_read) VALUES ('conference-old', 'organization.acme', '2025', 'Old', 'archived', 1)",
+    )
+    await pc(owner)
+    expect(editionRows()).toEqual([
+      expect.objectContaining({ api_read: 1, d1_write: 0 }),
+    ])
+  })
+
+  it.each<[string, Envelope | undefined]>([
+    ['anonymous', undefined],
+    ['a member', { ...owner, orgRole: 'member' } as Envelope],
+    ['a conference organizer', { ...owner, orgRole: 'organizer' } as Envelope],
+    ['a tenant with no role', { ...owner, orgRole: null } as Envelope],
+    [
+      'an operator acting for the tenant',
+      { ...owner, orgRole: null, scopes: ['platform:operator'] } as Envelope,
+    ],
+    ['a user envelope', { typ: 'user', userId: 'u1' }],
+  ])('refuses %s before any read or write', async (_, as) => {
+    const prepare = vi.spyOn(env.DB, 'prepare')
+    const { body } = await pc(as)
+    expect(reasonOf(body)).toEqual({ code: 'FORBIDDEN' })
+    expect(prepare).not.toHaveBeenCalled()
+    expect(sanityFetch).not.toHaveBeenCalled()
+    expect(editionRows()).toEqual([])
+  })
+
+  it('refuses orgId on the tenant lane, even an owner naming their own org', async () => {
+    const prepare = vi.spyOn(env.DB, 'prepare')
+    const { body } = await pc(
+      owner,
+      {},
+      'edition-key-00001',
+      'organization.acme',
+    )
+    expect(reasonOf(body)).toEqual({ code: 'FORBIDDEN' })
+    expect(prepare).not.toHaveBeenCalled()
+    expect(sanityFetch).not.toHaveBeenCalled()
+  })
+
+  it('an operator names the org on the platform lane, and must', async () => {
+    const missing = await pc(operator)
+    expect(reasonOf(missing.body)).toMatchObject({
+      reason: 'INVALID_INPUT',
+      field: 'orgId',
+    })
+    expect(sanityFetch).not.toHaveBeenCalled()
+    const { body } = await pc(
+      operator,
+      {},
+      'edition-key-00001',
+      'organization.beta',
+    )
+    expect(body.data.provisionConference).toEqual({
+      conferenceId: 'conference-e0',
+    })
+    expect(editionRows()).toEqual([
+      expect.objectContaining({ org_id: 'organization.beta' }),
+    ])
+    expect(site.operators).toEqual(['op'])
+  })
+
+  it('copyFrom of another org, or of no edition, is COPY_FROM_NOT_IN_ORG before the site is called', async () => {
+    for (const copyFrom of ['conference-beta', 'conference-nope']) {
+      const { body } = await pc(owner, { copyFrom })
+      expect(reasonOf(body)).toMatchObject({
+        code: 'BAD_USER_INPUT',
+        reason: 'COPY_FROM_NOT_IN_ORG',
+        field: 'copyFrom',
+      })
+    }
+    expect(sanityFetch).not.toHaveBeenCalled()
+    expect(editionRows()).toEqual([])
+  })
+
+  it('copyFrom of an own edition reaches the site', async () => {
+    const { body } = await pc(owner, { copyFrom: 'conference-acme' })
+    expect(body.data.provisionConference.conferenceId).toBe('conference-e0')
+  })
+
+  it('a retry returns the same id; a reused key with another input is IDEMPOTENCY_KEY_REUSED', async () => {
+    const a = await pc(owner)
+    const b = await pc(owner)
+    expect(b.body.data).toEqual(a.body.data)
+    expect(site.writes).toBe(1)
+    expect(count('provisioning_requests')).toBe(3)
+    const c = await pc(owner, { title: 'Other' })
+    expect(reasonOf(c.body)).toMatchObject({
+      reason: 'IDEMPOTENCY_KEY_REUSED',
+      field: 'idempotencyKey',
+    })
+    // The same key for another org is refused from the D1 receipt alone.
+    sanityFetch.mockClear()
+    const d = await pc(operator, {}, 'edition-key-00001', 'organization.beta')
+    expect(reasonOf(d.body)).toMatchObject({
+      reason: 'IDEMPOTENCY_KEY_REUSED',
+    })
+    expect(sanityFetch).not.toHaveBeenCalled()
+    expect(site.writes).toBe(1)
+    expect(editionRows()).toHaveLength(1)
+  })
+
+  it('a createOrganization key does not replay as an edition', async () => {
+    const { body } = await pc(owner, {}, 'k1-is-long-enough')
+    expect(body.errors).toBeUndefined()
+  })
+
+  it('a domain held in D1 or Sanity is DOMAIN_TAKEN with nothing created', async () => {
+    sqlite.exec(
+      "INSERT INTO domains (hostname, kind, org_id, conference_id, verification) VALUES ('d1.example.com', 'custom', 'organization.beta', 'conference-beta', 'pending')",
+    )
+    const d1 = await pc(owner, { domain: 'd1.example.com' })
+    expect(reasonOf(d1.body)).toMatchObject({
+      reason: 'DOMAIN_TAKEN',
+      field: 'domain',
+    })
+    expect(sanityFetch).not.toHaveBeenCalled()
+    const inSanity = await pc(owner, { domain: 'conf.beta.org' })
+    expect(reasonOf(inSanity.body)).toMatchObject({
+      reason: 'DOMAIN_TAKEN',
+      field: 'domain',
+    })
+    expect(site.writes).toBe(0)
+    expect(editionRows()).toEqual([])
+  })
+
+  it.each([
+    [{ title: ' ' }, 'title'],
+    [{ startDate: '2027-13-01' }, 'startDate'],
+    [{ endDate: '2027-09-01' }, 'endDate'],
+    [{ domain: 'x.konf.run' }, 'domain'],
+  ])('invalid input %j is INVALID_INPUT on %s', async (over, field) => {
+    const { body } = await pc(owner, over)
+    expect(reasonOf(body)).toMatchObject({ reason: 'INVALID_INPUT', field })
+    expect(sanityFetch).not.toHaveBeenCalled()
   })
 })
