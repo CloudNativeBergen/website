@@ -21,6 +21,7 @@
  *   wrangler d1 execute <identity-db> --remote --json --command "SELECT id, email, emailVerified FROM user" > users.json
  *   wrangler d1 execute <identity-db> --remote --json --command "SELECT userId, providerId, accountId FROM account" > accounts.json
  *   fnox exec -- pnpm tsx scripts/backfill-speaker-profiles.ts users.json accounts.json [--out <dir>] [--verbose]
+ * <dir> defaults to tmp/speaker-import (gitignored).
  * Writes <dir>/speaker-profiles.sql and <dir>/speaker-profiles-report.json.
  * Apply with `wrangler d1 execute <identity-db> --remote --file <dir>/speaker-profiles.sql`,
  * then delete both files and the exports: they hold PII.
@@ -41,6 +42,7 @@ export interface SanitySpeaker {
   imageURL?: string | null
   providers?: string[] | null
   knownEmails?: string[] | null
+  ticketGrantEmails?: string[] | null
   email?: string | null // fetched only to prove it is never matched on
   publicProfile?: boolean | null
 }
@@ -70,8 +72,9 @@ interface Profile {
   links: string[]
   topics: string[]
 }
-// Same limits as services/identity/src/data/speaker-profiles.ts (not imported:
-// it pulls Worker types into the root typecheck).
+// COPIED from services/identity/src/data/speaker-profiles.ts (importing it pulls
+// Worker types into the root typecheck). Re-check them against that file
+// before every run: a drift lets rows through that the API would refuse.
 const MAX_NAME = 120
 const MAX_BIO = 4000
 const PHOTO_KEY = /^[A-Za-z0-9/_.-]{1,200}$/
@@ -108,10 +111,16 @@ export function planProfiles(
     const viaProvider = new Set(
       (s.providers ?? []).flatMap((p) => byProvider.get(p) ?? []),
     )
+    // A ticket-granted address was added by an organizer, never login-verified;
+    // the live sign-in matcher skips it too (src/lib/speaker/sanity.ts, #1914).
+    const granted = new Set(
+      (s.ticketGrantEmails ?? []).map((e) => e.trim().toLowerCase()),
+    )
     const viaEmail = new Set(
-      (s.knownEmails ?? []).flatMap(
-        (e) => verified.get(e.trim().toLowerCase()) ?? [],
-      ),
+      (s.knownEmails ?? [])
+        .map((e) => e.trim().toLowerCase())
+        .filter((e) => !granted.has(e))
+        .flatMap((e) => verified.get(e) ?? []),
     )
     return {
       s,
@@ -218,7 +227,7 @@ export function summarize(report: ReportRow[]) {
 async function main() {
   const args = process.argv.slice(2)
   const i = args.indexOf('--out')
-  const outDir = i < 0 ? '.' : args[i + 1]
+  const outDir = i < 0 ? 'tmp/speaker-import' : args[i + 1]
   if (!outDir || outDir.startsWith('--')) throw new Error('--out needs a value')
   const [usersPath, accountsPath] = args.filter(
     (a, j) => !a.startsWith('--') && args[j - 1] !== '--out',
@@ -236,6 +245,7 @@ async function main() {
   const speakers: SanitySpeaker[] = await clientReadUncached.fetch(
     `*[_type == "speaker" && !(_id in path("drafts.**")) && !defined(erasedAt)]{
       _id, name, bio, links, imageURL, providers, knownEmails,
+      "ticketGrantEmails": ticketEmailGrants[].email,
       "publicProfile": consent.publicProfile.granted
     }`,
   )

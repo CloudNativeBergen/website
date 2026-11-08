@@ -56,6 +56,17 @@ describe('planProfiles matching', () => {
       'other-provider': ['skipped', 'no-user'],
     })
   })
+  it('refuses a known email that is a ticket grant', () => {
+    expect(
+      status([
+        sp({
+          _id: 's',
+          knownEmails: ['ver@example.com'],
+          ticketGrantEmails: ['VER@example.com'],
+        }),
+      ]),
+    ).toEqual({ s: ['skipped', 'no-user'] })
+  })
   it('skips one speaker matching two users', () => {
     expect(
       status([
