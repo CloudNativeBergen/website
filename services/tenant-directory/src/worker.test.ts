@@ -1733,3 +1733,52 @@ describe('provisionConference (kontroll#85)', () => {
     expect(sanityFetch).not.toHaveBeenCalled()
   })
 })
+
+describe('SiteMail.invitation (#2130)', () => {
+  // The test stub of WorkerEntrypoint keeps no env; set it as the runtime does.
+  const siteMail = () =>
+    Object.assign(
+      Object.create(SiteMail.prototype) as InstanceType<typeof SiteMail>,
+      { env },
+    )
+  const MAIL = {
+    invitationId: 'inv_1',
+    email: 'new@nova.org',
+    orgId: 'organization.nova',
+    orgName: 'Nova',
+    inviterName: 'Ada',
+    inviterId: 'user_ada',
+  }
+
+  it('posts the mail fields, minus the inviter id, under an invitations-audience assertion', async () => {
+    const seen: Request[] = []
+    sanityFetch.mockImplementation(async (url, init) => {
+      seen.push(new Request(url as unknown as string, init))
+      return Response.json({ sent: true })
+    })
+    await siteMail().invitation(MAIL)
+    expect(seen).toHaveLength(1)
+    const req = seen[0]
+    expect(req.url).toBe(`${SITE}/api/identity/service/invitations`)
+    const raw = await req.text()
+    const { inviterId, ...fields } = MAIL
+    expect(JSON.parse(raw)).toEqual(fields)
+    const token = req.headers.get('x-konf-service')
+    expect(
+      await verifyServiceAssertion(
+        token,
+        sitePublicKeys,
+        raw,
+        'konf-site-invitations',
+      ),
+    ).toBe(inviterId)
+    // A provisioning route refuses it.
+    expect(await verifyServiceAssertion(token, sitePublicKeys, raw)).toBeNull()
+  })
+
+  it('refuses a SITE_URL off the allowlist without calling it', async () => {
+    env.SITE_URL = 'https://konf.app'
+    await expect(siteMail().invitation(MAIL)).rejects.toThrow()
+    expect(sanityFetch).not.toHaveBeenCalled()
+  })
+})
