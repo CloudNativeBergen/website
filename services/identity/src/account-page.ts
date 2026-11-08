@@ -55,15 +55,21 @@ for (const b of document.querySelectorAll('[data-signin]')) {
 }
 `
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+export const esc = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
-function page(nonce: string, body: string) {
+export function page(
+  nonce: string,
+  body: string,
+  title = 'Innloggingskontoer',
+  script = SCRIPT,
+) {
   return `<!doctype html>
 <html lang="nb">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Innloggingskontoer</title>
+<title>${title}</title>
 <style nonce="${nonce}">
 body{font-family:system-ui,sans-serif;max-width:32rem;margin:0 auto;padding:2rem 1rem;line-height:1.5;color:#111;background:#fff}
 @media (prefers-color-scheme:dark){body{color:#eee;background:#111}}
@@ -75,11 +81,11 @@ ul{list-style:none;padding:0}li{display:flex;justify-content:space-between;align
 </head>
 <body>
 <main>
-<h1>Innloggingskontoer</h1>
+<h1>${title}</h1>
 ${body}
 <p id="status" role="status"></p>
 </main>
-<script nonce="${nonce}">${SCRIPT}</script>
+<script nonce="${nonce}">${script}</script>
 </body>
 </html>`
 }
@@ -132,8 +138,13 @@ ${Object.entries(PROVIDERS)
   .join('\n')}`
   }
   const nonce = crypto.randomUUID().replaceAll('-', '')
-  return new Response(page(nonce, body), {
-    status: 200,
+  return htmlResponse(nonce, page(nonce, body))
+}
+
+/** An HTML page under this worker's CSP (scripts and styles by nonce only). */
+export function htmlResponse(nonce: string, html: string, status = 200) {
+  return new Response(html, {
+    status,
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store',

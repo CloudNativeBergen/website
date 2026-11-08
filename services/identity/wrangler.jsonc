@@ -17,6 +17,11 @@
       "binding": "DIRECTORY",
       "service": "konf-tenant-directory",
     },
+    {
+      "binding": "SITE_MAIL",
+      "service": "konf-tenant-directory",
+      "entrypoint": "SiteMail",
+    },
   ],
   "vars": {
     "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z",
@@ -68,6 +73,11 @@
           "binding": "DIRECTORY",
           "service": "konf-tenant-directory-preview",
         },
+        {
+          "binding": "SITE_MAIL",
+          "entrypoint": "SiteMail",
+          "service": "konf-tenant-directory-preview",
+        },
       ],
       "vars": {
         "IDENTITY_UPGRADE_UNTIL": "2026-12-03T00:00:00Z",
@@ -116,6 +126,11 @@
         {
           "binding": "DIRECTORY",
           "service": "konf-tenant-directory",
+        },
+        {
+          "binding": "SITE_MAIL",
+          "service": "konf-tenant-directory",
+          "entrypoint": "SiteMail",
         },
       ],
       "vars": {

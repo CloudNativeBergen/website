@@ -189,7 +189,12 @@ const siteRefusal = (code: string | undefined, status: number) => {
 }
 
 /** A tenant-directory assertion over `body` (src/lib/provisioning/service.ts). */
-async function siteAssertion(jwkJson: string, sub: string, body: string) {
+async function siteAssertion(
+  jwkJson: string,
+  sub: string,
+  body: string,
+  audience = 'konf-site-provisioning',
+) {
   const jwk = JSON.parse(jwkJson) as JWK
   if (!jwk.kid) throw new Error('PROVISIONING_SIGNING_KEY has no kid')
   const bh = btoa(
@@ -206,7 +211,7 @@ async function siteAssertion(jwkJson: string, sub: string, body: string) {
   return new SignJWT({ bh })
     .setProtectedHeader({ alg: 'EdDSA', kid: jwk.kid })
     .setIssuer('konf-tenant-directory')
-    .setAudience('konf-site-provisioning')
+    .setAudience(audience)
     .setSubject(sub)
     .setIssuedAt(now)
     .setExpirationTime(now + 60)
@@ -330,6 +335,7 @@ export function createData(
     path: string,
     payload: unknown,
     createdBy: string,
+    audience?: string,
   ) => {
     const body = JSON.stringify(payload)
     let res: Response
@@ -342,6 +348,7 @@ export function createData(
             env.PROVISIONING_SIGNING_KEY!,
             createdBy,
             body,
+            audience,
           ),
         },
         body,
@@ -1047,8 +1054,33 @@ export function createData(
         )
       return rows.map((r) => r.hostname)
     },
+    /**
+     * Asks the site to email an identity invitation (#2130), signed for the
+     * `konf-site-invitations` audience so a provisioning route never accepts
+     * it. Reached only from identity's SITE_MAIL binding (src/index.ts).
+     */
+    async sendInvitationEmail(mail: InvitationMail) {
+      const { inviterId, ...body } = mail
+      await callSite(
+        siteUrl(),
+        '/api/identity/service/invitations',
+        body,
+        inviterId,
+        'konf-site-invitations',
+      )
+    },
   }
   return api
+}
+
+/** identity's invitation email (services/identity/src/data/invitations.ts). */
+export interface InvitationMail {
+  invitationId: string
+  email: string
+  orgId: string
+  orgName: string
+  inviterName: string
+  inviterId: string
 }
 
 /** Cron Trigger: mirror Cloudflare status onto custom domains due a check. */

@@ -25,6 +25,7 @@ import {
   type Envelope,
 } from '@runkonf/tenancy'
 import { rawDb } from './db'
+import { deliverInvitation, namesFor } from './invitations'
 import { emit } from './push'
 import {
   account,
@@ -266,6 +267,13 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
             audit('invite.create', actorId, { invitationId: row.id, to: role }),
           ])
           .catch(clean)
+        await deliverInvitation(env.SITE_MAIL, {
+          invitationId: row.id,
+          email: row.email,
+          orgId,
+          inviterId: actorId,
+          ...(await namesFor(env.DB, orgId, actorId)),
+        })
         return row
       },
       async cancelInvitation(invitationId: string) {

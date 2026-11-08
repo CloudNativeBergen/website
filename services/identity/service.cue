@@ -36,7 +36,12 @@ service: #PlatformService & {
 	// VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY; unset, nothing is sent.
 	// conference reaches it over the `Push` entrypoint.
 	// Verified origins for the login handoff (#688).
-	serviceBindings: [{binding: "DIRECTORY", service: "konf-tenant-directory"}]
+	// Invitation emails (#2130): tenant-directory's SiteMail entrypoint asks
+	// the site to send them, signed with the key it already holds.
+	serviceBindings: [
+		{binding: "DIRECTORY", service: "konf-tenant-directory"},
+		{binding: "SITE_MAIL", service: "konf-tenant-directory", entrypoint: "SiteMail"},
+	]
 	// Handoff limits (src/handoff.ts): POSTs per tenant origin, GET per IP.
 	rateLimits: [
 		{name: "HANDOFF_SITE_LIMIT", namespaceId: {preview: "1803", production: "1813"}, limit: 60, period: 60},

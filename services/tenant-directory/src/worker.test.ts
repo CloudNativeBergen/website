@@ -42,6 +42,7 @@ const identity = {
 vi.mock('./data/cloudflare', () => ({ cloudflareHostnames: () => hostnames }))
 
 const { default: worker } = await import('./worker')
+const { SiteMail } = await import('./index')
 
 /** The slice of D1 that drizzle-orm/d1 uses, over node:sqlite. */
 function d1(db: DatabaseSync): D1Database {
