@@ -444,7 +444,7 @@ builder.mutationFields((t) => ({
   seedDemoUser: t.id({
     tag: 'operator',
     description:
-      "Creates or updates a demo seed user (#2150): optionally their membership with `role` and their speaker profile. The email must be @example.com or *.test. A seed user has no credential and can never sign in. Platform operators acting for a demo org only (operator lane with a tenant); audited. Returns the user id.",
+      'Creates or updates a demo seed user (#2150): optionally their membership with `role` and their speaker profile. The email must be @example.com or *.test. A seed user has no credential and can never sign in. Platform operators acting for a demo org only (operator lane with a tenant); audited. Returns the user id.',
     args: {
       email: t.arg.string({ required: true }),
       name: t.arg.string({ required: true }),

@@ -89,7 +89,9 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
       .from(schema.user)
       .where(eq(schema.user.id, userId))
     if (u?.isSeed)
-      throw new APIError('FORBIDDEN', { message: 'This account cannot sign in' })
+      throw new APIError('FORBIDDEN', {
+        message: 'This account cannot sign in',
+      })
   }
 
   return betterAuth({

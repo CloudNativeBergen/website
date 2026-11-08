@@ -50,7 +50,9 @@ beforeAll(async () => {
     .map((s) => s.replace(/^--.*$/gm, '').trim()))
     if (s) await d1.prepare(s).run()
   await d1
-    .prepare("INSERT INTO organization (id, name, slug) VALUES (?1, 'Demo', 'demo')")
+    .prepare(
+      "INSERT INTO organization (id, name, slug) VALUES (?1, 'Demo', 'demo')",
+    )
     .bind(ORG)
     .run()
   env = {
@@ -144,7 +146,9 @@ describe('seedDemoUser guards', () => {
 
   it('never takes over a real user', async () => {
     await d1
-      .prepare("INSERT INTO user (id, name, email) VALUES ('real', 'R', 'r@kontainerkonf.test')")
+      .prepare(
+        "INSERT INTO user (id, name, email) VALUES ('real', 'R', 'r@kontainerkonf.test')",
+      )
       .run()
     const r = await seed(operatorFor('demo'), {
       email: 'r@kontainerkonf.test',
@@ -199,19 +203,27 @@ describe('seedDemoUser writes', () => {
 
 describe('a seed user can never log in', () => {
   const seeded = async (email: string) => {
-    const r = await seed(operatorFor('demo'), { email, name: 'S', role: 'member' })
+    const r = await seed(operatorFor('demo'), {
+      email,
+      name: 'S',
+      role: 'member',
+    })
     return r.data!.seedDemoUser!
   }
   // The handoff (src/handoff.ts) and every OAuth callback end in
   // internalAdapter.createSession; a sign-in or link writes an account.
   const tryLogin = async (userId: string) => {
     const ctx = await createAuth(d1, env).$context
-    const session = await ctx.internalAdapter
-      .createSession(userId, false)
-      .then(() => 'created', (e: Error) => e.message)
+    const session = await ctx.internalAdapter.createSession(userId, false).then(
+      () => 'created',
+      (e: Error) => e.message,
+    )
     const account = await ctx.internalAdapter
       .linkAccount({ userId, providerId: 'github', accountId: `gh-${userId}` })
-      .then(() => 'created', (e: Error) => e.message)
+      .then(
+        () => 'created',
+        (e: Error) => e.message,
+      )
     return { session, account }
   }
   const sessions = async (userId: string) =>
@@ -224,9 +236,14 @@ describe('a seed user can never log in', () => {
 
   it('a real user does get a session (control)', async () => {
     await d1
-      .prepare("INSERT INTO user (id, name, email) VALUES ('ctl', 'C', 'ctl@example.com')")
+      .prepare(
+        "INSERT INTO user (id, name, email) VALUES ('ctl', 'C', 'ctl@example.com')",
+      )
       .run()
-    expect(await tryLogin('ctl')).toEqual({ session: 'created', account: 'created' })
+    expect(await tryLogin('ctl')).toEqual({
+      session: 'created',
+      account: 'created',
+    })
     expect(await sessions('ctl')).toBe(1)
   })
 

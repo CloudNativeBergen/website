@@ -81,10 +81,7 @@ export async function seedDemoUser(
     : m
       ? m.role === input.role
         ? null
-        : db
-            .update(member)
-            .set({ role: input.role })
-            .where(eq(member.id, m.id))
+        : db.update(member).set({ role: input.role }).where(eq(member.id, m.id))
       : db.insert(member).values({
           id: crypto.randomUUID(),
           organizationId: orgId,
