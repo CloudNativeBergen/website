@@ -563,6 +563,21 @@ describe('recipients', () => {
     expect(await recipients()).toEqual([invitee.id])
   })
 
+  it('invite.accepted: roles parsed by parseOrgRoles (I4, #2106): "member,admin" and " Owner " are notified, "guest" is not', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const {
+      orgId,
+      users: [multi, cased],
+    } = await org('member,admin', ' Owner ', 'guest', 'member')
+    await notify(cf.env as unknown as PushEnv, {
+      type: 'invite.accepted',
+      organizationId: orgId,
+      invitationId: 'i',
+      userId: await newUser(),
+    })
+    expect(await recipients()).toEqual([multi, cased].sort())
+  })
+
   it('invite.accepted text names the user and the org, with a my.konf.app link', async () => {
     const {
       orgId,

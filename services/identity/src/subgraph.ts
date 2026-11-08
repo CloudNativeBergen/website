@@ -2,6 +2,7 @@
 // on the envelope's org only; the operator fields (@tag(operator)) take an
 // org argument and need a PlatformContext.
 import { createGraphQLError } from 'graphql-yoga'
+import { can, principalOf } from '@runkonf/tenancy'
 import { builder } from './builder'
 import './job-status'
 import { MemberError, type MemberRole } from './data'
@@ -42,6 +43,20 @@ const Role = builder.enumType('MemberRole', {
   values: ['owner', 'admin', 'member'] as const,
 })
 
+const RevokeAllResult = builder
+  .objectRef<{
+    membersRemoved: number
+    sessionsRevoked: number
+    keptLastOwnerOf: string[]
+  }>('RevokeAllResult')
+  .implement({
+    fields: (t) => ({
+      membersRemoved: t.exposeInt('membersRemoved'),
+      sessionsRevoked: t.exposeInt('sessionsRevoked'),
+      keptLastOwnerOf: t.exposeIDList('keptLastOwnerOf'),
+    }),
+  })
+
 const Invitation = builder
   .objectRef<{
     id: string
@@ -66,15 +81,12 @@ const Invitation = builder
  * the tenant (OPERATOR_SCOPE). Emails and invitations: owner, admin, operator.
  * Anyone else gets null.
  */
-const OPERATOR_SCOPE = 'platform:operator'
 const reader = (ctx: ResolverContext) => {
   const e = ctx.envelope
-  if (e?.typ !== 'tenant' || !e.userId) return null
-  const operator = e.scopes.includes(OPERATOR_SCOPE)
-  const roles = (e.orgRole ?? '').split(',').map((r) => r.trim().toLowerCase())
-  if (!operator && !roles.some((r) => r)) return null
-  const manager = operator || roles.some((r) => r === 'owner' || r === 'admin')
-  return { orgId: e.orgId, manager }
+  if (e?.typ !== 'tenant') return null
+  const p = principalOf(e)
+  if (!can(p, 'org.read_settings')) return null
+  return { orgId: e.orgId, manager: can(p, 'org.manage_members') }
 }
 
 const Member = builder
@@ -267,6 +279,17 @@ builder.mutationType({
             return true
           }),
       }),
+      revokeAll: t.field({
+        ...op,
+        type: RevokeAllResult,
+        description:
+          "Emergency revocation: removes the user's memberships (except where they are an org's last owner, reported in keptLastOwnerOf), sessions and operator flag, audited. Platform operators only. An issued identity JWT lives up to 300 s more.",
+        args: { userId: id() },
+        resolve: (_, a, ctx) =>
+          answer(() =>
+            ctx.data.members().revokeAll(ctx.envelope, String(a.userId)),
+          ),
+      }),
       operatorChangeMemberRole: t.boolean({
         ...op,
         args: { orgId: orgId(), userId: id(), role: role() },
@@ -340,7 +363,7 @@ const SpeakerProfileInput = builder.inputType('SpeakerProfileInput', {
  * tenant, or a PlatformContext operator. Plain members are not organizers.
  */
 const isOrganizer = (ctx: ResolverContext) =>
-  ctx.envelope?.typ === 'platform' || !!reader(ctx)?.manager
+  can(principalOf(ctx.envelope), 'speaker_directory.read')
 
 builder.queryFields((t) => ({
   myProfile: t.field({

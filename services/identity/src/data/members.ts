@@ -18,6 +18,12 @@ import {
   isOwner,
   type AuthEnv,
 } from './auth'
+import {
+  can,
+  principalOf,
+  principalOfRole,
+  type Envelope,
+} from '@runkonf/tenancy'
 import { rawDb } from './db'
 import { emit } from './push'
 import {
@@ -106,10 +112,7 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
   async function asMember(actorId: string, orgId: string) {
     const actor = await memberOf(orgId, actorId)
     const [u] = await db.select().from(user).where(eq(user.id, actorId))
-    const roles = (actor?.role ?? '')
-      .split(',')
-      .map((r) => r.trim().toLowerCase())
-    if (!u || !roles.some((r) => r === 'owner' || r === 'admin'))
+    if (!u || !can(principalOfRole(actor?.role), 'org.manage_members'))
       throw forbidden()
     const owner = isOwner(actor!.role)
     const auth = createAuth(env.DB, env)
@@ -205,6 +208,7 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
       db.insert(auditEvent).values({
         action,
         userId,
+        subjectUserId: userId,
         detail: JSON.stringify({ actorId, operator: true, orgId, ...detail }),
       })
     const target = async (userId: string) => {
@@ -381,5 +385,48 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
       )
       .orderBy(invitation.expiresAt)
 
-  return { asMember, asOperator, list, pendingInvitations }
+  /**
+   * Emergency revocation (docs/AUTHORIZATION.md §3.6): the user's member rows,
+   * sessions and operator flag, with one audit row, in ONE batch. Refused
+   * before any read for anything but an operator on the platform lane. A
+   * membership whose loss would leave an org without an owner is kept and
+   * reported (the LAST_OWNER trigger would abort the whole batch). An
+   * already-issued identity JWT lives up to 300 s more.
+   */
+  async function revokeAll(envelope: Envelope | null, userId: string) {
+    if (
+      envelope?.typ !== 'platform' ||
+      !can(principalOf(envelope), 'user.revoke_all')
+    )
+      throw forbidden()
+    // The trigger's own owner test (migration 0003), so the two agree.
+    const owner = (col: string) =>
+      `(',' || lower(replace(replace(replace(replace(${col}, ' ', ''), char(9), ''), char(10), ''), char(13), '')) || ',') LIKE '%,owner,%'`
+    const { results } = await env.DB.prepare(
+      `SELECT m.organizationId AS orgId FROM member m WHERE m.userId = ?1 AND ${owner('m.role')} AND NOT EXISTS (SELECT 1 FROM member o WHERE o.organizationId = m.organizationId AND o.id <> m.id AND ${owner('o.role')}) ORDER BY 1`,
+    )
+      .bind(userId)
+      .all<{ orgId: string }>()
+    const kept = results.map((r) => r.orgId)
+    const detail = JSON.stringify({ operator: true, keptLastOwnerOf: kept })
+    const [, members, sessions] = await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO audit_event (action, userId, subject_user_id, detail) VALUES ('user.revoke_all', ?1, ?2, ?3)",
+      ).bind(envelope.userId, userId, detail),
+      env.DB.prepare(
+        'DELETE FROM member WHERE userId = ?1 AND organizationId NOT IN (SELECT value FROM json_each(?2))',
+      ).bind(userId, JSON.stringify(kept)),
+      env.DB.prepare('DELETE FROM session WHERE userId = ?1').bind(userId),
+      env.DB.prepare('UPDATE user SET platformOperator = 0 WHERE id = ?1').bind(
+        userId,
+      ),
+    ]).catch(clean)
+    return {
+      membersRemoved: members.meta.changes,
+      sessionsRevoked: sessions.meta.changes,
+      keptLastOwnerOf: kept,
+    }
+  }
+
+  return { asMember, asOperator, list, pendingInvitations, revokeAll }
 }

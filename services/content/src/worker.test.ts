@@ -128,7 +128,7 @@ const tenant = (
   typ: 'tenant',
   orgId,
   conferenceId,
-  userId: null,
+  userId: orgRole ? 'u' : null,
   orgRole,
   scopes: [],
 })
