@@ -2,7 +2,7 @@
 // on the envelope's org only; the operator fields (@tag(operator)) take an
 // org argument and need a PlatformContext.
 import { createGraphQLError } from 'graphql-yoga'
-import { can, principalOf } from '@runkonf/tenancy'
+import { OPERATOR_SCOPE, can, principalOf } from '@runkonf/tenancy'
 import { builder } from './builder'
 import './job-status'
 import './api-clients'
@@ -424,7 +424,44 @@ builder.queryFields((t) => ({
   }),
 }))
 
+/**
+ * #2150: an operator acting for a demo org (the operator lane's tenant
+ * envelope, which carries the org's kind). Checked before any write.
+ */
+const asDemoOperator = (ctx: ResolverContext) => {
+  const e = ctx.envelope
+  if (
+    e?.typ !== 'tenant' ||
+    !e.userId ||
+    !e.scopes.includes(OPERATOR_SCOPE) ||
+    e.orgKind !== 'demo'
+  )
+    throw refuse()
+  return { actorId: e.userId, orgId: e.orgId }
+}
+
 builder.mutationFields((t) => ({
+  seedDemoUser: t.id({
+    tag: 'operator',
+    description:
+      'Creates or updates a demo seed user (#2150): optionally their membership with `role` and their speaker profile. The email must be @example.com or *.test. A seed user has no credential and can never sign in. Platform operators acting for a demo org only (operator lane with a tenant); audited. Returns the user id.',
+    args: {
+      email: t.arg.string({ required: true }),
+      name: t.arg.string({ required: true }),
+      role: t.arg({ type: Role }),
+      profile: t.arg({ type: SpeakerProfileInput }),
+    },
+    resolve: (_, a, ctx) =>
+      answer(() => {
+        const { actorId, orgId } = asDemoOperator(ctx)
+        return ctx.data.seedDemoUser(actorId, orgId, {
+          email: a.email,
+          name: a.name,
+          role: a.role as MemberRole | null | undefined,
+          profile: a.profile,
+        })
+      }),
+  }),
   updateMyProfile: t.field({
     type: SpeakerProfile,
     description:

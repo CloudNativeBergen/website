@@ -26,6 +26,8 @@ export const user = sqliteTable('user', {
   // Entitles the gateway to mint Platform context. Never user-settable
   // (input: false in auth.ts); set by the documented operator procedure.
   platformOperator: flag().notNull().default(false),
+  // A demo seed user (#2150, seedDemoUser): never logs in (auth.ts hooks).
+  isSeed: integer('is_seed', { mode: 'boolean' }).notNull().default(false),
   createdAt: now(),
   updatedAt: now(),
 })

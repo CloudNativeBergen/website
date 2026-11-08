@@ -286,6 +286,11 @@ type Mutation {
   rotateApiClientSecret(id: ID!): ApiClientSecretPayload
 
   """
+  Creates or updates a demo seed user (#2150): optionally their membership with `role` and their speaker profile. The email must be @example.com or *.test. A seed user has no credential and can never sign in. Platform operators acting for a demo org only (operator lane with a tenant); audited. Returns the user id.
+  """
+  seedDemoUser(email: String!, name: String!, profile: SpeakerProfileInput, role: MemberRole): ID
+
+  """
   Stores a web push subscription for the session user. An endpoint another user held moves to the caller.
   """
   subscribePush(input: PushSubscriptionInput!): Boolean
