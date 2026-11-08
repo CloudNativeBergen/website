@@ -8,8 +8,9 @@ service: #PlatformService & {
 	tenancy: false
 	secrets: {
 		required: ["GATEWAY_PUBLIC_KEY", "BETTER_AUTH_SECRET", "BETTER_AUTH_URL", "IDENTITY_ISSUER", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET", "IDENTITY_EXCHANGE_SECRET", "IDENTITY_UPGRADE_SECRET", "SANITY_API_TOKEN_READ"]
-		// Push and drift alerts are a no-op without these.
-		optional: ["VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "SLACK_MEMBER_DRIFT_WEBHOOK_URL"]
+		// Push and drift alerts are a no-op without these. Without
+		// RESEND_API_KEY (sending-only, #2130) invitations are created but not mailed.
+		optional: ["VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "SLACK_MEMBER_DRIFT_WEBHOOK_URL", "RESEND_API_KEY"]
 	}
 	// The public host for sign-in and the login handoff (#1803).
 	routes: {preview: ["id-preview.konf.app"], production: ["id.konf.app"]}
@@ -17,11 +18,11 @@ service: #PlatformService & {
 	// Sanity ids as in services/content; preview reads development only.
 	vars: {
 		// LOGIN_TEST_PAGE serves the manual login test page at /test (preview only).
-		preview: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", LOGIN_TEST_PAGE: "1", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development", MEMBER_SOURCE_ORGS: "", VAPID_SUBJECT: "mailto:hei@konf.app"}
+		preview: {IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", LOGIN_TEST_PAGE: "1", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development", MEMBER_SOURCE_ORGS: "", VAPID_SUBJECT: "mailto:hei@konf.app", INVITE_FROM: "Konf <no-reply@konf.app>"}
 		// OPERATOR_ORIGINS: non-tenant origins whose token only platform
 		// operators and organization members get (#1922, #1956). None in preview: kontroll has no stable
 		// preview origin.
-		production: {OPERATOR_ORIGINS: "https://my.konf.app", IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", MEMBER_SOURCE_ORGS: "", VAPID_SUBJECT: "mailto:hei@konf.app"}
+		production: {OPERATOR_ORIGINS: "https://my.konf.app", IDENTITY_UPGRADE_UNTIL: "2026-12-03T00:00:00Z", SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", MEMBER_SOURCE_ORGS: "", VAPID_SUBJECT: "mailto:hei@konf.app", INVITE_FROM: "Konf <no-reply@konf.app>"}
 	}
 	// Organizer membership sync (#1907, src/data/member-sync.ts) has no cron
 	// here: the account allows 5. tenant-directory's cron calls
