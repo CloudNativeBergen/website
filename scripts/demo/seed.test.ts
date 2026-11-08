@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
+import { avatarAsset } from './assets'
 import { generateDemoFixtures } from './fixtures/generate'
 import {
   buildDocuments,
@@ -41,6 +43,7 @@ function deps(
     orgId = DEMO_ORG_ID,
     editions = D1_EDITIONS,
     inSanity = [DEMO_ORG_ID, LIVE_CONFERENCE_ID, 'd1-past-7f3', 'd1-next-9a2'],
+    haveAssets = [] as string[],
   } = {},
 ) {
   const mutations: unknown[] = []
@@ -61,7 +64,15 @@ function deps(
       }
       return tx
     },
-    fetch: vi.fn(async () => inSanity) as unknown as SanityWriter['fetch'],
+    fetch: vi.fn(async (_q: string, p: { ids: string[] }) =>
+      [...inSanity, ...haveAssets].filter((x) => p.ids.includes(x)),
+    ) as unknown as SanityWriter['fetch'],
+    // Like Sanity: the asset id is the sha1 of the uploaded bytes.
+    assets: {
+      upload: vi.fn<SanityWriter['assets']['upload']>(async (_t, body) => ({
+        _id: `image-${createHash('sha1').update(body).digest('hex')}-256x256-svg`,
+      })),
+    },
   }
   const seedDemoD1 = vi.fn(async () => ({ ok: true }))
   const d = {
@@ -76,7 +87,7 @@ function deps(
     loadSeedDemoD1: vi.fn(async () => seedDemoD1),
     log: vi.fn(),
   } satisfies Deps
-  return { d, mutations, commit, seedDemoD1 }
+  return { d, mutations, commit, seedDemoD1, upload: client.assets.upload }
 }
 
 const opts = (o: Partial<Parameters<typeof run>[0]> = {}) => ({
@@ -186,6 +197,74 @@ describe('demo:seed', () => {
     expect(commit).not.toHaveBeenCalled()
   })
 
+  it('uploads nothing when a Sanity check stops the run', async () => {
+    const { d, upload } = deps('demo', { inSanity: [LIVE_CONFERENCE_ID] })
+    await expect(run(opts(), d)).rejects.toThrow(/missing in Sanity/)
+    expect(d.createSanityClient).toHaveBeenCalled()
+    expect(upload).not.toHaveBeenCalled()
+  })
+
+  it('uploads nothing on guard refusal or dry run', async () => {
+    for (const [kind, o] of [
+      ['customer', opts()],
+      ['demo', opts({ dryRun: true })],
+    ] as const) {
+      const { d, upload } = deps(kind)
+      await run(o, d).catch(() => undefined)
+      expect(upload).not.toHaveBeenCalled()
+    }
+  })
+
+  it('uploads each avatar once, before any commit, and skips unchanged ones', async () => {
+    const first = deps('demo')
+    await run(opts(), first.d)
+    const n = first.upload.mock.calls.length
+    expect(n).toBe(
+      new Set(first.upload.mock.calls.map((c) => c[2].filename)).size,
+    )
+    expect(n).toBeGreaterThan(34)
+    expect(first.upload.mock.invocationCallOrder[n - 1]).toBeLessThan(
+      first.commit.mock.invocationCallOrder[0],
+    )
+    const uploaded = await Promise.all(
+      first.upload.mock.results.map((r) => r.value as Promise<{ _id: string }>),
+    )
+    const again = deps('demo', { haveAssets: uploaded.map((u) => u._id) })
+    await run(opts(), again.d)
+    expect(again.upload).not.toHaveBeenCalled()
+  })
+
+  it('stops before any commit if Sanity names an avatar differently', async () => {
+    const { d, upload, commit } = deps('demo')
+    upload.mockResolvedValueOnce({ _id: 'image-other-256x256-svg' })
+    await expect(run(opts(), d)).rejects.toThrow(/avatar uploaded as/)
+    expect(commit).not.toHaveBeenCalled()
+  })
+
+  it('every speaker gets a deterministic avatar ref; every sponsor its own logo', () => {
+    const { upsert, avatars } = buildDocuments(fixtures, EDITION_IDS)
+    const speakers = upsert.filter((x) => x._type === 'speaker')
+    expect(speakers.length).toBe(avatars.length)
+    const refs = speakers.map(
+      (x) => (x.image as { asset: { _ref: string } }).asset._ref,
+    )
+    expect(refs.every((r) => /^image-[0-9a-f]{40}-256x256-svg$/.test(r))).toBe(
+      true,
+    )
+    expect(new Set(refs).size).toBe(refs.length)
+    expect(refs).toEqual(avatars.map((a) => a.assetId))
+    // Same key and name, same bytes.
+    expect(avatarAsset('speaker-1', 'Ada Berg')).toEqual(
+      avatarAsset('speaker-1', 'Ada Berg'),
+    )
+    const sponsors = upsert.filter((x) => x._type === 'sponsor')
+    expect(sponsors).toHaveLength(12)
+    const logos = sponsors.map((x) => x.logo as string)
+    expect(new Set(logos).size).toBe(12)
+    for (const [i, l] of logos.entries())
+      expect(l).toContain(`aria-label="${sponsors[i].name}"`)
+  })
+
   it('stops when D1 has no edition for a fixture edition', async () => {
     const { d } = deps('demo', { editions: [D1_EDITIONS[1]] })
     await expect(run(opts(), d)).rejects.toThrow(/edition-past/)
@@ -235,7 +314,21 @@ describe('demo:seed', () => {
     expect(live.map((m) => m[0])).toEqual(['patch'])
     // setIfMissing only: an existing theme or branding is never overwritten.
     expect(Object.keys(live[0][2] as object)).toEqual(['setIfMissing'])
-    expect(JSON.stringify(live[0][2])).not.toMatch(/theme|logo|primaryColor/)
+    const set = (live[0][2] as { setIfMissing: Record<string, unknown> })
+      .setIfMissing
+    for (const f of [
+      'logoBright',
+      'logoDark',
+      'logomarkBright',
+      'logomarkDark',
+    ])
+      expect(set[f]).toMatch(/^<svg [^>]*aria-label="KontainerKonf"/)
+    expect(set.theme).toEqual({
+      primaryColor: '#0f5c8a',
+      accentColor: '#f2a541',
+    })
+    // Branding goes on the live edition only.
+    expect(JSON.stringify(touching('d1-past-7f3'))).not.toMatch(/logo|theme/)
     // Past/upcoming use the D1 ids from the query; no seed-made conference ids.
     expect(touching('d1-past-7f3').map((m) => m[0])).toEqual(['patch'])
     expect(touching('d1-next-9a2').map((m) => m[0])).toEqual(['patch'])
@@ -294,7 +387,10 @@ describe('demo:seed', () => {
   })
 
   it('every _id stays inside the demo prefix; refs hit seeded docs or D1 editions', () => {
-    const { upsert, conferences } = buildDocuments(fixtures, EDITION_IDS)
+    const { upsert, conferences, avatars } = buildDocuments(
+      fixtures,
+      EDITION_IDS,
+    )
     const docs = upsert
     for (const doc of docs) expect(doc._id.startsWith(DEMO_PREFIX)).toBe(true)
     const refs = (
@@ -304,6 +400,7 @@ describe('demo:seed', () => {
     const ids = new Set([
       ...docs.map((x) => x._id),
       ...conferences.map((c) => c.id),
+      ...avatars.map((a) => a.assetId), // uploaded before the transactions
       DEMO_ORG_ID,
     ])
     expect(refs.filter((r) => !ids.has(r))).toEqual([])
