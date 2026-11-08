@@ -150,7 +150,7 @@ vi.mock('@/lib/sanity/client', () => {
 const gateway = vi.fn(async (_: unknown, init: RequestInit) => {
   const { query } = JSON.parse(String(init.body)) as { query: string }
   if (query.includes('rolloutFlags'))
-    return new Response(JSON.stringify({ data: { rolloutFlags: null } }))
+    return new Response(JSON.stringify({ data: { rolloutFlags: { apiRead: true } } }))
   const asked = Object.fromEntries(
     Object.entries(D1).filter(([k]) => new RegExp(`\\b${k}\\b`).test(query)),
   )
@@ -161,7 +161,6 @@ const gateway = vi.fn(async (_: unknown, init: RequestInit) => {
 
 beforeEach(() => {
   vi.stubEnv('KONF_API_URL', 'https://api.example.com/graphql')
-  vi.stubEnv('KONF_API_TENANTS', 'conf-1')
   vi.stubEnv('KONF_SITE_SIGNING_KEY', '{"kid":"k"}')
   vi.stubGlobal('fetch', gateway)
   vi.spyOn(console, 'warn').mockImplementation(() => {})

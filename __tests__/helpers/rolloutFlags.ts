@@ -29,7 +29,14 @@ export function flagTenants(flag: keyof RolloutFlags, ids: string) {
     .filter(Boolean)
 }
 
+/** Ids whose flag read fails with no recent good value (`unverified`). */
+let unverified: string[] = []
+export function unverifyTenants(ids: string) {
+  unverified = ids.split(',').map((s) => s.trim())
+}
+
 beforeEach(() => {
+  unverified = []
   for (const k of Object.keys(flagged) as (keyof RolloutFlags)[])
     flagged[k] = []
 })
@@ -37,10 +44,17 @@ beforeEach(() => {
 export async function fakeRolloutFlags(
   _host: string | null,
   conference: { _id: string; organization?: { _ref?: string } | null },
-): Promise<RolloutFlags> {
+): Promise<RolloutFlags & { unverified?: true }> {
   // The kill switch, as the real rolloutFlags honours it.
   if (process.env.KONF_API_DISABLED === '1')
     return { apiRead: false, identityLogin: false, d1Write: false }
+  if (unverified.includes(conference._id))
+    return {
+      apiRead: false,
+      identityLogin: false,
+      d1Write: false,
+      unverified: true,
+    }
   const on = (ids: string[]) =>
     ids.includes(conference._id) ||
     (!!conference.organization?._ref &&

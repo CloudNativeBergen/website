@@ -96,7 +96,7 @@ Kill switch: `KONF_API_DISABLED=1` on Vercel turns all three site flags off for 
 
 The transition lists are gone (#1939). The site reads `api_read`, `identity_login` and `d1_write` only from D1 through `rolloutFlags`, and the gateway switches both `@override` labels, `conference` and `conference-settings` (#2019), only by `d1_override`. A failed flag read or tenant lookup means off: the Sanity path, never on. Without a gateway URL every site flag is off, identity login included.
 
-Before the deploy, check in D1 that every conference of an organization that had `conference-settings` through `OVERRIDE_TENANTS` (`organization-cloud-native-days`, `kkdemo.org`) has `d1_override = 1`; a conference without it falls back to content for the settings fields. Since 2026-11-05 all 4 conferences have it.
+Before the deploy, check in D1 that every conference of an organization that had `conference-settings` through `OVERRIDE_TENANTS` (`organization-cloud-native-days`, `kkdemo.org`) has `d1_override = 1`; a conference without it falls back to content for the settings fields. Verified 2026-11-07: all 4 conferences have `api_read`, `identity_login`, `d1_write` and `d1_override` set to 1.
 
 After the site deploy, delete these from every Vercel environment. Nothing reads them:
 

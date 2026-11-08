@@ -17,7 +17,10 @@ vi.mock('@/lib/conference/konf-api', async (orig) => ({
   rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
     .fakeRolloutFlags,
 }))
-import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
+import {
+  flagTenants,
+  unverifyTenants,
+} from '../../../__tests__/helpers/rolloutFlags'
 import type { TicketCandidate } from '@/lib/tickets/speakerStatus'
 import type { HolderSignup } from './holders'
 
@@ -838,7 +841,7 @@ describe('sendWorkshopReminder', () => {
     beforeEach(() => {
       d1Reserved = null
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_D1_WRITE_TENANTS', 'conference-1')
+      flagTenants('d1Write', 'conference-1')
       vi.stubGlobal('fetch', vi.fn())
     })
 
@@ -862,6 +865,20 @@ describe('sendWorkshopReminder', () => {
       await expect(remind(conference, 1)).resolves.toMatchObject({
         kind: 'sent',
       })
+    })
+
+    // A failed flag read must not fall to the Sanity lock: the send would be
+    // recorded in Sanity only while readers prefer D1.
+    it('refuses, retryably, when the d1Write flag cannot be read', async () => {
+      unverifyTenants('conference-1')
+      await expect(remind(conference, 0)).resolves.toEqual({
+        kind: 'rate-limited',
+        retryAfterMs: 60_000,
+      })
+      expect(batchSend).not.toHaveBeenCalled()
+      expect(stored.workshopReminderReservedAt).toBeUndefined()
+      expect(lastSendWrite).not.toHaveBeenCalled()
+      expect(d1Calls).not.toHaveBeenCalled()
     })
 
     it('sends nothing when the D1 lock cannot be reached', async () => {

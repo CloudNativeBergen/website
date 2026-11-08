@@ -1845,7 +1845,7 @@ describe('conference router — D1 write path (#1881)', () => {
     expect(lastUnset).toBeUndefined()
   })
 
-  // #1925: the env list still applies without a host, so the refusal holds.
+  // A job with no request host cannot read the flags: refused, never Sanity-only.
   it('refuses, without touching Sanity, when the request has no host', async () => {
     hostMock.mockReturnValue(null)
     // No host means the flags cannot be read: unverified, so refused (#1938).

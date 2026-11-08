@@ -497,7 +497,7 @@ describe('settings phase 3 read flip (#2080)', () => {
   const read = (includeTicketSetup = false) =>
     getConferenceForDomain('2026.example.com', { includeTicketSetup })
   beforeEach(() => {
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     sanityFetch.mockResolvedValue(structuredClone(closed))
   })
 
@@ -623,7 +623,7 @@ describe('settings phase 3 read flip (#2080)', () => {
   })
 
   it('an unflagged tenant never calls the gateway', async () => {
-    vi.stubEnv('KONF_API_TENANTS', '')
+    flagTenants('apiRead', '')
     const { conference } = await read(true)
     expect(fetchMock).not.toHaveBeenCalled()
     expect(conference.ticketingProvider).toBe('checkin')
