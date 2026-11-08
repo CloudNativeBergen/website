@@ -2,7 +2,7 @@
 // supergraph, subgraphs reached over service bindings. Per request it drops any
 // client envelope, resolves the tenant from Origin, verifies the identity JWT,
 // looks up orgRole live, and mints the one envelope the subgraphs trust.
-import { GATEWAY_TYPEDEFS } from './supergraph'
+import { GATEWAY_TYPEDEFS } from './gateway-typedefs'
 import {
   createGatewayRuntime,
   type GatewayPlugin,
