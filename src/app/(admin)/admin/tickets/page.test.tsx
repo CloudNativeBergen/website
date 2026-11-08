@@ -166,7 +166,7 @@ beforeEach(() => {
   h.resolveAccess.mockResolvedValue({
     state: 'ready',
     providerType: 'checkin',
-    eventRef: { provider: 'checkin', customerId: 7, eventId: 4242 },
+    eventRef: { provider: 'checkin', accountId: '7', externalId: '4242' },
     provider: {
       amountsIncludeVat: false,
       amountBasis: 'per-order',

@@ -46,7 +46,7 @@ vi.mock('@/lib/tickets/provider', async (importOriginal) => ({
   resolveTicketingProvider: vi.fn(async () => ({
     configured: true,
     provider: { fetchPublicTicketTypes },
-    eventRef: { customerId: 42, eventId: 7 },
+    eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
   })),
 }))
 

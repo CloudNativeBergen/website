@@ -77,7 +77,11 @@ describe('resolveTicketingAdminAccess — ready', () => {
     expect(access.state).toBe('ready')
     expect(access.providerType).toBe('checkin')
     if (access.state !== 'ready') throw new Error('unreachable')
-    expect(access.eventRef).toEqual({ customerId: 42, eventId: 4242 })
+    expect(access.eventRef).toEqual({
+      provider: 'checkin',
+      accountId: '42',
+      externalId: '4242',
+    })
   })
 
   /**
@@ -92,8 +96,8 @@ describe('resolveTicketingAdminAccess — ready', () => {
     if (access.state !== 'ready') throw new Error('unreachable')
     expect(access.eventRef).toEqual({
       provider: 'tito',
-      accountSlug: 'cndn',
-      eventSlug: '2026',
+      accountId: 'cndn',
+      externalId: '2026',
     })
   })
 

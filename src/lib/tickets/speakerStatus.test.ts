@@ -67,7 +67,7 @@ function provider(opts: {
   resolveTicketingProviderMock.mockResolvedValue({
     configured: true,
     provider: p,
-    eventRef: { customerId: 42, eventId: 7 },
+    eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
   })
   return { fetchEventTickets, fetchPublicTicketTypes }
 }
@@ -289,7 +289,7 @@ describe('provider failure is UNKNOWN, never unredeemed', () => {
           ],
         }),
       },
-      eventRef: { customerId: 42, eventId: 7 },
+      eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
     await expect(fetchRedeemedSpeakerEmails(CONF)).resolves.toBeNull()
   })
@@ -348,7 +348,7 @@ describe('the 30s memo', () => {
           ],
         }),
       },
-      eventRef: { customerId: 42, eventId: 7 },
+      eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
 
     expect(await fetchRedeemedSpeakerEmails(CONF)).toBeNull()
@@ -463,7 +463,7 @@ describe('the memo — a fresh read', () => {
     resolveTicketingProviderMock.mockResolvedValue({
       configured: true,
       provider: { fetchEventTickets },
-      eventRef: { customerId: 42, eventId: 7 },
+      eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
 
     expect(emails(await fetchEventTicketCandidates(CONF))).toEqual([
@@ -511,7 +511,7 @@ describe('the memo — stale readers', () => {
     resolveTicketingProviderMock.mockResolvedValue({
       configured: true,
       provider: { fetchEventTickets },
-      eventRef: { customerId: 42, eventId: 7 },
+      eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
   }
 
@@ -994,7 +994,11 @@ describe('the memo — stale readers', () => {
       async (conference: typeof CONF) => ({
         configured: true,
         provider: { fetchEventTickets },
-        eventRef: { customerId: 42, eventId: conference.checkinEventId },
+        eventRef: {
+          provider: 'checkin',
+          accountId: '42',
+          externalId: String(conference.checkinEventId),
+        },
       }),
     )
 
@@ -1033,7 +1037,11 @@ describe('the memo — stale readers', () => {
       async (conference: typeof CONF) => ({
         configured: true,
         provider: { fetchEventTickets },
-        eventRef: { customerId: 42, eventId: conference.checkinEventId },
+        eventRef: {
+          provider: 'checkin',
+          accountId: '42',
+          externalId: String(conference.checkinEventId),
+        },
       }),
     )
 
@@ -1071,7 +1079,11 @@ describe('the memo — stale readers', () => {
       async (conference: typeof CONF) => ({
         configured: true,
         provider: { fetchEventTickets },
-        eventRef: { customerId: 42, eventId: conference.checkinEventId },
+        eventRef: {
+          provider: 'checkin',
+          accountId: '42',
+          externalId: String(conference.checkinEventId),
+        },
       }),
     )
 

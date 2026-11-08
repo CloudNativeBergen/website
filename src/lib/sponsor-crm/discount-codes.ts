@@ -167,7 +167,7 @@ export async function listEventDiscounts(
   const { discounts } = await getTicketingProvider(
     'checkin',
     credentials,
-  ).listDiscounts(eventId)
+  ).listDiscounts(String(eventId))
   return { ok: true, discounts }
 }
 

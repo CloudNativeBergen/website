@@ -83,7 +83,8 @@ export interface EventDiscountWithUsage extends EventDiscount {
 }
 
 export interface CreateEventDiscountInput {
-  eventId: number
+  /** The event's `EventRef.externalId`. */
+  eventId: string
   discountCode: string
   numberOfTickets: number
   ticketTypes: string[]

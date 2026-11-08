@@ -1,43 +1,37 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { fn } from 'storybook/test'
 import { PaymentDetailsModal } from './PaymentDetailsModal'
-import type { CheckinPayOrder } from '@/lib/tickets/types'
+import type { OrderPaymentDetails } from '@/lib/tickets/provider/types'
 
 const FIXED_NOW = new Date('2025-03-01T12:00:00Z')
 
-const baseOrder: CheckinPayOrder = {
-  id: 1001,
-  belongsTo: 42,
-  orderId: 5001,
-  orderType: 'SALE',
-  documentType: 'INVOICE',
+const baseOrder: OrderPaymentDetails = {
+  provider: 'checkin',
+  externalId: '1001',
+  orderId: '5001',
   kid: '00012345678',
   invoiceReference: 'INV-2025-001',
-  archivedAt: null,
   createdAt: '2025-01-15T10:30:00Z',
   invoiceDate: '2025-01-15T10:30:00Z',
   deliveryDate: '2025-06-12T08:00:00Z',
   dueAt: '2025-02-15T23:59:59Z',
-  contactCrm: {
+  contact: {
     firstName: 'Maria',
     lastName: 'Jensen',
-    email: { email: 'maria@techgiant.com' },
+    email: 'maria@techgiant.com',
   },
-  billingCrm: {
+  billing: {
     firstName: 'Erik',
     lastName: 'Olsen',
-    email: { email: 'billing@techgiant.com' },
+    email: 'billing@techgiant.com',
   },
   currency: 'NOK',
-  country: 'NO',
   paymentMethod: 'INVOICE',
   paymentStatus: 'PAID',
   actionRequired: null,
-  debtStatus: null,
-  debtLastUpdatedAt: null,
-  sum: '15000.00',
-  sumLeft: '0.00',
-  sumVat: '3750.00',
+  totalMinor: 1500000,
+  amountLeftMinor: 0,
+  vatMinor: 375000,
   paid: true,
 }
 
@@ -102,7 +96,7 @@ export const Pending: Story = {
       ...baseOrder,
       paymentStatus: 'PENDING',
       paid: false,
-      sumLeft: '15000.00',
+      amountLeftMinor: 1500000,
       dueAt: '2025-08-15T23:59:59Z',
     },
   },
@@ -114,7 +108,7 @@ export const Overdue: Story = {
       ...baseOrder,
       paymentStatus: 'PENDING',
       paid: false,
-      sumLeft: '15000.00',
+      amountLeftMinor: 1500000,
       dueAt: '2025-01-15T23:59:59Z',
       actionRequired: 'Payment is overdue. Please follow up with the customer.',
     },
@@ -149,21 +143,21 @@ export const BasisConsistent: Story = {
 
 export const BasisPerOrderWarning: Story = {
   args: {
-    paymentDetails: { ...baseOrder, sum: '5000.00' },
+    paymentDetails: { ...baseOrder, totalMinor: 500000 },
     seatSums: ['5000.00', '5000.00', '5000.00'],
   },
 }
 
 export const BasisVatDifference: Story = {
   args: {
-    paymentDetails: { ...baseOrder, sum: '18750.00' },
+    paymentDetails: { ...baseOrder, totalMinor: 1875000 },
     seatSums: ['5000.00', '5000.00', '5000.00'],
   },
 }
 
 export const BasisUnexplained: Story = {
   args: {
-    paymentDetails: { ...baseOrder, sum: '9000.00' },
+    paymentDetails: { ...baseOrder, totalMinor: 900000 },
     seatSums: ['5000.00', '5000.00'],
   },
 }

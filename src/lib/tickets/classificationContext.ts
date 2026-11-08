@@ -52,7 +52,7 @@ async function readDiscounts(
     // The TYPE LIST comes back on the same call and used to be thrown away.
     // `EventDiscount.tickets` holds ticket-type IDs, so without it a 100%-off
     // code cannot be joined to the type it comps — see `./discovery`.
-    return await access.provider.listDiscounts(access.eventRef.eventId)
+    return await access.provider.listDiscounts(access.eventRef.externalId)
   } catch (err) {
     console.error('Unable to read discount codes for ticket counting:', err)
     return undefined

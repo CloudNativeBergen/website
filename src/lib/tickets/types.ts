@@ -160,46 +160,6 @@ export interface EventTicket extends EventTicketWithoutDate {
   order_date: string
 }
 
-export interface CheckinPayOrder {
-  id: number
-  belongsTo: number
-  orderId: number
-  orderType: string
-  documentType: string
-  kid: string | null
-  invoiceReference: string | null
-  archivedAt: string | null
-  createdAt: string
-  invoiceDate: string | null
-  deliveryDate: string | null
-  dueAt: string
-  contactCrm: {
-    firstName: string
-    lastName: string
-    email: {
-      email: string
-    }
-  }
-  billingCrm: {
-    firstName: string
-    lastName: string
-    email: {
-      email: string
-    }
-  } | null
-  currency: string | null
-  country: string | null
-  paymentMethod: string
-  paymentStatus: string
-  actionRequired: string | null
-  debtStatus: string | null
-  debtLastUpdatedAt: string | null
-  sum: string
-  sumLeft: string
-  paid: boolean
-  sumVat: string
-}
-
 export interface GroupedOrder {
   order_id: number
   order_date: string
@@ -214,10 +174,6 @@ export interface GroupedOrder {
 
 export interface EventTicketsResponse {
   eventTickets: EventTicket[]
-}
-
-export interface CheckinPayOrderResponse {
-  findCheckinPayOrderByID: CheckinPayOrder
 }
 
 export interface EventOrderUser {

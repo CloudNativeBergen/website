@@ -17,12 +17,12 @@ import { formatTicketPrice, getLowestTicketPrice } from '@/lib/tickets/public'
 import { calculateTicketStatistics } from '@/lib/tickets/utils'
 import { deriveTicketIncome } from '@/lib/budget/income'
 import { resetAmountIssueReporting } from '@/lib/tickets/amount'
-import type {
-  EventTicket,
-  CheckinPayOrder,
-  ProcessTicketSalesInput,
-} from '@/lib/tickets/types'
+import type { EventTicket, ProcessTicketSalesInput } from '@/lib/tickets/types'
 import type { PublicTicketType } from '@/lib/tickets/public'
+import {
+  toMinorUnits,
+  type OrderPaymentDetails,
+} from '@/lib/tickets/provider/types'
 import { createMockConference } from '../../testdata/conference'
 
 const BROKEN = 'not-a-number'
@@ -151,24 +151,28 @@ describe('a malformed amount never poisons an aggregate', () => {
 })
 
 describe('the same policy on the payment and pricing surfaces', () => {
-  const payOrder = (overrides: Partial<CheckinPayOrder>): CheckinPayOrder =>
+  const payOrder = (
+    overrides: Partial<OrderPaymentDetails>,
+  ): OrderPaymentDetails =>
     ({
-      id: 1,
-      orderId: 1,
+      externalId: '1',
+      orderId: '1',
       paid: false,
       dueAt: '2020-01-01T00:00:00Z',
-      sum: '1000.00',
-      sumLeft: '1000.00',
-      sumVat: '250.00',
+      totalMinor: 100000,
+      amountLeftMinor: 100000,
+      vatMinor: 25000,
       ...overrides,
-    }) as unknown as CheckinPayOrder
+    }) as unknown as OrderPaymentDetails
 
   it('a real outstanding balance past its due date is overdue', () => {
     expect(isPaymentOverdue(payOrder({}))).toBe(true)
   })
 
   it('an unparseable balance is treated as nothing outstanding, not as overdue', () => {
-    expect(isPaymentOverdue(payOrder({ sumLeft: BROKEN }))).toBe(false)
+    expect(
+      isPaymentOverdue(payOrder({ amountLeftMinor: toMinorUnits(BROKEN) })),
+    ).toBe(false)
   })
 
   it('formatTicketPrice renders 0 for a price that does not parse, never "NaN"', () => {

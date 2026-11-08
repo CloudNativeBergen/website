@@ -194,7 +194,11 @@ async function gateAdmits(
           { category, crm: { email: ATTENDEE } } as unknown as EventTicket,
         ]),
     },
-    eventRef: { customerId: 1, eventId: EVENT_ID },
+    eventRef: {
+      provider: 'checkin',
+      accountId: '1',
+      externalId: String(EVENT_ID),
+    },
   })
 
   const result = await checkWorkshopEligibility({

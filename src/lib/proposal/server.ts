@@ -30,6 +30,7 @@ import {
 import { filterProposals, type ProposalFilters } from './utils/filtering'
 
 export { sendAcceptRejectNotification } from './email/notification'
+export { getMyProposals } from './my-proposals'
 /** Thrown by {@link deleteProposal}; re-exported so `instanceof` holds. */
 export {
   ProposalDeletionBlockedError,
