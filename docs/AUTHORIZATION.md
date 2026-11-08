@@ -142,8 +142,8 @@ rest (a reviewer until the review deadline).
 - **Erasure.** Deleting an identity user cascades their `conference_role` rows and profile
   (#2097 cascades). Audit rows keep the opaque user id (§9 decision 8). cfp `talk.speakers`
   user ids: the talk is org-owned (#2022 layer 3), so erasure replaces the user id with a
-  tombstone id and clears the profile snapshot; published program entries keep the
-  snapshot only if §9 decision 8 says the archive survives erasure.
+  tombstone id and clears the profile snapshot; published program entries drop name and
+  photo unless the speaker consented to archival (§9 decision 8).
 - **Fail closed.** Unknown action, unknown role string, expired row, missing resource fact:
   deny.
 
