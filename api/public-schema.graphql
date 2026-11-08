@@ -294,7 +294,7 @@ type Mutation {
   unsubscribePush(endpoint: String!): Boolean
 
   """
-  Creates or updates the session user's speaker profile. New profiles default to network visibility.
+  Creates or updates the session user's speaker profile. New profiles default to private visibility; network is opt-in.
   """
   updateMyProfile(input: SpeakerProfileInput!): SpeakerProfile
 
