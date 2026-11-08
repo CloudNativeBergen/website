@@ -3,6 +3,14 @@ name: Deploy Storybook
 on:
   push:
     branches: ['main']
+    paths:
+      - 'src/**'
+      - '.storybook/**'
+      - 'public/**'
+      - 'tailwind.config.*'
+      - 'postcss.config.*'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
   workflow_dispatch:
 
 permissions:
