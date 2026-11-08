@@ -14,6 +14,7 @@ import {
   planAllows,
   principalOf,
   requirePlan,
+  toOrgKind,
 } from '@runkonf/tenancy'
 import { builder } from './builder'
 import type { ResolverContext } from './worker'
@@ -133,6 +134,17 @@ const ConferenceEdition = builder
           "The edition's canonical host: a verified custom domain, else its verified platform-edition host, else null. Never pending or failed. Same visibility as lifecycleStatus.",
         resolve: (c, _, ctx) => ctx.data.primaryHostOf(c.orgId, c.id),
       }),
+      orgKind: t.string({
+        nullable: true,
+        description:
+          "The owning org's kind, `customer` or `demo` (#2150); the site sets `robots: noindex` for `demo`. Null off the tenant lane: operators read `Organization.kind`.",
+        // The reference resolver only returns the envelope's own org's
+        // editions, so the envelope's minted kind is this edition's.
+        resolve: (c, _, ctx) =>
+          ctx.envelope?.typ === 'tenant' && ctx.envelope.orgId === c.orgId
+            ? toOrgKind(ctx.envelope.orgKind)
+            : null,
+      }),
     }),
   })
 
@@ -174,6 +186,7 @@ const Domain = builder
     Row<'hostname' | 'kind' | 'verification' | 'orgId' | 'conferenceId'> & {
       flags?: Flags
       plan?: string
+      orgKind?: string
     }
   >('Domain')
   .implement({
@@ -191,6 +204,12 @@ const Domain = builder
         tag: 'internal',
         resolve: (d) => d.plan ?? null,
       }),
+      // `customer` or `demo` (#2150); only tenantByHost fills it.
+      orgKind: t.string({
+        nullable: true,
+        tag: 'internal',
+        resolve: (d) => d.orgKind ?? null,
+      }),
       hostname: t.exposeString('hostname'),
       kind: t.exposeString('kind'),
       verification: t.exposeString('verification'),
@@ -205,6 +224,7 @@ type OrgRow = Row<'id' | 'slug' | 'name' | 'status' | 'plan'> & {
   subscriptionStatus?: string | null
   currentPeriodEnd?: string | null
   compUntil?: string | null
+  kind?: string | null
 }
 
 // After Domain: Organization.domains refers to it.
@@ -225,7 +245,13 @@ const Organization = builder.objectRef<OrgRow>('Organization').implement({
           subscriptionStatus: o.subscriptionStatus ?? null,
           currentPeriodEnd: o.currentPeriodEnd ?? null,
           compUntil: o.compUntil ?? null,
+          kind: o.kind ?? null,
         }),
+    }),
+    kind: t.string({
+      description:
+        '`customer` or `demo` (#2150). A demo org is Pro without billing and is left out of operator totals: filter on it.',
+      resolve: (o) => toOrgKind(o.kind),
     }),
     // ISO 8601; null for orgs provisioned before #1973.
     createdAt: t.exposeString('createdAt', { nullable: true }),

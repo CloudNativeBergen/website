@@ -1,6 +1,6 @@
 // Drizzle mirror of migrations/0001_init.sql, 0002_rollout_flags.sql,
 // 0005_lifecycle_cancelled.sql and 0006_provisioning_conference.sql
-// 0007_provisioning_created_by.sql and 0008_billing_plan.sql.
+// 0007_provisioning_created_by.sql, 0008_billing_plan.sql and 0010_org_kind.sql.
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const organizations = sqliteTable('organizations', {
@@ -22,6 +22,10 @@ export const organizations = sqliteTable('organizations', {
   currentPeriodEnd: text('current_period_end'),
   compUntil: text('comp_until'),
   compReason: text('comp_reason'),
+  // #2150: a demo org is Pro, unbilled, and mails only its members.
+  kind: text('kind', { enum: ['customer', 'demo'] })
+    .notNull()
+    .default('customer'),
 })
 
 export const conferences = sqliteTable('conferences', {

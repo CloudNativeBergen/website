@@ -159,6 +159,8 @@ function value(
   // tenant-directory 0008 holds organizations.plan to free|basic|pro by
   // trigger (the column predates any CHECK), so no marker fits it.
   if (table === 'organizations' && n === 'plan') return 'free'
+  // Likewise 0010 for organizations.kind (#2150).
+  if (table === 'organizations' && n === 'kind') return 'customer'
   if (/INT|REAL|FLOA|DOUB/i.test(col.type)) return 0
   const text = `${tag(t)} ${table}.${n}`
   // A JSON id list holds numbers (conference 0007 public_free_ticket_ids).
@@ -1497,6 +1499,7 @@ describe('operator lane: Kontroll members (#1956)', () => {
       scopes: [],
       // The real directory's effective plan (#2129): a default-source org.
       plan: 'free',
+      orgKind: 'customer',
     })
   })
 
