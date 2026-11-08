@@ -80,26 +80,33 @@ const cases = Object.entries(OPS).flatMap(([op, { doc, allowed }]) =>
         op,
         who,
         doc,
-        allowed.includes(who) ? 'NOT_IMPLEMENTED' : 'FORBIDDEN',
+        allowed.includes(who)
+          ? 'NOT_IMPLEMENTED'
+          : doc.startsWith('mutation')
+            ? 'FORBIDDEN'
+            : undefined,
       ] as const,
   ),
 )
 
 describe('API credential resolvers', () => {
-  it.each(cases)('%s as %s -> %s', async (_, who, doc, code) => {
-    ctx.envelope = ENVELOPES[who]
-    const res = await yoga.fetch('http://x/graphql', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ query: doc }),
-    })
-    const r = (await res.json()) as {
-      data?: unknown
-      errors?: { extensions: { code: string } }[]
-    }
-    expect(r.errors?.map((e) => e.extensions.code)).toEqual([code])
-    expect(Object.values(r.data ?? {}).filter((v) => v !== null)).toEqual([])
-  })
+  it.each(cases)(
+    '%s as %s -> %s (undefined: null, no error)',
+    async (_, who, doc, code) => {
+      ctx.envelope = ENVELOPES[who]
+      const res = await yoga.fetch('http://x/graphql', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query: doc }),
+      })
+      const r = (await res.json()) as {
+        data?: unknown
+        errors?: { extensions: { code: string } }[]
+      }
+      expect(r.errors?.map((e) => e.extensions.code)).toEqual(code && [code])
+      expect(Object.values(r.data ?? {}).filter((v) => v !== null)).toEqual([])
+    },
+  )
 })
 
 /** Every field name reachable from a type (cycle-safe). */

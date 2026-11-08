@@ -416,7 +416,7 @@ type Query {
   conferenceParityStatus: ConferenceParityStatus
 
   """
-  The session org's API clients, without secrets. Owners, admins and operators.
+  The session org's API clients, without secrets. Owners, admins and operators; null otherwise.
   """
   apiClients: [ApiClient!]
 
@@ -435,7 +435,9 @@ type Query {
   """
   members: [OrganizationMember!]
 
-  """The session user's tokens for the session org, without secrets."""
+  """
+  The session user's tokens for the session org, without secrets. Null without an org role.
+  """
   myPersonalAccessTokens: [PersonalAccessToken!]
 
   """

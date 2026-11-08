@@ -147,18 +147,30 @@ const guarded =
     return notImplemented()
   }
 
+/** Reads follow the subgraph's convention: null for a caller without access. */
+const guardedRead =
+  (action: Action) =>
+  (_: unknown, __: unknown, ctx: ResolverContext): null => {
+    const e = ctx.envelope
+    if (e?.typ !== 'tenant' || !e.userId || !can(principalOf(e), action))
+      return null
+    return notImplemented()
+  }
+
 builder.queryFields((t) => ({
   apiClients: t.field({
     type: [ApiClient],
+    nullable: true,
     description:
-      "The session org's API clients, without secrets. Owners, admins and operators.",
-    resolve: guarded('api_client.read'),
+      "The session org's API clients, without secrets. Owners, admins and operators; null otherwise.",
+    resolve: guardedRead('api_client.read'),
   }),
   myPersonalAccessTokens: t.field({
     type: [PersonalAccessToken],
+    nullable: true,
     description:
-      "The session user's tokens for the session org, without secrets.",
-    resolve: guarded('pat.manage_own'),
+      "The session user's tokens for the session org, without secrets. Null without an org role.",
+    resolve: guardedRead('pat.manage_own'),
   }),
 }))
 

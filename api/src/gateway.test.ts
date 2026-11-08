@@ -580,6 +580,41 @@ describe('gateway', () => {
       expect(masked.extensions).toEqual({ code: 'BAD_USER_INPUT' })
     })
 
+    it('passes requiredPlan only with PLAN_REQUIRED and a known plan (#2115)', () => {
+      const ext = (extra: Record<string, unknown>) =>
+        (
+          maskError(
+            subgraphError('BAD_USER_INPUT', 'needs pro', extra),
+            'Unexpected error.',
+          ) as GraphQLError
+        ).extensions
+      expect(ext({ reason: 'PLAN_REQUIRED', requiredPlan: 'pro' })).toEqual({
+        code: 'BAD_USER_INPUT',
+        reason: 'PLAN_REQUIRED',
+        requiredPlan: 'pro',
+      })
+      expect(ext({ reason: 'PLAN_REQUIRED', requiredPlan: 'org_b' })).toEqual({
+        code: 'BAD_USER_INPUT',
+        reason: 'PLAN_REQUIRED',
+      })
+      expect(ext({ reason: 'LIMIT_REACHED', requiredPlan: 'pro' })).toEqual({
+        code: 'BAD_USER_INPUT',
+        reason: 'LIMIT_REACHED',
+      })
+    })
+
+    it('answers NOT_IMPLEMENTED with a generic message', () => {
+      const masked = maskError(
+        subgraphError('NOT_IMPLEMENTED', 'D1_ERROR org_b'),
+        'Unexpected error.',
+      )
+      expect(json(masked)).toEqual({
+        message: 'Not implemented yet.',
+        path: ['updateConference'],
+        extensions: { code: 'NOT_IMPLEMENTED' },
+      })
+    })
+
     it('answers NOT_FOUND with a generic message', () => {
       const masked = maskError(
         subgraphError('NOT_FOUND', 'conference conf_b of org_b not found'),
