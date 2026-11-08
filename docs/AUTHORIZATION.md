@@ -320,6 +320,7 @@ before acceptance; "Site" = `site:server` with no user token.
 | shift.manage                          | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
 | sponsor.read_crm                      | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
 | sponsor.edit_own_profile              | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | own | N    |
+| ticketing.read (sales summary, #2148) | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
 | attendee.read_pii                     | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
 | person.erase (GDPR)                   | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
 | audit.read                            | Y   | Y   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |

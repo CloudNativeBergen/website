@@ -156,6 +156,7 @@ describe('gateway', () => {
       buildSchema(publicSdl()).getMutationType()!.getFields(),
     )
     expect(names.sort()).toEqual([
+      'bindTicketEvent',
       'cancelInvitation',
       'changeMemberRole',
       'createApiClient',
@@ -176,6 +177,7 @@ describe('gateway', () => {
       'revokeApiClient',
       'revokePersonalAccessToken',
       'rotateApiClientSecret',
+      'seedTicketOrders',
       'setComplimentaryPlan',
       'setConferenceLifecycle',
       'submitProposal',

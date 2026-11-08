@@ -37,6 +37,8 @@ export const MATRIX = {
   'api_client.revoke': row('       Y  Y   N   N   N'),
   'pat.manage_own': row('          N  Y   Y   Y   N'),
   'user.revoke_all': row('         Y  N   N   N   N'),
+  'ticketing.read': row('         Y  Y   Y   N   N'),
+  'attendee.read_pii': row('      Y  Y   Y   N   N'),
   reminder_lock: row('             Y  N   N   N   Y'),
 } satisfies Record<string, Row>
 

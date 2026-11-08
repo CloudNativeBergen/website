@@ -318,6 +318,16 @@ type Mutation {
   Sets the request's Conference homepage override, or clears it with null (back to `live`; a draft stays draft). Org owner or admin, or an operator acting for the org (#1997).
   """
   setConferenceLifecycle(status: ConferenceLifecycleOverride): ConferenceEdition
+
+  """
+  Binds a provider event to the envelope's conference, the mapping ticket ingest trusts. Platform operators only (conference.bind_ticketing).
+  """
+  bindTicketEvent(event: TicketEventRefInput!): Boolean
+
+  """
+  Writes sample orders for a demo org (orgKind demo, owner or admin, or an operator for it). The event must have provider `demo`; its accountId is always the org id. Idempotent per order externalId. Returns the number of orders.
+  """
+  seedTicketOrders(event: TicketEventRefInput!, orders: [TicketOrderInput!]!): Int
 }
 
 """
@@ -428,7 +438,7 @@ type OperatorConferenceStats {
   sponsors: Int
 
   """
-  Always null for now: tickets sold live in the external ticketing provider, which only the site reads (src/lib/tickets). No subgraph has a server-side source yet.
+  Tickets on non-cancelled orders, from the ticketing subgraph (#2148). 0 until the conference has ingested orders.
   """
   ticketsSold: Int
 }
@@ -544,6 +554,16 @@ type Query {
   Every Organization, ordered by slug. Platform operators only (operator lane, no tenant). At most 100 per page: pass the last slug as `after` for the next.
   """
   organizations(after: String, first: Int = 100): [Organization!]
+
+  """
+  The envelope conference's orders with buyer email, newest first. Owners, admins and operators (attendee.read_pii); null otherwise.
+  """
+  ticketOrders: [TicketOrder!]
+
+  """
+  The envelope conference's ticket sales: counts by type and revenue. Owners, admins and operators (ticketing.read); null otherwise.
+  """
+  ticketSales: TicketSales
   health: String!
   rolloutFlags: SiteRolloutFlags
 }
@@ -1123,6 +1143,45 @@ type RolloutFlags {
   identityLogin: Boolean
 }
 
+"""An amount in integer minor units (øre, cents) and its currency."""
+type TicketMoney {
+  amountMinor: Int
+
+  """ISO 4217."""
+  currency: String
+}
+
+type TicketOrder {
+  """PII."""
+  buyerEmail: String
+  createdAt: String
+  externalId: String
+  id: ID
+  status: TicketOrderStatus
+  total: TicketMoney
+}
+
+type TicketSales {
+  byType: [TicketTypeSales!]
+  orders: Int
+
+  """
+  Totals of non-cancelled orders, one per currency (never added across currencies).
+  """
+  revenue: [TicketMoney!]
+  ticketsSold: Int
+}
+
+type TicketTypeSales {
+  capacity: Int
+  id: ID
+  name: String
+  price: TicketMoney
+
+  """Tickets on non-cancelled orders."""
+  sold: Int
+}
+
 interface HomepageSection {
   hidden: Boolean
   key: String
@@ -1212,6 +1271,12 @@ enum RolloutFlag {
   d1Override
   d1Write
   identityLogin
+}
+
+enum TicketOrderStatus {
+  cancelled
+  paid
+  pending
 }
 
 input SubmitProposalInput {
@@ -1419,6 +1484,35 @@ input ProvisionConferenceInput {
   """YYYY-MM-DD"""
   startDate: String!
   title: String!
+}
+
+input TicketEventRefInput {
+  accountId: String!
+  externalId: String!
+  provider: String!
+}
+
+input TicketMoneyInput {
+  amountMinor: Int!
+  currency: String!
+}
+
+input TicketOrderInput {
+  buyerEmail: String
+  createdAt: String!
+  externalId: String!
+  lines: [TicketOrderLineInput!]!
+  status: TicketOrderStatus!
+  total: TicketMoneyInput!
+  updatedAt: String
+}
+
+input TicketOrderLineInput {
+  capacity: Int
+  quantity: Int!
+  ticketTypeExternalId: String!
+  ticketTypeName: String!
+  unitPrice: TicketMoneyInput!
 }
 
 type SiteRolloutFlags {
