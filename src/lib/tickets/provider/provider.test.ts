@@ -32,7 +32,8 @@ import {
 } from './index'
 import { CheckinProvider, CHECKIN_API_URL } from './checkin'
 import { TitoProvider } from './tito'
-import { toPerTicketAmounts, type CheckinWebhookPayload } from './types'
+import { toPerTicketAmounts } from './types'
+import type { CheckinWebhookPayload } from './checkin'
 
 const CREDS = {
   apiKey: 'test-key',
@@ -52,12 +53,23 @@ const PLATFORM_ORG = 'org-platform'
  * name embedded in the request body. Every response is a well-formed GraphQL
  * envelope so the provider's `execute` path is exercised end to end.
  */
+const PAY_ORDER = {
+  id: 1,
+  orderId: 1,
+  sum: '0',
+  sumLeft: '0',
+  sumVat: '0',
+  contactCrm: { firstName: '', lastName: '', email: { email: '' } },
+  billingCrm: null,
+}
+
 function stubCheckinFetch(
   handlers: Partial<{
     eventTickets: unknown[]
     allEventOrderUsers: { data: unknown[]; hasNextPage: boolean }
     findEventById: unknown
     discounts: unknown
+    findCheckinPayOrderByID: unknown
   }>,
 ) {
   return vi.fn(async (_url: string, init: { body: string }) => {
@@ -80,6 +92,10 @@ function stubCheckinFetch(
           data: page.data,
           pageInfo: { hasNextPage: page.hasNextPage },
         },
+      }
+    } else if (q.includes('FindCheckinPayOrderByID')) {
+      data = {
+        findCheckinPayOrderByID: handlers.findCheckinPayOrderByID ?? PAY_ORDER,
       }
     } else if (q.includes('findEventByIdQuery')) {
       data = { findEventById: handlers.discounts }
@@ -141,7 +157,7 @@ describe('getTicketingProvider factory', () => {
     await getTicketingProvider('checkin', {
       ...CREDS,
       apiUrl: 'https://example.test/graphql',
-    }).fetchOrderPaymentDetails(1)
+    }).fetchOrderPaymentDetails('1')
 
     expect(fetchSpy).toHaveBeenCalledWith(
       'https://example.test/graphql',
@@ -149,7 +165,7 @@ describe('getTicketingProvider factory', () => {
     )
 
     fetchSpy.mockClear()
-    await getTicketingProvider('checkin', CREDS).fetchOrderPaymentDetails(1)
+    await getTicketingProvider('checkin', CREDS).fetchOrderPaymentDetails('1')
     expect(fetchSpy).toHaveBeenCalledWith(CHECKIN_API_URL, expect.anything())
   })
 })
@@ -213,7 +229,11 @@ describe('resolveTicketingProvider', () => {
     })
     expect(resolved.configured).toBe(true)
     if (resolved.configured) {
-      expect(resolved.eventRef).toEqual({ customerId: 42, eventId: 7 })
+      expect(resolved.eventRef).toEqual({
+        provider: 'checkin',
+        accountId: '42',
+        externalId: '7',
+      })
       expect(resolved.provider).toBeInstanceOf(CheckinProvider)
     }
   })
@@ -259,7 +279,7 @@ describe('resolveTicketingProvider', () => {
     expect(resolved.configured).toBe(true)
     if (resolved.configured) {
       // The per-org apiUrl override proves the org secret won over the env creds.
-      await resolved.provider.fetchOrderPaymentDetails(1)
+      await resolved.provider.fetchOrderPaymentDetails('1')
       expect(fetchSpy).toHaveBeenCalledWith(
         'https://org.example.test/graphql',
         expect.anything(),
@@ -295,7 +315,11 @@ describe('resolveTicketingProvider', () => {
       expect(resolved.provider).toBeInstanceOf(CheckinProvider)
       // The eventRef stays the bare Checkin pair (no `provider` key added), so
       // every existing consumer reading `.eventId` is unaffected.
-      expect(resolved.eventRef).toEqual({ customerId: 42, eventId: 7 })
+      expect(resolved.eventRef).toEqual({
+        provider: 'checkin',
+        accountId: '42',
+        externalId: '7',
+      })
     }
   })
 
@@ -313,8 +337,8 @@ describe('resolveTicketingProvider', () => {
       expect(resolved.provider.isConfigured()).toBe(true)
       expect(resolved.eventRef).toEqual({
         provider: 'tito',
-        accountSlug: 'acme',
-        eventSlug: '2026',
+        accountId: 'acme',
+        externalId: '2026',
       })
     }
   })
@@ -432,7 +456,11 @@ describe('resolveTicketingProvider', () => {
       expect(resolved.configured).toBe(true)
       if (resolved.configured) {
         expect(resolved.provider.isConfigured()).toBe(true)
-        expect(resolved.eventRef).toEqual({ customerId: 42, eventId: 7 })
+        expect(resolved.eventRef).toEqual({
+          provider: 'checkin',
+          accountId: '42',
+          externalId: '7',
+        })
       }
     })
 
@@ -540,7 +568,11 @@ describe('resolveTicketingCredentials — per-org discrete env vars', () => {
     expect(resolved.configured).toBe(true)
     if (resolved.configured) {
       expect(resolved.provider.isConfigured()).toBe(true)
-      expect(resolved.eventRef).toEqual({ customerId: 42, eventId: 7 })
+      expect(resolved.eventRef).toEqual({
+        provider: 'checkin',
+        accountId: '42',
+        externalId: '7',
+      })
     }
   })
 
@@ -654,7 +686,11 @@ describe('CheckinProvider — operations', () => {
   it('throws the "not configured" error when credentials are absent', async () => {
     const provider = getTicketingProvider('checkin', {})
     await expect(
-      provider.fetchEventTickets({ customerId: 1, eventId: 2 }),
+      provider.fetchEventTickets({
+        provider: 'checkin',
+        accountId: '1',
+        externalId: '2',
+      }),
     ).rejects.toThrow(/not configured/i)
   })
 
@@ -664,10 +700,18 @@ describe('CheckinProvider — operations', () => {
     const provider = getTicketingProvider('checkin', CREDS)
 
     await expect(
-      provider.fetchEventTickets({ customerId: 0, eventId: 2 }),
+      provider.fetchEventTickets({
+        provider: 'checkin',
+        accountId: '0',
+        externalId: '2',
+      }),
     ).rejects.toThrow(/customer ID/i)
     await expect(
-      provider.fetchEventTickets({ customerId: 1, eventId: 0 }),
+      provider.fetchEventTickets({
+        provider: 'checkin',
+        accountId: '1',
+        externalId: '0',
+      }),
     ).rejects.toThrow(/event ID/i)
     expect(fetchSpy).not.toHaveBeenCalled()
   })
@@ -688,7 +732,11 @@ describe('CheckinProvider — operations', () => {
     const tickets = await getTicketingProvider(
       'checkin',
       CREDS,
-    ).fetchEventTickets({ customerId: 42, eventId: 7 })
+    ).fetchEventTickets({
+      provider: 'checkin',
+      accountId: '42',
+      externalId: '7',
+    })
 
     expect(tickets.map((t) => t.order_date)).toEqual(['2026-01-01', ''])
   })
@@ -709,7 +757,11 @@ describe('CheckinProvider — operations', () => {
     const result = await getTicketingProvider(
       'checkin',
       CREDS,
-    ).fetchPublicTicketTypes(7)
+    ).fetchPublicTicketTypes({
+      provider: 'checkin',
+      accountId: '1',
+      externalId: '7',
+    })
 
     expect(result.event.name).toBe('CNDN')
     expect(result.tickets).toHaveLength(1)
@@ -719,7 +771,11 @@ describe('CheckinProvider — operations', () => {
     const fetchSpy = stubCheckinFetch({ findEventById: null })
     vi.stubGlobal('fetch', fetchSpy)
     await expect(
-      getTicketingProvider('checkin', CREDS).fetchPublicTicketTypes(999),
+      getTicketingProvider('checkin', CREDS).fetchPublicTicketTypes({
+        provider: 'checkin',
+        accountId: '1',
+        externalId: '999',
+      }),
     ).rejects.toThrow(/not found/i)
   })
 
@@ -733,7 +789,9 @@ describe('CheckinProvider — operations', () => {
     })
     vi.stubGlobal('fetch', fetchSpy)
 
-    const result = await getTicketingProvider('checkin', CREDS).listDiscounts(7)
+    const result = await getTicketingProvider('checkin', CREDS).listDiscounts(
+      '7',
+    )
     expect(result.discounts).toHaveLength(1)
     expect(result.ticketTypes).toHaveLength(1)
   })
@@ -790,7 +848,7 @@ describe('CheckinProvider — operations', () => {
         'checkin',
         CREDS,
       ).createDiscount({
-        eventId: 7,
+        eventId: '7',
         discountCode: 'COMMUNITY2026',
         numberOfTickets: 25,
         ticketTypes: ['1'],
@@ -807,7 +865,7 @@ describe('CheckinProvider — operations', () => {
       vi.stubGlobal('fetch', fetchSpy)
 
       await getTicketingProvider('checkin', CREDS).createDiscount({
-        eventId: 7,
+        eventId: '7',
         discountCode: 'ACME1234',
         numberOfTickets: 5,
         ticketTypes: ['1'],
@@ -829,7 +887,7 @@ describe('CheckinProvider — operations', () => {
 
         await expect(
           getTicketingProvider('checkin', CREDS).createDiscount({
-            eventId: 7,
+            eventId: '7',
             discountCode: 'BAD',
             numberOfTickets: 1,
             ticketTypes: ['1'],
@@ -947,5 +1005,54 @@ describe('amount basis', () => {
     const total = normalized.reduce((sum, r) => sum + Number(r.sum), 0)
 
     expect(total).toBe(3000)
+  })
+})
+
+describe('declared capabilities', () => {
+  it.each([
+    ['checkin', { discounts: true, paymentDetails: true, checkin: false }],
+    ['tito', { discounts: false, paymentDetails: false, checkin: false }],
+  ] as const)('%s declares %o', (type, expected) => {
+    expect(getTicketingProvider(type, CREDS).capabilities).toEqual(expected)
+  })
+})
+
+describe('CheckinProvider — fetchOrderPaymentDetails maps to Konf types', () => {
+  it('returns string ids and minor-unit amounts', async () => {
+    vi.stubGlobal(
+      'fetch',
+      stubCheckinFetch({
+        findCheckinPayOrderByID: {
+          id: 1001,
+          orderId: 5001,
+          sum: '15000.50',
+          sumLeft: '0.00',
+          sumVat: '3750.10',
+          currency: 'NOK',
+          paid: true,
+          contactCrm: {
+            firstName: 'A',
+            lastName: 'B',
+            email: { email: 'a@b' },
+          },
+          billingCrm: null,
+        },
+      }),
+    )
+    const details = await getTicketingProvider(
+      'checkin',
+      CREDS,
+    ).fetchOrderPaymentDetails('5001')
+    expect(details).toMatchObject({
+      provider: 'checkin',
+      externalId: '1001',
+      orderId: '5001',
+      totalMinor: 1500050,
+      amountLeftMinor: 0,
+      vatMinor: 375010,
+      currency: 'NOK',
+      contact: { firstName: 'A', lastName: 'B', email: 'a@b' },
+      billing: null,
+    })
   })
 })

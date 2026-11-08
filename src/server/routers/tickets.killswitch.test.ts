@@ -306,7 +306,7 @@ describe('a community org with no deny keeps full access (rule 2)', () => {
 
   it('still reaches the provider for reads and for writes', async () => {
     await tickets().admin.getDiscountCodes({ eventId: EVENT })
-    expect(h.listDiscounts).toHaveBeenCalledWith(EVENT)
+    expect(h.listDiscounts).toHaveBeenCalledWith(String(EVENT))
 
     await tickets().admin.createDiscountCode({
       eventId: EVENT,
@@ -315,7 +315,7 @@ describe('a community org with no deny keeps full access (rule 2)', () => {
       sponsorName: 'Acme',
     })
     expect(h.createDiscount).toHaveBeenCalledWith(
-      expect.objectContaining({ eventId: EVENT }),
+      expect.objectContaining({ eventId: String(EVENT) }),
     )
   })
 
@@ -382,7 +382,7 @@ describe('the production shape keeps full access — pro plan, no overrides', ()
 
   it('still reaches the provider for reads and for writes', async () => {
     await tickets().admin.getDiscountCodes({ eventId: EVENT })
-    expect(h.listDiscounts).toHaveBeenCalledWith(EVENT)
+    expect(h.listDiscounts).toHaveBeenCalledWith(String(EVENT))
 
     await tickets().admin.createDiscountCode({
       eventId: EVENT,
@@ -391,7 +391,7 @@ describe('the production shape keeps full access — pro plan, no overrides', ()
       sponsorName: 'Acme',
     })
     expect(h.createDiscount).toHaveBeenCalledWith(
-      expect.objectContaining({ eventId: EVENT }),
+      expect.objectContaining({ eventId: String(EVENT) }),
     )
   })
 })

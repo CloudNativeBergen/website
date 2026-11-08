@@ -57,7 +57,7 @@ describe('checkWorkshopEligibility — resolver routing (B7)', () => {
     resolveTicketingProviderMock.mockResolvedValue({
       configured: true,
       provider: { fetchEventTickets },
-      eventRef: { customerId: 42, eventId: 7 },
+      eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
 
     const result = await checkWorkshopEligibility({
@@ -69,8 +69,9 @@ describe('checkWorkshopEligibility — resolver routing (B7)', () => {
     expect(resolveTicketingProviderMock).toHaveBeenCalledWith(CONF)
     // And the resolved eventRef — not raw params — drives the fetch.
     expect(fetchEventTickets).toHaveBeenCalledWith({
-      customerId: 42,
-      eventId: 7,
+      provider: 'checkin',
+      accountId: '42',
+      externalId: '7',
     })
     expect(result.isEligible).toBe(true)
     expect(result.eligibleTickets).toHaveLength(1)
@@ -115,7 +116,7 @@ describe('checkWorkshopEligibility — resolver routing (B7)', () => {
       provider: {
         fetchEventTickets: vi.fn().mockRejectedValue(new Error('checkin down')),
       },
-      eventRef: { customerId: 42, eventId: 7 },
+      eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
 
     const result = await checkWorkshopEligibility({
@@ -137,7 +138,7 @@ describe('checkWorkshopEligibility — whose ticket it is', () => {
           .fn()
           .mockResolvedValue([ticket(registeredEmail, LEGACY)]),
       },
-      eventRef: { customerId: 42, eventId: 7 },
+      eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
   }
 
@@ -219,7 +220,7 @@ describe('checkWorkshopEligibility — a provider that stops answering', () => {
     resolveTicketingProviderMock.mockResolvedValue({
       configured: true,
       provider: { fetchEventTickets },
-      eventRef: { customerId: 42, eventId: 7 },
+      eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
     const gate = () =>
       checkWorkshopEligibility({ userEmail: 'ada@x.test', conference: CONF })
@@ -250,7 +251,7 @@ describe('checkWorkshopEligibility — a provider that stops answering', () => {
     resolveTicketingProviderMock.mockResolvedValue({
       configured: true,
       provider: { fetchEventTickets },
-      eventRef: { customerId: 42, eventId: 7 },
+      eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
     const gate = (userEmail: string) =>
       checkWorkshopEligibility({ userEmail, conference: CONF })
@@ -378,7 +379,7 @@ describe('checkWorkshopEligibility — what the attendee is told', () => {
           .fn()
           .mockResolvedValue([ticket('ada@x.test', category)]),
       },
-      eventRef: { customerId: 42, eventId: 7 },
+      eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
 
     return checkWorkshopEligibility({

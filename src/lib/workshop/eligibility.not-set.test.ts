@@ -102,7 +102,7 @@ function holding(...tickets: [email: string, category: string][]) {
           ),
         ),
     },
-    eventRef: { customerId: 42, eventId: 7 },
+    eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
   })
 }
 

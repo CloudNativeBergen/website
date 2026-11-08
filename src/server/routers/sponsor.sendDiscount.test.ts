@@ -386,7 +386,7 @@ describe('a discount send', () => {
   it('reads the provider event of the REQUEST conference, never one from input', async () => {
     await sponsor().crm.sendCommunication(INPUT)
     expect(h.credentials).toHaveBeenCalledWith(ORG, 'checkin')
-    expect(h.listDiscounts).toHaveBeenCalledWith(4242)
+    expect(h.listDiscounts).toHaveBeenCalledWith(String(4242))
   })
 })
 

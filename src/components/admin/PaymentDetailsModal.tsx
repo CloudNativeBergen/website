@@ -7,8 +7,7 @@ import {
   ClockIcon,
   CreditCardIcon,
 } from '@heroicons/react/24/outline'
-import type { CheckinPayOrder } from '@/lib/tickets/types'
-import { parseTicketAmount } from '@/lib/tickets/amount'
+import type { OrderPaymentDetails } from '@/lib/tickets/provider/types'
 import { reconcileOrderAmounts } from '@/lib/tickets/reconcile'
 import { formatCurrency } from '@/lib/format'
 import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/api'
@@ -18,7 +17,7 @@ import { AdminButton } from '@/components/admin/AdminButton'
 interface PaymentDetailsModalProps {
   isOpen: boolean
   onClose: () => void
-  paymentDetails: CheckinPayOrder | null
+  paymentDetails: OrderPaymentDetails | null
   isLoading: boolean
   error: string | null
   /**
@@ -40,12 +39,12 @@ function AmountBasisCheck({
   order,
   seatSums,
 }: {
-  order: CheckinPayOrder
+  order: OrderPaymentDetails
   seatSums: readonly (string | null | undefined)[]
 }) {
   const result = reconcileOrderAmounts({
-    orderSum: order.sum,
-    orderSumVat: order.sumVat,
+    orderSum: order.totalMinor / 100,
+    orderSumVat: order.vatMinor / 100,
     seatSums,
   })
   if (!result) return null
@@ -125,9 +124,8 @@ export function PaymentDetailsModal({
   error,
   seatSums,
 }: PaymentDetailsModalProps) {
-  const formatCurrencyFromString = (amount: string): string => {
-    return formatCurrency(parseTicketAmount(amount))
-  }
+  const formatMinor = (amountMinor: number): string =>
+    formatCurrency(amountMinor / 100)
 
   const getPaymentStatusColor = (status: string, isOverdue: boolean) => {
     if (status === 'PAID')
@@ -206,10 +204,10 @@ export function PaymentDetailsModal({
                 </div>
                 <div className="text-right">
                   <div className="text-sm font-medium text-gray-900 dark:text-white">
-                    {formatCurrencyFromString(paymentDetails.sumLeft)} remaining
+                    {formatMinor(paymentDetails.amountLeftMinor)} remaining
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    of {formatCurrencyFromString(paymentDetails.sum)} total
+                    of {formatMinor(paymentDetails.totalMinor)} total
                   </div>
                 </div>
               </div>
@@ -322,24 +320,24 @@ export function PaymentDetailsModal({
                     Contact
                   </h4>
                   <div className="text-sm text-gray-900 dark:text-white">
-                    {paymentDetails.contactCrm.firstName}{' '}
-                    {paymentDetails.contactCrm.lastName}
+                    {paymentDetails.contact.firstName}{' '}
+                    {paymentDetails.contact.lastName}
                   </div>
                   <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {paymentDetails.contactCrm.email.email}
+                    {paymentDetails.contact.email}
                   </div>
                 </div>
-                {paymentDetails.billingCrm && (
+                {paymentDetails.billing && (
                   <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-800/50">
                     <h4 className="mb-2 text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
                       Billing
                     </h4>
                     <div className="text-sm text-gray-900 dark:text-white">
-                      {paymentDetails.billingCrm.firstName}{' '}
-                      {paymentDetails.billingCrm.lastName}
+                      {paymentDetails.billing.firstName}{' '}
+                      {paymentDetails.billing.lastName}
                     </div>
                     <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {paymentDetails.billingCrm.email.email}
+                      {paymentDetails.billing.email}
                     </div>
                   </div>
                 )}

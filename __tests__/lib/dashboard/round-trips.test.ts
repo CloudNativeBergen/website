@@ -122,7 +122,7 @@ vi.mock('@/lib/tickets/provider', () => ({
   resolveTicketingProvider: () => ({
     configured: true,
     provider: { fetchEventTickets: async () => [] },
-    eventRef: { customerId: 1, eventId: 2 },
+    eventRef: { provider: 'checkin', accountId: '1', externalId: '2' },
   }),
 }))
 

@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { parseTicketAmount } from '@/lib/tickets/amount'
-import type { EventTicket, CheckinPayOrder } from '@/lib/tickets/types'
+import type { EventTicket } from '@/lib/tickets/types'
 import type {
   EventDiscount,
   TicketType,
@@ -12,14 +12,15 @@ import {
   type TicketAmountBasis,
   type EventRef,
   type FetchEventTicketsOptions,
-  type TitoEventRef,
+  type OrderPaymentDetails,
+  type TicketingCapabilities,
   type PublicEventInfo,
   type PublicTicketType,
   type TicketingProvider,
   type TicketingProviderCredentials,
   type WebhookVerifyResult,
-  type CheckinWebhookPayload,
-  type CheckinOrderCreatedData,
+  type LegacyOrderWebhookPayload,
+  type LegacyOrderCreatedData,
 } from './types'
 
 /** Default Tito Admin API v3 base URL. Overridable via injected credentials. */
@@ -104,13 +105,19 @@ interface TitoMeta {
  * slug pair. A Checkin ref reaching this provider is a wiring bug (the resolver
  * picks the provider from the same `ticketingProvider` field).
  */
-function titoRef(ref: EventRef): TitoEventRef {
+function titoRef(ref: EventRef): TitoSlugs {
   if (ref.provider !== 'tito') {
     throw new Error(
       'TitoProvider received a non-Tito event reference — check the resolver wiring',
     )
   }
-  return ref
+  return { accountSlug: ref.accountId, eventSlug: ref.externalId }
+}
+
+/** Tito keys an event by two URL slugs: `/:account/:event`. */
+interface TitoSlugs {
+  accountSlug: string
+  eventSlug: string
 }
 
 /**
@@ -118,7 +125,7 @@ function titoRef(ref: EventRef): TitoEventRef {
  * operator-entered strings; a reserved character must not be able to reshape
  * the request path into a different Tito API endpoint.
  */
-function encodedSlugs(ref: TitoEventRef): {
+function encodedSlugs(ref: TitoSlugs): {
   accountSlug: string
   eventSlug: string
 } {
@@ -140,6 +147,12 @@ function encodedSlugs(ref: TitoEventRef): {
  */
 export class TitoProvider implements TicketingProvider {
   readonly name = PROVIDER_NAME
+
+  readonly capabilities: TicketingCapabilities = {
+    discounts: false,
+    paymentDetails: false,
+    checkin: false,
+  }
 
   /**
    * Per ticket, by construction: `mapTicket` MINTS `sum` as `String(t.price)`,
@@ -375,7 +388,9 @@ export class TitoProvider implements TicketingProvider {
    * registration. Typed so callers can distinguish "not implemented for this
    * vendor" from a transport error.
    */
-  async fetchOrderPaymentDetails(orderId: number): Promise<CheckinPayOrder> {
+  async fetchOrderPaymentDetails(
+    orderId: string,
+  ): Promise<OrderPaymentDetails> {
     throw new ProviderUnsupportedError(
       PROVIDER_NAME,
       'fetchOrderPaymentDetails',
@@ -386,17 +401,8 @@ export class TitoProvider implements TicketingProvider {
   // ── Public ticket types ───────────────────────────────────────────
 
   async fetchPublicTicketTypes(
-    event: EventRef | number,
+    event: EventRef,
   ): Promise<{ event: PublicEventInfo; tickets: PublicTicketType[] }> {
-    if (typeof event === 'number') {
-      // A bare numeric event id is a Checkin concept and cannot address a Tito
-      // event (which needs account + event slugs).
-      throw new ProviderUnsupportedError(
-        PROVIDER_NAME,
-        'fetchPublicTicketTypes',
-        'Tito requires an account/event-slug EventRef, not a bare numeric event id',
-      )
-    }
     const { accountSlug, eventSlug } = encodedSlugs(titoRef(event))
 
     const [eventData, releases] = await Promise.all([
@@ -473,7 +479,7 @@ export class TitoProvider implements TicketingProvider {
   // docs/INTEGRATION_ADAPTERS.md. Until then they fail with a typed error.
 
   async listDiscounts(
-    eventId: number,
+    eventId: string,
   ): Promise<{ discounts: EventDiscount[]; ticketTypes: TicketType[] }> {
     throw new ProviderUnsupportedError(
       PROVIDER_NAME,
@@ -493,7 +499,7 @@ export class TitoProvider implements TicketingProvider {
   }
 
   async deleteDiscount(
-    eventId: number,
+    eventId: string,
     discountCode: string,
   ): Promise<boolean> {
     throw new ProviderUnsupportedError(
@@ -540,7 +546,7 @@ export class TitoProvider implements TicketingProvider {
 
   /**
    * UNSUPPORTED SHAPE: `parseOrderCreated` is typed against the Checkin webhook
-   * envelope ({@link CheckinWebhookPayload} → {@link CheckinOrderCreatedData}).
+   * envelope ({@link LegacyOrderWebhookPayload} → {@link LegacyOrderCreatedData}).
    * Tito's envelope (e.g. `ticket.completed`, identified by the `X-Webhook-Name`
    * header) is different, so there is nothing faithful to extract from a
    * Checkin-shaped payload — it always returns `null` ("not an order-created
@@ -550,8 +556,8 @@ export class TitoProvider implements TicketingProvider {
    * today's wiring.)
    */
   parseOrderCreated(
-    payload: CheckinWebhookPayload,
-  ): CheckinOrderCreatedData | null {
+    payload: LegacyOrderWebhookPayload,
+  ): LegacyOrderCreatedData | null {
     // Intentionally ignores the Checkin-shaped payload — see the doc above.
     void payload
     return null

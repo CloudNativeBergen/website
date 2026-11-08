@@ -250,7 +250,7 @@ vi.mock('../../src/lib/tickets/provider', () => ({
   ticketingBinding: (c: unknown) => c,
   resolveTicketingProvider: async () => ({
     configured: true,
-    eventRef: { customerId: 1, eventId: 2 },
+    eventRef: { provider: 'checkin', accountId: '1', externalId: '2' },
     provider: {
       fetchPublicTicketTypes: async () => ({
         tickets: [SPEAKER_TYPE, REGULAR_TYPE],

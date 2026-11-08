@@ -64,6 +64,7 @@ import { requireDocumentInCurrentConference } from '../tenancy'
 import {
   getTicketingProvider,
   resolveTicketingCredentials,
+  type EventRef,
   type TicketingProvider,
 } from '@/lib/tickets/provider'
 import type {
@@ -158,6 +159,15 @@ async function checkin(): Promise<RequestTicketing> {
  * FAILS CLOSED: an unresolvable conference or a conference with no
  * `checkinEventId` refuses.
  */
+/** The Konf `EventRef` for this router's numeric Checkin customer/event ids. */
+function checkinEventRef(customerId: number, eventId: number): EventRef {
+  return {
+    provider: 'checkin',
+    accountId: String(customerId),
+    externalId: String(eventId),
+  }
+}
+
 async function requireCheckinEventId(clientEventId?: number): Promise<number> {
   const { conference, error } = await getConferenceForCurrentDomain({
     includeTicketSetup: true,
@@ -229,7 +239,7 @@ function orderIdsForEvent(
   if (cached && cached.expiresAt > now) return cached.orderIds
 
   const orderIds = ticketing.provider
-    .fetchEventTickets({ customerId, eventId })
+    .fetchEventTickets(checkinEventRef(customerId, eventId))
     .then((tickets) => new Set(tickets.map((ticket) => ticket.order_id)))
   orderIds.catch(() => {
     if (orderIdsCache.get(key)?.orderIds === orderIds) orderIdsCache.delete(key)
@@ -1035,7 +1045,7 @@ export const ticketsRouter = router({
           // from the payload. Discount codes are redeemable strings.
           const eventId = await requireCheckinEventId(input.eventId)
           const { provider } = await checkin()
-          const eventData = await provider.listDiscounts(eventId)
+          const eventData = await provider.listDiscounts(String(eventId))
           return {
             success: true,
             discounts: eventData.discounts,
@@ -1073,7 +1083,7 @@ export const ticketsRouter = router({
 
         // ONE resolution for both provider calls below.
         const { provider } = await checkin()
-        const eventData = await provider.listDiscounts(eventId)
+        const eventData = await provider.listDiscounts(String(eventId))
         const discounts = eventData.discounts
 
         // EMPTY IS NOT UNKNOWN. `calculateDiscountUsage` only mints a key for a
@@ -1088,10 +1098,9 @@ export const ticketsRouter = router({
         let totalTickets: number | null = null
 
         try {
-          const tickets = await provider.fetchEventTickets({
-            customerId,
-            eventId,
-          })
+          const tickets = await provider.fetchEventTickets(
+            checkinEventRef(customerId, eventId),
+          )
           usageStats = calculateDiscountUsage(tickets)
           totalTickets = tickets.length
         } catch (ticketsError) {
@@ -1309,7 +1318,7 @@ export const ticketsRouter = router({
 
           // ONE resolution for the existence check and the create below.
           const { provider } = await checkin()
-          const eventData = await provider.listDiscounts(eventId)
+          const eventData = await provider.listDiscounts(String(eventId))
           const codeExists = eventData.discounts.some(
             (discount) =>
               normalizeDiscountCode(discount.triggerValue ?? '') ===
@@ -1352,7 +1361,7 @@ export const ticketsRouter = router({
           let result: Awaited<ReturnType<typeof provider.createDiscount>>
           try {
             result = await provider.createDiscount({
-              eventId,
+              eventId: String(eventId),
               discountCode,
               numberOfTickets,
               ticketTypes: selectedTicketTypes || [],
@@ -1454,7 +1463,7 @@ export const ticketsRouter = router({
           const eventId = await requireCheckinEventId(input.eventId)
           const { provider } = await checkin()
           const success = await provider.deleteDiscount(
-            eventId,
+            String(eventId),
             input.discountCode,
           )
 
@@ -1498,7 +1507,7 @@ export const ticketsRouter = router({
           const ticketing = await checkin()
           await requireOrderInCurrentEvent(ticketing, orderId)
           const paymentDetails =
-            await ticketing.provider.fetchOrderPaymentDetails(orderId)
+            await ticketing.provider.fetchOrderPaymentDetails(String(orderId))
           return {
             success: true,
             paymentDetails,

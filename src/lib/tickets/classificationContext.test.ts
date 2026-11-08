@@ -77,7 +77,7 @@ describe('buildClassificationContext', () => {
         provider: providerWith(
           vi.fn().mockRejectedValue(new Error('checkin down')),
         ),
-        eventRef: { provider: 'checkin', customerId: 1, eventId: 2 },
+        eventRef: { provider: 'checkin', accountId: '1', externalId: '2' },
       },
       conference,
     )
@@ -98,7 +98,7 @@ describe('buildClassificationContext', () => {
     const context = await buildClassificationContext(
       {
         provider: providerWith(listDiscounts),
-        eventRef: { provider: 'tito', accountSlug: 'a', eventSlug: 'e' },
+        eventRef: { provider: 'tito', accountId: 'a', externalId: 'e' },
       },
       conference,
     )
@@ -128,7 +128,7 @@ describe('buildClassificationContext', () => {
     const context = await buildClassificationContext(
       {
         provider,
-        eventRef: { provider: 'checkin', customerId: 1, eventId: 2 },
+        eventRef: { provider: 'checkin', accountId: '1', externalId: '2' },
       },
       conference,
     )
@@ -150,7 +150,7 @@ describe('buildClassificationContext', () => {
     const context = await buildClassificationContext(
       {
         provider: providerWith(vi.fn().mockResolvedValue({ discounts })),
-        eventRef: { provider: 'checkin', customerId: 1, eventId: 2 },
+        eventRef: { provider: 'checkin', accountId: '1', externalId: '2' },
       },
       conference,
     )
@@ -178,7 +178,7 @@ describe('buildClassificationContext', () => {
     const context = await buildClassificationContext(
       {
         provider: providerWith(vi.fn().mockResolvedValue({ discounts: [] })),
-        eventRef: { provider: 'checkin', customerId: 1, eventId: 2 },
+        eventRef: { provider: 'checkin', accountId: '1', externalId: '2' },
       },
       conference,
     )
@@ -204,7 +204,7 @@ describe('buildClassificationContext', () => {
     const context = await buildClassificationContext(
       {
         provider: providerWith(vi.fn().mockResolvedValue({ discounts: [] })),
-        eventRef: { provider: 'checkin', customerId: 1, eventId: 2 },
+        eventRef: { provider: 'checkin', accountId: '1', externalId: '2' },
       },
       conference,
     )

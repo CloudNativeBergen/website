@@ -2,9 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import type {
   EventTicket,
   EventTicketWithoutDate,
-  CheckinPayOrder,
   EventTicketsResponse,
-  CheckinPayOrderResponse,
   EventOrderUser as EventOrder,
   AllEventOrderUsersResponse,
 } from '@/lib/tickets/types'
@@ -16,36 +14,125 @@ import type {
   CreateEventDiscountResponse,
   DeleteEventDiscountResponse,
 } from '@/lib/discounts/types'
-import { toPerTicketAmounts } from './types'
+import { toMinorUnits, toPerTicketAmounts } from './types'
 import type {
   EventRef,
   FetchEventTicketsOptions,
+  OrderPaymentDetails,
+  TicketingCapabilities,
   TicketAmountBasis,
   PublicEventInfo,
   PublicTicketType,
   TicketingProvider,
   TicketingProviderCredentials,
   WebhookVerifyResult,
-  CheckinWebhookPayload,
-  CheckinOrderCreatedData,
 } from './types'
+
+// ── Checkin webhook envelope (`event`, `data`, per-user `crm`/`ticket`, HMAC
+// over `data`). Named in the provider interface only via the Legacy* aliases.
+
+export interface CheckinWebhookUser {
+  id: number
+  crm: {
+    id: number
+    firstName: string
+    lastName: string
+    email: {
+      email: string
+    }
+  }
+  ticket: {
+    id: number
+    name: string
+    type: string
+  }
+  isPaid: boolean
+}
+
+export interface CheckinOrderCreatedData {
+  id: number
+  eventId: number
+  users: CheckinWebhookUser[]
+  orderContact: {
+    crm: {
+      id: number
+      firstName: string
+      lastName: string
+      email: {
+        email: string
+      }
+    }
+  }
+}
+
+export interface CheckinWebhookPayload {
+  payloadId: string
+  event: string
+  dataType: string
+  data: CheckinOrderCreatedData
+}
+
+// ── Checkin pay-order document (`findCheckinPayOrderByID`).
+
+export interface CheckinPayOrder {
+  id: number
+  belongsTo: number
+  orderId: number
+  orderType: string
+  documentType: string
+  kid: string | null
+  invoiceReference: string | null
+  archivedAt: string | null
+  createdAt: string
+  invoiceDate: string | null
+  deliveryDate: string | null
+  dueAt: string
+  contactCrm: {
+    firstName: string
+    lastName: string
+    email: {
+      email: string
+    }
+  }
+  billingCrm: {
+    firstName: string
+    lastName: string
+    email: {
+      email: string
+    }
+  } | null
+  currency: string | null
+  country: string | null
+  paymentMethod: string
+  paymentStatus: string
+  actionRequired: string | null
+  debtStatus: string | null
+  debtLastUpdatedAt: string | null
+  sum: string
+  sumLeft: string
+  paid: boolean
+  sumVat: string
+}
+
+export interface CheckinPayOrderResponse {
+  findCheckinPayOrderByID: CheckinPayOrder
+}
 
 /** Default Checkin.no GraphQL endpoint. Overridable via injected credentials. */
 export const CHECKIN_API_URL = 'https://api.checkin.no/graphql'
 
 /**
  * Narrow a (possibly Tito-shaped) {@link EventRef} to Checkin's customer+event
- * pair. A ref without `provider`, or `provider: 'checkin'`, is Checkin; a Tito
- * ref reaching this provider is a wiring bug (the resolver picks the provider
+ * pair (ids are decimal strings on the ref). A non-Checkin ref reaching this provider is a wiring bug (the resolver picks the provider
  * from the same field), so it throws loudly.
  */
 function checkinRef(ref: EventRef): { customerId: number; eventId: number } {
-  if (ref.provider === 'tito') {
+  if (ref.provider !== 'checkin') {
     throw new Error(
       'CheckinProvider received a Tito event reference — check the resolver wiring',
     )
   }
-  return { customerId: ref.customerId, eventId: ref.eventId }
+  return { customerId: Number(ref.accountId), eventId: Number(ref.externalId) }
 }
 
 interface GraphQLError {
@@ -76,6 +163,12 @@ let hasWarnedAboutCredentials = false
  */
 export class CheckinProvider implements TicketingProvider {
   readonly name = 'Checkin.no'
+
+  readonly capabilities: TicketingCapabilities = {
+    discounts: true,
+    paymentDetails: true,
+    checkin: false,
+  }
 
   /**
    * `eventTickets.sum` is the ORDER TOTAL, repeated on every row of that order.
@@ -367,7 +460,9 @@ export class CheckinProvider implements TicketingProvider {
     return responseData.eventTickets || []
   }
 
-  async fetchOrderPaymentDetails(orderId: number): Promise<CheckinPayOrder> {
+  async fetchOrderPaymentDetails(
+    orderId: string,
+  ): Promise<OrderPaymentDetails | null> {
     const query = `
     query FindCheckinPayOrderByID($id: Int!) {
       findCheckinPayOrderByID(id: $id, type: EVENT) {
@@ -412,13 +507,15 @@ export class CheckinProvider implements TicketingProvider {
     }
   `
 
-    const variables = { id: orderId }
+    const variables = { id: Number(orderId) }
     const responseData = await this.query<CheckinPayOrderResponse>(
       query,
       variables,
     )
 
-    return responseData.findCheckinPayOrderByID
+    const order = responseData.findCheckinPayOrderByID
+    // Absent order: `null`, as before the Konf mapping (the router returned it).
+    return order ? toOrderPaymentDetails(order) : null
   }
 
   private async fetchEventOrders(
@@ -571,12 +668,11 @@ export class CheckinProvider implements TicketingProvider {
   // ── Public ticket types ───────────────────────────────────────────
 
   async fetchPublicTicketTypes(
-    event: EventRef | number,
+    event: EventRef,
   ): Promise<{ event: PublicEventInfo; tickets: PublicTicketType[] }> {
     // Accept the historical bare-number form or a provider-shaped ref; Checkin's
     // public lookup only needs the event id.
-    const eventId =
-      typeof event === 'number' ? event : checkinRef(event).eventId
+    const { eventId } = checkinRef(event)
     const query = `
   query FindEvent($id: Int!) {
     findEventById(id: $id) {
@@ -637,8 +733,9 @@ export class CheckinProvider implements TicketingProvider {
   // ── Discounts ─────────────────────────────────────────────────────
 
   async listDiscounts(
-    eventId: number,
+    eventIdRef: string,
   ): Promise<{ discounts: EventDiscount[]; ticketTypes: TicketType[] }> {
+    const eventId = Number(eventIdRef)
     if (!eventId || eventId <= 0) {
       throw new Error('Valid event ID is required')
     }
@@ -735,7 +832,7 @@ export class CheckinProvider implements TicketingProvider {
     // crafted values (quotes/braces) to inject arbitrary GraphQL. The enum-typed
     // literals (trigger/affects/modes/type) stay inline; every user value rides
     // a typed variable. Defense in depth: numeric inputs are coerced/validated.
-    const safeEventId = Math.trunc(eventId)
+    const safeEventId = Math.trunc(Number(eventId))
     const safeCount = Math.trunc(numberOfTickets)
     if (!Number.isFinite(safeEventId) || !Number.isFinite(safeCount)) {
       throw new Error('createDiscount: eventId/numberOfTickets must be numbers')
@@ -810,9 +907,10 @@ export class CheckinProvider implements TicketingProvider {
   }
 
   async deleteDiscount(
-    eventId: number,
+    eventIdRef: string,
     discountCode: string,
   ): Promise<boolean> {
+    const eventId = Number(eventIdRef)
     const mutation = `
     mutation DeleteEventDiscount($eventId: Int!, $id: String!) {
       deleteEventDiscount(eventId: $eventId, id: $id) {
@@ -960,4 +1058,34 @@ export function parseCheckinOrderCreated(
     return null
   }
   return payload.data
+}
+
+/** Checkin's pay-order document in Konf terms. */
+export function toOrderPaymentDetails(o: CheckinPayOrder): OrderPaymentDetails {
+  const person = (c: NonNullable<CheckinPayOrder['billingCrm']>) => ({
+    firstName: c.firstName,
+    lastName: c.lastName,
+    email: c.email.email,
+  })
+  return {
+    provider: 'checkin',
+    externalId: String(o.id),
+    orderId: String(o.orderId),
+    currency: o.currency,
+    totalMinor: toMinorUnits(o.sum),
+    amountLeftMinor: toMinorUnits(o.sumLeft),
+    vatMinor: toMinorUnits(o.sumVat),
+    paid: o.paid,
+    paymentStatus: o.paymentStatus,
+    paymentMethod: o.paymentMethod,
+    actionRequired: o.actionRequired,
+    invoiceReference: o.invoiceReference,
+    kid: o.kid,
+    createdAt: o.createdAt,
+    dueAt: o.dueAt,
+    invoiceDate: o.invoiceDate,
+    deliveryDate: o.deliveryDate,
+    contact: person(o.contactCrm),
+    billing: o.billingCrm ? person(o.billingCrm) : null,
+  }
 }

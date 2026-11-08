@@ -170,7 +170,7 @@ describe('volunteerStatus', () => {
 
       resolveTicketingProviderMock.mockResolvedValueOnce({
         configured: true,
-        eventRef: { customerId: 42, eventId: 7 },
+        eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
         provider: {
           fetchEventTickets: vi
             .fn()

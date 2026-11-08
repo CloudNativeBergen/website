@@ -75,7 +75,7 @@ function resolvedCheckin(): ResolvedTicketing {
     configured: true,
     // Only the members the handler touches are mocked.
     provider: mockProvider as never,
-    eventRef: { customerId: 99, eventId: 4242 },
+    eventRef: { provider: 'checkin', accountId: '99', externalId: '4242' },
   }
 }
 
@@ -535,7 +535,7 @@ describe('handleSpeakerTicket', () => {
         isConfigured: mockProvider.isConfigured,
         fetchPublicTicketTypes: mockProvider.fetchPublicTicketTypes,
       } as never,
-      eventRef: { customerId: 99, eventId: 4242 },
+      eventRef: { provider: 'checkin', accountId: '99', externalId: '4242' },
     })
 
     await handleSpeakerTicket(makeEvent())
@@ -573,7 +573,7 @@ describe('handleSpeakerTicket', () => {
     mockedResolveProvider.mockResolvedValue({
       configured: true,
       provider: { ...mockProvider, name: 'Tito' } as never,
-      eventRef: { provider: 'tito', accountSlug: 'acct', eventSlug: 'evt' },
+      eventRef: { provider: 'tito', accountId: 'acct', externalId: 'evt' },
     })
 
     await handleSpeakerTicket(makeEvent())

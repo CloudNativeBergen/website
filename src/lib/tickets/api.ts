@@ -1,5 +1,6 @@
 import { parseTicketAmount } from './amount'
-import type { EventTicket, CheckinPayOrder, GroupedOrder } from './types'
+import type { EventTicket, GroupedOrder } from './types'
+import type { OrderPaymentDetails } from './provider/types'
 
 export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
   const ordersMap = new Map<number, GroupedOrder>()
@@ -41,16 +42,16 @@ export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
   return Array.from(ordersMap.values())
 }
 
-export function isPaymentOverdue(paymentDetails: CheckinPayOrder): boolean {
+export function isPaymentOverdue(paymentDetails: OrderPaymentDetails): boolean {
   if (paymentDetails.paid) return false
 
   const dueDate = new Date(paymentDetails.dueAt)
   const now = new Date()
 
-  return dueDate < now && parseTicketAmount(paymentDetails.sumLeft) > 0
+  return dueDate < now && paymentDetails.amountLeftMinor > 0
 }
 
-export function getDaysOverdue(paymentDetails: CheckinPayOrder): number {
+export function getDaysOverdue(paymentDetails: OrderPaymentDetails): number {
   if (!isPaymentOverdue(paymentDetails)) return 0
 
   const dueDate = new Date(paymentDetails.dueAt)

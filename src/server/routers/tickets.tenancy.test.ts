@@ -162,7 +162,7 @@ describe('tickets discount codes are bound to this conference’s event (#731 F5
       selectedTicketTypes: [],
     })
     expect(h.createDiscount).toHaveBeenCalledWith(
-      expect.objectContaining({ eventId: OUR_EVENT }),
+      expect.objectContaining({ eventId: String(OUR_EVENT) }),
     )
   })
 
@@ -181,7 +181,7 @@ describe('tickets discount codes are bound to this conference’s event (#731 F5
       eventId: OUR_EVENT,
       discountCode: 'OURS',
     })
-    expect(h.deleteDiscount).toHaveBeenCalledWith(OUR_EVENT, 'OURS')
+    expect(h.deleteDiscount).toHaveBeenCalledWith(String(OUR_EVENT), 'OURS')
   })
 
   it('getDiscountCodes refuses another tenant’s eventId', async () => {
@@ -193,7 +193,7 @@ describe('tickets discount codes are bound to this conference’s event (#731 F5
 
   it('getDiscountCodes still lists our own codes', async () => {
     await tickets().admin.getDiscountCodes({ eventId: OUR_EVENT })
-    expect(h.listDiscounts).toHaveBeenCalledWith(OUR_EVENT)
+    expect(h.listDiscounts).toHaveBeenCalledWith(String(OUR_EVENT))
   })
 
   it('a conference with no checkin configuration refuses — fail closed', async () => {
@@ -229,7 +229,7 @@ describe('standalone discount codes (no sponsor)', () => {
     })
 
     expect(h.createDiscount).toHaveBeenCalledWith({
-      eventId: OUR_EVENT,
+      eventId: String(OUR_EVENT),
       discountCode: 'COMMUNITY2026',
       numberOfTickets: 25,
       ticketTypes: ['3'],
@@ -258,7 +258,7 @@ describe('standalone discount codes (no sponsor)', () => {
     })
 
     expect(h.createDiscount).toHaveBeenCalledWith({
-      eventId: OUR_EVENT,
+      eventId: String(OUR_EVENT),
       discountCode: 'ACME1234',
       numberOfTickets: 5,
       ticketTypes: ['1', '2'],
@@ -592,7 +592,10 @@ describe('standalone discount codes (no sponsor)', () => {
       eventId: OUR_EVENT,
       discountCode: 'COMMUNITY2026',
     })
-    expect(h.deleteDiscount).toHaveBeenCalledWith(OUR_EVENT, 'COMMUNITY2026')
+    expect(h.deleteDiscount).toHaveBeenCalledWith(
+      String(OUR_EVENT),
+      'COMMUNITY2026',
+    )
   })
 
   /**
@@ -639,7 +642,7 @@ describe('tickets payment details are bound to this conference’s orders (#731 
 
   it('getPaymentDetails still reads one of our own orders', async () => {
     await tickets().admin.getPaymentDetails({ orderId: 500 })
-    expect(h.fetchOrderPaymentDetails).toHaveBeenCalledWith(500)
+    expect(h.fetchOrderPaymentDetails).toHaveBeenCalledWith('500')
   })
 
   it('FAILS CLOSED when the ticket list cannot be read', async () => {
@@ -673,7 +676,7 @@ describe('tickets payment details are bound to this conference’s orders (#731 
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     // The next call must retry rather than serve the rejection for the TTL.
     await tickets().admin.getPaymentDetails({ orderId: 500 })
-    expect(h.fetchOrderPaymentDetails).toHaveBeenCalledWith(500)
+    expect(h.fetchOrderPaymentDetails).toHaveBeenCalledWith('500')
     expect(h.fetchEventTickets).toHaveBeenCalledTimes(2)
   })
 })
@@ -807,7 +810,7 @@ describe('the order-id memo is scoped to the ACCOUNT, not just the numeric ids',
 
     asOrgB()
     await tickets(ORG_B).admin.getPaymentDetails({ orderId: 900 })
-    expect(h.fetchOrderPaymentDetails).toHaveBeenLastCalledWith(900)
+    expect(h.fetchOrderPaymentDetails).toHaveBeenLastCalledWith('900')
   })
 
   it('still memoizes WITHIN one account (the rate limiter survives the fix)', async () => {

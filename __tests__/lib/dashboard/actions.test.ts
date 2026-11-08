@@ -48,8 +48,9 @@ vi.mock('@/lib/tickets/provider', () => ({
           mockFetchEventTickets(...args),
       },
       eventRef: {
-        customerId: conference.checkinCustomerId,
-        eventId: conference.checkinEventId,
+        provider: 'checkin',
+        accountId: String(conference.checkinCustomerId),
+        externalId: String(conference.checkinEventId),
       },
     }
   },
@@ -1145,8 +1146,9 @@ describe('Dashboard Server Actions', () => {
       // there is no client argument that could point the server's Checkin
       // credentials at another account.
       expect(mockFetchEventTickets).toHaveBeenCalledWith({
-        customerId: 123,
-        eventId: 456,
+        provider: 'checkin',
+        accountId: '123',
+        externalId: '456',
       })
     })
 
