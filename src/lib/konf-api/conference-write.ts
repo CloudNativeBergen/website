@@ -7,7 +7,12 @@ import { requestDomain } from '@/lib/conference/request-domain'
 import { IDENTITY_SESSION_COOKIE } from '@/lib/auth/identity-cookie'
 import { TRPCError } from '@trpc/server'
 import { rolloutFlags } from '@/lib/conference/konf-api'
-import { konfApiHeaders, konfApiUrl } from './client'
+import {
+  KonfApiError,
+  konfApiErrorFrom,
+  konfApiHeaders,
+  konfApiUrl,
+} from './client'
 import { graphql, type ResultOf } from './graphql'
 import {
   LIFECYCLE_STATUS_VALUES,
@@ -236,6 +241,16 @@ export async function writeMovedToD1(
       )
     await updateConferenceViaApi(host, conferenceId, moved, jwt)
   } catch (error) {
+    // A plan refusal is final: surface it as the upgrade prompt, and never
+    // retry the paid write through Sanity.
+    if (error instanceof KonfApiError && error.planRequired) {
+      Object.assign(error, await orgContextViaApi(host, jwt).catch(() => ({})))
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: error.message,
+        cause: error,
+      })
+    }
     console.error(
       `[conference] D1 write failed for ${conferenceId}; Sanity untouched`,
       error,
@@ -309,11 +324,9 @@ async function mutate<T>(
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = (await res.json()) as {
     data?: T
-    errors?: { message?: string }[]
+    errors?: { message?: string; extensions?: Record<string, unknown> }[]
   }
-  if (json.errors?.length) {
-    throw new Error(json.errors.map((e) => e.message).join('; '))
-  }
+  if (json.errors?.length) throw konfApiErrorFrom(json.errors)
   return json.data
 }
 
@@ -359,28 +372,30 @@ export async function setLifecycleViaApi(
   if (id !== conferenceId) throw new Error(`conference id mismatch: ${id}`)
 }
 
-const ORG_PLAN = `query { organization { effectivePlan } }` as const
+const ORG_PLAN =
+  `query { organization { id effectivePlan } myOrganizations { id role } }` as const
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
 const ORG_PLAN_DOC = graphql(ORG_PLAN)
 
 /**
- * The request org's effective plan (#2129), read as the signed-in organizer:
- * the gateway names the org from the host, never from input. Throws on any
- * HTTP or GraphQL error, and when the org is not returned.
+ * The request org's id and effective plan (#2129), and whether the signed-in
+ * organizer owns it: the gateway names the org from the host, never from
+ * input. Throws on any HTTP or GraphQL error, and when the org is not returned.
  */
-export async function orgPlanViaApi(
+export async function orgContextViaApi(
   host: string,
   userJwt: string,
-): Promise<string> {
+): Promise<{ orgId: string; plan: string; isOwner: boolean }> {
   const data = await mutate<ResultOf<typeof ORG_PLAN_DOC>>(
     host,
     ORG_PLAN,
     {},
     userJwt,
   )
-  const plan = data?.organization?.effectivePlan
-  if (!plan) throw new Error('no organization plan')
-  return plan
+  const org = data?.organization
+  if (!org?.id || !org.effectivePlan) throw new Error('no organization plan')
+  const role = data?.myOrganizations?.find((o) => o.id === org.id)?.role
+  return { orgId: org.id, plan: org.effectivePlan, isOwner: role === 'owner' }
 }
 
 const RESERVE_REMINDER =

@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server'
 import type { MissingField } from '@/lib/sponsor-crm/contract-readiness'
 import type { TagIssue } from '@/lib/marketing/tagging/checks'
-import { PlanRequiredError } from '@/lib/billing'
+import { KonfApiError, type RequiredPlan } from '@/lib/konf-api/client'
 
 const FALLBACK_MESSAGE = 'This action is not allowed in the current state.'
 
@@ -76,7 +76,10 @@ export interface StructuredErrorData {
   tagIssues?: TagIssue[]
   /** Billing (#2129): the same reason the gateway uses. */
   reason?: 'PLAN_REQUIRED'
-  requiredPlan?: 'basic' | 'pro'
+  requiredPlan?: RequiredPlan
+  /** Kontroll org id, for the billing link; absent when unknown. */
+  orgId?: string
+  isOwner?: boolean
 }
 
 /**
@@ -95,8 +98,15 @@ export function structuredErrorData(error: {
     code: error.code,
     ...(missingFields ? { missingFields } : {}),
     ...(tagIssues ? { tagIssues } : {}),
-    ...(error.cause instanceof PlanRequiredError
-      ? { reason: error.cause.reason, requiredPlan: error.cause.requiredPlan }
+    ...(error.cause instanceof KonfApiError && error.cause.planRequired
+      ? {
+          reason: 'PLAN_REQUIRED' as const,
+          requiredPlan: error.cause.requiredPlan,
+          ...(error.cause.orgId ? { orgId: error.cause.orgId } : {}),
+          ...(error.cause.isOwner !== undefined
+            ? { isOwner: error.cause.isOwner }
+            : {}),
+        }
       : {}),
   }
 }

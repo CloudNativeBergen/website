@@ -1854,6 +1854,50 @@ describe('conference router — D1 write path (#1881)', () => {
     expect(lastUnset).toBeUndefined()
   })
 
+  // #2129: a plan refusal on a paid write is final. Surfaced as the upgrade
+  // prompt's payload, and Sanity is never written instead.
+  it('never falls back to Sanity when the D1 write is refused with PLAN_REQUIRED', async () => {
+    fetchMock.mockImplementation(async (url: URL | string, init) =>
+      String(url).includes('/api/auth/token')
+        ? ok({ token: 'user-jwt' })
+        : String(init?.body).includes('rolloutFlags')
+          ? ok({ data: { rolloutFlags: { d1Write: true } } })
+          : String(init?.body).includes('myOrganizations')
+            ? ok({
+                data: {
+                  organization: { id: 'org_1', effectivePlan: 'free' },
+                  myOrganizations: [{ id: 'org_1', role: 'owner' }],
+                },
+              })
+            : ok({
+                errors: [
+                  {
+                    message: 'This needs the Basic plan.',
+                    extensions: {
+                      reason: 'PLAN_REQUIRED',
+                      requiredPlan: 'BASIC',
+                    },
+                  },
+                ],
+              }),
+    )
+    const { formatTRPCError } = await import('@/server/trpc')
+    const err = await makeCaller({ isOrganizer: true })
+      .updateBasicInfo({ title: 'T', organizer: 'Org', city: null })
+      .catch((e) => e)
+    expect(err).toMatchObject({ code: 'FORBIDDEN' })
+    expect(
+      formatTRPCError({ shape: { data: {} }, error: err }).data,
+    ).toMatchObject({
+      reason: 'PLAN_REQUIRED',
+      requiredPlan: 'basic',
+      orgId: 'org_1',
+      isOwner: true,
+    })
+    expect(commitMock).not.toHaveBeenCalled()
+    expect(lastSet).toBeUndefined()
+  })
+
   // A job with no request host cannot read the flags: refused, never Sanity-only.
   it('refuses, without touching Sanity, when the request has no host', async () => {
     hostMock.mockReturnValue(null)
