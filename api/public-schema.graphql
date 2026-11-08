@@ -90,6 +90,11 @@ type Mutation {
   revokeAll(userId: ID!): RevokeAllResult
 
   """
+  Platform operators only (#2101). identity: true makes identity the source of the org's roles: the hourly sync stops granting and the site reads organizers from identity. Refused unless the latest member sync (under two hours old, not failed) reported no access drift for the org. identity: false rolls back. Audited.
+  """
+  setMemberSource(identity: Boolean!, orgId: ID!): Boolean
+
+  """
   Stores a web push subscription for the session user. An endpoint another user held moves to the caller.
   """
   subscribePush(input: PushSubscriptionInput!): Boolean
@@ -174,6 +179,11 @@ type Query {
   The session org's pending invitations. Owners, admins and operators only; null otherwise.
   """
   invitations: [PendingInvitation!]
+
+  """
+  The session org's member source and the caller's live role (#2101). Null outside a tenant envelope.
+  """
+  memberAuthority: MemberAuthority
 
   """
   Platform operators only. The latest hourly member sync: status ok, drift or failed (failed wins over drift). Null if it has never run in this environment.
@@ -579,6 +589,18 @@ type TicketInclusion {
 type VanityMetric {
   label: String
   value: String
+}
+
+type MemberAuthority {
+  """
+  True when identity owns this org's roles (#2101): the site reads its organizers from here, not Sanity.
+  """
+  identitySource: Boolean
+
+  """
+  The caller's live org role from the gateway envelope; null without a signed-in user or membership.
+  """
+  role: String
 }
 
 type MemberInvitation {

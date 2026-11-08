@@ -15,6 +15,25 @@ const h = vi.hoisted(() => ({
   rights: new Map<string, string[] | null>(),
   rightsReads: 0,
   getProposal: vi.fn(),
+  // #2101: request host ('' = outside a request), the gateway's answer per
+  // org source and per JWT, and whether the gateway is down.
+  host: '',
+  identitySource: false,
+  jwt: null as string | null,
+  roles: new Map<string, string | null>(),
+  gatewayDown: false,
+  gatewayReads: 0,
+}))
+vi.mock('next/headers', async (orig) => ({
+  ...(await orig<object>()),
+  cookies: async () => ({ get: () => (h.jwt ? { value: h.jwt } : undefined) }),
+}))
+vi.mock('@/lib/conference/request-domain', () => ({
+  requestDomain: async () => h.host,
+}))
+vi.mock('@/lib/konf-api/conference-write', async (orig) => ({
+  ...(await orig<object>()),
+  identityJwt: async () => h.jwt,
 }))
 
 vi.mock('next-auth', () => ({
@@ -88,6 +107,7 @@ import type { Context } from '@/server/trpc'
 import { appRouter } from '@/server/_app'
 import { getAuthSession } from '@/lib/auth'
 import { clearOrganizerRightsMemo } from '@/lib/authz/live-organizer'
+import { clearOrgAuthorityMemo } from '@/lib/authz/identity-members'
 
 const createCaller = initTRPC
   .context<Context>()
@@ -124,6 +144,31 @@ async function adminAllowed(url = 'http://localhost:3000/'): Promise<boolean> {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   clearOrganizerRightsMemo()
+  clearOrgAuthorityMemo()
+  h.host = ''
+  h.identitySource = false
+  h.jwt = null
+  h.roles.clear()
+  h.gatewayDown = false
+  h.gatewayReads = 0
+  process.env.KONF_API_URL = 'https://gateway.test/graphql'
+  // The gateway: memberAuthority for the session org, the role by JWT.
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+    if (String(url) !== 'https://gateway.test/graphql')
+      throw new Error(`unexpected fetch ${url}`)
+    h.gatewayReads++
+    if (h.gatewayDown) return new Response('', { status: 503 })
+    const auth = new Headers(init?.headers).get('authorization')
+    const jwt = auth?.replace('Bearer ', '') ?? null
+    return Response.json({
+      data: {
+        memberAuthority: {
+          identitySource: h.identitySource,
+          role: jwt ? (h.roles.get(jwt) ?? null) : null,
+        },
+      },
+    })
+  })
   h.rights.clear()
   h.rightsReads = 0
   h.auth.mockReset()
@@ -137,6 +182,7 @@ beforeEach(() => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(() => {
+  delete process.env.KONF_API_URL
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
@@ -282,5 +328,90 @@ describe('live organizer rights (#1923)', () => {
     expect(s2?.isImpersonating).toBeUndefined()
     expect(s2?.speaker?.organizerOrgIds).toEqual([])
     vi.unstubAllEnvs()
+  })
+})
+
+/** Like adminAllowed, but returns the refusal code. */
+async function adminCode(): Promise<string> {
+  try {
+    return (await adminAllowed()) ? 'OK' : 'FORBIDDEN'
+  } catch (err) {
+    return (err as { code?: string }).code ?? 'THREW'
+  }
+}
+
+describe('identity as the member source (#2101)', () => {
+  beforeEach(() => {
+    h.host = 'localhost'
+    h.auth.mockResolvedValue(token('sp-i'))
+  })
+
+  it('an unswitched org decides exactly as Sanity does (cross-reader)', async () => {
+    for (const [sanity, identityRole, want] of [
+      [['org-A'], null, 'OK'],
+      [['org-A'], 'admin', 'OK'],
+      [[], 'admin', 'FORBIDDEN'],
+      [[], null, 'FORBIDDEN'],
+    ] as const) {
+      clearOrganizerRightsMemo()
+      clearOrgAuthorityMemo()
+      h.rights.set('sp-i', [...sanity])
+      h.jwt = 'jwt-i'
+      h.roles.set('jwt-i', identityRole)
+      expect(await adminCode()).toBe(want)
+    }
+    expect(h.gatewayReads).toBeGreaterThan(0) // identity was asked, and ignored
+  })
+
+  it('a switched org: an identity admin is admin, and loses it within 60 s of removal', async () => {
+    h.identitySource = true
+    h.rights.set('sp-i', []) // not in Sanity organizers[] at all
+    h.jwt = 'jwt-i'
+    h.roles.set('jwt-i', 'admin')
+    expect(await adminCode()).toBe('OK')
+    h.roles.set('jwt-i', null) // removed in Kontroll
+    vi.advanceTimersByTime(30_000)
+    expect(await adminCode()).toBe('OK') // memo
+    vi.advanceTimersByTime(31_000)
+    expect(await adminCode()).toBe('FORBIDDEN')
+  })
+
+  it('a switched org: a plain member is not admin', async () => {
+    h.identitySource = true
+    h.rights.set('sp-i', ['org-A'])
+    h.jwt = 'jwt-i'
+    h.roles.set('jwt-i', 'member')
+    expect(await adminCode()).toBe('FORBIDDEN')
+  })
+
+  it('a switched org: a Sanity-only organizer is not admin, with or without a Konf sign-in', async () => {
+    h.identitySource = true
+    h.rights.set('sp-i', ['org-A'])
+    h.jwt = 'jwt-i' // signed in with Konf, not a member there
+    expect(await adminCode()).toBe('FORBIDDEN')
+    clearOrgAuthorityMemo()
+    h.jwt = null // NextAuth only
+    expect(await adminCode()).toBe('FORBIDDEN')
+    const session = await getAuthSession({
+      url: 'http://localhost:3000/',
+      headers: new Headers(),
+    })
+    // The waist turns this into the "sign in with Konf" message.
+    expect(session?.speaker?.adminDenyReason).toBe('konf_sign_in')
+  })
+
+  it('identity down: refused with SERVICE_UNAVAILABLE, not the Sanity answer', async () => {
+    h.rights.set('sp-i', ['org-A'])
+    h.gatewayDown = true
+    expect(await adminCode()).toBe('SERVICE_UNAVAILABLE')
+  })
+
+  it('identity down shortly after an unswitched read keeps the Sanity answer', async () => {
+    h.rights.set('sp-i', ['org-A'])
+    expect(await adminCode()).toBe('OK')
+    h.gatewayDown = true
+    clearOrgAuthorityMemo()
+    vi.advanceTimersByTime(5 * 60_000)
+    expect(await adminCode()).toBe('OK')
   })
 })

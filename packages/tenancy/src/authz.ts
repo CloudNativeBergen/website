@@ -1,7 +1,18 @@
 // One role parser and one pure policy check (docs/AUTHORIZATION.md §3.3,
 // phase 1). No I/O: the envelope (or a member row) supplies the roles.
 import { MATRIX, type Action, type Column } from './authz-matrix'
-import type { Envelope } from './index'
+
+// Structural, not `import type { Envelope } from './index'`: the site imports
+// this file alone (@runkonf/tenancy/authz, #2101) and must not type-check the
+// Workers-only index.
+type Envelope =
+  | {
+      typ: 'tenant'
+      userId: string | null
+      orgRole: string | null
+      scopes: readonly string[]
+    }
+  | { typ: 'platform' | 'user'; userId: string; platformRole?: string }
 
 export { MATRIX, COLUMNS, type Action, type Column } from './authz-matrix'
 

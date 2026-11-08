@@ -1,11 +1,19 @@
 // Sanity organizers -> identity `member` sync (#1907), run by the cron.
 // Insert-only: grants missing `admin` rows, never updates, deletes or
-// demotes. Orgs in MEMBER_SOURCE_ORGS have identity as their source: they
-// get a drift check instead and are never granted (#1923). Matching and ids follow scripts/backfill-identity-members.ts (#1909).
+// demotes. Orgs in MEMBER_SOURCE_ORGS or the member_source table (switched by
+// an operator, #2101) have identity as their source: they get a drift check
+// instead and are never granted (#1923). Granting orgs get the same drift
+// check after granting, report-only (no alert): it is the evidence the switch
+// gate (job-status.ts switchRefusal) reads. Matching and ids follow scripts/backfill-identity-members.ts (#1909).
 
 import { can, principalOfRole } from '@runkonf/tenancy'
 import { emit } from './push'
-import { recordJobStatus, type MemberSyncDrift } from './job-status'
+import {
+  identitySourceOrgs,
+  PREFLIGHT_JOB,
+  recordJobStatus,
+  type MemberSyncDrift,
+} from './job-status'
 
 /** Role every synced organizer gets. The owner decided this; see #1907. */
 export const ORGANIZER_ROLE = 'admin'
@@ -117,6 +125,7 @@ export async function syncMembers(env: SyncEnv) {
     granted: 0,
     failed: false,
     drifted: [] as MemberSyncDrift[],
+    preflight: [] as MemberSyncDrift[],
   }
   const ranAt = Date.now()
   try {
@@ -139,6 +148,21 @@ export async function syncMembers(env: SyncEnv) {
       granted: progress.granted,
       detail: JSON.stringify(progress.drifted),
     })
+    // The switch gate's evidence (#2101), apart so the status above keeps
+    // meaning "drift in identity-source orgs".
+    await recordJobStatus(env.DB, {
+      job: PREFLIGHT_JOB,
+      ran_at: ranAt,
+      status: progress.failed
+        ? 'failed'
+        : progress.preflight.length
+          ? 'drift'
+          : 'ok',
+      checked: progress.checked,
+      affected: progress.preflight.length,
+      granted: null,
+      detail: JSON.stringify(progress.preflight),
+    })
   }
 }
 
@@ -147,6 +171,8 @@ interface Progress {
   granted: number
   failed: boolean
   drifted: MemberSyncDrift[]
+  /** Access drift of granting orgs, for the switch gate (#2101). */
+  preflight: MemberSyncDrift[]
 }
 
 async function runSync(env: SyncEnv, progress: Progress) {
@@ -198,15 +224,17 @@ async function runSync(env: SyncEnv, progress: Progress) {
   const { results: orgs } = await env.DB.prepare(
     'SELECT id FROM organization',
   ).all<{ id: string }>()
-  const sourceOrgs = new Set(
-    (env.MEMBER_SOURCE_ORGS ?? '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
-  )
+  const envOrgs = (env.MEMBER_SOURCE_ORGS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const sourceOrgs = new Set([
+    ...envOrgs,
+    ...(await identitySourceOrgs(env.DB)),
+  ])
   // A mistyped id would leave that org granting with no sign (#1949).
   const known = new Set(orgs.map((o) => o.id))
-  for (const orgId of sourceOrgs)
+  for (const orgId of envOrgs)
     if (!known.has(orgId))
       log('warn', 'identity.membership.source_org_unknown', { orgId })
   let granted = 0
@@ -215,9 +243,9 @@ async function runSync(env: SyncEnv, progress: Progress) {
     const organizers = byOrg.get(orgId)
     if (noOrganizers && !(sourceOrgs.has(orgId) && confOrgs.has(orgId)))
       continue
-    if (sourceOrgs.has(orgId)) {
-      // Never grants. A drift or Slack failure must not stop the sync.
-      await checkDrift(env, orgId, organizers ?? [], verified, progress).catch(
+    // A drift or Slack failure must not stop the sync.
+    const drift = (alert: boolean) =>
+      checkDrift(env, orgId, organizers ?? [], verified, progress, alert).catch(
         (e) => {
           progress.failed = true
           log('error', 'identity.membership.drift_failed', {
@@ -227,14 +255,22 @@ async function runSync(env: SyncEnv, progress: Progress) {
           })
         },
       )
+    if (sourceOrgs.has(orgId)) {
+      await drift(true) // never grants
       continue
     }
+    await grant(orgId, organizers)
+    await drift(false)
+  }
+  if (!noOrganizers) log('log', 'identity.membership.synced', { granted })
+
+  async function grant(orgId: string, organizers: Organizer[] | undefined) {
     if (!organizers?.length) {
       log('warn', 'identity.membership.org_skipped', {
         orgId,
         reason: 'no_organizers',
       })
-      continue
+      return
     }
     const userIds = new Set<string>()
     for (const { emails } of organizers) {
@@ -257,7 +293,6 @@ async function runSync(env: SyncEnv, progress: Progress) {
       }
     }
   }
-  if (!noOrganizers) log('log', 'identity.membership.synced', { granted })
 }
 
 const DAY_MS = 24 * 3600 * 1000
@@ -293,6 +328,7 @@ async function checkDrift(
   organizers: Organizer[],
   verified: Map<string, string | null>,
   progress: Progress,
+  alert: boolean,
 ) {
   const { results: rows } = await env.DB.prepare(
     'SELECT userId, role FROM member WHERE organizationId = ?1',
@@ -350,6 +386,12 @@ async function checkDrift(
     roleMismatch: drift.roleMismatch.length,
     ...(drift.ownersBelowTwo === undefined ? {} : { ownersBelowTwo: 1 }),
     ...(invitePending.length ? { invitePending: invitePending.length } : {}),
+  }
+  if (!alert) {
+    // Report-only (a granting org): access drift only, for the switch gate.
+    if (counts.missingInIdentity + counts.missingInSanity + counts.roleMismatch)
+      progress.preflight.push({ orgId, counts })
+    return
   }
   if (Object.values(counts).every((n) => n === 0)) {
     // Clean: forget the last alert, so a recurrence posts at once.

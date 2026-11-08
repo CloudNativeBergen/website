@@ -1,6 +1,9 @@
 import 'server-only'
 import type { Session } from 'next-auth'
 import { clientReadUncached } from '@/lib/sanity/client'
+import { requestDomain } from '@/lib/conference/request-domain'
+import { orgAuthority } from './identity-members'
+import { resolveCurrentOrgId } from './organizer'
 
 // Live organizer rights for the NextAuth lane (#1923). The login token carries
 // `organizerOrgIds` and rolls for 30 days with the same claims, so a removed
@@ -70,7 +73,10 @@ export async function withLiveOrganizerRights<S extends Session | null>(
       console.warn(
         `[authz-grace] organizer refresh failed for speaker ${speaker._id}; using last good read`,
       )
-      return { ...session, speaker: { ...speaker, ...good.rights } }
+      return {
+        ...session,
+        speaker: { ...speaker, ...(await identitySource(good.rights)) },
+      }
     }
     console.error(
       `[authz-deny] organizer refresh failed for speaker ${speaker._id}; denying organizer rights:`,
@@ -78,11 +84,64 @@ export async function withLiveOrganizerRights<S extends Session | null>(
     )
     rights = { organizerOrgIds: [], isOrganizer: false }
   }
-  return { ...session, speaker: { ...speaker, ...rights } }
+  return {
+    ...session,
+    speaker: { ...speaker, ...(await identitySource(rights)) },
+  }
+}
+
+// Last member source seen per host, for an identity outage (#2101).
+const lastSource = new Map<string, { at: number; identitySource: boolean }>()
+
+/**
+ * Phase 1b (#2101): when identity owns the request org's roles, the org is in
+ * organizerOrgIds only if identity says owner or admin; Sanity organizers[]
+ * no longer counts for it. Other orgs are untouched: every check is for the
+ * request org. If identity cannot be read, the request org is withheld (fail
+ * closed), unless this host was seen unswitched within GRACE_MS.
+ */
+async function identitySource(
+  rights: Rights,
+): Promise<Rights & { adminDenyReason?: 'unavailable' | 'konf_sign_in' }> {
+  let host: string
+  let orgId: string | null
+  try {
+    host = await requestDomain()
+    orgId = await resolveCurrentOrgId()
+  } catch {
+    return rights // outside a request: no request org to decide for
+  }
+  if (!host || !orgId) return rights
+  const others = rights.organizerOrgIds.filter((o) => o !== orgId)
+  const withheld = (adminDenyReason?: 'unavailable' | 'konf_sign_in') => ({
+    organizerOrgIds: others,
+    isOrganizer: others.length > 0,
+    ...(adminDenyReason && { adminDenyReason }),
+  })
+  try {
+    const a = await orgAuthority(host)
+    if (!a) return rights // no gateway on this environment
+    if (lastSource.size > 1000) lastSource.clear()
+    lastSource.set(host, { at: Date.now(), identitySource: a.identitySource })
+    if (!a.identitySource) return rights
+    if (a.admin)
+      return { organizerOrgIds: [...others, orgId], isOrganizer: true }
+    return withheld(a.signedIn ? undefined : 'konf_sign_in')
+  } catch (error) {
+    const seen = lastSource.get(host)
+    if (seen && !seen.identitySource && Date.now() - seen.at < GRACE_MS)
+      return rights
+    console.error(
+      `[authz-deny] identity member source unreadable for ${host}; withholding org ${orgId}:`,
+      error instanceof Error ? error.message : error,
+    )
+    return withheld('unavailable')
+  }
 }
 
 /** Test hook. */
 export function clearOrganizerRightsMemo(): void {
   memo.clear()
   lastGood.clear()
+  lastSource.clear()
 }
