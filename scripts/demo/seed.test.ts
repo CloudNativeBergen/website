@@ -5,14 +5,34 @@ import {
   DEMO_PREFIX,
   DEMO_SEED,
   inviteToken,
+  LIVE_CONFERENCE_ID,
   NotDemoOrgError,
+  OperatorTokenError,
   run,
   type Deps,
 } from './seed'
 
 const now = new Date('2026-11-08T00:00:00Z')
+const fixtures = generateDemoFixtures({ seed: DEMO_SEED, now })
+const titleOf = (key: string) =>
+  fixtures.d1.editions.find((e) => e.key === key)!.title
+// D1 ids deliberately unlike any seed id.
+const D1_EDITIONS = [
+  { id: 'd1-past-7f3', title: titleOf('edition-past'), primaryHost: null },
+  { id: 'd1-live-111', title: titleOf('edition-live'), primaryHost: 'kk' },
+  { id: 'd1-next-9a2', title: titleOf('edition-upcoming'), primaryHost: null },
+]
+const EDITION_IDS = {
+  'edition-past': 'd1-past-7f3',
+  'edition-upcoming': 'd1-next-9a2',
+}
 
-function deps(kind: string | null) {
+const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url')
+const jwt = (exp: unknown) =>
+  `${b64({ alg: 'EdDSA' })}.${b64({ sub: 'op', exp })}.sig`
+const TOKEN = jwt(Math.floor(Date.now() / 1000) + 900)
+
+function deps(kind: string | null, { d1 = true, editions = D1_EDITIONS } = {}) {
   const mutations: unknown[] = []
   const commit = vi.fn(async () => undefined)
   const client = {
@@ -23,68 +43,150 @@ function deps(kind: string | null) {
           mutations.push(['ifMissing', d]),
           tx
         ),
+        patch: (id: string, ops: unknown) => (
+          mutations.push(['patch', id, ops]),
+          tx
+        ),
         commit,
       }
       return tx
     },
   }
+  const seedDemoD1 = vi.fn(async () => ({ ok: true }))
   const d = {
     api: {
-      request: vi.fn(async () => ({
-        organization: kind === null ? null : { id: 'org-1', kind },
-      })) as unknown as Deps['api']['request'],
+      request: vi.fn(async (_host: string | null, query: string) =>
+        query.includes('conferenceEditions')
+          ? { conferenceEditions: editions }
+          : { organization: kind === null ? null : { id: 'org-1', kind } },
+      ) as unknown as Deps['api']['request'],
     },
     createSanityClient: vi.fn(async () => client),
-    loadSeedDemoD1: vi.fn(async () => undefined),
+    loadSeedDemoD1: vi.fn(async () => (d1 ? seedDemoD1 : undefined)),
     log: vi.fn(),
   } satisfies Deps
-  return { d, mutations, commit }
+  return { d, mutations, commit, seedDemoD1 }
 }
 
+const opts = (o: Partial<Parameters<typeof run>[0]> = {}) => ({
+  host: 'kk.example.com',
+  dryRun: false,
+  now,
+  token: TOKEN,
+  ...o,
+})
+
 describe('demo:seed', () => {
+  it.each([
+    ['missing', undefined],
+    ['malformed', 'not-a-jwt'],
+    ['undecodable payload', 'a.!!!.c'],
+    ['no exp', jwt(undefined)],
+    ['expired', jwt(Math.floor(Date.now() / 1000) - 60)],
+  ])(
+    'refuses a %s operator token before the guard or any client',
+    async (_, token) => {
+      const { d } = deps('demo')
+      await expect(run(opts({ token }), d)).rejects.toThrow(OperatorTokenError)
+      expect(d.api.request).not.toHaveBeenCalled()
+      expect(d.createSanityClient).not.toHaveBeenCalled()
+    },
+  )
+
+  it('never puts the token in an error message', async () => {
+    const { d } = deps('demo')
+    const expired = jwt(1)
+    await expect(run(opts({ token: expired }), d)).rejects.not.toThrow(expired)
+  })
+
   it('refuses a customer org before any Sanity client exists', async () => {
     const { d } = deps('customer')
-    await expect(
-      run({ host: 'customer.example.com', dryRun: false, now }, d),
-    ).rejects.toThrow(NotDemoOrgError)
+    await expect(run(opts(), d)).rejects.toThrow(NotDemoOrgError)
     expect(d.createSanityClient).not.toHaveBeenCalled()
     expect(d.loadSeedDemoD1).not.toHaveBeenCalled()
   })
 
   it('refuses an unknown org the same way', async () => {
     const { d } = deps(null)
-    await expect(
-      run({ host: 'nope.example.com', dryRun: false, now }, d),
-    ).rejects.toThrow(NotDemoOrgError)
+    await expect(run(opts(), d)).rejects.toThrow(NotDemoOrgError)
+    expect(d.createSanityClient).not.toHaveBeenCalled()
+  })
+
+  it('stops a real run when seedDemoD1 is missing, writing nothing', async () => {
+    const { d } = deps('demo', { d1: false })
+    await expect(run(opts(), d)).rejects.toThrow(/seedDemoD1/)
+    expect(d.createSanityClient).not.toHaveBeenCalled()
+  })
+
+  it('stops when D1 has no edition for a fixture edition', async () => {
+    const { d } = deps('demo', { editions: [D1_EDITIONS[1]] })
+    await expect(run(opts(), d)).rejects.toThrow(/edition-past/)
     expect(d.createSanityClient).not.toHaveBeenCalled()
   })
 
   it('dry run prints counts and creates no write client', async () => {
-    const { d } = deps('demo')
-    await run({ host: 'kk.example.com', dryRun: true, now }, d)
+    const { d } = deps('demo', { d1: false, editions: [] })
+    await run(opts({ dryRun: true }), d)
     expect(d.createSanityClient).not.toHaveBeenCalled()
     const out = d.log.mock.calls.map((c) => c[0]).join('\n')
     expect(out).toMatch(/talk\s+46/)
     expect(out).toMatch(/seedDemoD1 not available/)
   })
 
-  it('a demo org writes in transactions, and twice gives identical mutations', async () => {
+  it('runs seedDemoD1 before reading editions and writing Sanity', async () => {
+    const { d, seedDemoD1 } = deps('demo')
+    await run(opts(), d)
+    const reqs = vi.mocked(d.api.request).mock.invocationCallOrder
+    expect(seedDemoD1.mock.invocationCallOrder[0]).toBeLessThan(reqs[1])
+    expect(reqs[1]).toBeLessThan(
+      d.createSanityClient.mock.invocationCallOrder[0],
+    )
+  })
+
+  it('writes in transactions, twice identically; live conference patched not replaced, edition ids from D1', async () => {
     const a = deps('demo')
     const b = deps('demo')
-    await run({ host: 'kk.example.com', dryRun: false, now }, a.d)
-    await run({ host: 'kk.example.com', dryRun: false, now }, b.d)
+    await run(opts(), a.d)
+    await run(opts(), b.d)
     expect(a.commit).toHaveBeenCalled()
     expect(a.mutations.length).toBeGreaterThan(400)
     // Tokens are random without DEMO_SEED_TOKEN_SECRET; everything else matches.
     const noTokens = (m: unknown[]) =>
       JSON.parse(JSON.stringify(m).replace(/"token":"[^"]*"/g, '"token":""'))
     expect(noTokens(a.mutations)).toEqual(noTokens(b.mutations))
+
+    // The live doc: patched only, never createOrReplace'd.
+    const touching = (id: string) =>
+      a.mutations.filter(
+        (m) =>
+          JSON.stringify(m).startsWith(`["put",{"_id":"${id}"`) ||
+          (m as unknown[])[1] === id ||
+          ((m as unknown[])[1] as { _id?: string })?._id === id,
+      ) as unknown[][]
+    const live = touching(LIVE_CONFERENCE_ID)
+    expect(live.map((m) => m[0])).toEqual(['ifMissing', 'patch'])
+    expect(live[0][1]).toEqual({ _id: LIVE_CONFERENCE_ID, _type: 'conference' })
+    expect(Object.keys(live[1][2] as object).sort()).toEqual([
+      'set',
+      'setIfMissing',
+    ])
+    // Past/upcoming use the D1 ids from the query; no seed-made conference ids.
+    expect(touching('d1-past-7f3').map((m) => m[0])).toEqual([
+      'ifMissing',
+      'patch',
+    ])
+    expect(touching('d1-next-9a2').map((m) => m[0])).toEqual([
+      'ifMissing',
+      'patch',
+    ])
+    expect(JSON.stringify(a.mutations)).not.toContain(
+      `${DEMO_PREFIX}conference`,
+    )
+    expect(JSON.stringify(a.mutations)).toContain('"_ref":"d1-past-7f3"')
   })
 
   it('invite tokens are not derivable from the fixture key', () => {
-    const { upsert } = buildDocuments(
-      generateDemoFixtures({ seed: DEMO_SEED, now }),
-    )
+    const { upsert } = buildDocuments(fixtures, EDITION_IDS)
     const invites = upsert.filter((d) => d._type === 'coSpeakerInvitation')
     expect(invites.length).toBeGreaterThan(0)
     for (const d of invites) {
@@ -102,26 +204,29 @@ describe('demo:seed', () => {
     )
   })
 
-  it('every _id and every reference stays inside the demo prefix', () => {
-    const { upsert, ifMissing } = buildDocuments(
-      generateDemoFixtures({ seed: DEMO_SEED, now }),
+  it('every _id stays inside the demo prefix; refs hit seeded docs or D1 editions', () => {
+    const { upsert, ifMissing, conferences } = buildDocuments(
+      fixtures,
+      EDITION_IDS,
     )
     const docs = [...upsert, ...ifMissing]
     for (const doc of docs) expect(doc._id.startsWith(DEMO_PREFIX)).toBe(true)
-    const refs = JSON.stringify(docs).match(/"_ref":"[^"]+"/g) ?? []
+    const refs = (
+      JSON.stringify([docs, conferences]).match(/"_ref":"[^"]+"/g) ?? []
+    ).map((r) => r.slice(8, -1))
     expect(refs.length).toBeGreaterThan(100)
-    for (const r of refs) expect(r).toContain(`"_ref":"${DEMO_PREFIX}`)
-    // Every reference points at a document this seed writes.
-    const ids = new Set(docs.map((x) => x._id))
-    expect(refs.map((r) => r.slice(8, -1)).filter((r) => !ids.has(r))).toEqual(
-      [],
+    const ids = new Set([
+      ...docs.map((x) => x._id),
+      ...conferences.map((c) => c.id),
+    ])
+    expect(refs.filter((r) => !ids.has(r))).toEqual([])
+    expect(conferences.map((c) => c.id).sort()).toEqual(
+      ['d1-next-9a2', 'd1-past-7f3', LIVE_CONFERENCE_ID].sort(),
     )
   })
 
   it('gives every array item a _key', () => {
-    const { upsert } = buildDocuments(
-      generateDemoFixtures({ seed: DEMO_SEED, now }),
-    )
+    const { upsert, conferences } = buildDocuments(fixtures, EDITION_IDS)
     const missing: string[] = []
     const walk = (v: unknown, path: string) => {
       if (Array.isArray(v))
@@ -134,6 +239,7 @@ describe('demo:seed', () => {
         for (const [k, x] of Object.entries(v)) walk(x, `${path}.${k}`)
     }
     for (const doc of upsert) walk(doc, doc._id)
+    for (const c of conferences) walk(c, c.id)
     expect(missing).toEqual([])
   })
 })

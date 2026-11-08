@@ -5,12 +5,15 @@
  * same fixtures to website-001's `seedDemoD1` for the D1 side.
  *
  * Order matters and is tested:
+ *   0. Decode KONF_OPERATOR_TOKEN locally: missing, malformed or expired exits.
  *   1. Ask the gateway (operator lane, tenant = --host) for the org's kind.
  *      Anything but `demo` exits before a Sanity client exists.
- *   2. Build every document; refuse if any `_id` is outside DEMO_PREFIX.
- *   3. --dry-run: print counts per type and stop. No write client.
- *   4. createOrReplace in transactions. Deterministic ids, so a re-run on
- *      the same UTC day sends identical mutations.
+ *   2. seedDemoD1 (#2164) creates the D1 editions; without it a real run stops.
+ *   3. Read `conferenceEditions` and map past/upcoming by title. The live
+ *      edition is `kkdemo.conference`, patched (set/setIfMissing), never replaced.
+ *   4. --dry-run: print counts per type and stop. No write client.
+ *   5. createOrReplace everything else under DEMO_PREFIX, in transactions.
+ *      Same UTC day gives identical mutations, except invite tokens.
  *
  * Env: KONF_OPERATOR_TOKEN (identity JWT of a platform operator, origin
  * claim = KONF_OPERATOR_ORIGIN, default https://my.konf.app), KONF_API_URL
@@ -43,6 +46,13 @@ export interface SanityWriter {
   transaction(): {
     createOrReplace(doc: Doc): unknown
     createIfNotExists(doc: Doc): unknown
+    patch(
+      id: string,
+      ops: {
+        set?: Record<string, unknown>
+        setIfMissing?: Record<string, unknown>
+      },
+    ): unknown
     commit(): Promise<unknown>
   }
 }
@@ -63,6 +73,29 @@ export interface Deps {
 }
 
 export class NotDemoOrgError extends Error {}
+export class OperatorTokenError extends Error {}
+
+/**
+ * Local sanity check of the operator JWT before anything else runs. No
+ * signature check: the gateway verifies it. Never logs the token.
+ */
+export function checkOperatorToken(token: string | undefined, nowMs: number) {
+  if (!token) throw new OperatorTokenError('KONF_OPERATOR_TOKEN is not set')
+  let exp: unknown
+  try {
+    const [, payload, sig, ...rest] = token.split('.')
+    if (!payload || !sig || rest.length) throw new Error()
+    exp = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')).exp
+  } catch {
+    throw new OperatorTokenError('KONF_OPERATOR_TOKEN is not a JWT')
+  }
+  if (typeof exp !== 'number')
+    throw new OperatorTokenError('KONF_OPERATOR_TOKEN has no exp')
+  if (exp * 1000 <= nowMs)
+    throw new OperatorTokenError(
+      'KONF_OPERATOR_TOKEN has expired; copy a fresh one from Kontroll',
+    )
+}
 
 // ------------------------------------------------------------ documents
 
@@ -113,39 +146,43 @@ export function inviteToken(
     : randomBytes(32).toString('hex')
 }
 
-export function buildDocuments(f: DemoFixtures): {
+/** The live edition's Sanity document; patched, never replaced. */
+export const LIVE_CONFERENCE_ID = 'kkdemo.conference'
+const LIVE_KEY = 'edition-live'
+
+export interface ConferencePatch {
+  id: string
+  /** Seed-owned fields, always written. */
+  set: Record<string, unknown>
+  /** Written only where the document has no value (operator edits survive). */
+  setIfMissing: Record<string, unknown>
+}
+
+/**
+ * `editionIds` maps fixture edition keys to conference ids from D1; the live
+ * edition is always LIVE_CONFERENCE_ID.
+ */
+export function buildDocuments(
+  f: DemoFixtures,
+  editionIds: Record<string, string>,
+): {
   upsert: Doc[]
   ifMissing: Doc[]
+  conferences: ConferencePatch[]
 } {
   const s = f.sanity
-  const conf = (key: string) => ref('conference', key)
+  const confId = (key: string) => {
+    const v = key === LIVE_KEY ? LIVE_CONFERENCE_ID : editionIds[key]
+    if (!v) throw new Error(`no D1 conference id for ${key}`)
+    return v
+  }
+  const conf = (key: string) => ({ _type: 'reference', _ref: confId(key) })
   const members = f.d1.members
   const talkEdition = new Map(s.proposals.map((p) => [p.key, p.editionKey]))
   const speakersOf = new Map(s.proposals.map((p) => [p.key, p.speakerKeys]))
   const topics = [...new Set(s.proposals.flatMap((p) => p.topics))]
 
   const upsert: Doc[] = [
-    ...f.d1.editions.map((e) => ({
-      _id: id('conference', e.key),
-      _type: 'conference',
-      title: e.title,
-      tagline: e.tagline,
-      organization: { _type: 'reference', _ref: ORG_ID },
-      city: e.city,
-      country: e.country,
-      startDate: e.startDate,
-      endDate: e.endDate,
-      visibility: 'unlisted',
-      theme: {
-        primaryColor: s.branding.primaryColor,
-        accentColor: s.branding.accentColor,
-      },
-      organizers: refs(
-        'speaker',
-        members.filter((m) => m.role !== 'member').map((m) => m.key),
-        'og',
-      ),
-    })),
     ...topics.map((t) => ({
       _id: id('topic', t),
       _type: 'topic',
@@ -401,7 +438,31 @@ export function buildDocuments(f: DemoFixtures): {
       slug: { _type: 'slug', current: 'kontainerkonf-demo' },
     },
   ]
-  return { upsert, ifMissing }
+  const conferences: ConferencePatch[] = f.d1.editions.map((e) => ({
+    id: confId(e.key),
+    set: {
+      theme: {
+        primaryColor: s.branding.primaryColor,
+        accentColor: s.branding.accentColor,
+      },
+    },
+    setIfMissing: {
+      title: e.title,
+      tagline: e.tagline,
+      organization: { _type: 'reference', _ref: ORG_ID },
+      city: e.city,
+      country: e.country,
+      startDate: e.startDate,
+      endDate: e.endDate,
+      visibility: 'unlisted',
+      organizers: refs(
+        'speaker',
+        members.filter((m) => m.role !== 'member').map((m) => m.key),
+        'og',
+      ),
+    },
+  }))
+  return { upsert, ifMissing, conferences }
 }
 
 export function assertDemoIds(docs: Doc[]) {
@@ -425,10 +486,11 @@ export const today = (d = new Date()) =>
 const TX_SIZE = 200
 
 export async function run(
-  opts: { host: string; dryRun: boolean; now: Date },
+  opts: { host: string; dryRun: boolean; now: Date; token: string | undefined },
   deps: Deps,
 ) {
-  // 1. Guard first: nothing below runs for a non-demo org.
+  // 0. Token sanity, then the guard: nothing below runs for a non-demo org.
+  checkOperatorToken(opts.token, Date.now())
   const { organization } = await deps.api.request<{
     organization: { id: string; kind: string | null } | null
   }>(opts.host, '{ organization { id kind } }')
@@ -438,41 +500,77 @@ export async function run(
     )
 
   const fixtures = generateDemoFixtures({ seed: DEMO_SEED, now: opts.now })
-  const { upsert, ifMissing } = buildDocuments(fixtures)
+
+  // 1. D1 first: website-001's seedDemoD1 (#2164) creates the editions whose
+  //    ids the Sanity documents reference. Do not write D1 here.
+  const seedDemoD1 = await deps.loadSeedDemoD1()
+  if (seedDemoD1)
+    deps.log(
+      `D1: ${JSON.stringify(await seedDemoD1(fixtures, deps.api, { host: opts.host, dryRun: opts.dryRun }))}`,
+    )
+  else if (!opts.dryRun)
+    throw new Error(
+      'stopping: seedDemoD1 (#2164) is not available, so D1 has no demo editions to reference',
+    )
+  else deps.log('D1: seedDemoD1 not available yet (#2164), skipped.')
+
+  // 2. Edition ids from D1, matched by title. The live edition is LIVE_CONFERENCE_ID.
+  const { conferenceEditions } = await deps.api.request<{
+    conferenceEditions: { id: string; title: string | null }[] | null
+  }>(opts.host, '{ conferenceEditions { id title primaryHost } }')
+  const editionIds: Record<string, string> = {}
+  const missing: string[] = []
+  for (const e of fixtures.d1.editions) {
+    if (e.key === LIVE_KEY) continue
+    const hit = conferenceEditions?.find((c) => c.title === e.title)
+    if (hit) editionIds[e.key] = hit.id
+    else missing.push(`${e.key} (${e.title})`)
+  }
+  if (missing.length) {
+    if (!opts.dryRun)
+      throw new Error(
+        `stopping: D1 has no edition for ${missing.join(', ')}; run seedDemoD1 first`,
+      )
+    deps.log(`Dry run: no D1 edition yet for ${missing.join(', ')}`)
+    for (const e of fixtures.d1.editions)
+      editionIds[e.key] ??= `(pending:${e.key})`
+  }
+
+  const { upsert, ifMissing, conferences } = buildDocuments(
+    fixtures,
+    editionIds,
+  )
   assertDemoIds([...upsert, ...ifMissing])
 
   deps.log(`${opts.dryRun ? 'Planned' : 'Writing'} Sanity documents:`)
+  deps.log(`  ${'conference (patched)'.padEnd(22)} ${conferences.length}`)
   for (const [type, n] of Object.entries(
     countByType([...ifMissing, ...upsert]),
   ))
     deps.log(`  ${type.padEnd(22)} ${n}`)
+  if (opts.dryRun) return
 
-  if (!opts.dryRun) {
-    const client = await deps.createSanityClient()
-    for (let i = 0; i < upsert.length; i += TX_SIZE) {
-      const tx = client.transaction()
-      if (i === 0) ifMissing.forEach((d) => tx.createIfNotExists(d))
-      upsert.slice(i, i + TX_SIZE).forEach((d) => tx.createOrReplace(d))
-      await tx.commit()
+  // 3. Write. Conference docs: create if absent, then patch seed-owned fields
+  //    only; never createOrReplace (the live one carries operator settings).
+  const client = await deps.createSanityClient()
+  for (let i = 0; i < upsert.length; i += TX_SIZE) {
+    const tx = client.transaction()
+    if (i === 0) {
+      ifMissing.forEach((d) => tx.createIfNotExists(d))
+      for (const c of conferences) {
+        tx.createIfNotExists({ _id: c.id, _type: 'conference' })
+        tx.patch(c.id, { setIfMissing: c.setIfMissing, set: c.set })
+      }
     }
+    upsert.slice(i, i + TX_SIZE).forEach((d) => tx.createOrReplace(d))
+    await tx.commit()
   }
-
-  // ---- D1: website-001's seedDemoD1 (#2164). Do not write D1 here.
-  const seedDemoD1 = await deps.loadSeedDemoD1()
-  if (!seedDemoD1)
-    deps.log('D1: seedDemoD1 not available yet (#2164), skipped.')
-  else
-    deps.log(
-      `D1: ${JSON.stringify(await seedDemoD1(fixtures, deps.api, { host: opts.host, dryRun: opts.dryRun }))}`,
-    )
 }
 
 // ------------------------------------------------------------------ CLI
 
-function operatorClient(): GraphQLClient {
+function operatorClient(token: string): GraphQLClient {
   const url = process.env.KONF_API_URL?.trim() || 'https://api.konf.app/graphql'
-  const token = process.env.KONF_OPERATOR_TOKEN
-  if (!token) throw new Error('KONF_OPERATOR_TOKEN is required')
   const origin = process.env.KONF_OPERATOR_ORIGIN || 'https://my.konf.app'
   return {
     async request<T>(
@@ -505,9 +603,14 @@ async function main() {
   const hostAt = args.indexOf('--host')
   const host = hostAt >= 0 ? args[hostAt + 1] : DEFAULT_HOST
   await run(
-    { host, dryRun: args.includes('--dry-run'), now: today() },
     {
-      api: operatorClient(),
+      host,
+      dryRun: args.includes('--dry-run'),
+      now: today(),
+      token: process.env.KONF_OPERATOR_TOKEN,
+    },
+    {
+      api: operatorClient(process.env.KONF_OPERATOR_TOKEN ?? ''),
       createSanityClient: async () => {
         // Imported lazily so a refused or dry run never loads a write client.
         const { createClient } = await import('next-sanity')
