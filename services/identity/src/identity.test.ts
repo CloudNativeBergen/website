@@ -167,8 +167,10 @@ describe('signupOwner (#2163)', () => {
     ])
     const { results } = await d1
       .prepare(
-        "SELECT userId, detail FROM audit_event WHERE action = 'org.signup'",
+        // Scoped to this user: sibling tests in the shuffled file also sign up.
+        "SELECT userId, detail FROM audit_event WHERE action = 'org.signup' AND userId = ?1",
       )
+      .bind(u.id)
       .all()
     expect(results).toEqual([
       {
