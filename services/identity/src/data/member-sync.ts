@@ -3,6 +3,7 @@
 // demotes. Orgs in MEMBER_SOURCE_ORGS have identity as their source: they
 // get a drift check instead and are never granted (#1923). Matching and ids follow scripts/backfill-identity-members.ts (#1909).
 
+import { can, principalOfRole } from '@runkonf/tenancy'
 import { emit } from './push'
 import { recordJobStatus, type MemberSyncDrift } from './job-status'
 
@@ -327,15 +328,11 @@ async function checkDrift(
         .map((o) => o.speakerId),
     ),
   ].sort()
-  // As authorization reads a role (members.ts asMember: trim each item), so
+  // As authorization reads a role (members.ts asMember: parseOrgRoles), so
   // a role it refuses, such as "ow ner", is a mismatch. ownersBelowTwo uses
   // isOwner instead, the LAST_OWNER trigger's rule: the two differ on purpose
   // (#1949).
-  const roleOk = (r: string) =>
-    r
-      .toLowerCase()
-      .split(',')
-      .some((x) => ['owner', 'admin'].includes(x.trim()))
+  const roleOk = (r: string) => can(principalOfRole(r), 'org.manage_members')
   const drift: Drift = {
     missingInIdentity: [...new Set(missingInIdentity)].sort(),
     missingInSanity: [...roles.keys()].filter((u) => !inSanity.has(u)).sort(),

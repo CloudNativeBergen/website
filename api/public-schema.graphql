@@ -258,6 +258,11 @@ type Mutation {
   removeMember(userId: ID!): Boolean
 
   """
+  Emergency revocation: removes the user's memberships (except where they are an org's last owner, reported in keptLastOwnerOf), sessions and operator flag, audited. Platform operators only. An issued identity JWT lives up to 300 s more.
+  """
+  revokeAll(userId: ID!): RevokeAllResult
+
+  """
   Stores a web push subscription for the session user. An endpoint another user held moves to the caller.
   """
   subscribePush(input: PushSubscriptionInput!): Boolean
@@ -694,6 +699,12 @@ type PendingInvitation {
   expiresAt: String
   id: ID
   role: String
+}
+
+type RevokeAllResult {
+  keptLastOwnerOf: [ID!]
+  membersRemoved: Int
+  sessionsRevoked: Int
 }
 
 type SpeakerDirectoryPage {

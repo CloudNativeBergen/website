@@ -5,7 +5,12 @@
 // next-sanity and reads process.env, neither of which belongs in a Worker.
 // The filters are scoped.ts's (ORG_FILTER), with the tenant from the envelope.
 import { createClient, type SanityClient } from '@sanity/client'
-import { ScopedRepository, type Envelope } from '@runkonf/tenancy'
+import {
+  ScopedRepository,
+  can,
+  principalOf,
+  type Envelope,
+} from '@runkonf/tenancy'
 
 /** Bindings the data layer needs; the generated WorkerEnv extends it. */
 export interface DataEnv {
@@ -169,8 +174,10 @@ class Conferences extends ScopedRepository {
     const published = !['cancelled', 'archived'].includes(
       doc.lifecycleStatus ?? '',
     )
-    if (!published && !this.tenant.orgRole) return null
-    return toConference(doc, !!this.tenant.orgRole)
+    // C2 (#2106): insiders per can(); members included (owner decision 1).
+    const insider = can(principalOf(this.tenant), 'conference.read_draft')
+    if (!published && !insider) return null
+    return toConference(doc, insider)
   }
 
   /** Entity resolution: an id other than the envelope's resolves to null. */

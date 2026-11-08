@@ -4,6 +4,9 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 import { createGraphQLError } from 'graphql-yoga'
 import {
   ScopedRepository,
+  can,
+  principalOf,
+  SITE_SCOPE,
   unscopedForPlatformOps,
   type Envelope,
   type PlatformContext,
@@ -11,6 +14,7 @@ import {
 import { rawDb } from './db'
 import { conferences } from './schema'
 import { conferenceParityStatus } from './job-status'
+import { emitAudit } from '../push'
 
 export type ConferenceRow = typeof conferences.$inferSelect
 
@@ -19,16 +23,8 @@ export type ConferencePatch = Partial<
   Omit<ConferenceRow, 'conferenceId' | 'orgId' | 'updatedAt'>
 >
 
-/** Org roles that may write (#1881, owner decision 3). */
-const WRITERS = new Set(['owner', 'admin'])
-
-/**
- * Minted by the gateway only on its operator lane (#1921); a tenant-site
- * envelope always carries `scopes: []`, and the subgraph verifies the signature.
- */
-const OPERATOR_SCOPE = 'platform:operator'
 /** The site's server lane (api/src/gateway.ts SITE_SCOPE), set only for a verified site assertion. */
-export const SITE_SCOPE = 'site:server'
+export { SITE_SCOPE }
 /** The workshop reminder's rate limit (src/lib/workshop/reminder.ts). */
 export const REMINDER_WINDOW_MS = 60 * 60 * 1000
 const BINDING = ['checkinEventId', 'titoAccountSlug', 'titoEventSlug'] as const
@@ -53,6 +49,11 @@ class Conferences extends ScopedRepository {
    * The envelope's Conference, never one the caller names. An unpublished
    * one is for members of the org only (epic #1772, req. 2).
    */
+  /** C2: unpublished editions (owner decision 1: members are insiders). */
+  private insider() {
+    return can(principalOf(this.tenant), 'conference.read_draft')
+  }
+
   async current(): Promise<ConferenceRow | null> {
     const { org_id, conference_id } = this.columns
     if (!conference_id) return null
@@ -62,7 +63,7 @@ class Conferences extends ScopedRepository {
         eq(conferences.conferenceId, conference_id),
       ),
     })
-    if (!row || (!row.published && !this.tenant.orgRole)) return null
+    if (!row || (!row.published && !this.insider())) return null
     return row
   }
 
@@ -75,7 +76,7 @@ class Conferences extends ScopedRepository {
   async editions(): Promise<ConferenceRow[]> {
     const own = eq(conferences.orgId, this.columns.org_id)
     return this.db.query.conferences.findMany({
-      where: this.tenant.orgRole
+      where: this.insider()
         ? own
         : and(
             own,
@@ -93,11 +94,10 @@ class Conferences extends ScopedRepository {
    * so a refusal says nothing about whether the row exists.
    */
   async update(patch: ConferencePatch): Promise<ConferenceRow> {
-    const { userId, orgRole, scopes } = this.tenant
-    // better-auth stores several roles comma-separated.
-    const roles = orgRole?.split(',').map((r) => r.trim()) ?? []
-    const operator = scopes.includes(OPERATOR_SCOPE)
-    if (!userId || !(operator || roles.some((r) => WRITERS.has(r)))) {
+    const { userId, scopes } = this.tenant
+    const p = principalOf(this.tenant)
+    const operator = p.has('Op')
+    if (!can(p, 'conference.update_settings')) {
       throw fail(
         'updating the conference requires an org owner or admin',
         'FORBIDDEN',
@@ -121,7 +121,12 @@ class Conferences extends ScopedRepository {
     const rebinds = BINDING.some(
       (k) => k in patch && (patch[k] ?? null) !== (row[k] ?? null),
     )
-    if (rebinds && !operator && !scopes.includes(SITE_SCOPE))
+    // ponytail: the site:server arm goes in phase 2b (docs/AUTHORIZATION.md).
+    if (
+      rebinds &&
+      !can(p, 'conference.bind_ticketing') &&
+      !scopes.includes(SITE_SCOPE)
+    )
       throw fail(
         'only a platform operator can change the ticketing event binding',
         'FORBIDDEN',
@@ -156,9 +161,16 @@ class Conferences extends ScopedRepository {
         throw dateOrder()
       throw fail('conference not found', 'NOT_FOUND')
     }
-    // Every write on the operator lane is audited (#1921).
-    // ponytail: log only; a D1 audit table when someone needs to query it.
-    if (operator)
+    // Every write on the operator lane is audited (#1921): identity
+    // audit_event over the bus, plus the log line in case the bus is down.
+    if (operator) {
+      emitAudit({
+        type: 'operator.write',
+        actorId: userId!,
+        organizationId: org_id,
+        conferenceId: conference_id,
+        fields: Object.keys(patch),
+      })
       console.log(
         JSON.stringify({
           event: 'operator.write',
@@ -169,6 +181,7 @@ class Conferences extends ScopedRepository {
           at: new Date().toISOString(),
         }),
       )
+    }
     return updated
   }
 
@@ -178,8 +191,7 @@ class Conferences extends ScopedRepository {
    * generic patch never touches these columns. Checked before any query.
    */
   private reminderWhere() {
-    const { scopes } = this.tenant
-    if (!scopes.includes(SITE_SCOPE) && !scopes.includes(OPERATOR_SCOPE))
+    if (!can(principalOf(this.tenant), 'reminder_lock'))
       throw fail('the reminder lock is for the site lane only', 'FORBIDDEN')
     const { org_id, conference_id } = this.columns
     if (!conference_id) throw fail('no conference in this request', 'NOT_FOUND')

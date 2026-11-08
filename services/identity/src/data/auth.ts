@@ -13,6 +13,7 @@ import {
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { bearer, jwt, organization } from 'better-auth/plugins'
 import { and, count, eq, gt, lte, sql } from 'drizzle-orm'
+import { parseOrgRoles } from '@runkonf/tenancy'
 import { rawDb } from './db'
 import { emit } from './push'
 import * as schema from './schema'
@@ -40,7 +41,7 @@ export const JWT_AUDIENCE = 'konf-gateway'
 export const INVITATION_EXPIRES_IN = 30 * 24 * 3600
 
 export const isOwner = (role: string | null | undefined) =>
-  (role ?? '').split(',').some((r) => r.trim().toLowerCase() === 'owner')
+  parseOrgRoles(role).has('owner')
 
 /** The pending invitation a `resend: true` invite refreshes, if any. */
 const resendOf = defineRequestState<{ id: string; actor: string } | undefined>(
