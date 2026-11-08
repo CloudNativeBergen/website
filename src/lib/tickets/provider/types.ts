@@ -41,12 +41,6 @@ export interface TicketingCapabilities {
   checkin: boolean
 }
 
-/** Money as an integer in the currency's minor unit (øre, cents). */
-export interface Money {
-  amountMinor: number
-  currency: string | null
-}
-
 /** A person as the provider reports them on an order. */
 export interface OrderContact {
   firstName: string
@@ -279,7 +273,8 @@ export interface TicketingProvider {
     eventRef: EventRef,
     options?: FetchEventTicketsOptions,
   ): Promise<EventTicket[]>
-  fetchOrderPaymentDetails(orderId: string): Promise<OrderPaymentDetails>
+  /** `null` when the vendor has no such order. */
+  fetchOrderPaymentDetails(orderId: string): Promise<OrderPaymentDetails | null>
 
   /**
    * Public ticket types for an event. Throws on transport/not-found; callers

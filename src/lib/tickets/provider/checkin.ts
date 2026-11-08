@@ -462,7 +462,7 @@ export class CheckinProvider implements TicketingProvider {
 
   async fetchOrderPaymentDetails(
     orderId: string,
-  ): Promise<OrderPaymentDetails> {
+  ): Promise<OrderPaymentDetails | null> {
     const query = `
     query FindCheckinPayOrderByID($id: Int!) {
       findCheckinPayOrderByID(id: $id, type: EVENT) {
@@ -514,8 +514,8 @@ export class CheckinProvider implements TicketingProvider {
     )
 
     const order = responseData.findCheckinPayOrderByID
-    if (!order) throw new Error(`Payment order ${orderId} not found`)
-    return toOrderPaymentDetails(order)
+    // Absent order: `null`, as before the Konf mapping (the router returned it).
+    return order ? toOrderPaymentDetails(order) : null
   }
 
   private async fetchEventOrders(

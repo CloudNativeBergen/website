@@ -15,18 +15,14 @@ import type {
   EventRef,
   TicketingProvider,
   TicketingProviderCredentials,
-  TicketingCapabilities,
   TicketingProviderType,
-  OrderPaymentDetails,
 } from './types'
 
 export type {
   TicketingProvider,
   TicketingProviderCredentials,
   EventRef,
-  TicketingCapabilities,
   TicketingProviderType,
-  OrderPaymentDetails,
 }
 /**
  * The PURE order-created discriminator. Exported here so the inbound webhook can
