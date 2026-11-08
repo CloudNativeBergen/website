@@ -283,7 +283,10 @@ describe('submitProposal', () => {
     })
     const d = doc(r.data.submitProposal.id)
     expect(d.conference).toEqual(ref('conf_a'))
-    expect(d.speakerSnapshot).toMatchObject({ speaker: 'sp_me', ...PROFILE })
+    expect(d.speakerSnapshot).toMatchObject({
+      speaker: { _type: 'reference', _ref: 'sp_me', _weak: true },
+      ...PROFILE,
+    })
     // The identity binding offers only `link`; the profile is unchanged.
     expect(Object.keys(env.IDENTITY)).toEqual(['link'])
     expect(LINKS.u_me.profile).toEqual({
@@ -400,6 +403,28 @@ describe('updateMyProposal', () => {
     })
     expect(errOf(down)?.[0].code).toBe('FORBIDDEN')
     expect(doc('t_acc').title).toBe('t_acc title')
+  })
+
+  it('validates the fields a draft update sets', async () => {
+    for (const input of [
+      { format: 'keynote' },
+      { level: 'expert' },
+      { language: 'klingon' },
+      { audiences: ['ceo'] },
+      { capacity: 0 },
+      { capacity: 300 },
+      { outline: 'x'.repeat(2001) },
+    ])
+      expect(
+        errOf(await gql(UPDATE, as('u_me'), { id: 't_draft', input }))?.[0]
+          .code,
+      ).toBe('BAD_USER_INPUT')
+    expect(doc('t_draft').format).toBe('presentation_25')
+    const ok = await gql(UPDATE, as('u_me'), {
+      id: 't_draft',
+      input: { level: 'advanced' },
+    })
+    expect(ok.errors).toBeUndefined()
   })
 
   it('refuses a rejected proposal', async () => {

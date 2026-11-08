@@ -171,6 +171,7 @@ const isWorkshop = (f: string | null | undefined) =>
  */
 export function validate(p: ProposalFields, storedCapacity?: number | null) {
   const bad = (m: string) => no('BAD_USER_INPUT', m)
+  validateFields(p, storedCapacity)
   if (!p.title?.trim()) bad('Title is required')
   if (!p.abstract?.trim()) bad('Description cannot be empty')
   if (!p.language || !values('languages').includes(p.language))
@@ -186,6 +187,27 @@ export function validate(p: ProposalFields, storedCapacity?: number | null) {
   if (p.tos !== true) bad('Terms of Service must be accepted')
   if (p.prerequisites?.trim() && !isWorkshop(p.format))
     bad('Prerequisites are only allowed for workshop formats')
+}
+
+/**
+ * Checks that hold for drafts too (the site's draft schema keeps the enums,
+ * the capacity bounds and the speaker capacity): any field that is set.
+ */
+export function validateFields(
+  p: ProposalFields,
+  storedCapacity?: number | null,
+) {
+  const bad = (m: string) => no('BAD_USER_INPUT', m)
+  if (p.title != null && !p.title.trim()) bad('Title is required')
+  for (const [k, list, m] of [
+    ['language', 'languages', 'Language must be specified'],
+    ['format', 'formats', 'Format must be specified'],
+    ['level', 'levels', 'Level must be specified'],
+  ] as const)
+    if (p[k] != null && !values(list).includes(p[k]!)) bad(m)
+  const aud = values('audiences')
+  if (p.audiences && !p.audiences.every((a) => aud.includes(a)))
+    bad('At least one audience must be specified')
   const c = p.capacity
   if (c != null) {
     if (!Number.isInteger(c) || c < 1 || c > MAX_CAPACITY)
@@ -350,7 +372,8 @@ export class MyProposals {
       // never writes back to it. The opaque Sanity speaker id, not the user id.
       ...(link.profile && {
         speakerSnapshot: {
-          speaker: w.speakerId,
+          // Weak: erasure finds the talk through `references()` (#2078).
+          speaker: { _type: 'reference', _ref: w.speakerId, _weak: true },
           name: link.profile.name,
           bio: link.profile.bio,
           links: link.profile.links,
@@ -376,7 +399,10 @@ export class MyProposals {
         )
       const merged = { ...cur, tos: true, ...input }
       if (cur.status === 'submitted') validate(merged, cur.capacity)
-      else if (!merged.title?.trim()) no('BAD_USER_INPUT', 'Title is required')
+      else {
+        validateFields(input, cur.capacity)
+        if (!merged.title?.trim()) no('BAD_USER_INPUT', 'Title is required')
+      }
       if (input.topicIds) {
         const conf = await this.sanity.fetch<Row | null>(CONFERENCE_CFP, {
           ...w,
