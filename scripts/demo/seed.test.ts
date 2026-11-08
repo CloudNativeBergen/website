@@ -9,7 +9,10 @@ import {
   NotDemoOrgError,
   OperatorTokenError,
   run,
+  assertDemoIds,
+  DEMO_ORG_ID,
   type Deps,
+  type SanityWriter,
 } from './seed'
 
 const now = new Date('2026-11-08T00:00:00Z')
@@ -32,7 +35,14 @@ const jwt = (exp: unknown) =>
   `${b64({ alg: 'EdDSA' })}.${b64({ sub: 'op', exp })}.sig`
 const TOKEN = jwt(Math.floor(Date.now() / 1000) + 900)
 
-function deps(kind: string | null, { d1 = true, editions = D1_EDITIONS } = {}) {
+function deps(
+  kind: string | null,
+  {
+    orgId = DEMO_ORG_ID,
+    editions = D1_EDITIONS,
+    inSanity = [LIVE_CONFERENCE_ID, 'd1-past-7f3', 'd1-next-9a2'],
+  } = {},
+) {
   const mutations: unknown[] = []
   const commit = vi.fn(async () => undefined)
   const client = {
@@ -51,6 +61,7 @@ function deps(kind: string | null, { d1 = true, editions = D1_EDITIONS } = {}) {
       }
       return tx
     },
+    fetch: vi.fn(async () => inSanity) as unknown as SanityWriter['fetch'],
   }
   const seedDemoD1 = vi.fn(async () => ({ ok: true }))
   const d = {
@@ -58,18 +69,17 @@ function deps(kind: string | null, { d1 = true, editions = D1_EDITIONS } = {}) {
       request: vi.fn(async (_host: string | null, query: string) =>
         query.includes('conferenceEditions')
           ? { conferenceEditions: editions }
-          : { organization: kind === null ? null : { id: 'org-1', kind } },
+          : { organization: kind === null ? null : { id: orgId, kind } },
       ) as unknown as Deps['api']['request'],
     },
     createSanityClient: vi.fn(async () => client),
-    loadSeedDemoD1: vi.fn(async () => (d1 ? seedDemoD1 : undefined)),
+    loadSeedDemoD1: vi.fn(async () => seedDemoD1),
     log: vi.fn(),
   } satisfies Deps
   return { d, mutations, commit, seedDemoD1 }
 }
 
 const opts = (o: Partial<Parameters<typeof run>[0]> = {}) => ({
-  host: 'kk.example.com',
   dryRun: false,
   now,
   token: TOKEN,
@@ -117,7 +127,7 @@ describe('demo:seed', () => {
     // The guard call passes; then the clock jumps past the margin.
     vi.mocked(d.api.request).mockImplementationOnce((async () => {
       vi.spyOn(Date, 'now').mockReturnValue(t0 + 890_000)
-      return { organization: { id: 'org-1', kind: 'demo' } }
+      return { organization: { id: DEMO_ORG_ID, kind: 'demo' } }
     }) as unknown as Deps['api']['request'])
     try {
       await expect(run(opts(), d)).rejects.toThrow(/under 30 s/)
@@ -147,10 +157,31 @@ describe('demo:seed', () => {
     expect(d.createSanityClient).not.toHaveBeenCalled()
   })
 
-  it('stops a real run when seedDemoD1 is missing, writing nothing', async () => {
-    const { d } = deps('demo', { d1: false })
-    await expect(run(opts(), d)).rejects.toThrow(/seedDemoD1/)
+  it('refuses a demo org that is not KontainerKonf', async () => {
+    const { d } = deps('demo', { orgId: 'org-other-demo' })
+    await expect(run(opts(), d)).rejects.toThrow(NotDemoOrgError)
+    expect(d.loadSeedDemoD1).not.toHaveBeenCalled()
     expect(d.createSanityClient).not.toHaveBeenCalled()
+  })
+
+  it('refuses a write target outside the prefix and the allowlist', () => {
+    const allow = new Set([LIVE_CONFERENCE_ID, 'd1-past-7f3'])
+    expect(() =>
+      assertDemoIds(
+        [`${DEMO_PREFIX}talk.x`, 'd1-past-7f3', LIVE_CONFERENCE_ID],
+        allow,
+      ),
+    ).not.toThrow()
+    expect(() => assertDemoIds(['someone-elses-conference'], allow)).toThrow(
+      /refusing/,
+    )
+    expect(() => assertDemoIds(['kkdemo.org'], allow)).toThrow(/refusing/)
+  })
+
+  it('stops when an edition document is missing in Sanity, writing nothing', async () => {
+    const { d, commit } = deps('demo', { inSanity: [LIVE_CONFERENCE_ID] })
+    await expect(run(opts(), d)).rejects.toThrow(/missing in Sanity: d1-/)
+    expect(commit).not.toHaveBeenCalled()
   })
 
   it('stops when D1 has no edition for a fixture edition', async () => {
@@ -160,12 +191,12 @@ describe('demo:seed', () => {
   })
 
   it('dry run prints counts and creates no write client', async () => {
-    const { d } = deps('demo', { d1: false, editions: [] })
+    const { d } = deps('demo', { editions: [] })
     await run(opts({ dryRun: true }), d)
     expect(d.createSanityClient).not.toHaveBeenCalled()
     const out = d.log.mock.calls.map((c) => c[0]).join('\n')
     expect(out).toMatch(/talk\s+46/)
-    expect(out).toMatch(/seedDemoD1 not available/)
+    expect(out).toMatch(/no D1 edition yet/)
   })
 
   it('runs seedDemoD1 before reading editions and writing Sanity', async () => {
@@ -199,21 +230,13 @@ describe('demo:seed', () => {
           ((m as unknown[])[1] as { _id?: string })?._id === id,
       ) as unknown[][]
     const live = touching(LIVE_CONFERENCE_ID)
-    expect(live.map((m) => m[0])).toEqual(['ifMissing', 'patch'])
-    expect(live[0][1]).toEqual({ _id: LIVE_CONFERENCE_ID, _type: 'conference' })
-    expect(Object.keys(live[1][2] as object).sort()).toEqual([
-      'set',
-      'setIfMissing',
-    ])
+    expect(live.map((m) => m[0])).toEqual(['patch'])
+    // setIfMissing only: an existing theme or branding is never overwritten.
+    expect(Object.keys(live[0][2] as object)).toEqual(['setIfMissing'])
+    expect(JSON.stringify(live[0][2])).not.toMatch(/theme|logo|primaryColor/)
     // Past/upcoming use the D1 ids from the query; no seed-made conference ids.
-    expect(touching('d1-past-7f3').map((m) => m[0])).toEqual([
-      'ifMissing',
-      'patch',
-    ])
-    expect(touching('d1-next-9a2').map((m) => m[0])).toEqual([
-      'ifMissing',
-      'patch',
-    ])
+    expect(touching('d1-past-7f3').map((m) => m[0])).toEqual(['patch'])
+    expect(touching('d1-next-9a2').map((m) => m[0])).toEqual(['patch'])
     expect(JSON.stringify(a.mutations)).not.toContain(
       `${DEMO_PREFIX}conference`,
     )

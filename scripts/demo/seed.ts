@@ -1,16 +1,19 @@
 #!/usr/bin/env tsx
 /**
- * `pnpm demo:seed [--dry-run] [--host <host>]` (#2150): seeds the Sanity
+ * `pnpm demo:seed [--dry-run]` (#2150): seeds the Sanity
  * side of the demo tenant from the deterministic fixtures, then hands the
  * same fixtures to website-001's `seedDemoD1` for the D1 side.
  *
  * Order matters and is tested:
  *   0. Decode KONF_OPERATOR_TOKEN locally: missing, malformed or expired exits.
- *   1. Ask the gateway (operator lane, tenant = --host) for the org's kind.
- *      Anything but `demo` exits before a Sanity client exists.
- *   2. seedDemoD1 (#2164) creates the D1 editions; without it a real run stops.
- *   3. Read `conferenceEditions` and map past/upcoming by title. The live
- *      edition is `kkdemo.conference`, patched (set/setIfMissing), never replaced.
+ *   1. Ask the gateway (operator lane, tenant = DEMO_HOST) for the org. It
+ *      must be exactly DEMO_ORG_ID with kind `demo`, or the run exits before
+ *      seedDemoD1 or a Sanity client is loaded.
+ *   2. seedDemoD1 (#2164) creates the D1 editions.
+ *   3. Read that org's `conferenceEditions`; map past/upcoming by title. The
+ *      write allowlist is `kkdemo.conference` plus those ids; every target is
+ *      checked against `kkdemo.seed.*` or the allowlist before any write.
+ *      Conference docs get setIfMissing only, and must already exist.
  *   4. --dry-run: print counts per type and stop. No write client.
  *   5. createOrReplace everything else under DEMO_PREFIX, in transactions.
  *      Same UTC day gives identical mutations, except invite tokens.
@@ -18,7 +21,7 @@
  * Env: KONF_OPERATOR_TOKEN (identity JWT of a platform operator, origin
  * claim = KONF_OPERATOR_ORIGIN, required; both from Kontroll), KONF_API_URL
  * (default production gateway), NEXT_PUBLIC_SANITY_PROJECT_ID,
- * NEXT_PUBLIC_SANITY_DATASET, SANITY_API_TOKEN_WRITE.
+ * SANITY_API_TOKEN_WRITE. The dataset is pinned to `production`.
  */
 import { createHmac, randomBytes } from 'node:crypto'
 import { generateDemoFixtures } from './fixtures/generate'
@@ -29,7 +32,9 @@ import { ORGANIZERS_GROUP } from '@/lib/messaging/types'
 /** Every document this script writes has this id prefix; nothing else is touched. */
 export const DEMO_PREFIX = 'kkdemo.seed.'
 export const DEMO_SEED = 2150
-const DEFAULT_HOST = 'kontainerkonf.konf.run'
+/** The only org and host this script will ever seed (tenant-directory 0010). */
+export const DEMO_ORG_ID = 'kkdemo.org'
+export const DEMO_HOST = 'kontainerkonf.konf.run'
 
 type Doc = Record<string, unknown> & { _id: string; _type: string }
 
@@ -46,28 +51,22 @@ export interface SanityWriter {
   transaction(): {
     createOrReplace(doc: Doc): unknown
     createIfNotExists(doc: Doc): unknown
-    patch(
-      id: string,
-      ops: {
-        set?: Record<string, unknown>
-        setIfMissing?: Record<string, unknown>
-      },
-    ): unknown
+    patch(id: string, ops: { setIfMissing: Record<string, unknown> }): unknown
     commit(): Promise<unknown>
   }
+  fetch<T>(query: string, params: Record<string, unknown>): Promise<T>
 }
 
 export interface Deps {
   api: GraphQLClient
   createSanityClient: () => Promise<SanityWriter>
-  /** website-001's step; undefined until #2164 lands. */
+  /** website-001's step (#2164); loaded only after the guard passes. */
   loadSeedDemoD1: () => Promise<
-    | ((
-        f: DemoFixtures,
-        c: GraphQLClient,
-        o: { host: string; dryRun: boolean },
-      ) => Promise<unknown>)
-    | undefined
+    (
+      f: DemoFixtures,
+      c: GraphQLClient,
+      o: { host: string; dryRun: boolean },
+    ) => Promise<unknown>
   >
   log: (line: string) => void
 }
@@ -154,9 +153,7 @@ const LIVE_KEY = 'edition-live'
 
 export interface ConferencePatch {
   id: string
-  /** Seed-owned fields, always written. */
-  set: Record<string, unknown>
-  /** Written only where the document has no value (operator edits survive). */
+  /** setIfMissing only: existing values (theme, branding, dates) are never overwritten. */
   setIfMissing: Record<string, unknown>
 }
 
@@ -442,12 +439,6 @@ export function buildDocuments(
   ]
   const conferences: ConferencePatch[] = f.d1.editions.map((e) => ({
     id: confId(e.key),
-    set: {
-      theme: {
-        primaryColor: s.branding.primaryColor,
-        accentColor: s.branding.accentColor,
-      },
-    },
     setIfMissing: {
       title: e.title,
       tagline: e.tagline,
@@ -467,10 +458,15 @@ export function buildDocuments(
   return { upsert, ifMissing, conferences }
 }
 
-export function assertDemoIds(docs: Doc[]) {
-  const bad = docs.filter((d) => !d._id.startsWith(DEMO_PREFIX))
+/** Every write target must be `kkdemo.seed.*` or an allowlisted conference id. */
+export function assertDemoIds(ids: string[], allowlist: ReadonlySet<string>) {
+  const bad = ids.filter(
+    (id) => !id.startsWith(DEMO_PREFIX) && !allowlist.has(id),
+  )
   if (bad.length)
-    throw new Error(`refusing: ids outside ${DEMO_PREFIX}: ${bad[0]._id}`)
+    throw new Error(
+      `refusing: id outside ${DEMO_PREFIX} and the edition allowlist: ${bad[0]}`,
+    )
 }
 
 export function countByType(docs: Doc[]): Record<string, number> {
@@ -489,7 +485,6 @@ const TX_SIZE = 200
 
 export async function run(
   opts: {
-    host: string
     dryRun: boolean
     now: Date
     token: string | undefined
@@ -497,9 +492,9 @@ export async function run(
   },
   deps: Deps,
 ) {
-  // 0. Token and origin up front, then the guard: nothing below runs for a
-  //    non-demo org. Every API call re-checks expiry. All API calls happen
-  //    before the Sanity writes, which need no token.
+  // 0. Token and origin up front, then the guard: nothing below runs for any
+  //    org but DEMO_ORG_ID. Every API call re-checks expiry. All API calls
+  //    happen before the Sanity writes, which need no token.
   if (!opts.origin)
     throw new OperatorTokenError('KONF_OPERATOR_ORIGIN is not set')
   checkOperatorToken(opts.token, Date.now())
@@ -511,31 +506,29 @@ export async function run(
   }
   const { organization } = await api.request<{
     organization: { id: string; kind: string | null } | null
-  }>(opts.host, '{ organization { id kind } }')
-  if (organization?.kind !== 'demo')
+  }>(DEMO_HOST, '{ organization { id kind } }')
+  if (organization?.id !== DEMO_ORG_ID || organization.kind !== 'demo')
     throw new NotDemoOrgError(
-      `refusing to seed ${opts.host}: org kind is ${organization?.kind ?? 'unknown'}, not demo`,
+      `refusing to seed ${DEMO_HOST}: org is ${organization?.id ?? 'unknown'} (kind ${organization?.kind ?? 'unknown'}), expected ${DEMO_ORG_ID} (demo)`,
     )
 
   const fixtures = generateDemoFixtures({ seed: DEMO_SEED, now: opts.now })
 
-  // 1. D1 first: website-001's seedDemoD1 (#2164) creates the editions whose
-  //    ids the Sanity documents reference. Do not write D1 here.
+  // 1. D1 first: seedDemoD1 (#2164) creates the editions the Sanity documents
+  //    reference. Do not write D1 here.
   const seedDemoD1 = await deps.loadSeedDemoD1()
-  if (seedDemoD1)
-    deps.log(
-      `D1: ${JSON.stringify(await seedDemoD1(fixtures, api, { host: opts.host, dryRun: opts.dryRun }))}`,
-    )
-  else if (!opts.dryRun)
-    throw new Error(
-      'stopping: seedDemoD1 (#2164) is not available, so D1 has no demo editions to reference',
-    )
-  else deps.log('D1: seedDemoD1 not available yet (#2164), skipped.')
+  deps.log(
+    `D1: ${JSON.stringify(await seedDemoD1(fixtures, api, { host: DEMO_HOST, dryRun: opts.dryRun }))}`,
+  )
 
-  // 2. Edition ids from D1, matched by title. The live edition is LIVE_CONFERENCE_ID.
+  // 2. The pinned org's editions (tenant = DEMO_HOST), matched by title.
   const { conferenceEditions } = await api.request<{
     conferenceEditions: { id: string; title: string | null }[] | null
-  }>(opts.host, '{ conferenceEditions { id title primaryHost } }')
+  }>(DEMO_HOST, '{ conferenceEditions { id title primaryHost } }')
+  const allowlist = new Set([
+    LIVE_CONFERENCE_ID,
+    ...(conferenceEditions ?? []).map((c) => c.id),
+  ])
   const editionIds: Record<string, string> = {}
   const missing: string[] = []
   for (const e of fixtures.d1.editions) {
@@ -551,14 +544,25 @@ export async function run(
       )
     deps.log(`Dry run: no D1 edition yet for ${missing.join(', ')}`)
     for (const e of fixtures.d1.editions)
-      editionIds[e.key] ??= `(pending:${e.key})`
+      if (e.key !== LIVE_KEY && !editionIds[e.key]) {
+        editionIds[e.key] = `(pending:${e.key})`
+        allowlist.add(editionIds[e.key]) // dry run only: never written
+      }
   }
 
   const { upsert, ifMissing, conferences } = buildDocuments(
     fixtures,
     editionIds,
   )
-  assertDemoIds([...upsert, ...ifMissing])
+  // Before any transaction: every target is a seed id or an allowlisted edition.
+  assertDemoIds(
+    [...upsert, ...ifMissing].map((d) => d._id),
+    new Set(),
+  )
+  assertDemoIds(
+    conferences.map((c) => c.id),
+    allowlist,
+  )
 
   deps.log(`${opts.dryRun ? 'Planned' : 'Writing'} Sanity documents:`)
   deps.log(`  ${'conference (patched)'.padEnd(22)} ${conferences.length}`)
@@ -568,17 +572,21 @@ export async function run(
     deps.log(`  ${type.padEnd(22)} ${n}`)
   if (opts.dryRun) return
 
-  // 3. Write. Conference docs: create if absent, then patch seed-owned fields
-  //    only; never createOrReplace (the live one carries operator settings).
+  // 3. Write. Conference docs must already exist; they get setIfMissing only.
   const client = await deps.createSanityClient()
+  const ids = conferences.map((c) => c.id)
+  const found = await client.fetch<string[]>('*[_id in $ids]._id', { ids })
+  const absent = ids.filter((id) => !found.includes(id))
+  if (absent.length)
+    throw new Error(
+      `stopping: conference document(s) missing in Sanity: ${absent.join(', ')}`,
+    )
   for (let i = 0; i < upsert.length; i += TX_SIZE) {
     const tx = client.transaction()
     if (i === 0) {
       ifMissing.forEach((d) => tx.createIfNotExists(d))
-      for (const c of conferences) {
-        tx.createIfNotExists({ _id: c.id, _type: 'conference' })
-        tx.patch(c.id, { setIfMissing: c.setIfMissing, set: c.set })
-      }
+      for (const c of conferences)
+        tx.patch(c.id, { setIfMissing: c.setIfMissing })
     }
     upsert.slice(i, i + TX_SIZE).forEach((d) => tx.createOrReplace(d))
     await tx.commit()
@@ -617,11 +625,10 @@ function operatorClient(token: string, origin: string): GraphQLClient {
 
 async function main() {
   const args = process.argv.slice(2)
-  const hostAt = args.indexOf('--host')
-  const host = hostAt >= 0 ? args[hostAt + 1] : DEFAULT_HOST
+  const unknown = args.filter((a) => a !== '--dry-run')
+  if (unknown.length) throw new Error(`unknown arguments: ${unknown.join(' ')}`)
   await run(
     {
-      host,
       dryRun: args.includes('--dry-run'),
       now: today(),
       token: process.env.KONF_OPERATOR_TOKEN,
@@ -637,24 +644,13 @@ async function main() {
         const { createClient } = await import('next-sanity')
         return createClient({
           projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID,
-          dataset: process.env.NEXT_PUBLIC_SANITY_DATASET,
+          dataset: 'production',
           apiVersion: '2025-01-01',
           token: process.env.SANITY_API_TOKEN_WRITE,
           useCdn: false,
         }) as unknown as SanityWriter
       },
-      loadSeedDemoD1: async () => {
-        // A variable path keeps tsc from resolving a module that may not exist yet.
-        const path = './seed-d1'
-        try {
-          return (await import(path)).seedDemoD1
-        } catch (e) {
-          const code = (e as { code?: string }).code
-          if (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND')
-            return undefined
-          throw e
-        }
-      },
+      loadSeedDemoD1: async () => (await import('./seed-d1')).seedDemoD1,
       log: console.log,
     },
   )

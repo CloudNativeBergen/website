@@ -356,7 +356,7 @@ export const FEEDBACK_COMMENTS = [
 export const SPONSOR_BRANDS: [name: string, colour: string][] = [
   ['Nordvind Systems', '#1d4ed8'],
   ['Kestrel Cloud', '#0f766e'],
-  ['Fjordline Data', '#7c3aed'],
+  ['Lysglimt Data', '#7c3aed'],
   ['Bramble Labs', '#15803d'],
   ['Ostrea Payments', '#be123c'],
   ['Tindra Retail', '#c2410c'],
