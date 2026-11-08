@@ -472,10 +472,12 @@ export function createData(d1: D1Database, envelope: Envelope) {
     async (ids) => {
       const { results } = await rawDb(d1)
         .prepare(
-          `SELECT l.conference_id AS id, sum(l.quantity) AS n FROM ticket_order_lines l
-           JOIN ticket_orders o ON o.id = l.order_id AND o.status != 'cancelled'
-           WHERE l.conference_id IN (SELECT value FROM json_each(?))
-           GROUP BY l.conference_id`,
+          `SELECT DISTINCT e.conference_id AS id, coalesce((
+             SELECT sum(l.quantity) FROM ticket_order_lines l
+             JOIN ticket_orders o ON o.id = l.order_id AND o.status != 'cancelled'
+             WHERE l.conference_id = e.conference_id), 0) AS n
+           FROM ticket_events e
+           WHERE e.conference_id IN (SELECT value FROM json_each(?))`,
         )
         .bind(JSON.stringify(ids))
         .all<{ id: string; n: number }>()

@@ -117,9 +117,9 @@ const OperatorConferenceStats = builder
       ticketsSold: t.int({
         tag: 'operator',
         description:
-          'Tickets on non-cancelled orders, from the ticketing subgraph (#2148). 0 until the conference has ingested orders.',
+          'Tickets on non-cancelled orders, from the ticketing subgraph (#2148). Null when the conference has no ticket event bound; 0 when one is bound and has no orders.',
         resolve: async ({ conferenceId }, _, ctx) =>
-          (await ctx.data.ticketsSold(conferenceId)) ?? 0,
+          (await ctx.data.ticketsSold(conferenceId)) ?? null,
       }),
     }),
   })
