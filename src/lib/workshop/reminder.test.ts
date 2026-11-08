@@ -12,6 +12,15 @@
  * endpoint. The join, the rate limit and the email rendering run for real.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import {
+  flagTenants,
+  unverifyTenants,
+} from '../../../__tests__/helpers/rolloutFlags'
 import type { TicketCandidate } from '@/lib/tickets/speakerStatus'
 import type { HolderSignup } from './holders'
 
@@ -832,7 +841,7 @@ describe('sendWorkshopReminder', () => {
     beforeEach(() => {
       d1Reserved = null
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_D1_WRITE_TENANTS', 'conference-1')
+      flagTenants('d1Write', 'conference-1')
       vi.stubGlobal('fetch', vi.fn())
     })
 
@@ -858,6 +867,20 @@ describe('sendWorkshopReminder', () => {
       })
     })
 
+    // A failed flag read must not fall to the Sanity lock: the send would be
+    // recorded in Sanity only while readers prefer D1.
+    it('refuses, retryably, when the d1Write flag cannot be read', async () => {
+      unverifyTenants('conference-1')
+      await expect(remind(conference, 0)).resolves.toEqual({
+        kind: 'rate-limited',
+        retryAfterMs: 60_000,
+      })
+      expect(batchSend).not.toHaveBeenCalled()
+      expect(stored.workshopReminderReservedAt).toBeUndefined()
+      expect(lastSendWrite).not.toHaveBeenCalled()
+      expect(d1Calls).not.toHaveBeenCalled()
+    })
+
     it('sends nothing when the D1 lock cannot be reached', async () => {
       d1Calls.mockImplementationOnce(() => {
         throw new Error('gateway down')
@@ -873,7 +896,7 @@ describe('sendWorkshopReminder', () => {
   describe('D1 gateway values and fallbacks (#1997)', () => {
     it('uses D1-owned fields when the gateway returns values that differ from Sanity', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'conference-1')
+      flagTenants('apiRead', 'conference-1')
 
       const gatewayFetch = vi.fn().mockResolvedValue(
         new Response(
@@ -899,7 +922,7 @@ describe('sendWorkshopReminder', () => {
 
     it('falls back to Sanity when KONF_API_DISABLED=1', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'conference-1')
+      flagTenants('apiRead', 'conference-1')
       vi.stubEnv('KONF_API_DISABLED', '1')
 
       const gatewayFetch = vi.fn()
@@ -918,7 +941,7 @@ describe('sendWorkshopReminder', () => {
 
     it('falls back to Sanity when the gateway errors', async () => {
       vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-      vi.stubEnv('KONF_API_TENANTS', 'conference-1')
+      flagTenants('apiRead', 'conference-1')
 
       const gatewayFetch = vi.fn().mockResolvedValue(
         new Response(

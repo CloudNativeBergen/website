@@ -8,6 +8,12 @@
  * one that releases without claiming loses the address entirely.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 
 vi.mock('server-only', () => ({}))
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
@@ -212,7 +218,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('flagged: differing D1 startDate wins over Sanity (D1 later blocks transfer)', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conference-2025')
+    flagTenants('apiRead', 'conference-2025')
 
     // In Sanity, conference-2025 starts 2025-06-01 (earlier than the new 2026-06-01 edition).
     // In D1, conference-2025 starts 2027-06-01 (later than the new 2026-06-01 edition).
@@ -251,7 +257,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('flagged: differing D1 startDate wins over Sanity (D1 earlier enables transfer)', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conference-2025')
+    flagTenants('apiRead', 'conference-2025')
 
     // In Sanity, conference-2025 starts 2027-06-01 (later than 2026-06-01).
     // In D1, conference-2025 was rescheduled to 2025-06-01 (earlier than 2026-06-01).
@@ -290,7 +296,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('unflagged: gives Sanity with no gateway call', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
 
     holders = [
       {
@@ -315,7 +321,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('error: falls back to Sanity on gateway failure', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conference-2025')
+    flagTenants('apiRead', 'conference-2025')
 
     holders = [
       {

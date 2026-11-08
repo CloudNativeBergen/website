@@ -1,5 +1,11 @@
 /** @vitest-environment node */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 
@@ -56,7 +62,7 @@ describe('travelSupport D1 gateway values and fallbacks (#1997)', () => {
 
   it('getTravelSupportById uses merged D1 conference title/name when flagged and value differs', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     fetchMock.mockResolvedValue(structuredClone(sanityDetail))
 
     const gatewayFetch = vi.fn().mockResolvedValue(
@@ -83,7 +89,7 @@ describe('travelSupport D1 gateway values and fallbacks (#1997)', () => {
 
   it('getTravelSupportById falls back to Sanity conference name when unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
     fetchMock.mockResolvedValue(structuredClone(sanityDetail))
 
     const gatewayFetch = vi.fn()
@@ -99,7 +105,7 @@ describe('travelSupport D1 gateway values and fallbacks (#1997)', () => {
 
   it('getTravelSupportById falls back to Sanity conference name on gateway error', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     fetchMock.mockResolvedValue(structuredClone(sanityDetail))
 
     const gatewayFetch = vi.fn().mockResolvedValue(
@@ -118,7 +124,7 @@ describe('travelSupport D1 gateway values and fallbacks (#1997)', () => {
 
   it('getAllTravelSupport uses merged D1 conference title/name when flagged and value differs', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     scopedFetchMock.mockResolvedValue([structuredClone(sanityDetail)])
 
     const gatewayFetch = vi.fn().mockResolvedValue(
@@ -142,7 +148,7 @@ describe('travelSupport D1 gateway values and fallbacks (#1997)', () => {
 
   it('getAllTravelSupport falls back to Sanity conference name when unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
     scopedFetchMock.mockResolvedValue([structuredClone(sanityDetail)])
 
     const gatewayFetch = vi.fn()
@@ -155,7 +161,7 @@ describe('travelSupport D1 gateway values and fallbacks (#1997)', () => {
 
   it('getAllTravelSupport falls back to Sanity conference name on gateway error', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-1')
+    flagTenants('apiRead', 'conf-1')
     scopedFetchMock.mockResolvedValue([structuredClone(sanityDetail)])
 
     const gatewayFetch = vi.fn().mockResolvedValue(

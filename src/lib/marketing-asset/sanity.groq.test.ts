@@ -12,6 +12,12 @@
  * other tenant.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 import { evaluate, parse } from 'groq-js'
 
 const h = vi.hoisted(() => ({
@@ -1405,7 +1411,7 @@ describe('listMarketingAssets D1 gateway values and fallbacks (#1997)', () => {
 
   it('uses merged D1 edition title when flagged and values differ', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-a-2026')
+    flagTenants('apiRead', 'conf-a-2026')
 
     const conf = h.dataset.find((d) => d._id === 'conf-a-2026')!
     conf.domains = ['2026.example.com']
@@ -1432,7 +1438,7 @@ describe('listMarketingAssets D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity edition title when unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
 
     const conf = h.dataset.find((d) => d._id === 'conf-a-2026')!
     conf.domains = ['2026.example.com']
@@ -1449,7 +1455,7 @@ describe('listMarketingAssets D1 gateway values and fallbacks (#1997)', () => {
   it('falls back to Sanity edition title on gateway error', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-a-2026')
+    flagTenants('apiRead', 'conf-a-2026')
 
     const conf = h.dataset.find((d) => d._id === 'conf-a-2026')!
     conf.domains = ['2026.example.com']

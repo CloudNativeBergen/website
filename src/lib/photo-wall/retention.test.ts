@@ -17,6 +17,12 @@
  * tenant or type predicate were dropped.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 import type { VersionedSanityStore } from '../../../__tests__/helpers/versionedSanityStore'
 
 const h = vi.hoisted(() => ({
@@ -891,7 +897,7 @@ describe('the deduplicated asset is already gone after a crash past the chunk’
 describe('D1 gateway values and fallbacks (#1997)', () => {
   it('uses D1 endDate when tenant has apiRead enabled', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-A')
+    flagTenants('apiRead', 'conf-A')
 
     // conf-A in fixture has domains undefined; add domain so outbound origin resolves
     store().put({
@@ -926,7 +932,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('an EARLIER D1 endDate never brings the deletion forward', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-A')
+    flagTenants('apiRead', 'conf-A')
     store().put({
       _id: 'conf-A',
       _type: 'conference',
@@ -953,7 +959,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity endDate when tenant is unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
 
     store().put({
       _id: 'conf-A',
@@ -976,7 +982,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity endDate when D1 returns nullish date (never to now)', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-A')
+    flagTenants('apiRead', 'conf-A')
 
     store().put({
       _id: 'conf-A',

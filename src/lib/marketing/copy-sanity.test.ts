@@ -5,6 +5,12 @@
  * come back as the Recipes that were written (Templates spec §2.1).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/lib/conference/konf-api', async (orig) => ({
+  ...(await orig<object>()),
+  rolloutFlags: (await import('../../../__tests__/helpers/rolloutFlags'))
+    .fakeRolloutFlags,
+}))
+import { flagTenants } from '../../../__tests__/helpers/rolloutFlags'
 import { evaluate, parse } from 'groq-js'
 
 vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
@@ -107,7 +113,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('uses merged D1 title and startDate for getCopySources when flagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-old')
+    flagTenants('apiRead', 'conf-old')
 
     const confOld = h.dataset.find((d) => d._id === 'conf-old')!
     confOld.domains = ['old.example.com']
@@ -136,7 +142,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity for getCopySources when unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
 
     const confOld = h.dataset.find((d) => d._id === 'conf-old')!
     confOld.domains = ['old.example.com']
@@ -155,7 +161,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
   it('falls back to Sanity for getCopySources on gateway error', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-old')
+    flagTenants('apiRead', 'conf-old')
 
     const confOld = h.dataset.find((d) => d._id === 'conf-old')!
     confOld.domains = ['old.example.com']
@@ -176,7 +182,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('sorts getCopySources by merged D1 startDate descending when flagged and differing D1 dates change order', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-older')
+    flagTenants('apiRead', 'conf-older')
 
     const confOld = h.dataset.find((d) => d._id === 'conf-old')!
     confOld.domains = ['old.example.com']
@@ -224,7 +230,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('uses merged D1 fields for getCopySource when flagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-old')
+    flagTenants('apiRead', 'conf-old')
 
     const confOld = h.dataset.find((d) => d._id === 'conf-old')!
     confOld.domains = ['old.example.com']
@@ -262,7 +268,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
 
   it('falls back to Sanity for getCopySource when unflagged', async () => {
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'other-conf')
+    flagTenants('apiRead', 'other-conf')
 
     const confOld = h.dataset.find((d) => d._id === 'conf-old')!
     confOld.domains = ['old.example.com']
@@ -283,7 +289,7 @@ describe('D1 gateway values and fallbacks (#1997)', () => {
   it('falls back to Sanity for getCopySource on gateway error', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubEnv('KONF_API_URL', 'https://api.example.com')
-    vi.stubEnv('KONF_API_TENANTS', 'conf-old')
+    flagTenants('apiRead', 'conf-old')
 
     const confOld = h.dataset.find((d) => d._id === 'conf-old')!
     confOld.domains = ['old.example.com']

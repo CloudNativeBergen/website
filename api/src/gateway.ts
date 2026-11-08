@@ -41,7 +41,6 @@ export interface Env {
   /** identity's Better Auth base URL, the JWT `iss` (wrangler var, per env) */
   IDENTITY_ISSUER: string
   /** @override label -> orgIds that get the native subgraph (wrangler var, per env) */
-  OVERRIDE_TENANTS: Record<string, string[]>
   /** konf-tenant-directory: tenant lookup and its subgraph */
   DIRECTORY: Fetcher
   /** konf-content: Sanity-backed editorial data (#1835) */
@@ -322,21 +321,22 @@ async function resolveTenant(
   return data.tenantByHost
 }
 
+/** @override labels that d1_override switches to the native subgraph. */
+export const D1_OVERRIDE_LABELS = new Set(['conference', 'conference-settings'])
+
 /**
- * Progressive override per tenant: an @override label is on for the orgIds
- * OVERRIDE_TENANTS lists (transition, #1925), or for `conference` when the
- * resolved conference has d1_override. Both come from the host the envelope
- * is minted for, never from the caller.
+ * Progressive override per tenant: `conference` and `conference-settings`
+ * are on when the resolved conference has d1_override, the only switch since
+ * OVERRIDE_TENANTS was removed. The flags come from the host the envelope is
+ * minted for, never from the caller. No flags (lookup failed) means off.
  */
 export function progressiveOverride(label: string, context: unknown) {
-  const { env, orgId, flags } = context as {
-    env: Env
+  const { orgId, flags } = context as {
     orgId: string | null
     flags?: RolloutFlags | null
   }
   if (!orgId) return false
-  if (env.OVERRIDE_TENANTS?.[label]?.includes(orgId)) return true
-  return label === 'conference' && !!flags?.d1Override
+  return D1_OVERRIDE_LABELS.has(label) && flags?.d1Override === true
 }
 
 type GatewayContext = {
