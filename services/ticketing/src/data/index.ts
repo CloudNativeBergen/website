@@ -34,6 +34,8 @@ export interface OrderInput {
   total: Money
   buyerEmail: string | null
   createdAt: string
+  /** The provider's last-change time, if it sends one: orders same-status updates. */
+  updatedAt?: string | null
   lines: {
     ticketType: {
       externalId: string
@@ -97,6 +99,8 @@ export function validateOrder(input: IngestInput) {
   if (!nonEmpty(order?.externalId)) throw bad('externalId')
   if (!ORDER_STATUSES.includes(order.status)) throw bad('status')
   if (Number.isNaN(Date.parse(order.createdAt))) throw bad('createdAt')
+  if (order.updatedAt != null && Number.isNaN(Date.parse(order.updatedAt)))
+    throw bad('updatedAt')
   const { total } = order
   if (!minor(total?.amountMinor) || !CURRENCY.test(total?.currency))
     throw bad('total')
@@ -132,22 +136,6 @@ export async function ingestOrder(
   validateOrder(input)
   const db = rawDb(d1)
   const { orgId, conferenceId, event, order } = input
-  const now = new Date().toISOString()
-  await db
-    .prepare(
-      `INSERT INTO ticket_events (id, org_id, conference_id, provider, account_id, external_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (provider, account_id, external_id) DO NOTHING`,
-    )
-    .bind(
-      crypto.randomUUID(),
-      orgId,
-      conferenceId,
-      event.provider,
-      event.accountId,
-      event.externalId,
-      now,
-    )
-    .run()
   const ev = await db
     .prepare(
       `SELECT id, org_id, conference_id FROM ticket_events
@@ -155,9 +143,29 @@ export async function ingestOrder(
     )
     .bind(event.provider, event.accountId, event.externalId)
     .first<{ id: string; org_id: string; conference_id: string }>()
-  if (!ev || ev.org_id !== orgId || ev.conference_id !== conferenceId)
+  // Only a bound EventRef is ingested (bindEvent): no first-writer binding.
+  // The tenant comes from the binding; a payload naming another is refused.
+  if (!ev) throw fail('event is not bound to a conference', 'NOT_FOUND')
+  if (ev.org_id !== orgId || ev.conference_id !== conferenceId)
     throw fail('event is bound to another conference', 'FORBIDDEN')
-
+  const updatedAt = order.updatedAt ?? new Date().toISOString()
+  // Status only moves forward (pending, paid, cancelled); a same-status
+  // update applies unless it is older than the stored one. A stale or
+  // replayed event writes nothing, ticket types included.
+  const prev = await db
+    .prepare(
+      'SELECT status, updated_at FROM ticket_orders WHERE event_id = ? AND external_id = ?',
+    )
+    .bind(ev.id, order.externalId)
+    .first<{ status: OrderStatus; updated_at: string }>()
+  const rank = (st: string) => ORDER_STATUSES.indexOf(st as OrderStatus)
+  if (
+    prev &&
+    (rank(order.status) < rank(prev.status) ||
+      (order.status === prev.status &&
+        (prev.status === 'cancelled' || updatedAt < prev.updated_at)))
+  )
+    return (await orderId(db, ev.id, order.externalId))!
   const tenant = [orgId, conferenceId] as const
   const stmts = order.lines.map(({ ticketType: t }) =>
     db
@@ -189,7 +197,9 @@ export async function ingestOrder(
            status = excluded.status, total_minor = excluded.total_minor,
            currency = excluded.currency, buyer_email = excluded.buyer_email,
            updated_at = excluded.updated_at
-         WHERE ticket_orders.status != 'cancelled'`,
+         WHERE ${RANK('excluded.status')} > ${RANK('ticket_orders.status')}
+           OR (excluded.status = ticket_orders.status AND ticket_orders.status != 'cancelled'
+               AND excluded.updated_at >= ticket_orders.updated_at)`,
       )
       .bind(
         crypto.randomUUID(),
@@ -201,20 +211,20 @@ export async function ingestOrder(
         order.total.currency,
         order.buyerEmail,
         order.createdAt,
-        now,
+        updatedAt,
       ),
     db
       .prepare(
         `DELETE FROM ticket_order_lines WHERE order_id =
-           (SELECT id FROM ticket_orders WHERE event_id = ? AND external_id = ? AND status != 'cancelled')`,
+           (SELECT id FROM ticket_orders WHERE event_id = ? AND external_id = ? AND status = ? AND updated_at = ?)`,
       )
-      .bind(ev.id, order.externalId),
+      .bind(ev.id, order.externalId, order.status, updatedAt),
     ...order.lines.map(({ ticketType: t, quantity }) =>
       db
         .prepare(
           `INSERT INTO ticket_order_lines (order_id, ticket_type_id, org_id, conference_id, quantity, unit_price_minor)
            SELECT o.id, t.id, ?, ?, ?, ? FROM ticket_orders o, ticket_types t
-           WHERE o.event_id = ? AND o.external_id = ? AND o.status != 'cancelled'
+           WHERE o.event_id = ? AND o.external_id = ? AND o.status = ? AND o.updated_at = ?
              AND t.event_id = ? AND t.external_id = ?`,
         )
         .bind(
@@ -223,19 +233,71 @@ export async function ingestOrder(
           t.price.amountMinor,
           ev.id,
           order.externalId,
+          order.status,
+          updatedAt,
           ev.id,
           t.externalId,
         ),
     ),
   )
   await db.batch(stmts)
+  return (await orderId(db, ev.id, order.externalId))!
+}
+
+const RANK = (col: string) =>
+  `CASE ${col} WHEN 'pending' THEN 0 WHEN 'paid' THEN 1 ELSE 2 END`
+
+async function orderId(
+  db: ReturnType<typeof rawDb>,
+  eventId: string,
+  externalId: string,
+) {
   const row = await db
     .prepare(
       'SELECT id FROM ticket_orders WHERE event_id = ? AND external_id = ?',
     )
-    .bind(ev.id, order.externalId)
+    .bind(eventId, externalId)
     .first<{ id: string }>()
-  return { orderId: row!.id }
+  return row ? { orderId: row.id } : null
+}
+
+/**
+ * The trusted mapping from a provider EventRef to one conference. Only this
+ * creates a ticket_events row. Re-binding the same conference is a no-op;
+ * an EventRef bound to another conference is refused.
+ */
+async function bindEventRow(
+  d1: D1Database,
+  orgId: string,
+  conferenceId: string,
+  event: EventRef,
+) {
+  if (![event?.provider, event?.accountId, event?.externalId].every(nonEmpty))
+    throw fail('invalid event ref', 'BAD_USER_INPUT')
+  const db = rawDb(d1)
+  await db
+    .prepare(
+      `INSERT INTO ticket_events (id, org_id, conference_id, provider, account_id, external_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (provider, account_id, external_id) DO NOTHING`,
+    )
+    .bind(
+      crypto.randomUUID(),
+      orgId,
+      conferenceId,
+      event.provider,
+      event.accountId,
+      event.externalId,
+      new Date().toISOString(),
+    )
+    .run()
+  const ev = await db
+    .prepare(
+      'SELECT org_id, conference_id FROM ticket_events WHERE provider = ? AND account_id = ? AND external_id = ?',
+    )
+    .bind(event.provider, event.accountId, event.externalId)
+    .first<{ org_id: string; conference_id: string }>()
+  if (ev?.org_id !== orgId || ev.conference_id !== conferenceId)
+    throw fail('event is bound to another conference', 'FORBIDDEN')
 }
 
 class Ticketing extends ScopedRepository {
@@ -327,11 +389,40 @@ class Ticketing extends ScopedRepository {
   }
 
   /**
+   * Binds a provider event to the envelope's conference: the trusted mapping
+   * Ingest reads. `conference.bind_ticketing` (platform operators, #745):
+   * the provider credentials are shared, so an org admin must not claim
+   * another org's event.
+   */
+  async bindEvent(event: EventRef): Promise<boolean> {
+    if (!can(principalOf(this.tenant), 'conference.bind_ticketing'))
+      throw fail(
+        'only a platform operator can bind a ticketing event',
+        'FORBIDDEN',
+      )
+    const { org_id, conference_id } = this.columns
+    if (!conference_id) throw fail('no conference in this request', 'NOT_FOUND')
+    if (event.provider === 'demo')
+      throw fail('demo events are bound by seedTicketOrders', 'BAD_USER_INPUT')
+    await bindEventRow(this.d1, org_id, conference_id, event)
+    console.log(
+      JSON.stringify({
+        event: 'operator.write',
+        'konf.user_id': this.tenant.userId,
+        'konf.org_id': org_id,
+        'konf.conference_id': conference_id,
+        fields: ['ticket_events'],
+      }),
+    )
+    return true
+  }
+
+  /**
    * Sample orders for a demo org only (#2150): an owner or admin of it, or an
    * operator acting for it. A customer org's sales come from its provider,
    * never from here. The tenant comes from the envelope.
    */
-  async seed(event: EventRef, orders: OrderInput[]): Promise<number> {
+  async seed(input: EventRef, orders: OrderInput[]): Promise<number> {
     const p = principalOf(this.tenant)
     if (this.tenant.orgKind !== 'demo' || !can(p, 'conference.update_settings'))
       throw fail(
@@ -340,6 +431,16 @@ class Ticketing extends ScopedRepository {
       )
     const { org_id, conference_id } = this.columns
     if (!conference_id) throw fail('no conference in this request', 'NOT_FOUND')
+    // Always a `demo` ref namespaced to this org (accountId = orgId): a seed
+    // can never bind or write a real provider's event.
+    if (input.provider !== 'demo')
+      throw fail('seeded events must use provider demo', 'FORBIDDEN')
+    const event = {
+      provider: 'demo',
+      accountId: org_id,
+      externalId: input.externalId,
+    }
+    await bindEventRow(this.d1, org_id, conference_id, event)
     for (const order of orders)
       await ingestOrder(this.d1, {
         orgId: org_id,

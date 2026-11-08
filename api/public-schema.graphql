@@ -320,7 +320,12 @@ type Mutation {
   setConferenceLifecycle(status: ConferenceLifecycleOverride): ConferenceEdition
 
   """
-  Writes sample orders for a demo org (orgKind demo, owner or admin, or an operator for it). Idempotent per order externalId. Returns the number of orders.
+  Binds a provider event to the envelope's conference, the mapping ticket ingest trusts. Platform operators only (conference.bind_ticketing).
+  """
+  bindTicketEvent(event: TicketEventRefInput!): Boolean
+
+  """
+  Writes sample orders for a demo org (orgKind demo, owner or admin, or an operator for it). The event must have provider `demo`; its accountId is always the org id. Idempotent per order externalId. Returns the number of orders.
   """
   seedTicketOrders(event: TicketEventRefInput!, orders: [TicketOrderInput!]!): Int
 }
@@ -1499,6 +1504,7 @@ input TicketOrderInput {
   lines: [TicketOrderLineInput!]!
   status: TicketOrderStatus!
   total: TicketMoneyInput!
+  updatedAt: String
 }
 
 input TicketOrderLineInput {

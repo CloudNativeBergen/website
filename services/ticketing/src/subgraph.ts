@@ -101,6 +101,7 @@ const OrderInput = builder.inputType('TicketOrderInput', {
     total: t.field({ type: MoneyInput, required: true }),
     buyerEmail: t.string(),
     createdAt: t.string({ required: true }),
+    updatedAt: t.string(),
     lines: t.field({ type: [LineInput], required: true }),
   }),
 })
@@ -149,9 +150,15 @@ builder.queryType({
 
 builder.mutationType({
   fields: (t) => ({
+    bindTicketEvent: t.boolean({
+      description:
+        "Binds a provider event to the envelope's conference, the mapping ticket ingest trusts. Platform operators only (conference.bind_ticketing).",
+      args: { event: t.arg({ type: EventRefInput, required: true }) },
+      resolve: (_, { event }, ctx) => ctx.data.ticketing().bindEvent(event),
+    }),
     seedTicketOrders: t.int({
       description:
-        'Writes sample orders for a demo org (orgKind demo, owner or admin, or an operator for it). Idempotent per order externalId. Returns the number of orders.',
+        'Writes sample orders for a demo org (orgKind demo, owner or admin, or an operator for it). The event must have provider `demo`; its accountId is always the org id. Idempotent per order externalId. Returns the number of orders.',
       args: {
         event: t.arg({ type: EventRefInput, required: true }),
         orders: t.arg({ type: [OrderInput], required: true }),
@@ -165,6 +172,7 @@ builder.mutationType({
             total: o.total,
             buyerEmail: o.buyerEmail ?? null,
             createdAt: o.createdAt,
+            updatedAt: o.updatedAt ?? null,
             lines: o.lines.map((l) => ({
               quantity: l.quantity,
               ticketType: {

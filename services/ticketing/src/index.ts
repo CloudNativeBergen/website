@@ -10,8 +10,10 @@ export type { IngestInput, EventRef, Money, OrderInput } from './data'
 export class Ingest extends WorkerEntrypoint<WorkerEnv> {
   /**
    * Upserts one verified, normalised provider order, idempotent on
-   * (EventRef, order externalId). The caller resolved orgId and conferenceId
-   * from the EventRef; an EventRef bound to another conference is refused.
+   * (EventRef, order externalId). The EventRef must already be bound
+   * (bindTicketEvent); an unknown one is refused, and orgId/conferenceId
+   * must match the binding. The caller verifies the provider signature first
+   * and never logs buyer emails.
    */
   order(input: IngestInput) {
     return ingestOrder(this.env.DB, input)

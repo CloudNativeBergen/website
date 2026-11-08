@@ -4,10 +4,10 @@ package codegen
 // in D1, fed by the site's provider webhook over the `Ingest` entrypoint
 // (service binding only, src/index.ts). Every row carries org_id and
 // conference_id. Buyer email is PII: only `attendee.read_pii` reads it.
-// The owner creates the databases once (`wrangler d1 create
-// konf-ticketing[-preview]`) and commits the ids in `d1` below.
 service: #PlatformService & {
 	name: "ticketing"
+	// konf-ticketing-preview and konf-ticketing (owner-approved).
+	d1: {preview: "029d8d02-f07e-4d8a-90f6-8e7fb7ed4da3", production: "7ef04a98-8642-4437-bdf5-4c1cf789b4c8"}
 	secrets: {
 		required: ["GATEWAY_PUBLIC_KEY"]
 	}

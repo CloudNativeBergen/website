@@ -20,7 +20,7 @@
         {
           "binding": "DB",
           "database_name": "konf-ticketing-preview",
-          "database_id": "TO_BE_CREATED",
+          "database_id": "029d8d02-f07e-4d8a-90f6-8e7fb7ed4da3",
           "migrations_dir": "migrations",
         },
       ],
@@ -31,7 +31,7 @@
         {
           "binding": "DB",
           "database_name": "konf-ticketing",
-          "database_id": "TO_BE_CREATED",
+          "database_id": "7ef04a98-8642-4437-bdf5-4c1cf789b4c8",
           "migrations_dir": "migrations",
         },
       ],

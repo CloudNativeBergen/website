@@ -1054,8 +1054,9 @@ describe('cross-tenant mutation walk', () => {
           (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions
             ?.code,
         )
-      // Demo seed (#2148): org A is a customer org, so it refuses.
-      else if (field === 'seedTicketOrders')
+      // Demo seed (#2148): org A is a customer org, so it refuses; binding
+      // a ticketing event is operator-only.
+      else if (field === 'seedTicketOrders' || field === 'bindTicketEvent')
         expect(body.errors).toMatchObject([
           { extensions: { code: 'FORBIDDEN' } },
         ])

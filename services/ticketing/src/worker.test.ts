@@ -141,6 +141,16 @@ beforeEach(() => {
   for (const f of readdirSync(dir).sort())
     sqlite.exec(readFileSync(new URL(f, dir), 'utf8'))
   env = { DB: d1(sqlite), GATEWAY_PUBLIC_KEY: keys.publicPem }
+  // The trusted mappings ingest needs, as an operator binds them.
+  for (const [org, conf, externalId] of [
+    ['org-a', 'conf-a', '100'],
+    ['org-b', 'conf-b', '200'],
+  ])
+    sqlite
+      .prepare(
+        "INSERT INTO ticket_events VALUES (?, ?, ?, 'checkin', '1', ?, '2026-01-01')",
+      )
+      .run(`ev-${externalId}`, org, conf, externalId)
   reads.n = 0
 })
 
@@ -176,7 +186,7 @@ describe('ingest', () => {
     const a = await ingest(order('o1'))
     const b = await ingest(order('o1'))
     expect(b.orderId).toBe(a.orderId)
-    expect([count('ticket_events'), count('ticket_types')]).toEqual([1, 1])
+    expect([count('ticket_events'), count('ticket_types')]).toEqual([2, 1])
     expect([count('ticket_orders'), count('ticket_order_lines')]).toEqual([
       1, 1,
     ])
@@ -212,6 +222,80 @@ describe('ingest', () => {
   })
 })
 
+describe('binding trust', () => {
+  it('refuses an unbound EventRef, writing nothing', async () => {
+    const input = { ...order('o1'), event: { ...EVENT, externalId: '999' } }
+    await expect(ingest(input)).rejects.toThrow(/not bound/)
+    expect([count('ticket_events'), count('ticket_orders')]).toEqual([2, 0])
+  })
+
+  const BIND = `mutation($e: TicketEventRefInput!) { bindTicketEvent(event: $e) }`
+  const op = (org: string, conf: string) =>
+    tenant(org, conf, null, { scopes: ['platform:operator'] })
+
+  it('only an operator binds, and never onto another conference', async () => {
+    const e = { provider: 'tito', accountId: 'acme', externalId: 'conf' }
+    for (const role of ['owner', 'admin'])
+      expect(
+        (await gql(tenant('org-a', 'conf-a', role), BIND, { e })).errors[0]
+          .extensions.code,
+      ).toBe('FORBIDDEN')
+    expect(count('ticket_events')).toBe(2)
+    expect(
+      (await gql(op('org-a', 'conf-a'), BIND, { e })).data.bindTicketEvent,
+    ).toBe(true)
+    expect(
+      (await gql(op('org-a', 'conf-a'), BIND, { e })).data.bindTicketEvent,
+    ).toBe(true)
+    expect(
+      (await gql(op('org-b', 'conf-b'), BIND, { e })).errors[0].extensions.code,
+    ).toBe('FORBIDDEN')
+    expect(count('ticket_events')).toBe(3)
+  })
+})
+
+describe('order state', () => {
+  it('status only moves forward', async () => {
+    await ingest(order('o1'))
+    await ingest(order('o1', [line('std', 150000, 2)], 'pending'))
+    const st = () =>
+      (
+        sqlite.prepare('SELECT status FROM ticket_orders').get() as {
+          status: string
+        }
+      ).status
+    expect(st()).toBe('paid')
+    await ingest(order('o1', [line('std', 150000, 2)], 'cancelled'))
+    await ingest(order('o1'))
+    expect(st()).toBe('cancelled')
+  })
+
+  it('a replayed cancelled order leaves ticket types alone', async () => {
+    await ingest(order('o1', [line('std', 150000, 2)], 'cancelled'))
+    const replay = order('o1', [line('std', 99000, 2)], 'cancelled')
+    replay.order.lines[0].ticketType.name = 'Renamed'
+    await ingest(replay)
+    expect(
+      sqlite.prepare('SELECT name, price_minor FROM ticket_types').get(),
+    ).toEqual({
+      name: 'Type std',
+      price_minor: 150000,
+    })
+  })
+
+  it('an older same-status update is ignored, using the provider updatedAt', async () => {
+    const at = (iso: string, n: number) => {
+      const i = order('o1', [line('std', 150000, n)])
+      i.order.updatedAt = iso
+      return i
+    }
+    await ingest(at('2026-11-02T00:00:00Z', 3))
+    await ingest(at('2026-11-01T00:00:00Z', 1))
+    const { data } = await gql(tenant('org-a', 'conf-a', 'admin'), SALES)
+    expect(data.ticketSales.ticketsSold).toBe(3)
+  })
+})
+
 describe('Money integrity', () => {
   const bad: [string, (i: IngestInput) => void][] = [
     ['total off by one', (i) => void i.order.total.amountMinor++],
@@ -231,7 +315,7 @@ describe('Money integrity', () => {
     const input = order('o1')
     mutate(input)
     await expect(ingest(input)).rejects.toThrow(/invalid order/)
-    expect(count('ticket_events') + count('ticket_orders')).toBe(0)
+    expect(count('ticket_orders') + count('ticket_types')).toBe(0)
   })
 
   it('keeps currencies apart in revenue', async () => {
@@ -419,6 +503,32 @@ describe('seedTicketOrders', () => {
     expect(row).toEqual({ org_id: 'org-d', conference_id: 'conf-d' })
   })
 
+  it('refuses a real provider ref, and namespaces the demo ref to the org', async () => {
+    const as = tenant('org-d', 'conf-d', 'owner', demo)
+    const real = { ...vars, e: { ...EVENT } }
+    expect((await gql(as, SEED, real)).errors[0].extensions.code).toBe(
+      'FORBIDDEN',
+    )
+    expect(count('ticket_events')).toBe(2)
+    // A demo ref copying a real one's ids is stored under accountId = org.
+    const copy = {
+      ...vars,
+      e: { provider: 'demo', accountId: '1', externalId: '100' },
+    }
+    expect((await gql(as, SEED, copy)).data.seedTicketOrders).toBe(1)
+    expect(
+      sqlite
+        .prepare(
+          "SELECT account_id, org_id FROM ticket_events WHERE provider = 'demo'",
+        )
+        .all(),
+    ).toEqual([{ account_id: 'org-d', org_id: 'org-d' }])
+    // The real event's ingest is unaffected.
+    await ingest(order('o1'))
+    const s = await gql(tenant('org-a', 'conf-a', 'admin'), SALES)
+    expect(s.data.ticketSales.ticketsSold).toBe(2)
+  })
+
   it.each([
     [
       'a customer org owner',
@@ -434,6 +544,6 @@ describe('seedTicketOrders', () => {
   ])('refuses %s, writing nothing', async (_, as) => {
     const body = await gql(as, SEED, vars)
     expect(body.errors[0].extensions.code).toBe('FORBIDDEN')
-    expect(count('ticket_events')).toBe(0)
+    expect(count('ticket_events')).toBe(2)
   })
 })
