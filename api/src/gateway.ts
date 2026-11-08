@@ -186,6 +186,8 @@ const SAFE_CODES: ReadonlyMap<string, string | null> = new Map([
   ['FORBIDDEN', 'Not allowed.'],
   ['BAD_USER_INPUT', null],
   ['NOT_FOUND', 'Not found.'],
+  // A schema-first contract whose resolver is not built yet (#2115).
+  ['NOT_IMPLEMENTED', 'Not implemented yet.'],
 ])
 
 /** Stable BAD_USER_INPUT reasons a client may branch on (kontroll#81). */
@@ -195,8 +197,10 @@ export const INPUT_REASONS: ReadonlySet<string> = new Set([
   'IDEMPOTENCY_KEY_REUSED',
   'INVALID_INPUT',
   'COPY_FROM_NOT_IN_ORG',
-  // Billing (#2129): with `requiredPlan`, below.
+  // API credentials (#2115, docs/API_CLIENTS.md).
   'PLAN_REQUIRED',
+  'SCOPE_NOT_ALLOWED',
+  'LIMIT_REACHED',
 ])
 
 /** Plans a PLAN_REQUIRED refusal may name in `requiredPlan`. */

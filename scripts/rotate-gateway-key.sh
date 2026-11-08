@@ -16,6 +16,16 @@ case "$env_name" in
   preview | production) ;;
   *) echo "usage: $0 <preview|production>" >&2; exit 2 ;;
 esac
+# Every wrangler call below targets the RunKonf account, as secrets-sync.ts
+# does: an exported CLOUDFLARE_ACCOUNT_ID for another account (a PoC one) once
+# sent production writes to the wrong place, or the right place by surprise.
+RUNKONF_ACCOUNT_ID=eefa2cb5c8528a07d7bf8b00a6606dcd
+if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] && [ "$CLOUDFLARE_ACCOUNT_ID" != "$RUNKONF_ACCOUNT_ID" ]; then
+  echo "CLOUDFLARE_ACCOUNT_ID is set to another account; this script writes only to the RunKonf account $RUNKONF_ACCOUNT_ID. Unset it or set it to that id." >&2
+  exit 1
+fi
+export CLOUDFLARE_ACCOUNT_ID="$RUNKONF_ACCOUNT_ID"
+
 upper="$(printf '%s' "$env_name" | tr '[:lower:]' '[:upper:]')"
 priv_name="KONF_${upper}_GATEWAY_PRIVATE_KEY"
 pub_name="KONF_${upper}_GATEWAY_PUBLIC_KEY"

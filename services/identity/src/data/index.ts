@@ -11,6 +11,7 @@ import {
 } from './schema'
 
 export { createAuth, type AuthEnv } from './auth'
+export { openInvitationFor } from './invitations'
 import type { AuthEnv } from './auth'
 import { createMembers } from './members'
 export { MemberError, type MemberRole } from './members'

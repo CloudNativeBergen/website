@@ -323,8 +323,15 @@ before acceptance; "Site" = `site:server` with no user token.
 | attendee.read_pii                     | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
 | person.erase (GDPR)                   | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
 | audit.read                            | Y   | Y   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| api_client.read (list, no secrets)    | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| api_client.create / rotate            | N   | Y   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| api_client.revoke                     | Y   | Y   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| pat.manage_own (self-service)         | N   | Y   | Y   | Y   | N   | N                   | N   | N   | N   | N   | N    |
 | user.revoke_all                       | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
 | reminder_lock (C4)                    | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | Y    |
+
+API clients and PATs (`api_client.*`, `pat.manage_own`): see `docs/API_CLIENTS.md`.
+They are never client-callable.
 
 Operator is N on reviewing and editing proposals by default: operators act for a tenant
 for support, not as a juror. Operator access is only on the operator lane and is audited.
