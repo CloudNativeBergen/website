@@ -35,6 +35,9 @@ export function resolveEditorSpeaker(
   if (!own) return currentUserSpeaker
 
   return {
+    // The API's own entry carries only what the editor shows; the full read
+    // fills the rest (flags, gender, country) so a save cannot erase them.
+    ...currentUserSpeaker,
     ...own,
     /**
      * THE OWN-VALUE OVERRIDE, and the reason this function exists.

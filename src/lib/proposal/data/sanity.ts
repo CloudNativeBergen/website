@@ -1282,3 +1282,38 @@ export async function getWorkshops({
 
   return { workshops, workshopsError: proposalsError }
 }
+
+/**
+ * What the per-host API read of one proposal needs from Sanity (#2135): the
+ * proposal's own conference (whose domain is the API host), its topic objects
+ * (the API returns ids) and file-attachment asset refs (the API returns none,
+ * and the attachments panel writes the whole list back). Null unless the
+ * speaker is on the proposal.
+ */
+export async function getProposalApiContext(
+  id: string,
+  speakerId: string,
+): Promise<{
+  conference: {
+    _id: string
+    title?: string
+    startDate?: string
+    endDate?: string
+    domains?: string[]
+    organization?: { _ref: string }
+  } | null
+  topics: { _id: string }[] | null
+  files: { _key: string; file?: unknown }[] | null
+} | null> {
+  return clientRead.fetch(
+    // groq-global-scoped: owner predicate — `$speakerId in speakers[]._ref`; a
+    // foreign or missing id reads null alike.
+    groq`*[_type == "talk" && _id == $id && $speakerId in speakers[]._ref][0]{
+      "conference": conference->{ _id, title, startDate, endDate, domains, organization },
+      "topics": topics[]->{ _id, title, color, slug, description },
+      "files": attachments[_type == "fileAttachment"]{ _key, file }
+    }`,
+    { id, speakerId },
+    { cache: 'no-store' },
+  )
+}

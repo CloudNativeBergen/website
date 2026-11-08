@@ -32,8 +32,8 @@ vi.mock('@/lib/authz/organizer', () => ({
   isOrganizerForCurrentOrg: vi.fn(async () => false),
   resolveCurrentOrgId: vi.fn(async () => null),
 }))
-vi.mock('@/lib/proposal/server', () => ({
-  getProposalSanity: (...args: unknown[]) => getProposalMock(...args),
+vi.mock('@/lib/proposal/my-proposals', () => ({
+  getMyProposal: (...args: unknown[]) => getProposalMock(...args),
 }))
 vi.mock('@/lib/speaker/sanity', () => ({
   getSpeaker: vi.fn(async () => ({
