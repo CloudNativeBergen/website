@@ -63,6 +63,20 @@ export class Organizations extends WorkerEntrypoint<Env> {
     return createData(this.env).syncMembers()
   }
 
+  /**
+   * Self-serve sign-up (#2163): the caller's owner membership, written
+   * before tenant-directory answers. userId comes from its verified envelope.
+   */
+  signupOwner(
+    orgId: string,
+    slug: string,
+    name: string,
+    userId: string,
+    codeId: string,
+  ) {
+    return createData(this.env).signupOwner(orgId, slug, name, userId, codeId)
+  }
+
   /** tenant-directory's operator writes (complimentary plans, #2129). */
   audit(event: OperatorAuditEvent) {
     return recordOperatorWrite(this.env.DB, event)

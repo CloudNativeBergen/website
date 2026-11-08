@@ -194,6 +194,8 @@ const SAFE_CODES: ReadonlyMap<string, string | null> = new Map([
   ['NOT_FOUND', 'Not found.'],
   // A schema-first contract whose resolver is not built yet (#2115).
   ['NOT_IMPLEMENTED', 'Not implemented yet.'],
+  // A subgraph's own attempt limit (signUpOrganization, #2163).
+  ['RATE_LIMITED', 'Too many requests.'],
 ])
 
 /** Stable BAD_USER_INPUT reasons a client may branch on (kontroll#81). */

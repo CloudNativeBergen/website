@@ -196,6 +196,37 @@ export function createData(env: DataEnv) {
         .onConflictDoNothing({ target: organization.id })
     },
     /**
+     * Self-serve sign-up (#2163): the org, the caller's owner membership and
+     * the `org.signup` audit row in ONE batch, so membership is readable on
+     * the next request and never lands without its audit. Ids only; the
+     * invite code itself never reaches identity.
+     */
+    async signupOwner(
+      orgId: string,
+      slug: string,
+      name: string,
+      userId: string,
+      codeId: string,
+    ): Promise<void> {
+      await db.batch([
+        db
+          .insert(organization)
+          .values({ id: orgId, slug, name })
+          .onConflictDoNothing({ target: organization.id }),
+        db.insert(member).values({
+          id: crypto.randomUUID(),
+          organizationId: orgId,
+          userId,
+          role: 'owner',
+        }),
+        db.insert(auditEvent).values({
+          action: 'org.signup',
+          userId,
+          detail: JSON.stringify({ orgId, codeId }),
+        }),
+      ])
+    },
+    /**
      * Kontroll (an operator origin) admits platform operators and members of
      * at least one organization (#1956). A pending invitation is no member row.
      */

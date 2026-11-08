@@ -340,7 +340,7 @@ type Mutation {
   setConferenceLifecycle(status: ConferenceLifecycleOverride): ConferenceEdition
 
   """
-  Self-serve sign-up in closed preview (#2129): creates an Organization (free, kind customer) with the caller as owner, its first draft edition and the host <slug>.konf.app, and spends one use of `inviteCode`. Any signed-in user, on a session with no tenant.
+  Self-serve sign-up in closed preview (#2129): creates an Organization (free, kind customer) with the caller as owner, its first draft edition and the host <slug>.konf.run, and spends one use of `inviteCode`. Returns after the owner membership is written, so `myOrganizations` sees it on the next request. Any signed-in user, on a session with no tenant; attempts are rate-limited per user (RATE_LIMITED). Refusals are BAD_USER_INPUT with `field` inviteCode, then slug, then name.
   """
   signUpOrganization(input: SignupOrganizationInput!, inviteCode: String!): SignupResult
 
@@ -1238,7 +1238,7 @@ type SignupCode {
 type SignupResult {
   conference: ConferenceEdition
 
-  """The closed-preview host, <slug>.konf.app."""
+  """The closed-preview host, <slug>.konf.run."""
   host: String
   organization: Organization
 }
@@ -1600,7 +1600,7 @@ input ProvisionConferenceInput {
 input SignupOrganizationInput {
   name: String!
 
-  """Lowercase a-z, 0-9 and -, 3 to 40 characters; becomes <slug>.konf.app."""
+  """Lowercase a-z, 0-9 and -, 3 to 40 characters; becomes <slug>.konf.run."""
   slug: String!
 }
 

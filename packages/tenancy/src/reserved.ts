@@ -81,6 +81,8 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   'root',
   'gateway',
   'kontroll',
+  // id.konf.app is identity (#2163)
+  'id',
   // environments
   'dev',
   'test',
@@ -98,9 +100,17 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
 /** Org slug shape for self-serve sign-up: lowercase a-z, 0-9 and -, 3–40. */
 export const SIGNUP_SLUG = /^[a-z0-9-]{3,40}$/
 
-/** Why a sign-up slug is unusable, before any lookup; null when it passes. */
+/**
+ * Why a sign-up slug is unusable, before any lookup; null when it passes.
+ * `xn--` (punycode) and `--` are refused: they make IDN lookalikes (#2163).
+ */
 export function signupSlugProblem(slug: string): 'format' | 'reserved' | null {
-  if (!SIGNUP_SLUG.test(slug) || slug.startsWith('-') || slug.endsWith('-'))
+  if (
+    !SIGNUP_SLUG.test(slug) ||
+    slug.startsWith('-') ||
+    slug.endsWith('-') ||
+    slug.includes('--')
+  )
     return 'format'
   return RESERVED_SLUGS.has(slug) ? 'reserved' : null
 }

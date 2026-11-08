@@ -29,6 +29,10 @@ service: #PlatformService & {
 	// SITE_URL: no preview site writes to a dataset the worker can trust yet.
 	files: "package.json": dependencies: jose: "^6.2.14"
 	// CONFERENCE: is an edition ticketed, for the plan gate on going live (#2129).
+	// signUpOrganization attempts per user (#2163): 5 a minute. New namespaces.
+	rateLimits: [
+		{name: "SIGNUP_LIMIT", namespaceId: {preview: "2163", production: "2173"}, limit: 5, period: 60},
+	]
 	serviceBindings: [
 		{binding: "IDENTITY", service: "konf-identity", entrypoint: "Organizations"},
 		{binding: "CONFERENCE", service: "konf-conference", entrypoint: "ProgramDate"},
