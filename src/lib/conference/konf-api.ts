@@ -49,7 +49,7 @@ const QUERY = `{ conference {
   cfpStartDate cfpEndDate cfpNotifyDate programDate travelSupportPaymentDate
   earlyBirdEndDate registrationCloseDate speakersAnnouncedDate sponsorDeadlineDate
   recordingsLiveDate registrationEnabled organizer socialHashtag showVanityMetrics
-  ticketingProvider
+  ticketingProvider contactEmail cfpEmail sponsorEmail volunteerRegistrationLink
 } conferenceLifecycle }` as const
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
 const QUERY_DOC = graphql(QUERY)
@@ -67,6 +67,9 @@ const PRIVATE_QUERY = `{ conference {
   ticketTargetsEnabled ticketSalesStartDate ticketTargetCurve
   ticketTargetMilestones { date targetPercentage label }
   workshopReminderLastSentAt workshopReminderLastSentCount workshopReminderReservedAt
+  sponsorRegistrationLink speakerRegistrationLink salesNotificationChannel
+  cfpNotificationChannel speakerSlackChannel speakerSlackInviteUrl
+  volunteerSlackInviteUrl
 } }` as const
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
 const PRIVATE_DOC = graphql(PRIVATE_QUERY)
@@ -91,6 +94,41 @@ const isPosInt = (v: unknown) =>
 const PHASE3_CHECKS: Record<string, (v: unknown) => boolean> = {
   ticketingProvider: (v) => v === 'checkin' || v === 'tito',
 }
+
+// Settings phase 2 (#2038). The subgraph validates on write; these only keep
+// a malformed value from replacing Sanity's.
+const isEmail = (v: unknown) =>
+  typeof v === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+const isHttps = (v: unknown) =>
+  typeof v === 'string' && /^https:\/\/[^\s]+$/.test(v)
+const isUrl = (v: unknown) =>
+  typeof v === 'string' && /^https?:\/\/[^\s]+$/.test(v)
+const isChannel = (v: unknown) =>
+  typeof v === 'string' && /^#?[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v)
+/** Phase 2 public fields, in QUERY. */
+const PHASE2_PUBLIC_CHECKS: Record<string, (v: unknown) => boolean> = {
+  contactEmail: isEmail,
+  cfpEmail: isEmail,
+  sponsorEmail: isEmail,
+  volunteerRegistrationLink: isHttps,
+}
+/**
+ * Phase 2 members-only fields, in PRIVATE_QUERY only. Every one of them is
+ * also stripped from a public conference object (`getConferenceForDomain`).
+ */
+export const PHASE2_PRIVATE_CHECKS = {
+  sponsorRegistrationLink: isUrl,
+  speakerRegistrationLink: isHttps,
+  salesNotificationChannel: isChannel,
+  cfpNotificationChannel: isChannel,
+  speakerSlackChannel: isChannel,
+  speakerSlackInviteUrl: isHttps,
+  volunteerSlackInviteUrl: isHttps,
+} as const satisfies Record<string, (v: unknown) => boolean>
+export type Phase2PrivateField = keyof typeof PHASE2_PRIVATE_CHECKS
+export const PHASE2_PRIVATE_FIELDS = Object.keys(
+  PHASE2_PRIVATE_CHECKS,
+) as Phase2PrivateField[]
 
 type ApiConference = Partial<
   Omit<NonNullable<QueryData['conference']>, 'homepageSections'>
@@ -339,6 +377,7 @@ export async function mergeKonfApiConference(
       if (DATE_KEYS.has(k) && !isDay(v)) continue
       if (BOOL_KEYS.has(k) && typeof v !== 'boolean') continue
       if (k in PHASE3_CHECKS && !PHASE3_CHECKS[k](v)) continue
+      if (k in PHASE2_PUBLIC_CHECKS && !PHASE2_PUBLIC_CHECKS[k](v)) continue
       merged[k] = v
     }
     if (typeof showVanityMetrics === 'boolean')
@@ -438,6 +477,7 @@ export const TICKET_SETUP_FIELDS = [
 export async function mergeTicketSetup<T extends { _id: string }>(
   host: string,
   conference: T,
+  { settingsOnly = false }: { settingsOnly?: boolean } = {},
 ): Promise<T> {
   let p: PrivateConference
   try {
@@ -450,6 +490,13 @@ export async function mergeTicketSetup<T extends { _id: string }>(
     return conference
   }
   const merged = { ...conference } as Record<string, unknown>
+  // Phase 2 members-only settings (#2038). With `settingsOnly` (a narrow
+  // projection that is not stripped afterwards) only the keys the caller
+  // projected are replaced, so no other members-only field is added.
+  for (const k of PHASE2_PRIVATE_FIELDS)
+    if ((!settingsOnly || k in merged) && PHASE2_PRIVATE_CHECKS[k](p[k]))
+      merged[k] = p[k]
+  if (settingsOnly) return merged as T
   for (const k of ['checkinCustomerId', 'ticketCapacity'] as const)
     if (isPosInt(p[k])) merged[k] = p[k]
   for (const k of [

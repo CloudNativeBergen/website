@@ -237,6 +237,8 @@ type RegistrationConferenceDoc = {
   venueAddress?: string
   registrationLink?: string
   sponsorRegistrationLink?: string
+  contactEmail?: string | null
+  sponsorEmail?: string | null
   workshopRegistrationSponsorStart?: string
   workshopRegistrationStart?: string
 }
@@ -255,7 +257,9 @@ async function applyD1ConferenceFields(result: {
   const doc = result.conferenceDoc
   delete result.conferenceDoc
   if (!doc?._id) return
-  const c = await mergeConference(doc)
+  // The sponsor ticket link is members-only in D1 (#2038); the portal's
+  // bearer token already entitles the sponsor to it.
+  const c = await mergeConference(doc, { settings: true })
   result.conferenceName = c.title
   result.conferenceStartDate = c.startDate
   if (result.afterSigning) {
@@ -265,6 +269,8 @@ async function applyD1ConferenceFields(result: {
       venueName: c.venueName,
       venueAddress: c.venueAddress,
       ticketUrl: c.sponsorRegistrationLink ?? c.registrationLink,
+      contactEmail: c.contactEmail ?? null,
+      sponsorEmail: c.sponsorEmail ?? null,
       // The workshop windows from D1 when flagged (#2080).
       workshopSponsorStart: c.workshopRegistrationSponsorStart ?? null,
       workshopOpening: c.workshopRegistrationStart ?? null,
@@ -304,7 +310,7 @@ export async function validateRegistrationToken(token: string): Promise<{
         "tierTitle": tier->title,
         "conferenceName": conference->title,
         "conferenceStartDate": conference->startDate,
-        "conferenceDoc": conference->{ _id, domains, organization, title, startDate, endDate, venueName, venueAddress, registrationLink, sponsorRegistrationLink, workshopRegistrationSponsorStart, workshopRegistrationStart },
+        "conferenceDoc": conference->{ _id, domains, organization, title, startDate, endDate, venueName, venueAddress, registrationLink, sponsorRegistrationLink, contactEmail, sponsorEmail, workshopRegistrationSponsorStart, workshopRegistrationStart },
         contactPersons[]{ _key, name, email, phone, role, isPrimary },
         billing{ invoiceFormat, email, reference, comments },
         registrationComplete,
@@ -501,7 +507,7 @@ export interface SfcNotificationData {
 export async function getSfcForNotification(
   sfcId: string,
 ): Promise<SfcNotificationData | null> {
-  return clientRead.fetch<SfcNotificationData | null>(
+  const row = await clientRead.fetch<SfcNotificationData | null>(
     // groq-global-scoped: point read by a server-resolved id (token-validated
     // registration, or a cron sweep row); the alert goes to that deal's own
     // conference channel.
@@ -516,4 +522,10 @@ export async function getSfcForNotification(
     }`,
     { id: sfcId },
   )
+  // Server-side only: the sales channel and sponsorEmail from D1 (#2038).
+  if (row?.conference?._id)
+    row.conference = await mergeConference(row.conference, {
+      ticketSetup: true,
+    })
+  return row
 }

@@ -75,7 +75,7 @@ type Conference {
   cfpEmail: String
   cfpEndDate: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   cfpNotificationChannel: String
   cfpNotifyDate: String
   cfpStartDate: String
@@ -107,7 +107,7 @@ type Conference {
   registrationEnabled: Boolean
   registrationLink: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   salesNotificationChannel: String
 
   """ticketCustomization.showVanityMetrics in Sanity."""
@@ -115,19 +115,19 @@ type Conference {
   socialHashtag: String
   socialLinks: [String!]
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   speakerRegistrationLink: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   speakerSlackChannel: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   speakerSlackInviteUrl: String
   speakersAnnouncedDate: String
   sponsorDeadlineDate: String
   sponsorEmail: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   sponsorRegistrationLink: String
   startDate: String
   tagline: String
@@ -168,7 +168,7 @@ type Conference {
   visibility: String
   volunteerRegistrationLink: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   volunteerSlackInviteUrl: String
   workshopEarlyAccessTicketTypes: [String!]
   workshopRegistrationEnd: String

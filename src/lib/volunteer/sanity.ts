@@ -28,7 +28,8 @@ async function enrichVolunteersConference(
     ...c,
     organization: c.organization?._ref ? { _ref: c.organization._ref } : null,
   }))
-  const mergedConfs = await mergeConferences(candidates)
+  // The volunteer Slack invite is members-only (#2038).
+  const mergedConfs = await mergeConferences(candidates, { settings: true })
   const confMap = new Map(mergedConfs.map((c) => [c._id, c]))
   return volunteers.map((v) => {
     const conf = v.conference
