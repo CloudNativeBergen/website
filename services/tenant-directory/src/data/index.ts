@@ -533,8 +533,8 @@ export function createData(
 
     /**
      * Operator-only (#2129): grants `plan` until `until` (ISO 8601, null for
-     * no end), or with `free` ends a grant. Writes, then records the write in
-     * identity's audit_event before answering. Null for an unknown org.
+     * no end), or with `free` ends a grant. Records the change in identity's
+     * audit_event, then writes. Null for an unknown org.
      */
     async setComplimentaryPlan(
       actorId: string,
@@ -544,6 +544,18 @@ export function createData(
       reason: string,
     ) {
       const free = plan === 'free'
+      // Audit first: a failed audit call leaves no unaudited change. An
+      // unknown org is refused before either.
+      if (!(await organization(orgId))) return null
+      const event: OperatorAuditEvent = {
+        type: 'operator.write',
+        actorId,
+        organizationId: orgId,
+        conferenceId: null,
+        fields: ['plan', 'plan_source', 'comp_until', 'comp_reason'],
+      }
+      await env.IDENTITY.audit(event)
+      console.log(JSON.stringify({ event: 'billing.comp_plan', orgId, plan }))
       const [row] = await db
         .update(organizations)
         .set({
@@ -554,16 +566,6 @@ export function createData(
         })
         .where(eq(organizations.id, orgId))
         .returning()
-      if (!row) return null
-      const event: OperatorAuditEvent = {
-        type: 'operator.write',
-        actorId,
-        organizationId: orgId,
-        conferenceId: null,
-        fields: ['plan', 'plan_source', 'comp_until', 'comp_reason'],
-      }
-      console.log(JSON.stringify({ event: 'billing.comp_plan', orgId, plan }))
-      await env.IDENTITY.audit(event)
       return row
     },
 

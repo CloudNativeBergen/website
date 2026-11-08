@@ -953,6 +953,11 @@ type OperatorConference {
 type Organization {
   createdAt: String
   domains: [Domain!]
+
+  """
+  The plan the platform enforces now (#2129): `free`, `basic` or `pro`, from the plan, its source, the subscription status and the comp end date.
+  """
+  effectivePlan: String
   id: ID
   name: String
   plan: String

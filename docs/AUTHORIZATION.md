@@ -336,28 +336,43 @@ A role check passes first; a paid-only action then also needs the org's **effect
 envelope per request from tenant-directory's `tenantByHost`; `verifyEnvelope` caps it to
 `free | basic | pro` and reads an absent or unknown value as `free`.
 
-| Gate                          | Needs | Checked at                                                          |
-| ----------------------------- | ----- | ------------------------------------------------------------------- |
-| `conference.publish_ticketed` | basic | `setConferenceLifecycle(null)` putting a ticketed edition back live |
-| `domain.connect_custom`       | basic | `provisionConference` with a `domain`, tenant lane                  |
-| `api_client.create`           | basic | API client creation (#2115; resolver not built yet)                 |
-| `pat.create_write`            | basic | a PAT with any write scope (#2115; resolver not built yet)          |
+These are the only gated paths:
 
-A refusal is `BAD_USER_INPUT` with `extensions.reason = PLAN_REQUIRED` and
-`extensions.requiredPlan`; the gateway passes both. "Ticketed" means the edition's
-`ticketingProvider` is set (konf-conference D1). `provisionConference` creates drafts only,
-so it never publishes. The operator lane is exempt (`createOrganization`, and
-`provisionConference` naming `orgId`): staff grant a plan with `setComplimentaryPlan`
-instead. The live-event count limit waits for the owner's Pro decision.
+| Gate                          | Needs | Gated path                                                                                                                                          |
+| ----------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `conference.publish_ticketed` | basic | Site `conference.updateVisibility` to `live` from an explicit non-live visibility, when the edition's `ticketingProvider` is set (the real publish) |
+| `conference.publish_ticketed` | basic | Gateway `setConferenceLifecycle(null)` putting a cancelled or archived ticketed edition back live                                                   |
+| `domain.connect_custom`       | basic | Site `conference.updateDomains` adding an entry that was not in the list and is not a platform-zone host                                            |
+| `domain.connect_custom`       | basic | Gateway `provisionConference` with a `domain`, tenant lane                                                                                          |
+| `api_client.create`           | basic | Policy row only: API client creation (#2115, resolver not built yet)                                                                                |
+| `pat.create_write`            | basic | Policy row only: a PAT with any write scope (#2115, resolver not built yet)                                                                         |
 
-**Effective plan:** `comp` gives the stored plan while `comp_until` is unset or ahead;
-`stripe` gives it while `active`, or `past_due` within 14 days of `current_period_end`;
-everything else is `free`.
+Not gated: unlisting, an already live edition, free-to-attend editions, keeping or
+removing domains, cancelling or archiving, drafts created by `provisionConference`, and
+the operator lane (`createOrganization`, `provisionConference` naming `orgId`, the
+internal `addCustomDomain`). Staff grant a plan with `setComplimentaryPlan` instead. The
+live-event count limit waits for the owner's Pro decision.
 
-**Runbook:** once deployed, give CNDN its complimentary plan on the operator lane:
-`setComplimentaryPlan(orgId: "organization-cloud-native-days", plan: pro, reason: "...")`
-(add `until` for an end date). It is audited as `operator.write` in identity's
-`audit_event`. `plan: free` ends a grant.
+On the gateway a refusal is `BAD_USER_INPUT` with `extensions.reason = PLAN_REQUIRED`
+and `extensions.requiredPlan`, and the gateway passes both. On the site it is tRPC
+`FORBIDDEN`, with the same `reason` and `requiredPlan` in `error.data`. The site reads the
+plan from the gateway (`organization { effectivePlan }`) as the signed-in organizer. If
+that read fails, the site refuses with `SERVICE_UNAVAILABLE`, which is retryable.
+"Ticketed" means `ticketingProvider` is set.
+
+**Effective plan:** `comp` gives the stored plan while `comp_until` is unset or ahead.
+`stripe` gives it while `active`, or while `past_due` and within 14 days of
+`current_period_end`. Everything else is `free`.
+
+**Existing orgs:** migration 0009 gives `organization-cloud-native-days` comp `pro`
+(no end date, reason "existing customer (owner decision 2026-11-08)"). It ships in the
+same deploy as the gates, so CNDN is never blocked. `kkdemo.org` stays `free` on
+purpose: it is the test org the gates are exercised on.
+
+**Runbook:** grant or change a plan on the operator lane with
+`setComplimentaryPlan(orgId: "...", plan: basic|pro, until: "...", reason: "...")`.
+Leave out `until` for no end date; `plan: free` ends a grant. Each change is audited as
+`operator.write` in identity's `audit_event`, before the plan is written.
 
 ## 5. Migration plan
 

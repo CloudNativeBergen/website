@@ -273,6 +273,10 @@ beforeEach(() => {
       readFileSync(
         new URL('../migrations/0008_billing_plan.sql', import.meta.url),
         'utf8',
+      ) +
+      readFileSync(
+        new URL('../migrations/0009_comp_existing_orgs.sql', import.meta.url),
+        'utf8',
       ),
   )
   env = {
@@ -1847,6 +1851,77 @@ describe('billing phase 1 (#2129)', () => {
     })
   })
 
+  describe('migration 0009', () => {
+    it('gives CNDN comp pro, leaves every other org (kkdemo included) free, and reruns cleanly', () => {
+      const db = new DatabaseSync(':memory:')
+      const mig = (f: string) =>
+        readFileSync(new URL(`../migrations/${f}`, import.meta.url), 'utf8')
+      db.exec(
+        [
+          '0001_init.sql',
+          '0002_rollout_flags.sql',
+          '0004_org_created_at.sql',
+          '0005_lifecycle_cancelled.sql',
+          '0006_provisioning_conference.sql',
+          '0007_provisioning_created_by.sql',
+        ]
+          .map(mig)
+          .join('\n'),
+      )
+      db.exec(
+        "INSERT INTO organizations (id, slug, name) VALUES ('organization-cloud-native-days', 'cndn', 'CNDN'), ('kkdemo.org', 'kk', 'KK')",
+      )
+      db.exec(mig('0008_billing_plan.sql'))
+      db.exec(mig('0009_comp_existing_orgs.sql'))
+      db.exec(mig('0009_comp_existing_orgs.sql'))
+      expect(
+        db
+          .prepare(
+            'SELECT id, plan, plan_source, comp_until, comp_reason FROM organizations ORDER BY id',
+          )
+          .all(),
+      ).toEqual([
+        {
+          id: 'kkdemo.org',
+          plan: 'free',
+          plan_source: 'default',
+          comp_until: null,
+          comp_reason: null,
+        },
+        {
+          id: 'organization-cloud-native-days',
+          plan: 'pro',
+          plan_source: 'comp',
+          comp_until: null,
+          comp_reason: 'existing customer (owner decision 2026-11-08)',
+        },
+      ])
+    })
+  })
+
+  it('serves effectivePlan on the session organization', async () => {
+    const { org, admin } = await setup()
+    const Q = '{ organization { plan effectivePlan } }'
+    expect((await gql(Q, {}, admin)).body.data.organization).toEqual({
+      plan: 'free',
+      effectivePlan: 'free',
+    })
+    sqlite.exec(
+      `UPDATE organizations SET plan = 'basic', plan_source = 'comp' WHERE id = '${org.id}'`,
+    )
+    expect((await gql(Q, {}, admin)).body.data.organization).toEqual({
+      plan: 'basic',
+      effectivePlan: 'basic',
+    })
+    // A stored plan with no grant behind it is not enforced.
+    sqlite.exec(
+      `UPDATE organizations SET plan_source = 'default' WHERE id = '${org.id}'`,
+    )
+    expect((await gql(Q, {}, admin)).body.data.organization.effectivePlan).toBe(
+      'free',
+    )
+  })
+
   describe('tenantByHost carries the effective plan', () => {
     it.each([
       ["plan = 'pro', plan_source = 'default'", 'free'],
@@ -2041,6 +2116,20 @@ describe('billing phase 1 (#2129)', () => {
         comp_reason: null,
       })
       expect(identity.audit).toHaveBeenCalledTimes(2)
+    })
+
+    it('audits before it writes, and a failed audit writes nothing', async () => {
+      const { org } = await setup()
+      identity.audit.mockImplementation(async () => {
+        expect(orgRow(org.id)).toMatchObject({ plan: 'free' })
+        throw new Error('identity down')
+      })
+      const { body } = await gql(COMP, vars(org.id), operator)
+      expect(body.errors?.[0]).toBeDefined()
+      expect(orgRow(org.id)).toMatchObject({
+        plan: 'free',
+        plan_source: 'default',
+      })
     })
 
     it('answers null for an unknown org, without an audit row', async () => {

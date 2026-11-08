@@ -9,6 +9,7 @@ import { createGraphQLError } from 'graphql-yoga'
 import {
   PLANS,
   can,
+  effectivePlan,
   parseOrgRoles,
   planAllows,
   principalOf,
@@ -200,6 +201,10 @@ const Domain = builder
 
 type OrgRow = Row<'id' | 'slug' | 'name' | 'status' | 'plan'> & {
   createdAt: string | null
+  planSource?: string | null
+  subscriptionStatus?: string | null
+  currentPeriodEnd?: string | null
+  compUntil?: string | null
 }
 
 // After Domain: Organization.domains refers to it.
@@ -210,6 +215,18 @@ const Organization = builder.objectRef<OrgRow>('Organization').implement({
     name: t.exposeString('name'),
     status: t.exposeString('status'),
     plan: t.exposeString('plan'),
+    effectivePlan: t.string({
+      description:
+        'The plan the platform enforces now (#2129): `free`, `basic` or `pro`, from the plan, its source, the subscription status and the comp end date.',
+      resolve: (o) =>
+        effectivePlan({
+          plan: o.plan,
+          planSource: o.planSource ?? null,
+          subscriptionStatus: o.subscriptionStatus ?? null,
+          currentPeriodEnd: o.currentPeriodEnd ?? null,
+          compUntil: o.compUntil ?? null,
+        }),
+    }),
     // ISO 8601; null for orgs provisioned before #1973.
     createdAt: t.exposeString('createdAt', { nullable: true }),
     // Every hostname of this org, any verification state (#1969).
