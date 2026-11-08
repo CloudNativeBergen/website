@@ -93,7 +93,8 @@ export function validate(input: ProfileInput, current?: Profile) {
   )
   if (topics.length > MAX_TOPICS) throw bad('Too many topics')
   if (topics.some((t) => !t)) throw bad('Topics must not be empty')
-  const visibility = input.visibility ?? current?.visibility ?? 'network'
+  // New profiles are private until the speaker opts in (owner decision, #2022).
+  const visibility = input.visibility ?? current?.visibility ?? 'private'
   if (!(VISIBILITIES as readonly string[]).includes(visibility))
     throw bad('Unknown visibility')
   const photoKey =
