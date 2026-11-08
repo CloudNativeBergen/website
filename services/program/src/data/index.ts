@@ -99,9 +99,9 @@ class Program extends ScopedRepository {
   }
 }
 
-// groq-global-scoped: operator lane only (platformBatch refuses anything but a
-// PlatformContext); bounded to the page's conference ids, a count only.
-export const CONFIRMED_SPEAKER_COUNTS = `*[_type == "conference" && _id in $ids]{ _id, "n": count(array::unique(*[_type == "talk" && conference._ref == ^._id && status == "confirmed"].speakers[]._ref)) }`
+// Operator lane only: platformBatch refuses anything but a PlatformContext.
+// One read per page, bounded to the page's conference ids.
+export const CONFIRMED_TALK_SPEAKERS = `*[_type == "talk" && conference._ref in $conferenceIds && status == "confirmed"]{ "c": conference._ref, "s": speakers[]._ref }`
 
 export function createData(env: DataEnv, envelope: Envelope) {
   const client = createClient({
@@ -126,11 +126,17 @@ export function createData(env: DataEnv, envelope: Envelope) {
     envelope,
     'operator conference stats: confirmed speakers (#2142)',
     async (ids) => {
-      const rows = await client.fetch<{ _id: string; n: number }[]>(
-        CONFIRMED_SPEAKER_COUNTS,
-        { ids },
+      const rows = await client.fetch<{ c: string; s: unknown }[]>(
+        CONFIRMED_TALK_SPEAKERS,
+        { conferenceIds: ids },
       )
-      return new Map((rows ?? []).map((r) => [r._id, r.n]))
+      const by = new Map<string, Set<unknown>>()
+      for (const r of rows ?? []) {
+        const set = by.get(r.c) ?? new Set()
+        for (const sp of Array.isArray(r.s) ? r.s : []) if (sp) set.add(sp)
+        by.set(r.c, set)
+      }
+      return new Map([...by].map(([c, set]) => [c, set.size]))
     },
   )
   return {

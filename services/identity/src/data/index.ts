@@ -1,5 +1,5 @@
 // Public data layer. Exports functions and the auth instance, never the raw handle.
-import { and, count, eq, gt, like, lt, sql } from 'drizzle-orm'
+import { and, count, eq, gt, like, lt, sql, type AnyColumn } from 'drizzle-orm'
 import { platformBatch, type Envelope } from '@runkonf/tenancy'
 import { rawDb } from './db'
 import {
@@ -56,7 +56,7 @@ export function createData(env: DataEnv) {
         envelope,
         'operator organization counts (#2142)',
         async (ids) => {
-          const inPage = (c: typeof member.organizationId) =>
+          const inPage = (c: AnyColumn) =>
             sql`${c} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`
           const [members, invites] = await Promise.all([
             db

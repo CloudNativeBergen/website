@@ -43,9 +43,9 @@ class Sponsors extends ScopedRepository {
   }
 }
 
-// groq-global-scoped: operator lane only (platformBatch refuses anything but a
-// PlatformContext); bounded to the page's conference ids, a count only.
-export const SPONSOR_COUNTS = `*[_type == "conference" && _id in $ids]{ _id, "n": count(*[_type == "sponsorForConference" && conference._ref == ^._id && status == "closed-won"]) }`
+// Operator lane only: platformBatch refuses anything but a PlatformContext.
+// One read per page, bounded to the page's conference ids.
+export const CLOSED_WON = `*[_type == "sponsorForConference" && conference._ref in $conferenceIds && status == "closed-won"].conference._ref`
 
 export function createData(env: DataEnv, envelope: Envelope) {
   const client = createClient({
@@ -66,11 +66,12 @@ export function createData(env: DataEnv, envelope: Envelope) {
     envelope,
     'operator conference stats: sponsors (#2142)',
     async (ids) => {
-      const rows = await client.fetch<{ _id: string; n: number }[]>(
-        SPONSOR_COUNTS,
-        { ids },
-      )
-      return new Map((rows ?? []).map((r) => [r._id, r.n]))
+      const refs = await client.fetch<string[]>(CLOSED_WON, {
+        conferenceIds: ids,
+      })
+      const n = new Map<string, number>()
+      for (const c of refs ?? []) n.set(c, (n.get(c) ?? 0) + 1)
+      return n
     },
   )
   return {

@@ -149,9 +149,9 @@ class Mine extends ScopedRepository {
 }
 type Who = { orgId: string; conferenceId: string; speakerId: string }
 
-// groq-global-scoped: operator lane only (platformBatch refuses anything but a
-// PlatformContext); bounded to the page's conference ids, statuses only.
-export const PROPOSAL_STATUSES = `*[_type == "conference" && _id in $ids]{ _id, "s": *[_type == "talk" && conference._ref == ^._id].status }`
+// Operator lane only: platformBatch refuses anything but a PlatformContext.
+// One read per page, bounded to the page's conference ids.
+export const PROPOSAL_STATUSES = `*[_type == "talk" && conference._ref in $conferenceIds]{ "c": conference._ref, status }`
 
 /** Proposal counts per conference, every status included (#2142). */
 export type ProposalCounts = { total: number; byStatus: Map<string, number> }
@@ -175,21 +175,19 @@ export function createData(env: DataEnv, envelope: Envelope) {
     envelope,
     'operator conference stats: proposals (#2142)',
     async (ids) => {
-      const rows = await client.fetch<{ _id: string; s: unknown }[]>(
+      const rows = await client.fetch<{ c: string; status: unknown }[]>(
         PROPOSAL_STATUSES,
-        { ids },
+        { conferenceIds: ids },
       )
-      return new Map(
-        (rows ?? []).map((r) => {
-          const s = Array.isArray(r.s) ? r.s : []
-          const byStatus = new Map<string, number>()
-          for (const x of s) {
-            const k = typeof x === 'string' ? x : 'unknown'
-            byStatus.set(k, (byStatus.get(k) ?? 0) + 1)
-          }
-          return [r._id, { total: s.length, byStatus }]
-        }),
-      )
+      const by = new Map<string, ProposalCounts>()
+      for (const r of rows ?? []) {
+        const c = by.get(r.c) ?? { total: 0, byStatus: new Map() }
+        const k = typeof r.status === 'string' ? r.status : 'unknown'
+        c.total++
+        c.byStatus.set(k, (c.byStatus.get(k) ?? 0) + 1)
+        by.set(r.c, c)
+      }
+      return by
     },
   )
   return {
