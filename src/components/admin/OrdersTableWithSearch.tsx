@@ -14,7 +14,7 @@ import {
 import type { EventTicket, GroupedOrder } from '@/lib/tickets/types'
 import { invitationLetterHref } from '@/lib/invitation-letter/prefill'
 import { PaymentDetailsModal } from './PaymentDetailsModal'
-import { parseTicketAmount } from '@/lib/tickets/amount'
+import { moneyToMajor } from '@/lib/tickets/amount'
 import { formatCurrency } from '@/lib/format'
 import { api } from '@/lib/trpc/client'
 import { SearchInput } from '@/components/SearchInput'
@@ -55,7 +55,7 @@ const PAYMENT_TERM_DAYS = 30
  * Nothing here is verified against a passport — the form says so where the
  * values land, and every field stays editable.
  */
-function issueLetterHref(ticket: EventTicket, orderId: number): string {
+function issueLetterHref(ticket: EventTicket, orderId: string): string {
   const holder = `${ticket.crm.first_name} ${ticket.crm.last_name}`.trim()
   const fieldValue = (key: string) =>
     ticket.fields.find((field) => field.key === key)?.value
@@ -63,7 +63,7 @@ function issueLetterHref(ticket: EventTicket, orderId: number): string {
   return invitationLetterHref({
     fullName: holder || ticket.customer_name || undefined,
     email: ticket.crm.email || undefined,
-    registrationReference: String(orderId),
+    registrationReference: orderId,
     organization: fieldValue('company'),
     jobTitle: fieldValue('work_title'),
   })
@@ -76,16 +76,16 @@ export function OrdersTableWithSearch({
 }: OrdersTableWithSearchProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('all')
-  const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set())
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set())
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
-  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null)
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
 
   const {
     data: paymentDetailsData,
     isLoading: paymentDetailsLoading,
     error: paymentDetailsError,
   } = api.tickets.admin.getPaymentDetails.useQuery(
-    { orderId: selectedOrderId! },
+    { orderId: Number(selectedOrderId) },
     {
       enabled: selectedOrderId !== null,
       retry: 1,
@@ -185,7 +185,7 @@ export function OrdersTableWithSearch({
     })
   }, [orders, searchTerm, paymentFilter, isOrderOverdue])
 
-  const toggleExpanded = (orderId: number) => {
+  const toggleExpanded = (orderId: string) => {
     setExpandedOrders((prev) => {
       const newSet = new Set(prev)
       if (newSet.has(orderId)) {
@@ -197,7 +197,7 @@ export function OrdersTableWithSearch({
     })
   }
 
-  const handleViewPaymentDetails = (orderId: number) => {
+  const handleViewPaymentDetails = (orderId: string) => {
     setSelectedOrderId(orderId)
     setPaymentModalOpen(true)
   }
@@ -249,7 +249,7 @@ export function OrdersTableWithSearch({
     }
   }
 
-  const getCheckinOrderUrl = (orderId: number): string | null => {
+  const getCheckinOrderUrl = (orderId: string): string | null => {
     if (!customerId || !eventId) return null
     return `https://app.checkin.no/customer/${customerId}/event/${eventId}/order/${orderId}`
   }
@@ -511,7 +511,7 @@ export function OrdersTableWithSearch({
                                       </div>
                                       <div className="text-xs text-gray-500 dark:text-gray-400">
                                         {formatCurrency(
-                                          parseTicketAmount(ticket.sum),
+                                          moneyToMajor(ticket.sum),
                                         )}
                                       </div>
                                     </div>
@@ -682,7 +682,7 @@ export function OrdersTableWithSearch({
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {formatCurrency(parseTicketAmount(ticket.sum))}
+                            {formatCurrency(moneyToMajor(ticket.sum))}
                           </div>
                           <Link
                             href={issueLetterHref(ticket, order.order_id)}

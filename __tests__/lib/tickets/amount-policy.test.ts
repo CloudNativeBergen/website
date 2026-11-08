@@ -21,6 +21,7 @@ import type { EventTicket, ProcessTicketSalesInput } from '@/lib/tickets/types'
 import type { PublicTicketType } from '@/lib/tickets/public'
 import {
   toMinorUnits,
+  toMoney,
   type OrderPaymentDetails,
 } from '@/lib/tickets/provider/types'
 import { createMockConference } from '../../testdata/conference'
@@ -28,13 +29,13 @@ import { createMockConference } from '../../testdata/conference'
 const BROKEN = 'not-a-number'
 
 const ticket = (overrides: Partial<EventTicket> = {}): EventTicket => ({
-  id: 1,
-  order_id: 1,
+  id: '1',
+  order_id: '1',
   order_date: '2026-02-01T10:00:00Z',
   category: 'Regular',
   customer_name: 'Test User',
-  sum: '2500.00',
-  sum_left: '0',
+  sum: { amountMinor: 250000, currency: 'NOK' },
+  sum_left: { amountMinor: 0, currency: 'NOK' },
   fields: [],
   crm: { first_name: 'Test', last_name: 'User', email: 'test@example.com' },
   ...overrides,
@@ -70,7 +71,7 @@ const publicTicket = (
     requiresInvitation: false,
     begins: null,
     ends: null,
-    price: [{ price, vat, description: null, key: null }],
+    price: [{ price: toMoney(price), vat, description: null, key: null }],
     ...overrides,
   }) as unknown as PublicTicketType
 
@@ -90,22 +91,22 @@ describe('a malformed amount never poisons an aggregate', () => {
     const result = new TicketSalesProcessor(
       processorInput([
         {
-          order_id: 1,
+          order_id: '1',
           order_date: '2026-02-01T10:00:00Z',
           category: 'Regular',
-          sum: '2500.00',
+          sum: { amountMinor: 250000, currency: 'NOK' },
         },
         {
-          order_id: 2,
+          order_id: '2',
           order_date: '2026-02-02T10:00:00Z',
           category: 'Regular',
-          sum: BROKEN,
+          sum: toMoney(BROKEN),
         },
         {
-          order_id: 3,
+          order_id: '3',
           order_date: '2026-02-03T10:00:00Z',
           category: 'Regular',
-          sum: '1500.00',
+          sum: { amountMinor: 150000, currency: 'NOK' },
         },
       ]),
     ).process()
@@ -118,8 +119,12 @@ describe('a malformed amount never poisons an aggregate', () => {
 
   it('statistics: average price stays a number', () => {
     const stats = calculateTicketStatistics([
-      ticket({ id: 1, order_id: 1, sum: '2000.00' }),
-      ticket({ id: 2, order_id: 2, sum: BROKEN }),
+      ticket({
+        id: '1',
+        order_id: '1',
+        sum: { amountMinor: 200000, currency: 'NOK' },
+      }),
+      ticket({ id: '2', order_id: '2', sum: toMoney(BROKEN) }),
     ])
     expect(stats.totalRevenue).toBe(2000)
     expect(Number.isFinite(stats.averageTicketPrice)).toBe(true)
@@ -127,9 +132,17 @@ describe('a malformed amount never poisons an aggregate', () => {
 
   it('budget: live ticket income skips the broken order and keeps the rest', () => {
     const income = deriveTicketIncome([
-      { order_id: 1, category: 'Regular', sum: '5000' },
-      { order_id: 2, category: 'Comp', sum: BROKEN },
-      { order_id: 3, category: 'Regular', sum: '2500' },
+      {
+        order_id: '1',
+        category: 'Regular',
+        sum: { amountMinor: 500000, currency: 'NOK' },
+      },
+      { order_id: '2', category: 'Comp', sum: toMoney(BROKEN) },
+      {
+        order_id: '3',
+        category: 'Regular',
+        sum: { amountMinor: 250000, currency: 'NOK' },
+      },
     ])
     expect(income.revenue).toBe(7500)
     // The broken row carries no code either, so its grant status is unknown and
@@ -143,7 +156,12 @@ describe('a malformed amount never poisons an aggregate', () => {
 
   it('orders table: a broken order shows 0, not NaN', () => {
     const [order] = groupTicketsByOrder([
-      ticket({ id: 1, order_id: 7, sum: BROKEN, sum_left: BROKEN }),
+      ticket({
+        id: '1',
+        order_id: '7',
+        sum: toMoney(BROKEN),
+        sum_left: toMoney(BROKEN),
+      }),
     ])
     expect(order.totalAmount).toBe(0)
     expect(order.amountLeft).toBe(0)
@@ -176,12 +194,12 @@ describe('the same policy on the payment and pricing surfaces', () => {
   })
 
   it('formatTicketPrice renders 0 for a price that does not parse, never "NaN"', () => {
-    expect(formatTicketPrice('2000', '25')).not.toContain('NaN')
-    expect(formatTicketPrice(BROKEN, '25')).toBe('0')
+    expect(formatTicketPrice(toMoney('2000'), '25')).not.toContain('NaN')
+    expect(formatTicketPrice(toMoney(BROKEN), '25')).toBe('0')
     // A broken VAT falls back to the ex-VAT figure rather than NaN.
-    expect(formatTicketPrice('2000', BROKEN, { includeVat: true })).toBe(
-      formatTicketPrice('2000', '0', { includeVat: true }),
-    )
+    expect(
+      formatTicketPrice(toMoney('2000'), BROKEN, { includeVat: true }),
+    ).toBe(formatTicketPrice(toMoney('2000'), '0', { includeVat: true }))
   })
 
   it('getLowestTicketPrice ignores an unparseable price and still finds the real lowest', () => {
@@ -203,8 +221,8 @@ describe('the same policy on the payment and pricing surfaces', () => {
   it('an ABSENT VAT under-states an incl-VAT price, so it is reported rather than silent', () => {
     // A missing rate cannot be coalesced quietly: the figure it produces is a
     // ~25%-too-low price shown to a buyer, and it looks entirely plausible.
-    expect(formatTicketPrice('2000', '', { includeVat: true })).toBe(
-      formatTicketPrice('2000', '0', { includeVat: true }),
+    expect(formatTicketPrice(toMoney('2000'), '', { includeVat: true })).toBe(
+      formatTicketPrice(toMoney('2000'), '0', { includeVat: true }),
     )
     expect(warn).toHaveBeenCalled()
     expect(String(warn.mock.calls[0][0])).toContain('missing VAT rate')
@@ -213,12 +231,19 @@ describe('the same policy on the payment and pricing surfaces', () => {
   it('says nothing about a missing VAT rate on a price that does not apply it', () => {
     // A conference with no VAT renders ex-VAT prices constantly; the rate is
     // parsed only where it is actually applied.
-    expect(formatTicketPrice('2000', '')).toBe(formatTicketPrice('2000', '25'))
+    expect(formatTicketPrice(toMoney('2000'), '')).toBe(
+      formatTicketPrice(toMoney('2000'), '25'),
+    )
     expect(warn).not.toHaveBeenCalled()
   })
 
   it('an absent SUM stays silent — a free ticket is not a failure', () => {
-    groupTicketsByOrder([ticket({ sum: '', sum_left: '' })])
+    groupTicketsByOrder([
+      ticket({
+        sum: { amountMinor: 0, currency: 'NOK' },
+        sum_left: { amountMinor: 0, currency: 'NOK' },
+      }),
+    ])
     expect(warn).not.toHaveBeenCalled()
   })
 })
@@ -226,15 +251,24 @@ describe('the same policy on the payment and pricing surfaces', () => {
 describe('the failure is reported rather than absorbed silently', () => {
   it('warns once for the malformed sum a revenue total would otherwise hide', () => {
     deriveTicketIncome([
-      { order_id: 1, category: 'Regular', sum: '5000' },
-      { order_id: 2, category: 'Comp', sum: BROKEN },
+      {
+        order_id: '1',
+        category: 'Regular',
+        sum: { amountMinor: 500000, currency: 'NOK' },
+      },
+      { order_id: '2', category: 'Comp', sum: toMoney(BROKEN) },
     ])
     expect(warn).toHaveBeenCalledTimes(1)
     expect(String(warn.mock.calls[0][0])).toContain('unparseable amount')
   })
 
   it('says nothing about a legitimately absent amount', () => {
-    groupTicketsByOrder([ticket({ sum: '', sum_left: '' })])
+    groupTicketsByOrder([
+      ticket({
+        sum: { amountMinor: 0, currency: 'NOK' },
+        sum_left: { amountMinor: 0, currency: 'NOK' },
+      }),
+    ])
     expect(warn).not.toHaveBeenCalled()
   })
 })

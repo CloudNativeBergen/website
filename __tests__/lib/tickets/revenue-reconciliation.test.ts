@@ -27,6 +27,7 @@ import { deriveTicketIncome } from '@/lib/budget/income'
 import { toPerTicketAmounts } from '@/lib/tickets/provider/types'
 import type { EventTicket, SalesTargetConfig } from '@/lib/tickets/types'
 import { createMockConference } from '../../testdata/conference'
+import { toMoney } from '@/lib/tickets/provider/types'
 
 const ticket = (
   id: number,
@@ -34,13 +35,13 @@ const ticket = (
   category: string,
   sum: string,
 ): EventTicket => ({
-  id,
-  order_id,
+  id: String(id),
+  order_id: String(order_id),
   order_date: '2026-02-01T10:00:00Z',
   category,
   customer_name: 'Test User',
-  sum,
-  sum_left: '0',
+  sum: toMoney(sum),
+  sum_left: { amountMinor: 0, currency: 'NOK' },
   fields: [],
   crm: { first_name: 'Test', last_name: 'User', email: `${id}@example.com` },
 })
@@ -89,16 +90,13 @@ describe('toPerTicketAmounts (the one place the convention can be flipped)', () 
     // what `amountBasis: 'per-order'` declares.
     const perOrderFeed = TICKETS.map((t) => ({
       ...t,
-      sum: t.order_id === 1 ? '4000' : '6000',
+      sum: toMoney(t.order_id === '1' ? '4000' : '6000'),
     }))
 
     const normalized = toPerTicketAmounts(perOrderFeed, 'per-order')
 
-    expect(normalized.map((t) => t.sum)).toEqual([
-      '2000',
-      '2000',
-      '3000',
-      '3000',
+    expect(normalized.map((t) => t.sum.amountMinor)).toEqual([
+      200000, 200000, 300000, 300000,
     ])
     expect(calculateTicketStatistics(normalized).totalRevenue).toBe(
       EXPECTED_REVENUE,

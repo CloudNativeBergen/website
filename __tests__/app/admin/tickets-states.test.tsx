@@ -213,7 +213,7 @@ beforeEach(() => {
   vi.stubEnv('TITO_API_KEY', 'platform-tito-key')
   h.fetchEventTickets.mockResolvedValue([])
   h.fetchPublicTicketTypes.mockResolvedValue({
-    event: { id: 1, name: 'Event', currencies: ['NOK'] },
+    event: { id: '1', name: 'Event', currencies: ['NOK'] },
     tickets: [],
   })
   mockGetOrganizationById.mockResolvedValue({
@@ -392,7 +392,7 @@ describe('the platform organization with a bound Checkin event', () => {
 
   it('/admin/tickets/types lists the event’s ticket types', async () => {
     h.fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 1, name: 'Event', currencies: ['NOK'] },
+      event: { id: '1', name: 'Event', currencies: ['NOK'] },
       tickets: [
         {
           id: 7,
@@ -433,7 +433,7 @@ describe('the platform organization with a bound Checkin event', () => {
       visibleEndsAt: null,
     }
     h.fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 1, name: 'Event', currencies: ['NOK'] },
+      event: { id: '1', name: 'Event', currencies: ['NOK'] },
       tickets: [
         { ...base, id: 7, name: 'Early Bird', type: 'regular', position: 1 },
         { ...base, id: 8, name: 'Speaker ticket', type: 'free', position: 2 },
@@ -473,7 +473,7 @@ describe('the platform organization with a bound Checkin event', () => {
       ticketTypeRoles: [{ typeName: 'Early Bird', grantsWorkshop: true }],
     } as never)
     h.fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 1, name: 'Event', currencies: ['NOK'] },
+      event: { id: '1', name: 'Event', currencies: ['NOK'] },
       tickets: [
         {
           id: 8,
@@ -527,7 +527,7 @@ describe('the platform organization with a bound Checkin event', () => {
         ],
       } as never)
       h.fetchPublicTicketTypes.mockResolvedValue({
-        event: { id: 1, name: 'Event', currencies: ['NOK'] },
+        event: { id: '1', name: 'Event', currencies: ['NOK'] },
         tickets: [
           { ...base, id: 1, name: 'Two-day pass', position: 1 },
           { ...base, id: 2, name: 'Day pass', position: 2 },
@@ -592,7 +592,7 @@ describe('the platform organization with a bound Checkin event', () => {
       visibleEndsAt: null,
     }
     h.fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 1, name: 'Event', currencies: ['NOK'] },
+      event: { id: '1', name: 'Event', currencies: ['NOK'] },
       tickets: [
         {
           ...base,
@@ -608,7 +608,14 @@ describe('the platform organization with a bound Checkin event', () => {
           id: 8,
           name: 'Conference Pass',
           type: 'regular',
-          price: [{ price: '4990', vat: 25, key: 'nok', description: '' }],
+          price: [
+            {
+              price: { amountMinor: 499000, currency: 'NOK' },
+              vat: 25,
+              key: 'nok',
+              description: '',
+            },
+          ],
           requiresInvitation: false,
           position: 2,
         },
@@ -661,7 +668,7 @@ describe('a Tito-bound conference', () => {
 
   it('/admin/tickets/types opens and names Tito as the source', async () => {
     h.fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 1, name: 'Event', currencies: ['NOK'] },
+      event: { id: '1', name: 'Event', currencies: ['NOK'] },
       tickets: [
         {
           id: 7,

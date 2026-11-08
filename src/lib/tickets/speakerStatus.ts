@@ -193,8 +193,8 @@ export function toTicketCandidates(tickets: EventTicket[]): TicketCandidate[] {
       ticket.customer_name?.trim() ||
       ''
     candidates.push({
-      ticketId: ticket.id,
-      orderId: ticket.order_id,
+      ticketId: Number(ticket.id),
+      orderId: Number(ticket.order_id),
       name,
       email,
       registeredEmail: ticket.crm?.email ?? '',

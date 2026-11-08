@@ -75,7 +75,14 @@ function ticket(over: Record<string, unknown> = {}) {
     name: 'Conference',
     type: 'standard',
     description: null,
-    price: [{ price: '1000', vat: '25', description: null, key: null }],
+    price: [
+      {
+        price: { amountMinor: 100000, currency: 'NOK' },
+        vat: '25',
+        description: null,
+        key: null,
+      },
+    ],
     available: null,
     requiresInvitation: false,
     visibleStartsAt: null,
@@ -112,14 +119,21 @@ describe('a free-to-attend event can show its tickets', () => {
       }),
     )
     fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 7, name: 'Event', currencies: ['NOK'] },
+      event: { id: '7', name: 'Event', currencies: ['NOK'] },
       tickets: [
-        ticket({ id: 1, name: 'Conference', price: [] }),
+        ticket({ id: '1', name: 'Conference', price: [] }),
         ticket({
           id: 2,
           name: 'Workshop day',
           position: 1,
-          price: [{ price: '0', vat: '0', description: null, key: null }],
+          price: [
+            {
+              price: { amountMinor: 0, currency: 'NOK' },
+              vat: '0',
+              description: null,
+              key: null,
+            },
+          ],
         }),
       ],
     })
@@ -142,10 +156,10 @@ describe('a free-to-attend event can show its tickets', () => {
     // `extractComplimentaryTickets` instead.
     sanityFetch.mockResolvedValue(conference())
     fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 7, name: 'Event', currencies: ['NOK'] },
+      event: { id: '7', name: 'Event', currencies: ['NOK'] },
       tickets: [
-        ticket({ id: 1, name: 'Conference' }),
-        ticket({ id: 2, name: 'Crew', position: 1, price: [] }),
+        ticket({ id: '1', name: 'Conference' }),
+        ticket({ id: '2', name: 'Crew', position: 1, price: [] }),
       ],
     })
 
@@ -168,11 +182,11 @@ describe('a free-to-attend event can show its tickets', () => {
       }),
     )
     fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 7, name: 'Event', currencies: ['NOK'] },
+      event: { id: '7', name: 'Event', currencies: ['NOK'] },
       tickets: [
-        ticket({ id: 1, name: 'Conference' }),
-        ticket({ id: 2, name: 'Student', position: 1, price: [] }),
-        ticket({ id: 3, name: 'Crew', position: 2, price: [] }),
+        ticket({ id: '1', name: 'Conference' }),
+        ticket({ id: '2', name: 'Student', position: 1, price: [] }),
+        ticket({ id: '3', name: 'Crew', position: 2, price: [] }),
       ],
     })
 
@@ -198,11 +212,16 @@ describe('a free-to-attend event can show its tickets', () => {
       }),
     )
     fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 7, name: 'Event', currencies: ['NOK'] },
+      event: { id: '7', name: 'Event', currencies: ['NOK'] },
       tickets: [
-        ticket({ id: 1, name: 'Early Bird: Conference' }),
-        ticket({ id: 2, name: 'Regular: Conference', position: 1 }),
-        ticket({ id: 3, name: 'Early Bird: Student', position: 2, price: [] }),
+        ticket({ id: '1', name: 'Early Bird: Conference' }),
+        ticket({ id: '2', name: 'Regular: Conference', position: 1 }),
+        ticket({
+          id: '3',
+          name: 'Early Bird: Student',
+          position: 2,
+          price: [],
+        }),
       ],
     })
 
@@ -225,10 +244,10 @@ describe('a free-to-attend event can show its tickets', () => {
       }),
     )
     fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 7, name: 'Event', currencies: ['NOK'] },
+      event: { id: '7', name: 'Event', currencies: ['NOK'] },
       tickets: [
-        ticket({ id: 1, name: 'Conference' }),
-        ticket({ id: 2, name: 'Student', position: 1, price: [] }),
+        ticket({ id: '1', name: 'Conference' }),
+        ticket({ id: '2', name: 'Student', position: 1, price: [] }),
       ],
     })
 
@@ -292,7 +311,7 @@ describe('a ticket-provider outage is reported as an outage', () => {
     sanityFetch.mockResolvedValue(conference())
 
     fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 7, name: 'Event', currencies: ['NOK'] },
+      event: { id: '7', name: 'Event', currencies: ['NOK'] },
       tickets: [],
     })
     const empty = await renderPage()
@@ -311,7 +330,7 @@ describe('the honest "coming soon" survives', () => {
   it('still fires when the read succeeded, there are no tickets, and registration is closed', async () => {
     sanityFetch.mockResolvedValue(conference({ registrationEnabled: false }))
     fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 7, name: 'Event', currencies: ['NOK'] },
+      event: { id: '7', name: 'Event', currencies: ['NOK'] },
       tickets: [],
     })
 
@@ -331,7 +350,7 @@ describe('the honest "coming soon" survives', () => {
       }),
     )
     fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 7, name: 'Event', currencies: ['NOK'] },
+      event: { id: '7', name: 'Event', currencies: ['NOK'] },
       tickets: [ticket()],
     })
 
@@ -357,7 +376,7 @@ describe('the honest "coming soon" survives', () => {
       }),
     )
     fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 7, name: 'Event', currencies: ['NOK'] },
+      event: { id: '7', name: 'Event', currencies: ['NOK'] },
       tickets: [ticket()],
     })
 

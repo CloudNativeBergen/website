@@ -31,10 +31,10 @@ function slightlyBehindInput(): ProcessTicketSalesInput {
   return {
     tickets: [
       {
-        order_id: 1,
+        order_id: '1',
         order_date: '2026-01-05T10:00:00Z',
         category: 'Regular',
-        sum: '2500',
+        sum: { amountMinor: 250000, currency: 'NOK' },
       },
     ],
     config,

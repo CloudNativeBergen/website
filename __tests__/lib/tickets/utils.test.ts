@@ -10,17 +10,18 @@ import {
   createDefaultAnalysis,
 } from '@/lib/tickets/utils'
 import type { EventTicket } from '@/lib/tickets/types'
+import { toMoney } from '@/lib/tickets/provider/types'
 
 const createMockTicket = (
   overrides: Partial<EventTicket> = {},
 ): EventTicket => ({
-  id: 1,
-  order_id: 1,
+  id: '1',
+  order_id: '1',
   order_date: '2024-01-01T10:00:00Z',
   category: 'Regular',
   customer_name: 'Test User',
-  sum: '100',
-  sum_left: '0',
+  sum: { amountMinor: 10000, currency: 'NOK' },
+  sum_left: { amountMinor: 0, currency: 'NOK' },
   fields: [],
   crm: {
     first_name: 'Test',
@@ -34,9 +35,18 @@ describe('Ticket Utils', () => {
   describe('calculateTicketStatistics', () => {
     it('should calculate basic statistics for paid tickets', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, sum: '100' }),
-        createMockTicket({ order_id: 2, sum: '150' }),
-        createMockTicket({ order_id: 3, sum: '200' }),
+        createMockTicket({
+          order_id: '1',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '2',
+          sum: { amountMinor: 15000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '3',
+          sum: { amountMinor: 20000, currency: 'NOK' },
+        }),
       ]
 
       const result = calculateTicketStatistics(tickets)
@@ -49,9 +59,18 @@ describe('Ticket Utils', () => {
 
     it('counts a zero-priced sale as sold: the caller decided it is a sale (#1103)', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, sum: '100' }),
-        createMockTicket({ order_id: 2, sum: '0' }),
-        createMockTicket({ order_id: 3, sum: '200' }),
+        createMockTicket({
+          order_id: '1',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '2',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '3',
+          sum: { amountMinor: 20000, currency: 'NOK' },
+        }),
       ]
 
       const result = calculateTicketStatistics(tickets)
@@ -64,8 +83,14 @@ describe('Ticket Utils', () => {
 
     it('reports a free-to-attend event as sold, not as zero sales (#1103)', () => {
       const result = calculateTicketStatistics([
-        createMockTicket({ order_id: 1, sum: '0' }),
-        createMockTicket({ order_id: 2, sum: '0' }),
+        createMockTicket({
+          order_id: '1',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '2',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
       ])
 
       expect(result.totalPaidTickets).toBe(2)
@@ -75,9 +100,18 @@ describe('Ticket Utils', () => {
 
     it('should handle multiple tickets in same order', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, sum: '100' }),
-        createMockTicket({ order_id: 1, sum: '100' }),
-        createMockTicket({ order_id: 2, sum: '150' }),
+        createMockTicket({
+          order_id: '1',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '1',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '2',
+          sum: { amountMinor: 15000, currency: 'NOK' },
+        }),
       ]
 
       const result = calculateTicketStatistics(tickets)
@@ -101,9 +135,15 @@ describe('Ticket Utils', () => {
 
     it('should handle invalid sum values (NaN protection)', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, sum: 'invalid' }),
-        createMockTicket({ order_id: 2, sum: '100' }),
-        createMockTicket({ order_id: 3, sum: '' }),
+        createMockTicket({ order_id: '1', sum: toMoney('invalid') }),
+        createMockTicket({
+          order_id: '2',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '3',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
       ]
 
       const result = calculateTicketStatistics(tickets)
@@ -117,8 +157,14 @@ describe('Ticket Utils', () => {
 
     it('should handle negative values', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, sum: '-50' }),
-        createMockTicket({ order_id: 2, sum: '100' }),
+        createMockTicket({
+          order_id: '1',
+          sum: { amountMinor: -5000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '2',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
       ]
 
       const result = calculateTicketStatistics(tickets)
@@ -129,8 +175,14 @@ describe('Ticket Utils', () => {
 
     it('should handle decimal values', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, sum: '99.99' }),
-        createMockTicket({ order_id: 2, sum: '150.50' }),
+        createMockTicket({
+          order_id: '1',
+          sum: { amountMinor: 9999, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '2',
+          sum: { amountMinor: 15050, currency: 'NOK' },
+        }),
       ]
 
       const result = calculateTicketStatistics(tickets)
@@ -201,11 +253,31 @@ describe('Ticket Utils', () => {
   describe('calculateCategoryStats', () => {
     it('should calculate statistics for each category', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, category: 'Early Bird', sum: '100' }),
-        createMockTicket({ order_id: 2, category: 'Early Bird', sum: '100' }),
-        createMockTicket({ order_id: 3, category: 'Regular', sum: '150' }),
-        createMockTicket({ order_id: 4, category: 'Regular', sum: '150' }),
-        createMockTicket({ order_id: 5, category: 'Regular', sum: '150' }),
+        createMockTicket({
+          order_id: '1',
+          category: 'Early Bird',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '2',
+          category: 'Early Bird',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '3',
+          category: 'Regular',
+          sum: { amountMinor: 15000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '4',
+          category: 'Regular',
+          sum: { amountMinor: 15000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '5',
+          category: 'Regular',
+          sum: { amountMinor: 15000, currency: 'NOK' },
+        }),
       ]
 
       const result = calculateCategoryStats(tickets, 5)
@@ -221,9 +293,21 @@ describe('Ticket Utils', () => {
 
     it('should calculate revenue correctly for categories', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, category: 'VIP', sum: '500' }),
-        createMockTicket({ order_id: 2, category: 'VIP', sum: '500' }),
-        createMockTicket({ order_id: 3, category: 'Regular', sum: '100' }),
+        createMockTicket({
+          order_id: '1',
+          category: 'VIP',
+          sum: { amountMinor: 50000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '2',
+          category: 'VIP',
+          sum: { amountMinor: 50000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '3',
+          category: 'Regular',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
       ]
 
       const result = calculateCategoryStats(tickets, 3)
@@ -237,9 +321,21 @@ describe('Ticket Utils', () => {
 
     it('should count unique orders per category', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, category: 'Regular', sum: '100' }),
-        createMockTicket({ order_id: 1, category: 'Regular', sum: '100' }),
-        createMockTicket({ order_id: 2, category: 'Regular', sum: '150' }),
+        createMockTicket({
+          order_id: '1',
+          category: 'Regular',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '1',
+          category: 'Regular',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '2',
+          category: 'Regular',
+          sum: { amountMinor: 15000, currency: 'NOK' },
+        }),
       ]
 
       const result = calculateCategoryStats(tickets, 3)
@@ -255,12 +351,36 @@ describe('Ticket Utils', () => {
 
     it('should sort by count descending', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, category: 'A', sum: '100' }),
-        createMockTicket({ order_id: 2, category: 'B', sum: '100' }),
-        createMockTicket({ order_id: 3, category: 'B', sum: '100' }),
-        createMockTicket({ order_id: 4, category: 'C', sum: '100' }),
-        createMockTicket({ order_id: 5, category: 'C', sum: '100' }),
-        createMockTicket({ order_id: 6, category: 'C', sum: '100' }),
+        createMockTicket({
+          order_id: '1',
+          category: 'A',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '2',
+          category: 'B',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '3',
+          category: 'B',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '4',
+          category: 'C',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '5',
+          category: 'C',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '6',
+          category: 'C',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
       ]
 
       const result = calculateCategoryStats(tickets, 6)
@@ -275,9 +395,21 @@ describe('Ticket Utils', () => {
 
     it('counts each ticket of an order at its own amount', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, category: 'Regular', sum: '300' }),
-        createMockTicket({ order_id: 1, category: 'Regular', sum: '300' }),
-        createMockTicket({ order_id: 1, category: 'Regular', sum: '300' }),
+        createMockTicket({
+          order_id: '1',
+          category: 'Regular',
+          sum: { amountMinor: 30000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '1',
+          category: 'Regular',
+          sum: { amountMinor: 30000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '1',
+          category: 'Regular',
+          sum: { amountMinor: 30000, currency: 'NOK' },
+        }),
       ]
 
       const result = calculateCategoryStats(tickets, 3)
@@ -299,8 +431,16 @@ describe('Ticket Utils', () => {
      */
     it('gives a mixed-category order to each category once, and the column sums to revenue', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, category: 'Conference', sum: '2500' }),
-        createMockTicket({ order_id: 1, category: 'Workshop', sum: '1500' }),
+        createMockTicket({
+          order_id: '1',
+          category: 'Conference',
+          sum: { amountMinor: 250000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '1',
+          category: 'Workshop',
+          sum: { amountMinor: 150000, currency: 'NOK' },
+        }),
       ]
 
       const result = calculateCategoryStats(tickets, 2)
@@ -316,7 +456,11 @@ describe('Ticket Utils', () => {
 
     it('should handle zero total for percentage calculation', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, category: 'Regular', sum: '100' }),
+        createMockTicket({
+          order_id: '1',
+          category: 'Regular',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
       ]
 
       const result = calculateCategoryStats(tickets, 0)
@@ -328,7 +472,10 @@ describe('Ticket Utils', () => {
   describe('Edge cases and data consistency', () => {
     it('should handle very large numbers', () => {
       const tickets = Array.from({ length: 1000 }, (_, i) =>
-        createMockTicket({ order_id: i + 1, sum: '100' }),
+        createMockTicket({
+          order_id: String(i + 1),
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
       )
 
       const result = calculateTicketStatistics(tickets)
@@ -340,8 +487,14 @@ describe('Ticket Utils', () => {
 
     it('should produce consistent results for same input', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, sum: '100' }),
-        createMockTicket({ order_id: 2, sum: '200' }),
+        createMockTicket({
+          order_id: '1',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '2',
+          sum: { amountMinor: 20000, currency: 'NOK' },
+        }),
       ]
 
       const result1 = calculateTicketStatistics(tickets)
@@ -354,11 +507,20 @@ describe('Ticket Utils', () => {
 
     it('should handle mixed valid and invalid data', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, sum: '100' }),
-        createMockTicket({ order_id: 2, sum: 'abc' }),
-        createMockTicket({ order_id: 3, sum: '' }),
-        createMockTicket({ order_id: 4, sum: '200' }),
-        createMockTicket({ order_id: 5, sum: null as any }),
+        createMockTicket({
+          order_id: '1',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({ order_id: '2', sum: toMoney('abc') }),
+        createMockTicket({
+          order_id: '3',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '4',
+          sum: { amountMinor: 20000, currency: 'NOK' },
+        }),
+        createMockTicket({ order_id: '5', sum: null as any }),
       ]
 
       const result = calculateTicketStatistics(tickets)
@@ -499,9 +661,18 @@ describe('Ticket Utils', () => {
 
     it('should calculate basic stats from tickets', () => {
       const tickets = [
-        createMockTicket({ order_id: 1, sum: '100' }),
-        createMockTicket({ order_id: 2, sum: '200' }),
-        createMockTicket({ order_id: 3, sum: '0' }),
+        createMockTicket({
+          order_id: '1',
+          sum: { amountMinor: 10000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '2',
+          sum: { amountMinor: 20000, currency: 'NOK' },
+        }),
+        createMockTicket({
+          order_id: '3',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
       ]
 
       const result = createDefaultAnalysis(tickets, 100)

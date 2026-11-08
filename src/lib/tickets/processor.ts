@@ -69,7 +69,7 @@ export class TicketSalesProcessor {
     const dailySales = new Map<string, DailySales>()
     for (const [date, tickets] of dailyGroups) {
       const categoryBreakdown: Record<string, number> = {}
-      const processedOrders = new Set<number>()
+      const processedOrders = new Set<string>()
 
       tickets.forEach((ticket) => {
         categoryBreakdown[ticket.category] =
@@ -241,7 +241,7 @@ export class TicketSalesProcessor {
 
   private calculateStatistics(): TicketStatistics {
     const categoryBreakdown: Record<string, number> = {}
-    const processedOrders = new Set<number>()
+    const processedOrders = new Set<string>()
 
     this.tickets.forEach((ticket) => {
       categoryBreakdown[ticket.category] =

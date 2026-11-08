@@ -1,6 +1,6 @@
 import { canonicalEmail } from '@/lib/speaker/email'
-import { parseTicketAmount } from './amount'
-import type { EventTicket } from './types'
+import { moneyToMajor } from './amount'
+import type { EventTicket, Money } from './types'
 import { ticketEntitlementOf, type TierWithEntitlement } from './entitlement'
 
 /**
@@ -30,8 +30,8 @@ export function deduplicateTicketsByEmail(
       return
     }
 
-    const existingAmount = parseTicketAmount(existing.sum)
-    const currentAmount = parseTicketAmount(ticket.sum)
+    const existingAmount = moneyToMajor(existing.sum)
+    const currentAmount = moneyToMajor(ticket.sum)
 
     if (currentAmount > existingAmount) {
       emailMap.set(email, ticket)
@@ -62,8 +62,8 @@ export function deduplicateTicketsByEmail(
  * 352 188 shown against Checkin's own 385 750), and a per-category divisor that
  * gave each category in a mixed order the whole order.
  */
-export function sumTicketRevenue(tickets: { sum: string }[]): number {
-  return tickets.reduce((total, t) => total + parseTicketAmount(t.sum), 0)
+export function sumTicketRevenue(tickets: { sum: Money }[]): number {
+  return tickets.reduce((total, t) => total + moneyToMajor(t.sum), 0)
 }
 
 export interface CategoryStat {

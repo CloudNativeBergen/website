@@ -171,13 +171,13 @@ export interface TicketIncomeActuals {
  * M1 limitation, flagged in the PR).
  */
 export function deriveTicketIncome(
-  tickets: readonly ({ order_id: number } & ClassifiableTicket)[],
+  tickets: readonly ({ order_id: string } & ClassifiableTicket)[],
   context: TicketClassificationContext = {},
 ): TicketIncomeActuals {
   const sold = tickets.filter((ticket) => isPaidTicket(ticket, context))
 
   const categoryCounts: Record<string, number> = {}
-  const seenOrders = new Set<number>()
+  const seenOrders = new Set<string>()
 
   for (const ticket of sold) {
     categoryCounts[ticket.category] = (categoryCounts[ticket.category] ?? 0) + 1

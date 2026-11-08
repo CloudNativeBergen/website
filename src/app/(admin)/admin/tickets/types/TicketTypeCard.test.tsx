@@ -62,11 +62,18 @@ const control = (stored?: boolean, configured = false) => ({
 })
 
 const paidTicket: PublicTicketType = {
-  id: 4821,
+  id: '4821',
   name: 'Conference Pass',
   type: 'regular',
   description: null,
-  price: [{ price: '4500.00', vat: '25', description: null, key: 'nok' }],
+  price: [
+    {
+      price: { amountMinor: 450000, currency: 'NOK' },
+      vat: '25',
+      description: null,
+      key: 'nok',
+    },
+  ],
   available: 120,
   requiresInvitation: false,
   visibleStartsAt: null,

@@ -225,14 +225,14 @@ async function requireCheckinEventId(clientEventId?: number): Promise<number> {
 const ORDER_IDS_TTL_MS = 30_000
 const orderIdsCache = new Map<
   string,
-  { expiresAt: number; orderIds: Promise<Set<number>> }
+  { expiresAt: number; orderIds: Promise<Set<string>> }
 >()
 
 function orderIdsForEvent(
   ticketing: RequestTicketing,
   customerId: number,
   eventId: number,
-): Promise<Set<number>> {
+): Promise<Set<string>> {
   const key = `${ticketing.orgId}:${customerId}:${eventId}`
   const now = Date.now()
   const cached = orderIdsCache.get(key)
@@ -274,7 +274,7 @@ async function requireOrderInCurrentEvent(
       message: 'Conference checkin configuration not found',
     })
   }
-  let orderIds: Set<number>
+  let orderIds: Set<string>
   try {
     orderIds = await orderIdsForEvent(
       ticketing,
@@ -289,7 +289,7 @@ async function requireOrderInCurrentEvent(
       cause,
     })
   }
-  if (!orderIds.has(orderId)) {
+  if (!orderIds.has(String(orderId))) {
     throw new TRPCError({
       code: 'NOT_FOUND',
       message: 'No order with that id for this conference',

@@ -208,9 +208,9 @@ export function TicketTypeCard({
         </span>
         {isPublicFreeTicketType(ticket) && (
           <PublicFreeTicketToggle
-            ticketId={ticket.id}
+            ticketId={Number(ticket.id)}
             ticketName={ticket.name}
-            initialVisible={publicFreeTicketIds.includes(ticket.id)}
+            initialVisible={publicFreeTicketIds.includes(Number(ticket.id))}
           />
         )}
       </div>

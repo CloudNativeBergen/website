@@ -27,12 +27,12 @@ const CONF = {
 
 function pubTicket(over: Record<string, unknown>) {
   return {
-    id: 1,
+    id: '1',
     name: 'General',
     description: '',
     requiresInvitation: false,
     position: 0,
-    price: [{ price: '1000', vat: '25' }],
+    price: [{ price: { amountMinor: 100000, currency: 'NOK' }, vat: '25' }],
     ...over,
   }
 }
@@ -48,7 +48,7 @@ describe('getPublicTicketTypes — resolver routing (B7)', () => {
 
   it('resolves from the conference and fetches with the resolved eventRef', async () => {
     const fetchPublicTicketTypes = vi.fn().mockResolvedValue({
-      event: { id: 7, name: 'Event' },
+      event: { id: '7', name: 'Event' },
       tickets: [pubTicket({})],
     })
     resolveTicketingProviderMock.mockResolvedValue({
@@ -110,7 +110,7 @@ describe('getPublicTicketTypes — empty is not unknown, and free is not empty',
       provider: {
         fetchPublicTicketTypes: vi
           .fn()
-          .mockResolvedValue({ event: { id: 7, name: 'Event' }, tickets }),
+          .mockResolvedValue({ event: { id: '7', name: 'Event' }, tickets }),
       },
       eventRef: { provider: 'checkin', accountId: '42', externalId: '7' },
     })
@@ -118,11 +118,11 @@ describe('getPublicTicketTypes — empty is not unknown, and free is not empty',
 
   it('an all-free event keeps its ticket types instead of vanishing', async () => {
     withTickets([
-      pubTicket({ id: 1, name: 'Free entry', price: [] }),
+      pubTicket({ id: '1', name: 'Free entry', price: [] }),
       pubTicket({
-        id: 2,
+        id: '2',
         name: 'Free entry (day 2)',
-        price: [{ price: '0', vat: '0' }],
+        price: [{ price: { amountMinor: 0, currency: 'NOK' }, vat: '0' }],
       }),
     ])
 
@@ -158,8 +158,8 @@ describe('getPublicTicketTypes — empty is not unknown, and free is not empty',
 
   it('invitation-only types are in neither public bucket', async () => {
     withTickets([
-      pubTicket({ id: 1, name: 'Crew', price: [], requiresInvitation: true }),
-      pubTicket({ id: 2, name: 'Free entry', price: [] }),
+      pubTicket({ id: '1', name: 'Crew', price: [], requiresInvitation: true }),
+      pubTicket({ id: '2', name: 'Free entry', price: [] }),
     ])
 
     const result = await getPublicTicketTypes(CONF, 'conf-1')
@@ -171,9 +171,9 @@ describe('getPublicTicketTypes — empty is not unknown, and free is not empty',
 })
 
 describe('resolveDisplayTickets', () => {
-  const paid = pubTicket({ id: 1, name: 'General' }) as PublicTicketType
+  const paid = pubTicket({ id: '1', name: 'General' }) as PublicTicketType
   const gratis = pubTicket({
-    id: 2,
+    id: '2',
     name: 'Free entry',
     price: [],
   }) as unknown as PublicTicketType
@@ -210,13 +210,13 @@ describe('resolveDisplayTickets', () => {
   // #860: the organizer's per-type opt-in for a paid event's public free tier.
   describe('publicFreeTicketIds opt-in', () => {
     const student = pubTicket({
-      id: 3,
+      id: '3',
       name: 'Student',
       position: 1,
       price: [],
     }) as unknown as PublicTicketType
     const paidLater = pubTicket({
-      id: 4,
+      id: '4',
       name: 'Late Bird',
       position: 2,
     }) as PublicTicketType
@@ -267,11 +267,11 @@ describe('resolveDisplayTickets', () => {
         configured: true,
         provider: {
           fetchPublicTicketTypes: vi.fn().mockResolvedValue({
-            event: { id: 7, name: 'Event' },
+            event: { id: '7', name: 'Event' },
             tickets: [
-              pubTicket({ id: 1, name: 'General' }),
+              pubTicket({ id: '1', name: 'General' }),
               pubTicket({
-                id: 5,
+                id: '5',
                 name: 'Crew',
                 price: [],
                 requiresInvitation: true,

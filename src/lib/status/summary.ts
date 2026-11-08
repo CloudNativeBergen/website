@@ -130,7 +130,7 @@ async function buildTicketSection(conference: Conference): Promise<{
     // PAID BY GRANT, NOT BY PRICE — the same `isPaidTicket` split
     // `/admin/tickets` uses, so the weekly Slack post and the admin page cannot
     // report two different "Paid Tickets" for one event. This used to be
-    // `parseTicketAmount(t.sum) > 0`, which sells a 100%-off sponsor grant that
+    // `moneyToMajor(t.sum) > 0`, which sells a 100%-off sponsor grant that
     // carries a nonzero amount.
     //
     // WHAT IT COSTS ON THIS SURFACE: one extra provider call (the event's

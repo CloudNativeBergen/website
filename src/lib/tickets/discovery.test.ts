@@ -15,18 +15,19 @@ import {
 } from './discovery'
 import { tallyParticipants } from './participants'
 import type { EventTicket } from './types'
+import { toMoney } from '@/lib/tickets/provider/types'
 
 let nextId = 1
 
 function ticket(email: string, category: string, sum = '4500.00'): EventTicket {
   return {
-    id: nextId++,
-    order_id: 100,
+    id: String(nextId++),
+    order_id: '100',
     order_date: '2026-03-01',
     category,
     customer_name: email,
-    sum,
-    sum_left: '0.00',
+    sum: toMoney(sum),
+    sum_left: { amountMinor: 0, currency: 'NOK' },
     fields: [],
     crm: { first_name: 'X', last_name: 'Y', email },
   }
@@ -153,7 +154,7 @@ describe('provider and discount signals', () => {
   it('proposes an invitation-gated type as a granted seat', () => {
     const proposals = proposeTicketTypeRoles({
       tickets: [ticket('grace@example.com', SPEAKER, '0.00')],
-      ticketTypes: [{ id: 3, name: SPEAKER, requiresInvitation: true }],
+      ticketTypes: [{ id: '3', name: SPEAKER, requiresInvitation: true }],
     })
     const speaker = proposalFor(SPEAKER, proposals)
 
@@ -167,7 +168,7 @@ describe('provider and discount signals', () => {
     const proposals = proposeTicketTypeRoles({
       tickets: [ticket('ada@example.com', SEAT, '0.00')],
       discounts: [compCode],
-      ticketTypes: [{ id: 7, name: SEAT }],
+      ticketTypes: [{ id: '7', name: SEAT }],
     })
     const seat = proposalFor(SEAT, proposals)
 
@@ -182,7 +183,7 @@ describe('provider and discount signals', () => {
     const proposals = proposeTicketTypeRoles({
       tickets: [ticket('ada@example.com', SEAT, '3600.00')],
       discounts: [{ ...compCode, value: '20' }],
-      ticketTypes: [{ id: 7, name: SEAT }],
+      ticketTypes: [{ id: '7', name: SEAT }],
     })
 
     expect(proposalFor(SEAT, proposals)).toBeUndefined()
@@ -351,8 +352,8 @@ describe('a discount that targets no type in particular', () => {
       tickets: [ticket('ada@example.com', SEAT, '0.00')],
       discounts: [globalComp],
       ticketTypes: [
-        { id: 7, name: SEAT },
-        { id: 9, name: UPGRADE },
+        { id: '7', name: SEAT },
+        { id: '9', name: UPGRADE },
       ],
     })
 
@@ -365,7 +366,7 @@ describe('a discount that targets no type in particular', () => {
     const proposals = proposeTicketTypeRoles({
       tickets: [ticket('ada@example.com', SEAT, '3600.00')],
       discounts: [{ ...globalComp, value: '20' }],
-      ticketTypes: [{ id: 7, name: SEAT }],
+      ticketTypes: [{ id: '7', name: SEAT }],
     })
 
     expect(proposalFor(SEAT, proposals)).toBeUndefined()

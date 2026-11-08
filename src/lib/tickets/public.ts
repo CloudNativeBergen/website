@@ -4,7 +4,7 @@
  * client components import this module. The cached vendor read lives in
  * `./public-read`.
  */
-import { parseTicketAmount, parseVatPercent } from './amount'
+import { moneyToMajor, parseVatPercent } from './amount'
 import { formatDateSafe } from '@/lib/time'
 import { stripHtml } from '@/lib/html/text'
 
@@ -18,6 +18,7 @@ import type {
   PublicEventInfo,
   TicketPrice,
 } from './provider/types'
+import type { Money } from './types'
 
 export interface ComplimentaryTicketInfo {
   name: string
@@ -74,8 +75,7 @@ export type PublicTicketTypesResult =
  */
 export function isPublicFreeTicketType(t: PublicTicketType): boolean {
   return (
-    !t.requiresInvitation &&
-    !t.price.some((p) => parseTicketAmount(p.price) > 0)
+    !t.requiresInvitation && !t.price.some((p) => moneyToMajor(p.price) > 0)
   )
 }
 
@@ -117,7 +117,9 @@ export function resolveDisplayTickets(
 ): { tickets: PublicTicketType[]; free: boolean } {
   if (result.tickets.length > 0) {
     const optedIn = publicFreeTicketIds?.length
-      ? result.freeTickets.filter((t) => publicFreeTicketIds.includes(t.id))
+      ? result.freeTickets.filter((t) =>
+          publicFreeTicketIds.includes(Number(t.id)),
+        )
       : []
     if (optedIn.length === 0) {
       return { tickets: result.tickets, free: false }
@@ -202,11 +204,11 @@ export function getTicketAvailability(
  * Prices from Checkin.no are excl. VAT.
  */
 export function formatTicketPrice(
-  price: string,
+  price: Money,
   vat: string,
   options: { includeVat?: boolean } = {},
 ): string {
-  const priceNum = parseTicketAmount(price)
+  const priceNum = moneyToMajor(price)
 
   // The rate is only PARSED when it is about to be applied. parseVatPercent
   // reports an absent rate (unlike an absent sum, a missing rate silently
@@ -250,9 +252,9 @@ export function getLowestTicketPrice(
 
     const price = ticket.price[0]
     if (!price) continue
-    // parseTicketAmount always returns a finite number (unparseable is 0 and
+    // Provider amounts are parsed once (toMinorUnits: unparseable is 0 and
     // is reported), so `<= 0` covers both "free" and "did not parse" (#898).
-    const amount = parseTicketAmount(price.price)
+    const amount = moneyToMajor(price.price)
     if (amount <= 0) continue
     if (amount < lowestAmount) {
       lowestAmount = amount
@@ -432,7 +434,7 @@ export function extractComplimentaryTickets(
       (t) =>
         t.requiresInvitation ||
         t.price.length === 0 ||
-        !t.price.some((p) => parseTicketAmount(p.price) > 0),
+        !t.price.some((p) => moneyToMajor(p.price) > 0),
     )
     .filter((t) =>
       COMPLIMENTARY_TICKET_CONFIG.some((c) => c.pattern.test(t.name)),

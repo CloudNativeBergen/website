@@ -51,7 +51,13 @@ function show(
 
 describe('PaymentDetailsModal amount-basis check', () => {
   it('confirms quietly when the seats sum to the order total', () => {
-    show({ seatSums: ['5000.00', '5000.00', '5000.00'] })
+    show({
+      seatSums: [
+        { amountMinor: 500000, currency: 'NOK' },
+        { amountMinor: 500000, currency: 'NOK' },
+        { amountMinor: 500000, currency: 'NOK' },
+      ],
+    })
     expect(
       screen.getByText(/3 seat amounts sum to .* — matches this total/),
     ).toBeTruthy()
@@ -61,7 +67,11 @@ describe('PaymentDetailsModal amount-basis check', () => {
   it('warns loudly, and names the one line to flip, on a per-order reading', () => {
     show({
       paymentDetails: { ...order, totalMinor: 500000 },
-      seatSums: ['5000.00', '5000.00', '5000.00'],
+      seatSums: [
+        { amountMinor: 500000, currency: 'NOK' },
+        { amountMinor: 500000, currency: 'NOK' },
+        { amountMinor: 500000, currency: 'NOK' },
+      ],
     })
     expect(screen.getByText('Ticket rows repeat the order total')).toBeTruthy()
     expect(screen.getByText('CheckinProvider.amountBasis')).toBeTruthy()
@@ -73,7 +83,11 @@ describe('PaymentDetailsModal amount-basis check', () => {
   it('explains a VAT-sized difference without crying basis mismatch', () => {
     show({
       paymentDetails: { ...order, totalMinor: 1875000 },
-      seatSums: ['5000.00', '5000.00', '5000.00'],
+      seatSums: [
+        { amountMinor: 500000, currency: 'NOK' },
+        { amountMinor: 500000, currency: 'NOK' },
+        { amountMinor: 500000, currency: 'NOK' },
+      ],
     })
     expect(screen.getByText(/Amount basis is not in question/)).toBeTruthy()
     expect(screen.queryByText('Ticket rows repeat the order total')).toBeNull()
@@ -85,7 +99,10 @@ describe('PaymentDetailsModal amount-basis check', () => {
   it('says unknown rather than guessing at an unexplained difference', () => {
     show({
       paymentDetails: { ...order, totalMinor: 900000 },
-      seatSums: ['5000.00', '5000.00'],
+      seatSums: [
+        { amountMinor: 500000, currency: 'NOK' },
+        { amountMinor: 500000, currency: 'NOK' },
+      ],
     })
     expect(
       screen.getByText('Order total and ticket amounts disagree'),
@@ -96,7 +113,7 @@ describe('PaymentDetailsModal amount-basis check', () => {
   it('refuses to claim confirmation from a single-seat order', () => {
     show({
       paymentDetails: { ...order, totalMinor: 500000 },
-      seatSums: ['5000.00'],
+      seatSums: [{ amountMinor: 500000, currency: 'NOK' }],
     })
     expect(screen.getByText(/Single-seat order/)).toBeTruthy()
     expect(screen.queryByText(/matches this total\./)).toBeNull()
@@ -113,7 +130,11 @@ describe('PaymentDetailsModal amount-basis check', () => {
     show({
       paymentDetails: null,
       error: 'Failed to fetch payment details',
-      seatSums: ['5000.00', '5000.00', '5000.00'],
+      seatSums: [
+        { amountMinor: 500000, currency: 'NOK' },
+        { amountMinor: 500000, currency: 'NOK' },
+        { amountMinor: 500000, currency: 'NOK' },
+      ],
     })
     expect(screen.queryByText(/seat amounts sum to/)).toBeNull()
     expect(screen.queryByText('Ticket rows repeat the order total')).toBeNull()

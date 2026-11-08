@@ -15,13 +15,13 @@ let nextId = 1
 
 function ticket(overrides: Partial<EventTicket> = {}): EventTicket {
   return {
-    id: nextId++,
-    order_id: 100,
+    id: String(nextId++),
+    order_id: '100',
     order_date: '2026-03-01',
     category: 'Conference day',
     customer_name: 'Ada Lovelace',
-    sum: '4500.00',
-    sum_left: '0.00',
+    sum: { amountMinor: 450000, currency: 'NOK' },
+    sum_left: { amountMinor: 0, currency: 'NOK' },
     fields: [],
     crm: { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.com' },
     ...overrides,
@@ -62,7 +62,10 @@ describe('tallyParticipants', () => {
   it('counts one human holding a comp and a paid ticket exactly once', () => {
     const tally = tallyParticipants(
       [
-        withEmail('ada@example.com', { coupon: 'ACMECLOUD1234', sum: '0.00' }),
+        withEmail('ada@example.com', {
+          coupon: 'ACMECLOUD1234',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
         withEmail('ada@example.com'),
       ],
       context,
@@ -78,7 +81,10 @@ describe('tallyParticipants', () => {
     const tally = tallyParticipants(
       [
         withEmail('ada@example.com'),
-        withEmail('ada@example.com', { category: UPGRADE, sum: '800.00' }),
+        withEmail('ada@example.com', {
+          category: UPGRADE,
+          sum: { amountMinor: 80000, currency: 'NOK' },
+        }),
       ],
       context,
     )
@@ -92,7 +98,12 @@ describe('tallyParticipants', () => {
 
   it('counts an upgrade whose holder has no seat as neither a participant nor an attendee add-on', () => {
     const tally = tallyParticipants(
-      [withEmail('grace@example.com', { category: UPGRADE, sum: '800.00' })],
+      [
+        withEmail('grace@example.com', {
+          category: UPGRADE,
+          sum: { amountMinor: 80000, currency: 'NOK' },
+        }),
+      ],
       context,
     )
 
@@ -138,7 +149,10 @@ describe('tallyParticipants', () => {
     const tally = tallyParticipants(
       [
         withEmail('ada@example.com'),
-        withEmail('ada@example.com', { category: UPGRADE, sum: '800.00' }),
+        withEmail('ada@example.com', {
+          category: UPGRADE,
+          sum: { amountMinor: 80000, currency: 'NOK' },
+        }),
       ],
       withoutDiscounts,
     )
@@ -177,7 +191,10 @@ describe('tallyParticipants', () => {
     const tally = tallyParticipants(
       [
         withEmail('ada@example.com'),
-        withEmail('ada@example.com', { category: UPGRADE, sum: '800.00' }),
+        withEmail('ada@example.com', {
+          category: UPGRADE,
+          sum: { amountMinor: 80000, currency: 'NOK' },
+        }),
       ],
       {
         ...context,
@@ -198,16 +215,16 @@ describe('tallyParticipants', () => {
     const discountedPaidWorkshop = withEmail('discounted@x.test', {
       category: 'Workshop + Conference (2 days)',
       coupon: 'UNRESOLVED_PARTIAL_COUPON',
-      sum: '500.00',
+      sum: { amountMinor: 50000, currency: 'NOK' },
     })
     const freeSpeakerWorkshop = withEmail('free@x.test', {
       category: 'Speaker ticket',
-      sum: '0.00',
+      sum: { amountMinor: 0, currency: 'NOK' },
       fields: [{ key: 'workshop', value: 'yes' }],
     })
     const zeroSumWorkshop = withEmail('zerosum@x.test', {
       category: 'Workshop + Conference (2 days)',
-      sum: '0.00',
+      sum: { amountMinor: 0, currency: 'NOK' },
     })
 
     expect(
@@ -250,7 +267,10 @@ describe('seatsUsed', () => {
   it('counts a sponsor comp as a seat', () => {
     const tally = tallyParticipants(
       [
-        withEmail('ada@example.com', { coupon: 'ACMECLOUD1234', sum: '0.00' }),
+        withEmail('ada@example.com', {
+          coupon: 'ACMECLOUD1234',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
         withEmail('grace@example.com'),
       ],
       context,
@@ -263,8 +283,14 @@ describe('seatsUsed', () => {
     const tally = tallyParticipants(
       [
         withEmail('ada@example.com'),
-        withEmail('ada@example.com', { category: UPGRADE, sum: '800.00' }),
-        withEmail('grace@example.com', { category: UPGRADE, sum: '800.00' }),
+        withEmail('ada@example.com', {
+          category: UPGRADE,
+          sum: { amountMinor: 80000, currency: 'NOK' },
+        }),
+        withEmail('grace@example.com', {
+          category: UPGRADE,
+          sum: { amountMinor: 80000, currency: 'NOK' },
+        }),
       ],
       context,
     )
@@ -293,7 +319,7 @@ describe('one definition of a workshop participant (#1333)', () => {
   const speaker = (email: string, answer?: string) =>
     withEmail(email, {
       category: SPEAKER,
-      sum: '0.00',
+      sum: { amountMinor: 0, currency: 'NOK' },
       fields: answer
         ? [{ key: 'Will you attend the Monday workshops?', value: answer }]
         : [],
@@ -334,9 +360,18 @@ describe('one definition of a workshop participant (#1333)', () => {
   it('addresses that differ only in padding or case are one person', () => {
     const tally = tallyParticipants(
       [
-        withEmail('  Ada@X.test ', { category: UPGRADE, sum: '500.00' }),
-        withEmail('ada@x.test', { category: SPEAKER, sum: '0.00' }),
-        withEmail('ADA@x.test\t', { category: SPEAKER, sum: '0.00' }),
+        withEmail('  Ada@X.test ', {
+          category: UPGRADE,
+          sum: { amountMinor: 50000, currency: 'NOK' },
+        }),
+        withEmail('ada@x.test', {
+          category: SPEAKER,
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
+        withEmail('ADA@x.test\t', {
+          category: SPEAKER,
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
       ],
       { speakerTicketTypeName: SPEAKER },
     )

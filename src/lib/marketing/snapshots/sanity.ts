@@ -15,7 +15,7 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { mergeConference } from '@/lib/conference/merge'
 import { resolveTicketingAdminAccess } from '@/lib/tickets/admin-access'
-import { parseTicketAmount } from '@/lib/tickets/amount'
+import { moneyToMajor } from '@/lib/tickets/amount'
 import type { ConferenceTicketingBinding } from '@/lib/tickets/provider'
 import { getSocialEngagementProvider } from '@/lib/social/provider'
 import type { EngagementResult } from '@/lib/social/provider'
@@ -329,9 +329,7 @@ export async function readTicketOutcomes(
   // Campaign selling a hundred tickets in the week the speakers were
   // confirmed.
   return tickets
-    .filter(
-      (ticket) => !!ticket.order_date && parseTicketAmount(ticket.sum) > 0,
-    )
+    .filter((ticket) => !!ticket.order_date && moneyToMajor(ticket.sum) > 0)
     .map((ticket) => ({ orderDate: ticket.order_date }))
 }
 

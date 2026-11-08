@@ -13,14 +13,22 @@ import {
   stripHtml,
   type PublicTicketType,
 } from '@/lib/tickets/public'
+import { toMoney } from '@/lib/tickets/provider/types'
 
 function createTicket(overrides: Partial<PublicTicketType>): PublicTicketType {
   return {
-    id: 1,
+    id: '1',
     name: 'Test Ticket',
     type: 'ticket',
     description: null,
-    price: [{ price: '100', vat: '25', description: null, key: null }],
+    price: [
+      {
+        price: { amountMinor: 10000, currency: 'NOK' },
+        vat: '25',
+        description: null,
+        key: null,
+      },
+    ],
     available: null,
     requiresInvitation: false,
     visibleStartsAt: null,
@@ -34,22 +42,22 @@ describe('buildPricingMatrix', () => {
   it('should parse tiered tickets into a grid', () => {
     const tickets = [
       createTicket({
-        id: 1,
+        id: '1',
         name: 'Early Bird: Conference Only (1 day)',
         position: 0,
       }),
       createTicket({
-        id: 2,
+        id: '2',
         name: 'Early Bird: Workshop + Conference (2 days)',
         position: 1,
       }),
       createTicket({
-        id: 3,
+        id: '3',
         name: 'Standard: Conference Only (1 day)',
         position: 2,
       }),
       createTicket({
-        id: 4,
+        id: '4',
         name: 'Standard: Workshop + Conference (2 days)',
         position: 3,
       }),
@@ -66,17 +74,17 @@ describe('buildPricingMatrix', () => {
     expect(categories[1].label).toBe('Workshop + Conference (2 days)')
 
     expect(matrix).toHaveLength(2)
-    expect(matrix[0][0]?.id).toBe(1) // Early Bird × Conference Only
-    expect(matrix[0][1]?.id).toBe(3) // Standard × Conference Only
-    expect(matrix[1][0]?.id).toBe(2) // Early Bird × Workshop
-    expect(matrix[1][1]?.id).toBe(4) // Standard × Workshop
+    expect(matrix[0][0]?.id).toBe('1') // Early Bird × Conference Only
+    expect(matrix[0][1]?.id).toBe('3') // Standard × Conference Only
+    expect(matrix[1][0]?.id).toBe('2') // Early Bird × Workshop
+    expect(matrix[1][1]?.id).toBe('4') // Standard × Workshop
   })
 
   it('should handle three tiers', () => {
     const tickets = [
-      createTicket({ id: 1, name: 'Early Bird: Conf', position: 0 }),
-      createTicket({ id: 2, name: 'Standard: Conf', position: 1 }),
-      createTicket({ id: 3, name: 'Late Bird: Conf', position: 2 }),
+      createTicket({ id: '1', name: 'Early Bird: Conf', position: 0 }),
+      createTicket({ id: '2', name: 'Standard: Conf', position: 1 }),
+      createTicket({ id: '3', name: 'Late Bird: Conf', position: 2 }),
     ]
 
     const { tiers, matrix } = buildPricingMatrix(tickets)
@@ -92,9 +100,9 @@ describe('buildPricingMatrix', () => {
 
   it('should treat tickets without colons as standalone', () => {
     const tickets = [
-      createTicket({ id: 1, name: 'Early Bird: Conf', position: 0 }),
-      createTicket({ id: 2, name: 'Standard: Conf', position: 1 }),
-      createTicket({ id: 3, name: 'Student Ticket', position: 2 }),
+      createTicket({ id: '1', name: 'Early Bird: Conf', position: 0 }),
+      createTicket({ id: '2', name: 'Standard: Conf', position: 1 }),
+      createTicket({ id: '3', name: 'Student Ticket', position: 2 }),
     ]
 
     const { categories, tiers, matrix } = buildPricingMatrix(tickets)
@@ -110,10 +118,10 @@ describe('buildPricingMatrix', () => {
 
   it('should handle standalone tickets with unique category', () => {
     const tickets = [
-      createTicket({ id: 1, name: 'Early Bird: Conf', position: 0 }),
-      createTicket({ id: 2, name: 'Standard: Conf', position: 1 }),
+      createTicket({ id: '1', name: 'Early Bird: Conf', position: 0 }),
+      createTicket({ id: '2', name: 'Standard: Conf', position: 1 }),
       createTicket({
-        id: 3,
+        id: '3',
         name: 'Student: The 1337 Ticket',
         position: 2,
       }),
@@ -144,8 +152,8 @@ describe('buildPricingMatrix', () => {
 
   it('should handle all standalone tickets (no valid tiers)', () => {
     const tickets = [
-      createTicket({ id: 1, name: 'Ticket A', position: 0 }),
-      createTicket({ id: 2, name: 'Ticket B', position: 1 }),
+      createTicket({ id: '1', name: 'Ticket A', position: 0 }),
+      createTicket({ id: '2', name: 'Ticket B', position: 1 }),
     ]
 
     const { categories, tiers, matrix } = buildPricingMatrix(tickets)
@@ -158,10 +166,10 @@ describe('buildPricingMatrix', () => {
 
   it('should handle sparse matrix (missing tier/category combos)', () => {
     const tickets = [
-      createTicket({ id: 1, name: 'Early Bird: Conf', position: 0 }),
-      createTicket({ id: 2, name: 'Standard: Conf', position: 1 }),
-      createTicket({ id: 3, name: 'Standard: Workshop', position: 2 }),
-      createTicket({ id: 4, name: 'Early Bird: Workshop', position: 3 }),
+      createTicket({ id: '1', name: 'Early Bird: Conf', position: 0 }),
+      createTicket({ id: '2', name: 'Standard: Conf', position: 1 }),
+      createTicket({ id: '3', name: 'Standard: Workshop', position: 2 }),
+      createTicket({ id: '4', name: 'Early Bird: Workshop', position: 3 }),
     ]
 
     const { matrix } = buildPricingMatrix(tickets)
@@ -176,10 +184,10 @@ describe('buildPricingMatrix', () => {
 
   it('should preserve array ordering for tiers and categories', () => {
     const tickets = [
-      createTicket({ id: 1, name: 'Standard: B', position: 2 }),
-      createTicket({ id: 2, name: 'Early Bird: A', position: 0 }),
-      createTicket({ id: 3, name: 'Standard: A', position: 1 }),
-      createTicket({ id: 4, name: 'Early Bird: B', position: 3 }),
+      createTicket({ id: '1', name: 'Standard: B', position: 2 }),
+      createTicket({ id: '2', name: 'Early Bird: A', position: 0 }),
+      createTicket({ id: '3', name: 'Standard: A', position: 1 }),
+      createTicket({ id: '4', name: 'Early Bird: B', position: 3 }),
     ]
 
     const { tiers, categories } = buildPricingMatrix(tickets)
@@ -197,14 +205,14 @@ describe('buildPricingMatrix', () => {
   it('should include date range on tiers from visibility windows', () => {
     const tickets = [
       createTicket({
-        id: 1,
+        id: '1',
         name: 'Early Bird: Conf',
         position: 0,
         visibleStartsAt: '2026-01-01T00:00:00Z',
         visibleEndsAt: '2026-06-01T00:00:00Z',
       }),
       createTicket({
-        id: 2,
+        id: '2',
         name: 'Standard: Conf',
         position: 1,
         visibleStartsAt: '2026-06-01T00:00:00Z',
@@ -223,12 +231,12 @@ describe('buildPricingMatrix', () => {
   it('should handle colon in category name (split on first colon only)', () => {
     const tickets = [
       createTicket({
-        id: 1,
+        id: '1',
         name: 'Early Bird: Workshop: Advanced K8s',
         position: 0,
       }),
       createTicket({
-        id: 2,
+        id: '2',
         name: 'Standard: Workshop: Advanced K8s',
         position: 1,
       }),
@@ -286,35 +294,51 @@ describe('formatTicketPrice', () => {
   const nbsp = '\u00A0'
 
   it('should format price excluding VAT by default', () => {
-    expect(formatTicketPrice('2000', '25')).toBe(`2${nbsp}000`)
+    expect(
+      formatTicketPrice({ amountMinor: 200000, currency: 'NOK' }, '25'),
+    ).toBe(`2${nbsp}000`)
   })
 
   it('should format price including VAT when requested', () => {
-    expect(formatTicketPrice('2000', '25', { includeVat: true })).toBe(
-      `2${nbsp}500`,
-    )
+    expect(
+      formatTicketPrice({ amountMinor: 200000, currency: 'NOK' }, '25', {
+        includeVat: true,
+      }),
+    ).toBe(`2${nbsp}500`)
   })
 
   it('should handle zero price', () => {
-    expect(formatTicketPrice('0', '25')).toBe('0')
-  })
-
-  it('should handle decimal prices', () => {
-    expect(formatTicketPrice('99.99', '25')).toBe('100')
-  })
-
-  it('should handle decimal prices with VAT', () => {
-    expect(formatTicketPrice('100', '25', { includeVat: true })).toBe('125')
-  })
-
-  it('should handle zero VAT', () => {
-    expect(formatTicketPrice('1000', '0', { includeVat: true })).toBe(
-      `1${nbsp}000`,
+    expect(formatTicketPrice({ amountMinor: 0, currency: 'NOK' }, '25')).toBe(
+      '0',
     )
   })
 
+  it('should handle decimal prices', () => {
+    expect(
+      formatTicketPrice({ amountMinor: 9999, currency: 'NOK' }, '25'),
+    ).toBe('100')
+  })
+
+  it('should handle decimal prices with VAT', () => {
+    expect(
+      formatTicketPrice({ amountMinor: 10000, currency: 'NOK' }, '25', {
+        includeVat: true,
+      }),
+    ).toBe('125')
+  })
+
+  it('should handle zero VAT', () => {
+    expect(
+      formatTicketPrice({ amountMinor: 100000, currency: 'NOK' }, '0', {
+        includeVat: true,
+      }),
+    ).toBe(`1${nbsp}000`)
+  })
+
   it('should handle large prices', () => {
-    expect(formatTicketPrice('50000', '25')).toBe(`50${nbsp}000`)
+    expect(
+      formatTicketPrice({ amountMinor: 5000000, currency: 'NOK' }, '25'),
+    ).toBe(`50${nbsp}000`)
   })
 })
 
@@ -325,12 +349,26 @@ describe('getLowestTicketPrice', () => {
   it('returns the lowest positive price among active tickets', () => {
     const tickets = [
       createTicket({
-        id: 1,
-        price: [{ price: '4990', vat: '25', description: null, key: null }],
+        id: '1',
+        price: [
+          {
+            price: { amountMinor: 499000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
       }),
       createTicket({
-        id: 2,
-        price: [{ price: '3490', vat: '25', description: null, key: null }],
+        id: '2',
+        price: [
+          {
+            price: { amountMinor: 349000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
       }),
     ]
 
@@ -345,18 +383,39 @@ describe('getLowestTicketPrice', () => {
   it('ignores expired and upcoming tickets', () => {
     const tickets = [
       createTicket({
-        id: 1,
-        price: [{ price: '1000', vat: '25', description: null, key: null }],
+        id: '1',
+        price: [
+          {
+            price: { amountMinor: 100000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
         visibleEndsAt: '2020-01-01T00:00:00Z',
       }),
       createTicket({
-        id: 2,
-        price: [{ price: '1500', vat: '25', description: null, key: null }],
+        id: '2',
+        price: [
+          {
+            price: { amountMinor: 150000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
         visibleStartsAt: '2099-01-01T00:00:00Z',
       }),
       createTicket({
-        id: 3,
-        price: [{ price: '2000', vat: '25', description: null, key: null }],
+        id: '3',
+        price: [
+          {
+            price: { amountMinor: 200000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
       }),
     ]
 
@@ -366,10 +425,20 @@ describe('getLowestTicketPrice', () => {
   it('ignores zero and invalid prices', () => {
     const tickets = [
       createTicket({
-        id: 1,
+        id: '1',
         price: [
-          { price: '0', vat: '25', description: null, key: null },
-          { price: 'not-a-number', vat: '25', description: null, key: null },
+          {
+            price: { amountMinor: 0, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+          {
+            price: toMoney('not-a-number'),
+            vat: '25',
+            description: null,
+            key: null,
+          },
         ],
       }),
     ]
@@ -384,17 +453,34 @@ describe('getLowestTicketPrice', () => {
   it('only considers each ticket&apos;s primary price entry, matching the /tickets UI', () => {
     const tickets = [
       createTicket({
-        id: 1,
+        id: '1',
         price: [
           // primary (displayed) price
-          { price: '4000', vat: '25', description: null, key: null },
+          {
+            price: { amountMinor: 400000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
           // cheaper secondary entry that the pricing UI never shows
-          { price: '100', vat: '25', description: null, key: null },
+          {
+            price: { amountMinor: 10000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
         ],
       }),
       createTicket({
-        id: 2,
-        price: [{ price: '3500', vat: '25', description: null, key: null }],
+        id: '2',
+        price: [
+          {
+            price: { amountMinor: 350000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
       }),
     ]
 
@@ -405,8 +491,15 @@ describe('getLowestTicketPrice', () => {
   it('rounds decimal prices to whole kroner', () => {
     const tickets = [
       createTicket({
-        id: 1,
-        price: [{ price: '999.60', vat: '25', description: null, key: null }],
+        id: '1',
+        price: [
+          {
+            price: { amountMinor: 99960, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
       }),
     ]
 
@@ -420,14 +513,14 @@ describe('extractComplimentaryTickets', () => {
   it('should extract invite-only tickets with descriptions', () => {
     const tickets = [
       createTicket({
-        id: 1,
+        id: '1',
         name: 'Speaker Ticket',
         requiresInvitation: true,
         description: 'Complimentary ticket for speakers',
         position: 0,
       }),
       createTicket({
-        id: 2,
+        id: '2',
         name: 'Regular Ticket',
         requiresInvitation: false,
         position: 1,
@@ -445,10 +538,17 @@ describe('extractComplimentaryTickets', () => {
   it('should extract zero-price tickets with descriptions', () => {
     const tickets = [
       createTicket({
-        id: 1,
+        id: '1',
         name: 'Volunteer Ticket',
         requiresInvitation: false,
-        price: [{ price: '0', vat: '25', description: null, key: null }],
+        price: [
+          {
+            price: { amountMinor: 0, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
         description: 'Free ticket for volunteers',
         position: 0,
       }),
@@ -465,7 +565,7 @@ describe('extractComplimentaryTickets', () => {
   it('should extract tickets with empty price array if name matches', () => {
     const tickets = [
       createTicket({
-        id: 1,
+        id: '1',
         name: 'Volunteer',
         price: [],
         description: 'Free volunteer ticket',
@@ -482,14 +582,14 @@ describe('extractComplimentaryTickets', () => {
   it('should skip tickets without descriptions', () => {
     const tickets = [
       createTicket({
-        id: 1,
+        id: '1',
         name: 'Speaker Ticket',
         requiresInvitation: true,
         description: null,
         position: 0,
       }),
       createTicket({
-        id: 2,
+        id: '2',
         name: 'Volunteer Ticket',
         requiresInvitation: true,
         description: '',
@@ -505,28 +605,28 @@ describe('extractComplimentaryTickets', () => {
   it('should exclude non-speaker/volunteer hidden tickets', () => {
     const tickets = [
       createTicket({
-        id: 1,
+        id: '1',
         name: 'Crew Ticket',
         requiresInvitation: true,
         description: 'Internal crew access',
         position: 0,
       }),
       createTicket({
-        id: 2,
+        id: '2',
         name: 'Staff Ticket',
         requiresInvitation: true,
         description: 'Internal staff ticket',
         position: 1,
       }),
       createTicket({
-        id: 3,
+        id: '3',
         name: 'Organizer Pass',
         requiresInvitation: true,
         description: 'Organizer access',
         position: 2,
       }),
       createTicket({
-        id: 4,
+        id: '4',
         name: 'Speaker Ticket',
         requiresInvitation: true,
         description: 'Speaker comp',
@@ -543,10 +643,17 @@ describe('extractComplimentaryTickets', () => {
   it('should not extract paid public tickets', () => {
     const tickets = [
       createTicket({
-        id: 1,
+        id: '1',
         name: 'Regular Ticket',
         requiresInvitation: false,
-        price: [{ price: '2000', vat: '25', description: null, key: null }],
+        price: [
+          {
+            price: { amountMinor: 200000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
         description: 'Standard conference ticket',
         position: 0,
       }),
@@ -560,14 +667,14 @@ describe('extractComplimentaryTickets', () => {
   it('should sort by position', () => {
     const tickets = [
       createTicket({
-        id: 1,
+        id: '1',
         name: 'Volunteer',
         requiresInvitation: true,
         description: 'Vol desc',
         position: 5,
       }),
       createTicket({
-        id: 2,
+        id: '2',
         name: 'Speaker',
         requiresInvitation: true,
         description: 'Speaker desc',
@@ -587,7 +694,7 @@ describe('extractComplimentaryTickets', () => {
   it('should strip HTML from descriptions', () => {
     const tickets = [
       createTicket({
-        id: 1,
+        id: '1',
         name: 'Speaker Ticket',
         requiresInvitation: true,
         description:
@@ -604,30 +711,44 @@ describe('extractComplimentaryTickets', () => {
   it('should handle a mix of complimentary and paid tickets', () => {
     const tickets = [
       createTicket({
-        id: 1,
+        id: '1',
         name: 'Early Bird: Conf',
-        price: [{ price: '2000', vat: '25', description: null, key: null }],
+        price: [
+          {
+            price: { amountMinor: 200000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
         description: 'Conference ticket',
         position: 0,
       }),
       createTicket({
-        id: 2,
+        id: '2',
         name: 'Speaker Ticket',
         requiresInvitation: true,
         description: 'Speaker comp',
         position: 1,
       }),
       createTicket({
-        id: 3,
+        id: '3',
         name: 'Volunteer Ticket',
         requiresInvitation: true,
         description: 'Volunteer comp',
         position: 2,
       }),
       createTicket({
-        id: 4,
+        id: '4',
         name: 'Standard: Conf',
-        price: [{ price: '3000', vat: '25', description: null, key: null }],
+        price: [
+          {
+            price: { amountMinor: 300000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
         description: 'Conference ticket',
         position: 3,
       }),

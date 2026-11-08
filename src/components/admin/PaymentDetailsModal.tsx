@@ -9,6 +9,8 @@ import {
 } from '@heroicons/react/24/outline'
 import type { OrderPaymentDetails } from '@/lib/tickets/provider/types'
 import { reconcileOrderAmounts } from '@/lib/tickets/reconcile'
+import { moneyToMajor } from '@/lib/tickets/amount'
+import type { Money } from '@/lib/tickets/types'
 import { formatCurrency } from '@/lib/format'
 import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/api'
 import { SkeletonModal } from './LoadingSkeleton'
@@ -26,7 +28,7 @@ interface PaymentDetailsModalProps {
    * (a provider with no `fetchOrderPaymentDetails`, or a failed read) ⇒ nothing
    * is rendered rather than an inconclusive warning.
    */
-  seatSums?: readonly (string | null | undefined)[]
+  seatSums?: readonly Money[]
 }
 
 /**
@@ -40,12 +42,12 @@ function AmountBasisCheck({
   seatSums,
 }: {
   order: OrderPaymentDetails
-  seatSums: readonly (string | null | undefined)[]
+  seatSums: readonly Money[]
 }) {
   const result = reconcileOrderAmounts({
     orderSum: order.totalMinor / 100,
     orderSumVat: order.vatMinor / 100,
-    seatSums,
+    seatSums: seatSums.map(moneyToMajor),
   })
   if (!result) return null
 

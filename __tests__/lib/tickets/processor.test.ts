@@ -9,6 +9,7 @@ import type {
   SalesTargetConfig,
 } from '@/lib/tickets/types'
 import { createMockConference } from '../../testdata/conference'
+import { toMoney } from '@/lib/tickets/provider/types'
 
 const createMockConfig = (
   overrides: Partial<SalesTargetConfig> = {},
@@ -30,10 +31,10 @@ function createTicket(
   orderId: number,
 ) {
   return {
-    order_id: orderId,
+    order_id: String(orderId),
     order_date: date,
     category,
-    sum,
+    sum: toMoney(sum),
   }
 }
 

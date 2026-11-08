@@ -85,38 +85,48 @@ const conference = {
   ],
 } as unknown as Conference
 
-const ticket = (t: Partial<EventTicket> & { id: number; order_id: number }) =>
+const ticket = (t: Partial<EventTicket> & { id: string; order_id: string }) =>
   ({
     order_date: '2026-02-01T10:00:00Z',
     category: 'Regular',
     customer_name: null,
-    sum: '0',
-    sum_left: '0',
+    sum: { amountMinor: 0, currency: 'NOK' },
+    sum_left: { amountMinor: 0, currency: 'NOK' },
     fields: [],
     crm: crm('x@example.com'),
     ...t,
   }) as EventTicket
 
 const TICKETS: EventTicket[] = [
-  ticket({ id: 1, order_id: 100, sum: '2500', crm: crm('a@example.com') }),
-  ticket({ id: 2, order_id: 101, sum: '2500', crm: crm('b@example.com') }),
   ticket({
-    id: 3,
-    order_id: 102,
+    id: '1',
+    order_id: '100',
+    sum: { amountMinor: 250000, currency: 'NOK' },
+    crm: crm('a@example.com'),
+  }),
+  ticket({
+    id: '2',
+    order_id: '101',
+    sum: { amountMinor: 250000, currency: 'NOK' },
+    crm: crm('b@example.com'),
+  }),
+  ticket({
+    id: '3',
+    order_id: '102',
     category: 'Speaker ticket',
     crm: crm('speaker@example.com'),
   }),
   ticket({
-    id: 4,
-    order_id: 103,
+    id: '4',
+    order_id: '103',
     coupon: 'ACME100',
     crm: crm('sponsored@example.com'),
   }),
   ticket({
-    id: 5,
-    order_id: 100,
+    id: '5',
+    order_id: '100',
     category: 'Workshop upgrade',
-    sum: '500',
+    sum: { amountMinor: 50000, currency: 'NOK' },
     crm: crm('a@example.com'),
   }),
 ]
@@ -136,14 +146,14 @@ beforeEach(() => {
   h.listDiscounts.mockResolvedValue({
     discounts: [
       {
-        id: 1,
+        id: '1',
         triggerValue: 'ACME100',
         type: 'percent',
         value: '100',
         tickets: [],
       },
     ],
-    ticketTypes: [{ id: 10, name: 'Regular' }],
+    ticketTypes: [{ id: '10', name: 'Regular' }],
   })
   h.resolveAccess.mockResolvedValue({
     state: 'ready',
@@ -157,7 +167,7 @@ beforeEach(() => {
     },
   })
   h.resolveSpeakerTicketType.mockResolvedValue({
-    id: 11,
+    id: '11',
     name: 'Speaker ticket',
   })
   h.getSpeakers.mockResolvedValue({
@@ -383,24 +393,24 @@ describe('exportParticipants', () => {
   it('excludes standalone non-admitting add-ons when workshopOnly is false and aligns isComp with isPaidTicket', async () => {
     h.fetchEventTickets.mockResolvedValue([
       ticket({
-        id: 1,
-        order_id: 100,
+        id: '1',
+        order_id: '100',
         category: 'Regular',
-        sum: '2500',
+        sum: { amountMinor: 250000, currency: 'NOK' },
         crm: crm('paid@example.com'),
       }),
       ticket({
-        id: 2,
-        order_id: 101,
+        id: '2',
+        order_id: '101',
         category: 'Regular',
-        sum: '0',
+        sum: { amountMinor: 0, currency: 'NOK' },
         crm: crm('free@example.com'),
       }),
       ticket({
-        id: 3,
-        order_id: 102,
+        id: '3',
+        order_id: '102',
         category: 'Workshop upgrade',
-        sum: '500',
+        sum: { amountMinor: 50000, currency: 'NOK' },
         crm: crm('addon-only@example.com'),
       }),
     ])
@@ -420,19 +430,24 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
   it('exports every speaker as a workshop participant, whatever they answered', async () => {
     h.fetchEventTickets.mockResolvedValue([
       ticket({
-        id: 1,
-        order_id: 100,
+        id: '1',
+        order_id: '100',
         category: 'Speaker ticket',
         crm: crm('quiet@example.com'),
       }),
       ticket({
-        id: 2,
-        order_id: 101,
+        id: '2',
+        order_id: '101',
         category: 'Speaker ticket',
         fields: [{ key: 'Will you attend the Monday workshops?', value: 'No' }],
         crm: crm('no@example.com'),
       }),
-      ticket({ id: 3, order_id: 102, sum: '2500', crm: crm('a@example.com') }),
+      ticket({
+        id: '3',
+        order_id: '102',
+        sum: { amountMinor: 250000, currency: 'NOK' },
+        crm: crm('a@example.com'),
+      }),
     ])
 
     const res = await exportParticipants(conference, true)
@@ -452,14 +467,14 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
     }
     h.fetchEventTickets.mockResolvedValue([
       ticket({
-        id: 1,
-        order_id: 100,
+        id: '1',
+        order_id: '100',
         category: 'Regular',
         crm: crm('  Ada@Example.com '),
       }),
       ticket({
-        id: 2,
-        order_id: 101,
+        id: '2',
+        order_id: '101',
         category: 'Workshop upgrade',
         crm: crm('ada@example.com\t'),
       }),
@@ -482,8 +497,8 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
     }
     h.fetchEventTickets.mockResolvedValue([
       ticket({
-        id: 1,
-        order_id: 200,
+        id: '1',
+        order_id: '200',
         category: 'Regular',
         crm: {
           first_name: 'Alice',
@@ -492,8 +507,8 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
         },
       }),
       ticket({
-        id: 2,
-        order_id: 200,
+        id: '2',
+        order_id: '200',
         category: 'Regular',
         crm: {
           first_name: 'Bob',
@@ -502,8 +517,8 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
         },
       }),
       ticket({
-        id: 3,
-        order_id: 200,
+        id: '3',
+        order_id: '200',
         category: 'Workshop upgrade',
         crm: {
           first_name: 'Bob',
@@ -533,8 +548,8 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
     }
     h.fetchEventTickets.mockResolvedValue([
       ticket({
-        id: 1,
-        order_id: 200,
+        id: '1',
+        order_id: '200',
         category: 'Regular',
         crm: {
           first_name: '',
@@ -543,8 +558,8 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
         },
       }),
       ticket({
-        id: 2,
-        order_id: 200,
+        id: '2',
+        order_id: '200',
         category: 'Regular',
         crm: {
           first_name: 'Bob',
@@ -553,8 +568,8 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
         },
       }),
       ticket({
-        id: 3,
-        order_id: 200,
+        id: '3',
+        order_id: '200',
         category: 'Workshop upgrade',
         crm: {
           first_name: 'Bob',
@@ -583,8 +598,8 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
     }
     h.fetchEventTickets.mockResolvedValue([
       ticket({
-        id: 1,
-        order_id: 200,
+        id: '1',
+        order_id: '200',
         category: 'Regular',
         crm: {
           first_name: 'Alice',
@@ -593,8 +608,8 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
         },
       }),
       ticket({
-        id: 2,
-        order_id: 200,
+        id: '2',
+        order_id: '200',
         category: 'Workshop upgrade',
         crm: {
           first_name: 'Bob',
@@ -603,8 +618,8 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
         },
       }),
       ticket({
-        id: 3,
-        order_id: 200,
+        id: '3',
+        order_id: '200',
         category: 'Workshop upgrade',
         crm: {
           first_name: 'Charlie',
@@ -624,10 +639,10 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
   it('exports one row per admitting seat when a buyer purchases multiple tickets under one email', async () => {
     h.fetchEventTickets.mockResolvedValue([
       ticket({
-        id: 1,
-        order_id: 200,
+        id: '1',
+        order_id: '200',
         category: 'Regular',
-        sum: '2500',
+        sum: { amountMinor: 250000, currency: 'NOK' },
         crm: {
           first_name: 'Alice',
           last_name: 'Smith',
@@ -635,10 +650,10 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
         },
       }),
       ticket({
-        id: 2,
-        order_id: 200,
+        id: '2',
+        order_id: '200',
         category: 'Regular',
-        sum: '2500',
+        sum: { amountMinor: 250000, currency: 'NOK' },
         crm: {
           first_name: 'Bob',
           last_name: 'Jones',
@@ -646,10 +661,10 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
         },
       }),
       ticket({
-        id: 3,
-        order_id: 200,
+        id: '3',
+        order_id: '200',
         category: 'Regular',
-        sum: '2500',
+        sum: { amountMinor: 250000, currency: 'NOK' },
         crm: {
           first_name: 'To Be',
           last_name: 'Announced',
@@ -678,8 +693,13 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
     }
     const bob = { first_name: 'Bob', last_name: 'Jones', email: 'bob@x.com' }
     h.fetchEventTickets.mockResolvedValue([
-      ticket({ id: 1, order_id: 200, category: 'Two-day', crm: bob }),
-      ticket({ id: 2, order_id: 200, category: 'Workshop upgrade', crm: bob }),
+      ticket({ id: '1', order_id: '200', category: 'Two-day', crm: bob }),
+      ticket({
+        id: '2',
+        order_id: '200',
+        category: 'Workshop upgrade',
+        crm: bob,
+      }),
     ])
 
     const res = await exportParticipants(conf, true)
@@ -698,18 +718,18 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
     const email = 'buyer@company.com'
     h.fetchEventTickets.mockResolvedValue([
       ticket({
-        id: 1,
-        order_id: 200,
+        id: '1',
+        order_id: '200',
         crm: { first_name: 'Bob', last_name: '', email },
       }),
       ticket({
-        id: 2,
-        order_id: 200,
+        id: '2',
+        order_id: '200',
         crm: { first_name: 'Bob', last_name: 'Jones', email },
       }),
       ticket({
-        id: 3,
-        order_id: 200,
+        id: '3',
+        order_id: '200',
         category: 'Workshop upgrade',
         crm: { first_name: 'Bob', last_name: 'Jones', email },
       }),
@@ -727,8 +747,8 @@ describe('exportParticipants: one definition of a workshop participant (#1333)',
     const email = 'buyer@company.com'
     h.fetchEventTickets.mockResolvedValue([
       ticket({
-        id: 1,
-        order_id: 200,
+        id: '1',
+        order_id: '200',
         customer_name: 'Buyer Person',
         crm: { first_name: '', last_name: '', email },
       }),
@@ -762,8 +782,8 @@ describe('volunteer free ticket allocation in buildTicketSummary', () => {
     h.fetchEventTickets.mockResolvedValue([
       ...TICKETS,
       ticket({
-        id: 6,
-        order_id: 104,
+        id: '6',
+        order_id: '104',
         category: 'Volunteer ticket',
         crm: crm('vol1@example.com'),
       }),

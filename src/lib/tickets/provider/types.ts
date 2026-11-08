@@ -1,4 +1,4 @@
-import type { EventTicket } from '@/lib/tickets/types'
+import type { EventTicket, Money } from '@/lib/tickets/types'
 import type { CheckinWebhookPayload, CheckinOrderCreatedData } from './checkin'
 import { parseTicketAmount } from '@/lib/tickets/amount'
 import type {
@@ -76,6 +76,22 @@ export interface OrderPaymentDetails {
   billing: OrderContact | null
 }
 
+/**
+ * Currency assumed when a vendor's ticket feed does not carry one (Checkin's
+ * `eventTickets` has no currency field; Tito tickets neither).
+ * ponytail: single-currency assumption; read the event's currency when a
+ * tenant sells in anything but NOK.
+ */
+export const DEFAULT_TICKET_CURRENCY = 'NOK'
+
+/** A provider's decimal amount as Konf {@link Money}. */
+export function toMoney(
+  value: string | number | null | undefined,
+  currency: string = DEFAULT_TICKET_CURRENCY,
+): Money {
+  return { amountMinor: toMinorUnits(value), currency }
+}
+
 /** Convert a provider's decimal amount (`"1234.50"`) to minor units. */
 export function toMinorUnits(
   value: string | number | null | undefined,
@@ -127,14 +143,16 @@ export interface TicketingProviderCredentials {
 // are unaffected.
 
 export interface TicketPrice {
-  price: string
+  /** Price as the provider reports it (Checkin: net; Tito: gross, vat '0'). */
+  price: Money
+  /** VAT RATE in percent, as a string (parse with `parseVatPercent`). */
   vat: string
   description: string | null
   key: string | null
 }
 
 export interface PublicTicketType {
-  id: number
+  id: string
   name: string
   type: string
   description: string | null
@@ -191,24 +209,35 @@ export type TicketAmountBasis = 'per-ticket' | 'per-order'
  * therefore approximate in that (currently hypothetical) case.
  */
 export function toPerTicketAmounts<
-  T extends { order_id: number; sum: string; sum_left?: string },
+  T extends { order_id: string; sum: Money; sum_left?: Money },
 >(tickets: T[], basis: TicketAmountBasis): T[] {
   if (basis === 'per-ticket') return tickets
 
-  const ticketsPerOrder = new Map<number, number>()
+  const ticketsPerOrder = new Map<string, number>()
   for (const t of tickets) {
     ticketsPerOrder.set(t.order_id, (ticketsPerOrder.get(t.order_id) ?? 0) + 1)
   }
 
-  const split = (value: string | undefined, by: number) =>
-    value === undefined ? undefined : String(parseTicketAmount(value) / by)
+  // Integer split: the first `remainder` tickets of an order carry one extra
+  // minor unit, so the order still sums to exactly its total (no float øre).
+  const seen = new Map<string, number>()
+  const split = (money: Money, by: number, index: number): Money => {
+    const base = Math.trunc(money.amountMinor / by)
+    const remainder = money.amountMinor - base * by
+    const extra = Math.sign(remainder) * (index < Math.abs(remainder) ? 1 : 0)
+    return { amountMinor: base + extra, currency: money.currency }
+  }
 
   return tickets.map((t) => {
     const by = ticketsPerOrder.get(t.order_id) || 1
+    const index = seen.get(t.order_id) ?? 0
+    seen.set(t.order_id, index + 1)
     return {
       ...t,
-      sum: split(t.sum, by)!,
-      ...(t.sum_left === undefined ? {} : { sum_left: split(t.sum_left, by) }),
+      sum: split(t.sum, by, index),
+      ...(t.sum_left === undefined
+        ? {}
+        : { sum_left: split(t.sum_left, by, index) }),
     }
   })
 }

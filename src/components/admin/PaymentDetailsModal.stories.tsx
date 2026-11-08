@@ -137,27 +137,42 @@ export const Error: Story = {
 export const BasisConsistent: Story = {
   args: {
     paymentDetails: baseOrder,
-    seatSums: ['5000.00', '5000.00', '5000.00'],
+    seatSums: [
+      { amountMinor: 500000, currency: 'NOK' },
+      { amountMinor: 500000, currency: 'NOK' },
+      { amountMinor: 500000, currency: 'NOK' },
+    ],
   },
 }
 
 export const BasisPerOrderWarning: Story = {
   args: {
     paymentDetails: { ...baseOrder, totalMinor: 500000 },
-    seatSums: ['5000.00', '5000.00', '5000.00'],
+    seatSums: [
+      { amountMinor: 500000, currency: 'NOK' },
+      { amountMinor: 500000, currency: 'NOK' },
+      { amountMinor: 500000, currency: 'NOK' },
+    ],
   },
 }
 
 export const BasisVatDifference: Story = {
   args: {
     paymentDetails: { ...baseOrder, totalMinor: 1875000 },
-    seatSums: ['5000.00', '5000.00', '5000.00'],
+    seatSums: [
+      { amountMinor: 500000, currency: 'NOK' },
+      { amountMinor: 500000, currency: 'NOK' },
+      { amountMinor: 500000, currency: 'NOK' },
+    ],
   },
 }
 
 export const BasisUnexplained: Story = {
   args: {
     paymentDetails: { ...baseOrder, totalMinor: 900000 },
-    seatSums: ['5000.00', '5000.00'],
+    seatSums: [
+      { amountMinor: 500000, currency: 'NOK' },
+      { amountMinor: 500000, currency: 'NOK' },
+    ],
   },
 }

@@ -74,7 +74,7 @@ import {
   type SponsorCodeClaimant,
 } from '@/lib/discounts/attribution'
 import type { EventDiscount } from '@/lib/discounts/types'
-import { parseTicketAmount } from '@/lib/tickets/amount'
+import { moneyToMajor, parseTicketAmount } from '@/lib/tickets/amount'
 // TYPE-ONLY on purpose: `./discovery` imports `removesFullPrice` and `typeKey`
 // from here, and a type import is erased, so the cycle never exists at runtime.
 import type { TicketTypeProposal } from '@/lib/tickets/discovery'
@@ -231,7 +231,7 @@ export function isPaidTicket(
   context: TicketClassificationContext = {},
 ): boolean {
   const { comp } = classifyTicket(ticket, context)
-  if (comp === 'unknown') return parseTicketAmount(ticket.sum) > 0
+  if (comp === 'unknown') return moneyToMajor(ticket.sum) > 0
   return comp === false
 }
 
@@ -335,7 +335,7 @@ export function classifyTicket(
   } else if (code) {
     // A code was redeemed and we cannot see what it was worth. Not a zero.
     comp = 'unknown'
-  } else if (parseTicketAmount(ticket.sum) > 0) {
+  } else if (moneyToMajor(ticket.sum) > 0) {
     // LAST-RESORT PRICE, and the only place it decides anything: money changed
     // hands and no code was involved, so nobody granted this.
     comp = false
