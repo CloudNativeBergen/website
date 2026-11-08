@@ -168,5 +168,8 @@ describe('API credential schema shape', () => {
     const wire = Object.values(values.values).map((v) => v.description)
     expect(wire.every((w) => /^[a-z]+:(read|write)$/.test(w ?? ''))).toBe(true)
     expect(wire.some((w) => w?.startsWith('platform'))).toBe(false)
+    // Member and role management is never client-callable (API_CLIENTS.md).
+    expect(wire).not.toContain('members:write')
+    expect(Object.keys(values.values)).not.toContain('MEMBERS_WRITE')
   })
 })

@@ -1067,9 +1067,6 @@ enum ApiScope {
   """members:read"""
   MEMBERS_READ
 
-  """members:write"""
-  MEMBERS_WRITE
-
   """pii:read"""
   PII_READ
 

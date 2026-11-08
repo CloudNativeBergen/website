@@ -29,15 +29,15 @@ until the implementation lands. The token endpoint is described in `api/README.m
 `resource:read` and `resource:write`, where write implies read. In GraphQL they are the
 `ApiScope` enum (`CONFERENCE_READ` stands for `conference:read`, and so on).
 
-| Resource     | Covers (matrix actions)                                                          |
-| ------------ | -------------------------------------------------------------------------------- |
-| `conference` | `conference.*` except `bind_ticketing` and `manage_roles`                        |
-| `program`    | `schedule.*`                                                                     |
-| `cfp`        | `proposal.*`                                                                     |
-| `sponsors`   | `sponsor.*`                                                                      |
-| `content`    | content subgraph pages and assets                                                |
-| `members`    | `org.read_settings`; `members:write` = `org.manage_members`                      |
-| `pii:read`   | members-only PII reads (`attendee.read_pii`). Owner-granted only, off by default |
+| Resource     | Covers (matrix actions)                                                                                           |
+| ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `conference` | `conference.*` except `bind_ticketing` and `manage_roles`                                                         |
+| `program`    | `schedule.*`                                                                                                      |
+| `cfp`        | `proposal.*`                                                                                                      |
+| `sponsors`   | `sponsor.*`                                                                                                       |
+| `content`    | content subgraph pages and assets                                                                                 |
+| `members`    | `org.read_settings` (read only; there is no `members:write`: member and role management is never client-callable) |
+| `pii:read`   | members-only PII reads (`attendee.read_pii`). Owner-granted only, off by default                                  |
 
 No platform scope exists and none can be granted.
 

@@ -20,7 +20,6 @@ export const API_SCOPES = {
   CONTENT_READ: 'content:read',
   CONTENT_WRITE: 'content:write',
   MEMBERS_READ: 'members:read',
-  MEMBERS_WRITE: 'members:write',
   PII_READ: 'pii:read',
 } as const
 
