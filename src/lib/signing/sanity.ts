@@ -98,7 +98,8 @@ export async function getSigningContract(
         ? { _ref: conf.organization._ref }
         : null,
     }
-    const merged = await mergeConference(candidate)
+    // The projected sales channel from D1 too (#2038).
+    const merged = await mergeConference(candidate, { settings: true })
     contract.conference = {
       ...conf,
       ...merged,

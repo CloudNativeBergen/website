@@ -661,12 +661,22 @@ async function sendContractSignedSlackNotification(
   },
 ) {
   try {
-    const salesChannel = sfc.conference?._id
-      ? await clientReadUncached.fetch<string | null>(
+    const row = sfc.conference?._id
+      ? await clientReadUncached.fetch<{
+          _id: string
+          domains?: string[]
+          organization?: { _ref: string } | null
+          salesNotificationChannel: string | null
+        } | null>(
           // groq-global-scoped: point read of the sponsor's own conference.
-          `*[_type == "conference" && _id == $id][0].salesNotificationChannel`,
+          `*[_type == "conference" && _id == $id][0]{ _id, domains, organization, salesNotificationChannel }`,
           { id: sfc.conference._id },
         )
+      : null
+    // The channel from D1 when flagged (#2038); Sanity is the fallback.
+    const salesChannel = row
+      ? (await mergeConference(row, { settings: true }))
+          .salesNotificationChannel
       : null
 
     if (!salesChannel) return

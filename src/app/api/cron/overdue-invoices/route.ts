@@ -45,7 +45,10 @@ export async function GET(request: NextRequest) {
       { cache: 'no-store' },
     )
 
-    const merged = await mergeConferences(rawConferences ?? [])
+    // A cron: the alert channel is members-only (#2038).
+    const merged = await mergeConferences(rawConferences ?? [], {
+      ticketSetup: true,
+    })
     const conferences = merged.filter((c) => !c.endDate || c.endDate >= cutoff)
 
     const today = osloTodayDateString()

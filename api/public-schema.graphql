@@ -75,7 +75,7 @@ type Conference {
   cfpEmail: String
   cfpEndDate: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   cfpNotificationChannel: String
   cfpNotifyDate: String
   cfpStartDate: String
@@ -107,7 +107,7 @@ type Conference {
   registrationEnabled: Boolean
   registrationLink: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   salesNotificationChannel: String
 
   """ticketCustomization.showVanityMetrics in Sanity."""
@@ -115,19 +115,19 @@ type Conference {
   socialHashtag: String
   socialLinks: [String!]
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   speakerRegistrationLink: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   speakerSlackChannel: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   speakerSlackInviteUrl: String
   speakersAnnouncedDate: String
   sponsorDeadlineDate: String
   sponsorEmail: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   sponsorRegistrationLink: String
   startDate: String
   tagline: String
@@ -168,7 +168,7 @@ type Conference {
   visibility: String
   volunteerRegistrationLink: String
 
-  """Org members only."""
+  """Org members and the site server lane only."""
   volunteerSlackInviteUrl: String
   workshopEarlyAccessTicketTypes: [String!]
   workshopRegistrationEnd: String
@@ -391,6 +391,34 @@ type MyProposalSpeaker {
   image: String
   name: String
   slug: String
+}
+
+type OperatorConferenceStats {
+  conferenceId: ID
+  proposals: ProposalCounts
+
+  """Distinct speakers with a confirmed talk, published or not."""
+  confirmedSpeakers: Int
+
+  """Closed-won sponsorships."""
+  sponsors: Int
+
+  """
+  Always null for now: tickets sold live in the external ticketing provider, which only the site reads (src/lib/tickets). No subgraph has a server-side source yet.
+  """
+  ticketsSold: Int
+}
+
+"""Every proposal of the conference, draft and deleted included."""
+type ProposalCounts {
+  """Sorted by status; a status with no proposals is absent."""
+  byStatus: [ProposalStatusCount!]
+  total: Int
+}
+
+type ProposalStatusCount {
+  count: Int
+  status: String
 }
 
 type Query {
@@ -736,6 +764,29 @@ type MemberSyncStatus {
   status: String!
 }
 
+type Organization {
+  id: ID
+
+  """Platform operators only (operator lane); null otherwise."""
+  memberCount: Int
+
+  """
+  Pending, unexpired invitations. Platform operators only (operator lane); null otherwise.
+  """
+  pendingInviteCount: Int
+  createdAt: String
+  domains: [Domain!]
+
+  """
+  The plan the platform enforces now (#2129): `free`, `basic` or `pro`, from the plan, its source, the subscription status and the comp end date.
+  """
+  effectivePlan: String
+  name: String
+  plan: String
+  slug: String
+  status: String
+}
+
 type OrganizationMember {
   """Owners, admins and operators only; null otherwise."""
   email: String
@@ -1018,21 +1069,11 @@ type OperatorConference {
   id: ID
   lifecycleStatus: String
   organization: Organization
-}
-
-type Organization {
-  createdAt: String
-  domains: [Domain!]
 
   """
-  The plan the platform enforces now (#2129): `free`, `basic` or `pro`, from the plan, its source, the subscription status and the comp end date.
+  Counts for this conference (#2142): proposals, confirmed speakers, sponsors, tickets sold. Platform operators only.
   """
-  effectivePlan: String
-  id: ID
-  name: String
-  plan: String
-  slug: String
-  status: String
+  stats: OperatorConferenceStats
 }
 
 type ProvisionedConference {

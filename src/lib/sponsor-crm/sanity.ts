@@ -291,6 +291,10 @@ export async function createSponsorForConference(
       }
     }
 
+    if (sponsorForConference.conference?._id)
+      sponsorForConference.conference = await mergeConference(
+        sponsorForConference.conference,
+      )
     return { sponsorForConference }
   } catch (error) {
     return { error: error as Error }
@@ -379,6 +383,11 @@ export async function updateSponsorForConference(
       return { error: new Error('Sponsor relationship not found') }
     }
 
+    // D1-owned conference fields (#1997, #2038), as getSponsorForConference.
+    if (sponsorForConference.conference?._id)
+      sponsorForConference.conference = await mergeConference(
+        sponsorForConference.conference,
+      )
     return { sponsorForConference }
   } catch (error) {
     return { error: error as Error }
@@ -561,6 +570,12 @@ export async function listSponsorsForConference(
       },
     )
 
+    // One conference for the whole list: merge it once (#1997, #2038).
+    const conf = sponsors.find((x) => x.conference?._id)?.conference
+    if (conf) {
+      const merged = await mergeConference(conf)
+      for (const x of sponsors) if (x.conference?._id) x.conference = merged
+    }
     return { sponsors }
   } catch (error) {
     return { error: error as Error }

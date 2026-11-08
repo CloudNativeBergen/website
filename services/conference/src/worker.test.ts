@@ -737,6 +737,13 @@ describe('settings phase 2 (#2038)', () => {
       ...nulls,
     })
     expect(await read(tenant('org-a', 'conf-a', 'member'))).toEqual(ALL)
+    // The site's server lane reads them too (the read flip, #2038).
+    expect(
+      await read({
+        ...(tenant('org-a', 'conf-a') as Extract<Envelope, { typ: 'tenant' }>),
+        scopes: ['site:server'],
+      }),
+    ).toEqual(ALL)
     const entity = await gql(
       tenant('org-a', 'conf-a'),
       `{ _entities(representations: [{ __typename: "Conference", id: "conf-a" }]) { ... on Conference { ${Object.keys(PRIVATE).join(' ')} } } }`,

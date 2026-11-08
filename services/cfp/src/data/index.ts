@@ -5,7 +5,11 @@
 // Sanity, the data does not move).
 import { createClient } from '@sanity/client'
 import { createGraphQLError } from 'graphql-yoga'
-import { ScopedRepository, type Envelope } from '@runkonf/tenancy'
+import {
+  ScopedRepository,
+  platformBatch,
+  type Envelope,
+} from '@runkonf/tenancy'
 import { SanityCfpSource, type CfpSource, type DataEnv } from './source'
 import {
   MyProposals,
@@ -145,23 +149,49 @@ class Mine extends ScopedRepository {
 }
 type Who = { orgId: string; conferenceId: string; speakerId: string }
 
+// Operator lane only: platformBatch refuses anything but a PlatformContext.
+// One read per page, bounded to the page's conference ids.
+export const PROPOSAL_STATUSES = `*[_type == "talk" && conference._ref in $conferenceIds]{ "c": conference._ref, status }`
+
+/** Proposal counts per conference, every status included (#2142). */
+export type ProposalCounts = { total: number; byStatus: Map<string, number> }
+
 export function createData(env: DataEnv, envelope: Envelope) {
-  const source = new SanityCfpSource(
-    createClient({
-      projectId: env.SANITY_PROJECT_ID,
-      dataset: env.SANITY_DATASET,
-      apiVersion: '2023-05-03',
-      useCdn: true,
-      // The dataset is private: no token reads nothing.
-      token: env.SANITY_API_TOKEN_READ,
-      requestTagPrefix: 'cfp.read',
-    }),
-  )
+  const client = createClient({
+    projectId: env.SANITY_PROJECT_ID,
+    dataset: env.SANITY_DATASET,
+    apiVersion: '2023-05-03',
+    useCdn: true,
+    // The dataset is private: no token reads nothing.
+    token: env.SANITY_API_TOKEN_READ,
+    requestTagPrefix: 'cfp.read',
+  })
+  const source = new SanityCfpSource(client)
   // Built on first use: the constructor refuses a PlatformContext, and that
   // should fail the resolver, not the whole request.
   let cfps: Cfps | undefined
   let mine: Mine | undefined
+  const proposalCounts = platformBatch<ProposalCounts>(
+    envelope,
+    'operator conference stats: proposals (#2142)',
+    async (ids) => {
+      const rows = await client.fetch<{ c: string; status: unknown }[]>(
+        PROPOSAL_STATUSES,
+        { conferenceIds: ids },
+      )
+      const by = new Map<string, ProposalCounts>()
+      for (const r of rows ?? []) {
+        const c = by.get(r.c) ?? { total: 0, byStatus: new Map() }
+        const k = typeof r.status === 'string' ? r.status : 'unknown'
+        c.total++
+        c.byStatus.set(k, (c.byStatus.get(k) ?? 0) + 1)
+        by.set(r.c, c)
+      }
+      return by
+    },
+  )
   return {
+    proposalCounts,
     cfp: () => (cfps ??= new Cfps(source, envelope)),
     mine: () =>
       (mine ??= (() => {
