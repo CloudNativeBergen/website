@@ -377,6 +377,27 @@ export default defineType({
         },
       ],
     }),
+    // The speaker profile as it was at submission through the API (#2078,
+    // #2022). Written by konf-cfp, never edited, cleared by speaker erasure.
+    defineField({
+      name: 'speakerSnapshot',
+      title: 'Speaker snapshot',
+      type: 'object',
+      readOnly: true,
+      fields: [
+        defineField({
+          name: 'speaker',
+          type: 'reference',
+          to: [{ type: 'speaker' }],
+          weak: true,
+        }),
+        defineField({ name: 'name', type: 'string' }),
+        defineField({ name: 'bio', type: 'text' }),
+        defineField({ name: 'links', type: 'array', of: [{ type: 'string' }] }),
+        defineField({ name: 'photoKey', type: 'string' }),
+        defineField({ name: 'takenAt', type: 'datetime' }),
+      ],
+    }),
   ],
 
   preview: {
