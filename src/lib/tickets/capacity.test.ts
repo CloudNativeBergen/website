@@ -26,16 +26,16 @@ function input(capacity: number): ProcessTicketSalesInput {
   return {
     tickets: [
       {
-        order_id: 1,
+        order_id: '1',
         order_date: '2026-02-01T10:00:00Z',
         category: 'Regular',
-        sum: '2500',
+        sum: { amountMinor: 250000, currency: 'NOK' },
       },
       {
-        order_id: 2,
+        order_id: '2',
         order_date: '2026-02-02T10:00:00Z',
         category: 'Regular',
-        sum: '2500',
+        sum: { amountMinor: 250000, currency: 'NOK' },
       },
     ],
     config,

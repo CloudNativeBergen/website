@@ -1,9 +1,9 @@
-import { parseTicketAmount } from './amount'
+import { moneyToMajor } from './amount'
 import type { EventTicket, GroupedOrder } from './types'
 import type { OrderPaymentDetails } from './provider/types'
 
 export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
-  const ordersMap = new Map<number, GroupedOrder>()
+  const ordersMap = new Map<string, GroupedOrder>()
 
   tickets.forEach((ticket) => {
     const orderId = ticket.order_id
@@ -30,8 +30,8 @@ export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
     // order showed one seat's price, and — worse — `amountLeft` drives the
     // Orders page paid/unpaid filter, so an order whose first seat was settled
     // read as PAID while the rest was still outstanding.
-    order.totalAmount += parseTicketAmount(ticket.sum)
-    order.amountLeft += parseTicketAmount(ticket.sum_left)
+    order.totalAmount += moneyToMajor(ticket.sum)
+    order.amountLeft += moneyToMajor(ticket.sum_left)
     order.tickets.push(ticket)
 
     if (!order.categories.includes(ticket.category)) {

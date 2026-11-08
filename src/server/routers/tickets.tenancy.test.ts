@@ -133,8 +133,8 @@ beforeEach(() => {
   h.createDiscount.mockResolvedValue({ id: 1 })
   h.deleteDiscount.mockResolvedValue(true)
   // Our event's orders. Order 999 belongs to somebody else's event.
-  h.fetchEventTickets.mockResolvedValue([{ id: 1, order_id: 500 }])
-  h.fetchOrderPaymentDetails.mockResolvedValue({ id: 1, orderId: 500 })
+  h.fetchEventTickets.mockResolvedValue([{ id: '1', order_id: '500' }])
+  h.fetchOrderPaymentDetails.mockResolvedValue({ id: '1', orderId: 500 })
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
@@ -611,9 +611,21 @@ describe('standalone discount codes (no sponsor)', () => {
       ticketTypes: [],
     })
     h.fetchEventTickets.mockResolvedValue([
-      { id: 1, coupon: 'community2026', sum: '800' },
-      { id: 2, coupon: 'COMMUNITY2026', sum: '800' },
-      { id: 3, discount: 'ACME1234', sum: '0' },
+      {
+        id: '1',
+        coupon: 'community2026',
+        sum: { amountMinor: 80000, currency: 'NOK' },
+      },
+      {
+        id: '2',
+        coupon: 'COMMUNITY2026',
+        sum: { amountMinor: 80000, currency: 'NOK' },
+      },
+      {
+        id: '3',
+        discount: 'ACME1234',
+        sum: { amountMinor: 0, currency: 'NOK' },
+      },
     ])
 
     const result = await tickets().admin.getDiscountCodesWithUsage()
@@ -625,10 +637,10 @@ describe('standalone discount codes (no sponsor)', () => {
     // Case-insensitively matched, and OURS (2) rather than the vendor's 99.
     expect(byCode.COMMUNITY2026).toMatchObject({
       usageCount: 2,
-      ticketIds: [1, 2],
+      ticketIds: ['1', '2'],
       totalPaid: 1600,
     })
-    expect(byCode.ACME1234).toMatchObject({ usageCount: 1, ticketIds: [3] })
+    expect(byCode.ACME1234).toMatchObject({ usageCount: 1, ticketIds: ['3'] })
   })
 })
 
@@ -785,7 +797,7 @@ describe('the order-id memo is scoped to the ACCOUNT, not just the numeric ids',
       apiKey: 'B-key',
       apiSecret: 'B-s',
     })
-    h.fetchEventTickets.mockResolvedValue([{ id: 9, order_id: 900 }])
+    h.fetchEventTickets.mockResolvedValue([{ id: '9', order_id: '900' }])
   }
 
   it('does NOT serve org A’s cached order set to org B', async () => {

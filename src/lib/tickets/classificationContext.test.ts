@@ -52,13 +52,13 @@ const providerWith = (
 
 const ticket = (category: string, email: string): EventTicket =>
   ({
-    id: Math.random(),
-    order_id: 1,
+    id: String(Math.random()),
+    order_id: '1',
     order_date: '2026-03-01',
     category,
     customer_name: 'Ada',
-    sum: '0.00',
-    sum_left: '0.00',
+    sum: { amountMinor: 0, currency: 'NOK' },
+    sum_left: { amountMinor: 0, currency: 'NOK' },
     fields: [],
     crm: { first_name: 'Ada', last_name: 'L', email },
   }) as EventTicket

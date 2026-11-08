@@ -231,9 +231,15 @@ beforeEach(() => {
   h.createDiscount.mockResolvedValue({ id: 1 })
   h.deleteDiscount.mockResolvedValue(true)
   h.fetchEventTickets.mockResolvedValue([
-    { id: 1, order_id: 500, sum: '100', category: 'Regular', order_date: '' },
+    {
+      id: '1',
+      order_id: '500',
+      sum: { amountMinor: 10000, currency: 'NOK' },
+      category: 'Regular',
+      order_date: '',
+    },
   ])
-  h.fetchOrderPaymentDetails.mockResolvedValue({ id: 1, orderId: 500 })
+  h.fetchOrderPaymentDetails.mockResolvedValue({ id: '1', orderId: 500 })
   h.commit.mockResolvedValue({ _id: CONF })
   h.writeD1.mockResolvedValue(false)
   h.sanityFetch.mockResolvedValue({ _id: CONF, ticketCapacity: 400 })

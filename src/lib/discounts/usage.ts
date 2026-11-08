@@ -1,6 +1,6 @@
 import type { DiscountUsageStats, EventDiscountWithUsage } from './types'
 import type { EventTicket } from '@/lib/tickets/types'
-import { parseTicketAmount } from '@/lib/tickets/amount'
+import { moneyToMajor } from '@/lib/tickets/amount'
 
 /**
  * Derive per-code redemption counts by scanning THIS event's tickets.
@@ -31,7 +31,7 @@ export function calculateDiscountUsage(
       stats[normalizedCode].usageCount++
       stats[normalizedCode].ticketIds.push(ticket.id)
       // Amount PAID, not amount discounted — see `DiscountUsage.totalPaid`.
-      stats[normalizedCode].totalPaid += parseTicketAmount(ticket.sum)
+      stats[normalizedCode].totalPaid += moneyToMajor(ticket.sum)
     }
 
     return stats

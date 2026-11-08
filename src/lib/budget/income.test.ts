@@ -6,6 +6,7 @@ import {
   deriveTicketIncome,
 } from './income'
 import type { TicketClassificationContext } from '@/lib/tickets/classification'
+import { toMoney } from '@/lib/tickets/provider/types'
 
 describe('deriveSponsorIncome', () => {
   const sponsor = (
@@ -128,9 +129,21 @@ describe('deriveTicketIncome', () => {
     // The old expectation (7500) came from deduping by order_id, which is what
     // made the Revenue card read 352 188 against Checkin's own 385 750.
     const result = deriveTicketIncome([
-      { order_id: 1, category: 'Early Bird', sum: '5000' },
-      { order_id: 1, category: 'Early Bird', sum: '5000' },
-      { order_id: 2, category: 'Standard', sum: '2500' },
+      {
+        order_id: '1',
+        category: 'Early Bird',
+        sum: { amountMinor: 500000, currency: 'NOK' },
+      },
+      {
+        order_id: '1',
+        category: 'Early Bird',
+        sum: { amountMinor: 500000, currency: 'NOK' },
+      },
+      {
+        order_id: '2',
+        category: 'Standard',
+        sum: { amountMinor: 250000, currency: 'NOK' },
+      },
     ])
     expect(result.revenue).toBe(12500)
     expect(result.ticketCount).toBe(3)
@@ -147,7 +160,7 @@ describe('deriveTicketIncome', () => {
     // `isPaidTicket` fallback reads an unreadable amount as 0 — so the row is
     // not income and not a sale, exactly as /admin/tickets treats it.
     const result = deriveTicketIncome([
-      { order_id: 1, category: 'Comp', sum: 'not-a-number' },
+      { order_id: '1', category: 'Comp', sum: toMoney('not-a-number') },
     ])
     expect(result.revenue).toBe(0)
     expect(result.ticketCount).toBe(0)
@@ -182,11 +195,15 @@ describe('deriveTicketIncome', () => {
 
     const result = deriveTicketIncome(
       [
-        { order_id: 1, category: 'Conference day', sum: '5000' },
         {
-          order_id: 1,
+          order_id: '1',
           category: 'Conference day',
-          sum: '1500',
+          sum: { amountMinor: 500000, currency: 'NOK' },
+        },
+        {
+          order_id: '1',
+          category: 'Conference day',
+          sum: { amountMinor: 150000, currency: 'NOK' },
           coupon: 'ACMECLOUD1234',
         },
       ],
@@ -200,7 +217,14 @@ describe('deriveTicketIncome', () => {
 
   it('keeps a partly discounted seat, which is a purchase', () => {
     const result = deriveTicketIncome(
-      [{ order_id: 1, category: 'Conference day', sum: '3600', coupon: 'X20' }],
+      [
+        {
+          order_id: '1',
+          category: 'Conference day',
+          sum: { amountMinor: 360000, currency: 'NOK' },
+          coupon: 'X20',
+        },
+      ],
       {
         discounts: [
           {

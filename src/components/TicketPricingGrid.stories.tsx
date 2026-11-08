@@ -4,11 +4,18 @@ import type { PublicTicketType } from '@/lib/tickets/public'
 
 function ticket(over: Partial<PublicTicketType> = {}): PublicTicketType {
   return {
-    id: 1,
+    id: '1',
     name: 'Conference',
     type: 'standard',
     description: null,
-    price: [{ price: '4000', vat: '25', description: null, key: null }],
+    price: [
+      {
+        price: { amountMinor: 400000, currency: 'NOK' },
+        vat: '25',
+        description: null,
+        key: null,
+      },
+    ],
     available: null,
     requiresInvitation: false,
     visibleStartsAt: null,
@@ -39,12 +46,19 @@ type Story = StoryObj<typeof meta>
 export const Paid: Story = {
   args: {
     tickets: [
-      ticket({ id: 1, name: 'Conference' }),
+      ticket({ id: '1', name: 'Conference' }),
       ticket({
-        id: 2,
+        id: '2',
         name: 'Conference + Workshop',
         position: 1,
-        price: [{ price: '6000', vat: '25', description: null, key: null }],
+        price: [
+          {
+            price: { amountMinor: 600000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
       }),
     ],
     registrationLink: 'https://register.example/tickets',
@@ -59,12 +73,19 @@ export const FreeToAttend: Story = {
   args: {
     free: true,
     tickets: [
-      ticket({ id: 1, name: 'Conference', price: [] }),
+      ticket({ id: '1', name: 'Conference', price: [] }),
       ticket({
-        id: 2,
+        id: '2',
         name: 'Workshop day',
         position: 1,
-        price: [{ price: '0', vat: '0', description: null, key: null }],
+        price: [
+          {
+            price: { amountMinor: 0, currency: 'NOK' },
+            vat: '0',
+            description: null,
+            key: null,
+          },
+        ],
       }),
     ],
     registrationLink: 'https://register.example/free-event',
@@ -75,7 +96,7 @@ export const FreeToAttend: Story = {
 export const FreeToAttendWithoutRegistration: Story = {
   args: {
     free: true,
-    tickets: [ticket({ id: 1, name: 'Conference', price: [] })],
+    tickets: [ticket({ id: '1', name: 'Conference', price: [] })],
   },
 }
 
@@ -86,12 +107,19 @@ export const FreeToAttendWithoutRegistration: Story = {
 export const PaidWithoutRegistration: Story = {
   args: {
     tickets: [
-      ticket({ id: 1, name: 'Conference' }),
+      ticket({ id: '1', name: 'Conference' }),
       ticket({
-        id: 2,
+        id: '2',
         name: 'Conference + Workshop',
         position: 1,
-        price: [{ price: '6000', vat: '25', description: null, key: null }],
+        price: [
+          {
+            price: { amountMinor: 600000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
       }),
     ],
   },
@@ -107,14 +135,21 @@ export const PaidWithoutRegistration: Story = {
 export const PaidWithFreeTier: Story = {
   args: {
     tickets: [
-      ticket({ id: 1, name: 'Conference' }),
+      ticket({ id: '1', name: 'Conference' }),
       ticket({
-        id: 2,
+        id: '2',
         name: 'Conference + Workshop',
         position: 1,
-        price: [{ price: '6000', vat: '25', description: null, key: null }],
+        price: [
+          {
+            price: { amountMinor: 600000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
       }),
-      ticket({ id: 3, name: 'Student', position: 2, price: [] }),
+      ticket({ id: '3', name: 'Student', position: 2, price: [] }),
     ],
     registrationLink: 'https://register.example/tickets',
   },
@@ -127,15 +162,22 @@ export const PaidWithFreeTier: Story = {
 export const TieredWithFreeTier: Story = {
   args: {
     tickets: [
-      ticket({ id: 1, name: 'Early Bird: Conference', position: 0 }),
+      ticket({ id: '1', name: 'Early Bird: Conference', position: 0 }),
       ticket({
-        id: 2,
+        id: '2',
         name: 'Regular: Conference',
         position: 1,
-        price: [{ price: '5000', vat: '25', description: null, key: null }],
+        price: [
+          {
+            price: { amountMinor: 500000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
       }),
       ticket({
-        id: 3,
+        id: '3',
         name: 'Early Bird: Student',
         position: 2,
         price: [],
@@ -149,24 +191,45 @@ export const TieredWithFreeTier: Story = {
 export const Tiered: Story = {
   args: {
     tickets: [
-      ticket({ id: 1, name: 'Early Bird: Conference', position: 0 }),
+      ticket({ id: '1', name: 'Early Bird: Conference', position: 0 }),
       ticket({
-        id: 2,
+        id: '2',
         name: 'Regular: Conference',
         position: 1,
-        price: [{ price: '5000', vat: '25', description: null, key: null }],
+        price: [
+          {
+            price: { amountMinor: 500000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
       }),
       ticket({
-        id: 3,
+        id: '3',
         name: 'Early Bird: Conference + Workshop',
         position: 2,
-        price: [{ price: '6000', vat: '25', description: null, key: null }],
+        price: [
+          {
+            price: { amountMinor: 600000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
       }),
       ticket({
-        id: 4,
+        id: '4',
         name: 'Regular: Conference + Workshop',
         position: 3,
-        price: [{ price: '7000', vat: '25', description: null, key: null }],
+        price: [
+          {
+            price: { amountMinor: 700000, currency: 'NOK' },
+            vat: '25',
+            description: null,
+            key: null,
+          },
+        ],
       }),
     ],
     registrationLink: 'https://register.example/tickets',

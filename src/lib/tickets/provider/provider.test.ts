@@ -32,7 +32,7 @@ import {
 } from './index'
 import { CheckinProvider, CHECKIN_API_URL } from './checkin'
 import { TitoProvider } from './tito'
-import { toPerTicketAmounts } from './types'
+import { toMoney, toPerTicketAmounts } from './types'
 import type { CheckinWebhookPayload } from './checkin'
 
 const CREDS = {
@@ -1001,8 +1001,17 @@ describe('amount basis', () => {
       sum_left: '0.00',
     }))
 
-    const normalized = toPerTicketAmounts(rows, 'per-order')
-    const total = normalized.reduce((sum, r) => sum + Number(r.sum), 0)
+    const normalized = toPerTicketAmounts(
+      rows.map((r) => ({
+        ...r,
+        order_id: String(r.order_id),
+        sum: toMoney(r.sum),
+        sum_left: toMoney(r.sum_left),
+      })),
+      'per-order',
+    )
+    const total =
+      normalized.reduce((sum, r) => sum + r.sum.amountMinor, 0) / 100
 
     expect(total).toBe(3000)
   })

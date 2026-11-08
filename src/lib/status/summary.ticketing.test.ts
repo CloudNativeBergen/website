@@ -105,15 +105,15 @@ beforeEach(() => {
   h.fetchEventTickets.mockResolvedValue([
     {
       id: 1,
-      order_id: 500,
-      sum: '1000',
+      order_id: '500',
+      sum: { amountMinor: 100000, currency: 'NOK' },
       category: 'Regular',
       order_date: '2026-01-05',
     },
     {
       id: 2,
-      order_id: 501,
-      sum: '0',
+      order_id: '501',
+      sum: { amountMinor: 0, currency: 'NOK' },
       category: 'Speaker',
       order_date: '2026-01-06',
     },
@@ -246,8 +246,8 @@ describe('an org without an operator deny keeps its ticket numbers', () => {
 describe('paid tickets are the ones that were SOLD', () => {
   const sponsorGrant = {
     id: 3,
-    order_id: 502,
-    sum: '1500',
+    order_id: '502',
+    sum: { amountMinor: 150000, currency: 'NOK' },
     coupon: 'ACMECLOUD1234',
     category: 'Regular',
     order_date: '2026-01-07',
@@ -271,8 +271,8 @@ describe('paid tickets are the ones that were SOLD', () => {
     h.fetchEventTickets.mockResolvedValue([
       {
         id: 1,
-        order_id: 500,
-        sum: '1000',
+        order_id: '500',
+        sum: { amountMinor: 100000, currency: 'NOK' },
         category: 'Regular',
         order_date: '2026-01-05',
       },

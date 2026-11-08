@@ -8,12 +8,12 @@ import type { EventTicket, GroupedOrder } from '@/lib/tickets/types'
 // can hold several people, and each needs their own letter.
 
 const ticket = (
-  overrides: Partial<EventTicket> & { id: number; order_id: number },
+  overrides: Partial<EventTicket> & { id: string; order_id: string },
 ): EventTicket => ({
   category: 'Conference (1 Day)',
   customer_name: null,
-  sum: '4500',
-  sum_left: '0',
+  sum: { amountMinor: 450000, currency: 'NOK' },
+  sum_left: { amountMinor: 0, currency: 'NOK' },
   order_date: '2026-07-14T10:00:00Z',
   fields: [],
   crm: { first_name: 'Amina', last_name: 'Yusuf', email: 'amina@example.com' },
@@ -22,7 +22,7 @@ const ticket = (
 
 const orders: GroupedOrder[] = [
   {
-    order_id: 88912,
+    order_id: '88912',
     order_date: '2026-07-14T10:00:00Z',
     totalTickets: 1,
     totalAmount: 4500,
@@ -34,8 +34,8 @@ const orders: GroupedOrder[] = [
     ],
     tickets: [
       ticket({
-        id: 1,
-        order_id: 88912,
+        id: '1',
+        order_id: '88912',
         fields: [
           { key: 'company', value: 'Example Bank Ltd' },
           { key: 'work_title', value: 'Software Engineer' },
@@ -44,7 +44,7 @@ const orders: GroupedOrder[] = [
     ],
   },
   {
-    order_id: 88913,
+    order_id: '88913',
     order_date: '2026-07-02T08:30:00Z',
     totalTickets: 2,
     totalAmount: 12000,
@@ -53,12 +53,12 @@ const orders: GroupedOrder[] = [
     fields: [{ key: 'company', value: 'Example GmbH' }],
     tickets: [
       ticket({
-        id: 2,
-        order_id: 88913,
+        id: '2',
+        order_id: '88913',
         category: 'Workshop + Conference (2 Days)',
         customer_name: 'Chen Wei',
-        sum: '6000',
-        sum_left: '6000',
+        sum: { amountMinor: 600000, currency: 'NOK' },
+        sum_left: { amountMinor: 600000, currency: 'NOK' },
         crm: {
           first_name: 'Chen',
           last_name: 'Wei',
@@ -67,12 +67,12 @@ const orders: GroupedOrder[] = [
         fields: [{ key: 'company', value: 'Example GmbH' }],
       }),
       ticket({
-        id: 3,
-        order_id: 88913,
+        id: '3',
+        order_id: '88913',
         category: 'Workshop + Conference (2 Days)',
         customer_name: 'Priya Nair',
-        sum: '6000',
-        sum_left: '6000',
+        sum: { amountMinor: 600000, currency: 'NOK' },
+        sum_left: { amountMinor: 600000, currency: 'NOK' },
         crm: {
           first_name: 'Priya',
           last_name: 'Nair',

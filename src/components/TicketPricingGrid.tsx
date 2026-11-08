@@ -6,7 +6,7 @@ import {
   type PublicTicketType,
   type ComplimentaryTicketInfo,
 } from '@/lib/tickets/public'
-import { parseTicketAmount, parseVatPercent } from '@/lib/tickets/amount'
+import { parseVatPercent } from '@/lib/tickets/amount'
 import { TicketIcon, CalendarDaysIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 
@@ -16,7 +16,7 @@ import clsx from 'clsx'
  * both used to render as nothing or as "NOK 0" (#846).
  */
 function isFreeTicket(ticket: PublicTicketType): boolean {
-  return !ticket.price.some((p) => parseTicketAmount(p.price) > 0)
+  return !ticket.price.some((p) => p.price.amountMinor > 0)
 }
 
 function FreePrice({ muted = false }: { muted?: boolean }) {

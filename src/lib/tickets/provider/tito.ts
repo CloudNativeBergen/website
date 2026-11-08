@@ -1,5 +1,4 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { parseTicketAmount } from '@/lib/tickets/amount'
 import type { EventTicket } from '@/lib/tickets/types'
 import type {
   EventDiscount,
@@ -8,6 +7,7 @@ import type {
 } from '@/lib/discounts/types'
 import {
   ProviderUnsupportedError,
+  toMoney,
   toPerTicketAmounts,
   type TicketAmountBasis,
   type EventRef,
@@ -349,23 +349,23 @@ export class TitoProvider implements TicketingProvider {
       (isRegistrationComplete ||
         (!t.registration && ticketState === 'complete'))
 
-    const priceStr = String(t.price ?? '0')
-    const owesPrice = !paid && parseTicketAmount(t.price) > 0
+    const price = toMoney(t.price)
+    const owesPrice = !paid && price.amountMinor > 0
 
     return {
-      id: t.id,
+      id: String(t.id),
       // Tito groups tickets under a "registration" (the order equivalent).
       // A missing registration id must NOT collapse to a shared sentinel (0)
       // or unrelated tickets would merge into one synthetic order — negate the
       // ticket id so each orphan stays its own group and can never collide
       // with a real (positive) registration id.
-      order_id: t.registration_id ?? -t.id,
+      order_id: String(t.registration_id ?? -t.id),
       category,
       customer_name: name || null,
-      sum: priceStr,
+      sum: price,
       // Checkin semantics: `sum_left` is the outstanding balance. A settled
       // Tito registration owes 0; anything pending payment still owes its price.
-      sum_left: owesPrice ? priceStr : '0',
+      sum_left: owesPrice ? price : { ...price, amountMinor: 0 },
       coupon: t.discount_code ?? undefined,
       fields: [],
       crm: {
@@ -427,13 +427,19 @@ export class TitoProvider implements TicketingProvider {
     }
 
     // The index (the fallback `position`) runs across the whole list.
-    const tickets = releases.map((r, i) => this.mapRelease(r, i))
+    const tickets = releases.map((r, i) =>
+      this.mapRelease(r, i, ev.currency ?? undefined),
+    )
     return { event: info, tickets }
   }
 
-  private mapRelease(r: TitoRelease, index: number): PublicTicketType {
+  private mapRelease(
+    r: TitoRelease,
+    index: number,
+    currency?: string,
+  ): PublicTicketType {
     return {
-      id: r.id,
+      id: String(r.id),
       name: r.title ?? r.slug ?? `Release ${r.id}`,
       // Tito has no ticket "type" taxonomy; reuse the slug as a stable key.
       type: r.slug ?? 'release',
@@ -447,7 +453,7 @@ export class TitoProvider implements TicketingProvider {
       // future generalization would carry a tax-inclusive flag on TicketPrice.
       price: [
         {
-          price: String(r.price ?? '0'),
+          price: toMoney(r.price, currency),
           vat: '0',
           description: null,
           key: null,
