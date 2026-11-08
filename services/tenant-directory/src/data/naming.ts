@@ -8,27 +8,8 @@ export const editionHost = (org: string, conf: string) =>
 export const aliasHost = (org: string) => `${org}.${PLATFORM_DOMAIN}`
 
 export const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/
-// Org slugs become `<slug>.konf.run`; these names belong to the platform.
-export const RESERVED_SLUGS = new Set([
-  'admin',
-  'api',
-  'app',
-  'auth',
-  'cdn',
-  'dashboard',
-  'docs',
-  'gateway',
-  'help',
-  'kontroll',
-  'login',
-  'mail',
-  'my',
-  'smtp',
-  'static',
-  'status',
-  'support',
-  'www',
-])
+// Org slugs become `<slug>.konf.run`; one shared list (#2129).
+export { RESERVED_SLUGS } from '@runkonf/tenancy/reserved'
 
 /** Accepts an Origin (`https://host:port`) or a bare hostname. */
 export function normalizeHost(input: string): string | null {

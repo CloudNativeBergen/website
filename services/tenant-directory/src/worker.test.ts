@@ -16,6 +16,7 @@ import {
 } from '@runkonf/tenancy'
 import { exportJWK, exportSPKI, generateKeyPair } from 'jose'
 import type { CustomHostnames } from './data/cloudflare'
+import { createData, hashSignupCode } from './data'
 import { verifyServiceAssertion } from '../../../src/lib/provisioning/service'
 
 // vitest.config.ts stubs `jose`; load the real one so signatures are checked.
@@ -112,7 +113,7 @@ type Docs = {
 }
 const tenantDocs = (): Docs => {
   const docs: Docs = { orgs: {}, confs: {} }
-  for (const org of ['acme', 'beta', 'other']) {
+  for (const org of ['acme', 'bravo', 'other']) {
     docs.orgs[`organization.${org}`] = { slug: org, name: `Org ${org}` }
     docs.confs[`conference-${org}`] = {
       orgRef: `organization.${org}`,
@@ -281,6 +282,10 @@ beforeEach(() => {
       readFileSync(
         new URL('../migrations/0010_org_kind.sql', import.meta.url),
         'utf8',
+      ) +
+      readFileSync(
+        new URL('../migrations/0011_billing_signup.sql', import.meta.url),
+        'utf8',
       ),
   )
   env = {
@@ -410,22 +415,22 @@ describe('organizations (#1973)', () => {
   })
 
   it('lists every org by slug, with createdAt, to a PlatformContext', async () => {
-    await provision('beta')
+    await provision('bravo')
     await provision('acme', 'k2')
     const { body } = await gql(ORGS, {}, operator)
     expect(
       body.data.organizations.map((o: { slug: string }) => o.slug),
-    ).toEqual(['acme', 'beta'])
+    ).toEqual(['acme', 'bravo'])
     for (const o of body.data.organizations)
       expect(new Date(o.createdAt).toISOString()).toBe(o.createdAt)
   })
 
   it('pages by slug and clamps first to 1..100', async () => {
-    await provision('beta')
+    await provision('bravo')
     await provision('acme', 'k2')
     expect(await page('first: 1')).toEqual(['acme'])
-    expect(await page('first: 1, after: "acme"')).toEqual(['beta'])
-    expect(await page('after: "beta"')).toEqual([])
+    expect(await page('first: 1, after: "acme"')).toEqual(['bravo'])
+    expect(await page('after: "bravo"')).toEqual([])
     expect(await page('first: 0')).toEqual(['acme'])
     expect(await page('first: -5')).toEqual(['acme'])
     for (let i = 0; i < 101; i++)
@@ -469,18 +474,22 @@ describe('provisioning', () => {
     const { body } = await gql('{ _service { sdl } }')
     const mutation = /type Mutation[^}]*}/.exec(body.data._service.sdl)![0]
     const fields = mutation.split('\n').filter((l) => /^\s+\w+\(/.test(l))
-    expect(fields).toHaveLength(9)
+    expect(fields).toHaveLength(13)
     for (const f of fields)
       if (
         f.includes('setConferenceLifecycle(') ||
-        f.includes('provisionConference(')
+        f.includes('provisionConference(') ||
+        f.includes('startCheckout(') ||
+        f.includes('signUpOrganization(')
       )
         expect(f).not.toContain('@tag')
       else
         expect(f).toContain(
           f.includes('provisionOrganization(') ||
             f.includes('createOrganization(') ||
-            f.includes('setComplimentaryPlan(')
+            f.includes('setComplimentaryPlan(') ||
+            f.includes('createSignupCode(') ||
+            f.includes('revokeSignupCode(')
             ? '@tag(name: "operator")'
             : '@tag(name: "internal")',
         )
@@ -661,16 +670,16 @@ describe('provisioning', () => {
   })
 
   it("refuses a replay whose conference has moved to the caller's org (the org check alone)", async () => {
-    await provision('beta', 'beta-key')
+    await provision('bravo', 'bravo-key')
     await provision('acme', 'same')
     // Only reachable by a later D1 change: the key's conference now belongs
-    // to beta, so the conference checks pass and the org check must refuse.
+    // to bravo, so the conference checks pass and the org check must refuse.
     sqlite.exec(
-      "UPDATE conferences SET org_id = 'organization.beta', slug = 'moved' WHERE id = 'conference-acme'",
+      "UPDATE conferences SET org_id = 'organization.bravo', slug = 'moved' WHERE id = 'conference-acme'",
     )
     const { body } = await gql(
       PROVISION,
-      vars('beta', 'same', { conf: 'conference-acme' }),
+      vars('bravo', 'same', { conf: 'conference-acme' }),
       operator,
     )
     expect(body.errors[0].extensions.code).toBe('CONFLICT')
@@ -813,7 +822,7 @@ describe('anonymous resolution', () => {
 describe('custom domains', () => {
   it('enforces one routing claim per hostname', async () => {
     const a = await provision('acme', 'k1')
-    const b = await provision('beta', 'k2')
+    const b = await provision('bravo', 'k2')
     hostnames.create.mockResolvedValue({ id: 'cf1', verification: 'pending' })
     const add = `mutation($c: ID!) { addCustomDomain(conferenceId: $c, hostname: "conf.example.org") { hostname } }`
     expect(
@@ -1015,7 +1024,7 @@ describe('rollout flags (#1925)', () => {
 
   it("returns the host's own conference flags, never another's", async () => {
     const a = await provision('acme', 'ka')
-    const b = await provision('beta', 'kb')
+    const b = await provision('bravo', 'kb')
     sqlite
       .prepare(
         'UPDATE conferences SET api_read = 1, d1_override = 1 WHERE id = ?',
@@ -1027,7 +1036,7 @@ describe('rollout flags (#1925)', () => {
       conferenceId: conferenceOf(a.id),
       flags: { ...off, apiRead: true, d1Override: true },
     })
-    expect(await got('beta.konf.run')).toEqual({
+    expect(await got('bravo.konf.run')).toEqual({
       conferenceId: conferenceOf(b.id),
       flags: off,
     })
@@ -1040,11 +1049,12 @@ describe('rollout flags (#1925)', () => {
     expect(mutation).not.toMatch(
       /apiRead|identityLogin|d1Write|d1Override|flags/i,
     )
-    // The only input types are the two provisioning ones; neither has a flag.
+    // The only input types are provisioning and sign-up; none has a flag.
     const inputs = sdl.match(/^input [^}]*}/gm) ?? []
     expect(inputs.map((i) => i.split(' ')[1]).sort()).toEqual([
       'CreateOrganizationInput',
       'ProvisionConferenceInput',
+      'SignupOrganizationInput',
     ])
     for (const i of inputs)
       expect(i).not.toMatch(/apiRead|identityLogin|d1Write|d1Override|flags/i)
@@ -1162,7 +1172,7 @@ describe('lifecycle override (#1997)', () => {
     const { body } = await gql(
       SET,
       { s: 'cancelled' },
-      { ...as, orgId: 'organization.beta' },
+      { ...as, orgId: 'organization.bravo' },
     )
     expect(body.data.setConferenceLifecycle).toBeNull()
     expect(lifecycle(confId)).toBe('live')
@@ -1260,7 +1270,7 @@ describe('primaryHost (#1977)', () => {
 
   it('reads domains once for a whole operator page, across orgs', async () => {
     await provision('acme')
-    await provision('beta', 'k2')
+    await provision('bravo', 'k2')
     const prepare = vi.spyOn(env.DB, 'prepare')
     const { body } = await gql(
       '{ conferences { id edition { primaryHost } } }',
@@ -1272,7 +1282,7 @@ describe('primaryHost (#1977)', () => {
       body.data.conferences.map(
         (c: { edition: { primaryHost: string } }) => c.edition.primaryHost,
       ),
-    ).toEqual(['acme-2026.konf.run', 'beta-2026.konf.run'])
+    ).toEqual(['acme-2026.konf.run', 'bravo-2026.konf.run'])
     expect(domainReads(prepare)).toBe(1)
   })
 
@@ -1571,7 +1581,7 @@ describe('provisionConference (kontroll#85)', () => {
 
   beforeEach(async () => {
     await provision('acme')
-    await provision('beta', 'k2')
+    await provision('bravo', 'k2')
     sanityFetch.mockClear()
   })
 
@@ -1665,19 +1675,19 @@ describe('provisionConference (kontroll#85)', () => {
       operator,
       {},
       'edition-key-00001',
-      'organization.beta',
+      'organization.bravo',
     )
     expect(body.data.provisionConference).toEqual({
       conferenceId: 'conference-e0',
     })
     expect(editionRows()).toEqual([
-      expect.objectContaining({ org_id: 'organization.beta' }),
+      expect.objectContaining({ org_id: 'organization.bravo' }),
     ])
     expect(site.operators).toEqual(['op'])
   })
 
   it('copyFrom of another org, or of no edition, is COPY_FROM_NOT_IN_ORG before the site is called', async () => {
-    for (const copyFrom of ['conference-beta', 'conference-nope']) {
+    for (const copyFrom of ['conference-bravo', 'conference-nope']) {
       const { body } = await pc(owner, { copyFrom })
       expect(reasonOf(body)).toMatchObject({
         code: 'BAD_USER_INPUT',
@@ -1707,7 +1717,7 @@ describe('provisionConference (kontroll#85)', () => {
     })
     // The same key for another org is refused from the D1 receipt alone.
     sanityFetch.mockClear()
-    const d = await pc(operator, {}, 'edition-key-00001', 'organization.beta')
+    const d = await pc(operator, {}, 'edition-key-00001', 'organization.bravo')
     expect(reasonOf(d.body)).toMatchObject({
       reason: 'IDEMPOTENCY_KEY_REUSED',
     })
@@ -1723,7 +1733,7 @@ describe('provisionConference (kontroll#85)', () => {
 
   it('a domain held in D1 or Sanity is DOMAIN_TAKEN with nothing created', async () => {
     sqlite.exec(
-      "INSERT INTO domains (hostname, kind, org_id, conference_id, verification) VALUES ('d1.example.com', 'custom', 'organization.beta', 'conference-beta', 'pending')",
+      "INSERT INTO domains (hostname, kind, org_id, conference_id, verification) VALUES ('d1.example.com', 'custom', 'organization.bravo', 'conference-bravo', 'pending')",
     )
     const paid = { ...owner, plan: 'basic' } as Envelope
     const d1 = await pc(paid, { domain: 'd1.example.com' })
@@ -1732,7 +1742,7 @@ describe('provisionConference (kontroll#85)', () => {
       field: 'domain',
     })
     expect(sanityFetch).not.toHaveBeenCalled()
-    const inSanity = await pc(paid, { domain: 'conf.beta.org' })
+    const inSanity = await pc(paid, { domain: 'conf.bravo.org' })
     expect(reasonOf(inSanity.body)).toMatchObject({
       reason: 'DOMAIN_TAKEN',
       field: 'domain',
@@ -2265,7 +2275,7 @@ describe('org kind (#2150)', () => {
 
   it('carries kind on the operator org list and conference rows, so Kontroll can leave demo out', async () => {
     const { id } = await provision('acme')
-    await provision('beta', 'k2')
+    await provision('bravo', 'k2')
     demo(id)
     const { body } = await gql(
       '{ organizations { slug kind effectivePlan } conferences { organization { slug kind } } }',
@@ -2274,7 +2284,7 @@ describe('org kind (#2150)', () => {
     )
     expect(body.data.organizations).toEqual([
       { slug: 'acme', kind: 'demo', effectivePlan: 'pro' },
-      { slug: 'beta', kind: 'customer', effectivePlan: 'free' },
+      { slug: 'bravo', kind: 'customer', effectivePlan: 'free' },
     ])
     expect(
       body.data.conferences.map(
@@ -2282,7 +2292,7 @@ describe('org kind (#2150)', () => {
       ),
     ).toEqual([
       { slug: 'acme', kind: 'demo' },
-      { slug: 'beta', kind: 'customer' },
+      { slug: 'bravo', kind: 'customer' },
     ])
   })
 
@@ -2308,5 +2318,227 @@ describe('org kind (#2150)', () => {
     expect((await gql(Q, r, as())).body.data._entities).toEqual([
       { orgKind: 'customer' },
     ])
+  })
+})
+
+describe('billing and sign-up contract (#2129)', () => {
+  const ORG = `{ organization { billing { plan effectivePlan planSource subscriptionStatus currentPeriodEnd cancelAtPeriodEnd compUntil graceUntil } } }`
+  const CHECKOUT = `mutation { startCheckout(plan: PRO, currency: NOK) { url } }`
+  const PORTAL = `mutation { openBillingPortal { url } }`
+  const SIGNUP = `mutation($slug: String!) { signUpOrganization(input: { name: "Acme", slug: $slug }, inviteCode: "c") { host } }`
+  const CREATE_CODE = `mutation($exp: String!) { createSignupCode(note: "n", maxUses: 2, expiresAt: $exp) { id code uses maxUses } }`
+  const CODES = `{ signupCodes { id note uses } }`
+  const REVOKE = `mutation { revokeSignupCode(id: "x") { id } }`
+  const FUTURE = '2099-01-01T00:00:00.000Z'
+  const as = (orgId: string, orgRole: string, over: object = {}): Envelope => ({
+    typ: 'tenant',
+    orgId,
+    conferenceId: null,
+    userId: 'u',
+    orgRole,
+    scopes: [],
+    ...over,
+  })
+  const code = (body: { errors?: { extensions: { code: string } }[] }) =>
+    body.errors?.[0]?.extensions.code
+  /** Counts D1 statements: a refusal before any read prepares none. */
+  const watchDb = () => vi.spyOn(env.DB, 'prepare')
+
+  describe('authz before fetch', () => {
+    const user: Envelope = { typ: 'user', userId: 'u' }
+    it.each([
+      ['startCheckout as admin', CHECKOUT, as('org', 'admin')],
+      ['startCheckout as member', CHECKOUT, as('org', 'member')],
+      [
+        'startCheckout as operator acting',
+        CHECKOUT,
+        as('org', 'member', { scopes: ['platform:operator'] }),
+      ],
+      ['startCheckout as user', CHECKOUT, user],
+      ['openBillingPortal as admin', PORTAL, as('org', 'admin')],
+      ['openBillingPortal anonymous', PORTAL, undefined],
+      ['signUpOrganization on a tenant', SIGNUP, as('org', 'owner')],
+      ['signUpOrganization anonymous', SIGNUP, undefined],
+      ['createSignupCode as user', CREATE_CODE, user],
+      ['createSignupCode as owner', CREATE_CODE, as('org', 'owner')],
+      ['signupCodes as user', CODES, user],
+      ['revokeSignupCode as owner', REVOKE, as('org', 'owner')],
+    ])('%s: FORBIDDEN, no D1 read', async (_, q, env_) => {
+      const spy = watchDb()
+      const { body } = await gql(q, { slug: 'acme-new', exp: FUTURE }, env_)
+      expect(code(body)).toBe('FORBIDDEN')
+      expect(spy).not.toHaveBeenCalled()
+    })
+
+    it('openBillingPortal as owner reaches NOT_IMPLEMENTED', async () => {
+      expect(code((await gql(PORTAL, {}, as('org', 'owner'))).body)).toBe(
+        'NOT_IMPLEMENTED',
+      )
+    })
+  })
+
+  describe('Organization.billing', () => {
+    async function org() {
+      const { id } = await provision()
+      sqlite
+        .prepare(
+          `UPDATE organizations SET plan = 'basic', plan_source = 'stripe',
+             subscription_status = 'past_due', current_period_end = ?,
+             cancel_at_period_end = 1 WHERE id = ?`,
+        )
+        .run('2099-03-01T00:00:00.000Z', id)
+      return id
+    }
+
+    it.each(['owner', 'admin'])(
+      'gives a %s the values and graceUntil',
+      async (role) => {
+        const id = await org()
+        const { body } = await gql(ORG, {}, as(id, role))
+        expect(body.data.organization.billing).toEqual({
+          plan: 'basic',
+          effectivePlan: 'basic',
+          planSource: 'stripe',
+          subscriptionStatus: 'past_due',
+          currentPeriodEnd: '2099-03-01T00:00:00.000Z',
+          cancelAtPeriodEnd: true,
+          compUntil: null,
+          graceUntil: '2099-03-15T00:00:00.000Z',
+        })
+      },
+    )
+
+    it('is null for a member', async () => {
+      const id = await org()
+      const { body } = await gql(ORG, {}, as(id, 'member'))
+      expect(body.data.organization).toEqual({ billing: null })
+    })
+
+    it('has no graceUntil when active', async () => {
+      const id = await org()
+      sqlite.exec(
+        `UPDATE organizations SET subscription_status = 'active' WHERE id = '${id}'`,
+      )
+      const { body } = await gql(ORG, {}, as(id, 'owner'))
+      expect(body.data.organization.billing.graceUntil).toBeNull()
+    })
+  })
+
+  describe('startCheckout refusals', () => {
+    it('refuses a demo org from the envelope, before any read', async () => {
+      const spy = watchDb()
+      const { body } = await gql(
+        CHECKOUT,
+        {},
+        as('org', 'owner', { orgKind: 'demo' }),
+      )
+      expect(body.errors[0].extensions).toMatchObject({
+        code: 'BAD_USER_INPUT',
+        reason: 'INVALID_INPUT',
+        field: 'organization',
+      })
+      expect(spy).not.toHaveBeenCalled()
+    })
+
+    it('refuses an active comp, passes an expired one to NOT_IMPLEMENTED', async () => {
+      const { id } = await provision()
+      sqlite.exec(
+        `UPDATE organizations SET plan = 'pro', plan_source = 'comp', comp_until = NULL WHERE id = '${id}'`,
+      )
+      let { body } = await gql(CHECKOUT, {}, as(id, 'owner'))
+      expect(body.errors[0].extensions).toMatchObject({
+        code: 'BAD_USER_INPUT',
+        reason: 'INVALID_INPUT',
+      })
+      sqlite.exec(
+        `UPDATE organizations SET comp_until = '2000-01-01T00:00:00Z' WHERE id = '${id}'`,
+      )
+      ;({ body } = await gql(CHECKOUT, {}, as(id, 'owner')))
+      expect(code(body)).toBe('NOT_IMPLEMENTED')
+    })
+  })
+
+  describe('sign-up slug', () => {
+    const user: Envelope = { typ: 'user', userId: 'u' }
+    const field = async (slug: string) => {
+      const { body } = await gql(SIGNUP, { slug }, user)
+      return body.errors[0]
+    }
+    it.each(['ab', 'a'.repeat(41), 'Acme', 'ac_me', '-acme', 'acme-', 'æøå'])(
+      'refuses format %s',
+      async (slug) => {
+        expect((await field(slug)).extensions).toMatchObject({
+          code: 'BAD_USER_INPUT',
+          reason: 'INVALID_INPUT',
+          field: 'slug',
+        })
+      },
+    )
+    it('gives reserved and taken the same message', async () => {
+      await provision('acme')
+      sqlite.exec(
+        `INSERT INTO domains (hostname, org_id, conference_id, kind, verification) SELECT 'hosted.konf.app', org_id, id, 'custom', 'verified' FROM conferences LIMIT 1`,
+      )
+      const msgs = await Promise.all(
+        ['auth', 'kontroll', 'acme', 'hosted'].map(field),
+      )
+      for (const m of msgs)
+        expect(m).toMatchObject({
+          message: 'this slug is not available',
+          extensions: { field: 'slug' },
+        })
+    })
+    it('passes a free slug to NOT_IMPLEMENTED', async () => {
+      expect((await field('new-org')).extensions.code).toBe('NOT_IMPLEMENTED')
+    })
+  })
+
+  describe('signup codes', () => {
+    it('stores only the hash and returns the code once', async () => {
+      const { body } = await gql(CREATE_CODE, { exp: FUTURE }, operator)
+      const created = body.data.createSignupCode
+      expect(created).toMatchObject({ uses: 0, maxUses: 2 })
+      expect(created.code).toMatch(/^[a-z0-9-]{20,}$/)
+      const row = sqlite.prepare('SELECT * FROM signup_codes').get() as Record<
+        string,
+        unknown
+      >
+      expect(row.code_hash).toBe(await hashSignupCode(created.code))
+      expect(JSON.stringify(row)).not.toContain(created.code)
+      const list = await gql(`{ signupCodes { id code } }`, {}, operator)
+      expect(list.body.data.signupCodes).toEqual([
+        { id: created.id, code: null },
+      ])
+    })
+
+    it('refuses a past expiresAt', async () => {
+      const { body } = await gql(
+        CREATE_CODE,
+        { exp: '2000-01-01T00:00:00Z' },
+        operator,
+      )
+      expect(body.errors[0].extensions.field).toBe('expiresAt')
+    })
+
+    it('spends uses up to maxUses, never past expiry or revocation', async () => {
+      const data = createData(env)
+      const c = await data.createSignupCode('op', 'n', 2, FUTURE)
+      expect(await data.consumeSignupCode('wrong')).toBe(false)
+      expect(await data.consumeSignupCode(c.code)).toBe(true)
+      expect(await data.consumeSignupCode(c.code)).toBe(true)
+      expect(await data.consumeSignupCode(c.code)).toBe(false)
+      const e = await data.createSignupCode('op', 'n', 5, FUTURE)
+      expect(await data.consumeSignupCode(e.code, new Date('2100-01-01'))).toBe(
+        false,
+      )
+      const r = await data.createSignupCode('op', 'n', 5, FUTURE)
+      const { body } = await gql(
+        `mutation($id: ID!) { revokeSignupCode(id: $id) { revokedAt } }`,
+        { id: r.id },
+        operator,
+      )
+      expect(body.data.revokeSignupCode.revokedAt).toBeTruthy()
+      expect(await data.consumeSignupCode(r.code)).toBe(false)
+    })
   })
 })

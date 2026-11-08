@@ -80,6 +80,8 @@
 
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
 import type { DomainVerificationRecord } from './types'
+// The one reserved list, shared with tenant-directory (#2129).
+import { RESERVED_SLUGS as RESERVED_PLATFORM_LABELS } from '../../../packages/tenancy/src/reserved'
 
 /**
  * BAD_REQUEST prefix for a claim on a host in the platform's zone that the
@@ -170,96 +172,6 @@ export function isPlatformZoneHost(
  * long one would otherwise mint a hostname that resolves nowhere.
  */
 const DNS_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
-
-/**
- * Labels the platform keeps for ITSELF, refused as a minted tenant address.
- *
- * Cheap to add now and impossible to add later: the claim is globally unique
- * and permanent, so the first tenant slugged `api` or `auth` would take
- * `api.<suffix>` off the platform for good — including the one host the central
- * auth origin (#688) is going to want. The list covers the conventional
- * infrastructure names (RFC 2142 mailbox names, the usual www/api/cdn shape),
- * the platform's own product surfaces and the environment names a deploy would
- * plausibly use.
- */
-const RESERVED_PLATFORM_LABELS = new Set([
-  // infrastructure / conventional hostnames
-  'www',
-  'api',
-  'cdn',
-  'static',
-  'assets',
-  'media',
-  'img',
-  'images',
-  'files',
-  'mail',
-  'email',
-  'smtp',
-  'imap',
-  'mx',
-  'ns',
-  'ns1',
-  'ns2',
-  'dns',
-  'ftp',
-  'vpn',
-  'proxy',
-  'edge',
-  'origin',
-  // platform surfaces
-  'admin',
-  'auth',
-  'login',
-  'signin',
-  'signup',
-  'account',
-  'accounts',
-  'app',
-  'apps',
-  'my',
-  'dashboard',
-  'console',
-  'status',
-  'health',
-  'billing',
-  'pay',
-  'payments',
-  'checkout',
-  'docs',
-  'doc',
-  'blog',
-  'help',
-  'support',
-  'kb',
-  'go',
-  'link',
-  // brand / operations
-  'konf',
-  'runkonf',
-  'platform',
-  'internal',
-  'security',
-  'abuse',
-  'postmaster',
-  'webmaster',
-  'hostmaster',
-  'noreply',
-  'no-reply',
-  'root',
-  // environments
-  'dev',
-  'test',
-  'stage',
-  'staging',
-  'preview',
-  'demo',
-  'sandbox',
-  'beta',
-  'alpha',
-  'local',
-  'localhost',
-])
 
 /**
  * Why hosts could NOT be minted. The callers report these differently — a

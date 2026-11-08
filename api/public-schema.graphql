@@ -304,10 +304,25 @@ type Mutation {
   createOrganization(idempotencyKey: String!, input: CreateOrganizationInput!): CreatedOrganization
 
   """
+  Creates a sign-up invite code (#2129), valid until `expiresAt` (ISO 8601, in the future). The code is in this result only; just its hash is stored. Platform operators only (operator lane, no tenant).
+  """
+  createSignupCode(expiresAt: String!, maxUses: Int!, note: String!): SignupCode
+
+  """
+  Opens the Stripe billing portal for the envelope's org (#2129). Org owner only.
+  """
+  openBillingPortal: BillingPortalSession
+
+  """
   Creates a new conference edition (draft) in an Organization: the Sanity document (through the site) and the directory row. Org owner or admin on the tenant lane, for the envelope's org; or a platform operator (operator lane, no tenant) naming `orgId`, which no other caller may pass. Retrying with the same idempotencyKey returns the same id.
   """
   provisionConference(idempotencyKey: String!, input: ProvisionConferenceInput!, orgId: ID): ProvisionedConference
   provisionOrganization(conferenceId: ID!, idempotencyKey: String!, orgId: ID!, orgSlug: String!): Organization
+
+  """
+  Revokes a sign-up invite code; null for an unknown id. Platform operators only (operator lane, no tenant).
+  """
+  revokeSignupCode(id: ID!): SignupCode
 
   """
   Grants an Organization a plan without Stripe (#2129), until `until` (ISO 8601; omitted means no end), or ends a grant with `free`. Platform operators only (operator lane, no tenant); audited. Null for an unknown org.
@@ -318,6 +333,16 @@ type Mutation {
   Sets the request's Conference homepage override, or clears it with null (back to `live`; a draft stays draft). Org owner or admin, or an operator acting for the org (#1997).
   """
   setConferenceLifecycle(status: ConferenceLifecycleOverride): ConferenceEdition
+
+  """
+  Self-serve sign-up in closed preview (#2129): creates an Organization (free, kind customer) with the caller as owner, its first draft edition and the host <slug>.konf.app, and spends one use of `inviteCode`. Any signed-in user, on a session with no tenant.
+  """
+  signUpOrganization(input: SignupOrganizationInput!, inviteCode: String!): SignupResult
+
+  """
+  Starts a Stripe Checkout session for a yearly plan for the envelope's org (#2129, docs/BILLING.md). Org owner only. Refused for a demo org and an org on an active complimentary plan.
+  """
+  startCheckout(currency: Currency!, plan: PaidPlan!): CheckoutSession
 }
 
 """
@@ -544,6 +569,11 @@ type Query {
   Every Organization, ordered by slug. Platform operators only (operator lane, no tenant). At most 100 per page: pass the last slug as `after` for the next.
   """
   organizations(after: String, first: Int = 100): [Organization!]
+
+  """
+  Every sign-up invite code, newest first, without the code itself. Platform operators only (operator lane, no tenant).
+  """
+  signupCodes: [SignupCode!]
   health: String!
   rolloutFlags: SiteRolloutFlags
 }
@@ -805,6 +835,11 @@ type Organization {
   Pending, unexpired invitations. Platform operators only (operator lane); null otherwise.
   """
   pendingInviteCount: Int
+
+  """
+  The org's billing state (#2129). Owners and admins of this org on the tenant lane, or an operator acting for it; null for everyone else.
+  """
+  billing: Billing
   createdAt: String
   domains: [Domain!]
 
@@ -1079,6 +1114,43 @@ type Sponsorship {
   tier: SponsorTier
 }
 
+type Billing {
+  cancelAtPeriodEnd: Boolean
+
+  """ISO 8601; null for no end or no grant."""
+  compUntil: String
+
+  """ISO 8601."""
+  currentPeriodEnd: String
+
+  """The plan the platform enforces now."""
+  effectivePlan: String
+
+  """
+  While `past_due`: when the org drops to free (read-only), current_period_end + 14 days. ISO 8601; null otherwise.
+  """
+  graceUntil: String
+
+  """The stored plan: `free`, `basic` or `pro`."""
+  plan: String
+
+  """`stripe`, `comp` or `default`."""
+  planSource: String
+
+  """
+  `active`, `past_due`, `canceled` or `incomplete`; null without a subscription.
+  """
+  subscriptionStatus: String
+}
+
+type BillingPortalSession {
+  url: String
+}
+
+type CheckoutSession {
+  url: String
+}
+
 type CreatedOrganization {
   conferenceId: ID
   organizationId: ID
@@ -1121,6 +1193,29 @@ type RolloutFlags {
   d1Override: Boolean
   d1Write: Boolean
   identityLogin: Boolean
+}
+
+type SignupCode {
+  """
+  The plain code: only in the createSignupCode result, never stored or shown again.
+  """
+  code: String
+  createdAt: String
+  createdBy: ID
+  expiresAt: String
+  id: ID
+  maxUses: Int
+  note: String
+  revokedAt: String
+  uses: Int
+}
+
+type SignupResult {
+  conference: ConferenceEdition
+
+  """The closed-preview host, <slug>.konf.app."""
+  host: String
+  organization: Organization
 }
 
 interface HomepageSection {
@@ -1201,10 +1296,21 @@ enum ConferenceLifecycleOverride {
   cancelled
 }
 
+enum Currency {
+  EUR
+  NOK
+  USD
+}
+
 enum Plan {
   basic
   free
   pro
+}
+
+enum PaidPlan {
+  BASIC
+  PRO
 }
 
 enum RolloutFlag {
@@ -1419,6 +1525,13 @@ input ProvisionConferenceInput {
   """YYYY-MM-DD"""
   startDate: String!
   title: String!
+}
+
+input SignupOrganizationInput {
+  name: String!
+
+  """Lowercase a-z, 0-9 and -, 3 to 40 characters; becomes <slug>.konf.app."""
+  slug: String!
 }
 
 type SiteRolloutFlags {

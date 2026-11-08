@@ -161,6 +161,8 @@ function value(
   if (table === 'organizations' && n === 'plan') return 'free'
   // Likewise 0010 for organizations.kind (#2150).
   if (table === 'organizations' && n === 'kind') return 'customer'
+  // 0011: a signup code needs at least one use (CHECK max_uses > 0).
+  if (table === 'signup_codes' && n === 'max_uses') return 1
   if (/INT|REAL|FLOA|DOUB/i.test(col.type)) return 0
   const text = `${tag(t)} ${table}.${n}`
   // A JSON id list holds numbers (conference 0007 public_free_ticket_ids).
@@ -1040,6 +1042,15 @@ describe('cross-tenant mutation walk', () => {
           (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions
             ?.code,
         )
+      // Billing and sign-up (#2129): the admin organizer is no owner, and
+      // sign-up needs a session with no tenant.
+      else if (
+        /"(startCheckout|openBillingPortal|signUpOrganization)"/.test(json)
+      )
+        expect(
+          (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions
+            ?.code,
+        ).toBe('FORBIDDEN')
       // A speaker's own proposals (#2078): the organizer has no Sanity
       // speaker and the CFP has no dates, so nothing is written.
       else if (

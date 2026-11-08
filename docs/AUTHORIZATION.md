@@ -328,10 +328,19 @@ before acceptance; "Site" = `site:server` with no user token.
 | api_client.revoke                     | Y   | Y   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
 | pat.manage_own (self-service)         | N   | Y   | Y   | Y   | N   | N                   | N   | N   | N   | N   | N    |
 | user.revoke_all                       | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| billing.read (#2129)                  | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| billing.manage (checkout, portal)     | N   | Y   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| signup.create_org (user lane)         | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| signup.manage_codes                   | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
 | reminder_lock (C4)                    | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | Y    |
 
 API clients and PATs (`api_client.*`, `pat.manage_own`): see `docs/API_CLIENTS.md`.
 They are never client-callable.
+
+Billing and sign-up (`billing.*`, `signup.*`): see `docs/BILLING.md`. `signup.create_org`
+is the user lane: any signed-in user on a session with no tenant (a UserContext, which
+holds no column, or an operator's PlatformContext) with a valid invite code. No org role
+is involved, so the resolver checks the envelope type, not `can()`.
 
 Operator is N on reviewing and editing proposals by default: operators act for a tenant
 for support, not as a juror. Operator access is only on the operator lane and is audited.

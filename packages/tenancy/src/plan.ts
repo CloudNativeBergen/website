@@ -97,3 +97,17 @@ export function requirePlan(plan: unknown, gate: PlanGate): void {
     },
   })
 }
+
+/**
+ * When a `past_due` stripe subscription drops to free (read-only): the end of
+ * the grace that effectivePlan allows, current_period_end + GRACE_DAYS.
+ * ISO 8601; null in every other state.
+ */
+export function graceUntil(r: BillingRow): string | null {
+  if (r.planSource !== 'stripe' || r.subscriptionStatus !== 'past_due')
+    return null
+  const t = r.currentPeriodEnd ? Date.parse(r.currentPeriodEnd) : NaN
+  return Number.isNaN(t)
+    ? null
+    : new Date(t + GRACE_DAYS * DAY_MS).toISOString()
+}
