@@ -31,7 +31,7 @@ function deps(kind: string | null) {
     api: {
       request: vi.fn(async () => ({
         organization: kind === null ? null : { id: 'org-1', kind },
-      })),
+      })) as unknown as Deps['api']['request'],
     },
     createSanityClient: vi.fn(async () => client),
     loadSeedDemoD1: vi.fn(async () => undefined),
