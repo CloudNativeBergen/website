@@ -206,6 +206,37 @@ const Organization = builder.objectRef<OrgRow>('Organization').implement({
   }),
 })
 
+// An entity so identity can add memberCount and pendingInviteCount (#2142).
+// Never resolved by reference here: an Organization only reaches identity
+// from a field of this subgraph, and identity gates its own fields.
+builder.asEntity(Organization, {
+  key: builder.selection<{ id: string }>('id'),
+  resolveReference: () => null,
+})
+
+// Per-conference counts for the operator lane (#2142). An entity keyed by the
+// conference id: cfp, program and sponsors each add their own count, gated on
+// a PlatformContext. Integers only: no PII, no ids beyond the key.
+const OperatorConferenceStats = builder
+  .objectRef<{ conferenceId: string }>('OperatorConferenceStats')
+  .implement({
+    fields: (t) => ({
+      conferenceId: t.exposeID('conferenceId'),
+      ticketsSold: t.int({
+        nullable: true,
+        tag: 'operator',
+        description:
+          'Always null for now: tickets sold live in the external ticketing provider, which only the site reads (src/lib/tickets). No subgraph has a server-side source yet.',
+        resolve: () => null,
+      }),
+    }),
+  })
+
+builder.asEntity(OperatorConferenceStats, {
+  key: builder.selection<{ conferenceId: string }>('conferenceId'),
+  resolveReference: () => null,
+})
+
 const Lifecycle = builder.enumType('ConferenceLifecycle', {
   values: ['draft', 'live', 'cancelled', 'archived'] as const,
 })
@@ -231,6 +262,13 @@ const OperatorConference = builder
       edition: t.field({
         type: ConferenceEdition,
         resolve: ({ conf }) => conf,
+      }),
+      stats: t.field({
+        type: OperatorConferenceStats,
+        tag: 'operator',
+        description:
+          'Counts for this conference (#2142): proposals, confirmed speakers, sponsors, tickets sold. Platform operators only.',
+        resolve: ({ conf }) => ({ conferenceId: conf.id }),
       }),
     }),
   })

@@ -5,7 +5,11 @@
 // Sanity, the data does not move).
 import { createClient } from '@sanity/client'
 import { createGraphQLError } from 'graphql-yoga'
-import { ScopedRepository, type Envelope } from '@runkonf/tenancy'
+import {
+  ScopedRepository,
+  platformBatch,
+  type Envelope,
+} from '@runkonf/tenancy'
 import { SanityCfpSource, type CfpSource, type DataEnv } from './source'
 import {
   MyProposals,
@@ -145,23 +149,51 @@ class Mine extends ScopedRepository {
 }
 type Who = { orgId: string; conferenceId: string; speakerId: string }
 
+// groq-global-scoped: operator lane only (platformBatch refuses anything but a
+// PlatformContext); bounded to the page's conference ids, statuses only.
+export const PROPOSAL_STATUSES = `*[_type == "conference" && _id in $ids]{ _id, "s": *[_type == "talk" && conference._ref == ^._id].status }`
+
+/** Proposal counts per conference, every status included (#2142). */
+export type ProposalCounts = { total: number; byStatus: Map<string, number> }
+
 export function createData(env: DataEnv, envelope: Envelope) {
-  const source = new SanityCfpSource(
-    createClient({
-      projectId: env.SANITY_PROJECT_ID,
-      dataset: env.SANITY_DATASET,
-      apiVersion: '2023-05-03',
-      useCdn: true,
-      // The dataset is private: no token reads nothing.
-      token: env.SANITY_API_TOKEN_READ,
-      requestTagPrefix: 'cfp.read',
-    }),
-  )
+  const client = createClient({
+    projectId: env.SANITY_PROJECT_ID,
+    dataset: env.SANITY_DATASET,
+    apiVersion: '2023-05-03',
+    useCdn: true,
+    // The dataset is private: no token reads nothing.
+    token: env.SANITY_API_TOKEN_READ,
+    requestTagPrefix: 'cfp.read',
+  })
+  const source = new SanityCfpSource(client)
   // Built on first use: the constructor refuses a PlatformContext, and that
   // should fail the resolver, not the whole request.
   let cfps: Cfps | undefined
   let mine: Mine | undefined
+  const proposalCounts = platformBatch<ProposalCounts>(
+    envelope,
+    'operator conference stats: proposals (#2142)',
+    async (ids) => {
+      const rows = await client.fetch<{ _id: string; s: unknown }[]>(
+        PROPOSAL_STATUSES,
+        { ids },
+      )
+      return new Map(
+        (rows ?? []).map((r) => {
+          const s = Array.isArray(r.s) ? r.s : []
+          const byStatus = new Map<string, number>()
+          for (const x of s) {
+            const k = typeof x === 'string' ? x : 'unknown'
+            byStatus.set(k, (byStatus.get(k) ?? 0) + 1)
+          }
+          return [r._id, { total: s.length, byStatus }]
+        }),
+      )
+    },
+  )
   return {
+    proposalCounts,
     cfp: () => (cfps ??= new Cfps(source, envelope)),
     mine: () =>
       (mine ??= (() => {

@@ -5,7 +5,11 @@
 // Sanity, the data does not move). A D1 source implements the same interface
 // later; the schema only sees the plain types below.
 import { createClient } from '@sanity/client'
-import { ScopedRepository, type Envelope } from '@runkonf/tenancy'
+import {
+  ScopedRepository,
+  platformBatch,
+  type Envelope,
+} from '@runkonf/tenancy'
 import {
   SanitySponsorSource,
   type DataEnv,
@@ -39,22 +43,38 @@ class Sponsors extends ScopedRepository {
   }
 }
 
+// groq-global-scoped: operator lane only (platformBatch refuses anything but a
+// PlatformContext); bounded to the page's conference ids, a count only.
+export const SPONSOR_COUNTS = `*[_type == "conference" && _id in $ids]{ _id, "n": count(*[_type == "sponsorForConference" && conference._ref == ^._id && status == "closed-won"]) }`
+
 export function createData(env: DataEnv, envelope: Envelope) {
-  const source = new SanitySponsorSource(
-    createClient({
-      projectId: env.SANITY_PROJECT_ID,
-      dataset: env.SANITY_DATASET,
-      apiVersion: '2023-05-03',
-      useCdn: true,
-      // The dataset is private: no token reads nothing.
-      token: env.SANITY_API_TOKEN_READ,
-      requestTagPrefix: 'sponsors.read',
-    }),
-  )
+  const client = createClient({
+    projectId: env.SANITY_PROJECT_ID,
+    dataset: env.SANITY_DATASET,
+    apiVersion: '2023-05-03',
+    useCdn: true,
+    // The dataset is private: no token reads nothing.
+    token: env.SANITY_API_TOKEN_READ,
+    requestTagPrefix: 'sponsors.read',
+  })
+  const source = new SanitySponsorSource(client)
   // Built on first use: the constructor refuses a PlatformContext, and that
   // should fail the resolver, not the whole request.
   let sponsors: Sponsors | undefined
+  // Closed-won sponsorships, tiered or not (#2142).
+  const sponsorCount = platformBatch<number>(
+    envelope,
+    'operator conference stats: sponsors (#2142)',
+    async (ids) => {
+      const rows = await client.fetch<{ _id: string; n: number }[]>(
+        SPONSOR_COUNTS,
+        { ids },
+      )
+      return new Map((rows ?? []).map((r) => [r._id, r.n]))
+    },
+  )
   return {
+    sponsorCount,
     sponsors: () => (sponsors ??= new Sponsors(source, envelope)),
   }
 }
