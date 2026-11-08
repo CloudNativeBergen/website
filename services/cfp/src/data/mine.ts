@@ -564,7 +564,14 @@ export class MyProposals {
     private readonly sanity: Writer,
     private readonly window: () => Promise<CfpWindow | null>,
     private readonly now: () => Date = () => new Date(),
+    /** False until the Worker has SANITY_API_TOKEN_WRITE: reads work, writes refuse. */
+    private readonly writable = true,
   ) {}
+
+  private assertWritable() {
+    if (!this.writable)
+      no('SERVICE_UNAVAILABLE', 'Proposal changes are not enabled yet')
+  }
 
   private async load(w: Who, id: string) {
     const r = await this.sanity.fetch<Row | null>(ONE, { ...w, id })
@@ -585,6 +592,7 @@ export class MyProposals {
   }
 
   async submit(w: Who, raw: ProposalFields, link: SpeakerLink) {
+    this.assertWritable()
     const input = withDescription(raw)
     const win = await this.window()
     if (!cfpOpen(win, this.now()))
@@ -627,6 +635,7 @@ export class MyProposals {
   }
 
   async update(w: Who, id: string, raw: ProposalFields) {
+    this.assertWritable()
     const input = withDescription(raw)
     const cur = await this.load(w, id)
     const now = this.now()
@@ -685,6 +694,7 @@ export class MyProposals {
   }
 
   async withdraw(w: Who, id: string, reason: string) {
+    this.assertWritable()
     const why = reason.trim()
     // The site requires a reason (#212, requireWithdrawalReason).
     if (!why)

@@ -12,7 +12,9 @@ package codegen
 service: #PlatformService & {
 	name: "cfp"
 	secrets: {
-		required: ["GATEWAY_PUBLIC_KEY", "SANITY_API_TOKEN_READ", "SANITY_API_TOKEN_WRITE"]
+		required: ["GATEWAY_PUBLIC_KEY", "SANITY_API_TOKEN_READ"]
+		// Optional until speaker writes go live: without it, writes refuse.
+		optional: ["SANITY_API_TOKEN_WRITE"]
 	}
 	db: false
 	// Preview never reads production data (epic #1772, req. 8).

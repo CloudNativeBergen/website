@@ -172,7 +172,8 @@ export function createData(env: DataEnv, envelope: Envelope) {
           dataset: env.SANITY_DATASET,
           apiVersion: '2023-05-03',
           useCdn: false,
-          token: env.SANITY_API_TOKEN_WRITE,
+          // Reads fall back to the read token until the write token is set.
+          token: env.SANITY_API_TOKEN_WRITE || env.SANITY_API_TOKEN_READ,
           requestTagPrefix: 'cfp.mine',
         })
         const t = envelope.typ === 'tenant' ? envelope : null
@@ -182,7 +183,12 @@ export function createData(env: DataEnv, envelope: Envelope) {
             ? env.CONFERENCE.cfpWindow(t.orgId, t.conferenceId)
             : Promise.resolve(null))
         return new Mine(
-          new MyProposals(sanity, window),
+          new MyProposals(
+            sanity,
+            window,
+            undefined,
+            !!env.SANITY_API_TOKEN_WRITE,
+          ),
           sanity,
           env.IDENTITY,
           envelope,
