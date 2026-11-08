@@ -2,15 +2,25 @@
  * Deterministic demo fixtures (#2150). Pure: same { seed, now } gives
  * deep-equal output. No Math.random, no Date.now.
  *
- * TODO(#2150) full volumes, in a later PR with the copy-writing:
- *   proposals ~40 (every Status), reviews ~3 per submitted proposal,
- *   speakers ~35, sponsors ~12 (every tier and CRM stage), ticket orders ~300,
- *   volunteers ~20, workshop signups ~30, feedback ~150, conversations ~10,
- *   notifications ~25, schedule: 2 tracks x full day with breaks and TBA.
+ * Volumes (live edition unless noted): 40 proposals in every Status, ~3
+ * reviews per reviewable proposal, 2-day 2-track program with breaks and TBA,
+ * 12 sponsors over every tier and CRM stage, 20 volunteers, 30 workshop
+ * signups, ~150 feedback responses on the past edition, 10 conversations,
+ * 25 notifications, 150 ticket orders.
  */
 import { Format, Level, Status } from '@/lib/proposal/types'
 import type { DemoFixtures, D1Edition, FakePerson, Money } from './types'
-
+import {
+  BIO_TAILS,
+  COMPANIES,
+  FEEDBACK_COMMENTS,
+  FIRST,
+  LAST,
+  REVIEW_COMMENTS,
+  ROLES,
+  SPONSOR_BRANDS,
+  TALKS,
+} from './copy'
 /** mulberry32: tiny, seedable, good enough for fake data. */
 export function prng(seed: number) {
   let a = seed >>> 0
@@ -36,67 +46,7 @@ export function prng(seed: number) {
 }
 
 const DAY = 86_400_000
-const FIRST = [
-  'Ingrid',
-  'Kwame',
-  'Mei',
-  'Lars',
-  'Amara',
-  'Tomás',
-  'Priya',
-  'Siv',
-  'Yusuf',
-  'Hanna',
-  'Diego',
-  'Aiko',
-  'Oluwaseun',
-  'Freya',
-  'Mateusz',
-  'Leila',
-]
-const LAST = [
-  'Haugen',
-  'Mensah',
-  'Lindqvist',
-  'Okafor',
-  'Ribeiro',
-  'Nakamura',
-  'Sandvik',
-  'Kowalski',
-  'Rahman',
-  'Berg',
-  'Moreau',
-  'Achterberg',
-  'Iversen',
-  'Castellanos',
-]
-const COMPANIES = [
-  'Fjordbyte',
-  'Nordlys Systems',
-  'Kranvik Cloud',
-  'Brygge Data',
-  'Sølvpil Labs',
-  'Havørn Analytics',
-]
-const ROLES = [
-  'Platform Engineer',
-  'Staff SRE',
-  'Developer Advocate',
-  'Principal Engineer',
-  'Security Engineer',
-  'Engineering Manager',
-]
-const TALKS = [
-  'Shipping on Fridays: what our rollback budget taught us',
-  'Five SLOs that were green while users suffered',
-  'eBPF for people who do not write kernels',
-  'Multi-tenant Kubernetes without the tears',
-  'Supply chain security from commit to cluster, one signature at a time',
-  'Platform teams are product teams: lessons from three re-orgs',
-  'Cost dashboards nobody opened, and the one everybody did',
-  'GitOps at 400 clusters',
-]
-// TODO(#2150): /demo/*.svg logos do not exist yet; add repo assets with the copy PR.
+// TODO(#2150): /demo/*.svg logos and generated avatars do not exist yet.
 const AVATAR = '/images/default-avatar.png'
 
 const iso = (ms: number) => new Date(ms).toISOString()
@@ -183,30 +133,45 @@ export function generateDemoFixtures({
   ]
   const live = 'edition-live'
 
-  const members = (
-    ['owner', 'admin', 'admin', 'member', 'member'] as const
-  ).map((role) => ({ ...person('member'), role }))
-  const invites = (['pending', 'pending', 'accepted'] as const).map(
-    (status, i) => ({
-      key: `invite-${i}`,
-      email: `invitee${i + 1}@kontainerkonf.test`,
-      role: i === 0 ? ('admin' as const) : ('member' as const),
-      status,
-      expiresAt: iso(at(7 - i)),
-      inviterKey: members[0].key,
-    }),
-  )
+  const past = editions[0].key
 
-  const speakers = Array.from({ length: 6 }, () => {
+  const members = (
+    ['owner', 'admin', 'admin', 'member', 'member', 'member'] as const
+  ).map((role) => ({ ...person('member'), role }))
+  const invites = (
+    ['pending', 'pending', 'accepted', 'rejected', 'canceled'] as const
+  ).map((status, i) => ({
+    key: `invite-${i}`,
+    email: `invitee${i + 1}@kontainerkonf.test`,
+    role: i === 0 ? ('admin' as const) : ('member' as const),
+    status,
+    expiresAt: iso(at(status === 'pending' ? 7 - i : -3 - i)),
+    inviterKey: members[i % 2].key,
+  }))
+
+  const speakers = Array.from({ length: 34 }, (_, i) => {
     const p = person('speaker')
     const company = r.pick(COMPANIES)
+    const first = p.name.split(' ')[0]
     return {
       ...p,
       title: `${r.pick(ROLES)} at ${company}`,
       slug: slug(p.name),
-      bio: `${p.name.split(' ')[0]} builds internal platforms at ${company} and has opinions about YAML.`,
+      bio:
+        i % 3 === 0
+          ? `${first} works on infrastructure at ${company}.`
+          : `${first} builds internal platforms at ${company}. ${r.pick(BIO_TAILS)}`,
       links: [`https://${slug(p.name)}.example.com`],
-      country: 'Norway',
+      country: r.pick([
+        'Norway',
+        'Norway',
+        'Sweden',
+        'Denmark',
+        'Nigeria',
+        'Japan',
+        'Poland',
+        'Brazil',
+      ]),
     }
   })
   const speakerProfiles = speakers.map((s) => ({
@@ -233,20 +198,32 @@ export function generateDemoFixtures({
       price: nok(3490),
       capacity: 400,
     },
+    {
+      key: 'tt-student',
+      editionKey: live,
+      name: 'Student',
+      price: nok(490),
+      capacity: 50,
+    },
   ]
-  const ticketOrders = Array.from({ length: 4 }, (_, i) => {
-    const tt = r.pick(ticketTypes)
+  const ticketOrders = Array.from({ length: 150 }, (_, i) => {
+    const tt = i < 60 ? ticketTypes[0] : r.pick(ticketTypes.slice(1))
     const quantity = r.int(1, 3)
-    const createdAt = iso(at(-r.int(5, 120)))
+    const createdAt = iso(at(-r.int(5, 170)))
     return {
       key: `order-${i}`,
       editionKey: live,
-      status: i === 3 ? ('cancelled' as const) : ('paid' as const),
+      status:
+        i % 25 === 7
+          ? ('cancelled' as const)
+          : i % 31 === 3
+            ? ('pending' as const)
+            : ('paid' as const),
       total: {
         amount: tt.price.amount * quantity,
         currency: tt.price.currency,
       },
-      buyerEmail: person('buyer').email,
+      buyerEmail: `buyer${i + 1}@kontainerkonf.test`,
       lines: [{ ticketTypeKey: tt.key, quantity, unitPrice: tt.price }],
       createdAt,
       updatedAt: createdAt,
@@ -254,236 +231,458 @@ export function generateDemoFixtures({
   })
 
   // --- Sanity ---------------------------------------------------------
-  const statuses = [
-    Status.confirmed,
-    Status.accepted,
-    Status.submitted,
-    Status.rejected,
-    Status.waitlisted,
-    Status.withdrawn,
+  // 40 live proposals; the first 18 (confirmed + accepted) make the program.
+  const statusPlan: Status[] = [
+    ...Array<Status>(14).fill(Status.confirmed),
+    ...Array<Status>(4).fill(Status.accepted),
+    ...Array<Status>(8).fill(Status.submitted),
+    ...Array<Status>(3).fill(Status.waitlisted),
+    ...Array<Status>(5).fill(Status.rejected),
+    ...Array<Status>(2).fill(Status.withdrawn),
+    Status.draft,
+    Status.canceled,
   ]
-  const proposals = statuses.map((status, i) => ({
-    key: `proposal-${i}`,
-    editionKey: live,
-    title: TALKS[i],
-    description: `${TALKS[i]}. A practical talk with real numbers and the mistakes we made getting there.`,
-    language: 'english' as const,
-    format:
-      i === 0
-        ? Format.workshop_120
-        : r.pick([
-            Format.presentation_25,
-            Format.presentation_40,
-            Format.lightning_10,
-          ]),
-    level: r.pick([Level.beginner, Level.intermediate, Level.advanced]),
-    status,
-    speakerKeys:
-      i === 1
-        ? [speakers[1].key, speakers[2].key]
-        : [speakers[i % speakers.length].key],
-    topics: ['kubernetes'],
-  }))
-  // Past-edition talks, so feedback points at a talk that has happened.
-  const pastTalks = [6, 7].map((i) => ({
-    key: `proposal-${i}`,
-    editionKey: editions[0].key,
-    title: TALKS[i],
-    description: `${TALKS[i]}. A practical talk with real numbers and the mistakes we made getting there.`,
-    language: 'english' as const,
-    format: Format.presentation_40,
-    level: Level.intermediate,
-    status: Status.confirmed,
-    speakerKeys: [speakers[i % speakers.length].key],
-    topics: ['kubernetes'],
-  }))
-  const reviews = proposals.slice(0, 4).map((p, i) => ({
-    key: `review-${i}`,
-    proposalKey: p.key,
-    reviewerKey: members[i % members.length].key,
-    comment:
-      'Clear outline and a strong speaker. Would fit the platform track.',
-    score: {
-      content: r.int(2, 5),
-      relevance: r.int(2, 5),
-      speaker: r.int(2, 5),
-    },
-  }))
+  const talkFormat = (title: string) =>
+    /^(Hands-on|Workshop)/.test(title)
+      ? Format.workshop_120
+      : r.pick([
+          Format.presentation_25,
+          Format.presentation_40,
+          Format.presentation_40,
+          Format.lightning_10,
+        ])
+  const proposal = (i: number, editionKey: string, status: Status) => {
+    const [title, description, topic] = TALKS[i]
+    return {
+      key: `proposal-${i}`,
+      editionKey,
+      title,
+      description,
+      language: i % 9 === 4 ? ('norwegian' as const) : ('english' as const),
+      format: talkFormat(title),
+      level: r.pick([Level.beginner, Level.intermediate, Level.advanced]),
+      status,
+      // Every fifth talk has a co-speaker.
+      speakerKeys:
+        i % 5 === 1
+          ? [speakers[i % 34].key, speakers[(i + 7) % 34].key]
+          : [speakers[i % 34].key],
+      topics: [topic],
+    }
+  }
+  // Interleave so workshops (indices 24, 25) land in the program.
+  const order = r.shuffle(
+    Array.from({ length: 40 }, (_, i) => i).filter((i) => i !== 24 && i !== 25),
+  )
+  order.splice(2, 0, 24)
+  order.splice(9, 0, 25)
+  const proposals = order.map((i, n) => proposal(i, live, statusPlan[n]))
+  const pastTalks = Array.from({ length: 6 }, (_, j) =>
+    proposal(40 + j, past, Status.confirmed),
+  )
+  const programmed = proposals.slice(0, 18)
+
+  const reviewable = proposals.filter((p) => p.status !== Status.draft)
+  const reviews = reviewable.flatMap((p, i) =>
+    Array.from({ length: 2 + (i % 3) }, (_, j) => ({
+      key: `review-${p.key}-${j}`,
+      proposalKey: p.key,
+      reviewerKey: members[j % 4].key,
+      comment: REVIEW_COMMENTS[(i + j) % REVIEW_COMMENTS.length],
+      score: {
+        content: r.int(4, 10),
+        relevance: r.int(4, 10),
+        speaker: r.int(4, 10),
+      },
+    })),
+  )
   const coSpeakerInvitations = (
-    ['pending', 'accepted', 'declined'] as const
+    ['pending', 'accepted', 'declined', 'expired', 'pending'] as const
   ).map((status, i) => {
     const p = person('cospeaker')
+    const prop = proposals[i * 3]
     return {
       key: `cospeaker-${i}`,
-      proposalKey: proposals[i].key,
-      invitedByKey: proposals[i].speakerKeys[0],
+      proposalKey: prop.key,
+      invitedByKey: prop.speakerKeys[0],
       invitedEmail: p.email,
       invitedName: p.name,
       status,
-      expiresAt: iso(at(14)),
-      createdAt: iso(at(-10)),
+      expiresAt: iso(at(status === 'expired' ? -2 : 14)),
+      createdAt: iso(at(-10 - i)),
     }
   })
-  const day = editions[1].startDate
-  const schedules = [
-    {
-      key: 'schedule-day1',
-      editionKey: live,
-      date: day,
-      tracks: [
-        {
-          trackTitle: 'Platform',
-          trackDescription: 'Building and running internal platforms',
-          talks: [
-            { startTime: '09:00', endTime: '09:40', talkKey: proposals[0].key },
-            {
-              startTime: '09:40',
-              endTime: '10:00',
-              placeholder: 'Coffee break',
-            },
-            { startTime: '10:00', endTime: '10:40', talkKey: proposals[1].key },
-            { startTime: '10:40', endTime: '11:20', placeholder: 'TBA' },
-          ],
-        },
-      ],
-    },
+
+  // Program: 2 days x 2 tracks, 5 talk slots each = 20 slots for 18 talks + 2 TBA.
+  const TIMES = [
+    ['09:00', '09:40'],
+    ['09:50', '10:30'],
+    ['11:00', '11:40'],
+    ['13:00', '13:40'],
+    ['13:50', '14:30'],
   ]
-  const sponsors = COMPANIES.slice(0, 4).map((name) => ({
+  const breaks = [
+    {
+      at: 2,
+      startTime: '10:30',
+      endTime: '11:00',
+      placeholder: 'Coffee break',
+    },
+    { at: 3, startTime: '11:40', endTime: '13:00', placeholder: 'Lunch' },
+  ]
+  let next = 0
+  const trackTalks = (tba: boolean) =>
+    TIMES.flatMap(([startTime, endTime], s) => {
+      const brk = breaks
+        .filter((b) => b.at === s)
+        .map(({ startTime, endTime, placeholder }) => ({
+          startTime,
+          endTime,
+          placeholder,
+        }))
+      const slot =
+        tba && s === 4
+          ? { startTime, endTime, placeholder: 'TBA' }
+          : { startTime, endTime, talkKey: programmed[next++].key }
+      return [...brk, slot]
+    })
+  const day = (n: number, start: number) => date(start + n * DAY)
+  const liveStart = Date.parse(editions[1].startDate)
+  const pastStart = Date.parse(editions[0].startDate)
+  const schedules = [0, 1].map((d) => ({
+    key: `schedule-day${d + 1}`,
+    editionKey: live,
+    date: day(d, liveStart),
+    tracks: [
+      {
+        trackTitle: 'Fjord Hall',
+        trackDescription:
+          'Platform engineering, delivery and developer experience',
+        talks: trackTalks(d === 1),
+      },
+      {
+        trackTitle: 'Harbour Room',
+        trackDescription: 'Security, reliability and observability',
+        talks: trackTalks(d === 1),
+      },
+    ],
+  }))
+  schedules.push({
+    key: 'schedule-past-day1',
+    editionKey: past,
+    date: day(0, pastStart),
+    tracks: [
+      {
+        trackTitle: 'Main stage',
+        trackDescription: 'Everything, in one room',
+        talks: pastTalks.map((t, s) => ({
+          startTime: `${String(9 + s).padStart(2, '0')}:00`,
+          endTime: `${String(9 + s).padStart(2, '0')}:40`,
+          talkKey: t.key,
+        })),
+      },
+    ],
+  })
+
+  const sponsors = SPONSOR_BRANDS.map(([name, colour], i) => ({
     key: `sponsor-${slug(name)}`,
     name,
     website: `https://${slug(name)}.example.com`,
-    logo: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 32" role="img" aria-label="${name}"><text x="0" y="22" font-size="20" font-weight="600" fill="currentColor">${name}</text></svg>`,
+    logo: wordmark(name, colour, i),
   }))
+  const tier = (
+    key: string,
+    title: string,
+    tagline: string,
+    tierType: 'standard' | 'special' | 'addon',
+    kr: number,
+    maxQuantity?: number,
+  ) => ({
+    key: `tier-${key}`,
+    editionKey: live,
+    title,
+    tagline,
+    tierType,
+    price: nok(kr),
+    ...(maxQuantity ? { maxQuantity } : {}),
+  })
   const sponsorTiers = [
-    {
-      key: 'tier-gold',
-      editionKey: live,
-      title: 'Gold',
-      tagline: 'Front and centre',
-      tierType: 'standard' as const,
-      price: nok(80_000),
-      maxQuantity: 3,
-    },
-    {
-      key: 'tier-silver',
-      editionKey: live,
-      title: 'Silver',
-      tagline: 'The standard package',
-      tierType: 'standard' as const,
-      price: nok(40_000),
-    },
+    tier(
+      'platinum',
+      'Platinum',
+      'Your name on the day itself, with a welcome from the main stage',
+      'standard',
+      150_000,
+      2,
+    ),
+    tier('gold', 'Gold', 'Front and centre', 'standard', 80_000, 4),
+    tier('silver', 'Silver', 'The standard package', 'standard', 40_000),
+    tier(
+      'community',
+      'Community',
+      'For startups and non-profits',
+      'standard',
+      10_000,
+    ),
+    tier(
+      'diversity',
+      'Diversity scholarship',
+      'Fund travel and tickets for underrepresented speakers',
+      'special',
+      25_000,
+    ),
+    tier('coffee', 'Coffee bar', 'Your logo on every cup', 'addon', 15_000, 1),
   ]
+  // [tier, status, contract, signature, invoice]: every tier and every stage.
   const crm = [
-    ['closed-won', 'contract-signed', 'signed', 'paid'],
-    ['closed-won', 'contract-signed', 'signed', 'overdue'],
-    ['negotiating', 'contract-sent', 'pending', 'not-sent'],
-    ['prospect', 'none', 'not-started', 'not-sent'],
+    ['platinum', 'closed-won', 'contract-signed', 'signed', 'paid'],
+    ['platinum', 'negotiating', 'contract-sent', 'pending', 'not-sent'],
+    ['gold', 'closed-won', 'contract-signed', 'signed', 'overdue'],
+    ['gold', 'closed-won', 'contract-signed', 'signed', 'sent'],
+    ['gold', 'closed-won', 'registration-sent', 'not-started', 'not-sent'],
+    ['silver', 'closed-won', 'contract-signed', 'signed', 'paid'],
+    ['silver', 'negotiating', 'verbal-agreement', 'not-started', 'not-sent'],
+    ['silver', 'contacted', 'none', 'not-started', 'not-sent'],
+    ['community', 'prospect', 'none', 'not-started', 'not-sent'],
+    ['diversity', 'closed-won', 'contract-signed', 'signed', 'paid'],
+    ['coffee', 'closed-lost', 'contract-sent', 'expired', 'cancelled'],
+    ['community', 'closed-won', 'contract-sent', 'rejected', 'not-sent'],
   ] as const
   const sponsorsForConference = sponsors.map((s, i) => {
-    const [status, contractStatus, signatureStatus, invoiceStatus] = crm[i]
+    const [t, status, contractStatus, signatureStatus, invoiceStatus] = crm[i]
+    const invoiced = ['sent', 'paid', 'overdue', 'cancelled'].includes(
+      invoiceStatus,
+    )
     return {
       key: `sfc-${i}`,
       editionKey: live,
       sponsorKey: s.key,
-      tierKey: i === 0 ? 'tier-gold' : 'tier-silver',
+      tierKey: `tier-${t}`,
       status,
       contractStatus,
       signatureStatus,
       invoiceStatus,
-      ...(invoiceStatus === 'paid' || invoiceStatus === 'overdue'
-        ? { invoiceSentAt: iso(at(-45)), invoiceDueAt: date(at(-15)) }
-        : {}),
-      ...(invoiceStatus === 'paid' ? { invoicePaidAt: iso(at(-20)) } : {}),
-      assignedToKey: members[1].key,
-      contactInitiatedAt: iso(at(-r.int(30, 90))),
-    }
-  })
-  const volunteers = (['pending', 'approved', 'confirmed'] as const).map(
-    (status) => ({
-      ...person('volunteer'),
-      editionKey: live,
-      phone: `+47 4${r.int(1000000, 9999999)}`,
-      occupation: r.pick(['student', 'working'] as const),
-      tshirtSize: r.pick(['S', 'M', 'L', 'XL'] as const),
-      status,
-      submittedAt: iso(at(-r.int(10, 60))),
-    }),
-  )
-  const workshopSignups = (['confirmed', 'confirmed', 'waitlist'] as const).map(
-    (status, i) => ({
-      key: `signup-${i}`,
-      workshopKey: proposals[0].key,
-      user: person('attendee'),
-      experienceLevel: r.pick([
-        'beginner',
-        'intermediate',
-        'advanced',
-      ] as const),
-      operatingSystem: r.pick(['windows', 'macos', 'linux'] as const),
-      status,
-      signedUpAt: iso(at(-r.int(1, 30))),
-    }),
-  )
-  const travelSupport = (['submitted', 'approved'] as const).map(
-    (status, i) => ({
-      key: `travel-${i}`,
-      editionKey: live,
-      speakerKey: speakers[i].key,
-      status,
-      totalAmount: nok(4200 + i * 1800),
-      ...(status === 'approved' ? { approvedAmount: nok(4000) } : {}),
-      submittedAt: iso(at(-r.int(5, 40))),
-    }),
-  )
-  const feedback = (['green', 'green', 'yellow', 'red'] as const).map(
-    (colour, i) => ({
-      key: `feedback-${i}`,
-      talkKey: pastTalks[i % pastTalks.length].key,
-      colour,
-      ...(i % 2 === 0
+      ...(invoiced
         ? {
-            comment: 'Great live demo, slides were hard to read from the back.',
+            invoiceSentAt: iso(at(-45 + i)),
+            invoiceDueAt: date(at(invoiceStatus === 'sent' ? 10 : -15)),
           }
         : {}),
-      submittedAt: iso(at(-339)),
+      ...(invoiceStatus === 'paid' ? { invoicePaidAt: iso(at(-20 + i)) } : {}),
+      ...(status === 'prospect'
+        ? {}
+        : { assignedToKey: members[1 + (i % 2)].key }),
+      contactInitiatedAt: iso(at(-r.int(30, 120))),
+    }
+  })
+
+  const volStatus = [
+    'pending',
+    'approved',
+    'confirmed',
+    'confirmed',
+    'rejected',
+  ] as const
+  const volunteers = Array.from({ length: 20 }, (_, i) => ({
+    ...person('volunteer'),
+    editionKey: live,
+    phone: `+47 4${r.int(1000000, 9999999)}`,
+    occupation: r.pick([
+      'student',
+      'student',
+      'working',
+      'unemployed',
+      'other',
+    ] as const),
+    tshirtSize: r.pick(['XS', 'S', 'M', 'M', 'L', 'XL', 'XXL'] as const),
+    status: volStatus[i % volStatus.length],
+    submittedAt: iso(at(-r.int(10, 90))),
+  }))
+  const workshops = programmed.filter((p) => p.format === Format.workshop_120)
+  const workshopSignups = Array.from({ length: 30 }, (_, i) => ({
+    key: `signup-${i}`,
+    workshopKey: workshops[i % workshops.length].key,
+    user: person('attendee'),
+    experienceLevel: r.pick(['beginner', 'intermediate', 'advanced'] as const),
+    operatingSystem: r.pick(['windows', 'macos', 'macos', 'linux'] as const),
+    status: i >= 26 ? ('waitlist' as const) : ('confirmed' as const),
+    signedUpAt: iso(at(-r.int(1, 30))),
+  }))
+  const travelSupport = (
+    ['draft', 'submitted', 'approved', 'paid', 'rejected'] as const
+  ).map((status, i) => ({
+    key: `travel-${i}`,
+    editionKey: live,
+    speakerKey: speakers[i * 2 + 1].key,
+    status,
+    totalAmount: nok(2400 + i * 1900),
+    ...(status === 'approved' || status === 'paid'
+      ? { approvedAmount: nok(2000 + i * 1500) }
+      : {}),
+    ...(status === 'draft' ? {} : { submittedAt: iso(at(-r.int(5, 40))) }),
+  }))
+  const pastAt = (pastStart - t0) / DAY
+  const feedback = pastTalks.flatMap((t, ti) =>
+    Array.from({ length: 22 + ti * 2 }, (_, i) => {
+      const roll = r.next()
+      const colour =
+        roll < 0.62
+          ? ('green' as const)
+          : roll < 0.88
+            ? ('yellow' as const)
+            : ('red' as const)
+      return {
+        key: `feedback-${t.key}-${i}`,
+        talkKey: t.key,
+        colour,
+        ...(i % 4 === 0
+          ? { comment: FEEDBACK_COMMENTS[(ti + i) % FEEDBACK_COMMENTS.length] }
+          : {}),
+        submittedAt: iso(at(pastAt) + (9 + ti) * 3_600_000 + i * 60_000),
+      }
     }),
   )
+
+  const msg = (
+    who: { key: string; name: string },
+    body: string,
+    daysAgo: number,
+  ) => ({
+    authorKey: who.key,
+    authorName: who.name,
+    body,
+    origin: 'person' as const,
+    createdAt: iso(at(-daysAgo)),
+  })
+  const proposalThreads: [string, string][] = [
+    [
+      'Could you trim the intro to leave room for questions?',
+      'Yes, I will cut it to five minutes.',
+    ],
+    [
+      'Do you need a second microphone for the live demo?',
+      'That would be great, thank you!',
+    ],
+    [
+      'We would love a slightly more advanced version of this. Is that possible?',
+      'Absolutely. I can drop the basics and go straight into the failure modes.',
+    ],
+    ['Your slides are due next Friday.', 'Noted, they will be there.'],
+    [
+      'Can you confirm your travel dates?',
+      'Arriving the evening before, leaving the day after.',
+    ],
+    [
+      'Would you be open to moving to the afternoon slot on day two?',
+      'Works for me.',
+    ],
+  ]
   const conversations = [
-    {
-      key: 'conversation-0',
+    ...proposalThreads.map(([q, a], i) => {
+      const p = programmed[i]
+      const sp = speakers.find((s) => s.key === p.speakerKeys[0])!
+      return {
+        key: `conversation-${i}`,
+        editionKey: live,
+        conversationType: 'proposal' as const,
+        proposalKey: p.key,
+        messages: [
+          msg(members[1 + (i % 2)], q, 6 - i * 0.5),
+          msg(sp, a, 5 - i * 0.5),
+        ],
+      }
+    }),
+    ...[0, 2, 5].map((s, i) => ({
+      key: `conversation-sponsor-${i}`,
       editionKey: live,
-      conversationType: 'proposal' as const,
-      proposalKey: proposals[1].key,
+      conversationType: 'sponsor' as const,
+      sponsorForConferenceKey: sponsorsForConference[s].key,
+      messages: [
+        msg(
+          members[1],
+          'Here is the exhibitor guide with load-in times and stand dimensions.',
+          9 - i,
+        ),
+        {
+          authorName: sponsors[s].name,
+          body: 'Thanks! Can we bring a 2 m banner?',
+          origin: 'person' as const,
+          createdAt: iso(at(-8 + i)),
+        },
+      ],
+    })),
+    {
+      key: 'conversation-general-0',
+      editionKey: live,
+      conversationType: 'general' as const,
       messages: [
         {
-          authorKey: members[1].key,
-          authorName: members[1].name,
-          body: 'Could you trim the intro to leave room for questions?',
-          origin: 'person' as const,
-          createdAt: iso(at(-4)),
-        },
-        {
-          authorKey: speakers[1].key,
-          authorName: speakers[1].name,
-          body: 'Yes, I will cut it to five minutes.',
-          origin: 'person' as const,
-          createdAt: iso(at(-3)),
+          authorName: 'KontainerKonf',
+          body: 'Speaker dinner is confirmed for the evening before day one.',
+          origin: 'system' as const,
+          createdAt: iso(at(-2)),
         },
       ],
     },
   ]
-  const notifications = [
-    {
-      key: 'notification-0',
-      recipientKey: members[0].key,
+
+  const notificationKinds = [
+    'proposal_submitted',
+    'proposal_status_changed',
+    'message_received',
+    'cospeaker_response',
+    'travel_support_update',
+    'sponsor_activity',
+  ] as const
+  const notifications = Array.from({ length: 25 }, (_, i) => {
+    const notificationType = notificationKinds[i % notificationKinds.length]
+    const p = proposals[(i * 7) % 40]
+    const sp = speakers.find((s) => s.key === p.speakerKeys[0])!
+    const sfc = sponsors[i % sponsors.length]
+    const text = {
+      proposal_submitted: [
+        'New proposal',
+        `${sp.name} submitted “${p.title}”`,
+        `/admin/proposals/${p.key}`,
+      ],
+      proposal_status_changed: [
+        'Proposal updated',
+        `“${p.title}” is now ${p.status}`,
+        `/admin/proposals/${p.key}`,
+      ],
+      message_received: [
+        'New message',
+        `${sp.name} replied about “${p.title}”`,
+        `/admin/proposals/${p.key}`,
+      ],
+      cospeaker_response: [
+        'Co-speaker responded',
+        `A co-speaker answered the invitation for “${p.title}”`,
+        `/admin/proposals/${p.key}`,
+      ],
+      travel_support_update: [
+        'Travel support',
+        `${sp.name} submitted a travel support request`,
+        '/admin/travel-support',
+      ],
+      sponsor_activity: [
+        'Sponsor activity',
+        `${sfc.name} opened the sponsor portal`,
+        '/admin/sponsors',
+      ],
+    }[notificationType]
+    return {
+      key: `notification-${i}`,
+      recipientKey: members[i % 3].key,
       editionKey: live,
-      notificationType: 'proposal_submitted' as const,
-      title: 'New proposal',
-      message: `${speakers[2].name} submitted “${proposals[2].title}”`,
-      link: `/admin/proposals/${proposals[2].key}`,
-      createdAt: iso(at(-2)),
-    },
-  ]
+      notificationType,
+      title: text[0],
+      message: text[1],
+      link: text[2],
+      ...(i >= 8 ? { readAt: iso(at(-i / 4)) } : {}),
+      createdAt: iso(at(-i / 3)),
+    }
+  })
 
   return {
     seed,
@@ -521,4 +720,16 @@ export function generateDemoFixtures({
       notifications,
     },
   }
+}
+
+/** A fictional wordmark: a coloured glyph plus the name. No real brand. */
+function wordmark(name: string, colour: string, i: number): string {
+  const glyph = [
+    `<circle cx="16" cy="16" r="12" fill="${colour}"/>`,
+    `<rect x="4" y="4" width="24" height="24" rx="6" fill="${colour}"/>`,
+    `<path d="M16 3 29 28H3Z" fill="${colour}"/>`,
+    `<path d="M4 16 16 4l12 12-12 12Z" fill="${colour}"/>`,
+  ][i % 4]
+  const w = 44 + name.length * 12
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} 32" role="img" aria-label="${name}">${glyph}<text x="38" y="23" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" font-weight="600" fill="currentColor">${name}</text></svg>`
 }
