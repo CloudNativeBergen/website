@@ -386,10 +386,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               • Visibility can be &apos;network&apos; (the
                               default for new profiles), meaning organizers
                               (owners and admins) of any organization on the
-                              konf platform, and platform operators, can see the profile in a speaker
-                              directory, or &apos;private&apos; (which opts out,
-                              so only conferences you submit to see it). You can
-                              change it at any time
+                              konf platform, and platform operators, can see the
+                              profile in a speaker directory, or
+                              &apos;private&apos; (which opts out, so only
+                              conferences you submit to see it). You can change
+                              it at any time
                             </li>
                             <li>
                               • Profiles imported from earlier speaker records
@@ -408,8 +409,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               • Deleting your account deletes the global
                               profile. What a conference has already published
                               (for example a past program) is kept as an archive
-                              record, but your name and photo are removed from it
-                              unless you have agreed to keep them
+                              record, but your name and photo are removed from
+                              it unless you have agreed to keep them
                             </li>
                           </ul>
                         </div>
@@ -1768,12 +1769,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               set to &apos;network&apos; (the default for new
                               profiles), organizers (owners and admins) of any
                               organization on the konf platform, and platform
-                              operators, can see your
-                              profile in a speaker directory. The directory
-                              never shares email or account/identity data. You
-                              can opt out by changing visibility to
-                              &apos;private&apos; at any time, so only
-                              conferences you submit to see it.
+                              operators, can see your profile in a speaker
+                              directory. The directory never shares email or
+                              account/identity data. You can opt out by changing
+                              visibility to &apos;private&apos; at any time, so
+                              only conferences you submit to see it.
                             </p>
                           </div>
                           <div className="rounded-lg bg-yellow-50 p-3 dark:bg-yellow-900/20">
@@ -2000,9 +2000,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                                 conference keeps a snapshot of your profile as
                                 it was then. What a conference has already
                                 published (for example a past program) is kept
-                                as an archive record, but your name and photo are
-                                removed from it unless you have agreed to keep
-                                them
+                                as an archive record, but your name and photo
+                                are removed from it unless you have agreed to
+                                keep them
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
