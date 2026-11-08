@@ -89,7 +89,11 @@ jobs:
       # cue version follows .mise.toml.
       - name: Check service scaffold drift
         run: |
-          curl -fsSL https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_linux_amd64.tar.gz | tar -xz -C "$RUNNER_TEMP" cue
+          # GitHub release downloads have returned 504 for long stretches;
+          # fall back to the Go module proxy, which is separate infrastructure.
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 -o "$RUNNER_TEMP/cue.tgz" https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_linux_amd64.tar.gz \
+            && tar -xzf "$RUNNER_TEMP/cue.tgz" -C "$RUNNER_TEMP" cue \
+            || GOBIN="$RUNNER_TEMP" go install cuelang.org/go/cmd/cue@v0.17.1
           PATH="$RUNNER_TEMP:$PATH" pnpm run scaffold:check
 
       # Shell tests for the deploy-workers.yml helper scripts (#2053).

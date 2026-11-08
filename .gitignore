@@ -66,3 +66,4 @@ evals/content-judgement/.image-cache/
 # Local API (mise run dev:api): wrangler state and local-only dev keys
 .wrangler/
 .dev.vars*
+/tmp/

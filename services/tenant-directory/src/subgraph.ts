@@ -66,6 +66,30 @@ const CreatedOrganization = builder
     }),
   })
 
+const ProvisionConferenceInput = builder.inputType('ProvisionConferenceInput', {
+  fields: (t) => ({
+    title: t.string({ required: true }),
+    startDate: t.string({ required: true, description: 'YYYY-MM-DD' }),
+    endDate: t.string({
+      required: true,
+      description: 'YYYY-MM-DD, on or after startDate',
+    }),
+    domain: t.string({
+      description: 'Optional custom hostname; proves itself by DNS later.',
+    }),
+    copyFrom: t.id({
+      description:
+        "An edition of the same org to clone the structure of. Without it the edition starts empty, with the org's identity (name, logo, theme) from its latest edition.",
+    }),
+  }),
+})
+
+const ProvisionedConference = builder
+  .objectRef<{ conferenceId: string }>('ProvisionedConference')
+  .implement({
+    fields: (t) => ({ conferenceId: t.exposeID('conferenceId') }),
+  })
+
 const ORGS_MAX = 100
 
 type Row<K extends string> = Record<K, string>
@@ -369,6 +393,61 @@ builder.mutationType({
         }
         if (!e.conferenceId) return null
         return ctx.data.setLifecycle(e.orgId, e.conferenceId, status ?? null)
+      },
+    }),
+    provisionConference: t.field({
+      type: ProvisionedConference,
+      // kontroll#85. Public: the tenant lane is an org owner's or admin's.
+      description:
+        "Creates a new conference edition (draft) in an Organization: the Sanity document (through the site) and the directory row. Org owner or admin on the tenant lane, for the envelope's org; or a platform operator (operator lane, no tenant) naming `orgId`, which no other caller may pass. Retrying with the same idempotencyKey returns the same id.",
+      args: {
+        input: t.arg({ type: ProvisionConferenceInput, required: true }),
+        idempotencyKey: t.arg.string({ required: true }),
+        orgId: t.arg.id(),
+      },
+      resolve: (_, { input, idempotencyKey, orgId }, ctx) => {
+        const e = ctx.envelope
+        // Guard before fetch: nothing is read or written for a refusal.
+        let org: string
+        if (e?.typ === 'platform') {
+          if (orgId == null)
+            throw createGraphQLError('orgId is required on the operator lane', {
+              extensions: {
+                code: 'BAD_USER_INPUT',
+                reason: 'INVALID_INPUT',
+                field: 'orgId',
+              },
+            })
+          org = String(orgId)
+        } else {
+          const roles =
+            e?.typ === 'tenant'
+              ? (e.orgRole?.split(',').map((r) => r.trim()) ?? [])
+              : []
+          // Owner decision 3 (docs/AUTHORIZATION.md): lifecycle is the org
+          // owner's or admin's, never a member's or a conference organizer's.
+          if (
+            e?.typ !== 'tenant' ||
+            !e.userId ||
+            orgId != null ||
+            !roles.some((r) => WRITERS.has(r))
+          ) {
+            throw createGraphQLError(
+              'provisioning a conference requires an org owner or admin',
+              { extensions: { code: 'FORBIDDEN' } },
+            )
+          }
+          org = e.orgId
+        }
+        return ctx.data.provisionConference(
+          org,
+          {
+            ...input,
+            copyFrom: input.copyFrom == null ? null : String(input.copyFrom),
+          },
+          idempotencyKey,
+          e.userId!,
+        )
       },
     }),
     createOrganization: t.field({
