@@ -348,6 +348,46 @@ disagreement the phase did not intend. Intended changes are listed as explicit e
 | 4     | Volunteers as identity users with `conference_role`; sponsor contacts as identity users in sponsors D1; bearer links stay for existing invitations                                                                                                                                                                               | volunteers / sponsors phases     | Token links keep working until expiry                                             |
 | 5     | Retire `organizers[]` as authz source, member-sync cron, `withLiveOrganizerRights`, `PLATFORM_ORG_ID`, global `isOrganizer`, `adminProcedure` as one waist                                                                                                                                                                       | settings phase 5, Platform 6     | Each removed after its replacement ran one clean week                             |
 
+### 5.1 Phase 1b runbook: switching an org to identity (#2101)
+
+The switch is per org, a row in identity D1 `member_source`, flipped only by
+the operator mutation `setMemberSource(orgId, identity: true)`. While the row
+exists:
+
+- the hourly member sync never grants for the org (drift check and alert only);
+- the site's organizer check for that org reads the caller's live identity role
+  through the gateway (`memberAuthority`, `src/lib/authz/identity-members.ts`):
+  owner or admin by `can(principalOfRole(role), 'org.manage_members')`. Sanity
+  `organizers[]` no longer counts for the org, so a removal in Kontroll takes
+  site admin away within the 60 s memo, and a Sanity-only organizer is not admin;
+- the site's organizer invite creates an identity `admin` invitation as the
+  signed-in user (`inviteMember`), never a Sanity invitation.
+
+The mutation refuses unless the latest member sync is under two hours old, did
+not fail, and reported no access drift for the org (missing in identity, missing
+in Sanity, role mismatch). Orgs still granting get the same check every hour,
+report-only, in job `identity.member_sync.preflight`. `ownersBelowTwo` does not
+block.
+
+Steps:
+
+1. Turn on `identityLogin` for the org's conferences. On a switched org a
+   NextAuth-only session has no identity role, so it is refused with "sign in
+   with Konf"; so are CLI bearer tokens.
+2. Watch the preflight for a week (owner decision 2): no access drift for the
+   org on any day. Fix drift in Kontroll or Sanity, not by switching.
+3. Switch, as an operator on the operator lane:
+   `mutation { setMemberSource(orgId: "<id>", identity: true) }`. Audited as
+   `member_source.identity`.
+4. Check: an organizer's `/admin` still works; Kontroll shows the same members.
+5. Roll back with `identity: false` (always allowed, audited). The sync grants
+   again from the next run.
+
+If the gateway cannot answer, the site withholds the request org's organizer
+right (`SERVICE_UNAVAILABLE`, "cannot be checked right now"), except within
+10 minutes of having seen the org unswitched. `MEMBER_SOURCE_ORGS` keeps working
+as before; the table adds to it.
+
 ## 6. Future-proofing
 
 - **The envelope fixes the shape:** roles for one org plus one conference, never a list
