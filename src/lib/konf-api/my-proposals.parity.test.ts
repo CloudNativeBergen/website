@@ -389,11 +389,7 @@ describe('speaker dashboard proposals through the API (#2078)', () => {
 
     // Same order (both newest update first) and deleted entries included.
     expect(api.map(consumed)).toEqual(sanity.map(consumed))
-    expect(api.map((p) => p._id)).toEqual([
-      'talk_1',
-      'talk_deleted',
-      'talk_2',
-    ])
+    expect(api.map((p) => p._id)).toEqual(['talk_1', 'talk_deleted', 'talk_2'])
     expect(api.map((p) => p._updatedAt)).toEqual(
       sanity.map((p) => p._updatedAt),
     )
@@ -437,7 +433,11 @@ describe('speaker dashboard proposals through the API (#2078)', () => {
     })
     expect(h.apiCalls).toBe(1)
     // The speaker comes from the identity token's envelope, not the argument.
-    expect(proposals.map((p) => p._id).sort()).toEqual(['talk_1', 'talk_2', 'talk_deleted'])
+    expect(proposals.map((p) => p._id).sort()).toEqual([
+      'talk_1',
+      'talk_2',
+      'talk_deleted',
+    ])
     expect(lastVariables).toBeUndefined()
     expect(lastQuery).not.toMatch(/speakerId|conferenceId|sp_client_supplied/)
     expect(lastQuery).not.toMatch(/\(/) // no arguments on any field
