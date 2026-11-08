@@ -12,6 +12,7 @@ import {
   OPTIONS,
   type MyProposal,
   type MySpeaker,
+  type Consent,
   type Attachment,
   type Invitation,
   type ScheduleInfo,
@@ -133,6 +134,18 @@ const CfpType = builder
     }),
   })
 
+const ConsentType = builder
+  .objectRef<Consent>('MyProposalSpeakerConsent')
+  .implement({
+    description: 'Whether each consent the proposal editor shows is granted.',
+    fields: (t) => ({
+      dataProcessing: t.exposeBoolean('dataProcessing'),
+      marketing: t.exposeBoolean('marketing'),
+      publicProfile: t.exposeBoolean('publicProfile'),
+      photography: t.exposeBoolean('photography'),
+    }),
+  })
+
 const MySpeakerType = builder
   .objectRef<MySpeaker>('MyProposalSpeaker')
   .implement({
@@ -151,6 +164,21 @@ const MySpeakerType = builder
         ...str,
         description:
           "Shown to the talk's speakers only, as on the site; null to anyone else.",
+      }),
+      title: t.exposeString('title', str),
+      bio: t.exposeString('bio', {
+        ...str,
+        description:
+          'Your own entry only, as the editor shows; null on a co-speaker.',
+      }),
+      links: t.exposeStringList('links', {
+        description: 'Your own entry only; empty on a co-speaker.',
+      }),
+      consent: t.field({
+        type: ConsentType,
+        nullable: true,
+        description: 'Your own entry only; null on a co-speaker.',
+        resolve: (x) => x.consent,
       }),
     }),
   })
@@ -195,6 +223,8 @@ const InvitationType = builder
       expiresAt: t.exposeString('expiresAt', str),
       createdAt: t.exposeString('createdAt', str),
       respondedAt: t.exposeString('respondedAt', str),
+      declineReason: t.exposeString('declineReason', str),
+      lastRemindedAt: t.exposeString('lastRemindedAt', str),
     }),
   })
 
@@ -215,7 +245,12 @@ const MyProposalType = builder.objectRef<MyProposal>('MyProposal').implement({
     id: t.exposeID('id'),
     status: t.exposeString('status', {
       description:
-        'draft, submitted, accepted, waitlisted, confirmed, rejected, withdrawn or canceled.',
+        'draft, submitted, accepted, waitlisted, confirmed, rejected, withdrawn, canceled or deleted.',
+    }),
+    createdAt: t.exposeString('createdAt', str),
+    updatedAt: t.exposeString('updatedAt', {
+      ...str,
+      description: 'myProposals is ordered by this, newest first.',
     }),
     title: t.exposeString('title', str),
     abstract: t.exposeString('abstract', {
@@ -350,13 +385,13 @@ builder.queryType({
       type: [MyProposalType],
       directives: size(10),
       description:
-        "The session user's proposals in the request's conference, including those they are a co-speaker on.",
+        "The session user's proposals in the request's conference, including those they are a co-speaker on and deleted ones (as the site lists them), newest update first. For another conference, ask that conference's host.",
       resolve: (_, __, ctx) => ctx.data.mine().list(),
     }),
     myProposal: t.field({
       type: MyProposalType,
       description:
-        'One of your proposals. NOT_FOUND for anything else, existing or not.',
+        "One of your proposals in the request's conference. NOT_FOUND for anything else, existing or not, including your proposal in another conference: ask that conference's host.",
       args: { id: t.arg.id({ required: true }) },
       resolve: (_, { id }, ctx) => ctx.data.mine().get(String(id)),
     }),
