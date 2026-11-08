@@ -44,6 +44,9 @@ const identity = {
   isOwner: vi.fn(async (): Promise<boolean> => false),
 }
 const signupLimit = { limit: vi.fn(async () => ({ success: true })) }
+const inviteLimit = {
+  limit: vi.fn(async (opts: { key: string }) => ({ success: !!opts })),
+}
 const conferenceRpc = { ticketed: vi.fn(async () => false) }
 vi.mock('./data/cloudflare', () => ({ cloudflareHostnames: () => hostnames }))
 
@@ -289,6 +292,10 @@ beforeEach(() => {
       readFileSync(
         new URL('../migrations/0011_billing_signup.sql', import.meta.url),
         'utf8',
+      ) +
+      readFileSync(
+        new URL('../migrations/0012_invite_requests.sql', import.meta.url),
+        'utf8',
       ),
   )
   env = {
@@ -299,6 +306,8 @@ beforeEach(() => {
     IDENTITY: identity,
     CONFERENCE: conferenceRpc,
     SIGNUP_LIMIT: signupLimit as unknown as RateLimit,
+    INVITE_LIMIT: inviteLimit as unknown as RateLimit,
+    INVITE_TOKEN_SECRET: 'invite-secret',
     SANITY_PROJECT_ID: 'p',
     SANITY_DATASET: 'd',
     SANITY_API_TOKEN_READ: 'token',
@@ -336,6 +345,8 @@ beforeEach(() => {
   identity.isOwner.mockResolvedValue(false)
   signupLimit.limit.mockReset()
   signupLimit.limit.mockResolvedValue({ success: true })
+  inviteLimit.limit.mockReset()
+  inviteLimit.limit.mockResolvedValue({ success: true })
   conferenceRpc.ticketed.mockReset()
   conferenceRpc.ticketed.mockResolvedValue(false)
 })
@@ -344,8 +355,12 @@ async function gql(
   query: string,
   variables: Record<string, unknown> = {},
   as?: Envelope | string,
+  extra: Record<string, string> = {},
 ) {
-  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    ...extra,
+  }
   if (as)
     headers[ENVELOPE_HEADER] =
       typeof as === 'string' ? as : await signer.sign(as)
@@ -483,13 +498,14 @@ describe('provisioning', () => {
     const { body } = await gql('{ _service { sdl } }')
     const mutation = /type Mutation[^}]*}/.exec(body.data._service.sdl)![0]
     const fields = mutation.split('\n').filter((l) => /^\s+\w+\(/.test(l))
-    expect(fields).toHaveLength(13)
+    expect(fields).toHaveLength(16)
     for (const f of fields)
       if (
         f.includes('setConferenceLifecycle(') ||
         f.includes('provisionConference(') ||
         f.includes('startCheckout(') ||
-        f.includes('signUpOrganization(')
+        f.includes('signUpOrganization(') ||
+        f.includes('requestInvite(')
       )
         expect(f).not.toContain('@tag')
       else
@@ -498,7 +514,9 @@ describe('provisioning', () => {
             f.includes('createOrganization(') ||
             f.includes('setComplimentaryPlan(') ||
             f.includes('createSignupCode(') ||
-            f.includes('revokeSignupCode(')
+            f.includes('revokeSignupCode(') ||
+            f.includes('resolveInviteRequest(') ||
+            f.includes('eraseInviteRequests(')
             ? '@tag(name: "operator")'
             : '@tag(name: "internal")',
         )
@@ -1058,11 +1076,13 @@ describe('rollout flags (#1925)', () => {
     expect(mutation).not.toMatch(
       /apiRead|identityLogin|d1Write|d1Override|flags/i,
     )
-    // The only input types are provisioning and sign-up; none has a flag.
+    // The only input types are provisioning, sign-up and the invite form;
+    // none has a flag.
     const inputs = sdl.match(/^input [^}]*}/gm) ?? []
     expect(inputs.map((i) => i.split(' ')[1]).sort()).toEqual([
       'CreateOrganizationInput',
       'ProvisionConferenceInput',
+      'RequestInviteInput',
       'SignupOrganizationInput',
     ])
     for (const i of inputs)
@@ -2849,6 +2869,201 @@ describe('billing and sign-up contract (#2129)', () => {
       )
       expect(body.data.revokeSignupCode.revokedAt).toBeTruthy()
       expect(await data.consumeSignupCode(r.code)).toBeNull()
+    })
+  })
+})
+
+describe('invite requests (#2161)', () => {
+  const REQUEST = `mutation($input: RequestInviteInput!) { requestInvite(input: $input) }`
+  const LIST = `query($s: InviteRequestStatus) { inviteRequests(status: $s) { id email status codeId resolvedAt } }`
+  const RESOLVE_REQ = `mutation($id: ID!, $s: InviteRequestStatus!, $c: ID) { resolveInviteRequest(id: $id, status: $s, signupCodeId: $c) { id status codeId resolvedAt } }`
+  const ERASE = `mutation($e: String!) { eraseInviteRequests(email: $e) }`
+  const user: Envelope = { typ: 'user', userId: 'u' }
+  const code = (body: { errors?: { extensions: { code: string } }[] }) =>
+    body.errors?.[0]?.extensions.code
+  /** A token issued `ago` ms back, signed with the test secret. */
+  const token = async (ago = 10_000) =>
+    (await createData(env).inviteToken(Date.now() - ago))!
+  const input = async (over: Record<string, unknown> = {}) => ({
+    name: 'Ada',
+    email: 'Ada@Example.org',
+    conference: 'AdaConf',
+    size: '100-300',
+    ticketed: true,
+    message: 'hi',
+    token: await token(),
+    ...over,
+  })
+  const ask = async (over: Record<string, unknown> = {}, ip = '10.0.0.1') =>
+    gql(REQUEST, { input: await input(over) }, undefined, {
+      'x-konf-caller-ip': ip,
+    })
+  const rows = () =>
+    sqlite.prepare('SELECT * FROM invite_requests').all() as Record<
+      string,
+      unknown
+    >[]
+
+  it('stores a valid request anonymously, email lowercased', async () => {
+    const { body } = await ask()
+    expect(body).toEqual({ data: { requestInvite: true } })
+    expect(rows()).toMatchObject([
+      { name: 'Ada', email: 'ada@example.org', status: 'new', ticketed: 1 },
+    ])
+  })
+
+  it('serves a token publicly', async () => {
+    const { body } = await gql(`{ inviteRequestToken }`)
+    expect(body.data.inviteRequestToken).toMatch(/^\d+\.[\w-]+$/)
+  })
+
+  it.each([
+    ['name', { name: ' ' }],
+    ['name', { name: 'x'.repeat(101) }],
+    ['email', { email: 'not-an-email' }],
+    ['email', { email: `${'a'.repeat(250)}@b.no` }],
+    ['conference', { conference: '' }],
+    ['size', { size: 'x'.repeat(51) }],
+    ['message', { message: 'x'.repeat(2001) }],
+  ])('refuses a bad %s, writes nothing', async (field, over) => {
+    const { body } = await ask(over)
+    expect(body.errors[0].extensions).toMatchObject({
+      code: 'BAD_USER_INPUT',
+      field,
+    })
+    expect(rows()).toHaveLength(0)
+    expect(inviteLimit.limit).not.toHaveBeenCalled()
+  })
+
+  it('rate-limits per IP and per email, keys without each other', async () => {
+    await ask({}, '10.9.9.9')
+    expect(inviteLimit.limit.mock.calls.map((c) => c[0].key).sort()).toEqual([
+      'invite|email:ada@example.org',
+      'invite|ip:10.9.9.9',
+    ])
+    inviteLimit.limit.mockImplementation(async ({ key }) => ({
+      success: !key.startsWith('invite|ip:'),
+    }))
+    expect(code((await ask({ email: 'b@example.org' })).body)).toBe(
+      'RATE_LIMITED',
+    )
+    inviteLimit.limit.mockImplementation(async ({ key }) => ({
+      success: !key.startsWith('invite|email:'),
+    }))
+    expect(code((await ask({ email: 'c@example.org' })).body)).toBe(
+      'RATE_LIMITED',
+    )
+    expect(rows()).toHaveLength(1)
+  })
+
+  it('a filled honeypot answers true and writes nothing', async () => {
+    const { body } = await ask({ website: 'http://spam' })
+    expect(body).toEqual({ data: { requestInvite: true } })
+    expect(rows()).toHaveLength(0)
+  })
+
+  it('a too-fast submit answers true and writes nothing', async () => {
+    const { body } = await ask({ token: await token(500) })
+    expect(body).toEqual({ data: { requestInvite: true } })
+    expect(rows()).toHaveLength(0)
+  })
+
+  it.each([
+    ['forged', async () => `${Date.now() - 10_000}.AAAA`],
+    ['expired', () => token(3 * 60 * 60 * 1000)],
+    ['malformed', async () => 'nope'],
+  ])('a %s token is refused', async (_, make) => {
+    const { body } = await ask({ token: await make() })
+    expect(body.errors[0].extensions).toMatchObject({ field: 'token' })
+    expect(rows()).toHaveLength(0)
+  })
+
+  it('a duplicate email gets the same answer and is not stored twice', async () => {
+    const first = await ask()
+    const second = await ask({ email: 'ada@example.ORG', name: 'Other' })
+    expect(second).toEqual(first)
+    expect(rows()).toMatchObject([{ name: 'Ada' }])
+  })
+
+  describe('operator lane', () => {
+    it.each([
+      ['inviteRequests anonymous', LIST, undefined],
+      ['inviteRequests as user', LIST, user],
+      ['inviteRequests as tenant owner', LIST, organizer],
+      ['resolveInviteRequest as user', RESOLVE_REQ, user],
+      ['resolveInviteRequest anonymous', RESOLVE_REQ, undefined],
+      ['eraseInviteRequests as tenant admin', ERASE, organizer],
+      ['eraseInviteRequests anonymous', ERASE, undefined],
+    ])('%s: FORBIDDEN, no D1 read', async (_, q, as) => {
+      const spy = vi.spyOn(env.DB, 'prepare')
+      const { body } = await gql(q, { id: 'x', s: 'spam', e: 'a@b.no' }, as)
+      expect(code(body)).toBe('FORBIDDEN')
+      expect(spy).not.toHaveBeenCalled()
+    })
+
+    it('lists, resolves with a code and filters by status', async () => {
+      await ask()
+      const [req] = (await gql(LIST, {}, operator)).body.data.inviteRequests
+      sqlite.exec(
+        "INSERT INTO signup_codes VALUES ('c1', 'h', 'n', 1, 0, '2099-01-01', NULL, 'op', '2026-01-01')",
+      )
+      const out = (
+        await gql(RESOLVE_REQ, { id: req.id, s: 'invited', c: 'c1' }, operator)
+      ).body.data.resolveInviteRequest
+      expect(out).toMatchObject({ status: 'invited', codeId: 'c1' })
+      expect(out.resolvedAt).toBeTruthy()
+      expect(
+        (await gql(LIST, { s: 'new' }, operator)).body.data.inviteRequests,
+      ).toEqual([])
+      // Resolved, the same email may ask again.
+      await ask()
+      expect(rows()).toHaveLength(2)
+    })
+
+    it('erases every request from an email', async () => {
+      await ask()
+      await ask({ email: 'keep@example.org' })
+      sqlite.exec("UPDATE invite_requests SET status = 'spam'")
+      await ask()
+      const { body } = await gql(ERASE, { e: ' ADA@example.org ' }, operator)
+      expect(body.data.eraseInviteRequests).toBe(2)
+      expect(rows().map((r) => r.email)).toEqual(['keep@example.org'])
+    })
+  })
+
+  describe('retention', () => {
+    const insert = (id: string, created: string, resolved: string | null) =>
+      sqlite
+        .prepare(
+          `INSERT INTO invite_requests (id, name, email, conference, size, ticketed, status, created_at, resolved_at)
+           VALUES (?, 'n', ?, 'c', 's', 0, ?, ?, ?)`,
+        )
+        .run(id, `${id}@x.no`, resolved ? 'declined' : 'new', created, resolved)
+    const at = (iso: string) =>
+      ({ scheduledTime: Date.parse(iso) }) as ScheduledController
+
+    it('deletes 12 months after resolve, or after creation while open, at 03:00 UTC', async () => {
+      insert('oldOpen', '2025-11-01T00:00:00.000Z', null)
+      insert('freshOpen', '2026-06-01T00:00:00.000Z', null)
+      insert(
+        'oldResolved',
+        '2025-01-01T00:00:00.000Z',
+        '2025-11-01T00:00:00.000Z',
+      )
+      insert(
+        'recentResolved',
+        '2025-01-01T00:00:00.000Z',
+        '2026-01-01T00:00:00.000Z',
+      )
+      const ids = () =>
+        rows()
+          .map((r) => r.id)
+          .sort()
+      // Another hour: nothing is purged.
+      await worker.scheduled!(at('2026-11-08T04:00:00Z'), env)
+      expect(ids()).toHaveLength(4)
+      await worker.scheduled!(at('2026-11-08T03:00:00Z'), env)
+      expect(ids()).toEqual(['freshOpen', 'recentResolved'])
     })
   })
 })

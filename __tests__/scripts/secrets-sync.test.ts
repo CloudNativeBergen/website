@@ -127,6 +127,7 @@ describe('secrets', () => {
         'CF_API_TOKEN',
         'CF_ZONE_ID',
         'PROVISIONING_SIGNING_KEY',
+        'INVITE_TOKEN_SECRET',
       ],
     })
   })
@@ -145,6 +146,7 @@ describe('secrets', () => {
       'skip CF_API_TOKEN (optional, not in fnox)',
       'skip CF_ZONE_ID (optional, not in fnox)',
       'skip PROVISIONING_SIGNING_KEY (optional, not in fnox)',
+      'skip INVITE_TOKEN_SECRET (optional, not in fnox)',
     ])
     exec.mockImplementation(() => {
       throw new Error('missing')

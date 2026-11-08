@@ -14,6 +14,7 @@ import { maxDepthPlugin } from '@escape.tech/graphql-armor-max-depth'
 import { createRemoteJWKSet, customFetch, jwtVerify } from 'jose'
 import {
   createSigner,
+  CALLER_IP_HEADER,
   ENVELOPE_HEADER,
   isPlan,
   toOrgKind,
@@ -391,6 +392,8 @@ type GatewayContext = {
   siteFlags: RolloutFlags | null
   /** A PlatformContext was minted: an operator with no tenant (#1961). */
   platform: boolean
+  /** The caller's IP (clientIp), forwarded as CALLER_IP_HEADER (#2161). */
+  ip?: string
 }
 
 /**
@@ -562,6 +565,9 @@ export function createGateway(supergraph: string) {
           ENVELOPE_HEADER,
         )
         if (envelope) headers.set(ENVELOPE_HEADER, envelope)
+        // Always set from the gateway's own context (#2161), so the subgraph
+        // never sees a client-chosen value.
+        headers.set(CALLER_IP_HEADER, (context as GatewayContext).ip ?? '')
         return env[binding].fetch(url, {
           method: options?.method ?? 'POST',
           headers,
@@ -770,6 +776,7 @@ export function createGateway(supergraph: string) {
         // selected (an unauthorized selection was refused above).
         siteFlags: ((siteHost || operatorLane) && tenant?.flags) || null,
         platform,
+        ip,
       }
 
       // Response cache (#1789), after every guard above. Only the site's

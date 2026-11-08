@@ -17,6 +17,12 @@ import {
 } from 'jose'
 
 export const ENVELOPE_HEADER = 'x-konf-envelope'
+/**
+ * The caller's IP as the gateway resolved it (#2161), set by the gateway on
+ * every subgraph request; a client-sent value never passes. For rate-limit
+ * keys only: never log or store it.
+ */
+export const CALLER_IP_HEADER = 'x-konf-caller-ip'
 const ISSUER = 'konf-gateway'
 const AUDIENCE = 'konf-subgraphs'
 const ALG = 'EdDSA'

@@ -1034,8 +1034,8 @@ describe('cross-tenant mutation walk', () => {
       else if (
         // subscribePush: the probe endpoint is not https; updateMyProfile: the
         // probe input has no name; provisionConference: the probe dates are
-        // not dates.
-        /"(inviteMember|cancelInvitation|removeMember|changeMemberRole|subscribePush|updateMyProfile|provisionConference)"/.test(
+        // not dates; requestInvite: the probe name is empty.
+        /"(inviteMember|cancelInvitation|removeMember|changeMemberRole|subscribePush|updateMyProfile|provisionConference|requestInvite)"/.test(
           json,
         )
       )

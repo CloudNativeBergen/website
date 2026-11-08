@@ -7,7 +7,7 @@ service: #PlatformService & {
 	secrets: {
 		required: ["GATEWAY_PUBLIC_KEY"]
 		// Degrades without these: provisioning and custom-hostname registration refuse.
-		optional: ["SANITY_API_TOKEN_READ", "CF_API_TOKEN", "CF_ZONE_ID", "PROVISIONING_SIGNING_KEY"]
+		optional: ["SANITY_API_TOKEN_READ", "CF_API_TOKEN", "CF_ZONE_ID", "PROVISIONING_SIGNING_KEY", "INVITE_TOKEN_SECRET"]
 	}
 	// Mirror Cloudflare custom-hostname status for custom domains.
 	crons: ["*/5 * * * *"]
@@ -32,6 +32,8 @@ service: #PlatformService & {
 	// signUpOrganization attempts per user (#2163): 5 a minute. New namespaces.
 	rateLimits: [
 		{name: "SIGNUP_LIMIT", namespaceId: {preview: "2163", production: "2173"}, limit: 5, period: 60},
+		// requestInvite (#2161), keyed per caller IP and per email: 5 a minute.
+		{name: "INVITE_LIMIT", namespaceId: {preview: "2161", production: "2171"}, limit: 5, period: 60},
 	]
 	serviceBindings: [
 		{binding: "IDENTITY", service: "konf-identity", entrypoint: "Organizations"},

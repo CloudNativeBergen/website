@@ -85,3 +85,21 @@ export const signupCodes = sqliteTable('signup_codes', {
   createdBy: text('created_by').notNull(),
   createdAt: text('created_at').notNull(),
 })
+
+export const inviteRequests = sqliteTable('invite_requests', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  conference: text('conference').notNull(),
+  size: text('size').notNull(),
+  ticketed: integer('ticketed', { mode: 'boolean' }).notNull(),
+  message: text('message'),
+  status: text('status', {
+    enum: ['new', 'invited', 'declined', 'spam'],
+  })
+    .notNull()
+    .default('new'),
+  createdAt: text('created_at').notNull(),
+  resolvedAt: text('resolved_at'),
+  codeId: text('code_id'),
+})

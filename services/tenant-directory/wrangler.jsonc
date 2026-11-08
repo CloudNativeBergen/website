@@ -53,6 +53,14 @@
             "period": 60,
           },
         },
+        {
+          "name": "INVITE_LIMIT",
+          "namespace_id": "2161",
+          "simple": {
+            "limit": 5,
+            "period": 60,
+          },
+        },
       ],
       "services": [
         {
@@ -85,6 +93,14 @@
         {
           "name": "SIGNUP_LIMIT",
           "namespace_id": "2173",
+          "simple": {
+            "limit": 5,
+            "period": 60,
+          },
+        },
+        {
+          "name": "INVITE_LIMIT",
+          "namespace_id": "2171",
           "simple": {
             "limit": 5,
             "period": 60,

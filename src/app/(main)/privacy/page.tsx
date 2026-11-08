@@ -1486,6 +1486,36 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       </p>
                     </div>
                   </div>
+                  {/* Invite requests (konf.app) */}
+                  <div className="space-y-6">
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800/40">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-gray-900 dark:text-white">
+                        <EnvelopeIcon className="mr-3 h-5 w-5" />
+                        Invite Requests (konf.app)
+                      </h3>
+                      <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                        <li>• Name and email address</li>
+                        <li>
+                          • Conference name, expected size, whether it sells
+                          tickets, and an optional message
+                        </li>
+                        <li>
+                          • Your IP address is used only to limit how often the
+                          form can be sent; it is not stored
+                        </li>
+                      </ul>
+                      <p className="mt-4 text-sm text-gray-700 dark:text-gray-300">
+                        <strong>Purpose:</strong> Answering your request for an
+                        invite to the konf.app platform.{' '}
+                        <strong>Legal basis:</strong> Steps taken at your
+                        request before a possible agreement (Art. 6(1)(b)).{' '}
+                        <strong>Retention:</strong> Deleted automatically 12
+                        months after we answer the request, or 12 months after
+                        you sent it if it is never answered. Ask us and we
+                        delete it sooner.
+                      </p>
+                    </div>
+                  </div>
                 </section>
 
                 {/* Section 3: Legal Basis */}
@@ -1940,6 +1970,24 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900 print:divide-black print:bg-white">
+                          <tr>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100 print:border-b print:border-black print:px-3 print:py-2 print:text-black">
+                              Invite Requests (konf.app)
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 print:border-b print:border-black print:px-3 print:py-2 print:text-black">
+                              12 months
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                After we answer the request, or after it was
+                                sent if never answered; deleted automatically
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 print:border-b print:border-black print:px-3 print:py-2 print:text-black">
+                              <span className="font-medium text-blue-600 dark:text-blue-400 print:font-semibold print:text-black">
+                                Pre-contractual Steps:
+                              </span>{' '}
+                              Answering your invite request
+                            </td>
+                          </tr>
                           <tr>
                             <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100 print:border-b print:border-black print:px-3 print:py-2 print:text-black">
                               Active Speaker Profiles

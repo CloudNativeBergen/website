@@ -7,6 +7,7 @@
 // `organization` is public and returns only the envelope's own org.
 import { createGraphQLError } from 'graphql-yoga'
 import {
+  CALLER_IP_HEADER,
   PLANS,
   can,
   effectivePlan,
@@ -518,6 +519,74 @@ const SignupCode = builder.objectRef<SignupCodeRow>('SignupCode').implement({
   }),
 })
 
+// The konf.app "Request an invite" form (#2161).
+const INVITE_STATUSES = ['new', 'invited', 'declined', 'spam'] as const
+const InviteStatusEnum = builder.enumType('InviteRequestStatus', {
+  values: INVITE_STATUSES,
+})
+/** A form submitted faster than this is treated as a bot (silently). */
+export const INVITE_MIN_MS = 3_000
+/** A token older than this is refused: the visitor reloads the form. */
+export const INVITE_MAX_MS = 2 * 60 * 60 * 1000
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+const RequestInviteInput = builder.inputType('RequestInviteInput', {
+  fields: (t) => ({
+    name: t.string({ required: true, description: '1 to 100 characters.' }),
+    email: t.string({ required: true, description: 'At most 254 characters.' }),
+    conference: t.string({
+      required: true,
+      description: 'The conference name, 1 to 200 characters.',
+    }),
+    size: t.string({
+      required: true,
+      description: 'Expected attendees, free text, 1 to 50 characters.',
+    }),
+    ticketed: t.boolean({ required: true }),
+    message: t.string({ description: 'At most 2000 characters.' }),
+    website: t.string({
+      description:
+        'Honeypot: a hidden field people leave empty. Any value drops the request silently.',
+    }),
+    token: t.string({
+      required: true,
+      description:
+        'From `inviteRequestToken`, fetched when the form was shown.',
+    }),
+  }),
+})
+
+type InviteRequestRow = {
+  id: string
+  name: string
+  email: string
+  conference: string
+  size: string
+  ticketed: boolean
+  message: string | null
+  status: (typeof INVITE_STATUSES)[number]
+  createdAt: string
+  resolvedAt: string | null
+  codeId: string | null
+}
+const InviteRequest = builder
+  .objectRef<InviteRequestRow>('InviteRequest')
+  .implement({
+    fields: (t) => ({
+      id: t.exposeID('id'),
+      name: t.exposeString('name'),
+      email: t.exposeString('email'),
+      conference: t.exposeString('conference'),
+      size: t.exposeString('size'),
+      ticketed: t.exposeBoolean('ticketed'),
+      message: t.exposeString('message', { nullable: true }),
+      status: t.field({ type: InviteStatusEnum, resolve: (r) => r.status }),
+      createdAt: t.exposeString('createdAt'),
+      resolvedAt: t.exposeString('resolvedAt', { nullable: true }),
+      codeId: t.exposeID('codeId', { nullable: true }),
+    }),
+  })
+
 builder.queryType({
   fields: (t) => ({
     conferenceLifecycle: t.string({
@@ -598,6 +667,23 @@ builder.queryType({
           lifecycle,
           flag,
         )
+      },
+    }),
+    inviteRequestToken: t.string({
+      nullable: true,
+      description:
+        'A signed timestamp for the konf.app invite form (#2161): fetch it when the form is shown and send it as `token`. Public. Null when invite requests are not configured.',
+      resolve: (_, __, ctx) => ctx.data.inviteToken(),
+    }),
+    inviteRequests: t.field({
+      type: [InviteRequest],
+      tag: 'operator',
+      description:
+        'Invite requests (#2161), newest first (at most 500), optionally by status. Platform operators only (operator lane, no tenant).',
+      args: { status: t.arg({ type: InviteStatusEnum }) },
+      resolve: (_, { status }, ctx) => {
+        requirePlatform(ctx)
+        return ctx.data.inviteRequests(status)
       },
     }),
     signupCodes: t.field({
@@ -839,6 +925,80 @@ builder.mutationType({
         // Lost the race for the code's last use.
         if (!out) throw bad('inviteCode', 'this invite code is not valid')
         return out
+      },
+    }),
+    requestInvite: t.boolean({
+      description:
+        'The konf.app "Request an invite" form (#2161). Public; creates no account. Answers true whether or not the email already has an open request. Rate-limited per IP and per email (RATE_LIMITED). Refusals are BAD_USER_INPUT with `field`.',
+      args: { input: t.arg({ type: RequestInviteInput, required: true }) },
+      resolve: async (_, { input }, ctx) => {
+        const name = input.name.trim()
+        const email = input.email.trim().toLowerCase()
+        const conference = input.conference.trim()
+        const size = input.size.trim()
+        const message = input.message?.trim() || null
+        if (!name || name.length > 100)
+          throw bad('name', 'name must be 1 to 100 characters')
+        if (email.length > 254 || !EMAIL.test(email))
+          throw bad('email', 'email must be a valid address')
+        if (!conference || conference.length > 200)
+          throw bad('conference', 'conference must be 1 to 200 characters')
+        if (!size || size.length > 50)
+          throw bad('size', 'size must be 1 to 50 characters')
+        if (message && message.length > 2000)
+          throw bad('message', 'message must be at most 2000 characters')
+        const age = await ctx.data.inviteTokenAge(input.token)
+        if (age === null || age > INVITE_MAX_MS || age < 0)
+          throw bad('token', 'the form has expired; reload the page')
+        // Bots: the same answer as a stored request, and nothing is written.
+        if (input.website || age < INVITE_MIN_MS) return true
+        const ip =
+          (ctx as unknown as { request?: Request }).request?.headers.get(
+            CALLER_IP_HEADER,
+          ) || 'unknown'
+        if (!(await ctx.data.inviteAttempt(ip, email)))
+          throw createGraphQLError('too many requests', {
+            extensions: { code: 'RATE_LIMITED' },
+          })
+        await ctx.data.requestInvite({
+          name,
+          email,
+          conference,
+          size,
+          ticketed: input.ticketed,
+          message,
+        })
+        return true
+      },
+    }),
+    resolveInviteRequest: t.field({
+      type: InviteRequest,
+      nullable: true,
+      tag: 'operator',
+      description:
+        "Sets an invite request's status (#2161), optionally linking the signup code sent; `new` reopens it. Null for an unknown id. Platform operators only (operator lane, no tenant).",
+      args: {
+        id: t.arg.id({ required: true }),
+        status: t.arg({ type: InviteStatusEnum, required: true }),
+        signupCodeId: t.arg.id(),
+      },
+      resolve: (_, { id, status, signupCodeId }, ctx) => {
+        requirePlatform(ctx)
+        return ctx.data.resolveInviteRequest(
+          String(id),
+          status,
+          signupCodeId == null ? null : String(signupCodeId),
+        )
+      },
+    }),
+    eraseInviteRequests: t.int({
+      tag: 'operator',
+      description:
+        'Deletes every invite request from `email` (erasure, #2161); returns how many. Platform operators only (operator lane, no tenant).',
+      args: { email: t.arg.string({ required: true }) },
+      resolve: (_, { email }, ctx) => {
+        requirePlatform(ctx)
+        return ctx.data.eraseInviteRequests(email.trim().toLowerCase())
       },
     }),
     createSignupCode: t.field({
