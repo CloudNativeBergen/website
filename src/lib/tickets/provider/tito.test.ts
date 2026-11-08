@@ -169,7 +169,12 @@ describe('TitoProvider — fetchPublicTicketTypes', () => {
     // VAT-inclusive bridge: gross price surfaced with vat '0' so incl/excl math
     // is a no-op downstream.
     expect(t.price).toEqual([
-      { price: '100.0', vat: '0', description: null, key: null },
+      {
+        price: { amountMinor: 10000, currency: 'EUR' },
+        vat: '0',
+        description: null,
+        key: null,
+      },
     ])
   })
 
@@ -184,7 +189,7 @@ describe('TitoProvider — fetchPublicTicketTypes', () => {
       'tito',
       CREDS,
     ).fetchPublicTicketTypes(TITO_REF)
-    expect(tickets[0].price[0].price).toBe('0.0')
+    expect(tickets[0].price[0].price.amountMinor).toBe(0)
     // null quantity ⇒ unlimited ⇒ available null.
     expect(tickets[0].available).toBeNull()
   })
@@ -378,15 +383,15 @@ describe('TitoProvider — fetchEventTickets', () => {
     expect(tickets).toHaveLength(2)
     expect(tickets[0].crm.email).toBe('ada@example.com')
     expect(tickets[0].category).toBe('Speaker ticket')
-    expect(tickets[0].order_id).toBe(500)
+    expect(tickets[0].order_id).toBe('500')
     expect(tickets[0].order?.paid).toBe(true)
     // A paid registration owes nothing; an incomplete one still owes its price.
-    expect(tickets[0].sum_left).toBe('0')
+    expect(tickets[0].sum_left.amountMinor).toBe(0)
     expect(tickets[1].order?.paid).toBe(false)
-    expect(tickets[1].sum_left).toBe(tickets[1].sum)
+    expect(tickets[1].sum_left).toEqual(tickets[1].sum)
     // A missing registration_id gets a per-ticket negative fallback, never a
     // shared sentinel that would merge unrelated tickets into one order.
-    expect(tickets[1].order_id).toBe(-2)
+    expect(tickets[1].order_id).toBe('-2')
     // Page 1 then page 2 were both fetched.
     expect(fetchSpy).toHaveBeenCalledTimes(2)
   })
@@ -498,8 +503,8 @@ describe('TitoProvider — fetchEventTickets', () => {
     expect(tickets).toHaveLength(2)
     expect(tickets[0].order?.paid).toBe(true)
     expect(tickets[1].order?.paid).toBe(true)
-    expect(tickets[0].sum).toBe('2500.0')
-    expect(tickets[0].sum_left).toBe('0')
+    expect(tickets[0].sum.amountMinor).toBe(250000)
+    expect(tickets[0].sum_left.amountMinor).toBe(0)
   })
 
   it('throws instead of returning partial data when pagination never ends', async () => {
@@ -544,11 +549,11 @@ describe('TitoProvider — fetchEventTickets', () => {
 
     vi.stubGlobal('fetch', stubTitoFetch(orderOfTwo))
     const raw = await provider.fetchEventTickets(TITO_REF, { rawAmounts: true })
-    expect(raw.map((t) => t.sum)).toEqual(['1000', '1000'])
+    expect(raw.map((t) => t.sum.amountMinor)).toEqual([100000, 100000])
 
     vi.stubGlobal('fetch', stubTitoFetch(orderOfTwo))
     const normalized = await provider.fetchEventTickets(TITO_REF)
-    expect(normalized.map((t) => t.sum)).toEqual(['500', '500'])
+    expect(normalized.map((t) => t.sum.amountMinor)).toEqual([50000, 50000])
   })
 
   it('throws a wiring error when handed a Checkin-shaped ref', async () => {

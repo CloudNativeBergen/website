@@ -34,7 +34,7 @@ const mockedResolveProvider = vi.mocked(resolveTicketingProvider)
 const mockedSendEmail = vi.mocked(sendSpeakerTicketEmail)
 const mockedRecordEmailed = vi.mocked(recordSpeakerTicketEmailed)
 
-const SPEAKER_TICKET_ID = 777
+const SPEAKER_TICKET_ID = '777'
 
 /**
  * The organizer-pasted Checkin "Send invitations" link for the speaker ticket
@@ -140,9 +140,9 @@ beforeEach(() => {
   mockedResolveProvider.mockResolvedValue(resolvedCheckin())
   mockProvider.isConfigured.mockReturnValue(true)
   mockProvider.fetchPublicTicketTypes.mockResolvedValue({
-    event: { id: 4242, name: 'Cloud Native Day 2026' },
+    event: { id: '4242', name: 'Cloud Native Day 2026' },
     tickets: [
-      makeTicket({ id: 1, name: 'Regular', requiresInvitation: false }),
+      makeTicket({ id: '1', name: 'Regular', requiresInvitation: false }),
       makeTicket(),
     ],
   })
@@ -160,7 +160,7 @@ describe('handleSpeakerTicket', () => {
     // The claim link is delivered by the provider, not by us.
     expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(1)
     expect(mockProvider.sendTicketInvitation).toHaveBeenCalledWith(
-      SPEAKER_TICKET_ID,
+      Number(SPEAKER_TICKET_ID),
       [speaker.email],
       expect.stringContaining('Cloud Native Day 2026'),
     )
@@ -300,12 +300,12 @@ describe('handleSpeakerTicket', () => {
 
   it('picks the invitation-gated speaker ticket over other invitation tickets', async () => {
     mockProvider.fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 4242, name: 'Cloud Native Day 2026' },
+      event: { id: '4242', name: 'Cloud Native Day 2026' },
       tickets: [
-        makeTicket({ id: 10, name: 'Sponsor Ticket' }),
-        makeTicket({ id: 11, name: 'Speaker Ticket' }),
+        makeTicket({ id: '10', name: 'Sponsor Ticket' }),
+        makeTicket({ id: '11', name: 'Speaker Ticket' }),
         makeTicket({
-          id: 12,
+          id: '12',
           name: 'Speaker Ticket (public)',
           requiresInvitation: false,
         }),
@@ -478,7 +478,7 @@ describe('handleSpeakerTicket', () => {
 
   it('aborts without emailing when no invitation-gated speaker ticket exists', async () => {
     mockProvider.fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 4242, name: 'Cloud Native Day 2026' },
+      event: { id: '4242', name: 'Cloud Native Day 2026' },
       tickets: [makeTicket({ name: 'Regular Ticket' })],
     })
 
@@ -497,7 +497,7 @@ describe('handleSpeakerTicket', () => {
 
   it('aborts when the speaker ticket exists but does not require an invitation', async () => {
     mockProvider.fetchPublicTicketTypes.mockResolvedValue({
-      event: { id: 4242, name: 'Cloud Native Day 2026' },
+      event: { id: '4242', name: 'Cloud Native Day 2026' },
       tickets: [makeTicket({ requiresInvitation: false })],
     })
 
@@ -737,7 +737,7 @@ describe('handleSpeakerTicket', () => {
       expect(result.sent).toBe(1)
       expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(1)
       expect(mockProvider.sendTicketInvitation).toHaveBeenCalledWith(
-        SPEAKER_TICKET_ID,
+        Number(SPEAKER_TICKET_ID),
         ['grace@example.com'],
         expect.any(String),
       )
@@ -789,7 +789,7 @@ describe('handleSpeakerTicket', () => {
       })
       expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(1)
       expect(mockProvider.sendTicketInvitation).toHaveBeenCalledWith(
-        SPEAKER_TICKET_ID,
+        Number(SPEAKER_TICKET_ID),
         ['ada@example.com'],
         expect.any(String),
       )
@@ -933,7 +933,7 @@ describe('handleSpeakerTicket', () => {
      */
     it('aborts every proposal when no speaker ticket type can be identified', async () => {
       mockProvider.fetchPublicTicketTypes.mockResolvedValue({
-        event: { id: 4242, name: 'Cloud Native Day 2026' },
+        event: { id: '4242', name: 'Cloud Native Day 2026' },
         tickets: [makeTicket({ name: 'Regular Ticket' })],
       })
 

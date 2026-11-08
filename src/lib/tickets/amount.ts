@@ -1,3 +1,4 @@
+import type { Money } from './types'
 /**
  * The ONE place a money string from a ticketing provider becomes a number
  * (#898; the helper was introduced in #896 and lived in `tickets/utils.ts`).
@@ -176,4 +177,13 @@ export function parseVatPercent(
     return 0
   }
   return parseTicketAmount(value)
+}
+
+/**
+ * A Konf {@link Money} in major units (kroner), for totals and display. The
+ * provider already parsed its vendor string into integer minor units (via
+ * `toMinorUnits`), so this is exact for any amount with at most two decimals.
+ */
+export function moneyToMajor(money: Money | null | undefined): number {
+  return money ? money.amountMinor / 100 : 0
 }

@@ -15,17 +15,18 @@ import { describe, it, expect } from 'vitest'
 import { calculateDiscountUsage, resolveRedemptionCount } from './usage'
 import type { EventDiscountWithUsage } from './types'
 import type { EventTicket } from '@/lib/tickets/types'
+import { toMoney } from '@/lib/tickets/provider/types'
 
 const ticket = (
   id: number,
   overrides: Partial<EventTicket> = {},
 ): EventTicket => ({
-  id,
-  order_id: 500 + id,
+  id: String(id),
+  order_id: '500' + id,
   category: 'Regular',
   customer_name: null,
-  sum: '1000',
-  sum_left: '0',
+  sum: { amountMinor: 100000, currency: 'NOK' },
+  sum_left: { amountMinor: 0, currency: 'NOK' },
   fields: [],
   crm: { first_name: 'A', last_name: 'B', email: `a${id}@example.com` },
   order_date: '2026-06-01',
@@ -65,8 +66,8 @@ describe('calculateDiscountUsage', () => {
     ])
 
     expect(stats).toEqual({
-      ACME2026: { usageCount: 2, ticketIds: [1, 2], totalPaid: 2000 },
-      EARLYBIRD: { usageCount: 1, ticketIds: [3], totalPaid: 1000 },
+      ACME2026: { usageCount: 2, ticketIds: ['1', '2'], totalPaid: 2000 },
+      EARLYBIRD: { usageCount: 1, ticketIds: ['3'], totalPaid: 1000 },
     })
   })
 
@@ -81,21 +82,30 @@ describe('calculateDiscountUsage', () => {
     // Nothing here can see the list price, so nothing here can state the
     // discounted amount.
     const stats = calculateDiscountUsage([
-      ticket(1, { coupon: 'ACME2026', sum: '0' }),
-      ticket(2, { coupon: 'ACME2026', sum: '0' }),
+      ticket(1, {
+        coupon: 'ACME2026',
+        sum: { amountMinor: 0, currency: 'NOK' },
+      }),
+      ticket(2, {
+        coupon: 'ACME2026',
+        sum: { amountMinor: 0, currency: 'NOK' },
+      }),
     ])
 
     expect(stats.ACME2026).toEqual({
       usageCount: 2,
-      ticketIds: [1, 2],
+      ticketIds: ['1', '2'],
       totalPaid: 0,
     })
   })
 
   it('keeps decimals, and treats an unparseable amount as 0 without losing the redemption', () => {
     const stats = calculateDiscountUsage([
-      ticket(1, { coupon: 'HALF', sum: '1000.50' }),
-      ticket(2, { coupon: 'HALF', sum: 'n/a' }),
+      ticket(1, {
+        coupon: 'HALF',
+        sum: { amountMinor: 100050, currency: 'NOK' },
+      }),
+      ticket(2, { coupon: 'HALF', sum: toMoney('n/a') }),
     ])
 
     // The count is the point of the panel; a bad amount must not drop a row.
@@ -108,7 +118,7 @@ describe('resolveRedemptionCount', () => {
   it('prefers OUR derived count when the ticket read resolved', () => {
     const d = discount({
       times: 3,
-      actualUsage: { usageCount: 1, ticketIds: [7], totalPaid: 0 },
+      actualUsage: { usageCount: 1, ticketIds: ['7'], totalPaid: 0 },
     })
     expect(resolveRedemptionCount(d)).toEqual({ count: 1, fromProvider: false })
   })

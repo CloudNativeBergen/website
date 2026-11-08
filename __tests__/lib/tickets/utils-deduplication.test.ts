@@ -3,6 +3,7 @@
  */
 import { deduplicateTicketsByEmail } from '@/lib/tickets/utils'
 import type { EventTicket } from '@/lib/tickets/types'
+import { toMoney } from '@/lib/tickets/provider/types'
 
 describe('deduplicateTicketsByEmail', () => {
   const createMockTicket = (
@@ -11,13 +12,13 @@ describe('deduplicateTicketsByEmail', () => {
     sum: string,
     orderDate: string,
   ): EventTicket => ({
-    id,
-    order_id: id,
+    id: String(id),
+    order_id: String(id),
     order_date: orderDate,
     category: 'Standard',
     customer_name: 'Test User',
-    sum,
-    sum_left: '0',
+    sum: toMoney(sum),
+    sum_left: { amountMinor: 0, currency: 'NOK' },
     fields: [],
     crm: {
       first_name: 'Test',
@@ -45,8 +46,8 @@ describe('deduplicateTicketsByEmail', () => {
 
     const result = deduplicateTicketsByEmail(tickets)
     expect(result).toHaveLength(1)
-    expect(result[0].id).toBe(2)
-    expect(result[0].sum).toBe('2000')
+    expect(result[0].id).toBe('2')
+    expect(result[0].sum.amountMinor).toBe(200000)
   })
 
   it('should handle case-insensitive email matching', () => {
@@ -57,7 +58,7 @@ describe('deduplicateTicketsByEmail', () => {
 
     const result = deduplicateTicketsByEmail(tickets)
     expect(result).toHaveLength(1)
-    expect(result[0].sum).toBe('2000')
+    expect(result[0].sum.amountMinor).toBe(200000)
   })
 
   it('should keep most recent ticket when amounts are equal', () => {
@@ -68,7 +69,7 @@ describe('deduplicateTicketsByEmail', () => {
 
     const result = deduplicateTicketsByEmail(tickets)
     expect(result).toHaveLength(1)
-    expect(result[0].id).toBe(2)
+    expect(result[0].id).toBe('2')
     expect(result[0].order_date).toBe('2024-01-03')
   })
 
@@ -108,15 +109,15 @@ describe('deduplicateTicketsByEmail', () => {
 
     const result = deduplicateTicketsByEmail(tickets)
     expect(result).toHaveLength(3)
-    expect(result.find((t) => t.crm.email === 'user1@example.com')?.sum).toBe(
-      '1500',
-    )
-    expect(result.find((t) => t.crm.email === 'user2@example.com')?.sum).toBe(
-      '2500',
-    )
-    expect(result.find((t) => t.crm.email === 'user3@example.com')?.sum).toBe(
-      '3000',
-    )
+    expect(
+      result.find((t) => t.crm.email === 'user1@example.com')?.sum.amountMinor,
+    ).toBe(150000)
+    expect(
+      result.find((t) => t.crm.email === 'user2@example.com')?.sum.amountMinor,
+    ).toBe(250000)
+    expect(
+      result.find((t) => t.crm.email === 'user3@example.com')?.sum.amountMinor,
+    ).toBe(300000)
   })
 
   it('should handle upgrade scenario (one-day to two-day ticket)', () => {
@@ -127,7 +128,7 @@ describe('deduplicateTicketsByEmail', () => {
 
     const result = deduplicateTicketsByEmail(tickets)
     expect(result).toHaveLength(1)
-    expect(result[0].sum).toBe('1400')
+    expect(result[0].sum.amountMinor).toBe(140000)
     expect(result[0].order_date).toBe('2024-01-15')
   })
 })

@@ -239,7 +239,7 @@ export async function handleSpeakerTicket(
     return blocked()
   }
 
-  const speakerTicketId = speakerTicket.id
+  const speakerTicketId = Number(speakerTicket.id)
 
   // Speakers whose ticket email was already delivered on a previous run,
   // keyed both by speaker id and by normalized email so a duplicate speaker

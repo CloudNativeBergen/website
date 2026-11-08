@@ -17,13 +17,13 @@ import {
 
 function ticket(overrides: Partial<EventTicket> = {}): EventTicket {
   return {
-    id: 1,
-    order_id: 100,
+    id: '1',
+    order_id: '100',
     order_date: '2026-03-01',
     category: 'Conference day',
     customer_name: 'Ada Lovelace',
-    sum: '4500.00',
-    sum_left: '0.00',
+    sum: { amountMinor: 450000, currency: 'NOK' },
+    sum_left: { amountMinor: 0, currency: 'NOK' },
     fields: [],
     crm: { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.com' },
     ...overrides,
@@ -53,10 +53,16 @@ const SPONSORS = [{ name: 'Acme Cloud' }, { name: 'Globex' }]
 describe('classifyTicket', () => {
   it('reads a 100%-off sponsor redemption as a sponsor comp', () => {
     expect(
-      classifyTicket(ticket({ coupon: 'ACMECLOUD1234', sum: '0.00' }), {
-        discounts: [discount()],
-        sponsors: SPONSORS,
-      }),
+      classifyTicket(
+        ticket({
+          coupon: 'ACMECLOUD1234',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
+        {
+          discounts: [discount()],
+          sponsors: SPONSORS,
+        },
+      ),
     ).toEqual({
       admits: true,
       admitsSource: 'unknown',
@@ -70,10 +76,16 @@ describe('classifyTicket', () => {
     // The failure price-based classification could not see: a comp inside an
     // otherwise paid order. The code, not the number, decides.
     expect(
-      classifyTicket(ticket({ coupon: 'acmecloud1234', sum: '1500.00' }), {
-        discounts: [discount()],
-        sponsors: SPONSORS,
-      }).comp,
+      classifyTicket(
+        ticket({
+          coupon: 'acmecloud1234',
+          sum: { amountMinor: 150000, currency: 'NOK' },
+        }),
+        {
+          discounts: [discount()],
+          sponsors: SPONSORS,
+        },
+      ).comp,
     ).toBe(true)
   })
 
@@ -83,7 +95,7 @@ describe('classifyTicket', () => {
         ticket({
           category: 'Sponsor discount (20% off conference day)',
           coupon: 'ACMECLOUD20',
-          sum: '3600.00',
+          sum: { amountMinor: 360000, currency: 'NOK' },
         }),
         {
           discounts: [
@@ -112,16 +124,16 @@ describe('classifyTicket', () => {
     }
     const upgrade = classifyTicket(
       ticket({
-        id: 2,
+        id: '2',
         category: 'Sponsor discount (workshop upgrade)',
         coupon: 'ACMECLOUD20',
-        sum: '800.00',
+        sum: { amountMinor: 80000, currency: 'NOK' },
       }),
       context,
     )
     const seat = classifyTicket(
       ticket({
-        id: 3,
+        id: '3',
         crm: {
           first_name: 'Ada',
           last_name: 'Lovelace',
@@ -140,9 +152,15 @@ describe('classifyTicket', () => {
 
   it('reads a speaker ticket as a speaker comp, whatever it cost', () => {
     expect(
-      classifyTicket(ticket({ category: 'Speaker ticket', sum: '0.00' }), {
-        speakerTicketTypeName: 'Speaker ticket',
-      }),
+      classifyTicket(
+        ticket({
+          category: 'Speaker ticket',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
+        {
+          speakerTicketTypeName: 'Speaker ticket',
+        },
+      ),
     ).toEqual({
       admits: true,
       admitsSource: 'unknown',
@@ -177,7 +195,7 @@ describe('classifyTicket', () => {
     (_, answer) => {
       const speaker = ticket({
         category: 'Speaker ticket',
-        sum: '0.00',
+        sum: { amountMinor: 0, currency: 'NOK' },
         ...answer,
       })
       const context = { speakerTicketTypeName: 'Speaker ticket' }
@@ -207,15 +225,26 @@ describe('classifyTicket', () => {
     // `findSpeakerTicketType` resolves whatever the tenant called its
     // invitation-gated type; a hardcoded 'Speaker ticket' would miss this.
     expect(
-      classifyTicket(ticket({ category: 'Foredragsholder', sum: '0.00' }), {
-        speakerTicketTypeName: 'Foredragsholder',
-      }).grantedBy,
+      classifyTicket(
+        ticket({
+          category: 'Foredragsholder',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
+        {
+          speakerTicketTypeName: 'Foredragsholder',
+        },
+      ).grantedBy,
     ).toBe('speaker')
   })
 
   it('reads a volunteer ticket as a volunteer comp, by literal or derived type name', () => {
     expect(
-      classifyTicket(ticket({ category: 'Volunteer ticket', sum: '0.00' })),
+      classifyTicket(
+        ticket({
+          category: 'Volunteer ticket',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
+      ),
     ).toEqual({
       admits: true,
       admitsSource: 'unknown',
@@ -225,15 +254,24 @@ describe('classifyTicket', () => {
     })
 
     expect(
-      classifyTicket(ticket({ category: 'Free ticket - Crew', sum: '0.00' }), {
-        volunteerTicketTypeName: 'Free ticket - Crew',
-      }).grantedBy,
+      classifyTicket(
+        ticket({
+          category: 'Free ticket - Crew',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
+        {
+          volunteerTicketTypeName: 'Free ticket - Crew',
+        },
+      ).grantedBy,
     ).toBe('volunteer')
   })
 
   it('leaves a comp unattributed when its code matches no known sponsor', () => {
     const result = classifyTicket(
-      ticket({ coupon: 'ORGCREW2026', sum: '0.00' }),
+      ticket({
+        coupon: 'ORGCREW2026',
+        sum: { amountMinor: 0, currency: 'NOK' },
+      }),
       {
         discounts: [discount({ triggerValue: 'ORGCREW2026' })],
         sponsors: SPONSORS,
@@ -274,15 +312,23 @@ describe('classifyTicket', () => {
 
   it('will not call a zero-priced ticket with no code a comp', () => {
     // Free-to-attend events exist; price alone cannot tell one from a grant.
-    expect(classifyTicket(ticket({ sum: '0.00' })).comp).toBe('unknown')
+    expect(
+      classifyTicket(ticket({ sum: { amountMinor: 0, currency: 'NOK' } })).comp,
+    ).toBe('unknown')
   })
 
   it('reads the `discount` field when `coupon` is absent', () => {
     expect(
-      classifyTicket(ticket({ discount: 'ACMECLOUD1234', sum: '0.00' }), {
-        discounts: [discount()],
-        sponsors: SPONSORS,
-      }).grantedBy,
+      classifyTicket(
+        ticket({
+          discount: 'ACMECLOUD1234',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
+        {
+          discounts: [discount()],
+          sponsors: SPONSORS,
+        },
+      ).grantedBy,
     ).toBe('sponsor')
   })
 
@@ -290,9 +336,15 @@ describe('classifyTicket', () => {
     // Attribution is substring matching; without names there is nothing to
     // match, and a comp with no named grantor beats a guessed one.
     expect(
-      classifyTicket(ticket({ coupon: 'ACMECLOUD1234', sum: '0.00' }), {
-        discounts: [discount()],
-      }),
+      classifyTicket(
+        ticket({
+          coupon: 'ACMECLOUD1234',
+          sum: { amountMinor: 0, currency: 'NOK' },
+        }),
+        {
+          discounts: [discount()],
+        },
+      ),
     ).toEqual({
       admits: true,
       admitsSource: 'unknown',
@@ -306,11 +358,21 @@ describe('classifyTicket', () => {
     // A fixed-amount code needs the type's list price, which is not on the
     // ticket — so whether it removed everything is genuinely unknown.
     expect(
-      classifyTicket(ticket({ coupon: 'FIXED500', sum: '4000.00' }), {
-        discounts: [
-          discount({ triggerValue: 'FIXED500', type: 'amount', value: '500' }),
-        ],
-      }).comp,
+      classifyTicket(
+        ticket({
+          coupon: 'FIXED500',
+          sum: { amountMinor: 400000, currency: 'NOK' },
+        }),
+        {
+          discounts: [
+            discount({
+              triggerValue: 'FIXED500',
+              type: 'amount',
+              value: '500',
+            }),
+          ],
+        },
+      ).comp,
     ).toBe('unknown')
   })
 })
@@ -327,24 +389,41 @@ describe('isPaidTicket', () => {
     // The exact shape `classifyTicket` covers above: a comp inside an
     // otherwise paid order. By price it is a sale; by the code it is a grant.
     expect(
-      isPaidTicket(ticket({ coupon: 'ACMECLOUD1234', sum: '1500.00' }), {
-        discounts: [discount()],
-        sponsors: SPONSORS,
-      }),
+      isPaidTicket(
+        ticket({
+          coupon: 'ACMECLOUD1234',
+          sum: { amountMinor: 150000, currency: 'NOK' },
+        }),
+        {
+          discounts: [discount()],
+          sponsors: SPONSORS,
+        },
+      ),
     ).toBe(false)
   })
 
   it('sells a partially discounted seat, which price alone would too', () => {
     expect(
-      isPaidTicket(ticket({ coupon: 'ACMECLOUD20', sum: '3600.00' }), {
-        discounts: [discount({ triggerValue: 'ACMECLOUD20', value: '20' })],
-      }),
+      isPaidTicket(
+        ticket({
+          coupon: 'ACMECLOUD20',
+          sum: { amountMinor: 360000, currency: 'NOK' },
+        }),
+        {
+          discounts: [discount({ triggerValue: 'ACMECLOUD20', value: '20' })],
+        },
+      ),
     ).toBe(true)
   })
 
   it('never sells a speaker ticket, whatever the provider billed for it', () => {
     expect(
-      isPaidTicket(ticket({ category: 'Speaker ticket', sum: '4500.00' })),
+      isPaidTicket(
+        ticket({
+          category: 'Speaker ticket',
+          sum: { amountMinor: 450000, currency: 'NOK' },
+        }),
+      ),
     ).toBe(false)
   })
 
@@ -353,12 +432,27 @@ describe('isPaidTicket', () => {
     // documented last-resort tiebreak. Both sides land where they landed
     // before, so a failed discount read costs certainty and never a number.
     const unlookupable = { coupon: 'MYSTERY' }
-    expect(isPaidTicket(ticket({ ...unlookupable, sum: '4500.00' }))).toBe(true)
-    expect(isPaidTicket(ticket({ ...unlookupable, sum: '0.00' }))).toBe(false)
+    expect(
+      isPaidTicket(
+        ticket({
+          ...unlookupable,
+          sum: { amountMinor: 450000, currency: 'NOK' },
+        }),
+      ),
+    ).toBe(true)
+    expect(
+      isPaidTicket(
+        ticket({ ...unlookupable, sum: { amountMinor: 0, currency: 'NOK' } }),
+      ),
+    ).toBe(false)
   })
 
   it('reads an ordinary zero-priced ticket as free and a plain sale as paid', () => {
-    expect(isPaidTicket(ticket({ sum: '0.00' }))).toBe(false)
-    expect(isPaidTicket(ticket({ sum: '4500.00' }))).toBe(true)
+    expect(
+      isPaidTicket(ticket({ sum: { amountMinor: 0, currency: 'NOK' } })),
+    ).toBe(false)
+    expect(
+      isPaidTicket(ticket({ sum: { amountMinor: 450000, currency: 'NOK' } })),
+    ).toBe(true)
   })
 })

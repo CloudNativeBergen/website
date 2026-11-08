@@ -52,7 +52,7 @@ export type DiscountUsageStatus = 'resolved' | 'unavailable'
  */
 export interface DiscountUsage {
   usageCount: number
-  ticketIds: number[]
+  ticketIds: string[]
   /**
    * Sum of `ticket.sum` across the tickets that used this code — the amount
    * BUYERS PAID on those tickets, NOT the amount the code discounted.

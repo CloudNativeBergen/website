@@ -1,6 +1,6 @@
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
-import { parseTicketAmount } from './amount'
+import { moneyToMajor } from './amount'
 import {
   resolveTicketingProvider,
   type ConferenceTicketingBinding,
@@ -53,7 +53,7 @@ export async function getPublicTicketTypes(
       .filter((t) => !t.requiresInvitation)
       .sort((a, b) => a.position - b.position)
     const isPriced = (t: PublicTicketType) =>
-      t.price.some((p) => parseTicketAmount(p.price) > 0)
+      t.price.some((p) => moneyToMajor(p.price) > 0)
 
     // Extract complimentary tickets (invite-only or free) that have descriptions
     const complimentaryTickets = extractComplimentaryTickets(data.tickets)

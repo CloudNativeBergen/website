@@ -114,7 +114,7 @@ const discount = (triggerValue: string, value: string) => ({
   ticketsOnly: true,
   timesTotal: 10,
   times: 0,
-  actualUsage: { usageCount: 3, ticketIds: [1, 2, 3], totalPaid: 900 },
+  actualUsage: { usageCount: 3, ticketIds: ['1', '2', '3'], totalPaid: 900 },
 })
 
 const PAYLOAD: UsagePayload = {
