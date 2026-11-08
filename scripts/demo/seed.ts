@@ -126,7 +126,8 @@ const refs = (type: string, keys: string[], prefix: string) =>
     prefix,
   )
 
-export const ORG_ID = id('organization', 'kontainerkonf')
+/** Referenced only, never written: Sanity org `_id` = tenant-directory org id. */
+export const ORG_ID = DEMO_ORG_ID
 
 /**
  * Sanity documents for the fixtures. Conference documents carry only what
@@ -166,7 +167,6 @@ export function buildDocuments(
   editionIds: Record<string, string>,
 ): {
   upsert: Doc[]
-  ifMissing: Doc[]
   conferences: ConferencePatch[]
 } {
   const s = f.sanity
@@ -428,15 +428,6 @@ export function buildDocuments(
       createdAt: n.createdAt,
     })),
   ]
-  // The org document may already carry operator-set fields: never replace it.
-  const ifMissing: Doc[] = [
-    {
-      _id: ORG_ID,
-      _type: 'organization',
-      name: 'KontainerKonf',
-      slug: { _type: 'slug', current: 'kontainerkonf-demo' },
-    },
-  ]
   const conferences: ConferencePatch[] = f.d1.editions.map((e) => ({
     id: confId(e.key),
     setIfMissing: {
@@ -455,7 +446,7 @@ export function buildDocuments(
       ),
     },
   }))
-  return { upsert, ifMissing, conferences }
+  return { upsert, conferences }
 }
 
 /** Every write target must be `kkdemo.seed.*` or an allowlisted conference id. */
@@ -550,13 +541,10 @@ export async function run(
       }
   }
 
-  const { upsert, ifMissing, conferences } = buildDocuments(
-    fixtures,
-    editionIds,
-  )
+  const { upsert, conferences } = buildDocuments(fixtures, editionIds)
   // Before any transaction: every target is a seed id or an allowlisted edition.
   assertDemoIds(
-    [...upsert, ...ifMissing].map((d) => d._id),
+    upsert.map((d) => d._id),
     new Set(),
   )
   assertDemoIds(
@@ -566,25 +554,23 @@ export async function run(
 
   deps.log(`${opts.dryRun ? 'Planned' : 'Writing'} Sanity documents:`)
   deps.log(`  ${'conference (patched)'.padEnd(22)} ${conferences.length}`)
-  for (const [type, n] of Object.entries(
-    countByType([...ifMissing, ...upsert]),
-  ))
+  for (const [type, n] of Object.entries(countByType(upsert)))
     deps.log(`  ${type.padEnd(22)} ${n}`)
   if (opts.dryRun) return
 
   // 3. Write. Conference docs must already exist; they get setIfMissing only.
   const client = await deps.createSanityClient()
-  const ids = conferences.map((c) => c.id)
+  // The org and conference documents are referenced or patched, never created.
+  const ids = [ORG_ID, ...conferences.map((c) => c.id)]
   const found = await client.fetch<string[]>('*[_id in $ids]._id', { ids })
   const absent = ids.filter((id) => !found.includes(id))
   if (absent.length)
     throw new Error(
-      `stopping: conference document(s) missing in Sanity: ${absent.join(', ')}`,
+      `stopping: document(s) missing in Sanity: ${absent.join(', ')}`,
     )
   for (let i = 0; i < upsert.length; i += TX_SIZE) {
     const tx = client.transaction()
     if (i === 0) {
-      ifMissing.forEach((d) => tx.createIfNotExists(d))
       for (const c of conferences)
         tx.patch(c.id, { setIfMissing: c.setIfMissing })
     }

@@ -40,7 +40,7 @@ function deps(
   {
     orgId = DEMO_ORG_ID,
     editions = D1_EDITIONS,
-    inSanity = [LIVE_CONFERENCE_ID, 'd1-past-7f3', 'd1-next-9a2'],
+    inSanity = [DEMO_ORG_ID, LIVE_CONFERENCE_ID, 'd1-past-7f3', 'd1-next-9a2'],
   } = {},
 ) {
   const mutations: unknown[] = []
@@ -179,7 +179,9 @@ describe('demo:seed', () => {
   })
 
   it('stops when an edition document is missing in Sanity, writing nothing', async () => {
-    const { d, commit } = deps('demo', { inSanity: [LIVE_CONFERENCE_ID] })
+    const { d, commit } = deps('demo', {
+      inSanity: [DEMO_ORG_ID, LIVE_CONFERENCE_ID],
+    })
     await expect(run(opts(), d)).rejects.toThrow(/missing in Sanity: d1-/)
     expect(commit).not.toHaveBeenCalled()
   })
@@ -243,6 +245,35 @@ describe('demo:seed', () => {
     expect(JSON.stringify(a.mutations)).toContain('"_ref":"d1-past-7f3"')
   })
 
+  it('never writes kkdemo.org and references only it as the organization', async () => {
+    const { d, mutations } = deps('demo')
+    await run(opts(), d)
+    const targets = (mutations as unknown[][]).map((m) =>
+      typeof m[1] === 'string' ? m[1] : (m[1] as { _id: string })._id,
+    )
+    expect(targets.length).toBeGreaterThan(400)
+    expect(targets).not.toContain(DEMO_ORG_ID)
+    expect(targets.filter((t) => t.includes('organization'))).toEqual([])
+    const json = JSON.stringify(mutations)
+    const orgRefs = [
+      ...json.matchAll(
+        /"organizations?":(\[?)\{"_type":"reference","_ref":"([^"]+)"/g,
+      ),
+    ].map((m) => m[2])
+    expect(orgRefs.length).toBeGreaterThan(40)
+    expect(new Set(orgRefs)).toEqual(new Set([DEMO_ORG_ID]))
+  })
+
+  it('stops when kkdemo.org is missing in Sanity, writing nothing', async () => {
+    const { d, commit } = deps('demo', {
+      inSanity: [LIVE_CONFERENCE_ID, 'd1-past-7f3', 'd1-next-9a2'],
+    })
+    await expect(run(opts(), d)).rejects.toThrow(
+      /missing in Sanity: kkdemo.org/,
+    )
+    expect(commit).not.toHaveBeenCalled()
+  })
+
   it('invite tokens are not derivable from the fixture key', () => {
     const { upsert } = buildDocuments(fixtures, EDITION_IDS)
     const invites = upsert.filter((d) => d._type === 'coSpeakerInvitation')
@@ -263,11 +294,8 @@ describe('demo:seed', () => {
   })
 
   it('every _id stays inside the demo prefix; refs hit seeded docs or D1 editions', () => {
-    const { upsert, ifMissing, conferences } = buildDocuments(
-      fixtures,
-      EDITION_IDS,
-    )
-    const docs = [...upsert, ...ifMissing]
+    const { upsert, conferences } = buildDocuments(fixtures, EDITION_IDS)
+    const docs = upsert
     for (const doc of docs) expect(doc._id.startsWith(DEMO_PREFIX)).toBe(true)
     const refs = (
       JSON.stringify([docs, conferences]).match(/"_ref":"[^"]+"/g) ?? []
@@ -276,6 +304,7 @@ describe('demo:seed', () => {
     const ids = new Set([
       ...docs.map((x) => x._id),
       ...conferences.map((c) => c.id),
+      DEMO_ORG_ID,
     ])
     expect(refs.filter((r) => !ids.has(r))).toEqual([])
     expect(conferences.map((c) => c.id).sort()).toEqual(
