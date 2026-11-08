@@ -13,7 +13,7 @@
 // decision 9 on top: after acceptance only title and abstract, until the
 // program is published.
 import type { SanityClient } from '@sanity/client'
-import { OPTIONS, type SpeakerRef, type Tenant } from './source'
+import { OPTIONS, type Tenant } from './source'
 
 /** konf-identity `SpeakerLink`: safe match keys and the profile. */
 export interface SpeakerLink {
@@ -46,6 +46,48 @@ export const STATUS = [
 ] as const
 export type Status = (typeof STATUS)[number]
 
+/**
+ * A speaker on the talk as the site's speaker portal shows them
+ * (src/lib/proposal/data/sanity.ts getProposal). The site shows every
+ * speaker's email to the talk's other speakers (ProposalForm.tsx, the
+ * speaker list; ProposalCoSpeaker.tsx), so it is visible here only to a
+ * speaker of the same talk, which every read already requires.
+ */
+export interface MySpeaker {
+  id: string
+  name: string | null
+  image: string | null
+  slug: string | null
+  email: string | null
+}
+export interface Attachment {
+  key: string
+  kind: 'file' | 'url'
+  attachmentType: string | null
+  title: string | null
+  description: string | null
+  filename: string | null
+  url: string | null
+  uploadedAt: string | null
+}
+export interface Invitation {
+  id: string
+  invitedEmail: string | null
+  invitedName: string | null
+  status: string
+  expiresAt: string | null
+  createdAt: string | null
+  respondedAt: string | null
+}
+export interface ScheduleInfo {
+  date: string | null
+  trackTitle: string | null
+  startTime: string | null
+  endTime: string | null
+}
+/** Portable Text blocks, as validated by `toPortableText`. */
+export type Blocks = Row[]
+
 /** The speaker's own view: their text and status. No review, score or note. */
 export interface MyProposal {
   id: string
@@ -60,11 +102,20 @@ export interface MyProposal {
   outline: string | null
   prerequisites: string | null
   capacity: number | null
-  speakers: SpeakerRef[]
+  speakers: MySpeaker[]
+  description: Blocks | null
+  tos: boolean
+  withdrawnReason: string | null
+  conference: { id: string }
+  scheduleInfo: ScheduleInfo | null
+  attachments: Attachment[]
+  coSpeakerInvitations: Invitation[]
 }
 export interface ProposalFields {
   title?: string | null
   abstract?: string | null
+  /** Portable Text; validated and turned into `abstract` for the rules. */
+  description?: unknown
   format?: string | null
   level?: string | null
   language?: string | null
@@ -156,7 +207,7 @@ const WITHDRAWABLE: Status[] = [
 const ACTIVE = (s: Status) =>
   !['draft', 'withdrawn', 'canceled', 'rejected'].includes(s)
 const ACCEPTED: Status[] = ['accepted', 'confirmed']
-const AFTER_ACCEPTANCE = new Set(['title', 'abstract'])
+const AFTER_ACCEPTANCE = new Set(['title', 'abstract', 'description'])
 const MAX_PROPOSALS = 3
 const MAX_SPEAKER_CAPACITY = 200
 const MAX_CAPACITY = 500
@@ -222,11 +273,140 @@ export function validateFields(
   if ((p.abstract?.length ?? 0) > 10000) bad('Description is too long')
 }
 
+// ---- Portable Text ---------------------------------------------------------
+
+// The site's proposal editor schema (src/components/PortableTextEditor.tsx):
+// these styles, lists, decorators and a link annotation, nothing else.
+const STYLES = new Set(['normal', 'h1', 'h2', 'h3'])
+const LISTS = new Set(['bullet', 'number'])
+const DECORATORS = new Set(['strong', 'em', 'underline'])
+const MAX_BLOCKS = 200
+const MAX_JSON = 50_000
+const isObj = (v: unknown): v is Row =>
+  typeof v === 'object' && v !== null && !Array.isArray(v)
+const keyOf = (v: unknown) =>
+  typeof v === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(v) ? v : key()
+
+/**
+ * Validates Portable Text from a caller and rebuilds it from allowed parts
+ * only: unknown keys are dropped, an unknown block type, style, list, mark
+ * or link scheme is refused. Text length is capped by the abstract rule.
+ */
+export function toPortableText(v: unknown): Blocks {
+  const bad = (m: string) => no('BAD_USER_INPUT', `Description: ${m}`)
+  if (!Array.isArray(v)) return bad('must be a list of blocks')
+  if (v.length > MAX_BLOCKS) bad('too many blocks')
+  if (JSON.stringify(v).length > MAX_JSON) bad('too large')
+  return v.map((b) => {
+    if (!isObj(b) || b._type !== 'block') return bad('only text blocks')
+    const style = b.style ?? 'normal'
+    if (typeof style !== 'string' || !STYLES.has(style)) bad('style')
+    if (b.listItem != null && !LISTS.has(b.listItem as string)) bad('list')
+    if (
+      b.level != null &&
+      !(
+        Number.isInteger(b.level) &&
+        (b.level as number) >= 1 &&
+        (b.level as number) <= 5
+      )
+    )
+      bad('list level')
+    const markDefs = (b.markDefs ?? []) as unknown
+    if (!Array.isArray(markDefs)) return bad('markDefs')
+    const defs = markDefs.map((d) => {
+      if (!isObj(d) || d._type !== 'link' || typeof d._key !== 'string')
+        return bad('only link annotations')
+      if (
+        typeof d.href !== 'string' ||
+        !/^(https?:|mailto:)/i.test(d.href) ||
+        d.href.length > 2000
+      )
+        bad('links must be http(s) or mailto')
+      return { _type: 'link', _key: d._key, href: d.href }
+    })
+    const defKeys = new Set(defs.map((d) => d._key))
+    if (!Array.isArray(b.children) || !b.children.length) return bad('children')
+    const children = b.children.map((c: unknown) => {
+      if (!isObj(c) || c._type !== 'span' || typeof c.text !== 'string')
+        return bad('only text spans')
+      const marks = (c.marks ?? []) as unknown
+      if (
+        !Array.isArray(marks) ||
+        !marks.every(
+          (m) => typeof m === 'string' && (DECORATORS.has(m) || defKeys.has(m)),
+        )
+      )
+        bad('marks')
+      return { _type: 'span', _key: keyOf(c._key), text: c.text, marks }
+    })
+    return {
+      _type: 'block',
+      _key: keyOf(b._key),
+      style,
+      markDefs: defs,
+      children,
+      ...(b.listItem != null && { listItem: b.listItem, level: b.level ?? 1 }),
+    }
+  })
+}
+
+/** `description` (Portable Text) wins over `abstract`; both is an error. */
+function withDescription(p: ProposalFields): ProposalFields {
+  if (p.description == null) {
+    const { description, ...rest } = p
+    void description
+    return rest
+  }
+  if (p.abstract != null)
+    no('BAD_USER_INPUT', 'Send description or abstract, not both')
+  const blocks = toPortableText(p.description)
+  return { ...p, description: blocks, abstract: toText(blocks) ?? '' }
+}
+
 // ---- Sanity ----------------------------------------------------------------
 
+// The site's read models, copied verbatim (a service cannot import src/):
+// src/lib/speaker/image-groq.ts SPEAKER_IMAGE_URL, and from
+// src/lib/proposal/data/sanity.ts COSPEAKER_INVITATIONS_PROJECTION (without
+// the decline reason and reminder time, which the portal does not show) and
+// SCHEDULE_INFO_PROJECTION.
+const SPEAKER_IMAGE_URL = `coalesce(
+  image.asset->url + select(
+    defined(image.crop) || defined(image.hotspot) =>
+      "?rect=" + string(round(coalesce(image.crop.left, 0) * image.asset->metadata.dimensions.width))
+      + "," + string(round(coalesce(image.crop.top, 0) * image.asset->metadata.dimensions.height))
+      + "," + string(round((1 - coalesce(image.crop.left, 0) - coalesce(image.crop.right, 0)) * image.asset->metadata.dimensions.width))
+      + "," + string(round((1 - coalesce(image.crop.top, 0) - coalesce(image.crop.bottom, 0)) * image.asset->metadata.dimensions.height))
+      + "&fp-x=" + string(coalesce(image.hotspot.x, 0.5))
+      + "&fp-y=" + string(coalesce(image.hotspot.y, 0.5)),
+    ""
+  ),
+  imageURL
+)`
+// groq-global-scoped: parent-keyed — `proposal._ref == ^._id` bounds the read
+// to invitations of the enclosing talk, which is tenant- and speaker-scoped.
+const INVITATIONS = `"coSpeakerInvitations": *[_type == "coSpeakerInvitation" && proposal._ref == ^._id]{
+        _id, invitedEmail, invitedName, status, expiresAt, createdAt, respondedAt
+      }`
+// groq-global-scoped: parent-correlated — `conference._ref == ^.conference._ref`
+// binds the schedule read to the enclosing, already scoped talk's conference.
+const SCHEDULE_INFO = `"scheduleInfo": select(
+        (status == "accepted" || status == "confirmed") => {
+          "talkId": _id,
+          "schedule": *[_type == "schedule" && conference._ref == ^.conference._ref && (status == "official" || !defined(status)) && ^._id in tracks[].talks[].talk._ref] | order(date asc) [0]
+        } {
+          "date": schedule.date,
+          "trackTitle": schedule.tracks[^.talkId in talks[].talk._ref][0].trackTitle,
+          "timeSlot": schedule.tracks[^.talkId in talks[].talk._ref][0].talks[talk._ref == ^.talkId][0]{ startTime, endTime }
+        }
+      )`
 const FIELDS = `_id, _rev, status, title, description, format, level, language, audiences,
       "topicIds": topics[]._ref, outline, prerequisites, capacity,
-      "speakers": speakers[]->{ _id, name }`
+      tos, withdrawnReason, "conferenceId": conference._ref,
+      "speakers": speakers[]->{ _id, name, email, "slug": slug.current, "image": ${SPEAKER_IMAGE_URL} },
+      "attachments": attachments[]{ _key, _type, attachmentType, title, description, filename, url, uploadedAt, "fileUrl": file.asset->url },
+      ${INVITATIONS},
+      ${SCHEDULE_INFO}`
 // Every root filter carries the tenant AND the speaker predicate literally.
 export const MINE = `*[_type == "talk" && conference._ref == $conferenceId && conference->organization._ref == $orgId && $speakerId in speakers[]._ref && status != "deleted"] | order(_createdAt desc){
       ${FIELDS}
@@ -269,27 +449,82 @@ const s = (v: unknown) => (typeof v === 'string' && v.trim()) || null
 interface Stored extends MyProposal {
   rev: string
 }
+const rows = (v: unknown) =>
+  (Array.isArray(v) ? (v as Row[]) : []).filter(isObj)
+/** The site applies expiry on read (effectiveInvitationStatus). */
+const invitationStatus = (i: Row, now: Date) =>
+  i.status === 'pending' &&
+  typeof i.expiresAt === 'string' &&
+  new Date(i.expiresAt) < now
+    ? 'expired'
+    : (s(i.status) ?? 'pending')
+const schedule = (v: unknown): ScheduleInfo | null => {
+  if (!isObj(v) || !v.date) return null
+  const slot = isObj(v.timeSlot) ? v.timeSlot : {}
+  return {
+    date: s(v.date),
+    trackTitle: s(v.trackTitle),
+    startTime: s(slot.startTime),
+    endTime: s(slot.endTime),
+  }
+}
 // Allowlist mapping: nothing Sanity returns beyond these reaches the schema.
-const toProposal = (r: Row): Stored => ({
-  id: r._id as string,
-  rev: r._rev as string,
-  status: (STATUS as readonly string[]).includes(r.status as string)
-    ? (r.status as Status)
-    : 'draft',
-  title: s(r.title),
-  abstract: toText(r.description),
-  format: s(r.format),
-  level: s(r.level),
-  language: s(r.language),
-  audiences: strs(r.audiences),
-  topicIds: strs(r.topicIds),
-  outline: s(r.outline),
-  prerequisites: s(r.prerequisites),
-  capacity: typeof r.capacity === 'number' ? r.capacity : null,
-  speakers: (Array.isArray(r.speakers) ? (r.speakers as Row[]) : [])
-    .filter((p) => p?._id)
-    .map((p) => ({ id: p._id as string, name: s(p.name) })),
-})
+const toProposal = (r: Row, speakerId: string, now: Date): Stored => {
+  const people = rows(r.speakers).filter((p) => p._id)
+  // PII: emails only to a speaker of this talk (the query already requires
+  // it; this holds if a read ever drops that predicate).
+  const onTalk = people.some((p) => p._id === speakerId)
+  return {
+    id: r._id as string,
+    rev: r._rev as string,
+    status: (STATUS as readonly string[]).includes(r.status as string)
+      ? (r.status as Status)
+      : 'draft',
+    title: s(r.title),
+    abstract: toText(r.description),
+    format: s(r.format),
+    level: s(r.level),
+    language: s(r.language),
+    audiences: strs(r.audiences),
+    topicIds: strs(r.topicIds),
+    outline: s(r.outline),
+    prerequisites: s(r.prerequisites),
+    capacity: typeof r.capacity === 'number' ? r.capacity : null,
+    speakers: people.map((p) => ({
+      id: p._id as string,
+      name: s(p.name),
+      image: s(p.image),
+      slug: s(p.slug),
+      email: onTalk ? s(p.email) : null,
+    })),
+    description: Array.isArray(r.description)
+      ? (r.description as Blocks)
+      : null,
+    tos: r.tos === true,
+    withdrawnReason: s(r.withdrawnReason),
+    conference: { id: r.conferenceId as string },
+    scheduleInfo: schedule(r.scheduleInfo),
+    attachments: rows(r.attachments).map((a) => ({
+      key: String(a._key ?? ''),
+      kind: a._type === 'urlAttachment' ? 'url' : 'file',
+      attachmentType: s(a.attachmentType),
+      title: s(a.title),
+      description: s(a.description),
+      filename: s(a.filename),
+      url: s(a.url) ?? s(a.fileUrl),
+      uploadedAt: s(a.uploadedAt),
+    })),
+    coSpeakerInvitations: rows(r.coSpeakerInvitations).map((i) => ({
+      id: String(i._id),
+      invitedEmail: s(i.invitedEmail),
+      invitedName: s(i.invitedName),
+      status: invitationStatus(i, now),
+      expiresAt: s(i.expiresAt),
+      createdAt: s(i.createdAt),
+      respondedAt: s(i.respondedAt),
+    })),
+  }
+}
 const strip = (p: Stored): MyProposal => {
   const { rev, ...rest } = p
   void rev
@@ -306,7 +541,8 @@ function toDoc(p: ProposalFields) {
     if (v !== undefined) doc[k] = v
   }
   set('title', p.title?.trim())
-  if (p.abstract != null) doc.description = toBlocks(p.abstract)
+  if (Array.isArray(p.description)) doc.description = p.description
+  else if (p.abstract != null) doc.description = toBlocks(p.abstract)
   set('format', p.format)
   set('level', p.level)
   set('language', p.language)
@@ -332,19 +568,24 @@ export class MyProposals {
 
   private async load(w: Who, id: string) {
     const r = await this.sanity.fetch<Row | null>(ONE, { ...w, id })
-    return r?._id ? toProposal(r) : no('NOT_FOUND', NOT_FOUND)
+    return r?._id
+      ? toProposal(r, w.speakerId, this.now())
+      : no('NOT_FOUND', NOT_FOUND)
   }
 
   async list(w: Who) {
     const rows = await this.sanity.fetch<Row[]>(MINE, { ...w })
-    return (rows ?? []).filter((r) => r?._id).map((r) => strip(toProposal(r)))
+    return (rows ?? [])
+      .filter((r) => r?._id)
+      .map((r) => strip(toProposal(r, w.speakerId, this.now())))
   }
 
   async get(w: Who, id: string) {
     return strip(await this.load(w, id))
   }
 
-  async submit(w: Who, input: ProposalFields, link: SpeakerLink) {
+  async submit(w: Who, raw: ProposalFields, link: SpeakerLink) {
+    const input = withDescription(raw)
     const win = await this.window()
     if (!cfpOpen(win, this.now()))
       no('FORBIDDEN', 'The Call for Papers is closed')
@@ -385,7 +626,8 @@ export class MyProposals {
     return this.get(w, created._id)
   }
 
-  async update(w: Who, id: string, input: ProposalFields) {
+  async update(w: Who, id: string, raw: ProposalFields) {
+    const input = withDescription(raw)
     const cur = await this.load(w, id)
     const now = this.now()
     const keys = Object.keys(input).filter(
@@ -442,7 +684,12 @@ export class MyProposals {
     return this.get(w, id)
   }
 
-  async withdraw(w: Who, id: string) {
+  async withdraw(w: Who, id: string, reason: string) {
+    const why = reason.trim()
+    // The site requires a reason (#212, requireWithdrawalReason).
+    if (!why)
+      no('BAD_USER_INPUT', 'A reason is required to withdraw a proposal.')
+    if (why.length > 2000) no('BAD_USER_INPUT', 'reason is too long')
     const cur = await this.load(w, id)
     if (!WITHDRAWABLE.includes(cur.status))
       no('FORBIDDEN', `A ${cur.status} proposal cannot be withdrawn`)
@@ -453,7 +700,7 @@ export class MyProposals {
       )
     await this.sanity
       .patch(id)
-      .set({ status: 'withdrawn' })
+      .set({ status: 'withdrawn', withdrawnReason: why })
       .ifRevisionId(cur.rev)
       .commit()
       .catch(() => no('CONFLICT', 'The proposal changed; reload and retry'))

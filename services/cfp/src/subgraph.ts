@@ -1,12 +1,20 @@
 // cfp: the public face of the conference's call for papers (#2077). The
 // tenant comes from the envelope only. CFP dates and the conference's enabled
 // formats are on Conference (conference subgraph); talk details are in
-// program. No proposal state other than confirmed, no review and no speaker
-// contact field exists in this schema.
+// program. The public reads carry no proposal state other than confirmed and
+// no speaker contact; only MyProposal, behind the speaker-of-this-talk check,
+// carries the talk's speakers' emails (as the site's portal does). No review
+// field exists in this schema.
+import { GraphQLScalarType, valueFromASTUntyped } from 'graphql'
 import { builder } from './builder'
+import type { ResolverContext } from './worker'
 import {
   OPTIONS,
   type MyProposal,
+  type MySpeaker,
+  type Attachment,
+  type Invitation,
+  type ScheduleInfo,
   type ProposalFields,
   type CfpTalk,
   type CfpTopic,
@@ -16,6 +24,26 @@ import {
 
 const size = (assumedSize: number) => ({ listSize: { assumedSize } })
 const str = { nullable: true } as const
+
+// The generated builder declares no scalars; JSON is registered through a
+// widened view of the same builder instance.
+const JSON_ = (
+  builder as unknown as PothosSchemaTypes.SchemaBuilder<
+    PothosSchemaTypes.ExtendDefaultTypes<{
+      Context: ResolverContext
+      Scalars: { JSON: { Input: unknown; Output: unknown } }
+    }>
+  >
+).addScalarType(
+  'JSON',
+  new GraphQLScalarType({
+    name: 'JSON',
+    description: 'Any JSON value. Fields using it document the shape.',
+    serialize: (v) => v,
+    parseValue: (v) => v,
+    parseLiteral: (ast, vars) => valueFromASTUntyped(ast, vars),
+  }),
+) as never
 
 const OptionType = builder.objectRef<Option>('CfpOption').implement({
   fields: (t) => ({
@@ -105,6 +133,81 @@ const CfpType = builder
     }),
   })
 
+const MySpeakerType = builder
+  .objectRef<MySpeaker>('MyProposalSpeaker')
+  .implement({
+    description:
+      "A speaker on one of your proposals, as the site's speaker portal shows them.",
+    fields: (t) => ({
+      id: t.exposeID('id'),
+      name: t.exposeString('name', str),
+      image: t.exposeString('image', {
+        ...str,
+        description:
+          'Image URL (uploaded image with crop, else the login avatar).',
+      }),
+      slug: t.exposeString('slug', str),
+      email: t.exposeString('email', {
+        ...str,
+        description:
+          "Shown to the talk's speakers only, as on the site; null to anyone else.",
+      }),
+    }),
+  })
+
+const ScheduleInfoType = builder
+  .objectRef<ScheduleInfo>('MyProposalSchedule')
+  .implement({
+    fields: (t) => ({
+      date: t.exposeString('date', str),
+      trackTitle: t.exposeString('trackTitle', str),
+      startTime: t.exposeString('startTime', str),
+      endTime: t.exposeString('endTime', str),
+    }),
+  })
+
+const AttachmentType = builder
+  .objectRef<Attachment>('MyProposalAttachment')
+  .implement({
+    fields: (t) => ({
+      key: t.exposeID('key'),
+      kind: t.exposeString('kind', { description: '`file` or `url`.' }),
+      attachmentType: t.exposeString('attachmentType', str),
+      title: t.exposeString('title', str),
+      description: t.exposeString('description', str),
+      filename: t.exposeString('filename', str),
+      url: t.exposeString('url', str),
+      uploadedAt: t.exposeString('uploadedAt', str),
+    }),
+  })
+
+const InvitationType = builder
+  .objectRef<Invitation>('CoSpeakerInvitation')
+  .implement({
+    fields: (t) => ({
+      id: t.exposeID('id'),
+      invitedEmail: t.exposeString('invitedEmail', str),
+      invitedName: t.exposeString('invitedName', str),
+      status: t.exposeString('status', {
+        description:
+          'pending, accepted, declined, expired or canceled; a lapsed pending invite reads expired.',
+      }),
+      expiresAt: t.exposeString('expiresAt', str),
+      createdAt: t.exposeString('createdAt', str),
+      respondedAt: t.exposeString('respondedAt', str),
+    }),
+  })
+
+// The conference subgraph owns Conference; this one only names it by id.
+const ConferenceRef = builder
+  .objectRef<{ id: string }>('Conference')
+  .implement({ fields: (t) => ({ id: t.exposeID('id') }) })
+builder.asEntity(ConferenceRef, {
+  // resolvable: false; the stub resolver is never called by the router.
+  key: builder.keyDirective(builder.selection<{ id: string }>('id'), false),
+  resolveReference: () => null,
+})
+
 const MyProposalType = builder.objectRef<MyProposal>('MyProposal').implement({
   description:
     "One of the session user's own proposals (they are a speaker on it, #2078): their text and its status. Never reviews, scores or organizer notes.",
@@ -127,8 +230,40 @@ const MyProposalType = builder.objectRef<MyProposal>('MyProposal').implement({
     outline: t.exposeString('outline', str),
     prerequisites: t.exposeString('prerequisites', str),
     capacity: t.exposeInt('capacity', str),
+    description: t.field({
+      type: JSON_,
+      nullable: true,
+      description:
+        'Portable Text blocks: block with style normal, h1-h3, optional bullet or number list; spans with strong, em, underline and link marks.',
+      resolve: (x) => x.description as never,
+    }),
+    tos: t.exposeBoolean('tos', {
+      description: 'Whether the Terms of Service were accepted.',
+    }),
+    withdrawnReason: t.exposeString('withdrawnReason', str),
+    conference: t.field({
+      type: ConferenceRef,
+      resolve: (x) => x.conference,
+    }),
+    scheduleInfo: t.field({
+      type: ScheduleInfoType,
+      nullable: true,
+      description:
+        'Where an accepted or confirmed talk is on the official schedule.',
+      resolve: (x) => x.scheduleInfo,
+    }),
+    attachments: t.field({
+      type: [AttachmentType],
+      directives: size(5),
+      resolve: (x) => x.attachments,
+    }),
+    coSpeakerInvitations: t.field({
+      type: [InvitationType],
+      directives: size(3),
+      resolve: (x) => x.coSpeakerInvitations,
+    }),
     speakers: t.field({
-      type: [SpeakerRefType],
+      type: [MySpeakerType],
       directives: size(3),
       resolve: (x) => x.speakers,
     }),
@@ -144,8 +279,13 @@ type InputT = Parameters<
 const fields = (required: boolean) => (t: InputT) => ({
   title: t.string({ required }),
   abstract: t.string({
-    required,
-    description: 'Plain text; paragraphs separated by a blank line.',
+    description:
+      'Plain text; paragraphs separated by a blank line. Or send description.',
+  }),
+  description: t.field({
+    type: JSON_,
+    description:
+      'Portable Text, instead of abstract. Only the block types and marks MyProposal.description lists; at most 200 blocks.',
   }),
   format: t.string({ required }),
   level: t.string({ required }),
@@ -191,8 +331,15 @@ builder.mutationType({
       type: MyProposalType,
       description:
         'Withdraw a submitted, waitlisted, accepted or confirmed proposal, up to 14 days before the event.',
-      args: { id: t.arg.id({ required: true }) },
-      resolve: (_, { id }, ctx) => ctx.data.mine().withdraw(String(id)),
+      args: {
+        id: t.arg.id({ required: true }),
+        reason: t.arg.string({
+          required: true,
+          description: 'Why, as the site requires; shown to the organizers.',
+        }),
+      },
+      resolve: (_, { id, reason }, ctx) =>
+        ctx.data.mine().withdraw(String(id), reason),
     }),
   }),
 })
@@ -226,5 +373,5 @@ builder.queryType({
 // v2.9 is the first federation version with @listSize.
 export const schema = builder.toSubGraphSchema({
   linkUrl: 'https://specs.apollo.dev/federation/v2.9',
-  federationDirectives: ['@listSize'],
+  federationDirectives: ['@key', '@listSize'],
 })

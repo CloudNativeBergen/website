@@ -19,7 +19,14 @@ import {
 } from './mine'
 
 export * from './source'
-export type { MyProposal, ProposalFields } from './mine'
+export type {
+  MyProposal,
+  MySpeaker,
+  Attachment,
+  Invitation,
+  ScheduleInfo,
+  ProposalFields,
+} from './mine'
 
 /** The envelope's tenant, never one the caller names. */
 class Cfps extends ScopedRepository {
@@ -129,8 +136,11 @@ class Mine extends ScopedRepository {
   update(id: string, input: ProposalFields) {
     return this.run((w) => this.proposals.update(w, id, input), this.notFound)
   }
-  withdraw(id: string) {
-    return this.run((w) => this.proposals.withdraw(w, id), this.notFound)
+  withdraw(id: string, reason: string) {
+    return this.run(
+      (w) => this.proposals.withdraw(w, id, reason),
+      this.notFound,
+    )
   }
 }
 type Who = { orgId: string; conferenceId: string; speakerId: string }

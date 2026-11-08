@@ -67,8 +67,22 @@ const seed = (): Doc[] => [
     },
     { _id: `topic_${c}`, _type: 'topic', title: 't' },
   ]),
-  { _id: 'sp_me', _type: 'speaker', name: 'Me', providers: ['github:1'] },
-  { _id: 'sp_co', _type: 'speaker', name: 'Co', knownEmails: ['co@x.no'] },
+  {
+    _id: 'sp_me',
+    _type: 'speaker',
+    name: 'Me',
+    providers: ['github:1'],
+    email: 'me@x.no',
+    slug: { current: 'me' },
+    imageURL: 'https://avatars.example/me.png',
+  },
+  {
+    _id: 'sp_co',
+    _type: 'speaker',
+    name: 'Co',
+    knownEmails: ['co@x.no'],
+    email: 'co@x.no',
+  },
   { _id: 'sp_other', _type: 'speaker', name: 'Other', providers: ['github:9'] },
   // An organizer added this address off a ticket: it never links a login.
   {
@@ -84,6 +98,38 @@ const seed = (): Doc[] => [
   talk('t_other', 'conf_a', 'submitted', ['sp_other']),
   talk('t_b', 'conf_b', 'submitted', ['sp_me']),
   talk('t_del', 'conf_a', 'deleted', ['sp_me']),
+  {
+    _id: 'inv_1',
+    _type: 'coSpeakerInvitation',
+    proposal: ref('t_sub'),
+    invitedEmail: 'new@x.no',
+    invitedName: 'New',
+    status: 'pending',
+    expiresAt: '2099-01-01T00:00:00Z',
+    createdAt: '2026-02-01T00:00:00Z',
+    declineReason: 'PRIVATE',
+  },
+  {
+    _id: 'inv_2',
+    _type: 'coSpeakerInvitation',
+    proposal: ref('t_sub'),
+    invitedEmail: 'old@x.no',
+    status: 'pending',
+    expiresAt: '2026-01-02T00:00:00Z',
+    createdAt: '2026-01-01T00:00:00Z',
+  },
+  {
+    _id: 'sched_1',
+    _type: 'schedule',
+    conference: ref('conf_a'),
+    date: '2099-06-01',
+    tracks: [
+      {
+        trackTitle: 'Main',
+        talks: [{ talk: ref('t_acc'), startTime: '10:00', endTime: '10:25' }],
+      },
+    ],
+  },
 ]
 
 const fetch = vi.fn(async (q: string, params: Record<string, unknown>) =>
@@ -179,7 +225,7 @@ const F = 'id status title abstract format speakers { id name }'
 const ONE = `query($id: ID!) { myProposal(id: $id) { ${F} } }`
 const LIST = `{ myProposals { ${F} } }`
 const UPDATE = `mutation($id: ID!, $input: UpdateMyProposalInput!) { updateMyProposal(id: $id, input: $input) { ${F} } }`
-const WITHDRAW = `mutation($id: ID!) { withdrawMyProposal(id: $id) { ${F} } }`
+const WITHDRAW = `mutation($id: ID!, $reason: String! = "Cannot travel") { withdrawMyProposal(id: $id, reason: $reason) { ${F} withdrawnReason } }`
 const SUBMIT = `mutation($input: SubmitProposalInput!) { submitProposal(input: $input) { ${F} } }`
 const INPUT = {
   title: 'New talk',
@@ -457,6 +503,216 @@ describe('withdrawMyProposal', () => {
   })
 })
 
+const FULL = `query($id: ID!) { myProposal(id: $id) {
+  description tos withdrawnReason conference { id }
+  speakers { id name image slug email }
+  scheduleInfo { date trackTitle startTime endTime }
+  attachments { key kind attachmentType title filename url uploadedAt }
+  coSpeakerInvitations { id invitedEmail invitedName status expiresAt }
+} }`
+const PT = [
+  {
+    _type: 'block',
+    _key: 'b1',
+    style: 'h2',
+    markDefs: [{ _type: 'link', _key: 'l1', href: 'https://x.no' }],
+    children: [
+      { _type: 'span', _key: 's1', text: 'Bold ', marks: ['strong'] },
+      { _type: 'span', _key: 's2', text: 'link', marks: ['l1'] },
+    ],
+  },
+  {
+    _type: 'block',
+    _key: 'b2',
+    style: 'normal',
+    listItem: 'bullet',
+    level: 1,
+    markDefs: [],
+    children: [{ _type: 'span', _key: 's3', text: 'item', marks: [] }],
+  },
+]
+
+describe('the portal fields', () => {
+  beforeEach(() => {
+    Object.assign(doc('t_sub'), {
+      attachments: [
+        {
+          _type: 'urlAttachment',
+          _key: 'a1',
+          url: 'https://slides.example/1',
+          attachmentType: 'slides',
+          title: 'Slides',
+        },
+        {
+          _type: 'fileAttachment',
+          _key: 'a2',
+          file: { asset: ref('file-asset') },
+          attachmentType: 'recording',
+          filename: 'talk.mp4',
+        },
+      ],
+    })
+    dataset.push({
+      _id: 'file-asset',
+      _type: 'sanity.fileAsset',
+      url: 'https://cdn.example/talk.mp4',
+    })
+  })
+
+  it('returns the site-equivalent values', async () => {
+    const r = await gql(FULL, as('u_me'), { id: 't_sub' })
+    expect(r.errors).toBeUndefined()
+    const p = r.data.myProposal
+    expect(p.description).toEqual(doc('t_sub').description)
+    expect(p.tos).toBe(true)
+    expect(p.withdrawnReason).toBeNull()
+    expect(p.conference).toEqual({ id: 'conf_a' })
+    expect(p.scheduleInfo).toBeNull()
+    expect(p.speakers[0]).toEqual({
+      id: 'sp_me',
+      name: 'Me',
+      image: 'https://avatars.example/me.png',
+      slug: 'me',
+      email: 'me@x.no',
+    })
+    expect(p.attachments).toEqual([
+      {
+        key: 'a1',
+        kind: 'url',
+        attachmentType: 'slides',
+        title: 'Slides',
+        filename: null,
+        url: 'https://slides.example/1',
+        uploadedAt: null,
+      },
+      {
+        key: 'a2',
+        kind: 'file',
+        attachmentType: 'recording',
+        title: null,
+        filename: 'talk.mp4',
+        url: 'https://cdn.example/talk.mp4',
+        uploadedAt: null,
+      },
+    ])
+    // A lapsed pending invite reads expired, as effectiveInvitationStatus does.
+    expect(
+      p.coSpeakerInvitations.map((i: { id: string; status: string }) => [
+        i.id,
+        i.status,
+      ]),
+    ).toEqual([
+      ['inv_1', 'pending'],
+      ['inv_2', 'expired'],
+    ])
+    expect(JSON.stringify(r)).not.toContain('PRIVATE')
+  })
+
+  it('schedules an accepted talk; a withdrawal records the reason', async () => {
+    const r = await gql(FULL, as('u_me'), { id: 't_acc' })
+    expect(r.data.myProposal.scheduleInfo).toEqual({
+      date: '2099-06-01',
+      trackTitle: 'Main',
+      startTime: '10:00',
+      endTime: '10:25',
+    })
+    const w = await gql(WITHDRAW, as('u_me'), { id: 't_acc', reason: ' Ill ' })
+    expect(w.data.withdrawMyProposal.withdrawnReason).toBe('Ill')
+    const blank = await gql(WITHDRAW, as('u_me'), { id: 't_sub', reason: ' ' })
+    expect(errOf(blank)?.[0].code).toBe('BAD_USER_INPUT')
+    expect(doc('t_sub').status).toBe('submitted')
+  })
+
+  it("a co-speaker sees the other speaker's email, as the site shows it", async () => {
+    const r = await gql(FULL, as('u_co'), { id: 't_sub' })
+    expect(
+      r.data.myProposal.speakers.map((x: { email: string }) => x.email),
+    ).toEqual(['me@x.no', 'co@x.no'])
+  })
+
+  it('a foreign talk is NOT_FOUND, its speakers and emails never leave', async () => {
+    const r = await gql(FULL, as('u_co'), { id: 't_other' })
+    expect(errOf(r)?.[0].code).toBe('NOT_FOUND')
+    expect(r.data?.myProposal ?? null).toBeNull()
+  })
+
+  it('Portable Text round-trips through submit and update', async () => {
+    const s = await gql(
+      `mutation($input: SubmitProposalInput!) { submitProposal(input: $input) { id abstract description } }`,
+      as('u_me'),
+      { input: { ...INPUT, abstract: undefined, description: PT } },
+    )
+    expect(s.errors).toBeUndefined()
+    expect(s.data.submitProposal.description).toEqual(PT)
+    expect(s.data.submitProposal.abstract).toBe('Bold link\n\nitem')
+    const u = await gql(
+      `mutation($id: ID!, $input: UpdateMyProposalInput!) { updateMyProposal(id: $id, input: $input) { description } }`,
+      as('u_me'),
+      { id: 't_sub', input: { description: PT.slice(1) } },
+    )
+    expect(u.data.updateMyProposal.description).toEqual(PT.slice(1))
+  })
+
+  it('refuses invalid Portable Text and writes nothing', async () => {
+    const span = (o: object) => [
+      {
+        _type: 'block',
+        style: 'normal',
+        markDefs: [],
+        children: [{ _type: 'span', text: 'x', marks: [], ...o }],
+      },
+    ]
+    const bad = [
+      'just a string',
+      [{ _type: 'image', asset: ref('x') }],
+      [{ ...PT[0], style: 'blockquote' }],
+      [{ ...PT[1], listItem: 'checkbox' }],
+      span({ marks: ['code'] }),
+      span({ marks: ['nolink'] }),
+      span({ _type: 'inlineObject' }),
+      [
+        {
+          ...PT[0],
+          markDefs: [
+            { _type: 'link', _key: 'l1', href: 'javascript:alert(1)' },
+          ],
+        },
+      ],
+      [{ ...PT[0], markDefs: [{ _type: 'internalLink', _key: 'l1' }] }],
+      Array.from({ length: 201 }, () => PT[1]),
+      span({ text: 'x'.repeat(60_000) }),
+    ]
+    const before = JSON.stringify(doc('t_sub').description)
+    for (const description of bad) {
+      const r = await gql(UPDATE, as('u_me'), {
+        id: 't_sub',
+        input: { description },
+      })
+      expect(errOf(r)?.[0].code, JSON.stringify(description).slice(0, 80)).toBe(
+        'BAD_USER_INPUT',
+      )
+    }
+    expect(JSON.stringify(doc('t_sub').description)).toBe(before)
+    const both = await gql(UPDATE, as('u_me'), {
+      id: 't_sub',
+      input: { description: PT, abstract: 'x' },
+    })
+    expect(errOf(both)?.[0].code).toBe('BAD_USER_INPUT')
+  })
+
+  it('drops unknown keys from accepted blocks', async () => {
+    await gql(UPDATE, as('u_me'), {
+      id: 't_sub',
+      input: {
+        description: [
+          { ...PT[1], evil: 1, children: [{ ...PT[1].children[0], x: 2 }] },
+        ],
+      },
+    })
+    expect(JSON.stringify(doc('t_sub').description)).not.toMatch(/evil|"x"/)
+  })
+})
+
 describe('schema', () => {
   it('MyProposal carries the speaker’s own fields only: no review, score or note', () => {
     const f = Object.keys(
@@ -464,19 +720,54 @@ describe('schema', () => {
     ).sort()
     expect(f).toEqual([
       'abstract',
+      'attachments',
       'audiences',
       'capacity',
+      'coSpeakerInvitations',
+      'conference',
+      'description',
       'format',
       'id',
       'language',
       'level',
       'outline',
       'prerequisites',
+      'scheduleInfo',
       'speakers',
       'status',
       'title',
       'topicIds',
+      'tos',
+      'withdrawnReason',
     ])
+    const of = (t: string) =>
+      Object.keys((schema.getType(t) as GraphQLObjectType).getFields()).sort()
+    expect(of('CoSpeakerInvitation')).toEqual([
+      'createdAt',
+      'expiresAt',
+      'id',
+      'invitedEmail',
+      'invitedName',
+      'respondedAt',
+      'status',
+    ])
+    expect(of('MyProposalSpeaker')).toEqual([
+      'email',
+      'id',
+      'image',
+      'name',
+      'slug',
+    ])
+    // The public talk list's speaker carries no contact.
+    expect(of('CfpSpeakerRef')).toEqual(['id', 'name'])
+    for (const t of [
+      'MyProposalSpeaker',
+      'MyProposalSchedule',
+      'MyProposalAttachment',
+      'CoSpeakerInvitation',
+    ])
+      for (const x of of(t))
+        expect(x).not.toMatch(/review|score|note|rating|decline|remind/i)
     for (const x of f)
       expect(x).not.toMatch(
         /review|score|note|feedback|rating|comment|snapshot|email/i,
