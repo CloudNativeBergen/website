@@ -78,6 +78,9 @@ export const domains = sqliteTable('domains', {
     .notNull()
     .default(0),
   lastError: text('last_error'),
+  lastErrorCode: text('last_error_code', {
+    enum: ['hard-failure', 'soft-failure', 'unverifiable'],
+  }),
   lastRecheckAt: integer('last_recheck_at'),
   claimedAt: integer('claimed_at'),
 })

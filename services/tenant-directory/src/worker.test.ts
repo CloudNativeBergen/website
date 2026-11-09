@@ -316,6 +316,8 @@ beforeEach(() => {
     INVITE_TOKEN_SECRET: 'invite-secret',
     SANITY_PROJECT_ID: 'p',
     SANITY_DATASET: 'd',
+    DOMAIN_CNAME_TARGET: 'abc.vercel-dns-017.com',
+    DOMAIN_APEX_A: '216.150.1.1, 216.150.16.1',
     SANITY_API_TOKEN_READ: 'token',
     SITE_URL: SITE,
     PROVISIONING_SIGNING_KEY: signingJwk,
@@ -3353,5 +3355,44 @@ describe('domains API (#2207)', () => {
       (await gql(REMOVE, { h: 'live.example.com' }, admin)).body.data
         .removeDomain.hostname,
     ).toBe('live.example.com')
+  })
+
+  it('tells the organizer where to point the host, and why a check failed', async () => {
+    const { admin, conf } = await setup()
+    const ROUTE = `query($c: ID!) { domains(conferenceId: $c) { hostname routingRecords { type name value } lastErrorCode } }`
+    for (const h of ['www.example.com', 'example.com', 'example.co.uk'])
+      await gql(CLAIM, { c: conf, h }, admin)
+    sqlite
+      .prepare(
+        "UPDATE domains SET last_error_code = 'hard-failure' WHERE hostname = 'example.com'",
+      )
+      .run()
+    const read = async () =>
+      Object.fromEntries(
+        (await gql(ROUTE, { c: conf }, admin)).body.data.domains.map(
+          (d: { hostname: string }) => [d.hostname, d],
+        ),
+      )
+    const apex = (name: string) => [
+      { type: 'A', name, value: '216.150.1.1' },
+      { type: 'A', name, value: '216.150.16.1' },
+    ]
+    const by = await read()
+    expect(by['www.example.com'].routingRecords).toEqual([
+      {
+        type: 'CNAME',
+        name: 'www.example.com',
+        value: 'abc.vercel-dns-017.com',
+      },
+    ])
+    expect(by['example.com'].routingRecords).toEqual(apex('example.com'))
+    expect(by['example.co.uk'].routingRecords).toEqual(apex('example.co.uk'))
+    expect(by['acme.konf.run'].routingRecords).toEqual([])
+    expect(by['example.com'].lastErrorCode).toBe('HARD_FAILURE')
+    expect(by['www.example.com'].lastErrorCode).toBeNull()
+    env.DOMAIN_CNAME_TARGET = ''
+    env.DOMAIN_APEX_A = ''
+    for (const d of Object.values(await read()))
+      expect((d as { routingRecords: unknown[] }).routingRecords).toEqual([])
   })
 })

@@ -297,6 +297,24 @@ const LEGACY_STATUS = {
 const iso = (ms: number | null) =>
   ms == null ? null : new Date(ms).toISOString()
 
+// The failed DomainCheckOutcome kinds (src/lib/domain-verification/types.ts).
+const DomainErrorCode = builder.enumType('DomainErrorCode', {
+  values: {
+    HARD_FAILURE: { value: 'hard-failure' },
+    SOFT_FAILURE: { value: 'soft-failure' },
+    UNVERIFIABLE: { value: 'unverifiable' },
+  } as const,
+})
+const DomainRecord = builder
+  .objectRef<{ type: string; name: string; value: string }>('DomainRecord')
+  .implement({
+    fields: (t) => ({
+      type: t.exposeString('type', { description: 'CNAME or A.' }),
+      name: t.exposeString('name'),
+      value: t.exposeString('value'),
+    }),
+  })
+
 type DomainRow = NonNullable<
   Awaited<ReturnType<ResolverContext['data']['conferenceDomains']>>
 >[number]
@@ -326,6 +344,17 @@ const ConferenceDomain = builder
         resolve: (d) => iso(d.checkedAt),
       }),
       lastError: t.string({ nullable: true, resolve: (d) => d.lastError }),
+      lastErrorCode: t.field({
+        type: DomainErrorCode,
+        nullable: true,
+        resolve: (d) => d.lastErrorCode,
+      }),
+      routingRecords: t.field({
+        type: [DomainRecord],
+        description:
+          'Where to point the host so it routes to the site: CNAME for a subdomain, A records for an apex. Empty for platform hosts.',
+        resolve: (d, _, ctx) => ctx.data.routingRecords(d.hostname, d.kind),
+      }),
       token: t.string({ nullable: true, resolve: (d) => d.token }),
       txtName: t.string({
         nullable: true,

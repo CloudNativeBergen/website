@@ -17,9 +17,12 @@ service: #PlatformService & {
 	// provisionOrganization verifies org, conference and hosts against Sanity
 	// before any D1 write (#1924). Secret per env: SANITY_API_TOKEN_READ.
 	// Without it provisioning refuses. Preview reads development only.
+	// DOMAIN_CNAME_TARGET / DOMAIN_APEX_A (#2207): the DNS records a custom
+	// host points at, as the konf Vercel project recommends them
+	// (GET /v6/domains/<host>/config?projectIdOrName=konf, rank 1).
 	vars: {
-		preview: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development"}
-		production: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", SITE_URL: "https://auth.konf.app"}
+		preview: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "development", DOMAIN_CNAME_TARGET: "e5846d5fd11bb9bc.vercel-dns-017.com", DOMAIN_APEX_A: "216.150.1.1,216.150.16.1"}
+		production: {SANITY_PROJECT_ID: "mvzwvw14", SANITY_DATASET: "production", SITE_URL: "https://auth.konf.app", DOMAIN_CNAME_TARGET: "e5846d5fd11bb9bc.vercel-dns-017.com", DOMAIN_APEX_A: "216.150.1.1,216.150.16.1"}
 	}
 	// createOrganization (RunKonf/kontroll#79) asks the site to write the
 	// Sanity docs: POST SITE_URL/api/provisioning/service/organizations,
@@ -27,7 +30,7 @@ service: #PlatformService & {
 	// site holds the public half in TENANT_DIRECTORY_PUBLIC_KEYS). Without
 	// SITE_URL or the key, createOrganization refuses. Preview sets no
 	// SITE_URL: no preview site writes to a dataset the worker can trust yet.
-	files: "package.json": dependencies: jose: "^6.2.14"
+	files: "package.json": dependencies: {jose: "^6.2.14", tldts: "^7.4.19"}
 	// CONFERENCE: is an edition ticketed, for the plan gate on going live (#2129).
 	// signUpOrganization attempts per user (#2163): 5 a minute. New namespaces.
 	rateLimits: [

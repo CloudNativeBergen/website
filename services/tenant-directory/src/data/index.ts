@@ -15,6 +15,7 @@ import {
 } from 'drizzle-orm'
 import { createGraphQLError } from 'graphql-yoga'
 import type { OperatorAuditEvent } from '@runkonf/tenancy'
+import { getDomain } from 'tldts'
 import { importJWK, SignJWT, type JWK } from 'jose'
 import { effectivePlan, signupSlugProblem, type Plan } from '@runkonf/tenancy'
 import {
@@ -82,6 +83,10 @@ export interface DataEnv extends CloudflareEnv {
   /** Sanity ids as in services/identity; provisioning verifies against it. */
   SANITY_PROJECT_ID?: string
   SANITY_DATASET?: string
+  /** #2207: the CNAME a custom subdomain points at; empty: unknown. */
+  DOMAIN_CNAME_TARGET?: string
+  /** #2207: comma-separated A records for a custom apex; empty: unknown. */
+  DOMAIN_APEX_A?: string
   /** wrangler secret put SANITY_API_TOKEN_READ (per environment) */
   SANITY_API_TOKEN_READ?: string
   /** The site createOrganization asks to write the Sanity docs (kontroll#79). */
@@ -1447,6 +1452,24 @@ export function createData(
         await db.delete(domains).where(eq(domains.hostname, hostname))
         throw error
       }
+    },
+
+    /**
+     * #2207: the DNS records that route a custom host to the site. A CNAME
+     * for a subdomain; A records for an apex (a CNAME cannot sit there).
+     * Empty for platform hosts, and when the target var is unset.
+     */
+    routingRecords(hostname: string, kind: string) {
+      if (kind !== 'custom') return []
+      if (getDomain(hostname) !== hostname) {
+        const target = env.DOMAIN_CNAME_TARGET?.trim()
+        return target ? [{ type: 'CNAME', name: hostname, value: target }] : []
+      }
+      return (env.DOMAIN_APEX_A ?? '')
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .map((value) => ({ type: 'A', name: hostname, value }))
     },
 
     /**

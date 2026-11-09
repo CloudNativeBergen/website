@@ -13,6 +13,8 @@ ALTER TABLE domains ADD COLUMN grace_until INTEGER;
 ALTER TABLE domains ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE domains ADD COLUMN consecutive_soft_failures INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE domains ADD COLUMN last_error TEXT;
+-- The failed DomainCheckOutcome kind (src/lib/domain-verification/types.ts).
+ALTER TABLE domains ADD COLUMN last_error_code TEXT CHECK (last_error_code IN ('hard-failure', 'soft-failure', 'unverifiable'));
 -- Last accepted recheckDomain call; the 60 s limit is enforced on it in SQL.
 ALTER TABLE domains ADD COLUMN last_recheck_at INTEGER;
 -- When claimDomain wrote the row; an unverified claim expires after 72 h.
