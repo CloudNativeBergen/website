@@ -66,9 +66,11 @@ describe('domainVerificationSource', () => {
     ['sanity', 'sanity'],
     [' d1 ', 'd1'],
   ])('%s -> %s', (v, want) => {
-    expect(domainVerificationSource({ DOMAIN_VERIFICATION_SOURCE: v })).toBe(
-      want,
-    )
+    expect(
+      domainVerificationSource({
+        DOMAIN_VERIFICATION_SOURCE: v,
+      } as unknown as NodeJS.ProcessEnv),
+    ).toBe(want)
   })
 
   it('reads Sanity, and never the gateway, by default', async () => {
