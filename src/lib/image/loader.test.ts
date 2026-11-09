@@ -6,9 +6,9 @@ const params = (u: string) => Object.fromEntries(new URL(u).searchParams)
 
 describe('imageLoader', () => {
   it('resizes Sanity images on the Sanity CDN', () => {
-    expect(params(imageLoader({ src: ASSET, width: 640, quality: 80 }))).toEqual(
-      { w: '640', q: '80', fit: 'max', auto: 'format' },
-    )
+    expect(
+      params(imageLoader({ src: ASSET, width: 640, quality: 80 })),
+    ).toEqual({ w: '640', q: '80', fit: 'max', auto: 'format' })
   })
 
   it('defaults quality to 75', () => {
