@@ -23,6 +23,11 @@
       "service": "konf-conference",
       "entrypoint": "ProgramDate",
     },
+    {
+      "binding": "EDITIONS",
+      "service": "konf-conference",
+      "entrypoint": "Editions",
+    },
   ],
   "triggers": {
     "crons": ["*/5 * * * *"],
@@ -30,6 +35,8 @@
   "vars": {
     "SANITY_PROJECT_ID": "mvzwvw14",
     "SANITY_DATASET": "development",
+    "DOMAIN_CNAME_TARGET": "e5846d5fd11bb9bc.vercel-dns-017.com",
+    "DOMAIN_APEX_A": "216.150.1.1,216.150.16.1",
   },
   "workers_dev": false,
   "preview_urls": false,
@@ -73,10 +80,17 @@
           "entrypoint": "ProgramDate",
           "service": "konf-conference-preview",
         },
+        {
+          "binding": "EDITIONS",
+          "entrypoint": "Editions",
+          "service": "konf-conference-preview",
+        },
       ],
       "vars": {
         "SANITY_PROJECT_ID": "mvzwvw14",
         "SANITY_DATASET": "development",
+        "DOMAIN_CNAME_TARGET": "e5846d5fd11bb9bc.vercel-dns-017.com",
+        "DOMAIN_APEX_A": "216.150.1.1,216.150.16.1",
       },
     },
     "production": {
@@ -118,11 +132,18 @@
           "service": "konf-conference",
           "entrypoint": "ProgramDate",
         },
+        {
+          "binding": "EDITIONS",
+          "service": "konf-conference",
+          "entrypoint": "Editions",
+        },
       ],
       "vars": {
         "SANITY_PROJECT_ID": "mvzwvw14",
         "SANITY_DATASET": "production",
         "SITE_URL": "https://auth.konf.app",
+        "DOMAIN_CNAME_TARGET": "e5846d5fd11bb9bc.vercel-dns-017.com",
+        "DOMAIN_APEX_A": "216.150.1.1,216.150.16.1",
       },
     },
   },

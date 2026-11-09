@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./reserved": "./src/reserved.ts",
-    "./notify": "./src/notify.ts"
+    "./notify": "./src/notify.ts",
+    "./challenge": "./src/challenge.ts"
   },
   "scripts": {
     "test": "vitest run --root ../.. packages/tenancy/",

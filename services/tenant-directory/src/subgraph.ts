@@ -18,6 +18,10 @@ import {
   requirePlan,
   toOrgKind,
 } from '@runkonf/tenancy'
+import {
+  challengeRecordName,
+  expectedTxtValue,
+} from '@runkonf/tenancy/challenge'
 import { builder } from './builder'
 import type { ResolverContext } from './worker'
 
@@ -281,6 +285,106 @@ const Billing = builder.objectRef<OrgRow>('Billing').implement({
     }),
   }),
 })
+
+const DomainStatus = builder.enumType('DomainStatus', {
+  values: ['pending', 'verified', 'failing', 'revoked'] as const,
+})
+const LEGACY_STATUS = {
+  pending: 'pending',
+  verified: 'verified',
+  failed: 'failing',
+} as const
+const iso = (ms: number | null) =>
+  ms == null ? null : new Date(ms).toISOString()
+
+// The failed DomainCheckOutcome kinds (src/lib/domain-verification/types.ts).
+const DomainErrorCode = builder.enumType('DomainErrorCode', {
+  values: {
+    HARD_FAILURE: { value: 'hard-failure' },
+    SOFT_FAILURE: { value: 'soft-failure' },
+    UNVERIFIABLE: { value: 'unverifiable' },
+  } as const,
+})
+const DomainRecord = builder
+  .objectRef<{ type: string; name: string; value: string }>('DomainRecord')
+  .implement({
+    fields: (t) => ({
+      type: t.exposeString('type', { description: 'CNAME or A.' }),
+      name: t.exposeString('name'),
+      value: t.exposeString('value'),
+    }),
+  })
+
+type DomainRow = NonNullable<
+  Awaited<ReturnType<ResolverContext['data']['conferenceDomains']>>
+>[number]
+
+// #2207: a conference hostname with its DNS proof, for org admins only.
+const ConferenceDomain = builder
+  .objectRef<DomainRow>('ConferenceDomain')
+  .implement({
+    fields: (t) => ({
+      hostname: t.exposeString('hostname'),
+      kind: t.exposeString('kind'),
+      status: t.field({
+        type: DomainStatus,
+        description:
+          'On rows from before #2207 phase 1, read from the legacy Cloudflare state.',
+        resolve: (d) => d.status ?? LEGACY_STATUS[d.verification],
+      }),
+      method: t.string({ nullable: true, resolve: (d) => d.method }),
+      graceUntil: t.string({
+        nullable: true,
+        description: 'ISO 8601.',
+        resolve: (d) => iso(d.graceUntil),
+      }),
+      lastCheckedAt: t.string({
+        nullable: true,
+        description: 'ISO 8601.',
+        resolve: (d) => iso(d.checkedAt),
+      }),
+      lastError: t.string({ nullable: true, resolve: (d) => d.lastError }),
+      lastErrorCode: t.field({
+        type: DomainErrorCode,
+        nullable: true,
+        resolve: (d) => d.lastErrorCode,
+      }),
+      routingRecords: t.field({
+        type: [DomainRecord],
+        description:
+          'Where to point the host so it routes to the site: CNAME for a subdomain, A records for an apex. Empty for platform hosts.',
+        resolve: (d, _, ctx) => ctx.data.routingRecords(d.hostname, d.kind),
+      }),
+      token: t.string({ nullable: true, resolve: (d) => d.token }),
+      txtName: t.string({
+        nullable: true,
+        description:
+          'Where the TXT record goes, e.g. _konf-challenge.example.com.',
+        resolve: (d) => (d.token ? challengeRecordName(d.hostname) : null),
+      }),
+      txtValue: t.string({
+        nullable: true,
+        resolve: (d) => (d.token ? expectedTxtValue(d.token) : null),
+      }),
+      removable: t.boolean({ resolve: (d) => d.kind === 'custom' }),
+    }),
+  })
+
+/**
+ * #2207: an org owner or admin (or an operator acting for the org) on the
+ * tenant lane. Guard before fetch: the refusal says nothing about any row.
+ */
+function requireDomainAdmin(ctx: ResolverContext) {
+  const e = ctx.envelope
+  if (e?.typ !== 'tenant' || !can(principalOf(e), 'domain.manage'))
+    throw createGraphQLError(
+      'managing domains requires an org owner or admin',
+      {
+        extensions: { code: 'FORBIDDEN' },
+      },
+    )
+  return e
+}
 
 // After Domain: Organization.domains refers to it.
 const Organization = builder.objectRef<OrgRow>('Organization').implement({
@@ -696,6 +800,24 @@ builder.queryType({
         return ctx.data.signupCodes()
       },
     }),
+    domains: t.field({
+      type: [ConferenceDomain],
+      description:
+        "One of the session org's conferences' hostnames with their verification state (#2207). Org owner or admin. NOT_FOUND for a conference outside the org.",
+      args: { conferenceId: t.arg.id({ required: true }) },
+      resolve: async (_, { conferenceId }, ctx) => {
+        const e = requireDomainAdmin(ctx)
+        const rows = await ctx.data.conferenceDomains(
+          e.orgId,
+          String(conferenceId),
+        )
+        if (!rows)
+          throw createGraphQLError('conference not found', {
+            extensions: { code: 'NOT_FOUND' },
+          })
+        return rows
+      },
+    }),
     tenantByHost: t.field({
       type: Domain,
       nullable: true,
@@ -770,6 +892,39 @@ builder.mutationType({
             requirePlan(e.plan, 'conference.publish_ticketed')
         }
         return ctx.data.setLifecycle(e.orgId, e.conferenceId, status ?? null)
+      },
+    }),
+    claimDomain: t.field({
+      type: ConferenceDomain,
+      description:
+        "Claims a custom hostname for one of the org's conferences as pending, with a DNS TXT token (#2207). Routing is unchanged until it verifies. CONFLICT when the hostname is already claimed; NOT_FOUND for a conference outside the org. Org owner or admin.",
+      args: {
+        conferenceId: t.arg.id({ required: true }),
+        hostname: t.arg.string({ required: true }),
+      },
+      resolve: (_, { conferenceId, hostname }, ctx) => {
+        const e = requireDomainAdmin(ctx)
+        return ctx.data.claimDomain(e.orgId, String(conferenceId), hostname)
+      },
+    }),
+    recheckDomain: t.field({
+      type: ConferenceDomain,
+      description:
+        'Asks for a verification check now (#2207). Once per hostname per minute, else RATE_LIMITED. The DNS check itself arrives in phase 2; until then this returns the current state. Org owner or admin.',
+      args: { hostname: t.arg.string({ required: true }) },
+      resolve: (_, { hostname }, ctx) => {
+        const e = requireDomainAdmin(ctx)
+        return ctx.data.recheckDomain(e.orgId, hostname)
+      },
+    }),
+    removeDomain: t.field({
+      type: ConferenceDomain,
+      description:
+        'Removes a custom hostname (#2207). FORBIDDEN for platform hosts (<slug>.konf.run). Org owner or admin.',
+      args: { hostname: t.arg.string({ required: true }) },
+      resolve: (_, { hostname }, ctx) => {
+        const e = requireDomainAdmin(ctx)
+        return ctx.data.removeDomain(e.orgId, hostname)
       },
     }),
     provisionConference: t.field({

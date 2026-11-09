@@ -15,8 +15,13 @@ import {
 } from 'drizzle-orm'
 import { createGraphQLError } from 'graphql-yoga'
 import type { OperatorAuditEvent } from '@runkonf/tenancy'
+import { getDomain } from 'tldts'
 import { importJWK, SignJWT, type JWK } from 'jose'
 import { effectivePlan, signupSlugProblem, type Plan } from '@runkonf/tenancy'
+import {
+  generateVerificationToken,
+  isDevOnlyHost,
+} from '@runkonf/tenancy/challenge'
 import { rawDb } from './db'
 import {
   cloudflareHostnames,
@@ -75,9 +80,26 @@ export interface DataEnv extends CloudflareEnv {
   CONFERENCE: {
     ticketed(orgId: string, conferenceId: string): Promise<boolean>
   }
+  /** konf-conference's Editions entrypoint: bound by tenant-directory only. */
+  EDITIONS: {
+    /** Idempotent; throws when the id is another org's row. */
+    createEdition(
+      orgId: string,
+      conferenceId: string,
+      title: string,
+      startDate: string | null,
+      endDate: string | null,
+    ): Promise<void>
+    /** Deletes only that org's row, and only while unpublished. */
+    deleteEdition(orgId: string, conferenceId: string): Promise<void>
+  }
   /** Sanity ids as in services/identity; provisioning verifies against it. */
   SANITY_PROJECT_ID?: string
   SANITY_DATASET?: string
+  /** #2207: the CNAME a custom subdomain points at; empty: unknown. */
+  DOMAIN_CNAME_TARGET?: string
+  /** #2207: comma-separated A records for a custom apex; empty: unknown. */
+  DOMAIN_APEX_A?: string
   /** wrangler secret put SANITY_API_TOKEN_READ (per environment) */
   SANITY_API_TOKEN_READ?: string
   /** The site createOrganization asks to write the Sanity docs (kontroll#79). */
@@ -88,6 +110,28 @@ export interface DataEnv extends CloudflareEnv {
 
 /** How often a verified custom domain is re-checked with Cloudflare. */
 const RECHECK_VERIFIED_MS = 60 * 60 * 1000
+const RECHECK_LIMIT_MS = 60 * 1000
+
+/**
+ * Suffixes the platform owns outright. Every reserved slug (RESERVED_SLUGS)
+ * lives under one of these, so refusing the whole suffix covers them.
+ */
+const PLATFORM_SUFFIXES = [PLATFORM_DOMAIN, 'konf.app']
+/** A pending claim nobody verified can be taken over after this (#2207). */
+const CLAIM_EXPIRY_MS = 72 * 60 * 60 * 1000
+
+/** A hostname a tenant may claim: not a platform host (addCustomDomain, #2207). */
+function customHostname(input: string) {
+  const hostname = normalizeHost(input)
+  if (
+    !hostname ||
+    isDevOnlyHost(hostname) ||
+    PLATFORM_SUFFIXES.some((p) => hostname === p || hostname.endsWith(`.${p}`))
+  ) {
+    throw fail('BAD_USER_INPUT', 'not a custom hostname')
+  }
+  return hostname
+}
 
 const fail = (code: string, message: string) =>
   createGraphQLError(message, { extensions: { code } })
@@ -117,6 +161,8 @@ export interface ProvisionInput {
   conferenceId: string
   /** The operator's user id, recorded on the receipt row (audit). */
   createdBy?: string
+  /** Title and dates for the conference subgraph row (createOrganization). */
+  edition?: { title: string; startDate: string; endDate: string }
 }
 
 /**
@@ -260,7 +306,19 @@ const TENANT = `{
 export const SANITY_TIMEOUT_MS = 5000
 
 /** Raw GROQ, the same pattern as identity's member sync. Fails closed. */
-async function sanityTenant(env: DataEnv, params: Record<string, string>) {
+async function sanityTenant(
+  env: DataEnv,
+  params: Record<string, string>,
+): Promise<SanityTenant> {
+  return sanityQuery(env, TENANT, params)
+}
+
+/** One GROQ read with the read token; fails closed on any error. */
+async function sanityQuery<T>(
+  env: DataEnv,
+  query: string,
+  params: Record<string, string | string[]>,
+): Promise<T> {
   if (
     !env.SANITY_API_TOKEN_READ ||
     !env.SANITY_PROJECT_ID ||
@@ -278,7 +336,7 @@ async function sanityTenant(env: DataEnv, params: Record<string, string>) {
           authorization: `Bearer ${env.SANITY_API_TOKEN_READ}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ query: TENANT, params }),
+        body: JSON.stringify({ query, params }),
         // A hung read must not hold the provisioning call open (#1957).
         signal: AbortSignal.timeout(SANITY_TIMEOUT_MS),
       },
@@ -289,9 +347,10 @@ async function sanityTenant(env: DataEnv, params: Record<string, string>) {
   if (!res.ok)
     throw fail('INTERNAL_SERVER_ERROR', `Sanity read failed (${res.status})`)
   const body = (await res.json().catch(() => null)) as {
-    result?: SanityTenant
+    result?: T
   } | null
-  if (!body?.result) throw fail('INTERNAL_SERVER_ERROR', 'Sanity read failed')
+  if (body?.result == null)
+    throw fail('INTERNAL_SERVER_ERROR', 'Sanity read failed')
   return body.result
 }
 
@@ -809,6 +868,35 @@ export function createData(
         await refund()
         throw invalid('slug', 'this slug is not available')
       }
+      // Undo everything: the subgraph row first (it may have committed with
+      // only the reply lost), then the directory rows and the code's use.
+      // A failed delete is logged for the operator; sign-up still fails.
+      const rollback = async () => {
+        await env.EDITIONS.deleteEdition(orgId, conference.id).catch((e) =>
+          console.error(
+            JSON.stringify({
+              event: 'signup.orphan_edition',
+              orgId,
+              conferenceId: conference.id,
+              error: String(e),
+            }),
+          ),
+        )
+        await db.batch([
+          db.delete(domains).where(eq(domains.orgId, orgId)),
+          db.delete(conferences).where(eq(conferences.orgId, orgId)),
+          db.delete(organizations).where(eq(organizations.id, orgId)),
+          refund(),
+        ])
+      }
+      try {
+        await env.EDITIONS.createEdition(orgId, conference.id, name, null, null)
+      } catch (error) {
+        // Sign-up has no retry key: undo, as for a refused owner write.
+        console.error(error)
+        await rollback()
+        throw fail('INTERNAL_SERVER_ERROR', 'sign-up failed; nothing was kept')
+      }
       try {
         await env.IDENTITY.signupOwner(orgId, slug, name, userId, codeId)
       } catch (error) {
@@ -822,12 +910,7 @@ export function createData(
           throw fail('INTERNAL_SERVER_ERROR', 'sign-up state is unknown')
         }
         if (!owned) {
-          await db.batch([
-            db.delete(domains).where(eq(domains.orgId, orgId)),
-            db.delete(conferences).where(eq(conferences.orgId, orgId)),
-            db.delete(organizations).where(eq(organizations.id, orgId)),
-            refund(),
-          ])
+          await rollback()
           throw fail(
             'INTERNAL_SERVER_ERROR',
             'sign-up failed; nothing was kept',
@@ -1071,6 +1154,14 @@ export function createData(
           )
         }
         await env.IDENTITY.ensure(org.id, org.slug, org.name ?? undefined)
+        // Every call, replays too: a retry heals a missing subgraph row.
+        await env.EDITIONS.createEdition(
+          orgId,
+          conferenceId,
+          input.edition?.title ?? conf.name,
+          input.edition?.startDate ?? null,
+          input.edition?.endDate ?? null,
+        )
         return org
       }
       const done = await earlier()
@@ -1220,6 +1311,11 @@ export function createData(
         orgSlug: input.slug,
         conferenceId: out.conferenceId,
         createdBy,
+        edition: {
+          title: input.conferenceTitle,
+          startDate: input.startDate,
+          endDate: input.endDate,
+        },
       })
       return {
         organizationId: out.organizationId,
@@ -1288,9 +1384,20 @@ export function createData(
       const conferenceId = out.conferenceId
       if (typeof conferenceId !== 'string' || !SANITY_ID.test(conferenceId))
         throw fail('INTERNAL_SERVER_ERROR', 'site provisioning failed')
+      // After the D1 receipt, and on every replay: a retry with the same
+      // key heals an edition whose subgraph row is missing.
+      const subgraphRow = () =>
+        env.EDITIONS.createEdition(
+          orgId,
+          conferenceId,
+          input.title,
+          input.startDate,
+          input.endDate,
+        )
       if (done) {
         if (done.conferenceId !== conferenceId)
           throw fail('INTERNAL_SERVER_ERROR', 'receipt mismatch')
+        await subgraphRow()
         return { conferenceId }
       }
       // Rollout flags: on only where every other edition of the org has it
@@ -1339,11 +1446,14 @@ export function createData(
         ])
       } catch (error) {
         // A concurrent request with the same key won the race.
-        if ((await receipt())?.conferenceId === conferenceId)
+        if ((await receipt())?.conferenceId === conferenceId) {
+          await subgraphRow()
           return { conferenceId }
+        }
         console.error(error)
         throw fail('CONFLICT', 'conference or platform host is taken')
       }
+      await subgraphRow()
       return { conferenceId }
     },
 
@@ -1365,15 +1475,7 @@ export function createData(
 
     /** Claims the hostname, then asks Cloudflare for a custom hostname. */
     async addCustomDomain(conferenceId: string, input: string) {
-      const hostname = normalizeHost(input)
-      if (
-        !hostname ||
-        !hostname.includes('.') ||
-        hostname === PLATFORM_DOMAIN ||
-        hostname.endsWith(`.${PLATFORM_DOMAIN}`)
-      ) {
-        throw fail('BAD_USER_INPUT', 'not a custom hostname')
-      }
+      const hostname = customHostname(input)
       const conf = await conference(conferenceId)
       if (!conf) throw fail('NOT_FOUND', 'conference not found')
       // The primary key is the routing claim: first writer wins.
@@ -1416,6 +1518,155 @@ export function createData(
         await db.delete(domains).where(eq(domains.hostname, hostname))
         throw error
       }
+    },
+
+    /**
+     * #2207: the DNS records that route a custom host to the site. A CNAME
+     * for a subdomain; A records for an apex (a CNAME cannot sit there).
+     * Empty for platform hosts, and when the target var is unset.
+     */
+    routingRecords(hostname: string, kind: string) {
+      if (kind !== 'custom') return []
+      if (getDomain(hostname) !== hostname) {
+        const target = env.DOMAIN_CNAME_TARGET?.trim()
+        return target ? [{ type: 'CNAME', name: hostname, value: target }] : []
+      }
+      return (env.DOMAIN_APEX_A ?? '')
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .map((value) => ({ type: 'A', name: hostname, value }))
+    },
+
+    /**
+     * #2207: `orgId`'s hostnames of one of its conferences; null when the
+     * org has no such conference, so a foreign id reads as a missing one.
+     */
+    async conferenceDomains(orgId: string, conferenceId: string) {
+      if (!(await api.conferenceOf(orgId, conferenceId))) return null
+      return db.query.domains.findMany({
+        where: and(
+          eq(domains.orgId, orgId),
+          eq(domains.conferenceId, conferenceId),
+        ),
+        orderBy: domains.hostname,
+      })
+    },
+
+    /**
+     * #2207: a pending DNS-TXT claim with a fresh token. Writes only D1 and
+     * never `verification = 'verified'`, so routing does not change.
+     */
+    async claimDomain(orgId: string, conferenceId: string, input: string) {
+      const hostname = customHostname(input)
+      if (!(await api.conferenceOf(orgId, conferenceId)))
+        throw fail('NOT_FOUND', 'conference not found')
+      // Until phase 6 Sanity is the routing truth: a host it already knows
+      // (a verification record, or another conference's domains[]) is taken.
+      // groq-global: hostnames are one global namespace.
+      // Sanity entries are compared lower-cased, with or without a trailing
+      // dot, and a `*.parent` wildcard there covers this one-label host.
+      const parent = hostname.slice(hostname.indexOf('.') + 1)
+      const names = [hostname, `*.${parent}`].flatMap((h) => [h, `${h}.`])
+      const { n } = await sanityQuery<{ n: number }>(
+        env,
+        `{"n": count(*[(_type == "domainVerification" && lower(hostname) in $names) || (_type == "conference" && count(domains[lower(@) in $names]) > 0 && !(_id in [$conf, "drafts." + $conf]))])}`,
+        { names, conf: conferenceId },
+      )
+      if (n > 0) throw fail('CONFLICT', 'hostname is already claimed')
+      const now = Date.now()
+      const fresh = {
+        orgId,
+        conferenceId,
+        verification: 'pending' as const,
+        method: 'dns-txt' as const,
+        status: 'pending' as const,
+        token: generateVerificationToken(),
+        claimedAt: now,
+      }
+      // First writer wins; a pending claim never verified, never sent to
+      // Cloudflare and older than CLAIM_EXPIRY_MS is taken over atomically.
+      const [claimed] = await db
+        .insert(domains)
+        .values({ hostname, kind: 'custom', ...fresh })
+        .onConflictDoUpdate({
+          target: domains.hostname,
+          set: { ...fresh, lastError: null, lastRecheckAt: null },
+          setWhere: and(
+            eq(domains.kind, 'custom'),
+            eq(domains.verification, 'pending'),
+            or(isNull(domains.status), eq(domains.status, 'pending')),
+            isNull(domains.verifiedAt),
+            isNull(domains.cfCustomHostnameId),
+            lt(domains.claimedAt, now - CLAIM_EXPIRY_MS),
+          ),
+        })
+        .returning()
+      if (!claimed) throw fail('CONFLICT', 'hostname is already claimed')
+      return claimed
+    },
+
+    /**
+     * #2207: at most one recheck per hostname per RECHECK_LIMIT_MS, taken
+     * atomically in SQL. Phase 1 has no DNS check: it returns the row as is.
+     */
+    async recheckDomain(orgId: string, input: string, now = Date.now()) {
+      const hostname = normalizeHost(input) ?? ''
+      const mine = and(eq(domains.hostname, hostname), eq(domains.orgId, orgId))
+      const [row] = await db
+        .update(domains)
+        .set({ lastRecheckAt: now })
+        .where(
+          and(
+            mine,
+            or(
+              isNull(domains.lastRecheckAt),
+              lt(domains.lastRecheckAt, now - RECHECK_LIMIT_MS),
+            ),
+          ),
+        )
+        .returning()
+      if (row) return row
+      if (await db.query.domains.findFirst({ where: mine }))
+        throw fail('RATE_LIMITED', 'checked less than a minute ago')
+      throw fail('NOT_FOUND', 'no such hostname')
+    },
+
+    /** #2207: removes one of `orgId`'s custom hostnames; platform hosts stay. */
+    async removeDomain(orgId: string, input: string) {
+      const hostname = normalizeHost(input) ?? ''
+      const row = await db.query.domains.findFirst({
+        where: and(eq(domains.hostname, hostname), eq(domains.orgId, orgId)),
+      })
+      if (!row) throw fail('NOT_FOUND', 'no such hostname')
+      if (row.kind !== 'custom')
+        throw fail('FORBIDDEN', 'a platform hostname cannot be removed')
+      // Until the reader cutover (#2207 phase 6) a verified row may be live.
+      if (row.status === 'verified' || row.verification === 'verified')
+        throw fail(
+          'FORBIDDEN',
+          'a verified hostname cannot be removed here until the routing cutover',
+        )
+      // Conditional on what was read: a takeover or a verification landing
+      // in between leaves the row alone (NOT_FOUND, like any foreign host).
+      const [gone] = await db
+        .delete(domains)
+        .where(
+          and(
+            eq(domains.hostname, hostname),
+            eq(domains.orgId, orgId),
+            row.token === null
+              ? isNull(domains.token)
+              : eq(domains.token, row.token),
+            sql`${domains.verification} != 'verified'`,
+            or(isNull(domains.status), sql`${domains.status} != 'verified'`),
+          ),
+        )
+        .returning()
+      if (!gone) throw fail('NOT_FOUND', 'no such hostname')
+      if (gone.cfCustomHostnameId)
+        await hostnames.delete(gone.cfCustomHostnameId)
+      return gone
     },
 
     /** Deletes the Cloudflare custom hostname, then the routing claim. */

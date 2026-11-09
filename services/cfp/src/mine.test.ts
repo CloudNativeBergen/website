@@ -667,6 +667,38 @@ describe('updateMyProposal', () => {
     expect(ok.errors).toBeUndefined()
   })
 
+  it('refuses capacity below the confirmed sign-ups (#2211)', async () => {
+    const signup = (n: number, status: string, conf = 'conf_a') => ({
+      _id: `su_${n}`,
+      _type: 'workshopSignup',
+      workshop: ref('t_sub'),
+      conference: ref(conf),
+      status,
+    })
+    dataset.push(
+      signup(1, 'confirmed'),
+      signup(2, 'confirmed'),
+      signup(3, 'waitlist'),
+      signup(4, 'confirmed', 'conf_b'),
+    )
+    doc('t_sub').capacity = 10
+    const r = await gql(UPDATE, as('u_me'), {
+      id: 't_sub',
+      input: { capacity: 1 },
+    })
+    expect(errOf(r)?.[0]).toEqual({
+      message: 'Cannot reduce capacity below current signup count (2)',
+      code: 'CONFLICT',
+    })
+    expect(doc('t_sub').capacity).toBe(10)
+    const ok = await gql(UPDATE, as('u_me'), {
+      id: 't_sub',
+      input: { capacity: 2 },
+    })
+    expect(ok.errors).toBeUndefined()
+    expect(doc('t_sub').capacity).toBe(2)
+  })
+
   it('refuses a rejected proposal', async () => {
     const r = await gql(UPDATE, as('u_me'), {
       id: 't_rej',
