@@ -1,7 +1,5 @@
 {
-  "regions": [
-    "arn1"
-  ],
+  "regions": ["arn1"],
   "ignoreCommand": "bash scripts/vercel-ignore.sh",
   "crons": [
     {

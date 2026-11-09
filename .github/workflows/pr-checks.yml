@@ -449,15 +449,15 @@ jobs:
           VAPID_PRIVATE_KEY: ci_vapid_private_key_not_for_production
           VAPID_SUBJECT: mailto:ci@example.com
 
-  # POST-BUILD RUNTIME SMOKE TEST (#671). `next build` COMPILES the broken
-  # lazy-auth-config form fine and vitest mocks next-auth, so neither the Build
-  # nor the Tests job can catch a runtime middleware regression like #462
-  # (`nextAuthMiddleware is not a function`, 500 on every authenticated route).
-  # This job boots the REAL production server and curls PROTECTED routes (which
-  # run the middleware — the exact failure surface), failing loudly on any 500
-  # or `is not a function` / `TypeError` signature. Kept a separate, distinctly
-  # NAMED job so it can be added to the required-status ruleset in branch
-  # protection. A protected-route redirect needs no real backend/secrets.
+      # POST-BUILD RUNTIME SMOKE TEST (#671). `next build` COMPILES the broken
+      # lazy-auth-config form fine and vitest mocks next-auth, so neither the Build
+      # nor the Tests job can catch a runtime middleware regression like #462
+      # (`nextAuthMiddleware is not a function`, 500 on every authenticated route).
+      # This job boots the REAL production server and curls PROTECTED routes (which
+      # run the middleware — the exact failure surface), failing loudly on any 500
+      # or `is not a function` / `TypeError` signature. Kept a separate, distinctly
+      # NAMED job so it can be added to the required-status ruleset in branch
+      # protection. A protected-route redirect needs no real backend/secrets.
 
       # Handed to the Runtime Smoke Test job so it boots this exact build
       # instead of compiling Next a second time. Tarred because
