@@ -130,6 +130,7 @@ const order = (
       currency: 'NOK',
     },
     buyerEmail: `${externalId}@example.com`,
+    buyerName: `Buyer ${externalId}`,
     createdAt: '2026-11-01T10:00:00Z',
     lines,
   },
@@ -177,7 +178,7 @@ async function gql(
 const SALES =
   '{ ticketSales { ticketsSold orders revenue { amountMinor currency } byType { name sold capacity price { amountMinor currency } } } }'
 const ORDERS =
-  '{ ticketOrders { externalId status buyerEmail total { amountMinor currency } } }'
+  '{ ticketOrders { externalId status buyerEmail buyerName total { amountMinor currency } lines { ticketTypeName quantity unitPrice { amountMinor currency } } } }'
 const count = (t: string) =>
   (sqlite.prepare(`SELECT count(*) AS n FROM ${t}`).get() as { n: number }).n
 
@@ -341,7 +342,7 @@ describe('Money integrity', () => {
 
 describe('reads', () => {
   beforeEach(async () => {
-    await ingest(order('o1'))
+    await ingest(order('o1', [line('std', 150000, 2), line('vip', 50000, 1)]))
     await ingest({
       ...order('b1', [line('x', 5000, 7)]),
       orgId: 'org-b',
@@ -355,15 +356,21 @@ describe('reads', () => {
     for (const role of ['owner', 'admin']) {
       const { data } = await gql(tenant('org-a', 'conf-a', role), SALES)
       expect(data.ticketSales).toEqual({
-        ticketsSold: 2,
+        ticketsSold: 3,
         orders: 1,
-        revenue: [{ amountMinor: 300000, currency: 'NOK' }],
+        revenue: [{ amountMinor: 350000, currency: 'NOK' }],
         byType: [
           {
             name: 'Type std',
             sold: 2,
             capacity: 100,
             price: { amountMinor: 150000, currency: 'NOK' },
+          },
+          {
+            name: 'Type vip',
+            sold: 1,
+            capacity: 100,
+            price: { amountMinor: 50000, currency: 'NOK' },
           },
         ],
       })
@@ -408,16 +415,31 @@ describe('reads', () => {
     expect(reads.n).toBe(0)
   })
 
-  it('buyer list: emails for owner and admin, newest first', async () => {
-    const { data } = await gql(tenant('org-a', 'conf-a', 'admin'), ORDERS)
-    expect(data.ticketOrders).toEqual([
-      {
-        externalId: 'o1',
-        status: 'paid',
-        buyerEmail: 'o1@example.com',
-        total: { amountMinor: 300000, currency: 'NOK' },
-      },
-    ])
+  it('buyer list: email, name and lines for owner and admin', async () => {
+    for (const role of ['owner', 'admin']) {
+      const { data } = await gql(tenant('org-a', 'conf-a', role), ORDERS)
+      expect(data.ticketOrders).toEqual([
+        {
+          externalId: 'o1',
+          status: 'paid',
+          buyerEmail: 'o1@example.com',
+          buyerName: 'Buyer o1',
+          total: { amountMinor: 350000, currency: 'NOK' },
+          lines: [
+            {
+              ticketTypeName: 'Type std',
+              quantity: 2,
+              unitPrice: { amountMinor: 150000, currency: 'NOK' },
+            },
+            {
+              ticketTypeName: 'Type vip',
+              quantity: 1,
+              unitPrice: { amountMinor: 50000, currency: 'NOK' },
+            },
+          ],
+        },
+      ])
+    }
   })
 
   it('a PlatformContext gets no tenant read', async () => {

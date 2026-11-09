@@ -33,6 +33,8 @@ export interface OrderInput {
   status: OrderStatus
   total: Money
   buyerEmail: string | null
+  /** PII, like buyerEmail. */
+  buyerName?: string | null
   createdAt: string
   /** The provider's last-change time, if it sends one: orders same-status updates. */
   updatedAt?: string | null
@@ -74,7 +76,14 @@ export interface TicketOrder {
   status: OrderStatus
   total: Money
   buyerEmail: string | null
+  buyerName: string | null
   createdAt: string
+  lines: {
+    ticketTypeId: string
+    ticketTypeName: string
+    quantity: number
+    unitPrice: Money
+  }[]
 }
 
 const fail = (message: string, code: string) =>
@@ -191,11 +200,12 @@ export async function ingestOrder(
   stmts.push(
     db
       .prepare(
-        `INSERT INTO ticket_orders (id, org_id, conference_id, event_id, external_id, status, total_minor, currency, buyer_email, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO ticket_orders (id, org_id, conference_id, event_id, external_id, status, total_minor, currency, buyer_email, buyer_name, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (event_id, external_id) DO UPDATE SET
            status = excluded.status, total_minor = excluded.total_minor,
            currency = excluded.currency, buyer_email = excluded.buyer_email,
+           buyer_name = excluded.buyer_name,
            updated_at = excluded.updated_at
          WHERE ${RANK('excluded.status')} > ${RANK('ticket_orders.status')}
            OR (excluded.status = ticket_orders.status AND ticket_orders.status != 'cancelled'
@@ -210,6 +220,7 @@ export async function ingestOrder(
         order.total.amountMinor,
         order.total.currency,
         order.buyerEmail,
+        order.buyerName ?? null,
         order.createdAt,
         updatedAt,
       ),
@@ -367,15 +378,28 @@ class Ticketing extends ScopedRepository {
     const { org_id, conference_id } = this.columns
     if (!this.allowed('attendee.read_pii') || !conference_id) return null
     // ponytail: unpaginated; add a cursor when an edition passes a few thousand orders.
-    const { results } = await rawDb(this.d1)
-      .prepare(
-        `SELECT id, external_id, status, total_minor, currency, buyer_email, created_at
-         FROM ticket_orders WHERE org_id = ? AND conference_id = ?
-         ORDER BY created_at DESC, id`,
-      )
-      .bind(org_id, conference_id)
-      .all<Record<string, unknown>>()
-    return results.map((r) => ({
+    const db = rawDb(this.d1)
+    const [orders, lines] = await db.batch<Record<string, unknown>>([
+      db
+        .prepare(
+          `SELECT id, external_id, status, total_minor, currency, buyer_email, buyer_name, created_at
+           FROM ticket_orders WHERE org_id = ? AND conference_id = ?
+           ORDER BY created_at DESC, id`,
+        )
+        .bind(org_id, conference_id),
+      db
+        .prepare(
+          `SELECT l.order_id, t.id, t.name, t.currency, l.quantity, l.unit_price_minor
+           FROM ticket_order_lines l JOIN ticket_types t ON t.id = l.ticket_type_id
+           WHERE l.org_id = ? AND l.conference_id = ?
+           ORDER BY t.name, t.id`,
+        )
+        .bind(org_id, conference_id),
+    ])
+    const byOrder = new Map<unknown, Record<string, unknown>[]>()
+    for (const l of lines.results ?? [])
+      byOrder.set(l.order_id, [...(byOrder.get(l.order_id) ?? []), l])
+    return (orders.results ?? []).map((r) => ({
       id: r.id as string,
       externalId: r.external_id as string,
       status: r.status as OrderStatus,
@@ -384,7 +408,17 @@ class Ticketing extends ScopedRepository {
         currency: r.currency as string,
       },
       buyerEmail: (r.buyer_email as string | null) ?? null,
+      buyerName: (r.buyer_name as string | null) ?? null,
       createdAt: r.created_at as string,
+      lines: (byOrder.get(r.id) ?? []).map((l) => ({
+        ticketTypeId: l.id as string,
+        ticketTypeName: l.name as string,
+        quantity: l.quantity as number,
+        unitPrice: {
+          amountMinor: l.unit_price_minor as number,
+          currency: l.currency as string,
+        },
+      })),
     }))
   }
 
