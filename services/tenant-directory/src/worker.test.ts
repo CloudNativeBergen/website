@@ -559,7 +559,7 @@ describe('provisioning', () => {
     const { body } = await gql('{ _service { sdl } }')
     const mutation = /type Mutation[^}]*}/.exec(body.data._service.sdl)![0]
     const fields = mutation.split('\n').filter((l) => /^\s+\w+\(/.test(l))
-    expect(fields).toHaveLength(19)
+    expect(fields).toHaveLength(20)
     for (const f of fields)
       if (
         f.includes('setConferenceLifecycle(') ||
@@ -567,7 +567,8 @@ describe('provisioning', () => {
         f.includes('startCheckout(') ||
         f.includes('signUpOrganization(') ||
         f.includes('requestInvite(') ||
-        /\b(claim|recheck|remove)Domain\(/.test(f)
+        /\b(claim|recheck|remove)Domain\(/.test(f) ||
+        f.includes('mirrorDomainVerification(')
       )
         expect(f).not.toContain('@tag')
       else
@@ -1166,6 +1167,7 @@ describe('rollout flags (#1925)', () => {
     const inputs = sdl.match(/^input [^}]*}/gm) ?? []
     expect(inputs.map((i) => i.split(' ')[1]).sort()).toEqual([
       'CreateOrganizationInput',
+      'DomainVerificationMirror',
       'ProvisionConferenceInput',
       'RequestInviteInput',
       'SignupOrganizationInput',
@@ -3416,6 +3418,159 @@ describe('domains API (#2207)', () => {
     expect(code((await gql(LIST, { c: conf }, operator)).body)).toBe(
       'FORBIDDEN',
     )
+  })
+
+  describe('mirrorDomainVerification (phase 5)', () => {
+    const MIRROR = `mutation($i: DomainVerificationMirror!) { mirrorDomainVerification(input: $i) }`
+    const rec = (over: Record<string, unknown> = {}) => ({
+      hostname: 'conf.example.com',
+      method: 'dns-txt',
+      status: 'verified',
+      token: 'tok',
+      verifiedAt: '2026-11-01T00:00:00.000Z',
+      consecutiveFailures: 0,
+      consecutiveSoftFailures: 0,
+      ...over,
+    })
+    const siteOf = (e: Envelope) =>
+      ({
+        ...e,
+        userId: null,
+        orgRole: null,
+        scopes: ['site:server'],
+      }) as Envelope
+    const row = (h: string) =>
+      sqlite
+        .prepare(
+          'SELECT verification, method, status, token, verified_at, conference_id FROM domains WHERE hostname = ?',
+        )
+        .get(h)
+
+    it('copies a custom record without changing routing', async () => {
+      const { admin, conf } = await setup()
+      const { body } = await gql(
+        MIRROR,
+        { i: rec({ conferenceId: conf }) },
+        siteOf(admin),
+      )
+      expect(body.data.mirrorDomainVerification).toBe(true)
+      expect(row('conf.example.com')).toEqual({
+        verification: 'pending',
+        method: 'dns-txt',
+        status: 'verified',
+        token: 'tok',
+        verified_at: Date.parse('2026-11-01T00:00:00.000Z'),
+        conference_id: conf,
+      })
+      expect(
+        (await gql(RESOLVE, { host: 'conf.example.com' })).body.data
+          .tenantByHost,
+      ).toBeNull()
+      // A later write (the daily check failing) overwrites the state.
+      await gql(
+        MIRROR,
+        { i: rec({ conferenceId: conf, status: 'failing', token: 'tok' }) },
+        siteOf(admin),
+      )
+      expect(row('conf.example.com')).toMatchObject({ status: 'failing' })
+    })
+
+    it('leaves a D1 claim and another org alone; foreign reads as missing', async () => {
+      const { admin, otherAdmin, conf, otherConf } = await setup()
+      const claimed = (
+        await gql(CLAIM, { c: conf, h: 'mine.example.com' }, admin)
+      ).body.data.claimDomain
+      expect(
+        (
+          await gql(
+            MIRROR,
+            { i: rec({ conferenceId: conf, hostname: 'mine.example.com' }) },
+            siteOf(admin),
+          )
+        ).body.data.mirrorDomainVerification,
+      ).toBe(false)
+      expect(row('mine.example.com')).toMatchObject({
+        status: 'pending',
+        token: claimed.token,
+      })
+      await gql(CLAIM, { c: otherConf, h: 'theirs.example.com' }, otherAdmin)
+      sqlite.prepare('UPDATE domains SET claimed_at = NULL').run()
+      expect(
+        (
+          await gql(
+            MIRROR,
+            { i: rec({ conferenceId: conf, hostname: 'theirs.example.com' }) },
+            siteOf(admin),
+          )
+        ).body.data.mirrorDomainVerification,
+      ).toBe(false)
+      expect(row('theirs.example.com')).toMatchObject({ status: 'pending' })
+      const a = (
+        await gql(MIRROR, { i: rec({ conferenceId: otherConf }) }, siteOf(admin))
+      ).body.errors
+      const b = (
+        await gql(MIRROR, { i: rec({ conferenceId: 'nope' }) }, siteOf(admin))
+      ).body.errors
+      expect(a?.[0]?.extensions.code).toBe('NOT_FOUND')
+      expect(a?.[0]?.message).toBe(b?.[0]?.message)
+    })
+
+    it('updates a minted platform row and never mints one', async () => {
+      const { admin, conf } = await setup()
+      const m = (h: string) =>
+        gql(
+          MIRROR,
+          {
+            i: rec({
+              conferenceId: conf,
+              hostname: h,
+              method: 'platform-owned',
+              token: 'p',
+            }),
+          },
+          siteOf(admin),
+        )
+      expect((await m('acme.konf.run')).body.data.mirrorDomainVerification).toBe(
+        true,
+      )
+      expect(row('acme.konf.run')).toMatchObject({
+        method: 'platform',
+        token: 'p',
+        verification: 'verified',
+      })
+      expect((await m('new.konf.run')).body.data.mirrorDomainVerification).toBe(
+        false,
+      )
+      expect(row('new.konf.run')).toBeUndefined()
+    })
+
+    it.each([
+      ['an org admin', {}],
+      ['an org owner', { orgRole: 'owner' }],
+      ['a member', { orgRole: 'member' }],
+    ])('refuses %s before reading D1', async (_, over) => {
+      const { admin, conf } = await setup()
+      const prepare = vi.spyOn(env.DB, 'prepare')
+      const { body } = await gql(
+        MIRROR,
+        { i: rec({ conferenceId: conf }) },
+        { ...admin, ...over } as Envelope,
+      )
+      expect(code(body)).toBe('FORBIDDEN')
+      expect(prepare).not.toHaveBeenCalled()
+    })
+
+    it('refuses the platform lane and anonymous callers before reading D1', async () => {
+      const { conf } = await setup()
+      const prepare = vi.spyOn(env.DB, 'prepare')
+      for (const as of [operator, undefined])
+        expect(
+          code(
+            (await gql(MIRROR, { i: rec({ conferenceId: conf }) }, as)).body,
+          ),
+        ).toBe('FORBIDDEN')
+      expect(prepare).not.toHaveBeenCalled()
+    })
   })
 
   it('lets one recheck through per minute, atomically', async () => {
