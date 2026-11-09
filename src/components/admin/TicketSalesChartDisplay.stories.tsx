@@ -7,6 +7,12 @@ import type {
   TicketAnalysisResult,
 } from '@/lib/tickets/types'
 import type { CategoryStat } from '@/lib/tickets/utils'
+import { TicketSalesProcessor } from '@/lib/tickets/processor'
+import {
+  ticketsFromOrders,
+  type KonfTicketOrder,
+} from '@/lib/tickets/provider/konf-orders'
+import type { Conference } from '@/lib/conference/types'
 
 const FIXED_NOW = new Date('2026-04-20T09:00:00Z')
 
@@ -388,5 +394,90 @@ export const NoCapacitySet: Story = {
     const canvas = within(canvasElement)
     await expect(await canvas.findByText('No capacity set')).toBeVisible()
     await expect(canvas.queryByText(/250/)).toBeNull()
+  },
+}
+
+/**
+ * Native Konf ticketing (#2238): platform orders mapped by `ticketsFromOrders`
+ * (one row per seat, cancelled orders dropped) and run through the real
+ * `TicketSalesProcessor`. The platform records no VAT basis, so the revenue
+ * card makes no incl./ex. VAT claim.
+ */
+const nativeOrders: KonfTicketOrder[] = Array.from({ length: 40 }, (_, i) => {
+  const created = new Date('2026-02-16T10:00:00Z')
+  created.setUTCDate(created.getUTCDate() + i * 1.5)
+  return {
+    id: `ord_${i}`,
+    createdAt: created.toISOString(),
+    status: i % 13 === 0 ? 'cancelled' : i % 7 === 0 ? 'pending' : 'paid',
+    buyerName: i % 5 === 0 ? null : `Buyer ${i}`,
+    buyerEmail: `buyer${i}@example.com`,
+    lines: [
+      {
+        ticketTypeId: i < 18 ? 'tt_early' : 'tt_regular',
+        ticketTypeName: i < 18 ? 'Early Bird' : 'Regular',
+        quantity: 1 + (i % 3),
+        unitPrice: {
+          amountMinor: i < 18 ? 290000 : 390000,
+          currency: 'NOK',
+        },
+      },
+      ...(i % 4 === 0
+        ? [
+            {
+              ticketTypeId: 'tt_ws',
+              ticketTypeName: 'Workshop',
+              quantity: 1,
+              unitPrice: { amountMinor: 90000, currency: 'NOK' },
+            },
+          ]
+        : []),
+    ],
+  }
+})
+const nativeTickets = ticketsFromOrders(nativeOrders)
+const nativeAnalysis = new TicketSalesProcessor({
+  tickets: nativeTickets,
+  config: {
+    enabled: true,
+    salesStartDate: '2026-02-16',
+    targetCurve: 'linear',
+    milestones: [],
+  },
+  capacity: 150,
+  conference: { sponsors: [] } as unknown as Conference,
+  conferenceDate: '2026-06-01',
+  speakerCount: 0,
+}).process()
+
+export const NativeKonf: Story = {
+  args: {
+    analysis: nativeAnalysis,
+    paidAnalysis: nativeAnalysis,
+    salesConfig: {
+      enabled: true,
+      salesStartDate: '2026-02-16',
+      targetCurve: 'linear',
+      milestones: [],
+    },
+    paidCount: nativeAnalysis.statistics.totalPaidTickets,
+    freeCount: 0,
+    participantTally: {
+      participants: new Set(nativeTickets.map((t) => t.order_id)).size,
+      workshopParticipants: 0,
+      paidWorkshopParticipants: 0,
+      freeWorkshopParticipants: 0,
+      addOnsWithSeat: 0,
+      addOnsWithoutSeat: 0,
+      repeatTickets: 0,
+      roleBasis: 'declared',
+    },
+    freeTicketAllocation: undefined,
+    amountsIncludeVat: undefined,
+    chartFallback: undefined,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.queryByText(/VAT/)).toBeNull()
   },
 }

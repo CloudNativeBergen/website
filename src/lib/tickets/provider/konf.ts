@@ -5,6 +5,7 @@
 // conference id anywhere on this path.
 import 'server-only'
 import type { EventTicket } from '@/lib/tickets/types'
+import { ticketsFromOrders } from './konf-orders'
 import type {
   EventDiscount,
   TicketType,
@@ -36,58 +37,11 @@ const ORDERS =
   `query { ticketOrders { id createdAt status buyerName buyerEmail lines { ticketTypeId ticketTypeName quantity unitPrice { amountMinor currency } } } }` as const
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
 const ORDERS_DOC = graphql(ORDERS)
+export { ticketsFromOrders }
 const SALES =
   `query { ticketSales { byType { id name capacity sold price { amountMinor currency } } } }` as const
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
 const SALES_DOC = graphql(SALES)
-
-export type KonfTicketOrder = NonNullable<
-  ResultOf<typeof ORDERS_DOC>['ticketOrders']
->[number]
-
-/**
- * One ticket row per seat (line quantity), so every page built on
- * `fetchEventTickets` (stats, progression, orders, attendees) works unchanged.
- * Cancelled orders are not sold tickets and are dropped. The platform does not
- * record attendees per seat, so each row carries the buyer; `buyerName` is null
- * without `attendee.read_pii` or when the provider sent none.
- */
-export function ticketsFromOrders(orders: KonfTicketOrder[]): EventTicket[] {
-  const rows: EventTicket[] = []
-  for (const o of orders) {
-    if (o.status === 'cancelled' || !o.id) continue
-    const paid = o.status === 'paid'
-    const name = o.buyerName?.trim() || null
-    const [first = '', ...rest] = name?.split(/\s+/) ?? []
-    for (const [li, line] of (o.lines ?? []).entries()) {
-      const amountMinor = line.unitPrice?.amountMinor ?? 0
-      const currency = line.unitPrice?.currency ?? DEFAULT_TICKET_CURRENCY
-      for (let i = 0; i < (line.quantity ?? 0); i++) {
-        rows.push({
-          id: `${o.id}:${li}:${i}`,
-          order_id: o.id,
-          order_date: o.createdAt ?? '',
-          category: line.ticketTypeName ?? 'Ticket',
-          customer_name: name,
-          sum: { amountMinor, currency },
-          sum_left: { amountMinor: paid ? 0 : amountMinor, currency },
-          fields: [],
-          crm: {
-            first_name: first,
-            last_name: rest.join(' '),
-            email: o.buyerEmail ?? '',
-          },
-          order: {
-            createdAt: o.createdAt ?? '',
-            paymentStatus: o.status ?? 'pending',
-            paid,
-          },
-        })
-      }
-    }
-  }
-  return rows
-}
 
 async function query<T>(doc: string): Promise<T | undefined> {
   const [host, jwt] = await Promise.all([requestHost(), identityJwt()])
