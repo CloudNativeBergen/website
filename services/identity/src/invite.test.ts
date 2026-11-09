@@ -15,7 +15,11 @@ import {
 } from 'vitest'
 import { allowedRecipients } from '@runkonf/tenancy'
 import { createAuth, type AuthEnv } from './data/auth'
-import { inviterDisplayName, orgDisplayName } from './data/invitations'
+import {
+  inviteDailyCap,
+  inviterDisplayName,
+  orgDisplayName,
+} from './data/invitations'
 import { createMembers } from './data/members'
 import { invitePage, KONTROLL_URL } from './invite-page'
 import { orgWriteGate } from './org-write-gate'
@@ -418,6 +422,8 @@ describe('hardening (#2136)', () => {
     ['Line\r\nBreak', 'Line Break'],
     ["\u00c5se \u00d8deg\u00e5rd-O'Neil", "\u00c5se \u00d8deg\u00e5rd-O'Neil"],
     ['Jose\u0301', 'Jose\u0301'],
+    ['Mallory\u202E', 'Mallory'],
+    ['Mal\u200Blory', 'Mal lory'],
   ])('inviterDisplayName(%j) is %j', (raw, want) => {
     expect(inviterDisplayName(raw)).toBe(want)
   })
@@ -434,8 +440,27 @@ describe('hardening (#2136)', () => {
     ['a@b:c', 'a b c'],
     ['../..', 'my-slug'],
     ['', 'my-slug'],
+    ['Evil\u202Emoc.live', 'Evil moc live'],
+    ['Ev\u200Bil', 'Ev il'],
   ])('orgDisplayName(%j) is %j', (raw, want) => {
     expect(orgDisplayName(raw, 'my-slug')).toBe(want)
+  })
+
+  it('orgDisplayName cleans the slug fallback and never ends empty', () => {
+    expect(orgDisplayName('://', 'evil.com\u202E')).toBe('evil com')
+    expect(orgDisplayName('://', '../')).toBe('an organization')
+  })
+
+  it.each([
+    ['1e3', 1000],
+    ['-1', 50],
+    ['0', 0],
+    ['2.5', 50],
+    ['lots', 50],
+    ['', 50],
+    [undefined, 50],
+  ])('inviteDailyCap(%j) is %j', (raw, want) => {
+    expect(inviteDailyCap(raw)).toBe(want)
   })
 
   it('the email shows the cleaned org name, or the slug', async () => {

@@ -12,7 +12,7 @@ export interface MailEnv {
   INVITE_FROM?: string
   /**
    * Invitation emails per org per UTC day, resends included (#2136); resets
-   * at 00:00 UTC. "0" disables sending; unset or non-numeric means 50.
+   * at 00:00 UTC. "0" disables sending; unset, negative or non-integer means 50.
    */
   INVITE_DAILY_CAP?: string
 }
@@ -49,15 +49,20 @@ function allowlisted(text: string, digits: boolean) {
 export const inviterDisplayName = (name: string) =>
   allowlisted(name, false) || 'A member'
 
-/** The org's name in the email: letters and digits, or the slug. */
+/** The org's name in the email: letters and digits, else the cleaned slug. */
 export const orgDisplayName = (name: string, slug: string) =>
-  allowlisted(name, true) || slug
+  allowlisted(name, true) || allowlisted(slug, true) || 'an organization'
+
+/** The daily cap: a non-negative integer ("1e3" is 1000), else 50. */
+export function inviteDailyCap(raw: string | undefined) {
+  const n = Number(raw?.trim() || NaN)
+  return Number.isInteger(n) && n >= 0 ? n : DEFAULT_INVITE_DAILY_CAP
+}
 
 /** Counts one send against the org's day; false once the cap is passed. */
 async function underCap(d1: D1Database, env: MailEnv, orgId: string) {
-  // An explicit "0" disables sending; only missing or non-numeric is 50.
-  const parsed = Number.parseInt(env.INVITE_DAILY_CAP ?? '', 10)
-  const cap = parsed >= 0 ? parsed : DEFAULT_INVITE_DAILY_CAP
+  // An explicit "0" disables sending.
+  const cap = inviteDailyCap(env.INVITE_DAILY_CAP)
   // The day is the UTC date, so every org's allowance resets at 00:00 UTC.
   const day = new Date().toISOString().slice(0, 10)
   const row = await d1
