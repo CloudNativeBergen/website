@@ -21,6 +21,7 @@ const BASE = 'http://identity.test'
 const OPS = 'https://my.konf.app'
 let env: Parameters<typeof mintOperatorCliToken>[1]
 let mf: Miniflare
+const limited = new Map<string, number>()
 
 beforeAll(async () => {
   mf = new Miniflare(
@@ -52,6 +53,13 @@ beforeAll(async () => {
     GITHUB_CLIENT_SECRET: 'gh',
     LINKEDIN_CLIENT_ID: 'li',
     LINKEDIN_CLIENT_SECRET: 'li',
+    // 20 per key, as wrangler.jsonc gives HANDOFF_IP_LIMIT.
+    HANDOFF_IP_LIMIT: {
+      limit: async ({ key }: { key: string }) => {
+        limited.set(key, (limited.get(key) ?? 0) + 1)
+        return { success: limited.get(key)! <= 20 }
+      },
+    },
   } as unknown as typeof env
   // Better Auth creates its signing key on first use (any get-session call
   // does); create it up front so "no write" below means no write of ours.
@@ -82,11 +90,11 @@ async function sessionFor(operator: boolean, origin = OPS) {
   }
 }
 
-const mint = (bearer: string) =>
+const mint = (bearer: string, headers: Record<string, string> = {}) =>
   mintOperatorCliToken(
     new Request(`${BASE}/operator/cli-token`, {
       method: 'POST',
-      headers: { authorization: `Bearer ${bearer}` },
+      headers: { authorization: `Bearer ${bearer}`, ...headers },
     }),
     env,
   )
@@ -219,6 +227,60 @@ describe('mintOperatorCliToken', () => {
     } finally {
       spies.forEach((s) => s.mockRestore())
     }
+  })
+
+  it('rate-limits minting per user (#2171)', async () => {
+    const a = await sessionFor(true)
+    for (let i = 0; i < 20; i++) expect((await mint(a.bearer)).status).toBe(200)
+    const before = await writes()
+    const res = await mint(a.bearer)
+    expect(res.status).toBe(429)
+    expect(await writes()).toBe(before)
+    // Another operator has their own budget.
+    expect((await mint((await sessionFor(true)).bearer)).status).toBe(200)
+  })
+
+  it('mints from identity itself and from an operator origin', async () => {
+    const { bearer } = await sessionFor(true)
+    expect((await mint(bearer, { origin: OPS })).status).toBe(200)
+    expect((await mint(bearer, { origin: BASE })).status).toBe(200)
+    expect(
+      (await mint(bearer, { 'sec-fetch-site': 'same-origin' })).status,
+    ).toBe(200)
+  })
+
+  it.each([
+    ['a tenant Origin', { origin: 'https://conf.example' }],
+    ['a cross-site fetch with no Origin', { 'sec-fetch-site': 'cross-site' }],
+  ])(
+    'refuses an operator session posting from %s, nothing written (#2171)',
+    async (_, headers) => {
+      const { bearer } = await sessionFor(true)
+      const before = await writes()
+      await refused(await mint(bearer, headers))
+      expect(await writes()).toBe(before)
+    },
+  )
+
+  it('mints for a cookie-only session (#2171)', async () => {
+    const { userId, bearer } = await sessionFor(true)
+    const c = await ctx()
+    const res = await mintOperatorCliToken(
+      new Request(`${BASE}/operator/cli-token`, {
+        method: 'POST',
+        headers: { cookie: `${c.authCookies.sessionToken.name}=${bearer}` },
+      }),
+      env,
+    )
+    expect(res.status).toBe(200)
+    const { token } = (await res.json()) as { token: string }
+    expect((await gatewayVerify(token)).sub).toBe(userId)
+  })
+
+  it('refuses a two-part bearer that is no session (#2171)', async () => {
+    const before = await writes()
+    await refused(await mint('not-a-session.not-a-signature'))
+    expect(await writes()).toBe(before)
   })
 
   it('refuses GET', async () => {
