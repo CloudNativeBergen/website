@@ -1235,8 +1235,14 @@ type ConferenceDomain {
   """ISO 8601."""
   lastCheckedAt: String
   lastError: String
+  lastErrorCode: DomainErrorCode
   method: String
   removable: Boolean
+
+  """
+  Where to point the host so it routes to the site: CNAME for a subdomain, A records for an apex. Empty for platform hosts.
+  """
+  routingRecords: [DomainRecord!]
 
   """
   On rows from before #2207 phase 1, read from the legacy Cloudflare state.
@@ -1260,6 +1266,14 @@ type Domain {
   kind: String
   orgId: ID
   verification: String
+}
+
+type DomainRecord {
+  name: String
+
+  """CNAME or A."""
+  type: String
+  value: String
 }
 
 type InviteRequest {
@@ -1440,6 +1454,12 @@ enum TalkStatus {
   CONFIRMED
   PENDING
   WITHDRAWN
+}
+
+enum DomainErrorCode {
+  HARD_FAILURE
+  SOFT_FAILURE
+  UNVERIFIABLE
 }
 
 enum DomainStatus {
