@@ -5,6 +5,9 @@ package codegen
 // proposal from Sanity, derives tenant and recipients, dedupes per event id in
 // D1, posts the Slack alert and writes the organizers' in-app notifications.
 // No public route and no GraphQL: RPC only.
+// Security: every Worker that binds `Notifications` is trusted for orgId,
+// previousStatus and the event id it sends. Adding a binder needs a security
+// review.
 service: #PlatformService & {
 	name:     "notifications"
 	subgraph: false

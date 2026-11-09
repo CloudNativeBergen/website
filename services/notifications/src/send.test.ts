@@ -1,6 +1,10 @@
 import { DatabaseSync } from 'node:sqlite'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+
+const MIGRATIONS = ['0001_init.sql', '0002_sent_event_org_key.sql'].map((f) =>
+  readFileSync(join(__dirname, '../migrations', f), 'utf8'),
+)
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { evaluate, parse } from 'groq-js'
 import { send, slackToken, type DataEnv, type Deps } from './data'
@@ -8,7 +12,7 @@ import { send, slackToken, type DataEnv, type Deps } from './data'
 /** The slice of D1 send() uses (prepare/bind/run), over node:sqlite. */
 function d1(): D1Database {
   const db = new DatabaseSync(':memory:')
-  db.exec(readFileSync(join(__dirname, '../migrations/0001_init.sql'), 'utf8'))
+  for (const m of MIGRATIONS) db.exec(m)
   return {
     prepare: (sql: string) => ({
       bind: (...p: (string | number)[]) => ({
@@ -226,6 +230,29 @@ describe('notifications send', () => {
     expect(commits).toBe(1)
     expect(await send(deps, submitted({ id: 'evt-2' }))).toBe('sent')
     expect(slack).toHaveBeenCalledTimes(2)
+  })
+
+  it('dedupes per org: another org holding the same event id does not block it', async () => {
+    await deps.db
+      .prepare(
+        'INSERT INTO sent_event (id, type, org_id, created_at) VALUES (?, ?, ?, ?)',
+      )
+      .bind('evt-1', 'proposal.submitted', 'org-b', 'x')
+      .run()
+    expect(await send(deps, submitted())).toBe('sent')
+    expect(await send(deps, submitted())).toBe('duplicate')
+  })
+
+  it('migration 0002 keeps existing claims', () => {
+    const db = new DatabaseSync(':memory:')
+    db.exec(MIGRATIONS[0])
+    db.exec(
+      "INSERT INTO sent_event VALUES ('evt-1', 'proposal.submitted', 'org-a', 'x')",
+    )
+    db.exec(MIGRATIONS[1])
+    expect(db.prepare('SELECT id, org_id FROM sent_event').all()).toEqual([
+      { id: 'evt-1', org_id: 'org-a' },
+    ])
   })
 
   it('refuses a proposal outside the calling tenant', async () => {
