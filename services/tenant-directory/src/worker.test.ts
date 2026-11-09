@@ -538,8 +538,8 @@ describe('provisioning', () => {
     expect(sanityFetch).toHaveBeenCalledTimes(1)
     // identity's ensure runs on the retry too, so a failed one heals.
     expect(identity.ensure.mock.calls).toEqual([
-      [a.id, 'acme'],
-      [a.id, 'acme'],
+      [a.id, 'acme', 'Org acme'],
+      [a.id, 'acme', 'Org acme'],
     ])
     expect(
       sqlite.prepare('SELECT count(*) AS n FROM organizations').get(),
@@ -1519,7 +1519,11 @@ describe('createOrganization (kontroll#79)', () => {
     })
     expect(site.writes).toBe(1)
     expect(site.operators).toEqual(['op'])
-    expect(identity.ensure).toHaveBeenCalledWith('organization.nova', 'nova')
+    expect(identity.ensure).toHaveBeenCalledWith(
+      'organization.nova',
+      'nova',
+      'Nova',
+    )
     expect(
       sqlite.prepare('SELECT created_by FROM provisioning_requests').all(),
     ).toEqual([{ created_by: 'op' }])

@@ -47,7 +47,7 @@ export interface DataEnv extends CloudflareEnv {
   DB: D1Database
   /** identity's Organizations entrypoint: creates the org on its side. */
   IDENTITY: {
-    ensure(orgId: string, slug: string): Promise<unknown>
+    ensure(orgId: string, slug: string, name?: string): Promise<unknown>
     /** Organizer membership sync (#1907); identity has no cron of its own. */
     syncMembers(): Promise<unknown>
     /** The orgs a user is a member of, with the role there (#2036). */
@@ -1070,7 +1070,7 @@ export function createData(
             'idempotencyKey was used with different arguments',
           )
         }
-        await env.IDENTITY.ensure(org.id, org.slug)
+        await env.IDENTITY.ensure(org.id, org.slug, org.name ?? undefined)
         return org
       }
       const done = await earlier()

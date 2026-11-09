@@ -194,11 +194,16 @@ export function createData(env: DataEnv) {
      * Tenant-directory owns org ids. Idempotent on id; a slug taken by
      * another id still fails (UNIQUE).
      */
-    async ensureOrganization(id: string, slug: string): Promise<void> {
-      await db
-        .insert(organization)
-        .values({ id, slug, name: slug })
-        .onConflictDoNothing({ target: organization.id })
+    /** `name` is tenant-directory's display name (#2136); invitation emails show it. */
+    async ensureOrganization(
+      id: string,
+      slug: string,
+      name?: string,
+    ): Promise<void> {
+      const q = db.insert(organization).values({ id, slug, name: name || slug })
+      await (name
+        ? q.onConflictDoUpdate({ target: organization.id, set: { name } })
+        : q.onConflictDoNothing({ target: organization.id }))
     },
     /**
      * Self-serve sign-up (#2163): the org, the caller's owner membership and

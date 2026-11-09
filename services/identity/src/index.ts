@@ -42,8 +42,8 @@ export class Graph extends WorkerEntrypoint<Env> {
  * ids. No HTTP route.
  */
 export class Organizations extends WorkerEntrypoint<Env> {
-  ensure(id: string, slug: string) {
-    return createData(this.env).ensureOrganization(id, slug)
+  ensure(id: string, slug: string, name?: string) {
+    return createData(this.env).ensureOrganization(id, slug, name)
   }
 
   /**

@@ -103,9 +103,11 @@ ${Object.entries(PROVIDERS)
   )
   .join('\n')}`)
   }
-  const inv = id
-    ? await openInvitationFor(env.DB, id, session.user.email)
-    : null
+  // #2136: a matching but unverified email learns nothing, as on POST.
+  const inv =
+    id && session.user.emailVerified
+      ? await openInvitationFor(env.DB, id, session.user.email)
+      : null
   if (!inv) return render(`<p>${UNAVAILABLE}</p>`, 404)
   return render(`<p>Du er invitert til å bli med i <strong>${esc(inv.orgName)}</strong>.</p>
 <button class="btn" data-accept>Godta invitasjonen</button>`)

@@ -155,6 +155,20 @@ describe('ensureOrganization', () => {
     expect(results).toEqual([{ id: 'org-dir', slug: 'dir' }])
     await expect(data.ensureOrganization('org-other', 'dir')).rejects.toThrow()
   })
+
+  it('takes the display name from tenant-directory, refreshing it on repeat (#2136)', async () => {
+    const data = createData({ DB: d1 } as DataEnv)
+    const name = () =>
+      d1
+        .prepare("SELECT name FROM organization WHERE id = 'org-nm'")
+        .first('name')
+    await data.ensureOrganization('org-nm', 'nm')
+    expect(await name()).toBe('nm')
+    await data.ensureOrganization('org-nm', 'nm', 'Nordic Meetup')
+    expect(await name()).toBe('Nordic Meetup')
+    await data.ensureOrganization('org-nm', 'nm')
+    expect(await name()).toBe('Nordic Meetup')
+  })
 })
 
 describe('signupOwner (#2163)', () => {

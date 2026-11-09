@@ -10,15 +10,48 @@ export interface MailEnv {
   RESEND_API_KEY?: string
   /** The From header, a wrangler var (service.cue). */
   INVITE_FROM?: string
+  /** Invitation emails per org per UTC day, resends included (#2136). */
+  INVITE_DAILY_CAP?: string
 }
+
+export const DEFAULT_INVITE_DAILY_CAP = 50
 
 export interface InvitationMail {
   invitationId: string
+  orgId: string
   email: string
   orgName: string
   inviterName: string
   /** Reply-To, set only when the inviter's email is verified. */
   inviterEmail?: string | null
+}
+
+/**
+ * The inviter's free-text name, made unfit for phishing (#2136): no URLs,
+ * domains or phone numbers, one line, at most 64 characters.
+ */
+export function inviterDisplayName(name: string) {
+  const clean = name
+    .replace(/[\p{C}]/gu, ' ')
+    .replace(/(?:[a-z][a-z0-9+.-]*:\/\/|www\.)\S*/gi, ' ')
+    .replace(/\S+\.[a-z]{2,}\b\S*/gi, ' ')
+    .replace(/\+?\d[\d\s().-]{5,}\d/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return [...clean].slice(0, 64).join('').trim() || 'A member'
+}
+
+/** Counts one send against the org's day; false once the cap is passed. */
+async function underCap(d1: D1Database, env: MailEnv, orgId: string) {
+  const cap = Number(env.INVITE_DAILY_CAP) || DEFAULT_INVITE_DAILY_CAP
+  const day = new Date().toISOString().slice(0, 10)
+  const row = await d1
+    .prepare(
+      'INSERT INTO invite_send_count (org_id, day, n) VALUES (?, ?, 1) ON CONFLICT (org_id, day) DO UPDATE SET n = n + 1 RETURNING n',
+    )
+    .bind(orgId, day)
+    .first<{ n: number }>()
+  return (row?.n ?? Infinity) <= cap
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -32,6 +65,7 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
  */
 export async function deliverInvitation(
   env: MailEnv,
+  d1: D1Database,
   mail: InvitationMail,
 ): Promise<boolean> {
   if (!env.RESEND_API_KEY || !env.INVITE_FROM) {
@@ -40,9 +74,20 @@ export async function deliverInvitation(
     )
     return false
   }
+  try {
+    if (!(await underCap(d1, env, mail.orgId))) {
+      console.warn(
+        `[invite] daily cap reached for ${mail.orgId}; ${mail.invitationId} not mailed`,
+      )
+      return false
+    }
+  } catch (e) {
+    console.error(`[invite] cap check for ${mail.invitationId} failed`, e)
+    return false
+  }
   const url = `${env.BETTER_AUTH_URL}/invite/${encodeURIComponent(mail.invitationId)}`
   const org = mail.orgName.replace(/[\r\n]/g, ' ')
-  const inviter = mail.inviterName.replace(/[\r\n]/g, ' ') || 'A member'
+  const inviter = inviterDisplayName(mail.inviterName)
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
