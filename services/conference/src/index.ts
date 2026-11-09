@@ -57,4 +57,51 @@ export class ProgramDate extends WorkerEntrypoint<WorkerEnv> {
   }
 }
 
+/**
+ * Edition rows written by tenant-directory alone: its wrangler binds this
+ * entrypoint as EDITIONS, and no other service may (worker.test.ts checks).
+ * cfp and program bind ProgramDate, which stays read-only.
+ */
+export class Editions extends WorkerEntrypoint<WorkerEnv> {
+  /**
+   * The conference subgraph row for a new edition (provisionConference,
+   * createOrganization, signUpOrganization), or editions() never lists it.
+   * Unpublished, visibility live (backfill defaults). An existing row is
+   * never touched; one under another org throws, so a heal never succeeds
+   * against another org's row.
+   */
+  async createEdition(
+    orgId: string,
+    conferenceId: string,
+    title: string,
+    startDate: string | null,
+    endDate: string | null,
+  ): Promise<void> {
+    await this.env.DB.prepare(
+      "INSERT INTO conferences (conference_id, org_id, published, title, start_date, end_date, visibility, social_links) VALUES (?, ?, 0, ?, ?, ?, 'live', '[]') ON CONFLICT (conference_id) DO NOTHING",
+    )
+      .bind(conferenceId, orgId, title, startDate, endDate)
+      .run()
+    const row = await this.env.DB.prepare(
+      'SELECT org_id FROM conferences WHERE conference_id = ?',
+    )
+      .bind(conferenceId)
+      .first<{ org_id: string }>()
+    if (row?.org_id !== orgId)
+      throw new Error(`conference ${conferenceId} belongs to another org`)
+  }
+
+  /**
+   * Undoes createEdition for a rolled-back sign-up: deletes only a row of
+   * that org that is still unpublished. Idempotent.
+   */
+  async deleteEdition(orgId: string, conferenceId: string): Promise<void> {
+    await this.env.DB.prepare(
+      'DELETE FROM conferences WHERE conference_id = ? AND org_id = ? AND published = 0',
+    )
+      .bind(conferenceId, orgId)
+      .run()
+  }
+}
+
 export default worker

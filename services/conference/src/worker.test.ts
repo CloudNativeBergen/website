@@ -50,6 +50,11 @@ function d1(db: DatabaseSync, interleave = false): D1Database {
     interleave ? new Promise((r) => setTimeout(r, 0)) : undefined
   const stmt = (sql: string, params: SQLInputValue[] = []) => ({
     bind: (...p: SQLInputValue[]) => stmt(sql, p),
+    run: async () => {
+      await turn()
+      db.prepare(sql).run(...params)
+      return { success: true }
+    },
     all: async () => {
       await turn()
       return { results: db.prepare(sql).all(...params), success: true }
@@ -1410,6 +1415,81 @@ describe('ProgramDate.ticketed (#2129, #2141)', () => {
     expect(await rpc.ticketed('org-b', 'conf-b')).toBe(false)
     // Another org's id finds nothing.
     expect(await rpc.ticketed('org-b', 'conf-a')).toBe(false)
+  })
+})
+
+describe('Editions entrypoint (provisioned editions)', () => {
+  const EDITIONS = '{ conferenceEditions { id title startDate } }'
+  const rows = () =>
+    sqlite
+      .prepare(
+        'SELECT conference_id, org_id, title, published FROM conferences ORDER BY 1',
+      )
+      .all()
+  const rpc = async () => {
+    const { Editions } = await import('./index')
+    return new Editions({} as never, env as never)
+  }
+
+  it('a provisioned edition is listed for an insider, not for an outsider; a rerun never overwrites', async () => {
+    const e = await rpc()
+    await e.createEdition(
+      'org-a',
+      'conf-new',
+      'A 2028',
+      '2028-05-01',
+      '2028-05-02',
+    )
+    await e.createEdition('org-a', 'conf-new', 'Again', null, null)
+    const insider = await gql(tenant('org-a', 'conf-a', 'admin'), EDITIONS)
+    expect(insider.body.data.conferenceEditions).toContainEqual({
+      id: 'conf-new',
+      title: 'A 2028',
+      startDate: '2028-05-01',
+    })
+    const outsider = await gql(tenant('org-a', 'conf-a'), EDITIONS)
+    expect(
+      outsider.body.data.conferenceEditions.map((x: { id: string }) => x.id),
+    ).not.toContain('conf-new')
+  })
+
+  it("throws on another org's conference id and leaves the row as it was", async () => {
+    const e = await rpc()
+    const before = rows()
+    await expect(
+      e.createEdition('org-b', 'conf-a', 'Hijack', null, null),
+    ).rejects.toThrow('another org')
+    expect(rows()).toEqual(before)
+  })
+
+  it('deleteEdition removes only an unpublished row of that org, idempotently', async () => {
+    const e = await rpc()
+    await e.deleteEdition('org-b', 'conf-a-draft') // another org's draft
+    await e.deleteEdition('org-a', 'conf-a') // published
+    expect(rows()).toHaveLength(3)
+    await e.deleteEdition('org-a', 'conf-a-draft')
+    await e.deleteEdition('org-a', 'conf-a-draft')
+    expect(
+      rows().map((r) => (r as { conference_id: string }).conference_id),
+    ).toEqual(['conf-a', 'conf-b'])
+  })
+
+  it('is bound by tenant-directory only; ProgramDate has no write methods', async () => {
+    const { ProgramDate } = await import('./index')
+    expect(Object.getOwnPropertyNames(ProgramDate.prototype)).not.toContain(
+      'createEdition',
+    )
+    const services = new URL('../../', import.meta.url)
+    const binders = readdirSync(services).filter((d) => {
+      try {
+        return /"entrypoint":\s*"Editions"/.test(
+          readFileSync(new URL(`${d}/wrangler.jsonc`, services), 'utf8'),
+        )
+      } catch {
+        return false
+      }
+    })
+    expect(binders).toEqual(['tenant-directory'])
   })
 })
 

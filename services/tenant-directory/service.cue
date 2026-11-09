@@ -38,5 +38,8 @@ service: #PlatformService & {
 	serviceBindings: [
 		{binding: "IDENTITY", service: "konf-identity", entrypoint: "Organizations"},
 		{binding: "CONFERENCE", service: "konf-conference", entrypoint: "ProgramDate"},
+		// EDITIONS: the conference subgraph row for each new edition. Only
+		// tenant-directory may bind it (conference worker.test.ts checks).
+		{binding: "EDITIONS", service: "konf-conference", entrypoint: "Editions"},
 	]
 }
