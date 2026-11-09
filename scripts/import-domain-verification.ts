@@ -45,7 +45,7 @@
  * --verify computes, for every hostname in Sanity docs, routed
  * conference.domains and D1, the routing and allowlist verdicts on both sides
  * with the site's own isRoutingEligible / isAllowlistEligible, exits 1 on any
- * difference, and asserts 2026.cloudnativedays.no is verified on both.
+ * difference (platform rows with no Sanity doc excluded), and asserts 2026.cloudnativedays.no is verified on both.
  */
 
 import { config } from 'dotenv'
@@ -262,6 +262,8 @@ export function parity(
   for (const host of [...hosts].sort()) {
     if (!host || skipHost(host)) continue
     const row = d1.domains.get(host)
+    // Platform rows (phase 3) have no Sanity doc by design; phase 6 decides.
+    if (row && row.kind !== 'custom' && !sanity.has(host)) continue
     const s = verdict(sanity.get(host))
     const d = verdict(row && d1Record(row))
     for (const k of ['routing', 'allowlist'] as const)
