@@ -55,6 +55,26 @@ export class ProgramDate extends WorkerEntrypoint<WorkerEnv> {
   ticketed(orgId: string, conferenceId: string) {
     return isTicketed(this.env.DB, orgId, conferenceId)
   }
+
+  /**
+   * tenant-directory's edition writes (provisionConference, createOrganization,
+   * signUpOrganization) create the row here too, or editions() never lists
+   * it. Unpublished, visibility live (backfill defaults). Idempotent: an
+   * existing row is never touched, so a retry heals a missing one only.
+   */
+  async createEdition(
+    orgId: string,
+    conferenceId: string,
+    title: string,
+    startDate: string | null,
+    endDate: string | null,
+  ): Promise<void> {
+    await this.env.DB.prepare(
+      "INSERT INTO conferences (conference_id, org_id, published, title, start_date, end_date, visibility, social_links) VALUES (?, ?, 0, ?, ?, ?, 'live', '[]') ON CONFLICT (conference_id) DO NOTHING",
+    )
+      .bind(conferenceId, orgId, title, startDate, endDate)
+      .run()
+  }
 }
 
 export default worker

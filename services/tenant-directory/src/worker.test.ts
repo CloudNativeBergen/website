@@ -47,7 +47,10 @@ const signupLimit = { limit: vi.fn(async () => ({ success: true })) }
 const inviteLimit = {
   limit: vi.fn(async (opts: { key: string }) => ({ success: !!opts })),
 }
-const conferenceRpc = { ticketed: vi.fn(async () => false) }
+const conferenceRpc = {
+  ticketed: vi.fn(async () => false),
+  createEdition: vi.fn(async (...args: unknown[]) => void args),
+}
 vi.mock('./data/cloudflare', () => ({ cloudflareHostnames: () => hostnames }))
 
 const { default: worker } = await import('./worker')
@@ -349,6 +352,8 @@ beforeEach(() => {
   inviteLimit.limit.mockResolvedValue({ success: true })
   conferenceRpc.ticketed.mockReset()
   conferenceRpc.ticketed.mockResolvedValue(false)
+  conferenceRpc.createEdition.mockReset()
+  conferenceRpc.createEdition.mockResolvedValue(undefined)
 })
 
 async function gql(
@@ -1547,6 +1552,22 @@ describe('createOrganization (kontroll#79)', () => {
     expect(count('provisioning_requests')).toBe(1)
   })
 
+  it('creates the conference subgraph row with the edition title and dates; a retry heals it', async () => {
+    conferenceRpc.createEdition.mockRejectedValueOnce(new Error('down'))
+    const first = await create()
+    expect(first.body.errors[0].extensions.code).toBe('INTERNAL_SERVER_ERROR')
+    const { body } = await create()
+    expect(body.errors).toBeUndefined()
+    expect(conferenceRpc.createEdition).toHaveBeenCalledTimes(2)
+    expect(conferenceRpc.createEdition).toHaveBeenLastCalledWith(
+      'organization.nova',
+      'conference-0-nova',
+      'Nova Conf 2027',
+      '2027-05-01',
+      '2027-05-02',
+    )
+  })
+
   it('a retry after a failure between the Sanity and D1 steps completes', async () => {
     site.fail = true
     const first = await create()
@@ -1847,6 +1868,28 @@ describe('provisionConference (kontroll#85)', () => {
     expect(sanityFetch).not.toHaveBeenCalled()
     expect(site.writes).toBe(1)
     expect(editionRows()).toHaveLength(1)
+  })
+
+  it('creates the conference subgraph row; its failure fails the call; a retry heals it', async () => {
+    conferenceRpc.createEdition.mockClear()
+    conferenceRpc.createEdition.mockRejectedValueOnce(new Error('down'))
+    const a = await pc(owner)
+    expect(a.body.errors[0].extensions.code).toBe('INTERNAL_SERVER_ERROR')
+    // Half-created: the directory row landed, the subgraph row did not.
+    expect(editionRows()).toHaveLength(1)
+    const b = await pc(owner)
+    expect(b.body.errors).toBeUndefined()
+    expect(b.body.data.provisionConference).toEqual({
+      conferenceId: 'conference-e0',
+    })
+    expect(conferenceRpc.createEdition).toHaveBeenCalledTimes(2)
+    expect(conferenceRpc.createEdition).toHaveBeenLastCalledWith(
+      'organization.acme',
+      'conference-e0',
+      'Acme 2027',
+      '2027-10-01',
+      '2027-10-02',
+    )
   })
 
   it('a createOrganization key does not replay as an edition', async () => {
@@ -2751,6 +2794,36 @@ describe('billing and sign-up contract (#2129)', () => {
         })
         expect(m.message).not.toContain(slug)
       }
+    })
+
+    it('creates the conference subgraph row for the draft edition', async () => {
+      const body = await signUp({
+        slug: 'new-org',
+        code: await newCode(),
+        name: 'New Org',
+      })
+      expect(body.errors).toBeUndefined()
+      expect(conferenceRpc.createEdition).toHaveBeenCalledWith(
+        'organization.new-org',
+        body.data.signUpOrganization.conference.id,
+        'New Org',
+        null,
+        null,
+      )
+    })
+
+    it('keeps nothing and refunds the code when the subgraph row fails', async () => {
+      conferenceRpc.createEdition.mockRejectedValueOnce(new Error('down'))
+      const body = await signUp({
+        slug: 'new-org',
+        code: await newCode(),
+        name: 'New Org',
+      })
+      expect(body.errors[0].extensions.code).toBe('INTERNAL_SERVER_ERROR')
+      expect(count('organizations')).toBe(0)
+      expect(count('conferences')).toBe(0)
+      expect(uses()).toBe(0)
+      expect(identity.signupOwner).not.toHaveBeenCalled()
     })
 
     it('gives the last use to one of two racing sign-ups', async () => {

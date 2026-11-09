@@ -50,6 +50,11 @@ function d1(db: DatabaseSync, interleave = false): D1Database {
     interleave ? new Promise((r) => setTimeout(r, 0)) : undefined
   const stmt = (sql: string, params: SQLInputValue[] = []) => ({
     bind: (...p: SQLInputValue[]) => stmt(sql, p),
+    run: async () => {
+      await turn()
+      db.prepare(sql).run(...params)
+      return { success: true }
+    },
     all: async () => {
       await turn()
       return { results: db.prepare(sql).all(...params), success: true }
@@ -1410,6 +1415,54 @@ describe('ProgramDate.ticketed (#2129, #2141)', () => {
     expect(await rpc.ticketed('org-b', 'conf-b')).toBe(false)
     // Another org's id finds nothing.
     expect(await rpc.ticketed('org-b', 'conf-a')).toBe(false)
+  })
+})
+
+describe('ProgramDate.createEdition (provisioned editions)', () => {
+  const EDITIONS = '{ conferenceEditions { id title startDate } }'
+  it('a provisioned edition is listed for an insider, not for an outsider; a rerun never overwrites', async () => {
+    const { ProgramDate } = await import('./index')
+    const rpc = new ProgramDate({} as never, env as never)
+    await rpc.createEdition(
+      'org-a',
+      'conf-new',
+      'A 2028',
+      '2028-05-01',
+      '2028-05-02',
+    )
+    const insider = await gql(tenant('org-a', 'conf-a', 'admin'), EDITIONS)
+    expect(insider.body.data.conferenceEditions).toContainEqual({
+      id: 'conf-new',
+      title: 'A 2028',
+      startDate: '2028-05-01',
+    })
+    const outsider = await gql(tenant('org-a', 'conf-a'), EDITIONS)
+    expect(
+      outsider.body.data.conferenceEditions.map((e: { id: string }) => e.id),
+    ).not.toContain('conf-new')
+    // Idempotent and never moves or edits a row (here: another org's).
+    await rpc.createEdition('org-b', 'conf-new', 'Hijack', null, null)
+    await rpc.createEdition('org-a', 'conf-a', 'Clobber', null, null)
+    expect(
+      sqlite
+        .prepare(
+          "SELECT conference_id, org_id, title, published FROM conferences WHERE conference_id IN ('conf-new', 'conf-a') ORDER BY 1",
+        )
+        .all(),
+    ).toEqual([
+      {
+        conference_id: 'conf-a',
+        org_id: 'org-a',
+        title: 'A 2026',
+        published: 1,
+      },
+      {
+        conference_id: 'conf-new',
+        org_id: 'org-a',
+        title: 'A 2028',
+        published: 0,
+      },
+    ])
   })
 })
 
