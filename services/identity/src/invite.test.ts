@@ -15,7 +15,7 @@ import {
 } from 'vitest'
 import { allowedRecipients } from '@runkonf/tenancy'
 import { createAuth, type AuthEnv } from './data/auth'
-import { inviterDisplayName } from './data/invitations'
+import { inviterDisplayName, orgDisplayName } from './data/invitations'
 import { createMembers } from './data/members'
 import { invitePage, KONTROLL_URL } from './invite-page'
 import { orgWriteGate } from './org-write-gate'
@@ -392,22 +392,94 @@ describe('hardening (#2136)', () => {
   })
 
   it('the inviter name in the email carries no URL or phone number', async () => {
-    await invited(
+    const { invitationId } = await invited(
       'ph@example.com',
-      'Support https://evil.example/login call +47 912 34 567 evil.com',
+      'Support https://evil.example/login +47 912 34 567',
     )
     const [m] = await sent()
-    for (const body of [m.text, m.html]) {
-      expect(body).not.toMatch(/evil|https?:\/\/(?!identity\.test)|912/)
-      expect(body).toContain('Support call')
-    }
+    expect(m.text).toMatch(/^Support https evil example login has invited/)
+    expect(m.html).toMatch(
+      /^<p><strong>Support https evil example login<\/strong>/,
+    )
+    expect(invitationId).toBeTruthy()
   })
 
-  it('inviterDisplayName caps length and falls back', () => {
+  // Every name the first review leaked through the blocklist.
+  it.each([
+    ['evil .com', 'evil com'],
+    ['evil[.]com', 'evil com'],
+    ['evil\uff0ecom', 'evil com'],
+    ['e v i l . c o m', 'e v i l c o m'],
+    ['evil.\u0440\u0444', 'evil \u0440\u0444'],
+    ['call 91 23 45 67', 'call'],
+    ['+47 (0) 22-33', 'A member'],
+    ['www.evil.no', 'www evil no'],
+    ['mail@evil:80/x', 'mail evil x'],
+    ['Line\r\nBreak', 'Line Break'],
+    ["\u00c5se \u00d8deg\u00e5rd-O'Neil", "\u00c5se \u00d8deg\u00e5rd-O'Neil"],
+    ['Jose\u0301', 'Jose\u0301'],
+  ])('inviterDisplayName(%j) is %j', (raw, want) => {
+    expect(inviterDisplayName(raw)).toBe(want)
+  })
+
+  it('inviterDisplayName caps length at 64 and falls back', () => {
     expect([...inviterDisplayName('x'.repeat(200))]).toHaveLength(64)
-    expect(inviterDisplayName('www.evil.no')).toBe('A member')
-    expect(inviterDisplayName('Line\r\nBreak')).toBe('Line Break')
-    expect(inviterDisplayName('Åse Ødegård')).toBe('Åse Ødegård')
+    expect(inviterDisplayName('12345 ://.')).toBe('A member')
+  })
+
+  it.each([
+    ['KubeCon 2026', 'KubeCon 2026'],
+    ['evil.com/login', 'evil com login'],
+    ['evil\uff0ecom', 'evil com'],
+    ['a@b:c', 'a b c'],
+    ['../..', 'my-slug'],
+    ['', 'my-slug'],
+  ])('orgDisplayName(%j) is %j', (raw, want) => {
+    expect(orgDisplayName(raw, 'my-slug')).toBe(want)
+  })
+
+  it('the email shows the cleaned org name, or the slug', async () => {
+    const { orgId } = await invited('on@example.com')
+    await d1
+      .prepare('UPDATE organization SET name = ? WHERE id = ?')
+      .bind('evil.com/x', orgId)
+      .run()
+    resend.mockClear()
+    const op = await user(`op-on-${n}@example.com`)
+    const ops = createMembers({ ...env, DB: d1 })
+    await (
+      await ops.asOperator(op.id, orgId)
+    ).invite('on2@example.com', 'member')
+    await d1
+      .prepare("UPDATE organization SET name = '://' WHERE id = ?")
+      .bind(orgId)
+      .run()
+    await (
+      await ops.asOperator(op.id, orgId)
+    ).invite('on3@example.com', 'member')
+    const subjects = (await sent()).map((m) => m.subject)
+    expect(subjects).toEqual([
+      "You've been invited to join evil com x",
+      `You've been invited to join ${orgId}`,
+    ])
+  })
+
+  it('INVITE_DAILY_CAP "0" disables sending; garbage means 50', async () => {
+    const { orgId } = await invited('z0@example.com')
+    resend.mockClear()
+    const op = await user(`op-z-${n}@example.com`)
+    const as = async (c: string) =>
+      (
+        await createMembers({ ...env, INVITE_DAILY_CAP: c, DB: d1 }).asOperator(
+          op.id,
+          orgId,
+        )
+      ).invite(`z-${c || 'empty'}@example.com`, 'member')
+    await as('0')
+    expect(await sent()).toHaveLength(0)
+    await as('lots')
+    await as('')
+    expect(await sent()).toHaveLength(2)
   })
 
   it('email case variants match; Unicode look-alikes do not', async () => {

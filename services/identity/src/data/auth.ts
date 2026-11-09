@@ -294,6 +294,7 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
             orgId: o.id,
             email,
             orgName: o.name,
+            orgSlug: o.slug,
             inviterName: inviter.user.name,
             inviterEmail: inviter.user.emailVerified
               ? inviter.user.email
