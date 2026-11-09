@@ -17,7 +17,10 @@ import { createGraphQLError } from 'graphql-yoga'
 import type { OperatorAuditEvent } from '@runkonf/tenancy'
 import { importJWK, SignJWT, type JWK } from 'jose'
 import { effectivePlan, signupSlugProblem, type Plan } from '@runkonf/tenancy'
-import { generateVerificationToken } from '@runkonf/tenancy/challenge'
+import {
+  generateVerificationToken,
+  isDevOnlyHost,
+} from '@runkonf/tenancy/challenge'
 import { rawDb } from './db'
 import {
   cloudflareHostnames,
@@ -91,14 +94,21 @@ export interface DataEnv extends CloudflareEnv {
 const RECHECK_VERIFIED_MS = 60 * 60 * 1000
 const RECHECK_LIMIT_MS = 60 * 1000
 
+/**
+ * Suffixes the platform owns outright. Every reserved slug (RESERVED_SLUGS)
+ * lives under one of these, so refusing the whole suffix covers them.
+ */
+const PLATFORM_SUFFIXES = [PLATFORM_DOMAIN, 'konf.app']
+/** A pending claim nobody verified can be taken over after this (#2207). */
+const CLAIM_EXPIRY_MS = 72 * 60 * 60 * 1000
+
 /** A hostname a tenant may claim: not a platform host (addCustomDomain, #2207). */
 function customHostname(input: string) {
   const hostname = normalizeHost(input)
   if (
     !hostname ||
-    !hostname.includes('.') ||
-    hostname === PLATFORM_DOMAIN ||
-    hostname.endsWith(`.${PLATFORM_DOMAIN}`)
+    isDevOnlyHost(hostname) ||
+    PLATFORM_SUFFIXES.some((p) => hostname === p || hostname.endsWith(`.${p}`))
   ) {
     throw fail('BAD_USER_INPUT', 'not a custom hostname')
   }
@@ -276,7 +286,19 @@ const TENANT = `{
 export const SANITY_TIMEOUT_MS = 5000
 
 /** Raw GROQ, the same pattern as identity's member sync. Fails closed. */
-async function sanityTenant(env: DataEnv, params: Record<string, string>) {
+async function sanityTenant(
+  env: DataEnv,
+  params: Record<string, string>,
+): Promise<SanityTenant> {
+  return sanityQuery(env, TENANT, params)
+}
+
+/** One GROQ read with the read token; fails closed on any error. */
+async function sanityQuery<T>(
+  env: DataEnv,
+  query: string,
+  params: Record<string, string>,
+): Promise<T> {
   if (
     !env.SANITY_API_TOKEN_READ ||
     !env.SANITY_PROJECT_ID ||
@@ -294,7 +316,7 @@ async function sanityTenant(env: DataEnv, params: Record<string, string>) {
           authorization: `Bearer ${env.SANITY_API_TOKEN_READ}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ query: TENANT, params }),
+        body: JSON.stringify({ query, params }),
         // A hung read must not hold the provisioning call open (#1957).
         signal: AbortSignal.timeout(SANITY_TIMEOUT_MS),
       },
@@ -305,9 +327,10 @@ async function sanityTenant(env: DataEnv, params: Record<string, string>) {
   if (!res.ok)
     throw fail('INTERNAL_SERVER_ERROR', `Sanity read failed (${res.status})`)
   const body = (await res.json().catch(() => null)) as {
-    result?: SanityTenant
+    result?: T
   } | null
-  if (!body?.result) throw fail('INTERNAL_SERVER_ERROR', 'Sanity read failed')
+  if (body?.result == null)
+    throw fail('INTERNAL_SERVER_ERROR', 'Sanity read failed')
   return body.result
 }
 
@@ -1449,19 +1472,42 @@ export function createData(
       const hostname = customHostname(input)
       if (!(await api.conferenceOf(orgId, conferenceId)))
         throw fail('NOT_FOUND', 'conference not found')
+      // Until phase 6 Sanity is the routing truth: a host it already knows
+      // (a verification record, or another conference's domains[]) is taken.
+      // groq-global: hostnames are one global namespace.
+      const { n } = await sanityQuery<{ n: number }>(
+        env,
+        `{"n": count(*[(_type == "domainVerification" && hostname == $host) || (_type == "conference" && $host in domains[] && !(_id in [$conf, "drafts." + $conf]))])}`,
+        { host: hostname, conf: conferenceId },
+      )
+      if (n > 0) throw fail('CONFLICT', 'hostname is already claimed')
+      const now = Date.now()
+      const fresh = {
+        orgId,
+        conferenceId,
+        verification: 'pending' as const,
+        method: 'dns-txt' as const,
+        status: 'pending' as const,
+        token: generateVerificationToken(),
+        claimedAt: now,
+      }
+      // First writer wins; a pending claim never verified, never sent to
+      // Cloudflare and older than CLAIM_EXPIRY_MS is taken over atomically.
       const [claimed] = await db
         .insert(domains)
-        .values({
-          hostname,
-          kind: 'custom',
-          orgId,
-          conferenceId,
-          verification: 'pending',
-          method: 'dns-txt',
-          status: 'pending',
-          token: generateVerificationToken(),
+        .values({ hostname, kind: 'custom', ...fresh })
+        .onConflictDoUpdate({
+          target: domains.hostname,
+          set: { ...fresh, lastError: null, lastRecheckAt: null },
+          setWhere: and(
+            eq(domains.kind, 'custom'),
+            eq(domains.verification, 'pending'),
+            or(isNull(domains.status), eq(domains.status, 'pending')),
+            isNull(domains.verifiedAt),
+            isNull(domains.cfCustomHostnameId),
+            lt(domains.claimedAt, now - CLAIM_EXPIRY_MS),
+          ),
         })
-        .onConflictDoNothing()
         .returning()
       if (!claimed) throw fail('CONFLICT', 'hostname is already claimed')
       return claimed
@@ -1502,6 +1548,12 @@ export function createData(
       if (!row) throw fail('NOT_FOUND', 'no such hostname')
       if (row.kind !== 'custom')
         throw fail('FORBIDDEN', 'a platform hostname cannot be removed')
+      // Until the reader cutover (#2207 phase 6) a verified row may be live.
+      if (row.status === 'verified' || row.verification === 'verified')
+        throw fail(
+          'FORBIDDEN',
+          'a verified hostname cannot be removed here until the routing cutover',
+        )
       if (row.cfCustomHostnameId) await hostnames.delete(row.cfCustomHostnameId)
       await db.delete(domains).where(eq(domains.hostname, hostname))
       return row

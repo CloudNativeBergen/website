@@ -15,3 +15,5 @@ ALTER TABLE domains ADD COLUMN consecutive_soft_failures INTEGER NOT NULL DEFAUL
 ALTER TABLE domains ADD COLUMN last_error TEXT;
 -- Last accepted recheckDomain call; the 60 s limit is enforced on it in SQL.
 ALTER TABLE domains ADD COLUMN last_recheck_at INTEGER;
+-- When claimDomain wrote the row; an unverified claim expires after 72 h.
+ALTER TABLE domains ADD COLUMN claimed_at INTEGER;

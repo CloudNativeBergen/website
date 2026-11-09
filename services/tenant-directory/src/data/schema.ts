@@ -79,6 +79,7 @@ export const domains = sqliteTable('domains', {
     .default(0),
   lastError: text('last_error'),
   lastRecheckAt: integer('last_recheck_at'),
+  claimedAt: integer('claimed_at'),
 })
 
 export const provisioningRequests = sqliteTable('provisioning_requests', {

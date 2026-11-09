@@ -816,6 +816,11 @@ async function run(query: string, headers: Record<string, string>) {
  * refusal (e.g. TENANT_MISMATCH), never for a validation or execution error.
  */
 const EXPECTED_ERRORS = new Set<string>()
+const DOMAIN_CODES: Record<string, string> = {
+  claimDomain: 'BAD_USER_INPUT',
+  recheckDomain: 'NOT_FOUND',
+  removeDomain: 'NOT_FOUND',
+}
 
 describe.each([
   ['anonymous, A origin, A and B ids', false, TENANTS],
@@ -858,12 +863,8 @@ describe.each([
             e.extensions?.code === 'NOT_FOUND' &&
             roots[String(e.path?.[0])] === 'myProposal'
           ) &&
-          // domains (#2207): a probe id is no conference of the caller's org
-          // (NOT_FOUND, foreign and missing alike); non-admins get FORBIDDEN.
-          !(
-            /^(NOT_FOUND|FORBIDDEN)$/.test(e.extensions?.code ?? '') &&
-            roots[String(e.path?.[0])] === 'domains'
-          ) &&
+          // domains (#2207): checked exactly below.
+          roots[String(e.path?.[0])] !== 'domains' &&
           // API credentials (#2115) are a contract only: a caller with access
           // gets NOT_IMPLEMENTED. Drop this when they are implemented.
           !(
@@ -874,6 +875,20 @@ describe.each([
           ),
       )
       expect(unexpected, query).toEqual([])
+      // domains (#2207) runs alone. The signed-in walker is A's admin: A's
+      // own conference reads; any other probe is NOT_FOUND, foreign and
+      // missing alike. Anonymous is refused before any read.
+      if (Object.values(roots).includes('domains'))
+        expect(
+          errors.map((e) => e.extensions?.code),
+          query,
+        ).toEqual(
+          !signedIn
+            ? ['FORBIDDEN']
+            : query.includes('"conf-tenant-a"')
+              ? []
+              : ['NOT_FOUND'],
+        )
       sawA ||= body.includes('TENANT_A')
       const forged = await run(query, {
         ...headers(),
@@ -1041,9 +1056,8 @@ describe('cross-tenant mutation walk', () => {
       else if (
         // subscribePush: the probe endpoint is not https; updateMyProfile: the
         // probe input has no name; provisionConference: the probe dates are
-        // not dates; requestInvite: the probe name is empty; *Domain (#2207):
-        // probe ids and hostnames name nothing of A's.
-        /"(inviteMember|cancelInvitation|removeMember|changeMemberRole|subscribePush|updateMyProfile|provisionConference|requestInvite|claimDomain|recheckDomain|removeDomain)"/.test(
+        // not dates; requestInvite: the probe name is empty.
+        /"(inviteMember|cancelInvitation|removeMember|changeMemberRole|subscribePush|updateMyProfile|provisionConference|requestInvite)"/.test(
           json,
         )
       )
@@ -1080,6 +1094,14 @@ describe('cross-tenant mutation walk', () => {
           (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions
             ?.code,
         )
+      // Domains (#2207): the probe hostname has no dot (claim refuses it as
+      // input); recheck and remove find no such hostname of A's.
+      else if (/^(claimDomain|recheckDomain|removeDomain)$/.test(field))
+        expect(
+          (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions
+            ?.code,
+          field,
+        ).toBe(DOMAIN_CODES[field])
       // Demo seed (#2148): org A is a customer org, so it refuses; binding
       // a ticketing event is operator-only.
       else if (field === 'seedTicketOrders' || field === 'bindTicketEvent')
