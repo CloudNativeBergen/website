@@ -34,6 +34,7 @@ export interface AuthEnv {
   LINKEDIN_CLIENT_SECRET: string
   RESEND_API_KEY?: MailEnv['RESEND_API_KEY']
   INVITE_FROM?: MailEnv['INVITE_FROM']
+  INVITE_DAILY_CAP?: MailEnv['INVITE_DAILY_CAP']
 }
 
 /** Security requirement 4: identity JWTs live 5 minutes or less. */
@@ -288,10 +289,12 @@ export function createAuth(d1: D1Database, env: AuthEnv) {
         invitationExpiresIn: INVITATION_EXPIRES_IN,
         // #2130: the invitee gets a link to /invite/<id> (src/invite-page.ts).
         sendInvitationEmail: ({ id, email, organization: o, inviter }) =>
-          deliverInvitation(env, {
+          deliverInvitation(env, d1, {
             invitationId: id,
+            orgId: o.id,
             email,
             orgName: o.name,
+            orgSlug: o.slug,
             inviterName: inviter.user.name,
             inviterEmail: inviter.user.emailVerified
               ? inviter.user.email

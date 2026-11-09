@@ -267,8 +267,9 @@ export function createMembers(env: AuthEnv & { DB: D1Database }) {
             audit('invite.create', actorId, { invitationId: row.id, to: role }),
           ])
           .catch(clean)
-        await deliverInvitation(env, {
+        await deliverInvitation(env, env.DB, {
           invitationId: row.id,
+          orgId,
           email: row.email,
           ...(await namesFor(env.DB, orgId, actorId)),
         })

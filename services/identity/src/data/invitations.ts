@@ -10,15 +10,63 @@ export interface MailEnv {
   RESEND_API_KEY?: string
   /** The From header, a wrangler var (service.cue). */
   INVITE_FROM?: string
+  /**
+   * Invitation emails per org per UTC day, resends included (#2136); resets
+   * at 00:00 UTC. "0" disables sending; unset or non-numeric means 50.
+   */
+  INVITE_DAILY_CAP?: string
 }
+
+export const DEFAULT_INVITE_DAILY_CAP = 50
 
 export interface InvitationMail {
   invitationId: string
+  orgId: string
   email: string
   orgName: string
+  /** Shown when the name cleans down to nothing. */
+  orgSlug: string
   inviterName: string
   /** Reply-To, set only when the inviter's email is verified. */
   inviterEmail?: string | null
+}
+
+/**
+ * Free text made unfit for phishing (#2136), by allowlist: Unicode letters
+ * and marks, spaces, apostrophe and hyphen (plus digits when asked). Every
+ * other character, dots and slashes included, becomes a space; then one
+ * line of at most 64 characters.
+ */
+function allowlisted(text: string, digits: boolean) {
+  const drop = digits ? /[^\p{L}\p{M}\p{Nd}' -]/gu : /[^\p{L}\p{M}' -]/gu
+  const clean = text.replace(drop, ' ').replace(/\s+/g, ' ').trim()
+  const out = [...clean].slice(0, 64).join('').trim()
+  // Punctuation alone ("-", "'") is no name.
+  return /[\p{L}\p{Nd}]/u.test(out) ? out : ''
+}
+
+/** The inviter's name in the email: letters only, or "A member". */
+export const inviterDisplayName = (name: string) =>
+  allowlisted(name, false) || 'A member'
+
+/** The org's name in the email: letters and digits, or the slug. */
+export const orgDisplayName = (name: string, slug: string) =>
+  allowlisted(name, true) || slug
+
+/** Counts one send against the org's day; false once the cap is passed. */
+async function underCap(d1: D1Database, env: MailEnv, orgId: string) {
+  // An explicit "0" disables sending; only missing or non-numeric is 50.
+  const parsed = Number.parseInt(env.INVITE_DAILY_CAP ?? '', 10)
+  const cap = parsed >= 0 ? parsed : DEFAULT_INVITE_DAILY_CAP
+  // The day is the UTC date, so every org's allowance resets at 00:00 UTC.
+  const day = new Date().toISOString().slice(0, 10)
+  const row = await d1
+    .prepare(
+      'INSERT INTO invite_send_count (org_id, day, n) VALUES (?, ?, 1) ON CONFLICT (org_id, day) DO UPDATE SET n = n + 1 RETURNING n',
+    )
+    .bind(orgId, day)
+    .first<{ n: number }>()
+  return (row?.n ?? Infinity) <= cap
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -32,6 +80,7 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
  */
 export async function deliverInvitation(
   env: MailEnv,
+  d1: D1Database,
   mail: InvitationMail,
 ): Promise<boolean> {
   if (!env.RESEND_API_KEY || !env.INVITE_FROM) {
@@ -40,9 +89,20 @@ export async function deliverInvitation(
     )
     return false
   }
+  try {
+    if (!(await underCap(d1, env, mail.orgId))) {
+      console.warn(
+        `[invite] daily cap reached for ${mail.orgId}; ${mail.invitationId} not mailed`,
+      )
+      return false
+    }
+  } catch (e) {
+    console.error(`[invite] cap check for ${mail.invitationId} failed`, e)
+    return false
+  }
   const url = `${env.BETTER_AUTH_URL}/invite/${encodeURIComponent(mail.invitationId)}`
-  const org = mail.orgName.replace(/[\r\n]/g, ' ')
-  const inviter = mail.inviterName.replace(/[\r\n]/g, ' ') || 'A member'
+  const org = orgDisplayName(mail.orgName, mail.orgSlug)
+  const inviter = inviterDisplayName(mail.inviterName)
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -74,7 +134,7 @@ export async function deliverInvitation(
 export async function namesFor(d1: D1Database, orgId: string, userId: string) {
   const db = rawDb(d1)
   const [o] = await db
-    .select({ name: organization.name })
+    .select({ name: organization.name, slug: organization.slug })
     .from(organization)
     .where(eq(organization.id, orgId))
   const [u] = await db
@@ -87,6 +147,7 @@ export async function namesFor(d1: D1Database, orgId: string, userId: string) {
     .where(eq(user.id, userId))
   return {
     orgName: o?.name ?? '',
+    orgSlug: o?.slug ?? '',
     inviterName: u?.name ?? '',
     inviterEmail: u?.verified ? u.email : null,
   }

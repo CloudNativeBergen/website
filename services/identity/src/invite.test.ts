@@ -15,6 +15,7 @@ import {
 } from 'vitest'
 import { allowedRecipients } from '@runkonf/tenancy'
 import { createAuth, type AuthEnv } from './data/auth'
+import { inviterDisplayName, orgDisplayName } from './data/invitations'
 import { createMembers } from './data/members'
 import { invitePage, KONTROLL_URL } from './invite-page'
 import { orgWriteGate } from './org-write-gate'
@@ -49,6 +50,7 @@ const env: AuthEnv = {
 let mf: Miniflare
 let d1: D1Database
 let auth: ReturnType<typeof createAuth>
+let cap: string | undefined
 const pageEnv = () => ({
   ...env,
   DB: d1,
@@ -80,6 +82,7 @@ afterAll(() => mf?.dispose())
 beforeEach(() => {
   resend.mockReset().mockResolvedValue(Response.json({ id: 'e1' }))
   limit.mockReset().mockResolvedValue({ success: true })
+  cap = undefined
 })
 
 const all = async <T>(q: string, ...v: unknown[]) =>
@@ -103,20 +106,20 @@ async function user(email: string, emailVerified = true, name = 'T') {
 }
 
 /** An org with an owner who invites `email`; returns ids. */
-async function invited(email: string) {
+async function invited(email: string, inviterName = 'Ada') {
   const orgId = `org-${++n}`
   await d1
     .prepare('INSERT INTO organization (id, name, slug) VALUES (?, ?, ?)')
     .bind(orgId, `Org ${n}`, orgId)
     .run()
-  const owner = await user(`owner-${n}@example.com`, true, 'Ada')
+  const owner = await user(`owner-${n}@example.com`, true, inviterName)
   await d1
     .prepare(
       'INSERT INTO member (id, organizationId, userId, role) VALUES (?, ?, ?, ?)',
     )
     .bind(`${orgId}-m`, orgId, owner.id, 'owner')
     .run()
-  const members = createMembers({ ...env, DB: d1 })
+  const members = createMembers({ ...env, INVITE_DAILY_CAP: cap, DB: d1 })
   const inv = await (
     await members.asMember(owner.id, orgId)
   ).invite(email, 'member')
@@ -322,5 +325,213 @@ describe('accept', () => {
           new Request(`${BASE}/api/auth/organization/${p}`, { method: 'POST' }),
         )?.status,
       ).toBe(403)
+  })
+})
+
+describe('hardening (#2136)', () => {
+  it('an unverified session with the matching email sees no org name', async () => {
+    const { invitationId } = await invited('uv@example.com')
+    const invitee = await user('uv@example.com', false)
+    const res = await get(invitationId, invitee.cookie)
+    expect(res.status).toBe(404)
+    expect(await res.text()).not.toMatch(/Org \d+/)
+  })
+
+  it('caps invitation emails per org per day, resends included', async () => {
+    cap = '2'
+    const { orgId, owner } = await invited('cap1@example.com')
+    await d1
+      .prepare('UPDATE session SET activeOrganizationId = ? WHERE userId = ?')
+      .bind(orgId, owner.id)
+      .run()
+    const capped = createAuth(d1, { ...env, INVITE_DAILY_CAP: cap })
+    const resendTo = (email: string) =>
+      capped.api.createInvitation({
+        headers: new Headers({ cookie: owner.cookie }),
+        body: { email, role: 'member', organizationId: orgId, resend: true },
+      })
+    // Send 2 is a resend: it is mailed and counts.
+    await resendTo('cap1@example.com')
+    expect(await sent()).toHaveLength(2)
+    resend.mockClear()
+    // Past the cap: a new invite is created but not mailed, nor is a resend.
+    const third = await (
+      await createMembers({ ...env, INVITE_DAILY_CAP: cap, DB: d1 }).asMember(
+        owner.id,
+        orgId,
+      )
+    ).invite('cap3@example.com', 'member')
+    await resendTo('cap1@example.com')
+    expect(await sent()).toHaveLength(0)
+    expect(
+      await all('SELECT id FROM invitation WHERE id = ?', third.id),
+    ).toHaveLength(1)
+    expect(
+      await all<{ n: number }>(
+        'SELECT n FROM invite_send_count WHERE org_id = ?',
+        orgId,
+      ),
+    ).toEqual([{ n: 4 }])
+    // Another org has its own allowance.
+    await invited('cap4@example.com')
+    expect(await sent()).toHaveLength(1)
+  })
+
+  it('the cap defaults to 50 when unset', async () => {
+    const { orgId } = await invited('dflt@example.com')
+    await d1
+      .prepare('UPDATE invite_send_count SET n = 50 WHERE org_id = ?')
+      .bind(orgId)
+      .run()
+    resend.mockClear()
+    const op = await user(`op-d-${n}@example.com`)
+    await (
+      await createMembers({ ...env, DB: d1 }).asOperator(op.id, orgId)
+    ).invite('dflt2@example.com', 'member')
+    expect(await sent()).toHaveLength(0)
+  })
+
+  it('the inviter name in the email carries no URL or phone number', async () => {
+    const { invitationId } = await invited(
+      'ph@example.com',
+      'Support https://evil.example/login +47 912 34 567',
+    )
+    const [m] = await sent()
+    expect(m.text).toMatch(/^Support https evil example login has invited/)
+    expect(m.html).toMatch(
+      /^<p><strong>Support https evil example login<\/strong>/,
+    )
+    expect(invitationId).toBeTruthy()
+  })
+
+  // Every name the first review leaked through the blocklist.
+  it.each([
+    ['evil .com', 'evil com'],
+    ['evil[.]com', 'evil com'],
+    ['evil\uff0ecom', 'evil com'],
+    ['e v i l . c o m', 'e v i l c o m'],
+    ['evil.\u0440\u0444', 'evil \u0440\u0444'],
+    ['call 91 23 45 67', 'call'],
+    ['+47 (0) 22-33', 'A member'],
+    ['www.evil.no', 'www evil no'],
+    ['mail@evil:80/x', 'mail evil x'],
+    ['Line\r\nBreak', 'Line Break'],
+    ["\u00c5se \u00d8deg\u00e5rd-O'Neil", "\u00c5se \u00d8deg\u00e5rd-O'Neil"],
+    ['Jose\u0301', 'Jose\u0301'],
+  ])('inviterDisplayName(%j) is %j', (raw, want) => {
+    expect(inviterDisplayName(raw)).toBe(want)
+  })
+
+  it('inviterDisplayName caps length at 64 and falls back', () => {
+    expect([...inviterDisplayName('x'.repeat(200))]).toHaveLength(64)
+    expect(inviterDisplayName('12345 ://.')).toBe('A member')
+  })
+
+  it.each([
+    ['KubeCon 2026', 'KubeCon 2026'],
+    ['evil.com/login', 'evil com login'],
+    ['evil\uff0ecom', 'evil com'],
+    ['a@b:c', 'a b c'],
+    ['../..', 'my-slug'],
+    ['', 'my-slug'],
+  ])('orgDisplayName(%j) is %j', (raw, want) => {
+    expect(orgDisplayName(raw, 'my-slug')).toBe(want)
+  })
+
+  it('the email shows the cleaned org name, or the slug', async () => {
+    const { orgId } = await invited('on@example.com')
+    await d1
+      .prepare('UPDATE organization SET name = ? WHERE id = ?')
+      .bind('evil.com/x', orgId)
+      .run()
+    resend.mockClear()
+    const op = await user(`op-on-${n}@example.com`)
+    const ops = createMembers({ ...env, DB: d1 })
+    await (
+      await ops.asOperator(op.id, orgId)
+    ).invite('on2@example.com', 'member')
+    await d1
+      .prepare("UPDATE organization SET name = '://' WHERE id = ?")
+      .bind(orgId)
+      .run()
+    await (
+      await ops.asOperator(op.id, orgId)
+    ).invite('on3@example.com', 'member')
+    const subjects = (await sent()).map((m) => m.subject)
+    expect(subjects).toEqual([
+      "You've been invited to join evil com x",
+      `You've been invited to join ${orgId}`,
+    ])
+  })
+
+  it('INVITE_DAILY_CAP "0" disables sending; garbage means 50', async () => {
+    const { orgId } = await invited('z0@example.com')
+    resend.mockClear()
+    const op = await user(`op-z-${n}@example.com`)
+    const as = async (c: string) =>
+      (
+        await createMembers({ ...env, INVITE_DAILY_CAP: c, DB: d1 }).asOperator(
+          op.id,
+          orgId,
+        )
+      ).invite(`z-${c || 'empty'}@example.com`, 'member')
+    await as('0')
+    expect(await sent()).toHaveLength(0)
+    await as('lots')
+    await as('')
+    expect(await sent()).toHaveLength(2)
+  })
+
+  it('email case variants match; Unicode look-alikes do not', async () => {
+    const a = await invited('Mixed.Case@Example.com')
+    const upper = await user('MIXED.CASE@example.COM')
+    expect((await get(a.invitationId, upper.cookie)).status).toBe(200)
+    expect((await accept(a.invitationId, upper.cookie)).status).toBe(200)
+    // A non-ASCII address cannot be invited at all (z.email()).
+    await expect(invited('j\u00f8rn@example.com')).rejects.toThrow()
+    // ASCII invited; ø, combining-stroke and Cyrillic look-alikes refused.
+    const b = await invited('jorn@example.com')
+    for (const spoof of [
+      'j\u00f8rn@example.com',
+      'jo\u0338rn@example.com',
+      'jorn@ex\u0430mple.com',
+    ]) {
+      const s = await user(spoof)
+      expect((await get(b.invitationId, s.cookie)).status).toBe(404)
+      expect((await accept(b.invitationId, s.cookie)).status).toBe(404)
+    }
+    expect(await membersOf(b.orgId)).toHaveLength(1)
+  })
+
+  it('a user whose provider gave no email cannot open or accept', async () => {
+    const { orgId, invitationId } = await invited('noemail@example.com')
+    const u = await user(`blank-${n}@example.com`)
+    await d1.prepare("UPDATE user SET email = '' WHERE id = ?").bind(u.id).run()
+    expect((await get(invitationId, u.cookie)).status).toBe(404)
+    expect((await accept(invitationId, u.cookie)).status).toBe(404)
+    expect(await membersOf(orgId)).toHaveLength(1)
+  })
+
+  it('an account linked after the invite does not change whose invite it is', async () => {
+    const { orgId, invitationId } = await invited('linked@example.com')
+    const other = await user(`linker-${n}@example.com`)
+    await d1
+      .prepare(
+        "INSERT INTO account (id, accountId, providerId, userId, createdAt, updatedAt) VALUES (?, ?, 'github', ?, ?, ?)",
+      )
+      .bind(`acc-${n}`, `gh-${n}`, other.id, Date.now(), Date.now())
+      .run()
+    expect((await get(invitationId, other.cookie)).status).toBe(404)
+    expect((await accept(invitationId, other.cookie)).status).toBe(404)
+    // The real owner of the address, linking an account later, still can.
+    const invitee = await user('linked@example.com')
+    await d1
+      .prepare(
+        "INSERT INTO account (id, accountId, providerId, userId, createdAt, updatedAt) VALUES (?, ?, 'linkedin', ?, ?, ?)",
+      )
+      .bind(`acc2-${n}`, `li-${n}`, invitee.id, Date.now(), Date.now())
+      .run()
+    expect((await accept(invitationId, invitee.cookie)).status).toBe(200)
+    expect((await membersOf(orgId)).map((m) => m.userId)).toContain(invitee.id)
   })
 })
