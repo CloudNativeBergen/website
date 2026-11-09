@@ -1002,7 +1002,14 @@ describe('settings phase 3 (#2080)', () => {
     'ticketTypeRoles { typeName admits grantsWorkshop }',
   ].join(' ')
   const MUTATION = `mutation($input: ConferencePatch!) { updateConference(input: $input) { id } }`
-  const admin = tenant('org-a', 'conf-a', 'admin')
+  // Binding an event needs a paid plan (#2141); tested on its own below.
+  const admin: Envelope = {
+    ...(tenant('org-a', 'conf-a', 'admin') as Extract<
+      Envelope,
+      { typ: 'tenant' }
+    >),
+    plan: 'basic',
+  }
   const operator: Envelope = {
     ...(admin as Extract<Envelope, { typ: 'tenant' }>),
     scopes: ['platform:operator'],
@@ -1383,11 +1390,19 @@ describe('authz phase 1', () => {
   })
 })
 
-describe('ProgramDate.ticketed (#2129)', () => {
-  it('answers whether an edition of that org has a ticketing provider, published or not', async () => {
+describe('ProgramDate.ticketed (#2129, #2141)', () => {
+  it('answers whether an edition of that org has a vendor event bound, published or not', async () => {
     const { ProgramDate } = await import('./index')
+    // The production shape: no provider (Checkin) and an event id.
     sqlite.exec(
-      "UPDATE conferences SET ticketing_provider = 'tito' WHERE conference_id IN ('conf-a', 'conf-a-draft')",
+      "UPDATE conferences SET checkin_event_id = 218308 WHERE conference_id = 'conf-a'",
+    )
+    sqlite.exec(
+      "UPDATE conferences SET ticketing_provider = 'tito', tito_account_slug = 'a', tito_event_slug = '2027' WHERE conference_id = 'conf-a-draft'",
+    )
+    // A vendor picked with no event bound sells nothing.
+    sqlite.exec(
+      "UPDATE conferences SET ticketing_provider = 'checkin' WHERE conference_id = 'conf-b'",
     )
     const rpc = new ProgramDate({} as never, env as never)
     expect(await rpc.ticketed('org-a', 'conf-a')).toBe(true)
@@ -1395,5 +1410,60 @@ describe('ProgramDate.ticketed (#2129)', () => {
     expect(await rpc.ticketed('org-b', 'conf-b')).toBe(false)
     // Another org's id finds nothing.
     expect(await rpc.ticketed('org-b', 'conf-a')).toBe(false)
+  })
+})
+
+describe('updateConference plan gate on binding an event (#2141)', () => {
+  const MUTATION = `mutation($input: ConferencePatch!) { updateConference(input: $input) { id } }`
+  const site = (plan?: 'free' | 'basic'): Envelope => ({
+    ...(tenant('org-a', 'conf-a', 'admin') as Extract<
+      Envelope,
+      { typ: 'tenant' }
+    >),
+    scopes: ['site:server'],
+    ...(plan && { plan }),
+  })
+  const bound = () =>
+    sqlite
+      .prepare(
+        'SELECT checkin_event_id, tito_event_slug FROM conferences WHERE conference_id = ?',
+      )
+      .get('conf-a')
+
+  it.each([
+    ['a Checkin event (absent provider)', { checkinEventId: 34 }],
+    [
+      'a Tito event',
+      { ticketingProvider: 'tito', titoAccountSlug: 'a', titoEventSlug: '2026' },
+    ],
+  ])('refuses binding %s on free, writing nothing', async (_, input) => {
+    for (const plan of [undefined, 'free'] as const) {
+      const { body } = await gql(site(plan), MUTATION, { input })
+      expect(body.errors?.[0].extensions).toMatchObject({
+        reason: 'PLAN_REQUIRED',
+        requiredPlan: 'basic',
+      })
+    }
+    expect(bound()).toEqual({ checkin_event_id: null, tito_event_slug: null })
+  })
+
+  it('binds on basic; an already bound edition and a vendor pick alone are never asked', async () => {
+    expect(
+      (await gql(site('basic'), MUTATION, { input: { checkinEventId: 34 } }))
+        .body.errors,
+    ).toBeUndefined()
+    expect(
+      (await gql(site(), MUTATION, { input: { checkinEventId: 35 } })).body
+        .errors,
+    ).toBeUndefined()
+    expect(bound()).toEqual({ checkin_event_id: 35, tito_event_slug: null })
+    sqlite.exec("UPDATE conferences SET checkin_event_id = NULL")
+    expect(
+      (
+        await gql(site(), MUTATION, {
+          input: { ticketingProvider: 'checkin', checkinCustomerId: 1 },
+        })
+      ).body.errors,
+    ).toBeUndefined()
   })
 })
