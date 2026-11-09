@@ -17,7 +17,11 @@ export function normalizeHost(input: string): string | null {
   if (!s) return null
   try {
     const host = new URL(s.includes('://') ? s : `https://${s}`).hostname
-    return host.replace(/\.$/, '') || null
+      // All trailing dots: `konf.app..` must not slip past suffix checks.
+      .replace(/\.+$/, '')
+    // Empty labels (`a..b`) and anything outside LDH (#2207) are no host.
+    if (!/^[a-z0-9-]+(\.[a-z0-9-]+)*$/.test(host)) return null
+    return host
   } catch {
     return null
   }

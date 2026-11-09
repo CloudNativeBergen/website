@@ -302,7 +302,7 @@ async function sanityTenant(
 async function sanityQuery<T>(
   env: DataEnv,
   query: string,
-  params: Record<string, string>,
+  params: Record<string, string | string[]>,
 ): Promise<T> {
   if (
     !env.SANITY_API_TOKEN_READ ||
@@ -1498,10 +1498,14 @@ export function createData(
       // Until phase 6 Sanity is the routing truth: a host it already knows
       // (a verification record, or another conference's domains[]) is taken.
       // groq-global: hostnames are one global namespace.
+      // Sanity entries are compared lower-cased, with or without a trailing
+      // dot, and a `*.parent` wildcard there covers this one-label host.
+      const parent = hostname.slice(hostname.indexOf('.') + 1)
+      const names = [hostname, `*.${parent}`].flatMap((h) => [h, `${h}.`])
       const { n } = await sanityQuery<{ n: number }>(
         env,
-        `{"n": count(*[(_type == "domainVerification" && hostname == $host) || (_type == "conference" && $host in domains[] && !(_id in [$conf, "drafts." + $conf]))])}`,
-        { host: hostname, conf: conferenceId },
+        `{"n": count(*[(_type == "domainVerification" && lower(hostname) in $names) || (_type == "conference" && count(domains[lower(@) in $names]) > 0 && !(_id in [$conf, "drafts." + $conf]))])}`,
+        { names, conf: conferenceId },
       )
       if (n > 0) throw fail('CONFLICT', 'hostname is already claimed')
       const now = Date.now()
@@ -1577,9 +1581,26 @@ export function createData(
           'FORBIDDEN',
           'a verified hostname cannot be removed here until the routing cutover',
         )
-      if (row.cfCustomHostnameId) await hostnames.delete(row.cfCustomHostnameId)
-      await db.delete(domains).where(eq(domains.hostname, hostname))
-      return row
+      // Conditional on what was read: a takeover or a verification landing
+      // in between leaves the row alone (NOT_FOUND, like any foreign host).
+      const [gone] = await db
+        .delete(domains)
+        .where(
+          and(
+            eq(domains.hostname, hostname),
+            eq(domains.orgId, orgId),
+            row.token === null
+              ? isNull(domains.token)
+              : eq(domains.token, row.token),
+            sql`${domains.verification} != 'verified'`,
+            or(isNull(domains.status), sql`${domains.status} != 'verified'`),
+          ),
+        )
+        .returning()
+      if (!gone) throw fail('NOT_FOUND', 'no such hostname')
+      if (gone.cfCustomHostnameId)
+        await hostnames.delete(gone.cfCustomHostnameId)
+      return gone
     },
 
     /** Deletes the Cloudflare custom hostname, then the routing claim. */

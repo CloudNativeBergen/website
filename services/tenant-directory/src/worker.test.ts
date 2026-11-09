@@ -339,12 +339,19 @@ beforeEach(() => {
     sanityRequests.push(req.clone())
     const peek = (await req.clone().json()) as {
       query: string
-      params: { host?: string }
+      params: { names?: string[] }
     }
     if (peek.query.includes('domainVerification')) {
       if (sanityHosts.fail) return new Response('down', { status: 503 })
       return Response.json({
-        result: { n: sanityHosts.taken.has(peek.params.host!) ? 1 : 0 },
+        // Mirrors the GROQ: `lower(entry) in $names`.
+        result: {
+          n: [...sanityHosts.taken].some((t) =>
+            peek.params.names!.includes(t.toLowerCase()),
+          )
+            ? 1
+            : 0,
+        },
       })
     }
     const { params } = (await req.json()) as {
@@ -3160,6 +3167,10 @@ describe('domains API (#2207)', () => {
       'api.konf.app',
       'localhost:3000',
       'conf.test',
+      'konf.app..',
+      'x.konf.run..',
+      'a..b.com',
+      'under_score.example.com',
     ])
       expect(code((await gql(CLAIM, { c: conf, h }, admin)).body), h).toBe(
         'BAD_USER_INPUT',
@@ -3280,7 +3291,28 @@ describe('domains API (#2207)', () => {
     const sent = (await sanityRequests.at(-1)!.json()) as {
       params: Record<string, string>
     }
-    expect(sent.params).toEqual({ host: '2026.cloudnativedays.no', conf })
+    expect(sent.params).toEqual({
+      names: [
+        '2026.cloudnativedays.no',
+        '2026.cloudnativedays.no.',
+        '*.cloudnativedays.no',
+        '*.cloudnativedays.no.',
+      ],
+      conf,
+    })
+    sanityHosts.taken.add('*.Wild.Example.com.')
+    sanityHosts.taken.add('Dot.Example.org.')
+    for (const h of ['sub.wild.example.com', 'dot.example.org'])
+      expect(code((await gql(CLAIM, { c: conf, h }, admin)).body), h).toBe(
+        'CONFLICT',
+      )
+    expect(
+      (await gql(CLAIM, { c: conf, h: 'a.sub.wild.example.com' }, admin)).body
+        .data.claimDomain.hostname,
+    ).toBe('a.sub.wild.example.com')
+    sqlite
+      .prepare("DELETE FROM domains WHERE hostname = 'a.sub.wild.example.com'")
+      .run()
     sanityHosts.fail = true
     expect(
       code((await gql(CLAIM, { c: conf, h: 'new.example.com' }, admin)).body),
@@ -3395,4 +3427,50 @@ describe('domains API (#2207)', () => {
     for (const d of Object.values(await read()))
       expect((d as { routingRecords: unknown[] }).routingRecords).toEqual([])
   })
+
+  it('leaves a row alone when a takeover lands between the read and the delete', async () => {
+    const { admin, conf } = await setup()
+    await gql(CLAIM, { c: conf, h: 'race.example.com' }, admin)
+    const prepare = env.DB.prepare.bind(env.DB)
+    vi.spyOn(env.DB, 'prepare').mockImplementation((q: string) => {
+      if (/^delete from "domains"/i.test(q))
+        sqlite
+          .prepare(
+            "UPDATE domains SET org_id = 'organization.other', token = 'theirs' WHERE hostname = 'race.example.com'",
+          )
+          .run()
+      return prepare(q)
+    })
+    const { body } = await gql(REMOVE, { h: 'race.example.com' }, admin)
+    expect(code(body)).toBe('NOT_FOUND')
+    expect(
+      sqlite
+        .prepare(
+          "SELECT org_id, token FROM domains WHERE hostname = 'race.example.com'",
+        )
+        .get(),
+    ).toEqual({ org_id: 'organization.other', token: 'theirs' })
+  })
+
+  it.each([["verification = 'verified'"], ["token = 'reclaimed'"]])(
+    'keeps the row when %s lands between the read and the delete',
+    async (set) => {
+      const { admin, conf } = await setup()
+      await gql(CLAIM, { c: conf, h: 'race.example.com' }, admin)
+      const prepare = env.DB.prepare.bind(env.DB)
+      vi.spyOn(env.DB, 'prepare').mockImplementation((q: string) => {
+        if (/^delete from "domains"/i.test(q))
+          sqlite
+            .prepare(
+              `UPDATE domains SET ${set} WHERE hostname = 'race.example.com'`,
+            )
+            .run()
+        return prepare(q)
+      })
+      expect(
+        code((await gql(REMOVE, { h: 'race.example.com' }, admin)).body),
+      ).toBe('NOT_FOUND')
+      expect(count('domains')).toBe(5)
+    },
+  )
 })
