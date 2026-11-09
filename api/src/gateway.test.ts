@@ -168,6 +168,7 @@ describe('gateway', () => {
       'createSignupCode',
       'eraseInviteRequests',
       'inviteMember',
+      'mirrorDomainVerification',
       'openBillingPortal',
       'operatorCancelInvitation',
       'operatorChangeMemberRole',

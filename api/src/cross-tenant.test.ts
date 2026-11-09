@@ -1096,6 +1096,13 @@ describe('cross-tenant mutation walk', () => {
         )
       // Domains (#2207): the probe hostname has no dot (claim refuses it as
       // input); recheck and remove find no such hostname of A's.
+      // The site's mirror of Sanity verification state (#2207 phase 5):
+      // site server lane only, so a member or anonymous caller is refused.
+      else if (field === 'mirrorDomainVerification')
+        expect(
+          (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions
+            ?.code,
+        ).toBe('FORBIDDEN')
       else if (/^(claimDomain|recheckDomain|removeDomain)$/.test(field))
         expect(
           (body.errors as { extensions?: { code?: string } }[])?.[0]?.extensions

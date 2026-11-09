@@ -329,6 +329,11 @@ type Mutation {
   eraseInviteRequests(email: String!): Int
 
   """
+  Copies the site's Sanity verification record for one hostname onto D1 (#2207 phase 5, until the phase 6 reader switch). Never changes routing; a row claimed in D1 or held by another conference is left alone (false). NOT_FOUND for a conference outside the org. Site server lane only.
+  """
+  mirrorDomainVerification(input: DomainVerificationMirror!): Boolean!
+
+  """
   Opens the Stripe billing portal for the envelope's org (#2129). Org owner only.
   """
   openBillingPortal: BillingPortalSession
@@ -1708,6 +1713,31 @@ input CreateOrganizationInput {
 
   """YYYY-MM-DD"""
   startDate: String!
+}
+
+input DomainVerificationMirror {
+  conferenceId: ID!
+  consecutiveFailures: Int!
+  consecutiveSoftFailures: Int!
+
+  """ISO 8601"""
+  firstFailureAt: String
+
+  """ISO 8601"""
+  graceUntil: String
+  hostname: String!
+  lastError: String
+
+  """ISO 8601"""
+  lastSuccessAt: String
+
+  """dns-txt, grandfathered or platform-owned"""
+  method: String!
+  status: DomainStatus!
+  token: String
+
+  """ISO 8601"""
+  verifiedAt: String
 }
 
 input ProvisionConferenceInput {

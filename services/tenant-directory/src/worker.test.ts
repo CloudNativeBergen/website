@@ -3506,7 +3506,11 @@ describe('domains API (#2207)', () => {
       ).toBe(false)
       expect(row('theirs.example.com')).toMatchObject({ status: 'pending' })
       const a = (
-        await gql(MIRROR, { i: rec({ conferenceId: otherConf }) }, siteOf(admin))
+        await gql(
+          MIRROR,
+          { i: rec({ conferenceId: otherConf }) },
+          siteOf(admin),
+        )
       ).body.errors
       const b = (
         await gql(MIRROR, { i: rec({ conferenceId: 'nope' }) }, siteOf(admin))
@@ -3530,9 +3534,9 @@ describe('domains API (#2207)', () => {
           },
           siteOf(admin),
         )
-      expect((await m('acme.konf.run')).body.data.mirrorDomainVerification).toBe(
-        true,
-      )
+      expect(
+        (await m('acme.konf.run')).body.data.mirrorDomainVerification,
+      ).toBe(true)
       expect(row('acme.konf.run')).toMatchObject({
         method: 'platform',
         token: 'p',
@@ -3551,11 +3555,10 @@ describe('domains API (#2207)', () => {
     ])('refuses %s before reading D1', async (_, over) => {
       const { admin, conf } = await setup()
       const prepare = vi.spyOn(env.DB, 'prepare')
-      const { body } = await gql(
-        MIRROR,
-        { i: rec({ conferenceId: conf }) },
-        { ...admin, ...over } as Envelope,
-      )
+      const { body } = await gql(MIRROR, { i: rec({ conferenceId: conf }) }, {
+        ...admin,
+        ...over,
+      } as Envelope)
       expect(code(body)).toBe('FORBIDDEN')
       expect(prepare).not.toHaveBeenCalled()
     })

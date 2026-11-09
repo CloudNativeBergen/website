@@ -318,6 +318,7 @@ before acceptance; "Site" = `site:server` with no user token.
 | conference.set_lifecycle              | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
 | conference.bind_ticketing             | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
 | domain.manage (#2207)                 | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| domain.mirror (#2207 phase 5)         | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | Y    |
 | conference.manage_roles               | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
 | proposal.submit (CFP open)            | Y   | Y   | Y   | Y   | Y   | Y                   | Y   | Y   | Y   | Y   | N    |
 | proposal.read                         | Y   | Y   | Y   | N   | Y   | Y (asg if assigned) | N   | own | own | N   | N    |
@@ -360,6 +361,13 @@ Domains (`domain.manage`, #2207): the tenant-directory `domains` query and the
 envelope's own org only. The guard runs before any read; a conference or hostname of
 another org answers NOT_FOUND, exactly like a missing one. Platform hosts
 (`<slug>.konf.run`) answer FORBIDDEN on remove.
+
+`domain.mirror` (#2207 phase 5, until the phase 6 reader switch): the tenant-directory
+`mirrorDomainVerification` mutation, through which the site copies each Sanity
+`domainVerification` write onto the D1 `domains` row. Site server lane (or an operator
+on the tenant lane), for the envelope's own org; refused before any read for every
+other caller. It never raises the legacy `verification` column and never touches a row
+claimed in D1 or held by another conference.
 
 Operator is N on reviewing and editing proposals by default: operators act for a tenant
 for support, not as a juror. Operator access is only on the operator lane and is audited.

@@ -156,9 +156,13 @@ describe('principalOf', () => {
   })
 })
 
-describe('site:server is a lane marker with two capabilities', () => {
+describe('site:server is a lane marker with three capabilities', () => {
   const site = principalOf(tenant(null, [SITE_SCOPE], null))
-  const allowed: Action[] = ['reminder_lock', 'conference.read_ticket_setup']
+  const allowed: Action[] = [
+    'reminder_lock',
+    'conference.read_ticket_setup',
+    'domain.mirror',
+  ]
 
   it.each(allowed)('allows %s', (a) => expect(can(site, a)).toBe(true))
   it.each(ACTIONS.filter((a) => !allowed.includes(a)))('refuses %s', (a) =>

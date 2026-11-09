@@ -1779,7 +1779,9 @@ export function createData(
         if (!Number.isFinite(n)) throw fail('BAD_USER_INPUT', 'bad timestamp')
         return n
       }
-      if (!['dns-txt', 'grandfathered', 'platform-owned'].includes(input.method))
+      if (
+        !['dns-txt', 'grandfathered', 'platform-owned'].includes(input.method)
+      )
         throw fail('BAD_USER_INPUT', 'unknown method')
       const platform = input.method === 'platform-owned'
       const hostname = platform
