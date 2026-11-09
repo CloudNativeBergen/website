@@ -83,7 +83,9 @@ export function buildScreens(): Screen[] {
     site('admin-proposals', '/admin/proposals', true),
     site('admin-proposal-review', `/admin/proposals/${proposal}`, true),
     site('admin-schedule', '/admin/schedule', true),
-    site('admin-sponsor-crm', '/admin/sponsors/crm', true),
+    // Empty assignedTo keeps every owner; without it the board defaults to
+    // the signed-in organizer's own sponsors, usually none.
+    site('admin-sponsor-crm', '/admin/sponsors/crm?assignedTo=', true),
     site('admin-tickets', '/admin/tickets', true),
     site('speaker-portal', '/cfp/list', true),
     kontroll('kontroll-org', `/orgs/${DEMO_ORG_ID}`),
