@@ -185,6 +185,23 @@ vi.mock('@sanity/client', () => ({
   createClient: () => ({ fetch, create, patch }),
 }))
 
+// konf-notifications (epic #2215): capture the binding calls and what
+// reaches waitUntil.
+const cf = vi.hoisted(() => ({
+  env: {} as Record<string, unknown>,
+  pending: [] as Promise<unknown>[],
+}))
+vi.mock('cloudflare:workers', () => ({
+  env: cf.env,
+  waitUntil: (p: Promise<unknown>) => cf.pending.push(p),
+}))
+const sent = vi.fn<(e: unknown) => Promise<void>>(async () => {})
+/** Let the lazy import settle, then wait for every waitUntil promise. */
+const settled = async () => {
+  await new Promise((r) => setTimeout(r, 0))
+  await Promise.all(cf.pending)
+}
+
 const { default: worker } = await import('./worker')
 const { schema } = await import('./subgraph')
 
@@ -272,6 +289,60 @@ const errOf = (r: {
 beforeEach(() => {
   dataset = seed()
   win = { ...OPEN }
+  cf.pending.length = 0
+  sent.mockReset()
+  cf.env.NOTIFICATIONS = { send: sent }
+})
+
+describe('notifications after commit (#2215)', () => {
+  it('submit and withdraw hand konf-notifications the tenant, the proposal and the actor', async () => {
+    const r = await gql(SUBMIT, as('u_me'), { input: INPUT })
+    const id = r.data.submitProposal.id
+    await gql(WITHDRAW, as('u_me'), { id: 't_acc' })
+    await settled()
+    expect(sent.mock.calls.map((c) => c[0])).toEqual([
+      {
+        type: 'proposal.submitted',
+        id: `proposal.submitted:${id}`,
+        orgId: 'org_a',
+        conferenceId: 'conf_a',
+        proposalId: id,
+        actorSpeakerId: 'sp_me',
+      },
+      {
+        type: 'proposal.withdrawn',
+        id: 'proposal.withdrawn:t_acc:r0+',
+        orgId: 'org_a',
+        conferenceId: 'conf_a',
+        proposalId: 't_acc',
+        actorSpeakerId: 'sp_me',
+        previousStatus: 'accepted',
+      },
+    ])
+  })
+
+  it('a refused mutation sends nothing', async () => {
+    await gql(WITHDRAW, as('u_me'), { id: 't_draft' })
+    await settled()
+    expect(sent).not.toHaveBeenCalled()
+  })
+
+  it('the mutation succeeds when send throws, rejects, or the binding is missing', async () => {
+    sent.mockImplementationOnce(() => {
+      throw new Error('boom')
+    })
+    const a = await gql(SUBMIT, as('u_me'), { input: INPUT })
+    sent.mockRejectedValueOnce(new Error('down'))
+    const b = await gql(WITHDRAW, as('u_me'), { id: 't_sub' })
+    delete cf.env.NOTIFICATIONS
+    const c = await gql(WITHDRAW, as('u_me'), { id: 't_acc' })
+    await settled()
+    expect(a.errors).toBeUndefined()
+    expect(a.data.submitProposal.status).toBe('submitted')
+    expect(b.data.withdrawMyProposal.status).toBe('withdrawn')
+    expect(c.data.withdrawMyProposal.status).toBe('withdrawn')
+    expect(sent).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('myProposals / myProposal', () => {

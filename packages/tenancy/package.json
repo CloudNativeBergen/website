@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./reserved": "./src/reserved.ts"
+    "./reserved": "./src/reserved.ts",
+    "./notify": "./src/notify.ts"
   },
   "scripts": {
     "test": "vitest run --root ../.. packages/tenancy/",

@@ -6,8 +6,9 @@
 # printed last whenever anything deploys: it bundles the supergraph composed
 # from every subgraph SDL, so it must follow any subgraph change.
 set -euo pipefail
-# Order matters: tenant-directory binds identity, and the gateway binds all.
-SERVICES=(identity tenant-directory content conference program sponsors cfp ticketing)
+# Order matters: tenant-directory binds identity, cfp binds notifications, and
+# the gateway binds every subgraph.
+SERVICES=(identity tenant-directory content conference program sponsors notifications cfp ticketing)
 SHARED='^(packages/|src/lib/|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|services/[^/]+$|\.github/workflows/deploy-workers\.yml$|scripts/(changed-workers|secrets-sync)\.)'
 all() { printf '%s\n' "${SERVICES[@]}" api; }
 [ "${1:-}" = --all ] && { all; exit 0; }

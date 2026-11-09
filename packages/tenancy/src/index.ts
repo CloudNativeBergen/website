@@ -343,6 +343,7 @@ export async function generateEnvelopeKeyPair(): Promise<{
   }
 }
 export * from './push'
+export * from './notify'
 export * from './authz'
 export * from './plan'
 export * from './org-kind'

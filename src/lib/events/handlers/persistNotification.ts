@@ -6,6 +6,7 @@ import {
 } from '@/lib/notification/sanity'
 import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
+import { organizerProposalItems } from '@/lib/notification/proposal-copy'
 // Same gate as the email, so a speaker is notified in-app exactly when they
 // are emailed about a status change.
 import {
@@ -47,17 +48,14 @@ export async function handlePersistNotification(
       teamKey: 'cfp',
       allOrganizerIds: await eventOrgOrganizerIds(),
     })
-    const items: NotificationInput[] = organizerIds
-      .filter((id) => id && id !== actorId)
-      .map((id): NotificationInput => ({
-        recipientId: id,
-        conferenceId,
-        notificationType: 'proposal_submitted',
-        title: `New proposal: "${proposalTitle}"`,
-        actorId,
-        relatedProposalId: proposalId,
-        link: `/admin/proposals/${proposalId}`,
-      }))
+    const items = organizerProposalItems({
+      action: 'submit',
+      organizerIds,
+      actorId,
+      conferenceId,
+      proposalId,
+      title: proposalTitle,
+    })
     await createNotifications(items)
     return
   }
@@ -69,7 +67,6 @@ export async function handlePersistNotification(
   ) {
     // Organizer routing is unconditional (like submit) — it mirrors the Slack
     // organizer alert, not the email-gated speaker notification.
-    const isWithdraw = event.action === Action.withdraw
     // TEAMS-2: proposal events route to the `cfp` team (all organizers when it
     // is not configured).
     const organizerIds = await resolveRoutedOrganizerIds({
@@ -77,26 +74,16 @@ export async function handlePersistNotification(
       teamKey: 'cfp',
       allOrganizerIds: await eventOrgOrganizerIds(),
     })
-    const title = isWithdraw
-      ? `Proposal withdrawn: "${proposalTitle}"`
-      : event.action === Action.cancel
-        ? `Talk canceled: "${proposalTitle}"`
-        : `Speaker confirmed: "${proposalTitle}"`
-    // The mandatory withdrawal reason (#212) becomes the message when present.
-    const message =
-      isWithdraw && event.metadata.reason ? event.metadata.reason : undefined
-    const items: NotificationInput[] = organizerIds
-      .filter((id) => id && id !== actorId)
-      .map((id): NotificationInput => ({
-        recipientId: id,
-        conferenceId,
-        notificationType: 'proposal_status_changed',
-        title,
-        message,
-        actorId,
-        relatedProposalId: proposalId,
-        link: `/admin/proposals/${proposalId}`,
-      }))
+    const items = organizerProposalItems({
+      action: event.action as 'confirm' | 'withdraw' | 'cancel',
+      organizerIds,
+      actorId,
+      conferenceId,
+      proposalId,
+      title: proposalTitle,
+      // The mandatory withdrawal reason (#212) becomes the message.
+      reason: event.metadata.reason,
+    })
     // The fanned-out thread message already put a hub item in front of the
     // organizers; a status item on top would double-notify them.
     const isRemoval = event.action !== Action.confirm

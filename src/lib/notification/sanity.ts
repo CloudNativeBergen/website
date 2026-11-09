@@ -21,6 +21,7 @@ import {
   truncateToGraphemeBoundary,
   conversationLinkPath,
 } from '@/lib/messaging/links'
+import { notificationDocument } from './proposal-copy'
 import type {
   MessageNotificationInput,
   NotificationInput,
@@ -28,43 +29,6 @@ import type {
   OnceNotificationInput,
 } from './types'
 import { SPEAKER_IMAGE_URL } from '@/lib/speaker/image-groq'
-
-/** The stored `notification` document for one input. */
-function notificationDocument(
-  item: NotificationInput,
-  createdAt: string,
-): { _type: 'notification'; [key: string]: unknown } {
-  const doc: { _type: 'notification'; [key: string]: unknown } = {
-    _type: 'notification',
-    // WEAK (#851): a strong ref here blocks GDPR erasure of the speaker.
-    // `weak: true` in the schema governs Studio writes only — an API write
-    // is strong unless the stored ref object itself carries `_weak`.
-    recipient: { ...createReference(item.recipientId), _weak: true },
-    conference: createReference(item.conferenceId),
-    notificationType: item.notificationType,
-    title: item.title,
-    createdAt,
-  }
-  if (item.message) {
-    doc.message = item.message
-  }
-  if (item.link) {
-    doc.link = item.link
-  }
-  if (item.actorId) {
-    // WEAK (#851): see `recipient` above — speaker erasure must not be
-    // blocked by a notification the speaker happened to trigger.
-    doc.actor = { ...createReference(item.actorId), _weak: true }
-  }
-  if (item.relatedProposalId) {
-    // Weak reference so a later proposal deletion doesn't orphan-block.
-    doc.relatedProposal = {
-      ...createReference(item.relatedProposalId),
-      _weak: true,
-    }
-  }
-  return doc
-}
 
 /**
  * Persist one `notification` document per input, all in a SINGLE

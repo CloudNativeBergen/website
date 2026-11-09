@@ -25,6 +25,8 @@ service: #PlatformService & {
 	serviceBindings: [
 		{binding: "IDENTITY", service: "konf-identity", entrypoint: "SpeakerLink"},
 		{binding: "CONFERENCE", service: "konf-conference", entrypoint: "ProgramDate"},
+		// Proposal submitted/withdrawn → Slack and in-app (epic #2215).
+		{binding: "NOTIFICATIONS", service: "konf-notifications", entrypoint: "Notifications"},
 	]
 	files: "package.json": dependencies: "@sanity/client": "^7.28.0"
 }

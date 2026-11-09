@@ -174,6 +174,7 @@ const eslintConfig = [
       'services/program/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
       'services/sponsors/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
       'services/cfp/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+      'services/notifications/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
     ],
     plugins: {
       tenancy: { rules: { 'no-unscoped-groq': noUnscopedGroq } },
@@ -194,6 +195,7 @@ const eslintConfig = [
       'services/program/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
       'services/sponsors/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
       'services/cfp/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+      'services/notifications/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
     ],
     plugins: {
       d1: {
@@ -303,13 +305,15 @@ const eslintConfig = [
   // `@sanity/client`, the Worker-safe client; the site's src/lib/sanity
   // (next-sanity, process.env) stays out. Its resolvers keep the rule above.
   // services/program is the same, until a D1 ProgramSource replaces Sanity
-  // (DATA_OWNERSHIP rule 3, step 1).
+  // (DATA_OWNERSHIP rule 3, step 1). services/notifications re-reads the
+  // proposal an event names and writes the in-app hub (epic #2215).
   {
     files: [
       'services/content/src/data/**/*.{ts,mts,cts,tsx,js,mjs}',
       'services/program/src/data/**/*.{ts,mts,cts,tsx,js,mjs}',
       'services/sponsors/src/data/**/*.{ts,mts,cts,tsx,js,mjs}',
       'services/cfp/src/data/**/*.{ts,mts,cts,tsx,js,mjs}',
+      'services/notifications/src/data/**/*.{ts,mts,cts,tsx,js,mjs}',
     ],
     rules: (() => {
       const rules = boundary({

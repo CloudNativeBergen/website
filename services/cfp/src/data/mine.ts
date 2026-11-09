@@ -1,5 +1,6 @@
 // A speaker's own proposals (#2078): types, GROQ, the rules and the Sanity
-// source. No tenancy import, so a site test can load it.
+// source. No tenancy import (bar the type-only `/notify` entry), so a site
+// test can load it.
 //
 // AUTHORIZATION is the resource fact "this user is a speaker of this talk"
 // (docs/AUTHORIZATION.md §3.3, phase 3b), checked in the query itself:
@@ -13,6 +14,7 @@
 // decision 9 on top: after acceptance only title and abstract, until the
 // program is published.
 import type { SanityClient } from '@sanity/client'
+import type { NotificationEvent } from '@runkonf/tenancy/notify'
 import { OPTIONS, type Tenant } from './source'
 
 /** konf-identity `SpeakerLink`: safe match keys and the profile. */
@@ -616,6 +618,8 @@ export class MyProposals {
     private readonly now: () => Date = () => new Date(),
     /** False until the Worker has SANITY_API_TOKEN_WRITE: reads work, writes refuse. */
     private readonly writable = true,
+    /** konf-notifications, after commit (epic #2215). Never throws (index.ts `notify`). */
+    private readonly notify: (e: NotificationEvent) => void = () => {},
   ) {}
 
   private assertWritable() {
@@ -680,6 +684,14 @@ export class MyProposals {
           takenAt: this.now().toISOString(),
         },
       }),
+    })
+    this.notify({
+      type: 'proposal.submitted',
+      id: `proposal.submitted:${created._id}`,
+      orgId: w.orgId,
+      conferenceId: w.conferenceId,
+      proposalId: created._id,
+      actorSpeakerId: w.speakerId,
     })
     return this.get(w, created._id)
   }
@@ -758,12 +770,22 @@ export class MyProposals {
         'FORBIDDEN',
         'Withdrawals are closed within 14 days of the event; contact the organizers',
       )
-    await this.sanity
+    const done = await this.sanity
       .patch(id)
       .set({ status: 'withdrawn', withdrawnReason: why })
       .ifRevisionId(cur.rev)
       .commit()
       .catch(() => no('CONFLICT', 'The proposal changed; reload and retry'))
+    this.notify({
+      type: 'proposal.withdrawn',
+      // The committed revision: one event per withdrawal, stable on replay.
+      id: `proposal.withdrawn:${id}:${(done as { _rev?: string } | undefined)?._rev ?? crypto.randomUUID()}`,
+      orgId: w.orgId,
+      conferenceId: w.conferenceId,
+      proposalId: id,
+      actorSpeakerId: w.speakerId,
+      previousStatus: cur.status,
+    })
     return this.get(w, id)
   }
 }

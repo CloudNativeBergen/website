@@ -65,7 +65,14 @@ describe('secrets', () => {
         'program',
       ]),
     )
-    for (const s of services)
+    // An RPC-only Worker (`subgraph: false`, e.g. notifications) gets no
+    // envelope, so it holds no gateway key.
+    const verifying = services.filter(
+      (s) =>
+        s === 'api' || existsSync(join(root, 'services', s, 'src/subgraph.ts')),
+    )
+    expect(verifying).not.toContain('notifications')
+    for (const s of verifying)
       for (const e of envs)
         expect(declaredSecrets(s, e).required).toContain(
           s === 'api' ? 'ENVELOPE_PRIVATE_KEY' : 'GATEWAY_PUBLIC_KEY',

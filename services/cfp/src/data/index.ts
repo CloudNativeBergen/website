@@ -9,6 +9,8 @@ import {
   ScopedRepository,
   platformBatch,
   type Envelope,
+  type NotificationEvent,
+  type NotificationsBinding,
 } from '@runkonf/tenancy'
 import { SanityCfpSource, type CfpSource, type DataEnv } from './source'
 import {
@@ -154,6 +156,34 @@ type Who = { orgId: string; conferenceId: string; speakerId: string }
 // One read per page, bounded to the page's conference ids.
 export const PROPOSAL_STATUSES = `*[_type == "talk" && conference._ref in $conferenceIds]{ "c": conference._ref, status }`
 
+/**
+ * Hand a committed proposal event to konf-notifications (epic #2215). Runs
+ * after the response via waitUntil; a failure is logged and never reaches
+ * the mutation. `cloudflare:workers` is imported lazily: api/scripts/compose.ts
+ * loads the subgraph schema under Node, where the module does not exist.
+ */
+export function notify(event: NotificationEvent) {
+  const failed = (e: unknown) =>
+    console.error(
+      JSON.stringify({
+        event: 'notify.emit_failed',
+        type: event.type,
+        error: e instanceof Error ? e.message : 'unknown',
+      }),
+    )
+  import('cloudflare:workers')
+    .then(({ env, waitUntil }) => {
+      const n = (env as { NOTIFICATIONS?: NotificationsBinding }).NOTIFICATIONS
+      if (!n) return failed(new Error('no NOTIFICATIONS binding'))
+      waitUntil(
+        Promise.resolve()
+          .then(() => n.send(event))
+          .catch(failed),
+      )
+    })
+    .catch(failed)
+}
+
 /** Proposal counts per conference, every status included (#2142). */
 export type ProposalCounts = { total: number; byStatus: Map<string, number> }
 
@@ -219,6 +249,7 @@ export function createData(env: DataEnv, envelope: Envelope) {
             window,
             undefined,
             !!env.SANITY_API_TOKEN_WRITE,
+            notify,
           ),
           sanity,
           env.IDENTITY,

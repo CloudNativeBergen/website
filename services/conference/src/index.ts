@@ -49,6 +49,25 @@ export class ProgramDate extends WorkerEntrypoint<WorkerEnv> {
   }
 
   /**
+   * The CFP Slack channel (`cfpNotificationChannel`, D1-owned) for
+   * konf-notifications' proposal alerts (#2215), read like cfpWindow: an
+   * unpublished or foreign conference is null.
+   */
+  async cfpChannel(orgId: string, conferenceId: string) {
+    const row = await createData(this.env.DB, {
+      typ: 'tenant',
+      orgId,
+      conferenceId,
+      userId: null,
+      orgRole: null,
+      scopes: [],
+    })
+      .conferences()
+      .current()
+    return row?.cfpNotificationChannel ?? null
+  }
+
+  /**
    * Whether the edition sells tickets (`sellsTickets`), published or
    * not: tenant-directory's plan gate on going live (#2129). A boolean only.
    */
