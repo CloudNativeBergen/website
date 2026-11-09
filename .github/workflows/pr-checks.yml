@@ -417,6 +417,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Cache Next.js build cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache@v6.1.0
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('src/**', 'public/**', 'next.config.*', 'tsconfig.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/pnpm-lock.yaml') }}-
+
       - name: Build application
         run: pnpm run build
         env:
@@ -441,17 +449,36 @@ jobs:
           VAPID_PRIVATE_KEY: ci_vapid_private_key_not_for_production
           VAPID_SUBJECT: mailto:ci@example.com
 
-  # POST-BUILD RUNTIME SMOKE TEST (#671). `next build` COMPILES the broken
-  # lazy-auth-config form fine and vitest mocks next-auth, so neither the Build
-  # nor the Tests job can catch a runtime middleware regression like #462
-  # (`nextAuthMiddleware is not a function`, 500 on every authenticated route).
-  # This job boots the REAL production server and curls PROTECTED routes (which
-  # run the middleware — the exact failure surface), failing loudly on any 500
-  # or `is not a function` / `TypeError` signature. Kept a separate, distinctly
-  # NAMED job so it can be added to the required-status ruleset in branch
-  # protection. A protected-route redirect needs no real backend/secrets.
+      # POST-BUILD RUNTIME SMOKE TEST (#671). `next build` COMPILES the broken
+      # lazy-auth-config form fine and vitest mocks next-auth, so neither the Build
+      # nor the Tests job can catch a runtime middleware regression like #462
+      # (`nextAuthMiddleware is not a function`, 500 on every authenticated route).
+      # This job boots the REAL production server and curls PROTECTED routes (which
+      # run the middleware — the exact failure surface), failing loudly on any 500
+      # or `is not a function` / `TypeError` signature. Kept a separate, distinctly
+      # NAMED job so it can be added to the required-status ruleset in branch
+      # protection. A protected-route redirect needs no real backend/secrets.
+
+      # Handed to the Runtime Smoke Test job so it boots this exact build
+      # instead of compiling Next a second time. Tarred because
+      # .next/node_modules holds symlinks into node_modules/.pnpm, which
+      # upload-artifact would dereference (breaking module resolution). The
+      # cache is excluded: it is restored separately and the server never
+      # reads it.
+      - name: Pack Next build output
+        run: tar --exclude=.next/cache -cf next-build.tar .next
+
+      - name: Upload Next build output
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # ratchet:actions/upload-artifact@v7.0.2
+        with:
+          name: next-build
+          path: next-build.tar
+          retention-days: 1
+          if-no-files-found: error
+
   smoke:
     name: Runtime Smoke Test
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -485,23 +512,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build application
-        run: pnpm run build
-        env:
-          # Same placeholder env as the Build job — a `next build` must compile
-          # with these dummy Auth.js v5 secrets (no real backend is contacted).
-          NODE_ENV: production
-          AUTH_SECRET: ci-build-secret-not-for-production
-          AUTH_GITHUB_ID: ci-build-github-id-not-for-production
-          AUTH_GITHUB_SECRET: ci-build-github-secret-not-for-production
-          AUTH_LINKEDIN_ID: ci-build-linkedin-id-not-for-production
-          AUTH_LINKEDIN_SECRET: ci-build-linkedin-secret-not-for-production
-          NEXTAUTH_URL: http://localhost:3000
-          RESEND_API_KEY: re_ci_build_key_not_for_production
-          INVITATION_TOKEN_SECRET: ci_invitation_token_secret_not_for_production
-          VAPID_PUBLIC_KEY: ci_vapid_public_key_not_for_production
-          VAPID_PRIVATE_KEY: ci_vapid_private_key_not_for_production
-          VAPID_SUBJECT: mailto:ci@example.com
+      # Reuses the Build job's `next build` output instead of rebuilding.
+      - name: Download Next build output
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # ratchet:actions/download-artifact@v8.0.2
+        with:
+          name: next-build
+
+      - name: Unpack reused build
+        run: |
+          tar -xf next-build.tar
+          echo "Reusing Build job output, BUILD_ID=$(cat .next/BUILD_ID)"
 
       - name: Smoke-test protected routes against a live server
         run: node scripts/smoke-protected-routes.mjs

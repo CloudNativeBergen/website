@@ -1,5 +1,6 @@
 {
-  "ignoreCommand": "git diff --quiet \"${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}\" HEAD -- . \":(exclude)services\" \":(exclude)api\" \":(exclude)packages\" \":(exclude)docs\" \":(exclude)*.md\" \":(exclude).github\" \":(exclude)evals\" \":(exclude)e2e\" \":(exclude)CODEOWNERS\" && exit 0 || exit 1",
+  "regions": ["arn1"],
+  "ignoreCommand": "bash scripts/vercel-ignore.sh",
   "crons": [
     {
       "path": "/api/cron/overdue-invoices",
