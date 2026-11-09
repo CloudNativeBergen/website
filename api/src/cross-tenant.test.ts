@@ -535,6 +535,7 @@ const ALONE = new Set([
   'myProposals',
   'ticketSales',
   'ticketOrders',
+  'domains',
 ])
 
 function queries(tenants: T[]) {
@@ -857,6 +858,12 @@ describe.each([
             e.extensions?.code === 'NOT_FOUND' &&
             roots[String(e.path?.[0])] === 'myProposal'
           ) &&
+          // domains (#2207): a probe id is no conference of the caller's org
+          // (NOT_FOUND, foreign and missing alike); non-admins get FORBIDDEN.
+          !(
+            /^(NOT_FOUND|FORBIDDEN)$/.test(e.extensions?.code ?? '') &&
+            roots[String(e.path?.[0])] === 'domains'
+          ) &&
           // API credentials (#2115) are a contract only: a caller with access
           // gets NOT_IMPLEMENTED. Drop this when they are implemented.
           !(
@@ -1034,8 +1041,9 @@ describe('cross-tenant mutation walk', () => {
       else if (
         // subscribePush: the probe endpoint is not https; updateMyProfile: the
         // probe input has no name; provisionConference: the probe dates are
-        // not dates; requestInvite: the probe name is empty.
-        /"(inviteMember|cancelInvitation|removeMember|changeMemberRole|subscribePush|updateMyProfile|provisionConference|requestInvite)"/.test(
+        // not dates; requestInvite: the probe name is empty; *Domain (#2207):
+        // probe ids and hostnames name nothing of A's.
+        /"(inviteMember|cancelInvitation|removeMember|changeMemberRole|subscribePush|updateMyProfile|provisionConference|requestInvite|claimDomain|recheckDomain|removeDomain)"/.test(
           json,
         )
       )
