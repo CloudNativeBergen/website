@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { evaluate, parse } from 'groq-js'
 import { send, slackToken, type DataEnv, type Deps } from './data'
 
 /** The slice of D1 send() uses (prepare/bind/run), over node:sqlite. */
@@ -23,24 +24,54 @@ const ORG = 'org-a'
 const CONF = 'conf-a'
 const ACTOR = 'spk-actor'
 
-const proposal = (over: Record<string, unknown> = {}) => ({
-  _id: 'talk-1',
-  title: 'Kubernetes <b>',
-  status: 'submitted',
-  withdrawnReason: 'Sick',
-  speakers: [
-    { _id: ACTOR, name: 'Ada', email: 'ada@x.no' },
-    { _id: 'spk-co', name: 'Bo', email: 'bo@x.no' },
-  ],
-  conference: {
+type Doc = Record<string, unknown> & { _id: string }
+const ref = (_ref: string) => ({ _type: 'reference', _ref })
+// Two orgs, evaluated by groq-js: the tenant filter is the real query's.
+const seed = (): Doc[] => [
+  { _id: ORG, _type: 'organization', featureOverrides: [] },
+  { _id: 'org-b', _type: 'organization' },
+  {
+    _id: CONF,
+    _type: 'conference',
+    organization: ref(ORG),
     domains: ['a.konf.app'],
+    organizers: ['org-1', ACTOR, 'org-2'].map(ref),
     teams: [],
   },
-  organization: { featureOverrides: [] },
-  ...over,
-})
+  {
+    _id: 'conf-b',
+    _type: 'conference',
+    organization: ref('org-b'),
+    organizers: [ref('b-1')],
+  },
+  ...['org-1', 'org-2', 'b-1', 't-1'].map((id) => ({
+    _id: id,
+    _type: 'speaker',
+    name: id,
+  })),
+  { _id: ACTOR, _type: 'speaker', name: 'Ada', email: 'ada@x.no' },
+  { _id: 'spk-co', _type: 'speaker', name: 'Bo', email: 'bo@x.no' },
+  {
+    _id: 'talk-1',
+    _type: 'talk',
+    title: 'Kubernetes <b>',
+    status: 'submitted',
+    withdrawnReason: 'Sick',
+    conference: ref(CONF),
+    speakers: [ref(ACTOR), ref('spk-co')],
+  },
+  {
+    _id: 'talk-b',
+    _type: 'talk',
+    title: 'B',
+    status: 'submitted',
+    conference: ref('conf-b'),
+    speakers: [ref(ACTOR)],
+  },
+]
+let dataset: Doc[]
+const doc = (id: string) => dataset.find((d) => d._id === id)!
 
-let rows: { proposal: unknown; organizers: string[]; otherConfirmed: string[] }
 let reads: { query: string; params: Record<string, unknown> }[]
 let created: Record<string, unknown>[]
 let commits: number
@@ -64,12 +95,8 @@ const env = (over: Partial<DataEnv> = {}): DataEnv =>
   }) as DataEnv
 
 beforeEach(() => {
+  dataset = seed()
   channel = '#cfp'
-  rows = {
-    proposal: proposal(),
-    organizers: ['org-1', ACTOR, 'org-2'],
-    otherConfirmed: [],
-  }
   reads = []
   created = []
   commits = 0
@@ -79,16 +106,7 @@ beforeEach(() => {
     read: {
       fetch: async <T>(query: string, params: Record<string, unknown>) => {
         reads.push({ query, params })
-        if (query.includes('_type == "talk" && _id == $proposalId'))
-          // The tenant filter lives in the query: emulate it.
-          return (
-            params.orgId === ORG && params.conferenceId === CONF
-              ? rows.proposal
-              : null
-          ) as T
-        if (query.includes('status == "confirmed"'))
-          return rows.otherConfirmed as T
-        return rows.organizers as T
+        return (await evaluate(parse(query), { dataset, params })).get() as T
       },
     },
     write: {
@@ -155,9 +173,7 @@ describe('notifications send', () => {
   })
 
   it('routes to the cfp team when it has members', async () => {
-    rows.proposal = proposal({
-      conference: { teams: [{ key: 'cfp', members: ['t-1', ACTOR] }] },
-    })
+    doc(CONF).teams = [{ key: 'cfp', members: [ref('t-1'), ref(ACTOR)] }]
     await send(deps, submitted())
     expect(created.map((d) => (d.recipient as { _ref: string })._ref)).toEqual([
       't-1',
@@ -165,7 +181,7 @@ describe('notifications send', () => {
   })
 
   it('a withdrawal carries the reason in Slack and in-app', async () => {
-    rows.proposal = proposal({ status: 'withdrawn' })
+    doc('talk-1').status = 'withdrawn'
     expect(await send(deps, withdrawn())).toBe('sent')
     const body = slackBody()
     expect(body.blocks[0].text.text).toBe('🚫 Talk Withdrawn')
@@ -178,8 +194,14 @@ describe('notifications send', () => {
   })
 
   it('a withdrawn confirmed talk lists tickets to cancel, minus speakers with another confirmed talk', async () => {
-    rows.proposal = proposal({ status: 'withdrawn' })
-    rows.otherConfirmed = ['spk-co']
+    doc('talk-1').status = 'withdrawn'
+    dataset.push({
+      _id: 'talk-2',
+      _type: 'talk',
+      status: 'confirmed',
+      conference: ref(CONF),
+      speakers: [ref('spk-co')],
+    })
     await send(deps, withdrawn({ previousStatus: 'confirmed' }))
     expect(slackBody().blocks[3].text.text).toContain('• Ada (ada@x.no)')
     expect(slackBody().blocks[3].text.text).not.toContain('Bo')
@@ -207,17 +229,27 @@ describe('notifications send', () => {
   })
 
   it('refuses a proposal outside the calling tenant', async () => {
+    // org-b names org-a's talk under org-a's conference id.
     expect(await send(deps, submitted({ orgId: 'org-b' }))).toBe('refused')
-    expect(await send(deps, submitted({ conferenceId: 'conf-b' }))).toBe(
-      'refused',
-    )
-    // The tenant reached the query, so the filter is Sanity's, not ours.
-    expect(reads[0].params).toMatchObject({
-      orgId: 'org-b',
-      conferenceId: CONF,
-    })
+    // org-a names org-b's talk under org-b's conference id.
+    expect(
+      await send(
+        deps,
+        submitted({
+          id: 'evt-2',
+          proposalId: 'talk-b',
+          conferenceId: 'conf-b',
+        }),
+      ),
+    ).toBe('refused')
+    // The right org, the wrong conference.
+    expect(
+      await send(deps, submitted({ id: 'evt-3', conferenceId: 'conf-b' })),
+    ).toBe('refused')
     expect(slack).not.toHaveBeenCalled()
     expect(created).toEqual([])
+    // The control: the same talk under its own tenant goes out.
+    expect(await send(deps, submitted({ id: 'evt-4' }))).toBe('sent')
   })
 
   it('refuses an event whose proposal status or actor does not match', async () => {
