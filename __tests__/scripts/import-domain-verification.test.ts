@@ -7,6 +7,8 @@ import {
   MUST_VERIFY,
   parity,
   parseD1Dump,
+  cutoverCandidates,
+  outDir,
   planImport,
   toSql,
   type D1Dump,
@@ -44,6 +46,7 @@ const d1Row = (hostname: string, over: Partial<D1Row> = {}): D1Row => ({
   org_id: 'org-1',
   conference_id: CONF,
   kind: 'custom',
+  verification: 'pending',
   method: null,
   token: null,
   status: null,
@@ -99,7 +102,7 @@ describe('import-domain-verification mapping', () => {
     expect(by['old.example.org']).toMatchObject({
       kind: 'custom',
       method: 'dns-txt',
-      verification: 'failed',
+      verification: 'pending',
     })
   })
 
@@ -187,12 +190,46 @@ describe('import-domain-verification --verify', () => {
   })
 
   it('counts a routed conference.domains host with no record anywhere', () => {
-    const { diffs } = parity(
+    const { hosts, diffs } = parity(
       docs,
       [{ _id: CONF, domains: ['bare.example.org'] }],
       imported(),
       NOW,
     )
+    expect(hosts).toBe(3)
     expect(diffs).toEqual([])
+  })
+})
+
+describe('import-domain-verification never changes live routing', () => {
+  it('inserts new rows as legacy pending and lists them as cutover candidates', () => {
+    const docs = [doc(MUST_VERIFY)]
+    db.exec(toSql(planImport(docs, dump()).rows))
+    const row = all().find((r) => r.hostname === MUST_VERIFY)
+    expect(row).toMatchObject({ verification: 'pending', status: 'verified' })
+    expect(
+      cutoverCandidates(docs, dump(all() as unknown as D1Row[]), NOW),
+    ).toEqual([
+      `${MUST_VERIFY}: legacy=pending sanity routing=true`,
+      'cndn-2026.konf.run: legacy=verified sanity routing=false',
+    ])
+  })
+
+  it('does not stamp a claimed platform row', () => {
+    db.exec(`INSERT INTO domains (hostname, org_id, conference_id, kind, verification, claimed_at)
+      VALUES ('cndn.konf.run', 'org-1', '${CONF}', 'platform-alias', 'verified', 7)`)
+    db.exec(toSql([]))
+    expect(all().find((r) => r.hostname === 'cndn.konf.run')).toMatchObject({
+      method: null,
+      status: null,
+    })
+  })
+
+  it('refuses --out outside tmp/', () => {
+    expect(outDir(undefined, '/r')).toBe('/r/tmp')
+    expect(outDir('tmp/import', '/r')).toBe('/r/tmp/import')
+    expect(() => outDir('.', '/r')).toThrow('--out must be inside')
+    expect(() => outDir('tmp/../x', '/r')).toThrow('--out must be inside')
+    expect(() => outDir('/r/tmpx', '/r')).toThrow('--out must be inside')
   })
 })

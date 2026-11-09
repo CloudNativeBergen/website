@@ -25,8 +25,13 @@
  *   grace_until, consecutive_failures, consecutive_soft_failures, last_error.
  * - D1 always keeps: org_id, conference_id, kind, the legacy `verification`
  *   column (it drives routing until the phase 6 reader switch), checked_at,
- *   cf_custom_hostname_id, claimed_at, last_recheck_at, last_error_code. The
- *   legacy `verification` is written only when the row is new.
+ *   cf_custom_hostname_id, claimed_at, last_recheck_at, last_error_code. A new
+ *   row gets legacy `verification` 'pending', never 'verified', because
+ *   tenantByHost routes on it: this import never changes live routing. Hosts
+ *   where it disagrees with Sanity are listed as routing cutover candidates
+ *   (phase 6) in the dry run and in --verify, informational only.
+ * - The platform stamp UPDATE also skips claimed rows.
+ * - --out defaults to tmp/ and must stay inside it (gitignored).
  * - A row whose D1 conference differs from the Sanity doc's is not touched.
  *
  * Kinds: a `platform-owned` doc becomes method `platform` on the D1 platform
@@ -45,7 +50,7 @@
 
 import { config } from 'dotenv'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { join, resolve } from 'path'
+import { join, resolve, sep } from 'path'
 import { pathToFileURL } from 'url'
 import {
   isAllowlistEligible,
@@ -70,6 +75,7 @@ export interface D1Row {
   org_id: string
   conference_id: string
   kind: 'platform-edition' | 'platform-alias' | 'custom'
+  verification: 'pending' | 'verified' | 'failed'
   method: 'dns-txt' | 'platform' | null
   token: string | null
   status: DomainVerificationRecord['status'] | null
@@ -118,7 +124,6 @@ export function parseD1Dump(json: string): D1Dump {
 const ms = (iso: string | null) => (iso ? Date.parse(iso) || null : null)
 const iso = (n: number | null) =>
   n === null ? null : new Date(n).toISOString()
-const LEGACY = { verified: 'verified', pending: 'pending' } as const
 
 /** Sanity docs to D1 rows. Orphans and conflicts are skipped and reported. */
 export function planImport(docs: DomainVerificationRecord[], d1: D1Dump) {
@@ -158,7 +163,8 @@ export function planImport(docs: DomainVerificationRecord[], d1: D1Dump) {
       org_id: orgId,
       conference_id: doc.conferenceId!,
       kind: existing?.kind ?? 'custom',
-      verification: LEGACY[doc.status as keyof typeof LEGACY] ?? 'failed',
+      // Never 'verified': tenantByHost routes on this column (phase 6 switch).
+      verification: 'pending',
       method: platform ? 'platform' : 'dns-txt',
       token: doc.token || null,
       status: doc.status,
@@ -204,7 +210,7 @@ export function toSql(rows: Row[]) {
       `  WHERE domains.claimed_at IS NULL AND domains.conference_id = excluded.conference_id;`,
   )
   out.push(
-    "UPDATE domains SET method = 'platform', status = 'verified' WHERE kind IN ('platform-edition', 'platform-alias') AND status IS NULL;",
+    "UPDATE domains SET method = 'platform', status = 'verified' WHERE kind IN ('platform-edition', 'platform-alias') AND status IS NULL AND claimed_at IS NULL;",
   )
   return out.join('\n') + '\n'
 }
@@ -271,9 +277,50 @@ export function parity(
   return { hosts: hosts.size, diffs }
 }
 
+/**
+ * Hosts whose legacy `verification` column (what tenantByHost routes on today)
+ * disagrees with Sanity's routing verdict. Informational: the phase 6 reader
+ * switch decides them; this import never changes the legacy column.
+ */
+export function cutoverCandidates(
+  docs: DomainVerificationRecord[],
+  d1: D1Dump,
+  now: Date,
+) {
+  const sanity = new Map(docs.map((d) => [normalizeDomain(d.hostname), d]))
+  const out: string[] = []
+  for (const host of [
+    ...new Set([...sanity.keys(), ...d1.domains.keys()]),
+  ].sort()) {
+    if (!host || skipHost(host)) continue
+    const legacy = d1.domains.get(host)?.verification ?? 'absent'
+    const doc = sanity.get(host)
+    const routes = doc ? isRoutingEligible(doc, now) : false
+    if ((legacy === 'verified') !== routes)
+      out.push(`${host}: legacy=${legacy} sanity routing=${routes}`)
+  }
+  return out
+}
+
+/** Output must stay inside the gitignored tmp/: the SQL holds tokens. */
+export function outDir(value: string | undefined, cwd = process.cwd()) {
+  const dir = resolve(cwd, value ?? 'tmp')
+  const tmp = resolve(cwd, 'tmp')
+  if (dir !== tmp && !dir.startsWith(tmp + sep))
+    throw new Error(`--out must be inside ${tmp} (gitignored); got ${dir}`)
+  return dir
+}
+
 function arg(args: string[], flag: string) {
   const i = args.indexOf(flag)
   return i < 0 ? undefined : args[i + 1]
+}
+
+function printCutover(list: string[]) {
+  console.log(
+    `routing cutover candidates (phase 6), informational, NOT applied: ${list.length}`,
+  )
+  for (const c of list) console.log(`  ${c}`)
 }
 
 async function main() {
@@ -319,6 +366,7 @@ async function main() {
     const { hosts, diffs } = parity(docs, confs, d1, new Date())
     console.log(`hostnames ${hosts}, differences ${diffs.length}`)
     for (const d of diffs) console.log(`  ${d}`)
+    printCutover(cutoverCandidates(docs, d1, new Date()))
     if (diffs.length) process.exit(1)
     console.log(`parity OK; ${MUST_VERIFY} verified on both sides`)
     return
@@ -329,11 +377,12 @@ async function main() {
     `docs ${docs.length}, rows ${rows.length}, skipped ${skipped.length}`,
   )
   for (const s of skipped) console.log(`  skipped ${s}`)
+  printCutover(cutoverCandidates(docs, d1, new Date()))
   console.log(`ON CONFLICT UPDATE columns: ${UPDATED.join(', ')}`)
   if (!args.includes('--write')) return console.log('dry run; pass --write')
-  const outDir = arg(args, '--out') ?? '.'
-  mkdirSync(outDir, { recursive: true })
-  const file = join(outDir, 'domain-verification.sql')
+  const dir = outDir(arg(args, '--out'))
+  mkdirSync(dir, { recursive: true })
+  const file = join(dir, 'domain-verification.sql')
   writeFileSync(file, toSql(rows))
   console.log(
     `wrote ${file} (holds verification tokens; delete after applying)`,
