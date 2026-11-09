@@ -183,26 +183,27 @@ export function emit(event: PushEvent) {
 const id = (v: unknown): v is string =>
   typeof v === 'string' && v.length > 0 && v.length <= 200
 /**
- * An operator write raised in another service, as an audit_event row. Malformed
- * input is dropped and logged; never rejects into the caller.
+ * An operator write raised in another service, as an audit_event row. Throws
+ * on malformed input or a failed insert: an audited write must not proceed
+ * without its row (#2141). Fire-and-forget callers catch.
  */
 export async function recordOperatorWrite(
   db: D1Database,
   e: OperatorAuditEvent,
 ): Promise<void> {
+  if (
+    e?.type !== 'operator.write' ||
+    !id(e.actorId) ||
+    !id(e.organizationId) ||
+    !(e.conferenceId === null || id(e.conferenceId)) ||
+    !Array.isArray(e.fields) ||
+    e.fields.length > 100 ||
+    !e.fields.every(id)
+  ) {
+    console.error(JSON.stringify({ event: 'audit.rejected' }))
+    throw new Error('malformed operator audit event')
+  }
   try {
-    if (
-      e?.type !== 'operator.write' ||
-      !id(e.actorId) ||
-      !id(e.organizationId) ||
-      !(e.conferenceId === null || id(e.conferenceId)) ||
-      !Array.isArray(e.fields) ||
-      e.fields.length > 100 ||
-      !e.fields.every(id)
-    ) {
-      console.error(JSON.stringify({ event: 'audit.rejected' }))
-      return
-    }
     const detail = JSON.stringify({
       operator: true,
       orgId: e.organizationId,
@@ -222,5 +223,6 @@ export async function recordOperatorWrite(
         error: err instanceof Error ? err.message : 'unknown',
       }),
     )
+    throw err
   }
 }

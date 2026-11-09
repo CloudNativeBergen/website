@@ -66,7 +66,7 @@ export function effectivePlan(r: BillingRow, now = Date.now()): Plan {
  * (`can()`) still apply first; this only narrows.
  */
 export const PLAN_GATES = {
-  /** Publishing an edition that sells tickets (ticketingProvider set). */
+  /** An edition that sells tickets (`sellsTickets`) going live or bound. */
   'conference.publish_ticketed': 'basic',
   /** Setting a custom hostname on an edition. */
   'domain.connect_custom': 'basic',
@@ -77,6 +77,19 @@ export const PLAN_GATES = {
 } as const satisfies Record<string, Exclude<Plan, 'free'>>
 
 export type PlanGate = keyof typeof PLAN_GATES
+
+/**
+ * Whether an edition sells tickets: it has a vendor event bound (#2141). An
+ * absent ticketingProvider means Checkin, as every production edition
+ * stores it (null provider, checkinEventId set); the site mirrors this in
+ * src/lib/billing.
+ */
+export const sellsTickets = (c: {
+  ticketingProvider?: string | null
+  checkinEventId?: number | null
+  titoEventSlug?: string | null
+}): boolean =>
+  c.ticketingProvider === 'tito' ? !!c.titoEventSlug : c.checkinEventId != null
 
 /** True when `plan` covers `gate`. An unknown plan is free. */
 export const planAllows = (plan: unknown, gate: PlanGate): boolean =>

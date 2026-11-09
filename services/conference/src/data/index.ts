@@ -6,6 +6,8 @@ import {
   ScopedRepository,
   can,
   principalOf,
+  requirePlan,
+  sellsTickets,
   SITE_SCOPE,
   unscopedForPlatformOps,
   type Envelope,
@@ -131,6 +133,11 @@ class Conferences extends ScopedRepository {
         'only a platform operator can change the ticketing event binding',
         'FORBIDDEN',
       )
+    // Billing (#2141): binding a vendor event makes the edition sell
+    // tickets, which needs a paid plan, published or not, so a later
+    // publish or a post-publish binding cannot skip the gate.
+    if (!sellsTickets(row) && sellsTickets({ ...row, ...patch }))
+      requirePlan(this.tenant.plan, 'conference.publish_ticketed')
     // A patch that changes nothing is a no-op: updated_at stays put.
     const changes = Object.entries(patch).some(
       ([k, v]) =>
@@ -272,7 +279,7 @@ class Conferences extends ScopedRepository {
 }
 
 /**
- * Whether the edition sells tickets (ticketingProvider set), published or
+ * Whether the edition sells tickets (`sellsTickets`), published or
  * not: tenant-directory's plan gate on going live (#2129). Both ids match,
  * and only a boolean leaves.
  */
@@ -282,13 +289,17 @@ export async function isTicketed(
   conferenceId: string,
 ) {
   const row = await rawDb(d1).query.conferences.findFirst({
-    columns: { ticketingProvider: true },
+    columns: {
+      ticketingProvider: true,
+      checkinEventId: true,
+      titoEventSlug: true,
+    },
     where: and(
       eq(conferences.orgId, orgId),
       eq(conferences.conferenceId, conferenceId),
     ),
   })
-  return !!row?.ticketingProvider
+  return !!row && sellsTickets(row)
 }
 
 export function createData(d1: D1Database, envelope: Envelope) {

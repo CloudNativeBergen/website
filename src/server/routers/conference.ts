@@ -53,7 +53,7 @@ import {
   syncDomainVerifications,
 } from '@/lib/domain-verification'
 import { isPlatformZoneHost } from '@/lib/domain-verification/platform'
-import { requireOrgPlan } from '@/lib/billing'
+import { requireOrgPlan, sellsTickets } from '@/lib/billing'
 import { planEditionPlatformHosts } from '@/lib/conference/platformEditionHosts'
 import {
   PROVISIONING_RECEIPT_RETENTION_DAYS,
@@ -709,8 +709,8 @@ export const conferenceRouter = router({
     .input(UpdateVisibilitySchema)
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
-      // Billing (#2129): this flip is how an edition goes public. A ticketed
-      // one (ticketingProvider set) needs a paid plan; an edition that is
+      // Billing (#2129): this flip is how an edition goes public. One that
+      // sells tickets (`sellsTickets`) needs a paid plan; an edition that is
       // already live, or sells no tickets, is never asked.
       if (input.visibility === 'live') {
         const { conference } = await getConferenceForCurrentDomain({
@@ -718,7 +718,8 @@ export const conferenceRouter = router({
           uncached: true,
         })
         if (
-          conference?.ticketingProvider &&
+          conference &&
+          sellsTickets(conference) &&
           // Absent means live (lib/conference/visibility.ts).
           conference.visibility &&
           conference.visibility !== 'live'
@@ -856,12 +857,13 @@ export const conferenceRouter = router({
     .mutation(async ({ input, ctx }) => {
       const conferenceId = await resolveConferenceId()
       const current = await clientReadUncached.fetch<{
+        ticketingProvider?: 'checkin' | 'tito' | null
         checkinEventId?: number | null
         titoAccountSlug?: string | null
         titoEventSlug?: string | null
       } | null>(
         // groq-global: keyed by the SERVER-resolved conference id, never client input.
-        `*[_type == "conference" && _id == $id][0]{ checkinEventId, titoAccountSlug, titoEventSlug }`,
+        `*[_type == "conference" && _id == $id][0]{ ticketingProvider, checkinEventId, titoAccountSlug, titoEventSlug }`,
         { id: conferenceId },
         { cache: 'no-store' },
       )
@@ -897,6 +899,17 @@ export const conferenceRouter = router({
             'Only a platform operator can change the ticketing event binding',
         })
       }
+      // Billing (#2141): binding a vendor event makes the edition sell
+      // tickets, published or not, so this is gated as well as the publish.
+      const provider =
+        'ticketingProvider' in input
+          ? input.ticketingProvider
+          : current?.ticketingProvider
+      if (
+        !sellsTickets(current ?? {}) &&
+        sellsTickets({ ...effective, ticketingProvider: provider })
+      )
+        await requireOrgPlan('conference.publish_ticketed')
       if (await ticketingBindingIsClaimed(conferenceId, effective)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',

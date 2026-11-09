@@ -242,23 +242,49 @@ describe('operator-write audit sink', () => {
     ])
   })
 
-  it('drops a malformed event without throwing', async () => {
+  it('refuses a malformed event and writes nothing', async () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
-    await recordOperatorWrite(d1, {
-      type: 'member.removed',
-      actorId: 'op-2',
-    } as never)
-    await recordOperatorWrite(d1, {
-      type: 'operator.write',
-      actorId: '',
-      organizationId: 'o',
-      conferenceId: null,
-      fields: [],
-    })
+    await expect(
+      recordOperatorWrite(d1, {
+        type: 'member.removed',
+        actorId: 'op-2',
+      } as never),
+    ).rejects.toThrow('malformed')
+    await expect(
+      recordOperatorWrite(d1, {
+        type: 'operator.write',
+        actorId: '',
+        organizationId: 'o',
+        conferenceId: null,
+        fields: [],
+      }),
+    ).rejects.toThrow('malformed')
     expect(
       await all("SELECT 1 FROM audit_event WHERE userId IN ('op-2', '')"),
     ).toEqual([])
     expect(err).toHaveBeenCalledWith(expect.stringContaining('audit.rejected'))
+    err.mockRestore()
+  })
+
+  it('throws when the insert fails (#2141)', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const broken = {
+      prepare: () => ({
+        bind: () => ({ run: () => Promise.reject(new Error('d1 down')) }),
+      }),
+    } as unknown as D1Database
+    await expect(
+      recordOperatorWrite(broken, {
+        type: 'operator.write',
+        actorId: 'op-3',
+        organizationId: 'org-a',
+        conferenceId: null,
+        fields: ['plan'],
+      }),
+    ).rejects.toThrow('d1 down')
+    expect(err).toHaveBeenCalledWith(
+      expect.stringContaining('audit.write_failed'),
+    )
     err.mockRestore()
   })
 })

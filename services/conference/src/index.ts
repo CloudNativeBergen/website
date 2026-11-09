@@ -49,7 +49,7 @@ export class ProgramDate extends WorkerEntrypoint<WorkerEnv> {
   }
 
   /**
-   * Whether the edition sells tickets (ticketingProvider set), published or
+   * Whether the edition sells tickets (`sellsTickets`), published or
    * not: tenant-directory's plan gate on going live (#2129). A boolean only.
    */
   ticketed(orgId: string, conferenceId: string) {
