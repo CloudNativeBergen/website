@@ -312,8 +312,12 @@ describe('demo:seed', () => {
       ) as unknown[][]
     const live = touching(LIVE_CONFERENCE_ID)
     expect(live.map((m) => m[0])).toEqual(['patch'])
-    // setIfMissing only: an existing theme or branding is never overwritten.
-    expect(Object.keys(live[0][2] as object)).toEqual(['setIfMissing'])
+    // Only the dates are set; an existing theme or branding is never overwritten.
+    expect(Object.keys(live[0][2] as object)).toEqual(['set', 'setIfMissing'])
+    expect(Object.keys((live[0][2] as { set: object }).set)).toEqual([
+      'startDate',
+      'endDate',
+    ])
     const set = (live[0][2] as { setIfMissing: Record<string, unknown> })
       .setIfMissing
     for (const f of [
@@ -365,6 +369,15 @@ describe('demo:seed', () => {
       /missing in Sanity: kkdemo.org/,
     )
     expect(commit).not.toHaveBeenCalled()
+  })
+
+  it('gives every topic the hex color the schema requires', () => {
+    const { upsert } = buildDocuments(fixtures, EDITION_IDS)
+    const topics = upsert.filter((d) => d._type === 'topic')
+    expect(topics.length).toBeGreaterThan(0)
+    for (const d of topics) {
+      expect(d.color).toMatch(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
+    }
   })
 
   it('invite tokens are not derivable from the fixture key', () => {

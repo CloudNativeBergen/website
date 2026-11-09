@@ -13,7 +13,8 @@
  *   3. Read that org's `conferenceEditions`; map past/upcoming by title. The
  *      write allowlist is `kkdemo.conference` plus those ids; every target is
  *      checked against `kkdemo.seed.*` or the allowlist before any write.
- *      Conference docs get setIfMissing only, and must already exist.
+ *      Conference docs must already exist; they get their dates set and
+ *      everything else setIfMissing.
  *   4. --dry-run: print counts per type and stop. No write client.
  *   5. Upload missing speaker avatars (content-addressed, so unchanged ones
  *      are skipped), then createOrReplace everything else under DEMO_PREFIX,
@@ -59,7 +60,13 @@ export interface SanityWriter {
   transaction(): {
     createOrReplace(doc: Doc): unknown
     createIfNotExists(doc: Doc): unknown
-    patch(id: string, ops: { setIfMissing: Record<string, unknown> }): unknown
+    patch(
+      id: string,
+      ops: {
+        set?: Record<string, unknown>
+        setIfMissing: Record<string, unknown>
+      },
+    ): unknown
     commit(): Promise<unknown>
   }
   fetch<T>(query: string, params: Record<string, unknown>): Promise<T>
@@ -161,12 +168,34 @@ export function inviteToken(
 }
 
 /** The live edition's Sanity document; patched, never replaced. */
+const TOPIC_COLORS = [
+  '#326CE5',
+  '#7C3AED',
+  '#0EA5E9',
+  '#DC2626',
+  '#16A34A',
+  '#EA580C',
+  '#DB2777',
+  '#CA8A04',
+  '#0D9488',
+  '#4F46E5',
+  '#65A30D',
+  '#9333EA',
+  '#E11D48',
+  '#0891B2',
+]
+
 export const LIVE_CONFERENCE_ID = 'kkdemo.conference'
 const LIVE_KEY = 'edition-live'
 
 export interface ConferencePatch {
   id: string
-  /** setIfMissing only: existing values (theme, branding, dates) are never overwritten. */
+  /**
+   * Dates are always set: the admin schedule editor drops schedules outside
+   * them, and the seeded schedules follow the fixture dates.
+   */
+  set: { startDate: string; endDate: string }
+  /** Existing values (theme, branding) are never overwritten. */
   setIfMissing: Record<string, unknown>
 }
 
@@ -197,13 +226,15 @@ export function buildDocuments(
   const topics = [...new Set(s.proposals.flatMap((p) => p.topics))]
 
   const upsert: Doc[] = [
-    ...topics.map((t) => ({
+    ...topics.map((t, i) => ({
       _id: id('topic', t),
       _type: 'topic',
       title:
         ({ ai: 'AI', finops: 'FinOps' } as Record<string, string>)[t] ??
         t[0].toUpperCase() + t.slice(1),
       slug: { _type: 'slug', current: t },
+      // Required by the schema; the admin schedule editor crashes without it.
+      color: TOPIC_COLORS[i % TOPIC_COLORS.length],
       organization: { _type: 'reference', _ref: DEMO_ORG_ID },
     })),
     // Members are speakers too: reviewers, assignees and notification recipients.
@@ -449,14 +480,13 @@ export function buildDocuments(
   ]
   const conferences: ConferencePatch[] = f.d1.editions.map((e) => ({
     id: confId(e.key),
+    set: { startDate: e.startDate, endDate: e.endDate },
     setIfMissing: {
       title: e.title,
       tagline: e.tagline,
       organization: { _type: 'reference', _ref: DEMO_ORG_ID },
       city: e.city,
       country: e.country,
-      startDate: e.startDate,
-      endDate: e.endDate,
       visibility: 'unlisted',
       organizers: refs(
         'speaker',
@@ -619,7 +649,7 @@ export async function run(
     const tx = client.transaction()
     if (i === 0) {
       for (const c of conferences)
-        tx.patch(c.id, { setIfMissing: c.setIfMissing })
+        tx.patch(c.id, { set: c.set, setIfMissing: c.setIfMissing })
     }
     upsert.slice(i, i + TX_SIZE).forEach((d) => tx.createOrReplace(d))
     await tx.commit()
