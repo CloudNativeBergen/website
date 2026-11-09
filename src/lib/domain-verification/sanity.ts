@@ -385,6 +385,20 @@ export async function getDomainClaim(id: string): Promise<DomainClaim | null> {
 }
 
 /**
+ * The conference a D1 verification row points at, as `getDomainClaim` reads
+ * it (#2207 phase 6: the row moved to D1, the conference did not).
+ */
+export async function getClaimingConference(
+  conferenceId: string,
+): Promise<ClaimingConference | null> {
+  return clientReadUncached.fetch<ClaimingConference | null>(
+    // groq-global: one conference by the id a verification row names, never from client input.
+    `*[_type == "conference" && _id == $conferenceId][0]{ _id, organization, ticketingProvider, domains }`,
+    { conferenceId },
+  )
+}
+
+/**
  * #2207 phase 5, dual write: after a Sanity write, copy the record as it now
  * stands onto tenant-directory D1 (`mirrorDomainVerification`). Sanity stays
  * authoritative until phase 6, so this is BEST-EFFORT like the notification
