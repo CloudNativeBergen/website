@@ -35,6 +35,9 @@ const config: NextConfig = {
     return config
   },
   images: {
+    // Sanity images are resized by cdn.sanity.io, not /_next/image (src/lib/image/loader.ts).
+    loader: 'custom',
+    loaderFile: './src/lib/image/loader.ts',
     remotePatterns: [
       {
         protocol: 'https',
