@@ -309,6 +309,11 @@ type Mutation {
   updateMyProfile(input: SpeakerProfileInput!): SpeakerProfile
 
   """
+  Claims a custom hostname for one of the org's conferences as pending, with a DNS TXT token (#2207). Routing is unchanged until it verifies. CONFLICT when the hostname is already claimed; NOT_FOUND for a conference outside the org. Org owner or admin.
+  """
+  claimDomain(conferenceId: ID!, hostname: String!): ConferenceDomain
+
+  """
   Creates an Organization and its first Conference: the Sanity documents (through the site), the directory rows and the owner membership. Retrying with the same idempotencyKey returns the same ids. Platform operators only (operator lane, no tenant).
   """
   createOrganization(idempotencyKey: String!, input: CreateOrganizationInput!): CreatedOrganization
@@ -333,6 +338,16 @@ type Mutation {
   """
   provisionConference(idempotencyKey: String!, input: ProvisionConferenceInput!, orgId: ID): ProvisionedConference
   provisionOrganization(conferenceId: ID!, idempotencyKey: String!, orgId: ID!, orgSlug: String!): Organization
+
+  """
+  Asks for a verification check now (#2207). Once per hostname per minute, else RATE_LIMITED. The DNS check itself arrives in phase 2; until then this returns the current state. Org owner or admin.
+  """
+  recheckDomain(hostname: String!): ConferenceDomain
+
+  """
+  Removes a custom hostname (#2207). FORBIDDEN for platform hosts (<slug>.konf.run). Org owner or admin.
+  """
+  removeDomain(hostname: String!): ConferenceDomain
 
   """
   The konf.app "Request an invite" form (#2161). Public; creates no account. Answers true whether or not the email already has an open request. Rate-limited per IP and per email (RATE_LIMITED). Refusals are BAD_USER_INPUT with `field`.
@@ -589,6 +604,11 @@ type Query {
   Every org's conferences, ordered by id. Platform operators only (operator lane, no tenant). At most 100 per page: pass the last id as `after` for the next. `lifecycle` and `flag` (that flag on) filter.
   """
   conferences(after: ID, first: Int = 100, flag: RolloutFlag, lifecycle: ConferenceLifecycle): [OperatorConference!]
+
+  """
+  One of the session org's conferences' hostnames with their verification state (#2207). Org owner or admin. NOT_FOUND for a conference outside the org.
+  """
+  domains(conferenceId: ID!): [ConferenceDomain!]
 
   """
   A signed timestamp for the konf.app invite form (#2161): fetch it when the form is shown and send it as `token`. Public. Null when invite requests are not configured.
@@ -1206,6 +1226,29 @@ type CheckoutSession {
   url: String
 }
 
+type ConferenceDomain {
+  """ISO 8601."""
+  graceUntil: String
+  hostname: String
+  kind: String
+
+  """ISO 8601."""
+  lastCheckedAt: String
+  lastError: String
+  method: String
+  removable: Boolean
+
+  """
+  On rows from before #2207 phase 1, read from the legacy Cloudflare state.
+  """
+  status: DomainStatus
+  token: String
+
+  """Where the TXT record goes, e.g. _konf-challenge.example.com."""
+  txtName: String
+  txtValue: String
+}
+
 type CreatedOrganization {
   conferenceId: ID
   organizationId: ID
@@ -1397,6 +1440,13 @@ enum TalkStatus {
   CONFIRMED
   PENDING
   WITHDRAWN
+}
+
+enum DomainStatus {
+  failing
+  pending
+  revoked
+  verified
 }
 
 enum ConferenceLifecycle {
