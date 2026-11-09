@@ -641,7 +641,7 @@ type Query {
   signupCodes: [SignupCode!]
 
   """
-  The envelope conference's orders with buyer email, newest first. Owners, admins and operators (attendee.read_pii); null otherwise.
+  The envelope conference's orders with buyer email, name and lines, newest first. Owners, admins and operators (attendee.read_pii); null otherwise.
   """
   ticketOrders: [TicketOrder!]
 
@@ -1355,11 +1355,31 @@ type TicketMoney {
 type TicketOrder {
   """PII."""
   buyerEmail: String
+
+  """PII. Null when the provider sent none."""
+  buyerName: String
   createdAt: String
   externalId: String
   id: ID
+  lines: [TicketOrderLine!]
   status: TicketOrderStatus
+
+  """
+  Sum of the lines. VAT basis is not recorded: amounts are as the ticket provider reports them (Tito: VAT-inclusive; Checkin: VAT-exclusive per its adapter, though its order totals can include VAT; demo seeds: unspecified). Do not assume either way.
+  """
   total: TicketMoney
+}
+
+"""One ticket type on an order."""
+type TicketOrderLine {
+  quantity: Int
+  ticketTypeId: ID
+  ticketTypeName: String
+
+  """
+  Price per ticket at order time. VAT basis is not recorded: amounts are as the ticket provider reports them (Tito: VAT-inclusive; Checkin: VAT-exclusive per its adapter, though its order totals can include VAT; demo seeds: unspecified). Do not assume either way.
+  """
+  unitPrice: TicketMoney
 }
 
 type TicketSales {
@@ -1773,6 +1793,7 @@ input TicketMoneyInput {
 
 input TicketOrderInput {
   buyerEmail: String
+  buyerName: String
   createdAt: String!
   externalId: String!
   lines: [TicketOrderLineInput!]!

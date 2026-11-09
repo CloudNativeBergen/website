@@ -53,6 +53,26 @@ const TicketSales = builder
     }),
   })
 
+// Amounts are as the provider reported them; the basis is not stored (#2242).
+const VAT_NOTE =
+  'VAT basis is not recorded: amounts are as the ticket provider reports them (Tito: VAT-inclusive; Checkin: VAT-exclusive per its adapter, though its order totals can include VAT; demo seeds: unspecified). Do not assume either way.'
+
+const OrderLine = builder
+  .objectRef<TicketOrderValue['lines'][number]>('TicketOrderLine')
+  .implement({
+    description: 'One ticket type on an order.',
+    fields: (t) => ({
+      ticketTypeId: t.exposeID('ticketTypeId'),
+      ticketTypeName: t.exposeString('ticketTypeName'),
+      quantity: t.exposeInt('quantity'),
+      unitPrice: t.field({
+        type: Money,
+        description: `Price per ticket at order time. ${VAT_NOTE}`,
+        resolve: (l) => l.unitPrice,
+      }),
+    }),
+  })
+
 const TicketOrder = builder
   .objectRef<TicketOrderValue>('TicketOrder')
   .implement({
@@ -60,11 +80,20 @@ const TicketOrder = builder
       id: t.exposeID('id'),
       externalId: t.exposeString('externalId'),
       status: t.field({ type: OrderStatus, resolve: (o) => o.status }),
-      total: t.field({ type: Money, resolve: (o) => o.total }),
+      total: t.field({
+        type: Money,
+        description: `Sum of the lines. ${VAT_NOTE}`,
+        resolve: (o) => o.total,
+      }),
       buyerEmail: t.exposeString('buyerEmail', {
         nullable: true,
         description: 'PII.',
       }),
+      buyerName: t.exposeString('buyerName', {
+        nullable: true,
+        description: 'PII. Null when the provider sent none.',
+      }),
+      lines: t.field({ type: [OrderLine], resolve: (o) => o.lines }),
       createdAt: t.exposeString('createdAt'),
     }),
   })
@@ -100,6 +129,7 @@ const OrderInput = builder.inputType('TicketOrderInput', {
     status: t.field({ type: OrderStatus, required: true }),
     total: t.field({ type: MoneyInput, required: true }),
     buyerEmail: t.string(),
+    buyerName: t.string(),
     createdAt: t.string({ required: true }),
     updatedAt: t.string(),
     lines: t.field({ type: [LineInput], required: true }),
@@ -142,7 +172,7 @@ builder.queryType({
       type: [TicketOrder],
       nullable: true,
       description:
-        "The envelope conference's orders with buyer email, newest first. Owners, admins and operators (attendee.read_pii); null otherwise.",
+        "The envelope conference's orders with buyer email, name and lines, newest first. Owners, admins and operators (attendee.read_pii); null otherwise.",
       resolve: (_, __, ctx) => ctx.data.ticketing().orders(),
     }),
   }),
@@ -171,6 +201,7 @@ builder.mutationType({
             status: o.status,
             total: o.total,
             buyerEmail: o.buyerEmail ?? null,
+            buyerName: o.buyerName ?? null,
             createdAt: o.createdAt,
             updatedAt: o.updatedAt ?? null,
             lines: o.lines.map((l) => ({
