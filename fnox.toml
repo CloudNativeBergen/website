@@ -76,3 +76,10 @@ KONF_PRODUCTION_SLACK_MEMBER_DRIFT_WEBHOOK_URL= { provider = "keychain", value =
 KONF_PRODUCTION_RESEND_API_KEY= { provider = "keychain", value = "KONF_PRODUCTION_RESEND_API_KEY", if_missing = "warn" }
 KONF_PREVIEW_SANITY_API_TOKEN_WRITE= { provider = "keychain", value = "KONF_PREVIEW_SANITY_API_TOKEN_WRITE", if_missing = "warn" }
 KONF_PRODUCTION_SANITY_API_TOKEN_WRITE= { provider = "keychain", value = "KONF_PRODUCTION_SANITY_API_TOKEN_WRITE", if_missing = "warn" }
+# konf-notifications (epic #2215): all optional on the Worker.
+KONF_PREVIEW_SLACK_BOT_TOKEN= { provider = "keychain", value = "KONF_PREVIEW_SLACK_BOT_TOKEN", if_missing = "warn" }
+KONF_PREVIEW_TENANT_SECRETS_JSON= { provider = "keychain", value = "KONF_PREVIEW_TENANT_SECRETS_JSON", if_missing = "warn" }
+KONF_PREVIEW_PLATFORM_ORG_ID= { provider = "keychain", value = "KONF_PREVIEW_PLATFORM_ORG_ID", if_missing = "warn" }
+KONF_PRODUCTION_SLACK_BOT_TOKEN= { provider = "keychain", value = "KONF_PRODUCTION_SLACK_BOT_TOKEN", if_missing = "warn" }
+KONF_PRODUCTION_TENANT_SECRETS_JSON= { provider = "keychain", value = "KONF_PRODUCTION_TENANT_SECRETS_JSON", if_missing = "warn" }
+KONF_PRODUCTION_PLATFORM_ORG_ID= { provider = "keychain", value = "KONF_PRODUCTION_PLATFORM_ORG_ID", if_missing = "warn" }

@@ -228,7 +228,7 @@ jobs:
       - name: Compose supergraph
         run: pnpm --filter @runkonf/api compose
 
-      # Order matters: tenant-directory binds identity, and the gateway
+      # Order matters: tenant-directory binds identity, cfp binds notifications, and the gateway
       # binds all of them, so a binding target is always deployed first.
       - name: Migrate and deploy
         if: steps.select.outputs.workers != ''

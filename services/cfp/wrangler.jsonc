@@ -15,6 +15,11 @@
       "service": "konf-conference",
       "entrypoint": "ProgramDate",
     },
+    {
+      "binding": "NOTIFICATIONS",
+      "service": "konf-notifications",
+      "entrypoint": "Notifications",
+    },
   ],
   "vars": {
     "SANITY_PROJECT_ID": "mvzwvw14",
@@ -36,6 +41,11 @@
           "entrypoint": "ProgramDate",
           "service": "konf-conference-preview",
         },
+        {
+          "binding": "NOTIFICATIONS",
+          "entrypoint": "Notifications",
+          "service": "konf-notifications-preview",
+        },
       ],
       "vars": {
         "SANITY_PROJECT_ID": "mvzwvw14",
@@ -54,6 +64,11 @@
           "binding": "CONFERENCE",
           "service": "konf-conference",
           "entrypoint": "ProgramDate",
+        },
+        {
+          "binding": "NOTIFICATIONS",
+          "service": "konf-notifications",
+          "entrypoint": "Notifications",
         },
       ],
       "vars": {

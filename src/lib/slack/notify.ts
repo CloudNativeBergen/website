@@ -2,7 +2,6 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { getSpeaker } from '@/lib/speaker'
 import { formatNumber } from '@/lib/format'
 import { Action } from '@/lib/proposal/types'
-import type { ProposalStatusChangeEvent } from '@/lib/events/types'
 import { Conference } from '@/lib/conference/types'
 import { Volunteer } from '@/lib/volunteer/types'
 import {
@@ -11,6 +10,14 @@ import {
   type SlackBlock,
   type SlackMessage,
 } from '@/lib/slack/client'
+import {
+  createAdminButton,
+  createAdminLinkButton,
+  createProposalInfoBlocks,
+  proposalAlertBlocks,
+  pushTicketCancellation,
+  type TicketCancellation,
+} from '@/lib/notification/proposal-copy'
 import { resolveConferenceSlackToken } from '@/lib/slack/token'
 import { resolveTeamSlackChannel } from '@/lib/teams'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
@@ -92,118 +99,6 @@ function getDomainFromConference(conference: Conference): string | null {
     : null
 }
 
-function createAdminLinkButton(
-  domain: string,
-  path: string,
-  text: string,
-  actionId: string,
-): SlackBlock {
-  const adminUrl = `https://${domain}${path}`
-  return {
-    type: 'actions',
-    elements: [
-      {
-        type: 'button',
-        text: {
-          type: 'plain_text',
-          text: text,
-          emoji: true,
-        },
-        url: adminUrl,
-        action_id: actionId,
-      },
-    ],
-  }
-}
-
-function createAdminButton(
-  proposal: ProposalExisting,
-  domain: string,
-  buttonText: string,
-  actionId: string,
-): SlackBlock {
-  return createAdminLinkButton(
-    domain,
-    `/admin/proposals/${proposal._id}`,
-    buttonText,
-    actionId,
-  )
-}
-
-function createProposalInfoBlocks(
-  proposal: ProposalExisting,
-  speakerNames: string,
-): SlackBlock[] {
-  return [
-    {
-      type: 'section',
-      fields: [
-        {
-          type: 'mrkdwn',
-          text: `*Title:*\n${escapeMrkdwn(proposal.title)}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `*Speaker:*\n${escapeMrkdwn(speakerNames)}`,
-        },
-      ],
-    },
-  ]
-}
-
-function getActionEmoji(action: Action): string {
-  switch (action) {
-    case Action.confirm:
-      return '✅'
-    case Action.withdraw:
-      return '🚫'
-    case Action.cancel:
-      return '🛑'
-    default:
-      return '📝'
-  }
-}
-
-function getActionText(action: Action): string {
-  switch (action) {
-    case Action.confirm:
-      return 'Confirmed'
-    case Action.withdraw:
-      return 'Withdrawn'
-    case Action.cancel:
-      return 'Canceled'
-    default:
-      return 'Status Changed'
-  }
-}
-
-type TicketCancellation =
-  ProposalStatusChangeEvent['metadata']['ticketCancellation']
-
-// No provider API cancels tickets, so organizers do it by hand.
-function pushTicketCancellation(
-  blocks: SlackBlock[],
-  ticketCancellation: TicketCancellation,
-) {
-  if (!ticketCancellation?.speakers.length) return
-  const list = ticketCancellation.speakers
-    .map(
-      (s) =>
-        `• ${escapeMrkdwn(s.name)}${s.email ? ` (${escapeMrkdwn(s.email)})` : ''}`,
-    )
-    .join('\n')
-  const caveat = ticketCancellation.unfiltered
-    ? '\n_Could not check for other confirmed talks: this list is unfiltered. Check by hand that each speaker has no other confirmed talk before cancelling._'
-    : ''
-  blocks.push({
-    type: 'section',
-    text: {
-      type: 'mrkdwn',
-      text: `*🎟️ Cancel ticket by hand in the ticket provider's dashboard for:*\n${list}${caveat}`,
-    },
-  })
-}
-
 /** An organizer took one speaker off a talk that keeps its other speakers. */
 export async function notifySpeakerRemoved(
   proposal: ProposalExisting,
@@ -223,7 +118,7 @@ export async function notifySpeakerRemoved(
         emoji: true,
       },
     },
-    ...createProposalInfoBlocks(proposal, remainingNames),
+    ...createProposalInfoBlocks(proposal.title, remainingNames),
     {
       type: 'section',
       text: {
@@ -235,7 +130,7 @@ export async function notifySpeakerRemoved(
   pushTicketCancellation(blocks, ticketCancellation)
   if (domain) {
     blocks.push(
-      createAdminButton(proposal, domain, 'View in Admin', 'view_proposal'),
+      createAdminButton(proposal._id, domain, 'View in Admin', 'view_proposal'),
     )
   }
   await sendSlackNotification({ blocks }, conference)
@@ -252,35 +147,15 @@ export async function notifyProposalStatusChange(
   const names = speakerNames || (await resolveSpeakerNames(proposal))
   const domain = getDomainFromConference(conference)
 
-  const blocks: SlackBlock[] = [
-    {
-      type: 'header',
-      text: {
-        type: 'plain_text',
-        text: `${getActionEmoji(action)} Talk ${getActionText(action)}`,
-        emoji: true,
-      },
-    },
-    ...createProposalInfoBlocks(proposal, names),
-  ]
-
-  if (reason?.trim()) {
-    blocks.push({
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*Reason:*\n${escapeMrkdwn(reason.trim())}`,
-      },
-    })
-  }
-
-  pushTicketCancellation(blocks, ticketCancellation)
-
-  if (domain) {
-    blocks.push(
-      createAdminButton(proposal, domain, 'View in Admin', 'view_proposal'),
-    )
-  }
+  const blocks = proposalAlertBlocks({
+    action,
+    proposalId: proposal._id,
+    title: proposal.title,
+    speakerNames: names,
+    domain,
+    reason,
+    ticketCancellation,
+  })
 
   const message = { blocks }
   await sendSlackNotification(message, conference)
@@ -294,23 +169,13 @@ export async function notifyNewProposal(
   const names = speakerNames || (await resolveSpeakerNames(proposal))
   const domain = getDomainFromConference(conference)
 
-  const blocks: SlackBlock[] = [
-    {
-      type: 'header',
-      text: {
-        type: 'plain_text',
-        text: '📥 New Talk Proposal',
-        emoji: true,
-      },
-    },
-    ...createProposalInfoBlocks(proposal, names),
-  ]
-
-  if (domain) {
-    blocks.push(
-      createAdminButton(proposal, domain, 'Review Proposal', 'review_proposal'),
-    )
-  }
+  const blocks = proposalAlertBlocks({
+    action: 'submit',
+    proposalId: proposal._id,
+    title: proposal.title,
+    speakerNames: names,
+    domain,
+  })
 
   const message = { blocks }
   await sendSlackNotification(message, conference)

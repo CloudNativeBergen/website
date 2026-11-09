@@ -1418,6 +1418,19 @@ describe('ProgramDate.ticketed (#2129, #2141)', () => {
   })
 })
 
+describe('ProgramDate.cfpChannel (#2215)', () => {
+  it("answers the published edition's CFP channel, never another org's", async () => {
+    const { ProgramDate } = await import('./index')
+    sqlite.exec(
+      "UPDATE conferences SET cfp_notification_channel = '#cfp-a' WHERE conference_id IN ('conf-a', 'conf-a-draft')",
+    )
+    const rpc = new ProgramDate({} as never, env as never)
+    expect(await rpc.cfpChannel('org-a', 'conf-a')).toBe('#cfp-a')
+    expect(await rpc.cfpChannel('org-b', 'conf-a')).toBeNull()
+    expect(await rpc.cfpChannel('org-a', 'conf-a-draft')).toBeNull()
+  })
+})
+
 describe('Editions entrypoint (provisioned editions)', () => {
   const EDITIONS = '{ conferenceEditions { id title startDate } }'
   const rows = () =>

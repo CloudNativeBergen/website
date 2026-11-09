@@ -41,6 +41,10 @@
       "ignoreDependencies": ["cloudflare"]
     },
     "services/conference": { "ignoreDependencies": ["cloudflare"] },
+    "services/notifications": {
+      "ignoreDependencies": ["cloudflare", "drizzle-orm"]
+    },
+    "services/cfp": { "ignoreDependencies": ["cloudflare"] },
     "services/ticketing": {
       "ignoreDependencies": ["cloudflare", "drizzle-orm"]
     }

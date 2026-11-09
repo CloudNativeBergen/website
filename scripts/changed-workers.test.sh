@@ -7,10 +7,12 @@ check() { # name, expected (space-separated), changed files (newline-separated)
   [ "$got" = "$2" ] || { echo "FAIL $1: got '$got', want '$2'"; exit 1; }
   echo "ok $1: ${2:-<nothing>}"
 }
-ALL='identity tenant-directory content conference program sponsors cfp ticketing api'
+ALL='identity tenant-directory content conference program sponsors notifications cfp ticketing api'
 check one-service 'program api' $'services/program/src/index.ts\ndocs/a.md'
 check two-services 'identity cfp api' $'services/cfp/x.ts\nservices/identity/migrations/0002.sql'
 check gateway-only 'api' 'api/src/gateway.ts'
+# cfp binds notifications: the binding target deploys first.
+check binding-order 'notifications cfp api' $'services/cfp/a.ts\nservices/notifications/b.ts'
 check packages "$ALL" $'packages/tenancy/src/x.ts\nservices/program/a.ts'
 check lockfile "$ALL" 'pnpm-lock.yaml'
 check workflow "$ALL" '.github/workflows/deploy-workers.yml'
