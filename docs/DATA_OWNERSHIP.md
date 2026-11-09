@@ -208,6 +208,16 @@ directory under `tmp/` and deletes them on exit, since both hold tokens.
    cutover candidates section is informational until phase 6.
 4. Check later without writing: `mise run domains:import -- production --verify`.
 
+Phase 5 (dual write): every Sanity write of a `domainVerification` record
+(`ensureDomainVerification`, `revokeDomainVerification` and
+`patchDomainVerification` in `src/lib/domain-verification/sanity.ts`, reached
+by the domain router, `sync.ts` and the daily check) is followed by the
+tenant-directory `mirrorDomainVerification` mutation on the site server lane,
+with the same column rules as the import. It is best-effort: a D1 failure is
+logged and never fails the Sanity write. Sanity stays authoritative until
+phase 6; `--verify` catches drift. Without `KONF_SITE_SIGNING_KEY` or a
+gateway URL (previews) nothing is sent.
+
 ### Hard parts
 
 - **References.** `organizers` and `teams[].members` point at `speaker`

@@ -11,8 +11,15 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
 import { normalizeDomain } from '@/lib/conference/domains'
 import { mergeConference } from '@/lib/conference/merge'
-import { domainVerificationId, generateVerificationToken } from './challenge'
+import {
+  domainVerificationId,
+  generateVerificationToken,
+  isDevOnlyHost,
+  isWildcardEntry,
+} from './challenge'
 import { isPlatformZoneHost } from './platform'
+import { findOutboundOrigin } from '@/lib/conference/baseUrl'
+import { konfApiUrl } from '@/lib/konf-api/client'
 import { GRANDFATHER_GRACE_DAYS } from './policy'
 import type {
   ClaimingConference,
@@ -244,6 +251,7 @@ export async function ensureDomainVerification(
       ...grandfatherFields,
       ...platformFields,
     })
+    await mirrorToD1(_id)
     return
   }
 
@@ -267,6 +275,7 @@ export async function ensureDomainVerification(
         })
         .unset(['graceUntil', 'firstFailureAt', 'lastError'])
         .commit()
+      await mirrorToD1(_id)
     }
     return
   }
@@ -302,6 +311,7 @@ export async function ensureDomainVerification(
             ],
     )
     .commit()
+  await mirrorToD1(_id)
 }
 
 /**
@@ -324,6 +334,7 @@ export async function revokeDomainVerification(
   )
   if (!existing || existing.conferenceId !== conferenceId) return
   await clientWrite.patch(_id).set({ status: 'revoked' }).commit()
+  await mirrorToD1(_id)
 }
 
 /**
@@ -346,6 +357,7 @@ export async function patchDomainVerification(
   if (Object.keys(set).length > 0) tx = tx.set(set)
   if (unset.length > 0) tx = tx.unset(unset)
   await tx.commit()
+  await mirrorToD1(id)
 }
 
 /**
@@ -369,5 +381,49 @@ export async function getDomainClaim(id: string): Promise<DomainClaim | null> {
     record: hydrate(record),
     // The vendor from D1 when flagged (#2080).
     conference: conference ? await mergeConference(conference) : null,
+  }
+}
+
+/**
+ * #2207 phase 5, dual write: after a Sanity write, copy the record as it now
+ * stands onto tenant-directory D1 (`mirrorDomainVerification`). Sanity stays
+ * authoritative until phase 6, so this is BEST-EFFORT like the notification
+ * hub: it never throws, and a failure is only logged. Drift is caught by
+ * `mise run domains:import -- production --verify`.
+ *
+ * The gateway names the org from the host, so the call goes out on one of the
+ * conference's own hosts, the platform host first (D1 mints it verified).
+ */
+async function mirrorToD1(id: string): Promise<void> {
+  try {
+    // No gateway (preview), or no site key: the call could only be refused.
+    if (!konfApiUrl() || !process.env.KONF_SITE_SIGNING_KEY) return
+    const raw = await clientReadUncached.fetch<
+      (RawRecord & { domains?: string[] | null }) | null
+    >(
+      // groq-global: one record by deterministic id (hostnames are a global namespace), with the domains of the conference it points at.
+      `*[_type == "domainVerification" && _id == $id][0] {${FIELDS}, "domains": conference->domains}`,
+      { id },
+    )
+    if (!raw?.conferenceId) return
+    const { domains, ...rest } = raw
+    const record = hydrate(rest)
+    if (isWildcardEntry(record.hostname) || isDevOnlyHost(record.hostname))
+      return
+    const platformHost = (domains ?? []).find(
+      (d) => !isWildcardEntry(d) && isPlatformZoneHost(normalizeDomain(d)),
+    )
+    const origin = findOutboundOrigin({
+      domains: platformHost ? [platformHost] : domains,
+    })
+    if (!origin) throw new Error('the conference has no host to call from')
+    const { mirrorDomainVerificationViaApi } =
+      await import('@/lib/konf-api/conference-write')
+    await mirrorDomainVerificationViaApi(new URL(origin).host, {
+      ...record,
+      conferenceId: raw.conferenceId,
+    })
+  } catch (error) {
+    console.error(`[domain-verification] D1 mirror failed for ${id}:`, error)
   }
 }

@@ -289,6 +289,25 @@ const Billing = builder.objectRef<OrgRow>('Billing').implement({
 const DomainStatus = builder.enumType('DomainStatus', {
   values: ['pending', 'verified', 'failing', 'revoked'] as const,
 })
+const DomainMirror = builder.inputType('DomainVerificationMirror', {
+  fields: (t) => ({
+    hostname: t.string({ required: true }),
+    conferenceId: t.id({ required: true }),
+    method: t.string({
+      required: true,
+      description: 'dns-txt, grandfathered or platform-owned',
+    }),
+    status: t.field({ type: DomainStatus, required: true }),
+    token: t.string(),
+    verifiedAt: t.string({ description: 'ISO 8601' }),
+    lastSuccessAt: t.string({ description: 'ISO 8601' }),
+    firstFailureAt: t.string({ description: 'ISO 8601' }),
+    graceUntil: t.string({ description: 'ISO 8601' }),
+    consecutiveFailures: t.int({ required: true }),
+    consecutiveSoftFailures: t.int({ required: true }),
+    lastError: t.string(),
+  }),
+})
 const LEGACY_STATUS = {
   pending: 'pending',
   verified: 'verified',
@@ -925,6 +944,24 @@ builder.mutationType({
       resolve: (_, { hostname }, ctx) => {
         const e = requireDomainAdmin(ctx)
         return ctx.data.removeDomain(e.orgId, hostname)
+      },
+    }),
+    mirrorDomainVerification: t.boolean({
+      nullable: false,
+      description:
+        "Copies the site's Sanity verification record for one hostname onto D1 (#2207 phase 5, until the phase 6 reader switch). Never changes routing; a row claimed in D1 or held by another conference is left alone (false). NOT_FOUND for a conference outside the org. Site server lane only.",
+      args: { input: t.arg({ type: DomainMirror, required: true }) },
+      resolve: (_, { input }, ctx) => {
+        const e = ctx.envelope
+        // Before any read: no existence oracle for the lanes refused here.
+        if (e?.typ !== 'tenant' || !can(principalOf(e), 'domain.mirror'))
+          throw createGraphQLError('mirroring domains is for the site lane', {
+            extensions: { code: 'FORBIDDEN' },
+          })
+        return ctx.data.mirrorDomain(e.orgId, {
+          ...input,
+          conferenceId: String(input.conferenceId),
+        })
       },
     }),
     provisionConference: t.field({

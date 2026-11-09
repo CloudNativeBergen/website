@@ -18,6 +18,7 @@ import {
   LIFECYCLE_STATUS_VALUES,
   type LifecycleStatus,
 } from '@/lib/homepage/lifecycle'
+import type { DomainVerificationRecord } from '@/lib/domain-verification/types'
 
 const TIMEOUT_MS = 5000
 
@@ -454,6 +455,43 @@ export async function recordReminderViaApi(
     host,
     RECORD_REMINDER,
     { at: sentAt, n: count },
+    null,
+  )
+}
+
+const MIRROR_DOMAIN =
+  `mutation($i: DomainVerificationMirror!) { mirrorDomainVerification(input: $i) }` as const
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typing only
+const MIRROR_DOMAIN_DOC = graphql(MIRROR_DOMAIN)
+
+/**
+ * #2207 phase 5: copies one Sanity `domainVerification` record onto the D1
+ * `domains` row, on the site's server lane. `host` must route to the
+ * record's org. Throws on failure; the caller decides it is best-effort.
+ */
+export async function mirrorDomainVerificationViaApi(
+  host: string,
+  record: DomainVerificationRecord & { conferenceId: string },
+): Promise<void> {
+  await mutate<ResultOf<typeof MIRROR_DOMAIN_DOC>>(
+    host,
+    MIRROR_DOMAIN,
+    {
+      i: {
+        hostname: record.hostname,
+        conferenceId: record.conferenceId,
+        method: record.method,
+        status: record.status,
+        token: record.token || null,
+        verifiedAt: record.verifiedAt,
+        lastSuccessAt: record.lastSuccessAt,
+        firstFailureAt: record.firstFailureAt,
+        graceUntil: record.graceUntil,
+        consecutiveFailures: record.consecutiveFailures,
+        consecutiveSoftFailures: record.consecutiveSoftFailures,
+        lastError: record.lastError,
+      },
+    },
     null,
   )
 }

@@ -10,7 +10,7 @@ export type OrgRole = (typeof ORG_ROLES)[number]
 
 /** Minted by the gateway only on its operator lane (#1921). */
 export const OPERATOR_SCOPE = 'platform:operator'
-/** The site's server lane: a lane marker with two machine capabilities. */
+/** The site's server lane: a lane marker with three machine capabilities. */
 export const SITE_SCOPE = 'site:server'
 
 const known = new Set<string>(ORG_ROLES)

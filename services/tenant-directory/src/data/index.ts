@@ -146,6 +146,22 @@ function customHostname(input: string) {
   return hostname
 }
 
+/** One Sanity `domainVerification` record, as the site mirrors it (#2207 phase 5). */
+export type DomainMirrorInput = {
+  hostname: string
+  conferenceId: string
+  method: string
+  status: 'pending' | 'verified' | 'failing' | 'revoked'
+  token?: string | null
+  verifiedAt?: string | null
+  lastSuccessAt?: string | null
+  firstFailureAt?: string | null
+  graceUntil?: string | null
+  consecutiveFailures: number
+  consecutiveSoftFailures: number
+  lastError?: string | null
+}
+
 const fail = (code: string, message: string) =>
   createGraphQLError(message, { extensions: { code } })
 
@@ -1746,6 +1762,82 @@ export function createData(
       if (gone.cfCustomHostnameId)
         await hostnames.delete(gone.cfCustomHostnameId)
       return gone
+    },
+
+    /**
+     * #2207 phase 5: copies one Sanity `domainVerification` record onto D1,
+     * with the import's column rules (scripts/import-domain-verification.ts):
+     * a row claimed in D1, or held by another conference, is left alone; the
+     * legacy `verification` column (routing until phase 6) is never raised;
+     * a platform host D1 has not minted is skipped. False when nothing was
+     * written. Callers have passed `can(p, 'domain.mirror')`.
+     */
+    async mirrorDomain(orgId: string, input: DomainMirrorInput) {
+      const ms = (v: string | null | undefined) => {
+        if (v == null) return null
+        const n = Date.parse(v)
+        if (!Number.isFinite(n)) throw fail('BAD_USER_INPUT', 'bad timestamp')
+        return n
+      }
+      if (
+        !['dns-txt', 'grandfathered', 'platform-owned'].includes(input.method)
+      )
+        throw fail('BAD_USER_INPUT', 'unknown method')
+      const platform = input.method === 'platform-owned'
+      const hostname = platform
+        ? (normalizeHost(input.hostname) ?? '')
+        : customHostname(input.hostname)
+      if (!hostname) throw fail('BAD_USER_INPUT', 'not a hostname')
+      if (!(await api.conferenceOf(orgId, input.conferenceId)))
+        throw fail('NOT_FOUND', 'conference not found')
+      const state = {
+        method: platform ? ('platform' as const) : ('dns-txt' as const),
+        token: input.token || null,
+        status: input.status,
+        verifiedAt: ms(input.verifiedAt),
+        lastSuccessAt: ms(input.lastSuccessAt),
+        firstFailureAt: ms(input.firstFailureAt),
+        graceUntil: ms(input.graceUntil),
+        consecutiveFailures: input.consecutiveFailures,
+        consecutiveSoftFailures: input.consecutiveSoftFailures,
+        lastError: input.lastError ?? null,
+      }
+      const same = and(
+        eq(domains.orgId, orgId),
+        eq(domains.conferenceId, input.conferenceId),
+        isNull(domains.claimedAt),
+      )
+      if (platform) {
+        const rows = await db
+          .update(domains)
+          .set(state)
+          .where(
+            and(
+              eq(domains.hostname, hostname),
+              same,
+              sql`${domains.kind} != 'custom'`,
+            ),
+          )
+          .returning({ hostname: domains.hostname })
+        return rows.length > 0
+      }
+      const rows = await db
+        .insert(domains)
+        .values({
+          hostname,
+          orgId,
+          conferenceId: input.conferenceId,
+          kind: 'custom',
+          verification: 'pending',
+          ...state,
+        })
+        .onConflictDoUpdate({
+          target: domains.hostname,
+          set: state,
+          setWhere: and(same, eq(domains.kind, 'custom')),
+        })
+        .returning({ hostname: domains.hostname })
+      return rows.length > 0
     },
 
     /** Deletes the Cloudflare custom hostname, then the routing claim. */
