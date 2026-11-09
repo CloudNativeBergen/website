@@ -22,6 +22,8 @@ import {
   generateVerificationToken,
   isDevOnlyHost,
 } from '@runkonf/tenancy/challenge'
+import { applyCheckOutcome } from '@runkonf/tenancy/verification'
+import { checkDomainChallengeDoh } from './doh'
 import { rawDb } from './db'
 import {
   cloudflareHostnames,
@@ -507,6 +509,72 @@ export function createData(
       byOrg.set(orgId, p)
     }
     return p
+  }
+
+  /**
+   * #2207 phase 2: checks a DNS-TXT claim's token and writes the outcome.
+   * Compare-and-swap on the token: if the claim was taken over (new token)
+   * while we looked, nothing is written, so a takeover never inherits the
+   * previous claim's proof.
+   */
+  async function verifyClaim(row: DomainRow, now: number): Promise<DomainRow> {
+    const { token } = row
+    if (row.kind !== 'custom' || row.method !== 'dns-txt' || !token) return row
+    if (row.status === 'revoked') return row
+    const outcome = await checkDomainChallengeDoh(row.hostname, token)
+    const iso = (v: number | null) =>
+      v == null ? null : new Date(v).toISOString()
+    const ms = (v: string | null | undefined) =>
+      v == null ? null : Date.parse(v)
+    const status = row.status ?? 'pending'
+    const patch = applyCheckOutcome(
+      {
+        _id: row.hostname,
+        hostname: row.hostname,
+        conferenceId: row.conferenceId,
+        token,
+        status,
+        method: 'dns-txt',
+        graceUntil: iso(row.graceUntil),
+        verifiedAt: iso(row.verifiedAt),
+        lastSuccessAt: iso(row.lastSuccessAt),
+        lastCheckedAt: null,
+        firstFailureAt: iso(row.firstFailureAt),
+        consecutiveFailures: row.consecutiveFailures,
+        consecutiveSoftFailures: row.consecutiveSoftFailures,
+        lastError: row.lastError,
+      },
+      outcome,
+      new Date(now),
+    )
+    const set: Partial<typeof domains.$inferInsert> = {
+      lastErrorCode: outcome.kind === 'verified' ? null : outcome.kind,
+    }
+    // A never-proven claim stays pending, so the 72 h takeover still applies.
+    if (patch.status && !(status === 'pending' && patch.status === 'failing'))
+      set.status = patch.status
+    if ('verifiedAt' in patch) set.verifiedAt = ms(patch.verifiedAt)
+    if ('lastSuccessAt' in patch) set.lastSuccessAt = ms(patch.lastSuccessAt)
+    if ('firstFailureAt' in patch) set.firstFailureAt = ms(patch.firstFailureAt)
+    if ('graceUntil' in patch) set.graceUntil = ms(patch.graceUntil)
+    if ('consecutiveFailures' in patch)
+      set.consecutiveFailures = patch.consecutiveFailures
+    if ('consecutiveSoftFailures' in patch)
+      set.consecutiveSoftFailures = patch.consecutiveSoftFailures
+    if ('lastError' in patch) set.lastError = patch.lastError
+    const mine = and(
+      eq(domains.hostname, row.hostname),
+      eq(domains.orgId, row.orgId),
+    )
+    const [updated] = await db
+      .update(domains)
+      .set(set)
+      .where(and(mine, eq(domains.token, token)))
+      .returning()
+    if (updated) return updated
+    const current = await db.query.domains.findFirst({ where: mine })
+    if (!current) throw fail('NOT_FOUND', 'no such hostname')
+    return current
   }
 
   const api = {
@@ -1608,7 +1676,7 @@ export function createData(
 
     /**
      * #2207: at most one recheck per hostname per RECHECK_LIMIT_MS, taken
-     * atomically in SQL. Phase 1 has no DNS check: it returns the row as is.
+     * atomically in SQL, then the DNS TXT check (DoH) and its write-back.
      */
     async recheckDomain(orgId: string, input: string, now = Date.now()) {
       const hostname = normalizeHost(input) ?? ''
@@ -1626,7 +1694,7 @@ export function createData(
           ),
         )
         .returning()
-      if (row) return row
+      if (row) return verifyClaim(row, now)
       if (await db.query.domains.findFirst({ where: mine }))
         throw fail('RATE_LIMITED', 'checked less than a minute ago')
       throw fail('NOT_FOUND', 'no such hostname')
