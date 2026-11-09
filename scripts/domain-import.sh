@@ -34,7 +34,9 @@ if [ "$apply" != --apply ]; then
   exit 0
 fi
 imp --write --out "$work"
-grep -c "^INSERT\|^UPDATE" "$work/domain-verification.sql" | sed "s/^/statements: /"
+n=$(grep -c "^INSERT\|^UPDATE" "$work/domain-verification.sql" || true)
+if [ "$n" = 0 ]; then echo "nothing to apply"; exit 0; fi
+echo "statements: $n"
 read -r -p "Apply this plan to $env D1 ($ds dataset)? Type $env: " ok
 [ "$ok" = "$env" ] || { echo aborted; exit 1; }
 w d1 execute DB --env "$env" --remote --yes --file "$root/$work/domain-verification.sql"
