@@ -3131,7 +3131,11 @@ describe('domains API (#2207)', () => {
 
   it('claims a pending hostname with a TXT challenge, and routing does not change', async () => {
     const { admin, conf } = await setup()
-    const { body } = await gql(CLAIM, { c: conf, h: 'Conf.Example.com' }, admin)
+    const { body } = await gql(
+      CLAIM,
+      { c: conf, h: 'Conf.Example.com..' },
+      admin,
+    )
     const d = body.data.claimDomain
     expect(d).toMatchObject({
       hostname: 'conf.example.com',
