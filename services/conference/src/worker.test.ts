@@ -1556,6 +1556,17 @@ describe('updateConference plan gate on binding an event (#2141)', () => {
     expect(bound()).toEqual({ checkin_event_id: 35, tito_event_slug: null })
     sqlite.exec('UPDATE conferences SET checkin_event_id = NULL')
     expect(
+      (await gql(site(), MUTATION, { input: { ticketingProvider: 'konf' } }))
+        .body.errors,
+    ).toBeUndefined()
+    expect(
+      sqlite
+        .prepare(
+          'SELECT ticketing_provider FROM conferences WHERE conference_id = ?',
+        )
+        .get('conf-a'),
+    ).toEqual({ ticketing_provider: 'konf' })
+    expect(
       (
         await gql(site(), MUTATION, {
           input: { ticketingProvider: 'checkin', checkinCustomerId: 1 },

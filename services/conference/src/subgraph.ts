@@ -496,7 +496,8 @@ function validate(input: Record<string, unknown>): ConferencePatch {
     volunteerRegistrationLink: isHttps,
     speakerSlackInviteUrl: isHttps,
     volunteerSlackInviteUrl: isHttps,
-    ticketingProvider: (v) => v === 'checkin' || v === 'tito',
+    // 'konf' = native Konf ticketing (#2238): no vendor event to bind.
+    ticketingProvider: (v) => v === 'checkin' || v === 'tito' || v === 'konf',
     titoAccountSlug: isSlug,
     titoEventSlug: isSlug,
     ticketSalesStartDate: isDate,
