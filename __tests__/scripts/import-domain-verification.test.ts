@@ -168,6 +168,18 @@ describe('import-domain-verification --verify', () => {
     expect(parity(docs, [], imported(), NOW).diffs).toEqual([])
   })
 
+  it('ignores a platform row with no Sanity doc', () => {
+    const rows = [
+      ...imported().domains.values(),
+      d1Row('kk.konf.run', {
+        kind: 'platform-edition',
+        method: 'platform',
+        status: 'verified',
+      }),
+    ]
+    expect(parity(docs, [], dump(rows), NOW).diffs).toEqual([])
+  })
+
   it('detects a verdict mismatch', () => {
     const d1 = imported()
     d1.domains.get(MUST_VERIFY)!.status = 'revoked'

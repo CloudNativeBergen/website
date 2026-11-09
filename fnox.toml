@@ -33,7 +33,6 @@ KONTROLL_PRODUCTION_VAPID_PUBLIC_KEY= { provider = "keychain", value = "KONTROLL
 KONTROLL_PRODUCTION_VAPID_PRIVATE_KEY= { provider = "keychain", value = "KONTROLL_PRODUCTION_VAPID_PRIVATE_KEY" }
 # Worker secrets (scripts/secrets-sync.ts, docs/SECRETS.md). if_missing = "warn":
 # a key not yet in the keychain must not break `fnox exec` for the site.
-KONF_PREVIEW_GATEWAY_PRIVATE_KEY= { provider = "keychain", value = "KONF_PREVIEW_GATEWAY_PRIVATE_KEY", if_missing = "warn" }
 KONF_PREVIEW_GATEWAY_PUBLIC_KEY= { provider = "keychain", value = "KONF_PREVIEW_GATEWAY_PUBLIC_KEY", if_missing = "warn" }
 KONF_PREVIEW_SITE_SIGNING_KEY= { provider = "keychain", value = "KONF_PREVIEW_SITE_SIGNING_KEY", if_missing = "warn" }
 KONF_PREVIEW_SITE_PUBLIC_KEYS= { provider = "keychain", value = "KONF_PREVIEW_SITE_PUBLIC_KEYS", if_missing = "warn" }
@@ -46,7 +45,6 @@ KONF_PREVIEW_CF_API_TOKEN= { provider = "keychain", value = "KONF_PREVIEW_CF_API
 KONF_PREVIEW_CF_ZONE_ID= { provider = "keychain", value = "KONF_PREVIEW_CF_ZONE_ID", if_missing = "warn" }
 KONF_PREVIEW_PROVISIONING_SIGNING_KEY= { provider = "keychain", value = "KONF_PREVIEW_PROVISIONING_SIGNING_KEY", if_missing = "warn" }
 KONF_PREVIEW_INVITE_TOKEN_SECRET= { provider = "keychain", value = "KONF_PREVIEW_INVITE_TOKEN_SECRET", if_missing = "warn" }
-KONF_PRODUCTION_GATEWAY_PRIVATE_KEY= { provider = "keychain", value = "KONF_PRODUCTION_GATEWAY_PRIVATE_KEY", if_missing = "warn" }
 KONF_PRODUCTION_GATEWAY_PUBLIC_KEY= { provider = "keychain", value = "KONF_PRODUCTION_GATEWAY_PUBLIC_KEY", if_missing = "warn" }
 KONF_PRODUCTION_SITE_SIGNING_KEY= { provider = "keychain", value = "KONF_PRODUCTION_SITE_SIGNING_KEY", if_missing = "warn" }
 KONF_PRODUCTION_SITE_PUBLIC_KEYS= { provider = "keychain", value = "KONF_PRODUCTION_SITE_PUBLIC_KEYS", if_missing = "warn" }
@@ -59,11 +57,6 @@ KONF_PRODUCTION_CF_API_TOKEN= { provider = "keychain", value = "KONF_PRODUCTION_
 KONF_PRODUCTION_CF_ZONE_ID= { provider = "keychain", value = "KONF_PRODUCTION_CF_ZONE_ID", if_missing = "warn" }
 KONF_PRODUCTION_PROVISIONING_SIGNING_KEY= { provider = "keychain", value = "KONF_PRODUCTION_PROVISIONING_SIGNING_KEY", if_missing = "warn" }
 KONF_PRODUCTION_INVITE_TOKEN_SECRET= { provider = "keychain", value = "KONF_PRODUCTION_INVITE_TOKEN_SECRET", if_missing = "warn" }
-SANITY_API_TOKEN_READ_PROD= { provider = "keychain", value = "SANITY_API_TOKEN_READ_PROD", if_missing = "warn" }
-ID_KONF_APP_GH_CLIENT_ID= { provider = "keychain", value = "ID_KONF_APP_GH_CLIENT_ID", if_missing = "warn" }
-ID_KONF_APP_GH_CLIENT_SECRET= { provider = "keychain", value = "ID_KONF_APP_GH_CLIENT_SECRET", if_missing = "warn" }
-ID_KONF_APP_LI_CLIENT_ID= { provider = "keychain", value = "ID_KONF_APP_LI_CLIENT_ID", if_missing = "warn" }
-ID_KONF_APP_LI_CLIENT_SECRET= { provider = "keychain", value = "ID_KONF_APP_LI_CLIENT_SECRET", if_missing = "warn" }
 KONF_PREVIEW_IDENTITY_ISSUER= { provider = "keychain", value = "KONF_PREVIEW_IDENTITY_ISSUER", if_missing = "warn" }
 KONF_PREVIEW_VAPID_PUBLIC_KEY= { provider = "keychain", value = "KONF_PREVIEW_VAPID_PUBLIC_KEY", if_missing = "warn" }
 KONF_PREVIEW_VAPID_PRIVATE_KEY= { provider = "keychain", value = "KONF_PREVIEW_VAPID_PRIVATE_KEY", if_missing = "warn" }
@@ -74,8 +67,6 @@ KONF_PRODUCTION_VAPID_PUBLIC_KEY= { provider = "keychain", value = "KONF_PRODUCT
 KONF_PRODUCTION_VAPID_PRIVATE_KEY= { provider = "keychain", value = "KONF_PRODUCTION_VAPID_PRIVATE_KEY", if_missing = "warn" }
 KONF_PRODUCTION_SLACK_MEMBER_DRIFT_WEBHOOK_URL= { provider = "keychain", value = "KONF_PRODUCTION_SLACK_MEMBER_DRIFT_WEBHOOK_URL", if_missing = "warn" }
 KONF_PRODUCTION_RESEND_API_KEY= { provider = "keychain", value = "KONF_PRODUCTION_RESEND_API_KEY", if_missing = "warn" }
-KONF_PREVIEW_SANITY_API_TOKEN_WRITE= { provider = "keychain", value = "KONF_PREVIEW_SANITY_API_TOKEN_WRITE", if_missing = "warn" }
-KONF_PRODUCTION_SANITY_API_TOKEN_WRITE= { provider = "keychain", value = "KONF_PRODUCTION_SANITY_API_TOKEN_WRITE", if_missing = "warn" }
 # konf-notifications (epic #2215): all optional on the Worker.
 KONF_PREVIEW_SLACK_BOT_TOKEN= { provider = "keychain", value = "KONF_PREVIEW_SLACK_BOT_TOKEN", if_missing = "warn" }
 KONF_PREVIEW_TENANT_SECRETS_JSON= { provider = "keychain", value = "KONF_PREVIEW_TENANT_SECRETS_JSON", if_missing = "warn" }
@@ -83,3 +74,9 @@ KONF_PREVIEW_PLATFORM_ORG_ID= { provider = "keychain", value = "KONF_PREVIEW_PLA
 KONF_PRODUCTION_SLACK_BOT_TOKEN= { provider = "keychain", value = "KONF_PRODUCTION_SLACK_BOT_TOKEN", if_missing = "warn" }
 KONF_PRODUCTION_TENANT_SECRETS_JSON= { provider = "keychain", value = "KONF_PRODUCTION_TENANT_SECRETS_JSON", if_missing = "warn" }
 KONF_PRODUCTION_PLATFORM_ORG_ID= { provider = "keychain", value = "KONF_PRODUCTION_PLATFORM_ORG_ID", if_missing = "warn" }
+GITHUB_CLIENT_ID= { provider = "keychain", value = "GITHUB_CLIENT_ID", if_missing = "warn" }
+GITHUB_CLIENT_SECRET= { provider = "keychain", value = "GITHUB_CLIENT_SECRET", if_missing = "warn" }
+LINKEDIN_CLIENT_ID= { provider = "keychain", value = "LINKEDIN_CLIENT_ID", if_missing = "warn" }
+LINKEDIN_CLIENT_SECRET= { provider = "keychain", value = "LINKEDIN_CLIENT_SECRET", if_missing = "warn" }
+KONF_PREVIEW_ENVELOPE_PRIVATE_KEY= { provider = "keychain", value = "KONF_PREVIEW_ENVELOPE_PRIVATE_KEY", if_missing = "warn" }
+KONF_PRODUCTION_ENVELOPE_PRIVATE_KEY= { provider = "keychain", value = "KONF_PRODUCTION_ENVELOPE_PRIVATE_KEY", if_missing = "warn" }

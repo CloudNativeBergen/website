@@ -45,9 +45,7 @@ function scriptFnoxNames(): string[] {
     const src = readFileSync(join(root, 'scripts', f), 'utf8')
     for (const [, rest] of src.matchAll(/KONF_\$\{upper\}_([A-Z0-9_]+)/g))
       names.push(`KONF_PREVIEW_${rest}`, `KONF_PRODUCTION_${rest}`)
-    for (const [n] of src.matchAll(
-      /\b(?:KONF|ID_KONF_APP)_[A-Z][A-Z0-9_]*[A-Z0-9]\b/g,
-    ))
+    for (const [n] of src.matchAll(/\bKONF_[A-Z][A-Z0-9_]*[A-Z0-9]\b/g))
       names.push(n)
   }
   return [...new Set(names)]
@@ -81,19 +79,19 @@ describe('secrets', () => {
 
   it('every fnox name the scripts reference exists in fnox.toml', () => {
     const names = scriptFnoxNames()
-    expect(names).toContain('KONF_PRODUCTION_GATEWAY_PRIVATE_KEY')
+    expect(names).toContain('KONF_PRODUCTION_ENVELOPE_PRIVATE_KEY')
     expect(names.filter((n) => !fnoxKeys.has(n))).toEqual([])
   })
 
-  it('maps names by convention and by the exception table', () => {
+  it('maps names by one convention: shared bare, else KONF_<ENV>_<NAME>', () => {
     expect(fnoxName('CLIENT_IP_SECRET', 'preview')).toBe(
       'KONF_PREVIEW_CLIENT_IP_SECRET',
     )
     expect(fnoxName('ENVELOPE_PRIVATE_KEY', 'production')).toBe(
-      'KONF_PRODUCTION_GATEWAY_PRIVATE_KEY',
+      'KONF_PRODUCTION_ENVELOPE_PRIVATE_KEY',
     )
     expect(fnoxName('SANITY_API_TOKEN_READ', 'preview')).toBe(
-      'SANITY_API_TOKEN_READ_PROD',
+      'SANITY_API_TOKEN_READ',
     )
   })
 
@@ -245,16 +243,15 @@ describe('secrets', () => {
       (n) => fnoxName(n, 'preview') === fnoxName(n, 'production'),
     )
     expect(shared.sort()).toEqual(
-      Object.keys(SHARED_ACROSS_ENVS)
-        .filter((n) => names.has(n))
-        .sort(),
+      [...SHARED_ACROSS_ENVS].filter((n) => names.has(n)).sort(),
     )
-    expect(Object.keys(SHARED_ACROSS_ENVS).sort()).toEqual([
+    expect([...SHARED_ACROSS_ENVS].sort()).toEqual([
       'GITHUB_CLIENT_ID',
       'GITHUB_CLIENT_SECRET',
       'LINKEDIN_CLIENT_ID',
       'LINKEDIN_CLIENT_SECRET',
       'SANITY_API_TOKEN_READ',
+      'SANITY_API_TOKEN_WRITE',
     ])
   })
 

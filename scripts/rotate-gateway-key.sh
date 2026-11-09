@@ -27,7 +27,7 @@ fi
 export CLOUDFLARE_ACCOUNT_ID="$RUNKONF_ACCOUNT_ID"
 
 upper="$(printf '%s' "$env_name" | tr '[:lower:]' '[:upper:]')"
-priv_name="KONF_${upper}_GATEWAY_PRIVATE_KEY"
+priv_name="KONF_${upper}_ENVELOPE_PRIVATE_KEY"
 pub_name="KONF_${upper}_GATEWAY_PUBLIC_KEY"
 
 if [ "$env_name" = production ]; then

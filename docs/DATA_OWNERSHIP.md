@@ -194,21 +194,19 @@ new rows get the legacy `verification` column as `pending`, because
 with Sanity are printed as "routing cutover candidates (phase 6)" and are not
 applied.
 
-1. Dump D1: `wrangler d1 execute konf-tenant-directory --remote --json --command "SELECT id, org_id FROM conferences; SELECT * FROM domains" > ../../tmp/d1.json`
-   (run from `services/tenant-directory`; the other steps run from the repo root).
-2. Dry run: `fnox exec -- pnpm tsx scripts/import-domain-verification.ts --d1 tmp/d1.json`.
-3. Review the row count, every `skipped` line, the routing cutover candidates
+The Sanity read token comes from fnox (`SANITY_API_TOKEN_READ`).
+The task pins the RunKonf account, keeps the dump and SQL in a temporary
+directory under `tmp/` and deletes them on exit, since both hold tokens.
+
+1. Dry run: `mise run domains:import -- production`.
+2. Review the row count, every `skipped` line, the routing cutover candidates
    and the update columns.
-4. Generate: add `--write` (output goes to `tmp/`; `--out` must stay inside
-   it), then read `tmp/domain-verification.sql`.
-5. Apply, only with owner approval: `wrangler d1 execute konf-tenant-directory --remote --file tmp/domain-verification.sql`.
-6. Verify: dump D1 again as in step 1, then
-   `fnox exec -- pnpm tsx scripts/import-domain-verification.ts --d1 tmp/d1.json --verify`.
-   It exits 1 on any routing or allowlist difference, and if
+3. Apply, only with owner approval: `mise run domains:import -- production --apply`.
+   It dumps again, writes the SQL, applies it, dumps once more and runs
+   `--verify`, which exits 1 on any routing or allowlist difference, and if
    `2026.cloudnativedays.no` is not verified on both sides. The routing
    cutover candidates section is informational until phase 6.
-7. Delete `tmp/d1.json` and `tmp/domain-verification.sql`. Both hold
-   verification tokens.
+4. Check later without writing: `mise run domains:import -- production --verify`.
 
 ### Hard parts
 
