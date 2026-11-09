@@ -1471,3 +1471,58 @@ describe('updateConference plan gate on binding an event (#2141)', () => {
     ).toBeUndefined()
   })
 })
+
+describe('updateConference plan gate on going public (#2200)', () => {
+  const MUTATION = `mutation($input: ConferencePatch!) { updateConference(input: $input) { id } }`
+  const admin = (plan?: 'free' | 'basic'): Envelope => ({
+    ...(tenant('org-a', 'conf-a', 'admin') as Extract<
+      Envelope,
+      { typ: 'tenant' }
+    >),
+    ...(plan && { plan }),
+  })
+  const state = () =>
+    sqlite
+      .prepare(
+        'SELECT visibility, published FROM conferences WHERE conference_id = ?',
+      )
+      .get('conf-a')
+  const lapsed = () =>
+    sqlite.exec(
+      "UPDATE conferences SET checkin_event_id = 34, visibility = 'unlisted', published = 0 WHERE conference_id = 'conf-a'",
+    )
+
+  it.each([
+    ['visibility: live', { visibility: 'live' }],
+    ['published: true', { published: true }],
+  ])(
+    'refuses %s for a ticketed edition on free, writing nothing',
+    async (_, input) => {
+      lapsed()
+      for (const plan of [undefined, 'free'] as const) {
+        const { body } = await gql(admin(plan), MUTATION, { input })
+        expect(body.errors?.[0].extensions).toMatchObject({
+          reason: 'PLAN_REQUIRED',
+          requiredPlan: 'basic',
+        })
+      }
+      expect(state()).toEqual({ visibility: 'unlisted', published: 0 })
+    },
+  )
+
+  it('publishes on basic; an unticketed edition on free is never asked', async () => {
+    lapsed()
+    const input = { visibility: 'live', published: true }
+    expect(
+      (await gql(admin('basic'), MUTATION, { input })).body.errors,
+    ).toBeUndefined()
+    expect(state()).toEqual({ visibility: 'live', published: 1 })
+    sqlite.exec(
+      "UPDATE conferences SET checkin_event_id = NULL, visibility = 'unlisted', published = 0 WHERE conference_id = 'conf-a'",
+    )
+    expect(
+      (await gql(admin(), MUTATION, { input })).body.errors,
+    ).toBeUndefined()
+    expect(state()).toEqual({ visibility: 'live', published: 1 })
+  })
+})
