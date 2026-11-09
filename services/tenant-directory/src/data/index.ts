@@ -117,6 +117,17 @@ const RECHECK_LIMIT_MS = 60 * 1000
  * lives under one of these, so refusing the whole suffix covers them.
  */
 const PLATFORM_SUFFIXES = [PLATFORM_DOMAIN, 'konf.app']
+/**
+ * A host the platform mints (#2207 phase 3): verified by construction, since
+ * it sits under the platform's own zone and certificate. `verification`
+ * still drives routing until the phase 6 reader switch.
+ */
+const PLATFORM_HOST = {
+  verification: 'verified',
+  method: 'platform',
+  status: 'verified',
+} as const
+
 /** A pending claim nobody verified can be taken over after this (#2207). */
 const CLAIM_EXPIRY_MS = 72 * 60 * 60 * 1000
 
@@ -860,7 +871,7 @@ export function createData(
             kind: 'platform-alias',
             orgId,
             conferenceId: conference.id,
-            verification: 'verified',
+            ...PLATFORM_HOST,
           }),
         ])
       } catch (error) {
@@ -1235,8 +1246,7 @@ export function createData(
               kind,
               orgId,
               conferenceId,
-              // Platform hosts sit under the platform's own certificate.
-              verification: 'verified',
+              ...PLATFORM_HOST,
             }),
           ),
           db.insert(provisioningRequests).values({
@@ -1433,7 +1443,7 @@ export function createData(
                   kind: 'platform-edition' as const,
                   orgId,
                   conferenceId,
-                  verification: 'verified' as const,
+                  ...PLATFORM_HOST,
                 }),
               ]
             : []),
@@ -1463,7 +1473,8 @@ export function createData(
       if (!conf) throw fail('NOT_FOUND', 'conference not found')
       await db
         .update(domains)
-        .set({ conferenceId })
+        // Also stamps aliases written before #2207 phase 3.
+        .set({ conferenceId, ...PLATFORM_HOST })
         .where(
           and(
             eq(domains.orgId, conf.orgId),

@@ -451,6 +451,13 @@ async function refused(v: ReturnType<typeof vars>, code = 'BAD_USER_INPUT') {
 const RESOLVE = `query($host: String!) { tenantByHost(host: $host) { orgId conferenceId kind } }`
 
 /** Provisions, then publishes the Conference (provisioning leaves a draft). */
+/** A platform-minted host as #2207 phase 3 writes it: no token to prove. */
+const PLATFORM_ROW = (hostname: string) => ({
+  hostname,
+  method: 'platform',
+  status: 'verified',
+  token: null,
+})
 async function provision(org = 'acme', key = 'k1') {
   const { body } = await gql(PROVISION, vars(org, key), operator)
   const created = body.data.provisionOrganization as { id: string }
@@ -590,6 +597,16 @@ describe('provisioning', () => {
     expect(
       sqlite.prepare('SELECT count(*) AS n FROM organizations').get(),
     ).toEqual({ n: 1 })
+    expect(
+      sqlite
+        .prepare(
+          'SELECT hostname, method, status, token FROM domains ORDER BY hostname',
+        )
+        .all(),
+    ).toEqual([
+      PLATFORM_ROW('acme-2026.konf.run'),
+      PLATFORM_ROW('acme.konf.run'),
+    ])
   })
 
   it('registers the Sanity ids, names and year, verified before writing', async () => {
@@ -606,10 +623,14 @@ describe('provisioning', () => {
       },
     ])
     expect(
-      sqlite.prepare('SELECT hostname FROM domains ORDER BY hostname').all(),
+      sqlite
+        .prepare(
+          'SELECT hostname, method, status, token FROM domains ORDER BY hostname',
+        )
+        .all(),
     ).toEqual([
-      { hostname: 'acme-2026.konf.run' },
-      { hostname: 'acme.konf.run' },
+      PLATFORM_ROW('acme-2026.konf.run'),
+      PLATFORM_ROW('acme.konf.run'),
     ])
     // The raw key is never stored, only sha256(key).
     const { idempotency_key } = sqlite
@@ -805,6 +826,8 @@ describe('provisioning', () => {
 
   it('repoints the latest-edition alias', async () => {
     const org = await provision()
+    // An alias written before #2207 phase 3 carries no method or status.
+    sqlite.prepare('UPDATE domains SET method = NULL, status = NULL').run()
     sqlite
       .prepare(
         "INSERT INTO conferences (id, org_id, slug, name, lifecycle) VALUES ('c2', ?, '2027', 'Conf 2027', 'live')",
@@ -817,6 +840,13 @@ describe('provisioning', () => {
     )
     const { body } = await gql(RESOLVE, { host: 'acme.konf.run' })
     expect(body.data.tenantByHost.conferenceId).toBe('c2')
+    expect(
+      sqlite
+        .prepare(
+          "SELECT hostname, method, status, token FROM domains WHERE hostname = 'acme.konf.run'",
+        )
+        .get(),
+    ).toEqual(PLATFORM_ROW('acme.konf.run'))
   })
 })
 
@@ -1791,7 +1821,7 @@ describe('provisionConference (kontroll#85)', () => {
       expect(
         sqlite
           .prepare(
-            "SELECT hostname, kind, verification FROM domains WHERE conference_id = 'conference-e0'",
+            "SELECT hostname, kind, verification, method, status FROM domains WHERE conference_id = 'conference-e0'",
           )
           .all(),
       ).toEqual([
@@ -1799,6 +1829,8 @@ describe('provisionConference (kontroll#85)', () => {
           hostname: 'acme-2027.konf.run',
           kind: 'platform-edition',
           verification: 'verified',
+          method: 'platform',
+          status: 'verified',
         },
       ])
     },
@@ -2724,7 +2756,7 @@ describe('billing and sign-up contract (#2129)', () => {
       expect(
         sqlite
           .prepare(
-            `SELECT o.plan, o.kind, d.kind AS host, d.verification FROM organizations o JOIN domains d ON d.org_id = o.id`,
+            `SELECT o.plan, o.kind, d.kind AS host, d.verification, d.method, d.status FROM organizations o JOIN domains d ON d.org_id = o.id`,
           )
           .get(),
       ).toEqual({
@@ -2732,6 +2764,8 @@ describe('billing and sign-up contract (#2129)', () => {
         kind: 'customer',
         host: 'platform-alias',
         verification: 'verified',
+        method: 'platform',
+        status: 'verified',
       })
       expect(uses()).toBe(1)
       expect(identity.signupOwner).toHaveBeenCalledWith(
