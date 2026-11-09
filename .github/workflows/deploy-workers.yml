@@ -27,6 +27,8 @@ on:
       - 'packages/**'
       - 'src/lib/**'
       - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'package.json'
       - 'scripts/changed-workers.sh'
       - 'scripts/secrets-sync.ts'
       - '.github/workflows/deploy-workers.yml'
@@ -38,6 +40,8 @@ on:
       - 'packages/**'
       - 'src/lib/**'
       - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'package.json'
       - 'scripts/changed-workers.sh'
       - 'scripts/secrets-sync.ts'
       - '.github/workflows/deploy-workers.yml'
@@ -195,7 +199,9 @@ jobs:
             echo "::notice::No usable base ($EVENT); deploying every Worker."
             workers=$(bash scripts/changed-workers.sh --all)
           fi
-          echo "workers=$(paste -sd " " - <<<"$workers")" >> "$GITHUB_OUTPUT"
+          workers=$(paste -sd " " - <<<"$workers")
+          echo "workers=$workers" >> "$GITHUB_OUTPUT"
+          # One line: ::notice:: shows only the first line of a multi-line value.
           echo "::notice::Deploying: ${workers:-nothing}"
 
       - name: Setup Node.js

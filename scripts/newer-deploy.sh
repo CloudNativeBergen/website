@@ -5,7 +5,7 @@
 # is still the newest such change. `--paths` prints the paths it watches, which
 # must equal the `push.paths` of deploy-workers.yml (scripts/newer-deploy.test.sh).
 set -euo pipefail
-PATHS=('api/**' 'services/**' 'packages/**' 'src/lib/**' 'pnpm-lock.yaml' 'scripts/changed-workers.sh' 'scripts/secrets-sync.ts' '.github/workflows/deploy-workers.yml')
+PATHS=('api/**' 'services/**' 'packages/**' 'src/lib/**' 'pnpm-lock.yaml' 'pnpm-workspace.yaml' 'package.json' 'scripts/changed-workers.sh' 'scripts/secrets-sync.ts' '.github/workflows/deploy-workers.yml')
 if [ "${1:-}" = --paths ]; then
   printf '%s\n' "${PATHS[@]}"
   exit 0

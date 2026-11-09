@@ -15,6 +15,8 @@ check gateway-only 'api' 'api/src/gateway.ts'
 check binding-order 'notifications cfp api' $'services/cfp/a.ts\nservices/notifications/b.ts'
 check packages "$ALL" $'packages/tenancy/src/x.ts\nservices/program/a.ts'
 check lockfile "$ALL" 'pnpm-lock.yaml'
+check workspace "$ALL" 'pnpm-workspace.yaml'
+check root-package "$ALL" 'package.json'
 check workflow "$ALL" '.github/workflows/deploy-workers.yml'
 check service-config "$ALL" 'services/platform-service.cue'
 check docs-only '' $'docs/ROADMAP.md\nsrc/app/page.tsx\nsrc/components/Footer.tsx\nsrc/library.ts\nservices.md\napix/a\n.github/workflows/pr-checks.yml'
@@ -27,14 +29,13 @@ check empty '' ''
 got=$(bash "$dir/changed-workers.sh" --all </dev/null | paste -sd ' ' -)
 [ "$got" = "$ALL" ] || { echo "FAIL --all: got '$got'"; exit 1; }
 echo "ok dispatch --all: $ALL"
-# Every service directory must be in the deploy list.
-for d in "$dir"/../services/*/; do
-  s=$(basename "$d")
-  bash "$dir/changed-workers.sh" --all </dev/null | grep -qx "$s" || { echo "FAIL services/$s missing from SERVICES"; exit 1; }
-done
+# SERVICES must equal the service directories (`ls services/`, minus files).
+want=$(cd "$dir/../services" && ls -d */ | tr -d / | sort)
+got=$(bash "$dir/changed-workers.sh" --all </dev/null | grep -vx api | sort)
+[ "$want" = "$got" ] || { echo "FAIL SERVICES vs services/: want '$want', got '$got'"; exit 1; }
 grep -q 'git diff --name-only --no-renames' "$dir/../.github/workflows/deploy-workers.yml" || { echo 'FAIL workflow diff lacks --no-renames'; exit 1; }
 # The shared-path filters must be in the workflow's paths.
-for f in "src/lib/**" scripts/changed-workers.sh scripts/secrets-sync.ts; do
+for f in "src/lib/**" pnpm-workspace.yaml package.json scripts/changed-workers.sh scripts/secrets-sync.ts; do
   [ "$(grep -cF -- "- '$f'" "$dir/../.github/workflows/deploy-workers.yml")" = 2 ] || { echo "FAIL $f not in both paths filters"; exit 1; }
 done
 echo ok
