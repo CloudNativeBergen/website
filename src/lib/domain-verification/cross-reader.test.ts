@@ -118,6 +118,7 @@ describe('routing and the redirect guard on DOMAIN_VERIFICATION_SOURCE=d1', () =
     expect(await isHostRoutable(HOST, [HOST], new Date(NOW))).toBe(true)
     expect(await isAllowedBounceTarget(cb, env)).toBe(true)
     rows = [{ ...base, status: 'revoked' }]
+    clearMissCache() // a revocation lands after the 60 s hit TTL
     expect(await isHostRoutable(HOST, [HOST], new Date(NOW))).toBe(false)
     expect(await isAllowedBounceTarget(cb, env)).toBe(false)
   })

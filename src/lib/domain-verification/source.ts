@@ -12,8 +12,13 @@
  *
  * Fail closed: a D1 read that cannot be made or fails THROWS, which every
  * caller already treats as a refusal; a missing row is `null`, which every
- * policy refuses. Only misses are cached (briefly, per host): a negative
- * cache can delay a newly proven host, never keep a withdrawn one.
+ * policy refuses. Per-host reads are cached in memory: hits 60 s, misses
+ * 30 s, errors never. So a revocation takes up to 60 s to land. The cache is
+ * what keeps routing under the gateway's limiter: the site lane carries no
+ * user token, so it counts in the anonymous bucket (`anon:<org>:<ip>`, 300 a
+ * minute) keyed on a few Vercel egress IPs, and no site-lane call is exempt
+ * (`rolloutFlags` leans on its cache the same way). The allowlist list read
+ * stays live; it runs only on OAuth callbacks.
  */
 
 import { normalizeDomain } from '@/lib/conference/domains'
@@ -108,26 +113,32 @@ async function readD1(variables: {
   return rows.map(recordOf).filter((r) => r !== null)
 }
 
+const HIT_TTL_MS = 60_000
 const MISS_TTL_MS = 30_000
-const MISS_MAX = 1000
-const misses = new Map<string, number>()
+const CACHE_MAX = 1000
+const cache = new Map<
+  string,
+  { record: DomainVerificationRecord | null; until: number }
+>()
 
-/** Test hook: forget cached misses. */
+/** Test hook: forget cached reads. */
 export function clearMissCache() {
-  misses.clear()
+  cache.clear()
 }
 
 async function d1Record(
   hostname: string,
 ): Promise<DomainVerificationRecord | null> {
   const host = normalizeDomain(hostname)
-  const until = misses.get(host)
-  if (until && until > Date.now()) return null
-  const [record] = await readD1({ h: host })
-  if (record) return record
-  if (misses.size >= MISS_MAX) misses.clear()
-  misses.set(host, Date.now() + MISS_TTL_MS)
-  return null
+  const hit = cache.get(host)
+  if (hit && hit.until > Date.now()) return hit.record
+  const [record = null] = await readD1({ h: host })
+  if (cache.size >= CACHE_MAX) cache.clear()
+  cache.set(host, {
+    record,
+    until: Date.now() + (record ? HIT_TTL_MS : MISS_TTL_MS),
+  })
+  return record
 }
 
 /** One hostname's record, or `null`. */

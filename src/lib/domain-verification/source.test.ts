@@ -120,10 +120,26 @@ describe('the d1 source', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('never caches a hit', async () => {
-    await readDomainVerification('conf.example.com')
-    await readDomainVerification('conf.example.com')
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+  it('caches a hit for 60 s, a miss for 30 s', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      await readDomainVerification('conf.example.com')
+      await readDomainVerification('conf.example.com')
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(59_000)
+      await readDomainVerification('conf.example.com')
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(2_000)
+      await readDomainVerification('conf.example.com')
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      fetchMock.mockImplementation(async () => answer([]))
+      await readDomainVerification('gone.example.com')
+      vi.advanceTimersByTime(31_000)
+      await readDomainVerification('gone.example.com')
+      expect(fetchMock).toHaveBeenCalledTimes(4)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it.each([
