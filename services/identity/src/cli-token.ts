@@ -28,6 +28,17 @@ export async function mintOperatorCliToken(request: Request, env: Env) {
     request.headers.get('authorization')?.trim() ?? '',
   )?.[1]
   if (bearer && bearer.split('.').length >= 3) return refuse()
+  // Defence in depth (#2171): a browser POST must come from identity itself or
+  // an operator origin; a cross-site one never reaches the session read.
+  // Scripts send neither header.
+  const from = request.headers.get('origin')
+  if (
+    from
+      ? from !== new URL(env.BETTER_AUTH_URL).origin &&
+        !isOperatorOrigin(env, from)
+      : request.headers.get('sec-fetch-site') === 'cross-site'
+  )
+    return refuse()
 
   const auth = createAuth(env.DB, env)
   const session = await auth.api.getSession({ headers: request.headers })
@@ -36,6 +47,16 @@ export async function mintOperatorCliToken(request: Request, env: Env) {
   // entry: a tenant-site session has nothing to mint for.
   const origin = (session.session as { origin?: string | null }).origin ?? ''
   if (!isOperatorOrigin(env, origin)) return refuse()
+  // Per user, as /handoff limits per IP (handoff.ts). Shares that binding's
+  // 20/min budget under its own key prefix, so no new namespace.
+  if (
+    !(await env.HANDOFF_IP_LIMIT.limit({ key: `cli-token:${session.user.id}` }))
+      .success
+  )
+    return Response.json(
+      { error: 'rate_limited' },
+      { status: 429, headers: noStore },
+    )
   // Live, from the DB: a cached claim would outlive a revoked operator.
   const data = createData(env)
   const principal = await data.principal(session.user.id, '')

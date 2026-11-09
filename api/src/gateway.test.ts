@@ -1691,6 +1691,21 @@ describe('operator lane (#1892 phase 4)', () => {
     }
   })
 
+  it('refuses a CLI token replayed on a tenant host (#2171)', async () => {
+    const cli = await jwt({
+      iat: Math.floor(Date.now() / 1000),
+      claims: { [SESSION_ORIGIN_CLAIM]: OPS, cli: true, jti: 'j3' },
+    })
+    const { env, envelopes } = opsEnv()
+    const res = await call(env, {
+      origin: VERIFIED,
+      authorization: `Bearer ${cli}`,
+    })
+    expect(res.status).toBe(401)
+    expect(envelopes).toEqual([])
+    expect(env.MEMBERSHIP.principal).not.toHaveBeenCalled()
+  })
+
   it('mints the named tenant plan on the operator lane (#2129)', async () => {
     const { env, envelopes } = opsEnv()
     env.DIRECTORY.fetch = vi.fn(async () =>
