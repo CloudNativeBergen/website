@@ -159,6 +159,23 @@ export function inviteToken(
 }
 
 /** The live edition's Sanity document; patched, never replaced. */
+const TOPIC_COLORS = [
+  '#326CE5',
+  '#7C3AED',
+  '#0EA5E9',
+  '#DC2626',
+  '#16A34A',
+  '#EA580C',
+  '#DB2777',
+  '#CA8A04',
+  '#0D9488',
+  '#4F46E5',
+  '#65A30D',
+  '#9333EA',
+  '#E11D48',
+  '#0891B2',
+]
+
 export const LIVE_CONFERENCE_ID = 'kkdemo.conference'
 const LIVE_KEY = 'edition-live'
 
@@ -195,13 +212,15 @@ export function buildDocuments(
   const topics = [...new Set(s.proposals.flatMap((p) => p.topics))]
 
   const upsert: Doc[] = [
-    ...topics.map((t) => ({
+    ...topics.map((t, i) => ({
       _id: id('topic', t),
       _type: 'topic',
       title:
         ({ ai: 'AI', finops: 'FinOps' } as Record<string, string>)[t] ??
         t[0].toUpperCase() + t.slice(1),
       slug: { _type: 'slug', current: t },
+      // Required by the schema; the admin schedule editor crashes without it.
+      color: TOPIC_COLORS[i % TOPIC_COLORS.length],
       organization: { _type: 'reference', _ref: DEMO_ORG_ID },
     })),
     // Members are speakers too: reviewers, assignees and notification recipients.

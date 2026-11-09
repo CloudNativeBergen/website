@@ -367,6 +367,15 @@ describe('demo:seed', () => {
     expect(commit).not.toHaveBeenCalled()
   })
 
+  it('gives every topic the hex color the schema requires', () => {
+    const { upsert } = buildDocuments(fixtures, EDITION_IDS)
+    const topics = upsert.filter((d) => d._type === 'topic')
+    expect(topics.length).toBeGreaterThan(0)
+    for (const d of topics) {
+      expect(d.color).toMatch(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
+    }
+  })
+
   it('invite tokens are not derivable from the fixture key', () => {
     const { upsert } = buildDocuments(fixtures, EDITION_IDS)
     const invites = upsert.filter((d) => d._type === 'coSpeakerInvitation')
