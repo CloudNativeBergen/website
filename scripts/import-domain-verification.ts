@@ -329,8 +329,8 @@ async function main() {
   config({ path: resolve(process.cwd(), '.env') })
   config({ path: resolve(process.cwd(), '.env.local'), override: true })
   // domain-import.sh pins the env's dataset; .env.local must not override it.
-  if (process.env.KONF_IMPORT_DATASET)
-    process.env.NEXT_PUBLIC_SANITY_DATASET = process.env.KONF_IMPORT_DATASET
+  if (process.env.IMPORT_SANITY_DATASET)
+    process.env.NEXT_PUBLIC_SANITY_DATASET = process.env.IMPORT_SANITY_DATASET
   const { requireReadToken } = await import('./backfill-conference')
   const args = process.argv.slice(2)
   const dumpPath = arg(args, '--d1')

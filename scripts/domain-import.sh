@@ -10,7 +10,7 @@ apply=${2:-}
 export CLOUDFLARE_ACCOUNT_ID=eefa2cb5c8528a07d7bf8b00a6606dcd
 # Same dataset the env's Workers read (services/tenant-directory/wrangler.jsonc).
 if [ "$env" = production ]; then ds=production; else ds=development; fi
-export KONF_IMPORT_DATASET=$ds
+export IMPORT_SANITY_DATASET=$ds
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 mkdir -p tmp
