@@ -1765,6 +1765,34 @@ export function createData(
     },
 
     /**
+     * #2207 phase 6: verification rows across EVERY org, for the site's
+     * readers (routing, the redirect allowlist, the sign-in destination).
+     * Filters are ANDed; at least one is required. Rows without verification
+     * state (status null) are never returned. Callers have passed
+     * `can(p, 'domain.read_all')`.
+     */
+    async domainRecords(filter: {
+      hostname?: string | null
+      conferenceId?: string | null
+      status?: 'pending' | 'verified' | 'failing' | 'revoked' | null
+    }) {
+      const where = [
+        isNotNull(domains.status),
+        filter.hostname != null &&
+          eq(domains.hostname, normalizeHost(filter.hostname) ?? ''),
+        filter.conferenceId != null &&
+          eq(domains.conferenceId, filter.conferenceId),
+        filter.status != null && eq(domains.status, filter.status),
+      ].filter((c) => c !== false)
+      if (where.length === 1)
+        throw fail('BAD_USER_INPUT', 'name a hostname, conference or status')
+      return db.query.domains.findMany({
+        where: and(...where),
+        orderBy: domains.hostname,
+      })
+    },
+
+    /**
      * #2207 phase 5: copies one Sanity `domainVerification` record onto D1,
      * with the import's column rules (scripts/import-domain-verification.ts):
      * a row claimed in D1, or held by another conference, is left alone; the

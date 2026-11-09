@@ -389,6 +389,48 @@ const ConferenceDomain = builder
     }),
   })
 
+// #2207 phase 6: one row's verification state as the site's policy reads it
+// (DomainVerificationRecord). Site server lane only (domain.read_all).
+const SiteDomainRecord = builder
+  .objectRef<DomainRow>('SiteDomainRecord')
+  .implement({
+    fields: (t) => ({
+      hostname: t.exposeString('hostname'),
+      conferenceId: t.exposeID('conferenceId'),
+      kind: t.exposeString('kind'),
+      method: t.string({ nullable: true, resolve: (d) => d.method }),
+      status: t.field({
+        type: DomainStatus,
+        nullable: true,
+        resolve: (d) => d.status,
+      }),
+      token: t.string({ nullable: true, resolve: (d) => d.token }),
+      verifiedAt: t.string({
+        nullable: true,
+        resolve: (d) => iso(d.verifiedAt),
+      }),
+      lastSuccessAt: t.string({
+        nullable: true,
+        resolve: (d) => iso(d.lastSuccessAt),
+      }),
+      lastCheckedAt: t.string({
+        nullable: true,
+        resolve: (d) => iso(d.lastRecheckAt ?? d.checkedAt),
+      }),
+      firstFailureAt: t.string({
+        nullable: true,
+        resolve: (d) => iso(d.firstFailureAt),
+      }),
+      graceUntil: t.string({
+        nullable: true,
+        resolve: (d) => iso(d.graceUntil),
+      }),
+      consecutiveFailures: t.exposeInt('consecutiveFailures'),
+      consecutiveSoftFailures: t.exposeInt('consecutiveSoftFailures'),
+      lastError: t.string({ nullable: true, resolve: (d) => d.lastError }),
+    }),
+  })
+
 /**
  * #2207: an org owner or admin (or an operator acting for the org) on the
  * tenant lane. Guard before fetch: the refusal says nothing about any row.
@@ -835,6 +877,32 @@ builder.queryType({
             extensions: { code: 'NOT_FOUND' },
           })
         return rows
+      },
+    }),
+    siteDomainRecords: t.field({
+      type: [SiteDomainRecord],
+      description:
+        "Verification rows across every org, ANDed on the filters given (at least one), for the site's routing, redirect-allowlist and sign-in readers (#2207 phase 6). Site server lane only.",
+      args: {
+        hostname: t.arg.string(),
+        conferenceId: t.arg.id(),
+        status: t.arg({ type: DomainStatus }),
+      },
+      resolve: (_, { hostname, conferenceId, status }, ctx) => {
+        const e = ctx.envelope
+        // Before any read: the refused lanes learn nothing about any row.
+        if (e?.typ !== 'tenant' || !can(principalOf(e), 'domain.read_all'))
+          throw createGraphQLError(
+            'reading every domain is for the site lane',
+            {
+              extensions: { code: 'FORBIDDEN' },
+            },
+          )
+        return ctx.data.domainRecords({
+          hostname,
+          conferenceId: conferenceId == null ? null : String(conferenceId),
+          status,
+        })
       },
     }),
     tenantByHost: t.field({
