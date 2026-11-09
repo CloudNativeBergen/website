@@ -25,7 +25,10 @@ on:
       - 'api/**'
       - 'services/**'
       - 'packages/**'
+      - 'src/lib/**'
       - 'pnpm-lock.yaml'
+      - 'scripts/changed-workers.sh'
+      - 'scripts/secrets-sync.ts'
       - '.github/workflows/deploy-workers.yml'
   push:
     branches: [main]
@@ -33,7 +36,10 @@ on:
       - 'api/**'
       - 'services/**'
       - 'packages/**'
+      - 'src/lib/**'
       - 'pnpm-lock.yaml'
+      - 'scripts/changed-workers.sh'
+      - 'scripts/secrets-sync.ts'
       - '.github/workflows/deploy-workers.yml'
   workflow_dispatch:
 
@@ -152,6 +158,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Test Worker selection
+        run: bash scripts/changed-workers.test.sh && bash scripts/newer-deploy.test.sh
+
       # Push: diff against the head of the newest run whose production deploy
       # succeeded, so changes from skipped, cancelled or failed runs are not
       # lost; else the push's before SHA. Any doubt (no base, base not an
@@ -181,7 +190,7 @@ jobs:
           esac
           if [ -n "$base" ] && git merge-base --is-ancestor "$base" HEAD 2>/dev/null; then
             echo "Changes since $base"
-            workers=$(git diff --name-only "$base" HEAD | bash scripts/changed-workers.sh)
+            workers=$(git diff --name-only --no-renames "$base" HEAD | bash scripts/changed-workers.sh)
           else
             echo "::notice::No usable base ($EVENT); deploying every Worker."
             workers=$(bash scripts/changed-workers.sh --all)
