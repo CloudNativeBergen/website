@@ -93,7 +93,7 @@ describe('secrets', () => {
       'KONF_PRODUCTION_GATEWAY_PRIVATE_KEY',
     )
     expect(fnoxName('SANITY_API_TOKEN_READ', 'preview')).toBe(
-      'SANITY_API_TOKEN_READ_PROD',
+      'SANITY_API_TOKEN_READ',
     )
   })
 

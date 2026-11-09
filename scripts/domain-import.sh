@@ -19,10 +19,7 @@ dump() {
     --command "SELECT id, org_id FROM conferences; SELECT * FROM domains" \
     >"$work/d1.json"
 }
-# The import reads SANITY_API_TOKEN_READ; fall back to fnox's _PROD key.
-imp() {
-  fnox exec -- sh -c 'export SANITY_API_TOKEN_READ="${SANITY_API_TOKEN_READ:-$SANITY_API_TOKEN_READ_PROD}"; exec pnpm exec tsx scripts/import-domain-verification.ts "$@"' sh --d1 "$work/d1.json" "$@"
-}
+imp() { fnox exec -- pnpm exec tsx scripts/import-domain-verification.ts --d1 "$work/d1.json" "$@"; }
 
 dump
 if [ "$apply" = --verify ]; then imp --verify; exit; fi

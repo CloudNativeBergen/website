@@ -4,7 +4,7 @@
  * as the conference Worker's daily sweep (#1986), for an operator who wants
  * the answer now. READ-ONLY on both sides. Prints ids and column names only.
  *
- *   SANITY_API_TOKEN_READ=$(fnox get SANITY_API_TOKEN_READ_PROD) \
+ *   SANITY_API_TOKEN_READ=$(fnox get SANITY_API_TOKEN_READ) \
  *     pnpm tsx scripts/parity-d1.ts [--env production|preview] [--id <conferenceId>]
  *
  * Exit 0: in_sync. Exit 1: drift. Exit 2: unknown (a read failed or was empty).
