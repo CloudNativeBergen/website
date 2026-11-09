@@ -16,7 +16,9 @@ are reached over service bindings, never HTTP.
   `Membership` work, after a coarse `ip:<ip>` pre-check (`API_IP_LIMITER`,
   1200 a minute) before the tenant lookup. 429 `RATE_LIMITED` when spent.
 - `src/response-cache.ts` (#1789): anonymous response cache, off until the var
-  `API_CACHE_TTL_SECONDS` is set. Only the site's signed server lane without a
+  `API_CACHE_TTL_SECONDS` is set. Off in every environment for now: site
+  writes go straight to Sanity and never purge it (#2192). Turning it on needs
+  a site purge path first (#2212). Only the site's signed server lane without a
   session reads through it, after every guard above: the gateway calls the
   `CachedRead` entrypoint (`src/index.ts`) over `ctx.exports`, and Workers
   Caching (`exports.CachedRead.cache` in wrangler) stores clean `200`s. The
