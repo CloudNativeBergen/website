@@ -179,6 +179,7 @@ describe('secrets', () => {
     expect(puts.map(([, a]) => a[4])).toEqual([
       'GATEWAY_PUBLIC_KEY',
       'SANITY_API_TOKEN_READ',
+      'SANITY_API_TOKEN_WRITE',
     ])
     expect(String(puts[0]?.[2].input)).toBe(
       'value-of-KONF_PREVIEW_GATEWAY_PUBLIC_KEY',

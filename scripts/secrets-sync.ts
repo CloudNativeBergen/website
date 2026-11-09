@@ -19,11 +19,13 @@ export const RUNKONF_ACCOUNT_ID = 'eefa2cb5c8528a07d7bf8b00a6606dcd'
 
 // The owner's ACCEPTED exceptions to preview/production separation: one fnox
 // key serves both environments. The Sanity read token (preview Workers read
-// the development dataset with the production token) and the GitHub and
+// the development dataset with the production token), the Sanity write token
+// (one token for both datasets) and the GitHub and
 // LinkedIn OAuth apps (one app each). Nothing else may be shared; a test
 // enforces it.
 export const SHARED_ACROSS_ENVS: Record<string, string> = {
   SANITY_API_TOKEN_READ: 'SANITY_API_TOKEN_READ',
+  SANITY_API_TOKEN_WRITE: 'SANITY_API_TOKEN_WRITE',
   GITHUB_CLIENT_ID: 'ID_KONF_APP_GH_CLIENT_ID',
   GITHUB_CLIENT_SECRET: 'ID_KONF_APP_GH_CLIENT_SECRET',
   LINKEDIN_CLIENT_ID: 'ID_KONF_APP_LI_CLIENT_ID',
