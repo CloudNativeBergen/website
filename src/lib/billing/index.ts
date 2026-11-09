@@ -34,6 +34,18 @@ const GATES = {
 const PAID = new Set(['basic', 'pro'])
 
 /**
+ * Mirrors packages/tenancy `sellsTickets` (#2141): an edition sells tickets
+ * when a vendor event is bound. An absent ticketingProvider means Checkin,
+ * which is how every production edition stores it.
+ */
+export const sellsTickets = (c: {
+  ticketingProvider?: string | null
+  checkinEventId?: number | null
+  titoEventSlug?: string | null
+}): boolean =>
+  c.ticketingProvider === 'tito' ? !!c.titoEventSlug : c.checkinEventId != null
+
+/**
  * Throws FORBIDDEN with a PlanRequiredError cause unless the org's effective
  * plan covers `gate`; SERVICE_UNAVAILABLE when the plan cannot be read.
  */

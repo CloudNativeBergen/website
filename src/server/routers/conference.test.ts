@@ -225,7 +225,9 @@ beforeEach(() => {
       // `updateTicketingIds` reads its OWN stored binding, so a one-field patch
       // is checked against the EFFECTIVE binding, not just the fields sent.
       if (
-        query.includes('{ checkinEventId, titoAccountSlug, titoEventSlug }')
+        query.includes(
+          '{ ticketingProvider, checkinEventId, titoAccountSlug, titoEventSlug }',
+        )
       ) {
         return ticketingByConference[CONFERENCE_ID] ?? null
       }
@@ -2073,7 +2075,10 @@ describe('conference router — plan gates (#2129)', () => {
     })
 
   it('refuses publishing an unlisted ticketed edition on free, writing nothing', async () => {
-    conference({ visibility: 'unlisted', ticketingProvider: 'tito' })
+    conference({
+      visibility: 'unlisted',
+      ticketingProvider: 'tito', titoEventSlug: '2026',
+    })
     requireOrgPlanMock.mockRejectedValue(await planRefusal())
     await expect(
       makeCaller({ isOrganizer: true }).updateVisibility({
@@ -2087,7 +2092,7 @@ describe('conference router — plan gates (#2129)', () => {
   })
 
   it('publishes it when the plan covers it', async () => {
-    conference({ visibility: 'unlisted', ticketingProvider: 'checkin' })
+    conference({ visibility: 'unlisted', checkinEventId: 7 })
     await makeCaller({ isOrganizer: true }).updateVisibility({
       visibility: 'live',
     })
@@ -2098,18 +2103,23 @@ describe('conference router — plan gates (#2129)', () => {
   it.each([
     ['a free-to-attend edition', { visibility: 'unlisted' }, 'live'],
     [
+      'a vendor picked but no event bound',
+      { visibility: 'unlisted', ticketingProvider: 'tito' },
+      'live',
+    ],
+    [
       'an already live edition',
-      { visibility: 'live', ticketingProvider: 'tito' },
+      { visibility: 'live', checkinEventId: 7 },
       'live',
     ],
     [
       'an edition with no visibility (live)',
-      { ticketingProvider: 'tito' },
+      { checkinEventId: 7 },
       'live',
     ],
     [
       'unlisting',
-      { visibility: 'live', ticketingProvider: 'tito' },
+      { visibility: 'live', checkinEventId: 7 },
       'unlisted',
     ],
   ] as const)('never asks for %s', async (_, over, visibility) => {
@@ -2117,6 +2127,58 @@ describe('conference router — plan gates (#2129)', () => {
     await makeCaller({ isOrganizer: true }).updateVisibility({ visibility })
     expect(requireOrgPlanMock).not.toHaveBeenCalled()
     expect(lastSet).toEqual({ visibility })
+  })
+
+  it('treats an absent provider with a Checkin event as ticketed (#2141, the production shape)', async () => {
+    conference({ visibility: 'unlisted', checkinEventId: 218308 })
+    requireOrgPlanMock.mockRejectedValue(await planRefusal())
+    await expect(
+      makeCaller({ isOrganizer: true }).updateVisibility({
+        visibility: 'live',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  describe('binding a vendor event (#2141)', () => {
+    const operator = () =>
+      makeCaller({ isOrganizer: true, platformOperator: true })
+    beforeEach(() => vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG_ID))
+    afterEach(() => vi.unstubAllEnvs())
+
+    it('refuses binding an event on free, writing nothing', async () => {
+      requireOrgPlanMock.mockRejectedValue(await planRefusal())
+      await expect(
+        operator().updateTicketingIds({ checkinEventId: 4242 }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      expect(requireOrgPlanMock).toHaveBeenCalledWith(
+        'conference.publish_ticketed',
+      )
+      expect(commitMock).not.toHaveBeenCalled()
+    })
+
+    it('binds it when the plan covers it', async () => {
+      await operator().updateTicketingIds({
+        ticketingProvider: 'tito',
+        titoAccountSlug: 'acme',
+        titoEventSlug: '2026',
+      })
+      expect(requireOrgPlanMock).toHaveBeenCalledTimes(1)
+      expect(lastSet).toMatchObject({ titoEventSlug: '2026' })
+    })
+
+    it('never asks when the edition already sells tickets, or no event is bound', async () => {
+      requireOrgPlanMock.mockRejectedValue(await planRefusal())
+      ticketingByConference[CONFERENCE_ID] = { checkinEventId: 7 }
+      await operator().updateTicketingIds({ checkinEventId: 8 })
+      ticketingByConference[CONFERENCE_ID] = {}
+      await makeCaller({ isOrganizer: true }).updateTicketingIds({
+        ticketingProvider: 'checkin',
+        checkinCustomerId: 15509,
+      })
+      expect(requireOrgPlanMock).not.toHaveBeenCalled()
+      expect(lastSet).toMatchObject({ checkinCustomerId: 15509 })
+    })
   })
 
   it('refuses adding a new custom domain on free, writing nothing', async () => {

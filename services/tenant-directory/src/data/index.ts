@@ -564,7 +564,7 @@ export function createData(
       return row ?? null
     },
 
-    /** Whether the edition sells tickets: its ticketingProvider is set. */
+    /** Whether the edition sells tickets (`sellsTickets`). */
     ticketed: (orgId: string, id: string) => env.CONFERENCE.ticketed(orgId, id),
 
     /**
