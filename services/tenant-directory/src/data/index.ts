@@ -17,6 +17,7 @@ import { createGraphQLError } from 'graphql-yoga'
 import type { OperatorAuditEvent } from '@runkonf/tenancy'
 import { importJWK, SignJWT, type JWK } from 'jose'
 import { effectivePlan, signupSlugProblem, type Plan } from '@runkonf/tenancy'
+import { generateVerificationToken } from '@runkonf/tenancy/challenge'
 import { rawDb } from './db'
 import {
   cloudflareHostnames,
@@ -88,6 +89,21 @@ export interface DataEnv extends CloudflareEnv {
 
 /** How often a verified custom domain is re-checked with Cloudflare. */
 const RECHECK_VERIFIED_MS = 60 * 60 * 1000
+const RECHECK_LIMIT_MS = 60 * 1000
+
+/** A hostname a tenant may claim: not a platform host (addCustomDomain, #2207). */
+function customHostname(input: string) {
+  const hostname = normalizeHost(input)
+  if (
+    !hostname ||
+    !hostname.includes('.') ||
+    hostname === PLATFORM_DOMAIN ||
+    hostname.endsWith(`.${PLATFORM_DOMAIN}`)
+  ) {
+    throw fail('BAD_USER_INPUT', 'not a custom hostname')
+  }
+  return hostname
+}
 
 const fail = (code: string, message: string) =>
   createGraphQLError(message, { extensions: { code } })
@@ -1365,15 +1381,7 @@ export function createData(
 
     /** Claims the hostname, then asks Cloudflare for a custom hostname. */
     async addCustomDomain(conferenceId: string, input: string) {
-      const hostname = normalizeHost(input)
-      if (
-        !hostname ||
-        !hostname.includes('.') ||
-        hostname === PLATFORM_DOMAIN ||
-        hostname.endsWith(`.${PLATFORM_DOMAIN}`)
-      ) {
-        throw fail('BAD_USER_INPUT', 'not a custom hostname')
-      }
+      const hostname = customHostname(input)
       const conf = await conference(conferenceId)
       if (!conf) throw fail('NOT_FOUND', 'conference not found')
       // The primary key is the routing claim: first writer wins.
@@ -1416,6 +1424,87 @@ export function createData(
         await db.delete(domains).where(eq(domains.hostname, hostname))
         throw error
       }
+    },
+
+    /**
+     * #2207: `orgId`'s hostnames of one of its conferences; null when the
+     * org has no such conference, so a foreign id reads as a missing one.
+     */
+    async conferenceDomains(orgId: string, conferenceId: string) {
+      if (!(await api.conferenceOf(orgId, conferenceId))) return null
+      return db.query.domains.findMany({
+        where: and(
+          eq(domains.orgId, orgId),
+          eq(domains.conferenceId, conferenceId),
+        ),
+        orderBy: domains.hostname,
+      })
+    },
+
+    /**
+     * #2207: a pending DNS-TXT claim with a fresh token. Writes only D1 and
+     * never `verification = 'verified'`, so routing does not change.
+     */
+    async claimDomain(orgId: string, conferenceId: string, input: string) {
+      const hostname = customHostname(input)
+      if (!(await api.conferenceOf(orgId, conferenceId)))
+        throw fail('NOT_FOUND', 'conference not found')
+      const [claimed] = await db
+        .insert(domains)
+        .values({
+          hostname,
+          kind: 'custom',
+          orgId,
+          conferenceId,
+          verification: 'pending',
+          method: 'dns-txt',
+          status: 'pending',
+          token: generateVerificationToken(),
+        })
+        .onConflictDoNothing()
+        .returning()
+      if (!claimed) throw fail('CONFLICT', 'hostname is already claimed')
+      return claimed
+    },
+
+    /**
+     * #2207: at most one recheck per hostname per RECHECK_LIMIT_MS, taken
+     * atomically in SQL. Phase 1 has no DNS check: it returns the row as is.
+     */
+    async recheckDomain(orgId: string, input: string, now = Date.now()) {
+      const hostname = normalizeHost(input) ?? ''
+      const mine = and(eq(domains.hostname, hostname), eq(domains.orgId, orgId))
+      const [row] = await db
+        .update(domains)
+        .set({ lastRecheckAt: now })
+        .where(
+          and(
+            mine,
+            or(
+              isNull(domains.lastRecheckAt),
+              lt(domains.lastRecheckAt, now - RECHECK_LIMIT_MS),
+            ),
+          ),
+        )
+        .returning()
+      if (row) return row
+      if (await db.query.domains.findFirst({ where: mine }))
+        throw fail('RATE_LIMITED', 'checked less than a minute ago')
+      throw fail('NOT_FOUND', 'no such hostname')
+    },
+
+    /** #2207: removes one of `orgId`'s custom hostnames; platform hosts stay. */
+    async removeDomain(orgId: string, input: string) {
+      const hostname = normalizeHost(input) ?? ''
+      const row = await db.query.domains.findFirst({
+        where: and(eq(domains.hostname, hostname), eq(domains.orgId, orgId)),
+      })
+      if (!row) throw fail('NOT_FOUND', 'no such hostname')
+      if (row.kind !== 'custom')
+        throw fail('FORBIDDEN', 'a platform hostname cannot be removed')
+      if (row.cfCustomHostnameId) await hostnames.delete(row.cfCustomHostnameId)
+      await db.delete(domains).where(eq(domains.hostname, hostname))
+      return row
     },
 
     /** Deletes the Cloudflare custom hostname, then the routing claim. */

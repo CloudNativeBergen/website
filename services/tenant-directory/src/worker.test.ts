@@ -296,6 +296,10 @@ beforeEach(() => {
       readFileSync(
         new URL('../migrations/0012_invite_requests.sql', import.meta.url),
         'utf8',
+      ) +
+      readFileSync(
+        new URL('../migrations/0013_domain_verification.sql', import.meta.url),
+        'utf8',
       ),
   )
   env = {
@@ -498,14 +502,15 @@ describe('provisioning', () => {
     const { body } = await gql('{ _service { sdl } }')
     const mutation = /type Mutation[^}]*}/.exec(body.data._service.sdl)![0]
     const fields = mutation.split('\n').filter((l) => /^\s+\w+\(/.test(l))
-    expect(fields).toHaveLength(16)
+    expect(fields).toHaveLength(19)
     for (const f of fields)
       if (
         f.includes('setConferenceLifecycle(') ||
         f.includes('provisionConference(') ||
         f.includes('startCheckout(') ||
         f.includes('signUpOrganization(') ||
-        f.includes('requestInvite(')
+        f.includes('requestInvite(') ||
+        /\b(claim|recheck|remove)Domain\(/.test(f)
       )
         expect(f).not.toContain('@tag')
       else
@@ -3069,5 +3074,169 @@ describe('invite requests (#2161)', () => {
       await worker.scheduled!(at('2026-11-08T03:00:00Z'), env)
       expect(ids()).toEqual(['freshOpen', 'recentResolved'])
     })
+  })
+})
+
+describe('domains API (#2207)', () => {
+  const LIST = `query($c: ID!) { domains(conferenceId: $c) { hostname kind status method token txtName txtValue removable } }`
+  const CLAIM = `mutation($c: ID!, $h: String!) { claimDomain(conferenceId: $c, hostname: $h) { hostname status method token txtName txtValue removable } }`
+  const RECHECK = `mutation($h: String!) { recheckDomain(hostname: $h) { hostname status } }`
+  const REMOVE = `mutation($h: String!) { removeDomain(hostname: $h) { hostname } }`
+  const code = (body: { errors?: { extensions: { code: string } }[] }) =>
+    body.errors?.[0]?.extensions.code
+  async function setup() {
+    const acme = await provision('acme', 'k1')
+    const other = await provision('other', 'k2')
+    const as = (orgId: string, orgRole = 'admin'): Envelope => ({
+      typ: 'tenant',
+      orgId,
+      conferenceId: conferenceOf(orgId),
+      userId: 'u',
+      orgRole,
+      scopes: [],
+    })
+    return {
+      acme,
+      other,
+      admin: as(acme.id),
+      otherAdmin: as(other.id),
+      member: as(acme.id, 'member'),
+      conf: conferenceOf(acme.id),
+      otherConf: conferenceOf(other.id),
+    }
+  }
+
+  it('claims a pending hostname with a TXT challenge, and routing does not change', async () => {
+    const { admin, conf } = await setup()
+    const { body } = await gql(CLAIM, { c: conf, h: 'Conf.Example.com' }, admin)
+    const d = body.data.claimDomain
+    expect(d).toMatchObject({
+      hostname: 'conf.example.com',
+      status: 'pending',
+      method: 'dns-txt',
+      txtName: '_konf-challenge.conf.example.com',
+      removable: true,
+    })
+    expect(d.token).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(d.txtValue).toBe(`konf-domain-verification=${d.token}`)
+    expect(hostnames.create).not.toHaveBeenCalled()
+    expect(
+      (await gql(RESOLVE, { host: 'conf.example.com' })).body.data.tenantByHost,
+    ).toBeNull()
+    const list = (await gql(LIST, { c: conf }, admin)).body.data.domains
+    expect(list.map((x: { hostname: string }) => x.hostname)).toEqual([
+      'acme-2026.konf.run',
+      'acme.konf.run',
+      'conf.example.com',
+    ])
+    expect(
+      list.find((x: { kind: string }) => x.kind !== 'custom'),
+    ).toMatchObject({ status: 'verified', removable: false, token: null })
+  })
+
+  it('refuses a platform hostname and a hostname another org holds', async () => {
+    const { admin, otherAdmin, conf, otherConf } = await setup()
+    expect(
+      code((await gql(CLAIM, { c: conf, h: 'evil.konf.run' }, admin)).body),
+    ).toBe('BAD_USER_INPUT')
+    await gql(CLAIM, { c: otherConf, h: 'taken.example.com' }, otherAdmin)
+    const { body } = await gql(
+      CLAIM,
+      { c: conf, h: 'taken.example.com' },
+      admin,
+    )
+    expect(code(body)).toBe('CONFLICT')
+    expect(
+      sqlite
+        .prepare(
+          "SELECT org_id FROM domains WHERE hostname = 'taken.example.com'",
+        )
+        .get(),
+    ).toEqual({ org_id: 'organization.other' })
+  })
+
+  it('answers a foreign conference or hostname exactly like a missing one', async () => {
+    const { admin, otherAdmin, otherConf } = await setup()
+    await gql(CLAIM, { c: otherConf, h: 'theirs.example.com' }, otherAdmin)
+    const pairs: [string, Record<string, string>, Record<string, string>][] = [
+      [LIST, { c: otherConf }, { c: 'conference-nope' }],
+      [
+        CLAIM,
+        { c: otherConf, h: 'x.example.com' },
+        { c: 'conference-nope', h: 'x.example.com' },
+      ],
+      [RECHECK, { h: 'theirs.example.com' }, { h: 'nope.example.com' }],
+      [REMOVE, { h: 'theirs.example.com' }, { h: 'nope.example.com' }],
+      [REMOVE, { h: 'other.konf.run' }, { h: 'nope.konf.run' }],
+    ]
+    for (const [q, foreign, missing] of pairs) {
+      const a = (await gql(q, foreign, admin)).body.errors
+      const b = (await gql(q, missing, admin)).body.errors
+      expect(a?.[0]?.extensions.code).toBe('NOT_FOUND')
+      expect(a?.[0]?.message).toBe(b?.[0]?.message)
+    }
+    expect(count('domains')).toBe(5)
+  })
+
+  it.each([
+    ['a member', { orgRole: 'member' }],
+    ['the site lane', { userId: null, orgRole: null, scopes: ['site:server'] }],
+    ['an unknown role', { orgRole: 'guest' }],
+  ])('refuses %s before reading D1', async (_, over) => {
+    const { admin, conf } = await setup()
+    const as = { ...admin, ...over } as Envelope
+    const prepare = vi.spyOn(env.DB, 'prepare')
+    for (const [q, v] of [
+      [LIST, { c: conf }],
+      [CLAIM, { c: conf, h: 'x.example.com' }],
+      [RECHECK, { h: 'acme.konf.run' }],
+      [REMOVE, { h: 'acme.konf.run' }],
+    ] as const)
+      expect(code((await gql(q, v, as)).body)).toBe('FORBIDDEN')
+    expect(prepare).not.toHaveBeenCalled()
+  })
+
+  it('refuses the platform lane, which names no org', async () => {
+    const { conf } = await setup()
+    expect(code((await gql(LIST, { c: conf }, operator)).body)).toBe(
+      'FORBIDDEN',
+    )
+  })
+
+  it('lets one recheck through per minute, atomically', async () => {
+    const { admin, conf } = await setup()
+    await gql(CLAIM, { c: conf, h: 'conf.example.com' }, admin)
+    const first = await gql(RECHECK, { h: 'conf.example.com' }, admin)
+    expect(first.body.data.recheckDomain).toEqual({
+      hostname: 'conf.example.com',
+      status: 'pending',
+    })
+    expect(
+      code((await gql(RECHECK, { h: 'conf.example.com' }, admin)).body),
+    ).toBe('RATE_LIMITED')
+    sqlite
+      .prepare('UPDATE domains SET last_recheck_at = ? WHERE hostname = ?')
+      .run(Date.now() - 61_000, 'conf.example.com')
+    expect(
+      (await gql(RECHECK, { h: 'conf.example.com' }, admin)).body.data
+        .recheckDomain.hostname,
+    ).toBe('conf.example.com')
+  })
+
+  it('removes a custom hostname and its Cloudflare hostname, never a platform one', async () => {
+    const { admin, conf } = await setup()
+    await gql(CLAIM, { c: conf, h: 'conf.example.com' }, admin)
+    sqlite
+      .prepare(
+        "UPDATE domains SET cf_custom_hostname_id = 'cf1' WHERE hostname = ?",
+      )
+      .run('conf.example.com')
+    for (const h of ['acme.konf.run', 'acme-2026.konf.run'])
+      expect(code((await gql(REMOVE, { h }, admin)).body)).toBe('FORBIDDEN')
+    expect(count('domains')).toBe(5)
+    const { body } = await gql(REMOVE, { h: 'conf.example.com' }, admin)
+    expect(body.data.removeDomain.hostname).toBe('conf.example.com')
+    expect(hostnames.delete).toHaveBeenCalledWith('cf1')
+    expect(count('domains')).toBe(4)
   })
 })

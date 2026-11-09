@@ -31,6 +31,8 @@ export const MATRIX = {
   'conference.update_settings': row('Y Y  Y   N   N'),
   'conference.set_lifecycle': row('Y  Y   Y   N   N'),
   'conference.bind_ticketing': row('Y N   N   N   N'),
+  // #2207: list, claim, recheck and remove a conference's hostnames.
+  'domain.manage': row('           Y  Y   Y   N   N'),
   'speaker_directory.read': row('  Y  Y   Y   N   N'),
   'api_client.read': row('         Y  Y   Y   N   N'),
   'api_client.create': row('       N  Y   N   N   N'),

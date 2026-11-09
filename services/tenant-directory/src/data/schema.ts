@@ -1,7 +1,7 @@
 // Drizzle mirror of migrations/0001_init.sql, 0002_rollout_flags.sql,
 // 0005_lifecycle_cancelled.sql and 0006_provisioning_conference.sql
 // 0007_provisioning_created_by.sql, 0008_billing_plan.sql, 0010_org_kind.sql
-// and 0011_billing_signup.sql.
+// and 0011_billing_signup.sql, 0013_domain_verification.sql.
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const organizations = sqliteTable('organizations', {
@@ -63,6 +63,22 @@ export const domains = sqliteTable('domains', {
   cfCustomHostnameId: text('cf_custom_hostname_id'),
   /** Last Cloudflare status check, epoch ms. */
   checkedAt: integer('checked_at'),
+  // 0013 (#2207): DNS TXT verification state. Epoch ms; status null on older rows.
+  method: text('method', { enum: ['dns-txt', 'platform'] }),
+  token: text('token'),
+  status: text('status', {
+    enum: ['pending', 'verified', 'failing', 'revoked'],
+  }),
+  verifiedAt: integer('verified_at'),
+  lastSuccessAt: integer('last_success_at'),
+  firstFailureAt: integer('first_failure_at'),
+  graceUntil: integer('grace_until'),
+  consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+  consecutiveSoftFailures: integer('consecutive_soft_failures')
+    .notNull()
+    .default(0),
+  lastError: text('last_error'),
+  lastRecheckAt: integer('last_recheck_at'),
 })
 
 export const provisioningRequests = sqliteTable('provisioning_requests', {
