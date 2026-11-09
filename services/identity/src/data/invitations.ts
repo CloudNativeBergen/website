@@ -12,12 +12,13 @@ export interface MailEnv {
   INVITE_FROM?: string
   /**
    * Invitation emails per org per UTC day, resends included (#2136); resets
-   * at 00:00 UTC. "0" disables sending; unset, negative or non-integer means 50.
+   * at 00:00 UTC. "0" disables sending; anything but decimal digits up to 10000 means 50.
    */
   INVITE_DAILY_CAP?: string
 }
 
 export const DEFAULT_INVITE_DAILY_CAP = 50
+const MAX_INVITE_DAILY_CAP = 10000
 
 export interface InvitationMail {
   invitationId: string
@@ -53,10 +54,13 @@ export const inviterDisplayName = (name: string) =>
 export const orgDisplayName = (name: string, slug: string) =>
   allowlisted(name, true) || allowlisted(slug, true) || 'an organization'
 
-/** The daily cap: a non-negative integer ("1e3" is 1000), else 50. */
+/** The daily cap: decimal digits only, 0..10000, else 50. */
 export function inviteDailyCap(raw: string | undefined) {
-  const n = Number(raw?.trim() || NaN)
-  return Number.isInteger(n) && n >= 0 ? n : DEFAULT_INVITE_DAILY_CAP
+  const t = raw?.trim() ?? ''
+  const n = Number(t)
+  return /^\d+$/.test(t) && Number.isSafeInteger(n) && n <= MAX_INVITE_DAILY_CAP
+    ? n
+    : DEFAULT_INVITE_DAILY_CAP
 }
 
 /** Counts one send against the org's day; false once the cap is passed. */
