@@ -698,6 +698,9 @@ importers:
       jose:
         specifier: ^6.2.14
         version: 6.2.14
+      tldts:
+        specifier: ^7.4.19
+        version: 7.4.19
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^5.20261101.1

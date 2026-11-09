@@ -255,6 +255,8 @@ let sanityRequests: Pick<Request, 'url' | 'headers' | 'json'>[] = []
 vi.stubGlobal('fetch', sanityFetch)
 
 let sqlite: DatabaseSync
+/** Hostnames Sanity already lists (#2207), and a forced read failure. */
+const sanityHosts = { taken: new Set<string>(), fail: false }
 let env: Parameters<typeof worker.fetch>[1]
 
 beforeEach(() => {
@@ -309,6 +311,10 @@ beforeEach(() => {
       readFileSync(
         new URL('../migrations/0012_invite_requests.sql', import.meta.url),
         'utf8',
+      ) +
+      readFileSync(
+        new URL('../migrations/0013_domain_verification.sql', import.meta.url),
+        'utf8',
       ),
   )
   env = {
@@ -324,6 +330,8 @@ beforeEach(() => {
     INVITE_TOKEN_SECRET: 'invite-secret',
     SANITY_PROJECT_ID: 'p',
     SANITY_DATASET: 'd',
+    DOMAIN_CNAME_TARGET: 'abc.vercel-dns-017.com',
+    DOMAIN_APEX_A: '216.150.1.1, 216.150.16.1',
     SANITY_API_TOKEN_READ: 'token',
     SITE_URL: SITE,
     PROVISIONING_SIGNING_KEY: signingJwk,
@@ -335,12 +343,31 @@ beforeEach(() => {
   site.fail = false
   site.operators = []
   sanityFetch.mockReset()
+  sanityHosts.taken.clear()
+  sanityHosts.fail = false
   sanityRequests = []
   sanityFetch.mockImplementation(async (url, init) => {
     // A Request at runtime; workers-types and Node disagree on its type.
     const req = new Request(url as unknown as string, init)
     if (req.url.startsWith(SITE)) return fakeSite(req)
     sanityRequests.push(req.clone())
+    const peek = (await req.clone().json()) as {
+      query: string
+      params: { names?: string[] }
+    }
+    if (peek.query.includes('domainVerification')) {
+      if (sanityHosts.fail) return new Response('down', { status: 503 })
+      return Response.json({
+        // Mirrors the GROQ: `lower(entry) in $names`.
+        result: {
+          n: [...sanityHosts.taken].some((t) =>
+            peek.params.names!.includes(t.toLowerCase()),
+          )
+            ? 1
+            : 0,
+        },
+      })
+    }
     const { params } = (await req.json()) as {
       params: { orgId: string; conferenceId: string }
     }
@@ -516,14 +543,15 @@ describe('provisioning', () => {
     const { body } = await gql('{ _service { sdl } }')
     const mutation = /type Mutation[^}]*}/.exec(body.data._service.sdl)![0]
     const fields = mutation.split('\n').filter((l) => /^\s+\w+\(/.test(l))
-    expect(fields).toHaveLength(16)
+    expect(fields).toHaveLength(19)
     for (const f of fields)
       if (
         f.includes('setConferenceLifecycle(') ||
         f.includes('provisionConference(') ||
         f.includes('startCheckout(') ||
         f.includes('signUpOrganization(') ||
-        f.includes('requestInvite(')
+        f.includes('requestInvite(') ||
+        /\b(claim|recheck|remove)Domain\(/.test(f)
       )
         expect(f).not.toContain('@tag')
       else
@@ -3202,4 +3230,383 @@ describe('invite requests (#2161)', () => {
       expect(ids()).toEqual(['freshOpen', 'recentResolved'])
     })
   })
+})
+
+describe('domains API (#2207)', () => {
+  const LIST = `query($c: ID!) { domains(conferenceId: $c) { hostname kind status method token txtName txtValue removable } }`
+  const CLAIM = `mutation($c: ID!, $h: String!) { claimDomain(conferenceId: $c, hostname: $h) { hostname status method token txtName txtValue removable } }`
+  const RECHECK = `mutation($h: String!) { recheckDomain(hostname: $h) { hostname status } }`
+  const REMOVE = `mutation($h: String!) { removeDomain(hostname: $h) { hostname } }`
+  const code = (body: { errors?: { extensions: { code: string } }[] }) =>
+    body.errors?.[0]?.extensions.code
+  async function setup() {
+    const acme = await provision('acme', 'k1')
+    const other = await provision('other', 'k2')
+    const as = (orgId: string, orgRole = 'admin'): Envelope => ({
+      typ: 'tenant',
+      orgId,
+      conferenceId: conferenceOf(orgId),
+      userId: 'u',
+      orgRole,
+      scopes: [],
+    })
+    return {
+      acme,
+      other,
+      admin: as(acme.id),
+      otherAdmin: as(other.id),
+      member: as(acme.id, 'member'),
+      conf: conferenceOf(acme.id),
+      otherConf: conferenceOf(other.id),
+    }
+  }
+
+  it('claims a pending hostname with a TXT challenge, and routing does not change', async () => {
+    const { admin, conf } = await setup()
+    const { body } = await gql(
+      CLAIM,
+      { c: conf, h: 'Conf.Example.com..' },
+      admin,
+    )
+    const d = body.data.claimDomain
+    expect(d).toMatchObject({
+      hostname: 'conf.example.com',
+      status: 'pending',
+      method: 'dns-txt',
+      txtName: '_konf-challenge.conf.example.com',
+      removable: true,
+    })
+    expect(d.token).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(d.txtValue).toBe(`konf-domain-verification=${d.token}`)
+    expect(hostnames.create).not.toHaveBeenCalled()
+    expect(
+      (await gql(RESOLVE, { host: 'conf.example.com' })).body.data.tenantByHost,
+    ).toBeNull()
+    const list = (await gql(LIST, { c: conf }, admin)).body.data.domains
+    expect(list.map((x: { hostname: string }) => x.hostname)).toEqual([
+      'acme-2026.konf.run',
+      'acme.konf.run',
+      'conf.example.com',
+    ])
+    expect(
+      list.find((x: { kind: string }) => x.kind !== 'custom'),
+    ).toMatchObject({ status: 'verified', removable: false, token: null })
+  })
+
+  it('refuses a platform hostname and a hostname another org holds', async () => {
+    const { admin, otherAdmin, conf, otherConf } = await setup()
+    for (const h of [
+      'evil.konf.run',
+      'konf.run',
+      'konf.app',
+      'auth.konf.app',
+      'api.konf.app',
+      'localhost:3000',
+      'conf.test',
+      'konf.app..',
+      'x.konf.run..',
+      'a..b.com',
+      'under_score.example.com',
+    ])
+      expect(code((await gql(CLAIM, { c: conf, h }, admin)).body), h).toBe(
+        'BAD_USER_INPUT',
+      )
+    await gql(CLAIM, { c: otherConf, h: 'taken.example.com' }, otherAdmin)
+    const { body } = await gql(
+      CLAIM,
+      { c: conf, h: 'taken.example.com' },
+      admin,
+    )
+    expect(code(body)).toBe('CONFLICT')
+    expect(
+      sqlite
+        .prepare(
+          "SELECT org_id FROM domains WHERE hostname = 'taken.example.com'",
+        )
+        .get(),
+    ).toEqual({ org_id: 'organization.other' })
+  })
+
+  it('answers a foreign conference or hostname exactly like a missing one', async () => {
+    const { admin, otherAdmin, otherConf } = await setup()
+    await gql(CLAIM, { c: otherConf, h: 'theirs.example.com' }, otherAdmin)
+    const pairs: [string, Record<string, string>, Record<string, string>][] = [
+      [LIST, { c: otherConf }, { c: 'conference-nope' }],
+      [
+        CLAIM,
+        { c: otherConf, h: 'x.example.com' },
+        { c: 'conference-nope', h: 'x.example.com' },
+      ],
+      [RECHECK, { h: 'theirs.example.com' }, { h: 'nope.example.com' }],
+      [REMOVE, { h: 'theirs.example.com' }, { h: 'nope.example.com' }],
+      [REMOVE, { h: 'other.konf.run' }, { h: 'nope.konf.run' }],
+    ]
+    for (const [q, foreign, missing] of pairs) {
+      const a = (await gql(q, foreign, admin)).body.errors
+      const b = (await gql(q, missing, admin)).body.errors
+      expect(a?.[0]?.extensions.code).toBe('NOT_FOUND')
+      expect(a?.[0]?.message).toBe(b?.[0]?.message)
+    }
+    expect(count('domains')).toBe(5)
+  })
+
+  it.each([
+    ['a member', { orgRole: 'member' }],
+    ['the site lane', { userId: null, orgRole: null, scopes: ['site:server'] }],
+    ['an unknown role', { orgRole: 'guest' }],
+  ])('refuses %s before reading D1', async (_, over) => {
+    const { admin, conf } = await setup()
+    const as = { ...admin, ...over } as Envelope
+    const prepare = vi.spyOn(env.DB, 'prepare')
+    for (const [q, v] of [
+      [LIST, { c: conf }],
+      [CLAIM, { c: conf, h: 'x.example.com' }],
+      [RECHECK, { h: 'acme.konf.run' }],
+      [REMOVE, { h: 'acme.konf.run' }],
+    ] as const)
+      expect(code((await gql(q, v, as)).body)).toBe('FORBIDDEN')
+    expect(prepare).not.toHaveBeenCalled()
+  })
+
+  it('refuses the platform lane, which names no org', async () => {
+    const { conf } = await setup()
+    expect(code((await gql(LIST, { c: conf }, operator)).body)).toBe(
+      'FORBIDDEN',
+    )
+  })
+
+  it('lets one recheck through per minute, atomically', async () => {
+    const { admin, conf } = await setup()
+    await gql(CLAIM, { c: conf, h: 'conf.example.com' }, admin)
+    const first = await gql(RECHECK, { h: 'conf.example.com' }, admin)
+    expect(first.body.data.recheckDomain).toEqual({
+      hostname: 'conf.example.com',
+      status: 'pending',
+    })
+    expect(
+      code((await gql(RECHECK, { h: 'conf.example.com' }, admin)).body),
+    ).toBe('RATE_LIMITED')
+    sqlite
+      .prepare('UPDATE domains SET last_recheck_at = ? WHERE hostname = ?')
+      .run(Date.now() - 61_000, 'conf.example.com')
+    expect(
+      (await gql(RECHECK, { h: 'conf.example.com' }, admin)).body.data
+        .recheckDomain.hostname,
+    ).toBe('conf.example.com')
+  })
+
+  it('removes a custom hostname and its Cloudflare hostname, never a platform one', async () => {
+    const { admin, conf } = await setup()
+    await gql(CLAIM, { c: conf, h: 'conf.example.com' }, admin)
+    sqlite
+      .prepare(
+        "UPDATE domains SET cf_custom_hostname_id = 'cf1' WHERE hostname = ?",
+      )
+      .run('conf.example.com')
+    for (const h of ['acme.konf.run', 'acme-2026.konf.run'])
+      expect(code((await gql(REMOVE, { h }, admin)).body)).toBe('FORBIDDEN')
+    expect(count('domains')).toBe(5)
+    const { body } = await gql(REMOVE, { h: 'conf.example.com' }, admin)
+    expect(body.data.removeDomain.hostname).toBe('conf.example.com')
+    expect(hostnames.delete).toHaveBeenCalledWith('cf1')
+    expect(count('domains')).toBe(4)
+  })
+
+  it('refuses a hostname Sanity already lists, with the same CONFLICT, and fails closed', async () => {
+    const { admin, conf } = await setup()
+    sanityHosts.taken.add('2026.cloudnativedays.no')
+    const { body } = await gql(
+      CLAIM,
+      { c: conf, h: '2026.cloudnativedays.no' },
+      admin,
+    )
+    expect(body.errors[0]).toMatchObject({
+      message: 'hostname is already claimed',
+      extensions: { code: 'CONFLICT' },
+    })
+    const sent = (await sanityRequests.at(-1)!.json()) as {
+      params: Record<string, string>
+    }
+    expect(sent.params).toEqual({
+      names: [
+        '2026.cloudnativedays.no',
+        '2026.cloudnativedays.no.',
+        '*.cloudnativedays.no',
+        '*.cloudnativedays.no.',
+      ],
+      conf,
+    })
+    sanityHosts.taken.add('*.Wild.Example.com.')
+    sanityHosts.taken.add('Dot.Example.org.')
+    for (const h of ['sub.wild.example.com', 'dot.example.org'])
+      expect(code((await gql(CLAIM, { c: conf, h }, admin)).body), h).toBe(
+        'CONFLICT',
+      )
+    expect(
+      (await gql(CLAIM, { c: conf, h: 'a.sub.wild.example.com' }, admin)).body
+        .data.claimDomain.hostname,
+    ).toBe('a.sub.wild.example.com')
+    sqlite
+      .prepare("DELETE FROM domains WHERE hostname = 'a.sub.wild.example.com'")
+      .run()
+    sanityHosts.fail = true
+    expect(
+      code((await gql(CLAIM, { c: conf, h: 'new.example.com' }, admin)).body),
+    ).toBe('INTERNAL_SERVER_ERROR')
+    expect(count('domains')).toBe(4)
+  })
+
+  it('lets another org take over a pending claim only after 72 h', async () => {
+    const { admin, otherAdmin, conf, otherConf } = await setup()
+    await gql(CLAIM, { c: otherConf, h: 'squat.example.com' }, otherAdmin)
+    const age = (ms: number, extra = '') =>
+      sqlite
+        .prepare(
+          `UPDATE domains SET claimed_at = ?${extra} WHERE hostname = 'squat.example.com'`,
+        )
+        .run(Date.now() - ms)
+    const owner = () =>
+      (
+        sqlite
+          .prepare(
+            "SELECT org_id FROM domains WHERE hostname = 'squat.example.com'",
+          )
+          .get() as { org_id: string }
+      ).org_id
+    const take = async () =>
+      (await gql(CLAIM, { c: conf, h: 'squat.example.com' }, admin)).body
+    age(71 * 3600_000)
+    expect(code(await take())).toBe('CONFLICT')
+    for (const extra of [
+      ", status = 'verified'",
+      ", verification = 'verified', status = 'pending'",
+      ", verification = 'pending', cf_custom_hostname_id = 'cf9'",
+    ]) {
+      age(73 * 3600_000, extra)
+      expect(code(await take()), extra).toBe('CONFLICT')
+      expect(owner()).toBe('organization.other')
+      sqlite
+        .prepare(
+          "UPDATE domains SET status = 'pending', verification = 'pending', cf_custom_hostname_id = NULL WHERE hostname = 'squat.example.com'",
+        )
+        .run()
+    }
+    age(73 * 3600_000)
+    const won = await take()
+    expect(won.data.claimDomain.status).toBe('pending')
+    expect(owner()).toBe('organization.acme')
+  })
+
+  it('refuses to remove a verified custom hostname until the cutover', async () => {
+    const { admin, conf } = await setup()
+    await gql(CLAIM, { c: conf, h: 'live.example.com' }, admin)
+    for (const set of [
+      "status = 'verified'",
+      "verification = 'verified', status = 'pending'",
+    ]) {
+      sqlite
+        .prepare(
+          `UPDATE domains SET ${set} WHERE hostname = 'live.example.com'`,
+        )
+        .run()
+      expect(
+        code((await gql(REMOVE, { h: 'live.example.com' }, admin)).body),
+        set,
+      ).toBe('FORBIDDEN')
+    }
+    sqlite
+      .prepare(
+        "UPDATE domains SET verification = 'failed', status = 'failing' WHERE hostname = 'live.example.com'",
+      )
+      .run()
+    expect(
+      (await gql(REMOVE, { h: 'live.example.com' }, admin)).body.data
+        .removeDomain.hostname,
+    ).toBe('live.example.com')
+  })
+
+  it('tells the organizer where to point the host, and why a check failed', async () => {
+    const { admin, conf } = await setup()
+    const ROUTE = `query($c: ID!) { domains(conferenceId: $c) { hostname routingRecords { type name value } lastErrorCode } }`
+    for (const h of ['www.example.com', 'example.com', 'example.co.uk'])
+      await gql(CLAIM, { c: conf, h }, admin)
+    sqlite
+      .prepare(
+        "UPDATE domains SET last_error_code = 'hard-failure' WHERE hostname = 'example.com'",
+      )
+      .run()
+    const read = async () =>
+      Object.fromEntries(
+        (await gql(ROUTE, { c: conf }, admin)).body.data.domains.map(
+          (d: { hostname: string }) => [d.hostname, d],
+        ),
+      )
+    const apex = (name: string) => [
+      { type: 'A', name, value: '216.150.1.1' },
+      { type: 'A', name, value: '216.150.16.1' },
+    ]
+    const by = await read()
+    expect(by['www.example.com'].routingRecords).toEqual([
+      {
+        type: 'CNAME',
+        name: 'www.example.com',
+        value: 'abc.vercel-dns-017.com',
+      },
+    ])
+    expect(by['example.com'].routingRecords).toEqual(apex('example.com'))
+    expect(by['example.co.uk'].routingRecords).toEqual(apex('example.co.uk'))
+    expect(by['acme.konf.run'].routingRecords).toEqual([])
+    expect(by['example.com'].lastErrorCode).toBe('HARD_FAILURE')
+    expect(by['www.example.com'].lastErrorCode).toBeNull()
+    env.DOMAIN_CNAME_TARGET = ''
+    env.DOMAIN_APEX_A = ''
+    for (const d of Object.values(await read()))
+      expect((d as { routingRecords: unknown[] }).routingRecords).toEqual([])
+  })
+
+  it('leaves a row alone when a takeover lands between the read and the delete', async () => {
+    const { admin, conf } = await setup()
+    await gql(CLAIM, { c: conf, h: 'race.example.com' }, admin)
+    const prepare = env.DB.prepare.bind(env.DB)
+    vi.spyOn(env.DB, 'prepare').mockImplementation((q: string) => {
+      if (/^delete from "domains"/i.test(q))
+        sqlite
+          .prepare(
+            "UPDATE domains SET org_id = 'organization.other', token = 'theirs' WHERE hostname = 'race.example.com'",
+          )
+          .run()
+      return prepare(q)
+    })
+    const { body } = await gql(REMOVE, { h: 'race.example.com' }, admin)
+    expect(code(body)).toBe('NOT_FOUND')
+    expect(
+      sqlite
+        .prepare(
+          "SELECT org_id, token FROM domains WHERE hostname = 'race.example.com'",
+        )
+        .get(),
+    ).toEqual({ org_id: 'organization.other', token: 'theirs' })
+  })
+
+  it.each([["verification = 'verified'"], ["token = 'reclaimed'"]])(
+    'keeps the row when %s lands between the read and the delete',
+    async (set) => {
+      const { admin, conf } = await setup()
+      await gql(CLAIM, { c: conf, h: 'race.example.com' }, admin)
+      const prepare = env.DB.prepare.bind(env.DB)
+      vi.spyOn(env.DB, 'prepare').mockImplementation((q: string) => {
+        if (/^delete from "domains"/i.test(q))
+          sqlite
+            .prepare(
+              `UPDATE domains SET ${set} WHERE hostname = 'race.example.com'`,
+            )
+            .run()
+        return prepare(q)
+      })
+      expect(
+        code((await gql(REMOVE, { h: 'race.example.com' }, admin)).body),
+      ).toBe('NOT_FOUND')
+      expect(count('domains')).toBe(5)
+    },
+  )
 })

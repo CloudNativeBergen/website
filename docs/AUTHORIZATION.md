@@ -317,6 +317,7 @@ before acceptance; "Site" = `site:server` with no user token.
 | conference.update_settings            | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
 | conference.set_lifecycle              | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
 | conference.bind_ticketing             | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
+| domain.manage (#2207)                 | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
 | conference.manage_roles               | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
 | proposal.submit (CFP open)            | Y   | Y   | Y   | Y   | Y   | Y                   | Y   | Y   | Y   | Y   | N    |
 | proposal.read                         | Y   | Y   | Y   | N   | Y   | Y (asg if assigned) | N   | own | own | N   | N    |
@@ -353,6 +354,12 @@ Billing and sign-up (`billing.*`, `signup.*`): see `docs/BILLING.md`. `signup.cr
 is the user lane: any signed-in user on a session with no tenant (a UserContext, which
 holds no column, or an operator's PlatformContext) with a valid invite code. No org role
 is involved, so the resolver checks the envelope type, not `can()`.
+
+Domains (`domain.manage`, #2207): the tenant-directory `domains` query and the
+`claimDomain`, `recheckDomain` and `removeDomain` mutations, on the tenant lane for the
+envelope's own org only. The guard runs before any read; a conference or hostname of
+another org answers NOT_FOUND, exactly like a missing one. Platform hosts
+(`<slug>.konf.run`) answer FORBIDDEN on remove.
 
 Operator is N on reviewing and editing proposals by default: operators act for a tenant
 for support, not as a juror. Operator access is only on the operator lane and is audited.
