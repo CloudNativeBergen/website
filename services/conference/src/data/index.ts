@@ -136,7 +136,14 @@ class Conferences extends ScopedRepository {
     // Billing (#2141): binding a vendor event makes the edition sell
     // tickets, which needs a paid plan, published or not, so a later
     // publish or a post-publish binding cannot skip the gate.
-    if (!sellsTickets(row) && sellsTickets({ ...row, ...patch }))
+    // Going public (visibility -> live or published -> true) with tickets is
+    // gated like setConferenceLifecycle(live) and the site publish (#2200),
+    // so a plan that lapsed after binding cannot publish through this patch.
+    const next = { ...row, ...patch }
+    const goesPublic =
+      (next.visibility === 'live' && row.visibility !== 'live') ||
+      (!!next.published && !row.published)
+    if (sellsTickets(next) && (!sellsTickets(row) || goesPublic))
       requirePlan(this.tenant.plan, 'conference.publish_ticketed')
     // A patch that changes nothing is a no-op: updated_at stays put.
     const changes = Object.entries(patch).some(
