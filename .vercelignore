@@ -28,6 +28,7 @@ docs/
 /packages/tenancy/src/*
 !/packages/tenancy/src/reserved.ts
 !/packages/tenancy/src/challenge.ts
+!/packages/tenancy/src/verification.ts
 
 # DO NOT ignore cache directories - we need Vercel to rebuild CSS
 # Commenting out potential cache ignores to ensure fresh CSS builds
