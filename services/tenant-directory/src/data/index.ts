@@ -75,6 +75,19 @@ export interface DataEnv extends CloudflareEnv {
   CONFERENCE: {
     ticketed(orgId: string, conferenceId: string): Promise<boolean>
   }
+  /** konf-conference's Editions entrypoint: bound by tenant-directory only. */
+  EDITIONS: {
+    /** Idempotent; throws when the id is another org's row. */
+    createEdition(
+      orgId: string,
+      conferenceId: string,
+      title: string,
+      startDate: string | null,
+      endDate: string | null,
+    ): Promise<void>
+    /** Deletes only that org's row, and only while unpublished. */
+    deleteEdition(orgId: string, conferenceId: string): Promise<void>
+  }
   /** Sanity ids as in services/identity; provisioning verifies against it. */
   SANITY_PROJECT_ID?: string
   SANITY_DATASET?: string
@@ -117,6 +130,8 @@ export interface ProvisionInput {
   conferenceId: string
   /** The operator's user id, recorded on the receipt row (audit). */
   createdBy?: string
+  /** Title and dates for the conference subgraph row (createOrganization). */
+  edition?: { title: string; startDate: string; endDate: string }
 }
 
 /**
@@ -809,6 +824,35 @@ export function createData(
         await refund()
         throw invalid('slug', 'this slug is not available')
       }
+      // Undo everything: the subgraph row first (it may have committed with
+      // only the reply lost), then the directory rows and the code's use.
+      // A failed delete is logged for the operator; sign-up still fails.
+      const rollback = async () => {
+        await env.EDITIONS.deleteEdition(orgId, conference.id).catch((e) =>
+          console.error(
+            JSON.stringify({
+              event: 'signup.orphan_edition',
+              orgId,
+              conferenceId: conference.id,
+              error: String(e),
+            }),
+          ),
+        )
+        await db.batch([
+          db.delete(domains).where(eq(domains.orgId, orgId)),
+          db.delete(conferences).where(eq(conferences.orgId, orgId)),
+          db.delete(organizations).where(eq(organizations.id, orgId)),
+          refund(),
+        ])
+      }
+      try {
+        await env.EDITIONS.createEdition(orgId, conference.id, name, null, null)
+      } catch (error) {
+        // Sign-up has no retry key: undo, as for a refused owner write.
+        console.error(error)
+        await rollback()
+        throw fail('INTERNAL_SERVER_ERROR', 'sign-up failed; nothing was kept')
+      }
       try {
         await env.IDENTITY.signupOwner(orgId, slug, name, userId, codeId)
       } catch (error) {
@@ -822,12 +866,7 @@ export function createData(
           throw fail('INTERNAL_SERVER_ERROR', 'sign-up state is unknown')
         }
         if (!owned) {
-          await db.batch([
-            db.delete(domains).where(eq(domains.orgId, orgId)),
-            db.delete(conferences).where(eq(conferences.orgId, orgId)),
-            db.delete(organizations).where(eq(organizations.id, orgId)),
-            refund(),
-          ])
+          await rollback()
           throw fail(
             'INTERNAL_SERVER_ERROR',
             'sign-up failed; nothing was kept',
@@ -1071,6 +1110,14 @@ export function createData(
           )
         }
         await env.IDENTITY.ensure(org.id, org.slug, org.name ?? undefined)
+        // Every call, replays too: a retry heals a missing subgraph row.
+        await env.EDITIONS.createEdition(
+          orgId,
+          conferenceId,
+          input.edition?.title ?? conf.name,
+          input.edition?.startDate ?? null,
+          input.edition?.endDate ?? null,
+        )
         return org
       }
       const done = await earlier()
@@ -1220,6 +1267,11 @@ export function createData(
         orgSlug: input.slug,
         conferenceId: out.conferenceId,
         createdBy,
+        edition: {
+          title: input.conferenceTitle,
+          startDate: input.startDate,
+          endDate: input.endDate,
+        },
       })
       return {
         organizationId: out.organizationId,
@@ -1288,9 +1340,20 @@ export function createData(
       const conferenceId = out.conferenceId
       if (typeof conferenceId !== 'string' || !SANITY_ID.test(conferenceId))
         throw fail('INTERNAL_SERVER_ERROR', 'site provisioning failed')
+      // After the D1 receipt, and on every replay: a retry with the same
+      // key heals an edition whose subgraph row is missing.
+      const subgraphRow = () =>
+        env.EDITIONS.createEdition(
+          orgId,
+          conferenceId,
+          input.title,
+          input.startDate,
+          input.endDate,
+        )
       if (done) {
         if (done.conferenceId !== conferenceId)
           throw fail('INTERNAL_SERVER_ERROR', 'receipt mismatch')
+        await subgraphRow()
         return { conferenceId }
       }
       // Rollout flags: on only where every other edition of the org has it
@@ -1339,11 +1402,14 @@ export function createData(
         ])
       } catch (error) {
         // A concurrent request with the same key won the race.
-        if ((await receipt())?.conferenceId === conferenceId)
+        if ((await receipt())?.conferenceId === conferenceId) {
+          await subgraphRow()
           return { conferenceId }
+        }
         console.error(error)
         throw fail('CONFLICT', 'conference or platform host is taken')
       }
+      await subgraphRow()
       return { conferenceId }
     },
 

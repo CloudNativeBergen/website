@@ -23,6 +23,11 @@
       "service": "konf-conference",
       "entrypoint": "ProgramDate",
     },
+    {
+      "binding": "EDITIONS",
+      "service": "konf-conference",
+      "entrypoint": "Editions",
+    },
   ],
   "triggers": {
     "crons": ["*/5 * * * *"],
@@ -73,6 +78,11 @@
           "entrypoint": "ProgramDate",
           "service": "konf-conference-preview",
         },
+        {
+          "binding": "EDITIONS",
+          "entrypoint": "Editions",
+          "service": "konf-conference-preview",
+        },
       ],
       "vars": {
         "SANITY_PROJECT_ID": "mvzwvw14",
@@ -117,6 +127,11 @@
           "binding": "CONFERENCE",
           "service": "konf-conference",
           "entrypoint": "ProgramDate",
+        },
+        {
+          "binding": "EDITIONS",
+          "service": "konf-conference",
+          "entrypoint": "Editions",
         },
       ],
       "vars": {
