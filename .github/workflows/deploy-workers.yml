@@ -4,7 +4,7 @@ name: Deploy Workers
 # (services/*) to Cloudflare (#1799, epic #1772).
 #
 # - Pull request: deploys to the `preview` env with the preview token.
-# - Push to main: deploys to the `production` env. The job runs in the GitHub
+# - Push to main (or manual dispatch on main): deploys to the `production` env. The job runs in the GitHub
 #   environment `workers-production`, so its required reviewers approve every
 #   production deploy, D1 migrations included.
 #
@@ -13,6 +13,11 @@ name: Deploy Workers
 #   secrets.CLOUDFLARE_API_TOKEN   - a separate token per environment; the
 #                                    preview token never sees production
 #   secrets.CLOUDFLARE_ACCOUNT_ID  - repository or environment secret
+#
+# Only the Workers whose files changed are deployed (#2191,
+# scripts/changed-workers.sh). Push diffs against the last successful
+# production deploy, PRs against their base. Shared inputs deploy everything,
+# and the gateway follows any subgraph. workflow_dispatch deploys everything.
 
 on:
   pull_request:
@@ -20,7 +25,10 @@ on:
       - 'api/**'
       - 'services/**'
       - 'packages/**'
+      - 'src/lib/**'
       - 'pnpm-lock.yaml'
+      - 'scripts/changed-workers.sh'
+      - 'scripts/secrets-sync.ts'
       - '.github/workflows/deploy-workers.yml'
   push:
     branches: [main]
@@ -28,8 +36,12 @@ on:
       - 'api/**'
       - 'services/**'
       - 'packages/**'
+      - 'src/lib/**'
       - 'pnpm-lock.yaml'
+      - 'scripts/changed-workers.sh'
+      - 'scripts/secrets-sync.ts'
       - '.github/workflows/deploy-workers.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -121,25 +133,70 @@ jobs:
         run: echo "::warning::Could not compare with main; deploying this commit."
 
   deploy:
-    name: Deploy (${{ github.event_name == 'push' && 'production' || 'preview' }})
+    name: Deploy (${{ github.event_name != 'pull_request' && 'production' || 'preview' }})
     needs: [compose, cancel-older, newest]
     # Fork PRs get no secrets; skip them rather than fail.
     # Dependabot PRs get no environment secrets either.
     # cancel-older and newest are skipped on PRs, so accept skipped as well as
     # success. newest never blocks on its own failure: its output is then empty.
-    if: ${{ !cancelled() && needs.compose.result == 'success' && needs.cancel-older.result != 'failure' && needs.newest.outputs.newer == '' && (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) }}
+    if: ${{ !cancelled() && needs.compose.result == 'success' && needs.cancel-older.result != 'failure' && needs.newest.outputs.newer == '' && ((github.event_name != 'pull_request' && github.ref == 'refs/heads/main') || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: ${{ github.event_name == 'push' && 'workers-production' || 'workers-preview' }}
+    environment: ${{ github.event_name != 'pull_request' && 'workers-production' || 'workers-preview' }}
     concurrency:
-      group: deploy-workers-${{ github.event_name == 'push' && 'production' || 'preview' }}
+      group: deploy-workers-${{ github.event_name != 'pull_request' && 'production' || 'preview' }}
       cancel-in-progress: false
     env:
-      DEPLOY_ENV: ${{ github.event_name == 'push' && 'production' || 'preview' }}
+      DEPLOY_ENV: ${{ github.event_name != 'pull_request' && 'production' || 'preview' }}
+    permissions:
+      contents: read
+      actions: read
 
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Test Worker selection
+        run: bash scripts/changed-workers.test.sh && bash scripts/newer-deploy.test.sh
+
+      # Push: diff against the head of the newest run whose production deploy
+      # succeeded, so changes from skipped, cancelled or failed runs are not
+      # lost; else the push's before SHA. Any doubt (no base, base not an
+      # ancestor, API failure) deploys everything.
+      - name: Select Workers
+        id: select
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          base=
+          case "$EVENT" in
+            pull_request) base=$PR_BASE ;;
+            push)
+              base=$(gh api "repos/$REPO/actions/workflows/deploy-workers.yml/runs?branch=main&status=success&per_page=30" --jq '.workflow_runs[] | "\(.id) \(.head_sha)"' 2>/dev/null \
+                | while read -r id sha; do
+                    if gh api "repos/$REPO/actions/runs/$id/jobs" --jq '.jobs[] | select(.name == "Deploy (production)" and .conclusion == "success") | .name' 2>/dev/null | grep -q .; then
+                      echo "$sha"; break
+                    fi
+                  done || true)
+              base=${base:-$BEFORE} ;;
+          esac
+          if [ -n "$base" ] && git merge-base --is-ancestor "$base" HEAD 2>/dev/null; then
+            echo "Changes since $base"
+            workers=$(git diff --name-only --no-renames "$base" HEAD | bash scripts/changed-workers.sh)
+          else
+            echo "::notice::No usable base ($EVENT); deploying every Worker."
+            workers=$(bash scripts/changed-workers.sh --all)
+          fi
+          echo "workers=$(paste -sd " " - <<<"$workers")" >> "$GITHUB_OUTPUT"
+          echo "::notice::Deploying: ${workers:-nothing}"
 
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # ratchet:actions/setup-node@v7.1.0
@@ -151,6 +208,19 @@ jobs:
         with:
           version: 10.24.0
 
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - name: Setup pnpm cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache@v6.1.0
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -161,8 +231,10 @@ jobs:
       # Order matters: tenant-directory binds identity, and the gateway
       # binds all of them, so a binding target is always deployed first.
       - name: Migrate and deploy
+        if: steps.select.outputs.workers != ''
         shell: bash
         env:
+          WORKERS: ${{ steps.select.outputs.workers }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
@@ -174,7 +246,12 @@ jobs:
               pnpm exec tsx scripts/secrets-sync.ts "$1" production --check
             fi
           }
-          for pkg in identity tenant-directory content conference program sponsors cfp ticketing; do
+          for pkg in $WORKERS; do
+            if [ "$pkg" = api ]; then
+              pnpm --filter @runkonf/api exec wrangler deploy --env "$DEPLOY_ENV"
+              check_secrets api
+              continue
+            fi
             echo "::group::$pkg ($DEPLOY_ENV)"
             # `db: false` services (content, program, sponsors, cfp) have no D1 and no migrations.
             if [ -d "services/$pkg/migrations" ]; then
@@ -184,5 +261,3 @@ jobs:
             check_secrets "$pkg"
             echo "::endgroup::"
           done
-          pnpm --filter @runkonf/api exec wrangler deploy --env "$DEPLOY_ENV"
-          check_secrets api
