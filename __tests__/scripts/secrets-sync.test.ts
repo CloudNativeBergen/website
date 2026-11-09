@@ -45,9 +45,7 @@ function scriptFnoxNames(): string[] {
     const src = readFileSync(join(root, 'scripts', f), 'utf8')
     for (const [, rest] of src.matchAll(/KONF_\$\{upper\}_([A-Z0-9_]+)/g))
       names.push(`KONF_PREVIEW_${rest}`, `KONF_PRODUCTION_${rest}`)
-    for (const [n] of src.matchAll(
-      /\bKONF_[A-Z][A-Z0-9_]*[A-Z0-9]\b/g,
-    ))
+    for (const [n] of src.matchAll(/\bKONF_[A-Z][A-Z0-9_]*[A-Z0-9]\b/g))
       names.push(n)
   }
   return [...new Set(names)]
@@ -245,9 +243,7 @@ describe('secrets', () => {
       (n) => fnoxName(n, 'preview') === fnoxName(n, 'production'),
     )
     expect(shared.sort()).toEqual(
-      [...SHARED_ACROSS_ENVS]
-        .filter((n) => names.has(n))
-        .sort(),
+      [...SHARED_ACROSS_ENVS].filter((n) => names.has(n)).sort(),
     )
     expect([...SHARED_ACROSS_ENVS].sort()).toEqual([
       'GITHUB_CLIENT_ID',
