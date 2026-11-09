@@ -433,10 +433,8 @@ describe('hardening (#2136)', () => {
 
   it('a user whose provider gave no email cannot open or accept', async () => {
     const { orgId, invitationId } = await invited('noemail@example.com')
-    const ctx = await auth.$context
     const u = await user(`blank-${n}@example.com`)
     await d1.prepare("UPDATE user SET email = '' WHERE id = ?").bind(u.id).run()
-    void ctx
     expect((await get(invitationId, u.cookie)).status).toBe(404)
     expect((await accept(invitationId, u.cookie)).status).toBe(404)
     expect(await membersOf(orgId)).toHaveLength(1)
