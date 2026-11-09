@@ -45,138 +45,23 @@
 
 import { isDevOnlyHost, isWildcardEntry } from './challenge'
 import { isPlatformAllocated } from './platform'
-import type {
-  DomainCheckOutcome,
-  DomainVerificationPatch,
-  DomainVerificationRecord,
-} from './types'
+import type { DomainVerificationRecord } from './types'
 
-/** A successful proof older than this stops counting for the redirect allowlist. */
-export const ALLOWLIST_MAX_STALENESS_DAYS = 30
-
-/** Hard failures needed before routing may be withdrawn. */
-export const ROUTING_GRACE_FAILURES = 3
-
-/** …and how long the failure streak must have lasted as well. */
-export const ROUTING_GRACE_DAYS = 7
-
-/**
- * Consecutive resolver outages before a soft failure is escalated to a hard one.
- * Bounds the "our DNS has been broken for weeks" case without punishing a blip.
- */
-export const SOFT_FAILURE_ESCALATION = 5
-
-/** How long a backfilled (grandfathered) claim is honoured without proof. */
-export const GRANDFATHER_GRACE_DAYS = 30
-
-const DAY_MS = 24 * 60 * 60 * 1000
-
-function daysBetween(fromIso: string, now: Date): number {
-  const from = Date.parse(fromIso)
-  if (Number.isNaN(from)) return Number.POSITIVE_INFINITY
-  return (now.getTime() - from) / DAY_MS
-}
-
-/** True while a grandfathered record is still inside its migration window. */
-function inGrandfatherGrace(
-  record: DomainVerificationRecord,
-  now: Date,
-): boolean {
-  if (record.method !== 'grandfathered') return false
-  if (record.status === 'revoked') return false
-  if (!record.graceUntil) return false
-  const until = Date.parse(record.graceUntil)
-  return !Number.isNaN(until) && now.getTime() < until
-}
-
-/**
- * The write-back for one check result. Returns ONLY changed fields so the caller
- * can issue a narrow patch.
- *
- * A `revoked` record is inert — the claim is gone, so a check result must not
- * resurrect it.
- */
-export function applyCheckOutcome(
-  record: DomainVerificationRecord,
-  outcome: DomainCheckOutcome,
-  now: Date,
-): DomainVerificationPatch {
-  const nowIso = now.toISOString()
-  if (record.status === 'revoked') return {}
-
-  if (outcome.kind === 'platform-owned') {
-    // No lookup happened and none ever will. The write-back exists so the
-    // stored record TELLS THE TRUTH — verified, by the platform, with no
-    // failure history — which is what the admin card and the allowlist's GROQ
-    // prefilter read.
-    return {
-      status: 'verified',
-      method: 'platform-owned',
-      // CLEARED, not left alone: a record that was grandfathered before it was
-      // allocated still carries that 30-day deadline, and a platform allocation
-      // has no deadline. Leaving it would expire a permanent grant.
-      graceUntil: null,
-      verifiedAt: record.verifiedAt ?? nowIso,
-      lastSuccessAt: nowIso,
-      lastCheckedAt: nowIso,
-      firstFailureAt: null,
-      consecutiveFailures: 0,
-      consecutiveSoftFailures: 0,
-      lastError: null,
-    }
-  }
-
-  if (outcome.kind === 'verified') {
-    return {
-      status: 'verified',
-      // A real proof retires the grandfathered exemption for good.
-      method: 'dns-txt',
-      verifiedAt: record.verifiedAt ?? nowIso,
-      lastSuccessAt: nowIso,
-      lastCheckedAt: nowIso,
-      firstFailureAt: null,
-      consecutiveFailures: 0,
-      consecutiveSoftFailures: 0,
-      lastError: null,
-    }
-  }
-
-  if (outcome.kind === 'unverifiable') {
-    // Nothing to prove and nothing to punish: a dev-only entry simply never
-    // reaches `verified`. Recorded so the admin surface can explain itself.
-    return { lastCheckedAt: nowIso, lastError: outcome.reason }
-  }
-
-  if (outcome.kind === 'soft-failure') {
-    const soft = record.consecutiveSoftFailures + 1
-    if (soft < SOFT_FAILURE_ESCALATION) {
-      // Deliberately does NOT touch status, firstFailureAt or the hard counter:
-      // our resolver being unhappy is not evidence about the tenant's zone.
-      return {
-        lastCheckedAt: nowIso,
-        consecutiveSoftFailures: soft,
-        lastError: outcome.reason,
-      }
-    }
-    return {
-      status: 'failing',
-      lastCheckedAt: nowIso,
-      firstFailureAt: record.firstFailureAt ?? nowIso,
-      consecutiveFailures: record.consecutiveFailures + 1,
-      consecutiveSoftFailures: soft,
-      lastError: `${outcome.reason} (escalated after ${soft} consecutive resolver failures)`,
-    }
-  }
-
-  return {
-    status: 'failing',
-    lastCheckedAt: nowIso,
-    firstFailureAt: record.firstFailureAt ?? nowIso,
-    consecutiveFailures: record.consecutiveFailures + 1,
-    consecutiveSoftFailures: 0,
-    lastError: outcome.reason,
-  }
-}
+export {
+  ALLOWLIST_MAX_STALENESS_DAYS,
+  GRANDFATHER_GRACE_DAYS,
+  ROUTING_GRACE_DAYS,
+  ROUTING_GRACE_FAILURES,
+  SOFT_FAILURE_ESCALATION,
+  applyCheckOutcome,
+} from '../../../packages/tenancy/src/verification'
+import {
+  ALLOWLIST_MAX_STALENESS_DAYS,
+  ROUTING_GRACE_DAYS,
+  ROUTING_GRACE_FAILURES,
+  daysBetween,
+  inGrandfatherGrace,
+} from '../../../packages/tenancy/src/verification'
 
 /**
  * May this hostname appear on the OAuth redirect allowlist?

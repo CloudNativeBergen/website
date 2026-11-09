@@ -16,7 +16,8 @@
  */
 
 import { Resolver } from 'node:dns/promises'
-import { challengeRecordName, expectedTxtValue } from './challenge'
+import { challengeRecordName } from './challenge'
+import { classifyTxtRecords } from '../../../packages/tenancy/src/verification'
 import type { DomainCheckOutcome } from './types'
 
 /** Per-attempt DNS timeout. */
@@ -95,15 +96,5 @@ export async function checkDomainChallenge(
     return { kind: 'soft-failure', reason: `DNS lookup failed (${code})` }
   }
 
-  const expected = expectedTxtValue(token)
-  const found = records.some((chunks) => chunks.join('').trim() === expected)
-  if (found) return { kind: 'verified' }
-
-  return {
-    kind: 'hard-failure',
-    reason:
-      records.length === 0
-        ? `No TXT record at ${name}`
-        : `TXT records at ${name} do not contain the expected token`,
-  }
+  return classifyTxtRecords(name, token, records)
 }

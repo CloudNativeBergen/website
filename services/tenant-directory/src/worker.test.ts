@@ -257,6 +257,9 @@ vi.stubGlobal('fetch', sanityFetch)
 let sqlite: DatabaseSync
 /** Hostnames Sanity already lists (#2207), and a forced read failure. */
 const sanityHosts = { taken: new Set<string>(), fail: false }
+/** The DoH resolver's answer (#2207 phase 2); SERVFAIL unless a test sets it. */
+let doh: (url: URL) => Response | Promise<Response> = () =>
+  Response.json({ Status: 2 })
 let env: Parameters<typeof worker.fetch>[1]
 
 beforeEach(() => {
@@ -345,11 +348,17 @@ beforeEach(() => {
   sanityFetch.mockReset()
   sanityHosts.taken.clear()
   sanityHosts.fail = false
+  doh = () => Response.json({ Status: 2 })
   sanityRequests = []
   sanityFetch.mockImplementation(async (url, init) => {
     // A Request at runtime; workers-types and Node disagree on its type.
     const req = new Request(url as unknown as string, init)
     if (req.url.startsWith(SITE)) return fakeSite(req)
+    if (req.url.startsWith('https://cloudflare-dns.com/')) {
+      expect(req.headers.get('accept')).toBe('application/dns-json')
+      expect(req.signal).toBeDefined()
+      return doh(new URL(req.url))
+    }
     sanityRequests.push(req.clone())
     const peek = (await req.clone().json()) as {
       query: string
@@ -3393,6 +3402,119 @@ describe('domains API (#2207)', () => {
       (await gql(RECHECK, { h: 'conf.example.com' }, admin)).body.data
         .recheckDomain.hostname,
     ).toBe('conf.example.com')
+  })
+
+  describe('DNS check over DoH (phase 2)', () => {
+    const FULL = `mutation($h: String!) { recheckDomain(hostname: $h) { status lastError lastErrorCode } }`
+    const row = (h = 'conf.example.com') =>
+      sqlite
+        .prepare(
+          'SELECT status, verified_at, consecutive_failures, consecutive_soft_failures, last_error_code, token FROM domains WHERE hostname = ?',
+        )
+        .get(h) as Record<string, unknown>
+    const txt = (token: string) =>
+      Response.json({
+        Status: 0,
+        Answer: [
+          { type: 16, data: '"v=spf1 -all"' },
+          { type: 16, data: `"konf-domain-verification=" "${token}"` },
+        ],
+      })
+    async function claimed() {
+      const { admin, conf } = await setup()
+      const { body } = await gql(
+        CLAIM,
+        { c: conf, h: 'conf.example.com' },
+        admin,
+      )
+      return { admin, token: body.data.claimDomain.token as string }
+    }
+
+    it('marks the claim verified when the TXT record carries its token', async () => {
+      const { admin, token } = await claimed()
+      let asked = ''
+      doh = (url) => {
+        asked = `${url.searchParams.get('name')} ${url.searchParams.get('type')}`
+        return txt(token)
+      }
+      const { body } = await gql(FULL, { h: 'conf.example.com' }, admin)
+      expect(asked).toBe('_konf-challenge.conf.example.com TXT')
+      expect(body.data.recheckDomain).toEqual({
+        status: 'verified',
+        lastError: null,
+        lastErrorCode: null,
+      })
+      expect(row().verified_at).toEqual(expect.any(Number))
+      // Routing is phase 6: the legacy column is untouched.
+      expect(
+        (await gql(RESOLVE, { host: 'conf.example.com' })).body.data
+          .tenantByHost,
+      ).toBeNull()
+    })
+
+    it('does not verify a row whose token changed during the lookup (CAS)', async () => {
+      const { admin, token } = await claimed()
+      doh = () => {
+        // A takeover lands while DNS answers for the OLD claim's token.
+        sqlite
+          .prepare("UPDATE domains SET token = 'new-claim' WHERE hostname = ?")
+          .run('conf.example.com')
+        return txt(token)
+      }
+      const { body } = await gql(FULL, { h: 'conf.example.com' }, admin)
+      expect(body.data.recheckDomain.status).toBe('pending')
+      expect(row()).toMatchObject({
+        status: 'pending',
+        verified_at: null,
+        token: 'new-claim',
+        last_error_code: null,
+      })
+    })
+
+    it.each([
+      ['NXDOMAIN', () => Response.json({ Status: 3 }), 'hard-failure'],
+      ['no TXT', () => Response.json({ Status: 0 }), 'hard-failure'],
+      ['a wrong token', () => txt('someone-else'), 'hard-failure'],
+      ['SERVFAIL', () => Response.json({ Status: 2 }), 'soft-failure'],
+      ['HTTP 503', () => new Response('x', { status: 503 }), 'soft-failure'],
+      [
+        'a timeout',
+        () => {
+          throw new DOMException('timed out', 'TimeoutError')
+        },
+        'soft-failure',
+      ],
+    ] as const)('classifies %s as %s', async (_, answer, kind) => {
+      const { admin } = await claimed()
+      doh = answer
+      const { body } = await gql(FULL, { h: 'conf.example.com' }, admin)
+      expect(body.data.recheckDomain.lastErrorCode).toBe(
+        kind.toUpperCase().replace('-', '_'),
+      )
+      expect(row()).toMatchObject(
+        kind === 'hard-failure'
+          ? { consecutive_failures: 1, consecutive_soft_failures: 0 }
+          : { consecutive_failures: 0, consecutive_soft_failures: 1 },
+      )
+      // Never proven: stays pending, so the 72 h takeover still applies.
+      expect(row().status).toBe('pending')
+    })
+
+    it('marks a verified claim failing on a hard failure, not a soft one', async () => {
+      const { admin } = await claimed()
+      sqlite
+        .prepare(
+          "UPDATE domains SET status = 'verified', verified_at = 1 WHERE hostname = ?",
+        )
+        .run('conf.example.com')
+      doh = () => Response.json({ Status: 2 })
+      await gql(FULL, { h: 'conf.example.com' }, admin)
+      expect(row().status).toBe('verified')
+      sqlite.prepare('UPDATE domains SET last_recheck_at = 0').run()
+      doh = () => Response.json({ Status: 3 })
+      await gql(FULL, { h: 'conf.example.com' }, admin)
+      expect(row().status).toBe('failing')
+    })
   })
 
   it('removes a custom hostname and its Cloudflare hostname, never a platform one', async () => {
