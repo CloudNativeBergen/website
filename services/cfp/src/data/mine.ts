@@ -441,6 +441,8 @@ const FIELDS = `_id, _rev, _createdAt, _updatedAt, status, title, description, f
 export const MINE = `*[_type == "talk" && conference._ref == $conferenceId && conference->organization._ref == $orgId && $speakerId in speakers[]._ref] | order(_updatedAt desc){
       ${FIELDS}
     }`
+// The seats a capacity change may not go below (the site's changeCapacity).
+export const SEATS_TAKEN = `count(*[_type == "workshopSignup" && workshop._ref == $id && conference._ref == $conferenceId && status == "confirmed" && !(_id in path("drafts.**"))])`
 export const ONE = `*[_type == "talk" && _id == $id && conference._ref == $conferenceId && conference->organization._ref == $orgId && $speakerId in speakers[]._ref][0]{
       ${FIELDS}
     }`
@@ -733,6 +735,25 @@ export class MyProposals {
         no('BAD_USER_INPUT', 'Description cannot be empty')
     } else no('FORBIDDEN', `A ${cur.status} proposal cannot be edited`)
     if (!keys.length) return strip(cur)
+    // #2211: capacity changes only reach here for a draft or submitted talk
+    // (accepted ones may change title and abstract only), and the site's
+    // changeCapacity promotes the waitlist only for a confirmed workshop, so
+    // there is nothing to promote; what is left of it is the refusal below
+    // the seats taken. No sign-up can land meanwhile: only a listed
+    // (confirmed) workshop takes them, and a status change fails the
+    // ifRevisionId below.
+    if (
+      input.capacity != null &&
+      input.capacity !== cur.capacity &&
+      (cur.status === 'draft' || cur.status === 'submitted')
+    ) {
+      const taken = await this.sanity.fetch<number>(SEATS_TAKEN, { ...w, id })
+      if (input.capacity < taken)
+        no(
+          'CONFLICT',
+          `Cannot reduce capacity below current signup count (${taken})`,
+        )
+    }
     // ifRevisionId: a change between the rule check and the write fails.
     await this.sanity
       .patch(id)
