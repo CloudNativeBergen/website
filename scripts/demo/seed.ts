@@ -22,10 +22,12 @@
  *      Same UTC day gives identical mutations, except invite tokens.
  *
  * Env: KONF_OPERATOR_TOKEN (identity JWT of a platform operator, origin
- * claim = KONF_OPERATOR_ORIGIN, required; both from Kontroll), KONF_API_URL
- * (default production gateway), NEXT_PUBLIC_SANITY_PROJECT_ID,
- * SANITY_API_TOKEN_WRITE. The dataset is pinned to `production`.
+ * claim = KONF_OPERATOR_ORIGIN, defaults to that claim; from Kontroll), KONF_API_URL
+ * (default production gateway), NEXT_PUBLIC_SANITY_PROJECT_ID (default
+ * mvzwvw14), SANITY_API_TOKEN_WRITE (default: the logged-in Sanity CLI's
+ * token). The dataset is pinned to `production`.
  */
+import { execFileSync } from 'node:child_process'
 import { createHmac, randomBytes } from 'node:crypto'
 import { avatarAsset } from './assets'
 import { generateDemoFixtures } from './fixtures/generate'
@@ -658,30 +660,62 @@ function operatorClient(token: string, origin: string): GraphQLClient {
   }
 }
 
+/** SANITY_API_TOKEN_WRITE, else the token of `sanity login`. Never logged. */
+function sanityToken(): string {
+  const env = process.env.SANITY_API_TOKEN_WRITE?.trim()
+  if (env) return env
+  let out = ''
+  try {
+    out = execFileSync('npx', ['sanity', 'debug', '--secrets'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+  } catch {}
+  const token = out.match(/Auth token:\s+(\S+)/)?.[1]
+  // Without a token a private dataset reads as empty, not as an error.
+  if (!token)
+    throw new Error(
+      'no Sanity token: set SANITY_API_TOKEN_WRITE or run `npx sanity login`',
+    )
+  return token
+}
+
+/** KONF_OPERATOR_ORIGIN, else the token's own origin claim. */
+function operatorOrigin(token: string | undefined): string | undefined {
+  const env = process.env.KONF_OPERATOR_ORIGIN?.trim()
+  if (env || !token) return env
+  try {
+    const claims = JSON.parse(
+      Buffer.from(token.split('.')[1] ?? '', 'base64url').toString(),
+    ) as { origin?: unknown }
+    return typeof claims.origin === 'string' ? claims.origin : undefined
+  } catch {
+    return undefined
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2)
   const unknown = args.filter((a) => a !== '--dry-run')
   if (unknown.length) throw new Error(`unknown arguments: ${unknown.join(' ')}`)
+  const origin = operatorOrigin(process.env.KONF_OPERATOR_TOKEN)
   await run(
     {
       dryRun: args.includes('--dry-run'),
       now: today(),
       token: process.env.KONF_OPERATOR_TOKEN,
-      origin: process.env.KONF_OPERATOR_ORIGIN,
+      origin,
     },
     {
-      api: operatorClient(
-        process.env.KONF_OPERATOR_TOKEN ?? '',
-        process.env.KONF_OPERATOR_ORIGIN ?? '',
-      ),
+      api: operatorClient(process.env.KONF_OPERATOR_TOKEN ?? '', origin ?? ''),
       createSanityClient: async () => {
         // Imported lazily so a refused or dry run never loads a write client.
         const { createClient } = await import('next-sanity')
         return createClient({
-          projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID,
+          projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || 'mvzwvw14',
           dataset: 'production',
           apiVersion: '2025-01-01',
-          token: process.env.SANITY_API_TOKEN_WRITE,
+          token: sanityToken(),
           useCdn: false,
         }) as unknown as SanityWriter
       },
