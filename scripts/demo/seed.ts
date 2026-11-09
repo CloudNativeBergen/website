@@ -13,7 +13,8 @@
  *   3. Read that org's `conferenceEditions`; map past/upcoming by title. The
  *      write allowlist is `kkdemo.conference` plus those ids; every target is
  *      checked against `kkdemo.seed.*` or the allowlist before any write.
- *      Conference docs get setIfMissing only, and must already exist.
+ *      Conference docs must already exist; they get their dates set and
+ *      everything else setIfMissing.
  *   4. --dry-run: print counts per type and stop. No write client.
  *   5. Upload missing speaker avatars (content-addressed, so unchanged ones
  *      are skipped), then createOrReplace everything else under DEMO_PREFIX,
@@ -57,7 +58,13 @@ export interface SanityWriter {
   transaction(): {
     createOrReplace(doc: Doc): unknown
     createIfNotExists(doc: Doc): unknown
-    patch(id: string, ops: { setIfMissing: Record<string, unknown> }): unknown
+    patch(
+      id: string,
+      ops: {
+        set?: Record<string, unknown>
+        setIfMissing: Record<string, unknown>
+      },
+    ): unknown
     commit(): Promise<unknown>
   }
   fetch<T>(query: string, params: Record<string, unknown>): Promise<T>
@@ -181,7 +188,12 @@ const LIVE_KEY = 'edition-live'
 
 export interface ConferencePatch {
   id: string
-  /** setIfMissing only: existing values (theme, branding, dates) are never overwritten. */
+  /**
+   * Dates are always set: the admin schedule editor drops schedules outside
+   * them, and the seeded schedules follow the fixture dates.
+   */
+  set: { startDate: string; endDate: string }
+  /** Existing values (theme, branding) are never overwritten. */
   setIfMissing: Record<string, unknown>
 }
 
@@ -466,14 +478,13 @@ export function buildDocuments(
   ]
   const conferences: ConferencePatch[] = f.d1.editions.map((e) => ({
     id: confId(e.key),
+    set: { startDate: e.startDate, endDate: e.endDate },
     setIfMissing: {
       title: e.title,
       tagline: e.tagline,
       organization: { _type: 'reference', _ref: DEMO_ORG_ID },
       city: e.city,
       country: e.country,
-      startDate: e.startDate,
-      endDate: e.endDate,
       visibility: 'unlisted',
       organizers: refs(
         'speaker',
@@ -636,7 +647,7 @@ export async function run(
     const tx = client.transaction()
     if (i === 0) {
       for (const c of conferences)
-        tx.patch(c.id, { setIfMissing: c.setIfMissing })
+        tx.patch(c.id, { set: c.set, setIfMissing: c.setIfMissing })
     }
     upsert.slice(i, i + TX_SIZE).forEach((d) => tx.createOrReplace(d))
     await tx.commit()

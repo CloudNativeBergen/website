@@ -312,8 +312,12 @@ describe('demo:seed', () => {
       ) as unknown[][]
     const live = touching(LIVE_CONFERENCE_ID)
     expect(live.map((m) => m[0])).toEqual(['patch'])
-    // setIfMissing only: an existing theme or branding is never overwritten.
-    expect(Object.keys(live[0][2] as object)).toEqual(['setIfMissing'])
+    // Only the dates are set; an existing theme or branding is never overwritten.
+    expect(Object.keys(live[0][2] as object)).toEqual(['set', 'setIfMissing'])
+    expect(Object.keys((live[0][2] as { set: object }).set)).toEqual([
+      'startDate',
+      'endDate',
+    ])
     const set = (live[0][2] as { setIfMissing: Record<string, unknown> })
       .setIfMissing
     for (const f of [
