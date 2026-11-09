@@ -92,7 +92,9 @@ export const sellsTickets = (c: {
   // Native ticketing (#2247) has no vendor event to bind: choosing 'konf' is
   // the decision to sell, so it is gated like binding one.
   c.ticketingProvider === 'konf' ||
-  (c.ticketingProvider === 'tito' ? !!c.titoEventSlug : c.checkinEventId != null)
+  (c.ticketingProvider === 'tito'
+    ? !!c.titoEventSlug
+    : c.checkinEventId != null)
 
 /** True when `plan` covers `gate`. An unknown plan is free. */
 export const planAllows = (plan: unknown, gate: PlanGate): boolean =>
