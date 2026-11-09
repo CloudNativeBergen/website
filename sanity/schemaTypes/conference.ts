@@ -714,6 +714,7 @@ export default defineType({
         list: [
           { title: 'Checkin.no (default)', value: 'checkin' },
           { title: 'Tito (ti.to)', value: 'tito' },
+          { title: 'Konf (native)', value: 'konf' },
         ],
         layout: 'radio',
       },

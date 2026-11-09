@@ -9,6 +9,7 @@ import {
   generateEnvelopeKeyPair,
   planAllows,
   requirePlan,
+  sellsTickets,
   verifyEnvelope,
   type BillingRow,
   type PlanGate,
@@ -150,5 +151,21 @@ describe('the envelope plan claim', () => {
     } as never)
     const e = await verifyEnvelope(token, keys.publicPem)
     expect(e).toEqual({ ...base, plan: want, orgKind: 'customer' })
+  })
+})
+
+const SELLS_CASES: [Record<string, unknown>, boolean][] = [
+  [{}, false],
+  [{ checkinEventId: 7 }, true],
+  [{ ticketingProvider: 'tito', titoEventSlug: 'ev' }, true],
+  [{ ticketingProvider: 'tito', checkinEventId: 7 }, false],
+  // #2247: native ticketing has no vendor event; choosing it is selling.
+  [{ ticketingProvider: 'konf' }, true],
+  [{ ticketingProvider: 'konf', checkinEventId: null }, true],
+]
+
+describe('sellsTickets (#2141, #2247)', () => {
+  it.each(SELLS_CASES)('%j -> %s', (c, want) => {
+    expect(sellsTickets(c)).toBe(want)
   })
 })

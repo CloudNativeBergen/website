@@ -18,7 +18,7 @@ vi.mock('@/lib/konf-api/conference-write', () => ({
   orgContextViaApi: (h: string, j: string) => w.ctx(h, j),
 }))
 
-const { requireOrgPlan } = await import('./index')
+const { requireOrgPlan, sellsTickets } = await import('./index')
 const { structuredErrorData } = await import('@/server/errors')
 
 beforeEach(() => {
@@ -66,5 +66,21 @@ describe('requireOrgPlan (#2129)', () => {
         code: 'SERVICE_UNAVAILABLE',
       },
     )
+  })
+})
+
+const SELLS_CASES: [Record<string, unknown>, boolean][] = [
+  [{}, false],
+  [{ checkinEventId: 7 }, true],
+  [{ ticketingProvider: 'tito', titoEventSlug: 'ev' }, true],
+  [{ ticketingProvider: 'tito', checkinEventId: 7 }, false],
+  // #2247: native ticketing has no vendor event; choosing it is selling.
+  [{ ticketingProvider: 'konf' }, true],
+  [{ ticketingProvider: 'konf', checkinEventId: null }, true],
+]
+
+describe('sellsTickets (#2141, #2247)', () => {
+  it.each(SELLS_CASES)('%j -> %s', (c, want) => {
+    expect(sellsTickets(c)).toBe(want)
   })
 })

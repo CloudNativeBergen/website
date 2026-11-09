@@ -86,7 +86,7 @@ export interface TicketSummaryReady {
    * VAT, Tito tax-inclusive), so a surface states the basis instead of leaving
    * the reader to assume one.
    */
-  amountsIncludeVat: boolean
+  amountsIncludeVat: boolean | undefined
   /**
    * Whether per-type revenue is APPORTIONED. A provider reporting one amount
    * per ORDER (Checkin) carries no per-seat price, so a mixed-category order is

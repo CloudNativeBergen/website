@@ -242,7 +242,7 @@ export interface Conference {
    * 'tito' routes to the Tito account/event slugs below. Server code must treat
    * absence as Checkin — see `conferenceProviderType`.
    */
-  ticketingProvider?: 'checkin' | 'tito'
+  ticketingProvider?: 'checkin' | 'tito' | 'konf'
   checkinCustomerId?: number
   checkinEventId?: number
   /** Tito account slug (e.g. "ultimateconf" in ti.to/ultimateconf/2026). */

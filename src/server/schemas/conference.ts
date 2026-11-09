@@ -265,7 +265,7 @@ export const UpdateVolunteerLinksSchema = z.object({
 // Checkin). Checkin uses the numeric ids; Tito uses the two account/event slugs.
 export const UpdateTicketingIdsSchema = z
   .object({
-    ticketingProvider: z.enum(['checkin', 'tito']).nullable().optional(),
+    ticketingProvider: z.enum(['checkin', 'tito', 'konf']).nullable().optional(),
     checkinCustomerId: z
       .number()
       .int('Must be a whole number')

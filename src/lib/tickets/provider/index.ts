@@ -200,7 +200,8 @@ export type ConferenceTicketingBinding = {
 export function conferenceProviderType(
   conference: ConferenceTicketingBinding,
 ): TicketingProviderType {
-  return conference.ticketingProvider === 'tito' ? 'tito' : 'checkin'
+  const p = conference.ticketingProvider
+  return p === 'tito' || p === 'konf' ? p : 'checkin'
 }
 
 /**
@@ -236,7 +237,11 @@ export function ticketingBinding(
 export function hasTicketingBinding(
   conference: ConferenceTicketingBinding,
 ): boolean {
-  if (conferenceProviderType(conference) === 'tito') {
+  const providerType = conferenceProviderType(conference)
+  // Native ticketing has no vendor binding, and its public ticket types are
+  // not served through this provider yet: public readers skip it.
+  if (providerType === 'konf') return false
+  if (providerType === 'tito') {
     return Boolean(conference.titoAccountSlug && conference.titoEventSlug)
   }
   return Boolean(conference.checkinCustomerId && conference.checkinEventId)
@@ -265,6 +270,14 @@ export async function resolveTicketingProvider(
 ): Promise<ResolvedTicketing> {
   const orgId = conference.organization?._ref
   const providerType = conferenceProviderType(conference)
+
+  // Native ticketing is not a vendor account: it is read through the Konf API
+  // as the signed-in organizer, so only the admin pages resolve it
+  // (`resolveTicketingAdminAccess`). Webhook, speaker-ticket and public paths
+  // see it as unconfigured.
+  if (providerType === 'konf') {
+    return { configured: false, provider: null, eventRef: null }
+  }
 
   if (providerType === 'tito') {
     if (!conference.titoAccountSlug || !conference.titoEventSlug) {

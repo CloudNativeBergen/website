@@ -501,6 +501,7 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         options: [
           { value: 'checkin', title: 'Checkin.no (default)' },
           { value: 'tito', title: 'Tito (ti.to)' },
+          { value: 'konf', title: 'Konf (native)' },
         ],
       },
       {

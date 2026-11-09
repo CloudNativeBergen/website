@@ -11,6 +11,7 @@ import {
   type TicketingProvider,
   type TicketingProviderType,
 } from './provider'
+import { KonfProvider } from './provider/konf'
 
 /**
  * ONE resolution for what an organizer's ticketing pages should show — the
@@ -87,6 +88,24 @@ export async function resolveTicketingAdminAccess(
     return { state: 'disabled', providerType }
   }
 
+  // 2. Native ticketing (#2238) has no vendor binding or credentials: the
+  // org's ticketing entitlement is what makes it ready. Asked before any
+  // fetch; the gateway still enforces `ticketing.read` on the read itself.
+  if (providerType === 'konf') {
+    return (await isTicketingEnabledForOrg(orgId))
+      ? {
+          state: 'ready',
+          provider: new KonfProvider(),
+          eventRef: {
+            provider: 'konf',
+            accountId: orgId ?? '',
+            externalId: 'native',
+          },
+          providerType,
+        }
+      : { state: 'unavailable', providerType }
+  }
+
   const ticketing = await resolveTicketingProvider(conference)
 
   if (ticketing.configured) {
@@ -109,5 +128,6 @@ export async function resolveTicketingAdminAccess(
 export function ticketingProviderLabel(
   providerType: TicketingProviderType,
 ): string {
+  if (providerType === 'konf') return 'Konf'
   return providerType === 'tito' ? 'Tito' : 'Checkin.no'
 }

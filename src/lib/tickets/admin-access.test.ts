@@ -304,3 +304,37 @@ describe('ticketingProviderLabel', () => {
     expect(ticketingProviderLabel('tito')).toBe('Tito')
   })
 })
+
+describe('resolveTicketingAdminAccess — native Konf (#2238)', () => {
+  const konf = {
+    ticketingProvider: 'konf' as const,
+    organization: { _ref: TENANT_ORG_ID },
+  }
+
+  it('is READY with the Konf provider when the org has the ticketing grant, without credentials', async () => {
+    vi.stubEnv('CHECKIN_API_KEY', '')
+    vi.stubEnv('TITO_API_KEY', '')
+    getOrganizationById.mockResolvedValue(
+      org({ featureOverrides: [{ feature: 'ticketing', enabled: true }] }),
+    )
+    const access = await resolveTicketingAdminAccess(konf)
+    expect(access.state).toBe('ready')
+    if (access.state !== 'ready') throw new Error('unreachable')
+    expect(access.provider.name).toBe('Konf')
+    expect(access.provider.amountsIncludeVat).toBeUndefined()
+    expect(ticketingProviderLabel(access.providerType)).toBe('Konf')
+  })
+
+  it('is UNAVAILABLE without the grant', async () => {
+    const access = await resolveTicketingAdminAccess(konf)
+    expect(access).toEqual({ state: 'unavailable', providerType: 'konf' })
+  })
+
+  it('is DISABLED on an explicit deny', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({ featureOverrides: [{ feature: 'ticketing', enabled: false }] }),
+    )
+    const access = await resolveTicketingAdminAccess(konf)
+    expect(access).toEqual({ state: 'disabled', providerType: 'konf' })
+  })
+})
