@@ -289,7 +289,11 @@ export async function isTicketed(
   conferenceId: string,
 ) {
   const row = await rawDb(d1).query.conferences.findFirst({
-    columns: { ticketingProvider: true, checkinEventId: true, titoEventSlug: true },
+    columns: {
+      ticketingProvider: true,
+      checkinEventId: true,
+      titoEventSlug: true,
+    },
     where: and(
       eq(conferences.orgId, orgId),
       eq(conferences.conferenceId, conferenceId),

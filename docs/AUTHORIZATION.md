@@ -366,14 +366,15 @@ envelope per request from tenant-directory's `tenantByHost`; `verifyEnvelope` ca
 
 These are the only gated paths:
 
-| Gate                          | Needs | Gated path                                                                                                                                          |
-| ----------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `conference.publish_ticketed` | basic | Site `conference.updateVisibility` to `live` from an explicit non-live visibility, when the edition's `ticketingProvider` is set (the real publish) |
-| `conference.publish_ticketed` | basic | Gateway `setConferenceLifecycle(null)` putting a cancelled or archived ticketed edition back live                                                   |
-| `domain.connect_custom`       | basic | Site `conference.updateDomains` adding an entry that was not in the list and is not a platform-zone host                                            |
-| `domain.connect_custom`       | basic | Gateway `provisionConference` with a `domain`, tenant lane                                                                                          |
-| `api_client.create`           | basic | Policy row only: API client creation (#2115, resolver not built yet)                                                                                |
-| `pat.create_write`            | basic | Policy row only: a PAT with any write scope (#2115, resolver not built yet)                                                                         |
+| Gate                          | Needs | Gated path                                                                                                                                                       |
+| ----------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `conference.publish_ticketed` | basic | Site `conference.updateVisibility` to `live` from an explicit non-live visibility, when the edition's `ticketingProvider` is set (the real publish)              |
+| `conference.publish_ticketed` | basic | Gateway `setConferenceLifecycle(null)` putting a cancelled or archived ticketed edition back live                                                                |
+| `conference.publish_ticketed` | basic | Binding a vendor event to an edition that sold no tickets, published or not: site `conference.updateTicketingIds` and the D1 write in `updateConference` (#2141) |
+| `domain.connect_custom`       | basic | Site `conference.updateDomains` adding an entry that was not in the list and is not a platform-zone host                                                         |
+| `domain.connect_custom`       | basic | Gateway `provisionConference` with a `domain`, tenant lane                                                                                                       |
+| `api_client.create`           | basic | Policy row only: API client creation (#2115, resolver not built yet)                                                                                             |
+| `pat.create_write`            | basic | Policy row only: a PAT with any write scope (#2115, resolver not built yet)                                                                                      |
 
 Not gated: unlisting, an already live edition, free-to-attend editions, keeping or
 removing domains, cancelling or archiving, drafts created by `provisionConference`, and
@@ -386,7 +387,10 @@ and `extensions.requiredPlan`, and the gateway passes both. On the site it is tR
 `FORBIDDEN`, with the same `reason` and `requiredPlan` in `error.data`. The site reads the
 plan from the gateway (`organization { effectivePlan }`) as the signed-in organizer. If
 that read fails, the site refuses with `SERVICE_UNAVAILABLE`, which is retryable.
-"Ticketed" means `ticketingProvider` is set.
+"Ticketed" means a vendor event is bound (`sellsTickets` in `packages/tenancy/src/plan.ts`):
+`titoEventSlug` when `ticketingProvider` is `tito`, otherwise `checkinEventId`. An absent
+`ticketingProvider` means Checkin, which is how every production edition stores it. Picking a
+vendor without an event is not ticketed.
 
 **Effective plan:** `comp` gives the stored plan while `comp_until` is unset or ahead.
 `stripe` gives it while `active`, or while `past_due` and within 14 days of

@@ -1434,7 +1434,11 @@ describe('updateConference plan gate on binding an event (#2141)', () => {
     ['a Checkin event (absent provider)', { checkinEventId: 34 }],
     [
       'a Tito event',
-      { ticketingProvider: 'tito', titoAccountSlug: 'a', titoEventSlug: '2026' },
+      {
+        ticketingProvider: 'tito',
+        titoAccountSlug: 'a',
+        titoEventSlug: '2026',
+      },
     ],
   ])('refuses binding %s on free, writing nothing', async (_, input) => {
     for (const plan of [undefined, 'free'] as const) {
@@ -1457,7 +1461,7 @@ describe('updateConference plan gate on binding an event (#2141)', () => {
         .errors,
     ).toBeUndefined()
     expect(bound()).toEqual({ checkin_event_id: 35, tito_event_slug: null })
-    sqlite.exec("UPDATE conferences SET checkin_event_id = NULL")
+    sqlite.exec('UPDATE conferences SET checkin_event_id = NULL')
     expect(
       (
         await gql(site(), MUTATION, {

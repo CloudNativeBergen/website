@@ -2077,7 +2077,8 @@ describe('conference router — plan gates (#2129)', () => {
   it('refuses publishing an unlisted ticketed edition on free, writing nothing', async () => {
     conference({
       visibility: 'unlisted',
-      ticketingProvider: 'tito', titoEventSlug: '2026',
+      ticketingProvider: 'tito',
+      titoEventSlug: '2026',
     })
     requireOrgPlanMock.mockRejectedValue(await planRefusal())
     await expect(
@@ -2112,16 +2113,8 @@ describe('conference router — plan gates (#2129)', () => {
       { visibility: 'live', checkinEventId: 7 },
       'live',
     ],
-    [
-      'an edition with no visibility (live)',
-      { checkinEventId: 7 },
-      'live',
-    ],
-    [
-      'unlisting',
-      { visibility: 'live', checkinEventId: 7 },
-      'unlisted',
-    ],
+    ['an edition with no visibility (live)', { checkinEventId: 7 }, 'live'],
+    ['unlisting', { visibility: 'live', checkinEventId: 7 }, 'unlisted'],
   ] as const)('never asks for %s', async (_, over, visibility) => {
     conference(over)
     await makeCaller({ isOrganizer: true }).updateVisibility({ visibility })
