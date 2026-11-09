@@ -97,6 +97,10 @@ run = "fnox exec -- pnpm run manage-orphaned-files"
 description = "Put a Worker's declared secrets from fnox (usage: mise run secrets:sync -- <service> <preview|production> [--check])"
 run = "pnpm exec tsx scripts/secrets-sync.ts"
 
+[tasks."domains:import"]
+description = "Import domain verification into tenant-directory D1 (usage: mise run domains:import -- <preview|production> [--apply|--verify])"
+run = "scripts/domain-import.sh"
+
 [tasks.install]
 description = "Install dependencies"
 run = "pnpm install"
