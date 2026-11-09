@@ -182,6 +182,34 @@ token, wrangler and gh.
 4. Check: `pnpm tsx scripts/parity-conference.ts --all`.
 5. Delete `tmp/backfill/conference.sql`. It can hold Slack invite URLs.
 
+### Importing domain verification
+
+Epic #2207 phase 4. `scripts/import-domain-verification.ts` copies Sanity
+`domainVerification` state into tenant-directory D1 `domains`. It reads Sanity
+and a D1 dump you make, writes one SQL file, and never touches D1 itself. Its
+header lists which side wins per column; in short, a row claimed in D1
+(`claimed_at` set) is never changed. It never changes live routing either:
+new rows get the legacy `verification` column as `pending`, because
+`tenantByHost` routes on it until phase 6. Hosts where that column disagrees
+with Sanity are printed as "routing cutover candidates (phase 6)" and are not
+applied.
+
+1. Dump D1: `wrangler d1 execute konf-tenant-directory --remote --json --command "SELECT id, org_id FROM conferences; SELECT * FROM domains" > ../../tmp/d1.json`
+   (run from `services/tenant-directory`; the other steps run from the repo root).
+2. Dry run: `fnox exec -- pnpm tsx scripts/import-domain-verification.ts --d1 tmp/d1.json`.
+3. Review the row count, every `skipped` line, the routing cutover candidates
+   and the update columns.
+4. Generate: add `--write` (output goes to `tmp/`; `--out` must stay inside
+   it), then read `tmp/domain-verification.sql`.
+5. Apply, only with owner approval: `wrangler d1 execute konf-tenant-directory --remote --file tmp/domain-verification.sql`.
+6. Verify: dump D1 again as in step 1, then
+   `fnox exec -- pnpm tsx scripts/import-domain-verification.ts --d1 tmp/d1.json --verify`.
+   It exits 1 on any routing or allowlist difference, and if
+   `2026.cloudnativedays.no` is not verified on both sides. The routing
+   cutover candidates section is informational until phase 6.
+7. Delete `tmp/d1.json` and `tmp/domain-verification.sql`. Both hold
+   verification tokens.
+
 ### Hard parts
 
 - **References.** `organizers` and `teams[].members` point at `speaker`
