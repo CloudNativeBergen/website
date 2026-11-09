@@ -194,7 +194,8 @@ new rows get the legacy `verification` column as `pending`, because
 with Sanity are printed as "routing cutover candidates (phase 6)" and are not
 applied.
 
-`SANITY_API_TOKEN_READ` must be in fnox (`fnox set SANITY_API_TOKEN_READ`).
+The Sanity read token comes from fnox (`SANITY_API_TOKEN_READ`, else
+`SANITY_API_TOKEN_READ_PROD`).
 The task pins the RunKonf account, keeps the dump and SQL in a temporary
 directory under `tmp/` and deletes them on exit, since both hold tokens.
 
