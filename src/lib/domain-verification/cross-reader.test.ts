@@ -44,9 +44,11 @@ const base = {
   consecutiveSoftFailures: 0,
   lastError: null,
 }
-const STATES: [string, Record<string, unknown> | null][] = [
-  ['verified', { ...base, status: 'verified' }],
-  ['pending', { ...base, status: 'pending', verifiedAt: null }],
+// [state, row, routes, bounces]. A failing row in grace still routes, but the
+// guard sends codes only to verified rows.
+const STATES: [string, Record<string, unknown> | null, boolean, boolean][] = [
+  ['verified', { ...base, status: 'verified' }, true, true],
+  ['pending', { ...base, status: 'pending', verifiedAt: null }, false, false],
   [
     'failing, in grace',
     {
@@ -55,6 +57,8 @@ const STATES: [string, Record<string, unknown> | null][] = [
       firstFailureAt: iso(NOW - DAY),
       consecutiveFailures: 1,
     },
+    true,
+    false,
   ],
   [
     'failing, past grace',
@@ -64,9 +68,11 @@ const STATES: [string, Record<string, unknown> | null][] = [
       firstFailureAt: iso(NOW - 60 * DAY),
       consecutiveFailures: 9,
     },
+    false,
+    false,
   ],
-  ['revoked', { ...base, status: 'revoked' }],
-  ['missing', null],
+  ['revoked', { ...base, status: 'revoked' }, false, false],
+  ['missing', null, false, false],
 ]
 
 let rows: Record<string, unknown>[] = []
@@ -100,17 +106,19 @@ afterEach(() => {
 })
 
 describe('routing and the redirect guard on DOMAIN_VERIFICATION_SOURCE=d1', () => {
-  it.each(STATES)('%s: a guard-allowed host is routable', async (_, r) => {
-    rows = r ? [r] : []
-    const routes = await isHostRoutable(HOST, [HOST], new Date(NOW))
-    const bounces = await isAllowedBounceTarget(
-      `https://${HOST}/api/auth/callback/github`,
-      env,
-    )
-    if (bounces) expect(routes).toBe(true)
-    if (!r) expect([routes, bounces]).toEqual([false, false])
-    expect(sanityFetch).not.toHaveBeenCalled()
-  })
+  it.each(STATES)(
+    '%s: routes %s, bounces %s',
+    async (_, r, wantRoute, wantBounce) => {
+      rows = r ? [r] : []
+      const routes = await isHostRoutable(HOST, [HOST], new Date(NOW))
+      const bounces = await isAllowedBounceTarget(
+        `https://${HOST}/api/auth/callback/github`,
+        env,
+      )
+      expect([routes, bounces]).toEqual([wantRoute, wantBounce])
+      expect(sanityFetch).not.toHaveBeenCalled()
+    },
+  )
 
   it('a verified row passes both; the same row revoked fails both', async () => {
     rows = [{ ...base, status: 'verified' }]

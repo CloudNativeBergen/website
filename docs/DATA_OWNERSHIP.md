@@ -101,6 +101,19 @@ The operator view of all orgs uses `organizations` (#1973), and of all their
 conferences `conferences` (#1985), operator lane with no tenant selected only;
 see `api/README.md`.
 
+### Domain verification on `DOMAIN_VERIFICATION_SOURCE=d1`
+
+The site reads domain verification from D1 through `src/lib/domain-verification/source.ts`
+(#2207 phase 6). Two behaviours differ from the Sanity reader:
+
+- Sanity docs with method `grandfathered` are mirrored into D1 as `dns-txt`
+  (tenant-directory `data/index.ts`), so the grandfathered grace period
+  (`inGrandfatherGrace`) never applies in d1 mode. Production had 3
+  grandfathered rows at the flip: 2 past grace, 1 verified, so no live impact.
+- `localhost:<port>` rows are unroutable in d1 mode. D1 strips the port, and
+  the reader drops any row whose hostname is not exactly the host asked for
+  (#2251). This affects local development only.
+
 ## Members read (identity subgraph)
 
 `members` and `invitations` (#1972) list the session org's members and pending

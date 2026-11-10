@@ -132,7 +132,10 @@ async function d1Record(
   const host = normalizeDomain(hostname)
   const hit = cache.get(host)
   if (hit && hit.until > Date.now()) return hit.record
-  const [record = null] = await readD1({ h: host })
+  // D1 normalizes the key (port, trailing dot, punycode); a row for any
+  // other spelling than the exact host asked for is not this host's.
+  const [row = null] = await readD1({ h: host })
+  const record = row && normalizeDomain(row.hostname) === host ? row : null
   if (cache.size >= CACHE_MAX) cache.clear()
   cache.set(host, {
     record,
