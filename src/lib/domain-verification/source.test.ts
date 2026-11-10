@@ -103,7 +103,9 @@ describe('the d1 source', () => {
 
   it('maps method platform to platform-owned', async () => {
     fetchMock.mockResolvedValue(answer([row({ method: 'platform' })]))
-    expect((await readDomainVerification('x'))?.method).toBe('platform-owned')
+    expect((await readDomainVerification('conf.example.com'))?.method).toBe(
+      'platform-owned',
+    )
   })
 
   it('asks only for verified rows for the allowlist', async () => {
@@ -112,6 +114,16 @@ describe('the d1 source', () => {
       s: 'verified',
     })
   })
+
+  it.each(['conf.example.com:8080', 'conf.example.com.'])(
+    'drops a row D1 matched for %s, which is not its exact host',
+    async (h) => {
+      expect(await readDomainVerification(h)).toBeNull()
+      expect(await readDomainVerification('conf.example.com')).toMatchObject({
+        hostname: 'conf.example.com',
+      })
+    },
+  )
 
   it('answers a missing row null and caches the miss briefly', async () => {
     fetchMock.mockResolvedValue(answer([]))
