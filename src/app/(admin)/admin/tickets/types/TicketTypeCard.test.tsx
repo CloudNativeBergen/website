@@ -182,3 +182,30 @@ describe('workshop access', () => {
     ).toHaveLength(0)
   })
 })
+
+describe('VAT text', () => {
+  it('prints the VAT rate when the provider gave one', () => {
+    render(
+      <TicketTypeCard
+        ticket={paidTicket}
+        publicFreeTicketIds={[]}
+        workshopAccess={control()}
+      />,
+    )
+    expect(screen.getByText(/incl\. 25% VAT/)).toBeInTheDocument()
+  })
+
+  it('prints no VAT text for a native type with no recorded basis', () => {
+    render(
+      <TicketTypeCard
+        ticket={{
+          ...paidTicket,
+          price: [{ ...paidTicket.price[0], vat: '' }],
+        }}
+        publicFreeTicketIds={[]}
+        workshopAccess={control()}
+      />,
+    )
+    expect(screen.queryByText(/VAT/)).not.toBeInTheDocument()
+  })
+})

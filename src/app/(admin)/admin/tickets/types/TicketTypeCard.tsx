@@ -131,9 +131,11 @@ export function TicketTypeCard({
                         <span className="font-medium whitespace-nowrap text-gray-900 dark:text-white">
                           {currency} {excl}
                         </span>{' '}
-                        <span className="whitespace-nowrap text-gray-500 dark:text-gray-400">
-                          ({incl} incl. {p.vat}% VAT)
-                        </span>
+                        {p.vat.trim() !== '' && (
+                          <span className="whitespace-nowrap text-gray-500 dark:text-gray-400">
+                            ({incl} incl. {p.vat}% VAT)
+                          </span>
+                        )}
                       </div>
                       {p.description && (
                         <div className="text-xs text-gray-500 dark:text-gray-400">

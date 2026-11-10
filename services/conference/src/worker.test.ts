@@ -1567,6 +1567,11 @@ describe('updateConference plan gate on binding an event (#2141)', () => {
         })
       ).body.errors,
     ).toBeUndefined()
+    // Already on konf: a free plan still saves other settings.
+    expect(
+      (await gql(site(), MUTATION, { input: { checkinCustomerId: 2 } })).body
+        .errors,
+    ).toBeUndefined()
     expect(
       sqlite
         .prepare(

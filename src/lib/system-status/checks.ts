@@ -1095,9 +1095,10 @@ async function tenantCredentialChecks(
     resolveTicketingCredentials(orgId, providerType),
     resolveConferenceSlackToken(conference),
   ])
-  const apiOn = Boolean(
-    creds && ticketingCredentialsConfigured(providerType, creds),
-  )
+  // Native ticketing has no vendor credentials to check: it is always on.
+  const apiOn =
+    providerType === 'konf' ||
+    Boolean(creds && ticketingCredentialsConfigured(providerType, creds))
   const webhookSecret = creds?.webhookSecret
   return [
     {

@@ -73,14 +73,20 @@ export class KonfProvider implements TicketingProvider {
 
   async fetchEventTickets(): Promise<EventTicket[]> {
     const data = await query<ResultOf<typeof ORDERS_DOC>>(ORDERS)
-    return ticketsFromOrders(data?.ticketOrders ?? [])
+    // The gateway answers null, not an error, to a caller without
+    // `ticketing.read`. Treating that as no orders would show "0 sold".
+    if (!data?.ticketOrders)
+      throw new Error('Konf API refused the ticket order read')
+    return ticketsFromOrders(data.ticketOrders)
   }
 
   async fetchPublicTicketTypes(
     event: EventRef,
   ): Promise<{ event: PublicEventInfo; tickets: PublicTicketType[] }> {
     const data = await query<ResultOf<typeof SALES_DOC>>(SALES)
-    const tickets = (data?.ticketSales?.byType ?? []).map(
+    if (!data?.ticketSales)
+      throw new Error('Konf API refused the ticket sales read')
+    const tickets = (data.ticketSales.byType ?? []).map(
       (t, position): PublicTicketType => ({
         id: t.id ?? String(position),
         name: t.name ?? 'Ticket',
@@ -92,7 +98,8 @@ export class KonfProvider implements TicketingProvider {
               amountMinor: t.price?.amountMinor ?? 0,
               currency: t.price?.currency ?? DEFAULT_TICKET_CURRENCY,
             },
-            vat: '0',
+            // Empty: the VAT basis is not recorded, so no rate is claimed.
+            vat: '',
             description: null,
             key: null,
           },

@@ -64,6 +64,8 @@ export function ticketingCredentialsConfigured(
   providerType: TicketingProviderType,
   credentials: TicketingProviderCredentials,
 ): boolean {
+  // Native ticketing needs no vendor credentials.
+  if (providerType === 'konf') return true
   return providerType === 'tito'
     ? TitoProvider.canCallApi(credentials)
     : CheckinProvider.canCallApi(credentials)
@@ -145,6 +147,8 @@ export async function resolveTicketingCredentials(
   orgId: string | null | undefined,
   providerType: TicketingProviderType,
 ): Promise<TicketingProviderCredentials | null> {
+  // Native ticketing has no vendor account; never hand out Checkin's.
+  if (providerType === 'konf') return null
   // The chain here is the PER-ORG stores only; the platform env is layered back
   // on below. Two reasons this does not just use DEFAULT_SECRETS_CHAIN even now
   // that `EnvSecretsStore` fails closed (#844):

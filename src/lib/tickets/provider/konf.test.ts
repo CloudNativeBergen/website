@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('server-only', () => ({}))
-vi.mock('@/lib/konf-api/conference-write', () => ({
-  identityJwt: async () => null,
-  requestHost: async () => 'conf.example',
+const k = vi.hoisted(() => ({
+  jwt: null as string | null,
   mutate: vi.fn(),
+}))
+vi.mock('@/lib/konf-api/conference-write', () => ({
+  identityJwt: async () => k.jwt,
+  requestHost: async () => 'conf.example',
+  mutate: k.mutate,
 }))
 
 const { KonfProvider, ticketsFromOrders } = await import('./konf')
@@ -97,10 +101,52 @@ describe('ticketsFromOrders (#2238)', () => {
 
 describe('KonfProvider', () => {
   it('refuses to read without a signed-in organizer, before any request', async () => {
+    k.jwt = null
+    k.mutate.mockReset()
     const { mutate } = await import('@/lib/konf-api/conference-write')
     await expect(new KonfProvider().fetchEventTickets()).rejects.toThrow(
       'signed-in organizer',
     )
     expect(mutate).not.toHaveBeenCalled()
+  })
+})
+
+describe('KonfProvider reads (#2238 review)', () => {
+  it('throws when the gateway refuses the order read (null), never "0 sold"', async () => {
+    k.jwt = 'jwt'
+    k.mutate.mockResolvedValueOnce({ ticketOrders: null })
+    await expect(new KonfProvider().fetchEventTickets()).rejects.toThrow(
+      'refused',
+    )
+  })
+
+  it('throws when the gateway refuses the sales read (null)', async () => {
+    k.jwt = 'jwt'
+    k.mutate.mockResolvedValueOnce({ ticketSales: null })
+    const ref = { provider: 'konf' as const, accountId: 'o', externalId: 'n' }
+    await expect(
+      new KonfProvider().fetchPublicTicketTypes(ref),
+    ).rejects.toThrow('refused')
+  })
+
+  it('claims no VAT rate on native ticket types', async () => {
+    k.jwt = 'jwt'
+    k.mutate.mockResolvedValueOnce({
+      ticketSales: {
+        byType: [
+          {
+            id: 't',
+            name: 'Regular',
+            capacity: 10,
+            sold: 3,
+            price: money(100),
+          },
+        ],
+      },
+    })
+    const ref = { provider: 'konf' as const, accountId: 'o', externalId: 'n' }
+    const { tickets } = await new KonfProvider().fetchPublicTicketTypes(ref)
+    expect(tickets[0].price[0].vat).toBe('')
+    expect(tickets[0].available).toBe(7)
   })
 })

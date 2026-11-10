@@ -73,6 +73,7 @@ let currentTeams: Array<{ key: string; members: { _ref: string }[] }> = []
 let ticketingByConference: Record<
   string,
   {
+    ticketingProvider?: string | null
     checkinEventId?: number | null
     titoAccountSlug?: string | null
     titoEventSlug?: string | null
@@ -2169,6 +2170,22 @@ describe('conference router — plan gates (#2129)', () => {
         ticketingProvider: 'checkin',
         checkinCustomerId: 15509,
       })
+      expect(requireOrgPlanMock).not.toHaveBeenCalled()
+      expect(lastSet).toMatchObject({ checkinCustomerId: 15509 })
+    })
+
+    it('refuses picking native konf on free (#2247)', async () => {
+      requireOrgPlanMock.mockRejectedValue(await planRefusal())
+      await expect(
+        operator().updateTicketingIds({ ticketingProvider: 'konf' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      expect(commitMock).not.toHaveBeenCalled()
+    })
+
+    it('lets a free edition already on konf save other settings (#2247)', async () => {
+      requireOrgPlanMock.mockRejectedValue(await planRefusal())
+      ticketingByConference[CONFERENCE_ID] = { ticketingProvider: 'konf' }
+      await operator().updateTicketingIds({ checkinCustomerId: 15509 })
       expect(requireOrgPlanMock).not.toHaveBeenCalled()
       expect(lastSet).toMatchObject({ checkinCustomerId: 15509 })
     })

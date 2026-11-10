@@ -145,7 +145,8 @@ export interface TicketingProviderCredentials {
 export interface TicketPrice {
   /** Price as the provider reports it (Checkin: net; Tito: gross, vat '0'). */
   price: Money
-  /** VAT RATE in percent, as a string (parse with `parseVatPercent`). */
+  /** VAT RATE in percent, as a string (parse with `parseVatPercent`). Empty
+   * when the provider records no VAT basis (native Konf): show no VAT text. */
   vat: string
   description: string | null
   key: string | null
