@@ -220,6 +220,8 @@ export async function canReadTicketsForOrg(
   providerType: TicketingProviderType,
 ): Promise<boolean | null> {
   if (!orgId) return false
+  // Native ticketing is read through the Konf API, not a vendor credential.
+  if (providerType === 'konf') return true
   try {
     const credentials = await resolveTicketingCredentials(orgId, providerType)
     if (!credentials) return false

@@ -8,7 +8,7 @@ import type {
 } from '@/lib/discounts/types'
 
 /** The vendors behind {@link TicketingProvider}. */
-export type TicketingProviderType = 'checkin' | 'tito'
+export type TicketingProviderType = 'checkin' | 'tito' | 'konf'
 
 /**
  * Konf reference to an event at a ticketing vendor. Every id is a string; the
@@ -145,7 +145,8 @@ export interface TicketingProviderCredentials {
 export interface TicketPrice {
   /** Price as the provider reports it (Checkin: net; Tito: gross, vat '0'). */
   price: Money
-  /** VAT RATE in percent, as a string (parse with `parseVatPercent`). */
+  /** VAT RATE in percent, as a string (parse with `parseVatPercent`). Empty
+   * when the provider records no VAT basis (native Konf): show no VAT text. */
   vat: string
   description: string | null
   key: string | null
@@ -287,9 +288,10 @@ export interface TicketingProvider {
    * Whether the amounts this vendor reports INCLUDE VAT. Revenue is shown as
    * the provider reports it (no VAT normalization anywhere in the app), so this
    * is what labels a revenue figure incl./ex. VAT — the same card means
-   * different things for a Checkin tenant and a Tito one.
+   * different things for a Checkin tenant and a Tito one. `undefined` when the
+   * basis is not recorded (native Konf orders): no label is shown.
    */
-  readonly amountsIncludeVat: boolean
+  readonly amountsIncludeVat: boolean | undefined
 
   /** Which optional operations this provider supports. */
   readonly capabilities: TicketingCapabilities

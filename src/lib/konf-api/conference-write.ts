@@ -303,7 +303,7 @@ const MUTATION_DOC = graphql(MUTATION)
  * One gateway mutation as the signed-in user, or with no user on the site's
  * server lane alone (`userJwt` null). Throws on HTTP or GraphQL errors.
  */
-async function mutate<T>(
+export async function mutate<T>(
   host: string,
   query: string,
   variables: Record<string, unknown>,

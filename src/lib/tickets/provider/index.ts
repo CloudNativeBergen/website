@@ -64,6 +64,8 @@ export function ticketingCredentialsConfigured(
   providerType: TicketingProviderType,
   credentials: TicketingProviderCredentials,
 ): boolean {
+  // Native ticketing needs no vendor credentials.
+  if (providerType === 'konf') return true
   return providerType === 'tito'
     ? TitoProvider.canCallApi(credentials)
     : CheckinProvider.canCallApi(credentials)
@@ -145,6 +147,8 @@ export async function resolveTicketingCredentials(
   orgId: string | null | undefined,
   providerType: TicketingProviderType,
 ): Promise<TicketingProviderCredentials | null> {
+  // Native ticketing has no vendor account; never hand out Checkin's.
+  if (providerType === 'konf') return null
   // The chain here is the PER-ORG stores only; the platform env is layered back
   // on below. Two reasons this does not just use DEFAULT_SECRETS_CHAIN even now
   // that `EnvSecretsStore` fails closed (#844):
@@ -200,7 +204,8 @@ export type ConferenceTicketingBinding = {
 export function conferenceProviderType(
   conference: ConferenceTicketingBinding,
 ): TicketingProviderType {
-  return conference.ticketingProvider === 'tito' ? 'tito' : 'checkin'
+  const p = conference.ticketingProvider
+  return p === 'tito' || p === 'konf' ? p : 'checkin'
 }
 
 /**
@@ -236,7 +241,11 @@ export function ticketingBinding(
 export function hasTicketingBinding(
   conference: ConferenceTicketingBinding,
 ): boolean {
-  if (conferenceProviderType(conference) === 'tito') {
+  const providerType = conferenceProviderType(conference)
+  // Native ticketing has no vendor binding, and its public ticket types are
+  // not served through this provider yet: public readers skip it.
+  if (providerType === 'konf') return false
+  if (providerType === 'tito') {
     return Boolean(conference.titoAccountSlug && conference.titoEventSlug)
   }
   return Boolean(conference.checkinCustomerId && conference.checkinEventId)
@@ -265,6 +274,14 @@ export async function resolveTicketingProvider(
 ): Promise<ResolvedTicketing> {
   const orgId = conference.organization?._ref
   const providerType = conferenceProviderType(conference)
+
+  // Native ticketing is not a vendor account: it is read through the Konf API
+  // as the signed-in organizer, so only the admin pages resolve it
+  // (`resolveTicketingAdminAccess`). Webhook, speaker-ticket and public paths
+  // see it as unconfigured.
+  if (providerType === 'konf') {
+    return { configured: false, provider: null, eventRef: null }
+  }
 
   if (providerType === 'tito') {
     if (!conference.titoAccountSlug || !conference.titoEventSlug) {

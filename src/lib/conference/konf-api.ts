@@ -92,7 +92,7 @@ const isPosInt = (v: unknown) =>
  * fail, so D1 could run ahead of what was saved; they stay on Sanity.
  */
 const PHASE3_CHECKS: Record<string, (v: unknown) => boolean> = {
-  ticketingProvider: (v) => v === 'checkin' || v === 'tito',
+  ticketingProvider: (v) => v === 'checkin' || v === 'tito' || v === 'konf',
 }
 
 // Settings phase 2 (#2038). The subgraph validates on write; these only keep

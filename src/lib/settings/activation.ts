@@ -247,7 +247,7 @@ export interface ConferenceForActivation {
   visibility?: string | null
   domains?: string[]
   // Provider-aware ticketing binding.
-  ticketingProvider?: 'checkin' | 'tito' | null
+  ticketingProvider?: 'checkin' | 'tito' | 'konf' | null
   checkinCustomerId?: number | null
   checkinEventId?: number | null
   titoAccountSlug?: string | null
@@ -467,6 +467,8 @@ function checkOk(checks: SystemCheck[], id: string): boolean {
  * server-only secret store). Absent provider ⇒ Checkin, the historical default.
  */
 export function hasTicketingBinding(c: ConferenceForActivation): boolean {
+  // Native ticketing has nothing to bind: selecting it is the setup.
+  if (c.ticketingProvider === 'konf') return true
   if ((c.ticketingProvider ?? 'checkin') === 'tito') {
     return present(c.titoAccountSlug) && present(c.titoEventSlug)
   }

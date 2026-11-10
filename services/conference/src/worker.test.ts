@@ -1544,7 +1544,7 @@ describe('updateConference plan gate on binding an event (#2141)', () => {
     expect(bound()).toEqual({ checkin_event_id: null, tito_event_slug: null })
   })
 
-  it('binds on basic; an already bound edition and a vendor pick alone are never asked', async () => {
+  it('binds on basic; an already bound edition and a vendor pick alone are never asked; native konf is gated (#2247)', async () => {
     expect(
       (await gql(site('basic'), MUTATION, { input: { checkinEventId: 34 } }))
         .body.errors,
@@ -1555,9 +1555,22 @@ describe('updateConference plan gate on binding an event (#2141)', () => {
     ).toBeUndefined()
     expect(bound()).toEqual({ checkin_event_id: 35, tito_event_slug: null })
     sqlite.exec('UPDATE conferences SET checkin_event_id = NULL')
+    // #2247: choosing native ticketing is selling, so free is refused.
     expect(
       (await gql(site(), MUTATION, { input: { ticketingProvider: 'konf' } }))
-        .body.errors,
+        .body.errors?.[0]?.extensions,
+    ).toMatchObject({ reason: 'PLAN_REQUIRED', requiredPlan: 'basic' })
+    expect(
+      (
+        await gql(site('basic'), MUTATION, {
+          input: { ticketingProvider: 'konf' },
+        })
+      ).body.errors,
+    ).toBeUndefined()
+    // Already on konf: a free plan still saves other settings.
+    expect(
+      (await gql(site(), MUTATION, { input: { checkinCustomerId: 2 } })).body
+        .errors,
     ).toBeUndefined()
     expect(
       sqlite

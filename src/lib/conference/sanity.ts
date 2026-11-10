@@ -762,7 +762,7 @@ export type CheckinWebhookTenant = {
   _id: string
   organization?: { _ref?: string } | null
   /** Same union as `Conference['ticketingProvider']`; absent ⇒ Checkin. */
-  ticketingProvider?: 'checkin' | 'tito' | null
+  ticketingProvider?: 'checkin' | 'tito' | 'konf' | null
 }
 
 /**

@@ -315,7 +315,7 @@ export interface TenantProcessingFacts {
 
 export interface TicketingFacts {
   /** The vendor the conference resolves to (absent selection ⇒ Checkin). */
-  provider: 'checkin' | 'tito'
+  provider: 'checkin' | 'tito' | 'konf'
   /** True when the conference carries the FULL binding for that vendor. */
   bound: boolean
   /** True when `ticketingProvider` is set explicitly on the document. */
