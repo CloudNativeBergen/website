@@ -320,6 +320,11 @@ describe('isTicketingEnabledForOrg — grants', () => {
  * org by identity (never by the document's slug), anyone else by its own secret.
  */
 describe('canReadTicketsForOrg', () => {
+  it('is TRUE for native konf without any vendor credential', async () => {
+    vi.stubEnv('CHECKIN_API_KEY', '')
+    expect(await canReadTicketsForOrg('org-A', 'konf')).toBe(true)
+  })
+
   const ownBag = (bag: Record<string, string>) =>
     vi.stubEnv(
       'TENANT_SECRETS_JSON',

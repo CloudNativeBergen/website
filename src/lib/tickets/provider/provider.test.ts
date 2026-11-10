@@ -543,6 +543,12 @@ describe('resolveTicketingCredentials — per-org discrete env vars', () => {
     vi.stubEnv('CHECKIN_WEBHOOK_SECRET', 'platform-webhook')
   })
 
+  it('never hands Checkin credentials to native konf, even for the platform org or a mapped tenant', async () => {
+    stubVars(FULL)
+    expect(await resolveTicketingCredentials(PLATFORM_ORG, 'konf')).toBeNull()
+    expect(await resolveTicketingCredentials(CNDN, 'konf')).toBeNull()
+  })
+
   it('serves a MAPPED, NON-platform org from its own variables', async () => {
     stubVars(FULL)
     expect(await resolveTicketingCredentials(CNDN, 'checkin')).toEqual({
