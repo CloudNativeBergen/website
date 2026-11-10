@@ -23,6 +23,7 @@ vi.mock('@/lib/konf-api/client', () => ({
 
 import { isAllowedBounceTarget } from '@/lib/auth/redirect-proxy-guard'
 import { isHostRoutable } from './routing'
+import { domainVerificationId } from './challenge'
 import { clearMissCache } from './source'
 
 const NOW = Date.parse('2026-11-10T12:00:00.000Z')
@@ -160,4 +161,45 @@ describe('routing and the redirect guard on DOMAIN_VERIFICATION_SOURCE=d1', () =
     ).toBe(false)
     expect(gateway).not.toHaveBeenCalled()
   })
+})
+
+// #2258: D1 cannot store `*.vercel.app` (tenant-directory rejects `*`), so a
+// wildcard entry must give the same verdicts in both modes: routing follows
+// its Sanity record, the guard never allowlists it.
+describe('a wildcard domains[] entry, in both modes', () => {
+  const WILD = '*.vercel.app'
+  const PREVIEW = 'preview-1.vercel.app'
+  const sanityRecord = (status: string) => ({
+    ...base,
+    _id: domainVerificationId(WILD),
+    hostname: WILD,
+    status,
+  })
+  const CASES = [
+    ['d1', 'verified', true],
+    ['sanity', 'verified', true],
+    ['d1', 'pending', false],
+    ['sanity', 'pending', false],
+  ] as const
+
+  it.each(CASES)(
+    '%s, Sanity %s: routes %s, never bounces',
+    async (mode, status, wantRoute) => {
+      vi.stubEnv('DOMAIN_VERIFICATION_SOURCE', mode)
+      rows = []
+      const record = sanityRecord(status)
+      sanityFetch.mockImplementation(async (q: string, p?: { id?: string }) =>
+        q.includes('$id') ? (p?.id === record._id ? record : null) : [record],
+      )
+      expect(await isHostRoutable(PREVIEW, [WILD], new Date(NOW))).toBe(
+        wantRoute,
+      )
+      expect(
+        await isAllowedBounceTarget(
+          `https://${PREVIEW}/api/auth/callback/github`,
+          env,
+        ),
+      ).toBe(false)
+    },
+  )
 })

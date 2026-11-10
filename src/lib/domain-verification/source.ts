@@ -24,7 +24,7 @@
 import { normalizeDomain } from '@/lib/conference/domains'
 import { mergeConference } from '@/lib/conference/merge'
 import { konfApiHeaders, konfApiUrl } from '@/lib/konf-api/client'
-import { domainVerificationId } from './challenge'
+import { domainVerificationId, isWildcardEntry } from './challenge'
 import * as sanity from './sanity'
 import type { DomainClaim, DomainVerificationRecord } from './types'
 
@@ -144,11 +144,18 @@ async function d1Record(
   return record
 }
 
-/** One hostname's record, or `null`. */
+/**
+ * One hostname's record, or `null`.
+ *
+ * A wildcard entry (`*.vercel.app`) reads Sanity in both modes: D1 cannot key
+ * it (tenant-directory `normalizeHost` rejects `*`), so a d1 read would miss
+ * and fail closed where sanity mode routes (#2258). The allowlist needs no
+ * such branch: `isAllowlistEligible` refuses every wildcard.
+ */
 export async function readDomainVerification(
   hostname: string,
 ): Promise<DomainVerificationRecord | null> {
-  return domainVerificationSource() === 'd1'
+  return domainVerificationSource() === 'd1' && !isWildcardEntry(hostname)
     ? d1Record(hostname)
     : sanity.getDomainVerification(hostname)
 }

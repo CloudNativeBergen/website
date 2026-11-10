@@ -107,12 +107,22 @@ The site reads domain verification from D1 through `src/lib/domain-verification/
 (#2207 phase 6). Two behaviours differ from the Sanity reader:
 
 - Sanity docs with method `grandfathered` are mirrored into D1 as `dns-txt`
-  (tenant-directory `data/index.ts`), so the grandfathered grace period
+  (`scripts/import-domain-verification.ts:168`; the D1 CHECK in migration
+  0013 allows only `dns-txt` and `platform`), so the grandfathered grace period
   (`inGrandfatherGrace`) never applies in d1 mode. Production had 3
   grandfathered rows at the flip: 2 past grace, 1 verified, so no live impact.
 - `localhost:<port>` rows are unroutable in d1 mode. D1 strips the port, and
   the reader drops any row whose hostname is not exactly the host asked for
   (#2251). This affects local development only.
+
+Wildcard `domains[]` entries (`*.vercel.app`) behave the same in both modes
+(#2258). D1 has no row for them, because tenant-directory `normalizeHost`
+rejects `*`, so `readDomainVerification` reads a wildcard entry from Sanity
+even in d1 mode. Routing therefore gives the verdict of its Sanity record, as
+before. The redirect allowlist never admits a wildcard (`isAllowlistEligible`),
+so it needs no special case. The admin and system-status views
+(`readConferenceDomainVerifications`) still read D1 only and show no record for
+a wildcard entry in d1 mode.
 
 ## Members read (identity subgraph)
 
