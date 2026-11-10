@@ -218,6 +218,14 @@ logged and never fails the Sanity write. Sanity stays authoritative until
 phase 6; `--verify` catches drift. Without `KONF_SITE_SIGNING_KEY` or a
 gateway URL (previews) nothing is sent.
 
+Phase 6 (read flip, #2248) prerequisite: routing reads in
+`DOMAIN_VERIFICATION_SOURCE=d1` mode go through the gateway's signed site
+lane, which has its own rate-limit bucket (`site:<verified host>`,
+`API_SITE_LIMITER`, 3000 a minute, #2250) instead of `anon:<org>:<ip>`. When
+flipping, point `DOMAIN_VERIFICATION_D1_HOST` at a host whose org has no site
+traffic, so routing reads never share that bucket with page renders. A spent
+bucket fails routing for every custom host until the minute drains.
+
 ### Hard parts
 
 - **References.** `organizers` and `teams[].members` point at `speaker`

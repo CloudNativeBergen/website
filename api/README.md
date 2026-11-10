@@ -12,7 +12,11 @@ are reached over service bindings, never HTTP.
   errors, no HTTP batching, depth and alias limits at validation, and a cost
   limit on each subgraph request.
   Rate limit (`API_LIMITER`, 300 requests a minute) per caller: `user:<sub>`
-  from the verified JWT, else `anon:<orgId>:<ip>`, checked before identity and
+  from the verified JWT, else `anon:<orgId>:<ip>`. The anonymous signed site
+  lane is keyed `site:<verified host>` on its own `API_SITE_LIMITER` (3000 a
+  minute, #2250): it is server traffic shared by every Vercel instance, so 10x
+  the per-caller limit; an unverified assertion falls back to `anon`. All are
+  checked before identity and
   `Membership` work, after a coarse `ip:<ip>` pre-check (`API_IP_LIMITER`,
   1200 a minute) before the tenant lookup. 429 `RATE_LIMITED` when spent.
 - `src/response-cache.ts` (#1789): anonymous response cache, off until the var
