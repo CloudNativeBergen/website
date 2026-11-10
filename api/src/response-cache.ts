@@ -57,6 +57,9 @@ export function cacheableRead(body: string): ReadPayload | null {
   }
   if (op?.operation !== 'query') return null
   if (/\b__(schema|type)\b/.test(query)) return null
+  // Verification state is read live (#2207 phase 6): a cached allowlist is
+  // a delisting that has not taken effect, and no write of that org purges it.
+  if (/\bsiteDomainRecords\b/.test(query)) return null
   return {
     query,
     variables: (variables as Record<string, unknown> | null) ?? null,

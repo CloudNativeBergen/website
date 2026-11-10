@@ -22,10 +22,10 @@
 
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
-import { domainVerificationId, isWildcardEntry } from './challenge'
+import { isWildcardEntry } from './challenge'
 import { isPlatformAllocated } from './platform'
 import { isAllowlistEligible } from './policy'
-import { getDomainClaim } from './sanity'
+import { readDomainClaim } from './source'
 import type { ClaimingConference, DomainVerificationRecord } from './types'
 
 export interface ProvenDestination {
@@ -116,7 +116,7 @@ export async function readProvenDestination(
   if (!hostname) return null
   if (isLocalDevelopment(hostname)) return localDestination(hostname)
 
-  const claim = await getDomainClaim(domainVerificationId(hostname))
+  const claim = await readDomainClaim(hostname)
   if (!claim?.conference) return null
   const { record, conference } = claim
   if (normalizeDomain(record.hostname) !== hostname) return null

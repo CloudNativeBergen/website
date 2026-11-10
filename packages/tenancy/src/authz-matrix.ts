@@ -35,6 +35,8 @@ export const MATRIX = {
   'domain.manage': row('           Y  Y   Y   N   N'),
   // #2207 phase 5: the site copies its Sanity verification state onto D1.
   'domain.mirror': row('           Y  N   N   N   Y'),
+  // #2207 phase 6: the site reads every org's verification rows from D1.
+  'domain.read_all': row('         N  N   N   N   Y'),
   'speaker_directory.read': row('  Y  Y   Y   N   N'),
   'api_client.read': row('         Y  Y   Y   N   N'),
   'api_client.create': row('       N  Y   N   N   N'),

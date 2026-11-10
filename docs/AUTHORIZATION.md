@@ -319,6 +319,7 @@ before acceptance; "Site" = `site:server` with no user token.
 | conference.bind_ticketing             | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | N    |
 | domain.manage (#2207)                 | Y   | Y   | Y   | N   | N   | N                   | N   | N   | N   | N   | N    |
 | domain.mirror (#2207 phase 5)         | Y   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | Y    |
+| domain.read_all (#2207 phase 6)       | N   | N   | N   | N   | N   | N                   | N   | N   | N   | N   | Y    |
 | conference.manage_roles               | Y   | Y   | Y   | N   | Y   | N                   | N   | N   | N   | N   | N    |
 | proposal.submit (CFP open)            | Y   | Y   | Y   | Y   | Y   | Y                   | Y   | Y   | Y   | Y   | N    |
 | proposal.read                         | Y   | Y   | Y   | N   | Y   | Y (asg if assigned) | N   | own | own | N   | N    |
@@ -368,6 +369,13 @@ another org answers NOT_FOUND, exactly like a missing one. Platform hosts
 on the tenant lane), for the envelope's own org; refused before any read for every
 other caller. It never raises the legacy `verification` column and never touches a row
 claimed in D1 or held by another conference.
+
+`domain.read_all` (#2207 phase 6): the tenant-directory `siteDomainRecords` query, through
+which the site's routing gate, redirect allowlist and sign-in destination read verification
+rows of every org when `DOMAIN_VERIFICATION_SOURCE=d1`. Site server lane only, across
+orgs, because the allowlist and routing span every tenant (the same reach the site's
+Sanity read token has today). Refused before any read for every other caller. The
+gateway never caches the query, so a delisting takes effect on the next read.
 
 Operator is N on reviewing and editing proposals by default: operators act for a tenant
 for support, not as a juror. Operator access is only on the operator lane and is audited.

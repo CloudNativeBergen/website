@@ -218,6 +218,30 @@ logged and never fails the Sanity write. Sanity stays authoritative until
 phase 6; `--verify` catches drift. Without `KONF_SITE_SIGNING_KEY` or a
 gateway URL (previews) nothing is sent.
 
+Phase 6 (reader switch): every reader of "is this host proven?" goes through
+`src/lib/domain-verification/source.ts`: routing, the redirect allowlist (and
+so the OAuth redirect guard), the sign-in destination, sign-in standing, and
+the admin and system-status views. `DOMAIN_VERIFICATION_SOURCE=d1` switches
+them all at once to tenant-directory D1 through the gateway's
+`siteDomainRecords` query (site server lane, `domain.read_all`); anything else,
+the default, keeps Sanity. The d1 source also needs `KONF_SITE_SIGNING_KEY` and
+`DOMAIN_VERIFICATION_D1_HOST`, a host `tenantByHost` resolves (any org's; the
+query spans every org). It fails closed: a failed or impossible read throws,
+which every caller treats as a refusal, and a missing row refuses. Per-host reads
+are cached in memory: hits 60 seconds, misses 30, errors never, so a
+revocation takes up to 60 seconds to reach the site. The cache is what keeps
+routing under the gateway's anonymous rate limit (300 a minute per org and IP),
+which the site lane counts against from a few Vercel egress IPs; no site-lane
+call is exempt. `DOMAIN_VERIFICATION_D1_HOST` has no default; unset, the d1
+source fails closed. Platform rows (method `platform`) read as
+`platform-owned`, so they route and are allowlisted as before. Writers
+(the domain router, `sync.ts`, the daily check) stay on Sanity with the phase 5
+dual write. Roll back by unsetting the variable.
+
+Flip, owner only: run `mise run domains:import -- production --verify` the same
+day, then set `DOMAIN_VERIFICATION_D1_HOST` and `DOMAIN_VERIFICATION_SOURCE=d1`
+in production.
+
 ### Hard parts
 
 - **References.** `organizers` and `teams[].members` point at `speaker`

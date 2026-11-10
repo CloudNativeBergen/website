@@ -15,9 +15,9 @@ import { isPlatformZoneHost } from './platform'
 import {
   ensureDomainVerification,
   getDomainVerification,
-  listDomainVerificationsForConference,
   revokeDomainVerification,
 } from './sanity'
+import { readConferenceDomainVerifications } from './source'
 import { workshopSignInStanding } from './sign-in-standing'
 import {
   isWorkshopsEnabledForConference,
@@ -131,7 +131,7 @@ export async function listDomainVerificationViews(
     now?: Date
   } = {},
 ): Promise<DomainVerificationView[]> {
-  const records = await listDomainVerificationsForConference(conferenceId)
+  const records = await readConferenceDomainVerifications(conferenceId)
   const byHost = new Map(records.map((r) => [normalizeDomain(r.hostname), r]))
   return domains
     .map(normalizeDomain)
