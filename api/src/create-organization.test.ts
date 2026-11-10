@@ -101,6 +101,7 @@ function env(platformOperator: boolean, orgRole: string | null) {
     IDENTITY: { fetch: async () => Response.json(jwks) },
     API_LIMITER: ok,
     API_IP_LIMITER: ok,
+    API_SITE_LIMITER: ok,
     API_MUTATION_LIMITER: ok,
     CLIENT_IP_SECRET: 'ip-secret',
     SITE_PUBLIC_KEYS: '{}',

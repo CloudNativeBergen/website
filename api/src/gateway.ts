@@ -68,6 +68,8 @@ export interface Env {
   API_MUTATION_LIMITER: RateLimit
   /** Coarse per-IP limit, checked before the tenant lookup */
   API_IP_LIMITER: RateLimit
+  /** Anonymous signed site lane only, keyed `site:<verified host>` (#2250) */
+  API_SITE_LIMITER: RateLimit
   /** wrangler secret put CLIENT_IP_SECRET: shared with the site to sign the client IP */
   CLIENT_IP_SECRET?: string
   /** wrangler secret put SITE_PUBLIC_KEYS: JSON `{ kid: SPKI PEM }` of the site's server-lane keys */
@@ -645,8 +647,8 @@ export function createGateway(supergraph: string) {
       // anonymous callers; signed-in callers are keyed on the verified sub.
       // Mutations also spend their own budget, keyed the same (mutationBudget).
       let limitKey: string
-      const limited = async (key: string) =>
-        !(await env.API_LIMITER.limit({ key: (limitKey = key) })).success
+      const limited = async (key: string, limiter = env.API_LIMITER) =>
+        !(await limiter.limit({ key: (limitKey = key) })).success
       const tooMany = () => reject(429, 'RATE_LIMITED', 'too many requests')
 
       // 4. Identity: optional, but a header that is present must verify.
@@ -655,7 +657,14 @@ export function createGateway(supergraph: string) {
       let cli = false
       const auth = request.headers.get('authorization')
       if (auth === null) {
-        if (await limited(`anon:${tenant?.orgId ?? null}:${ip}`))
+        // The signed site lane is server traffic from shared egress IPs: it
+        // gets its own bucket, keyed only on the VERIFIED host (#2250), so
+        // it neither starves nor is starved by that org's anonymous callers.
+        if (
+          siteHost
+            ? await limited(`site:${siteHost}`, env.API_SITE_LIMITER)
+            : await limited(`anon:${tenant?.orgId ?? null}:${ip}`)
+        )
           return tooMany()
       } else {
         const token = /^Bearer +(\S+)$/i.exec(auth.trim())?.[1]

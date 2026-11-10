@@ -251,9 +251,18 @@ source fails closed. Platform rows (method `platform`) read as
 (the domain router, `sync.ts`, the daily check) stay on Sanity with the phase 5
 dual write. Roll back by unsetting the variable.
 
+Phase 6 (read flip, #2248) prerequisite: routing reads in
+`DOMAIN_VERIFICATION_SOURCE=d1` mode go through the gateway's signed site
+lane, which has its own rate-limit bucket (`site:<verified host>`,
+`API_SITE_LIMITER`, 3000 a minute, #2250) instead of `anon:<org>:<ip>`. When
+flipping, point `DOMAIN_VERIFICATION_D1_HOST` at a host whose org has no site
+traffic, so routing reads never share that bucket with page renders. A spent
+bucket fails routing for every custom host until the minute drains.
+
 Flip, owner only: run `mise run domains:import -- production --verify` the same
-day, then set `DOMAIN_VERIFICATION_D1_HOST` and `DOMAIN_VERIFICATION_SOURCE=d1`
-in production.
+day, then set `DOMAIN_VERIFICATION_D1_HOST` to a host whose org has no site
+traffic (see the prerequisite above) and `DOMAIN_VERIFICATION_SOURCE=d1` in
+production.
 
 ### Hard parts
 

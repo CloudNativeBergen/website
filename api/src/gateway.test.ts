@@ -104,6 +104,7 @@ function makeEnv(
     IDENTITY: { fetch: async () => Response.json(jwks) },
     API_LIMITER: { limit: vi.fn(async () => ({ success: allow })) },
     API_IP_LIMITER: { limit: vi.fn(async () => ({ success: ipAllow })) },
+    API_SITE_LIMITER: { limit: vi.fn(async () => ({ success: true })) },
     API_MUTATION_LIMITER: {
       limit: vi.fn(async () => ({ success: mutationAllow })),
     },
@@ -1396,6 +1397,56 @@ describe('gateway', () => {
         env,
       )
       expect(envelopes).toEqual([null])
+    })
+
+    describe('rate limit bucket (#2250)', () => {
+      const anonKeys = (env: Env) =>
+        vi.mocked(env.API_LIMITER.limit).mock.calls.map(([o]) => o.key)
+      const siteKeys_ = (env: Env) =>
+        vi.mocked(env.API_SITE_LIMITER.limit).mock.calls.map(([o]) => o.key)
+
+      it('spends a site-lane burst on site:<host>, never the anon bucket', async () => {
+        const { env, envelopes } = makeEnv()
+        for (let i = 0; i < 5; i++)
+          await gateway.fetch(
+            post(SUBGRAPH_QUERY, {
+              origin: VERIFIED,
+              [SITE_ASSERTION_HEADER]: await assertion(),
+            }),
+            env,
+          )
+        expect(siteKeys_(env)).toEqual(Array(5).fill('site:conf.example'))
+        expect(anonKeys(env)).toEqual([])
+        expect(envelopes).toHaveLength(5)
+      })
+
+      it('keeps an unsigned caller with spoofed site headers in anon', async () => {
+        const { env, envelopes } = makeEnv()
+        await gateway.fetch(
+          post(SUBGRAPH_QUERY, {
+            origin: VERIFIED,
+            [SITE_ASSERTION_HEADER]: await assertion({ key: strangerKey }),
+            'x-konf-site-host': 'conf.example',
+          }),
+          env,
+        )
+        expect(anonKeys(env)).toEqual(['anon:org_a:unknown'])
+        expect(siteKeys_(env)).toEqual([])
+        expect(envelopes).toHaveLength(1)
+      })
+
+      it('refuses with 429 when the site bucket is spent', async () => {
+        const { env, envelopes } = makeEnv()
+        vi.mocked(env.API_SITE_LIMITER.limit).mockResolvedValue({
+          success: false,
+        })
+        const res = await gateway.fetch(
+          post(SUBGRAPH_QUERY, { [SITE_ASSERTION_HEADER]: await assertion() }),
+          env,
+        )
+        expect(res.status).toBe(429)
+        expect(envelopes).toEqual([])
+      })
     })
 
     it('ignores every assertion when SITE_PUBLIC_KEYS is unset', async () => {
