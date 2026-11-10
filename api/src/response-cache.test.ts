@@ -135,6 +135,7 @@ function makeEnv(over: Partial<Record<string, unknown>> = {}) {
     IDENTITY: { fetch: async () => Response.json(jwks) },
     API_LIMITER: { limit: async () => ({ success: true }) },
     API_IP_LIMITER: { limit: async () => ({ success: true }) },
+    API_SITE_LIMITER: { limit: async () => ({ success: true }) },
     API_MUTATION_LIMITER: { limit: async () => ({ success: true }) },
     CLIENT_IP_SECRET: 'ip-secret',
     SITE_PUBLIC_KEYS: sitePublicKeys,
@@ -363,7 +364,7 @@ describe('response cache through the gateway (#1789)', () => {
     await gateway.fetch(post(QUERY, await site()), env, ctx)
     expect(store.size).toBe(1)
     const limited = makeEnv({
-      API_LIMITER: { limit: async () => ({ success: false }) },
+      API_SITE_LIMITER: { limit: async () => ({ success: false }) },
     })
     const res = await gateway.fetch(post(QUERY, await site()), limited, ctx)
     expect(res.status).toBe(429)

@@ -26,7 +26,11 @@
   // @override labels follow d1_override in tenant-directory D1 (gateway.ts).
   // API_LIMITER: per caller, 300 requests a minute (#1790);
   // API_MUTATION_LIMITER: per caller, 60 mutations a minute (#1888);
-  // API_IP_LIMITER: per IP, 1200 a minute, before the tenant lookup. namespace_id is
+  // API_IP_LIMITER: per IP, 1200 a minute, before the tenant lookup;
+  // API_SITE_LIMITER: anonymous signed site lane, per verified host, 3000 a
+  // minute (#2250). Server traffic: every Vercel instance and the d1 domain
+  // reader share it, so 10x the per-caller limit. API_IP_LIMITER still caps
+  // each egress IP at 1200. namespace_id is
   // unique per account; the local default shares preview's.
   "ratelimits": [
     {
@@ -43,6 +47,11 @@
       "name": "API_IP_LIMITER",
       "namespace_id": "1795",
       "simple": { "limit": 1200, "period": 60 },
+    },
+    {
+      "name": "API_SITE_LIMITER",
+      "namespace_id": "2250",
+      "simple": { "limit": 3000, "period": 60 },
     },
   ],
   "vars": {
@@ -97,6 +106,11 @@
           "namespace_id": "1795",
           "simple": { "limit": 1200, "period": 60 },
         },
+        {
+          "name": "API_SITE_LIMITER",
+          "namespace_id": "2250",
+          "simple": { "limit": 3000, "period": 60 },
+        },
       ],
       // Security requirement 8: preview never binds production services.
       "services": [
@@ -147,6 +161,11 @@
           "name": "API_IP_LIMITER",
           "namespace_id": "1796",
           "simple": { "limit": 1200, "period": 60 },
+        },
+        {
+          "name": "API_SITE_LIMITER",
+          "namespace_id": "2251",
+          "simple": { "limit": 3000, "period": 60 },
         },
       ],
       "services": [
