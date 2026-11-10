@@ -16,7 +16,7 @@
 
 import { normalizeDomain, wildcardFormForHost } from '@/lib/conference/domains'
 import { isRoutingEligible } from './policy'
-import { getDomainVerification } from './sanity'
+import { readDomainVerification } from './source'
 
 /** Whether routing is gated on verification in this environment. */
 function isRoutingEnforced(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -45,7 +45,7 @@ export async function verifiedDomains(
       if (normalized.startsWith('*.')) return true
       // The record is keyed exactly as the entry is written (`sync.ts`
       // stores `normalizeDomain(entry)`, port included), so no port strip.
-      const record = await getDomainVerification(normalized)
+      const record = await readDomainVerification(normalized)
       return record !== null && isRoutingEligible(record, now)
     }),
   )
@@ -86,7 +86,7 @@ export async function isHostRoutable(
   // suffix — otherwise an organizer could add any unissued `<label>.<suffix>` to
   // their `domains[]` and have it served with no allocation at all. A missing
   // record therefore still fails closed, for platform and custom hosts alike.
-  const record = await getDomainVerification(matched)
+  const record = await readDomainVerification(matched)
   if (!record) return false
   return isRoutingEligible(record, now)
 }

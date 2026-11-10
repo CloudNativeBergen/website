@@ -3576,6 +3576,85 @@ describe('domains API (#2207)', () => {
     })
   })
 
+  describe('siteDomainRecords (phase 6)', () => {
+    const READ = `query($h: String, $c: ID, $s: DomainStatus) { siteDomainRecords(hostname: $h, conferenceId: $c, status: $s) { hostname conferenceId kind method status token verifiedAt } }`
+    const siteOf = (e: Envelope) =>
+      ({
+        ...e,
+        userId: null,
+        orgRole: null,
+        scopes: ['site:server'],
+      }) as Envelope
+
+    it("reads every org's rows on the site lane, ANDing the filters", async () => {
+      const { admin, otherAdmin, conf, otherConf } = await setup()
+      await gql(CLAIM, { c: conf, h: 'mine.example.com' }, admin)
+      await gql(CLAIM, { c: otherConf, h: 'theirs.example.com' }, otherAdmin)
+      sqlite
+        .prepare(
+          "UPDATE domains SET status = 'verified', verified_at = 1 WHERE hostname = 'theirs.example.com'",
+        )
+        .run()
+      const read = async (v: Record<string, unknown>) =>
+        (await gql(READ, v, siteOf(admin))).body.data.siteDomainRecords
+      expect(await read({ h: 'theirs.example.com' })).toEqual([
+        {
+          hostname: 'theirs.example.com',
+          conferenceId: otherConf,
+          kind: 'custom',
+          method: 'dns-txt',
+          status: 'verified',
+          token: expect.any(String),
+          verifiedAt: '1970-01-01T00:00:00.001Z',
+        },
+      ])
+      expect(
+        (await read({ s: 'verified' })).map(
+          (r: { hostname: string }) => r.hostname,
+        ),
+      ).toContain('theirs.example.com')
+      expect(
+        (await read({ s: 'verified' })).map(
+          (r: { hostname: string }) => r.hostname,
+        ),
+      ).not.toContain('mine.example.com')
+      expect(await read({ h: 'mine.example.com', c: otherConf })).toEqual([])
+      expect(await read({ h: 'nope.example.com' })).toEqual([])
+    })
+
+    it('refuses an unfiltered read', async () => {
+      const { admin } = await setup()
+      expect(code((await gql(READ, {}, siteOf(admin))).body)).toBe(
+        'BAD_USER_INPUT',
+      )
+    })
+
+    it.each([
+      ['an org admin', {}],
+      ['an org owner', { orgRole: 'owner' }],
+      ['a member', { orgRole: 'member' }],
+    ])('refuses %s before reading D1', async (_, over) => {
+      const { admin } = await setup()
+      const prepare = vi.spyOn(env.DB, 'prepare')
+      const { body } = await gql(READ, { s: 'verified' }, {
+        ...admin,
+        ...over,
+      } as Envelope)
+      expect(code(body)).toBe('FORBIDDEN')
+      expect(prepare).not.toHaveBeenCalled()
+    })
+
+    it('refuses the platform lane and anonymous callers before reading D1', async () => {
+      await setup()
+      const prepare = vi.spyOn(env.DB, 'prepare')
+      for (const as of [operator, undefined])
+        expect(code((await gql(READ, { s: 'verified' }, as)).body)).toBe(
+          'FORBIDDEN',
+        )
+      expect(prepare).not.toHaveBeenCalled()
+    })
+  })
+
   it('lets one recheck through per minute, atomically', async () => {
     const { admin, conf } = await setup()
     await gql(CLAIM, { c: conf, h: 'conf.example.com' }, admin)

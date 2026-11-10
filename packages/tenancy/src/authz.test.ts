@@ -162,6 +162,7 @@ describe('site:server is a lane marker with three capabilities', () => {
     'reminder_lock',
     'conference.read_ticket_setup',
     'domain.mirror',
+    'domain.read_all',
   ]
 
   it.each(allowed)('allows %s', (a) => expect(can(site, a)).toBe(true))

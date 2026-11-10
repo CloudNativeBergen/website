@@ -508,6 +508,11 @@ describe('response cache rules', () => {
       'B',
     ],
     ['an unparsable document', '{ conference {', undefined],
+    [
+      'a verification-state read (#2207 phase 6)',
+      'query($h: String) { siteDomainRecords(hostname: $h) { status } }',
+      undefined,
+    ],
   ])('does not cache %s', (_, query, operationName) => {
     expect(cacheableRead(JSON.stringify({ query, operationName }))).toBeNull()
   })

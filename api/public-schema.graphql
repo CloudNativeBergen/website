@@ -646,6 +646,11 @@ type Query {
   signupCodes: [SignupCode!]
 
   """
+  Verification rows across every org, ANDed on the filters given (at least one), for the site's routing, redirect-allowlist and sign-in readers (#2207 phase 6). Site server lane only.
+  """
+  siteDomainRecords(conferenceId: ID, hostname: String, status: DomainStatus): [SiteDomainRecord!]
+
+  """
   The envelope conference's orders with buyer email, name and lines, newest first. Owners, admins and operators (attendee.read_pii); null otherwise.
   """
   ticketOrders: [TicketOrder!]
@@ -1347,6 +1352,23 @@ type SignupResult {
   """The closed-preview host, <slug>.konf.run."""
   host: String
   organization: Organization
+}
+
+type SiteDomainRecord {
+  conferenceId: ID
+  consecutiveFailures: Int
+  consecutiveSoftFailures: Int
+  firstFailureAt: String
+  graceUntil: String
+  hostname: String
+  kind: String
+  lastCheckedAt: String
+  lastError: String
+  lastSuccessAt: String
+  method: String
+  status: DomainStatus
+  token: String
+  verifiedAt: String
 }
 
 """An amount in integer minor units (øre, cents) and its currency."""

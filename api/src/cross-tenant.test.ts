@@ -536,6 +536,7 @@ const ALONE = new Set([
   'ticketSales',
   'ticketOrders',
   'domains',
+  'siteDomainRecords',
 ])
 
 function queries(tenants: T[]) {
@@ -866,6 +867,7 @@ describe.each([
           ) &&
           // domains (#2207): checked exactly below.
           roots[String(e.path?.[0])] !== 'domains' &&
+          roots[String(e.path?.[0])] !== 'siteDomainRecords' &&
           // API credentials (#2115) are a contract only: a caller with access
           // gets NOT_IMPLEMENTED. Drop this when they are implemented.
           !(
@@ -890,6 +892,13 @@ describe.each([
               ? []
               : ['NOT_FOUND'],
         )
+      // siteDomainRecords (#2207 phase 6): site server lane only, and no
+      // walker is the site lane, so every walker is refused before any read.
+      if (Object.values(roots).includes('siteDomainRecords'))
+        expect(
+          errors.map((e) => e.extensions?.code),
+          query,
+        ).toEqual(['FORBIDDEN'])
       sawA ||= body.includes('TENANT_A')
       const forged = await run(query, {
         ...headers(),

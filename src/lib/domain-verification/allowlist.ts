@@ -21,7 +21,7 @@
 
 import { normalizeDomain } from '@/lib/conference/domains'
 import { isAllowlistEligible } from './policy'
-import { listAllowlistCandidates } from './sanity'
+import { readAllowlistCandidates } from './source'
 
 /**
  * The exact hosts currently permitted as post-login redirect destinations.
@@ -33,7 +33,7 @@ import { listAllowlistCandidates } from './sanity'
 export async function getVerifiedRedirectHosts(
   now: Date = new Date(),
 ): Promise<Set<string>> {
-  const records = await listAllowlistCandidates()
+  const records = await readAllowlistCandidates()
   return new Set(
     records
       .filter((record) => isAllowlistEligible(record, now))
